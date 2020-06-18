@@ -27,6 +27,7 @@ import kafka.api.LeaderAndIsr
 import kafka.api.Request
 import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.cluster.BrokerEndPoint
+import kafka.log.LeaderOffsetIncremented
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -2094,7 +2095,7 @@ class ReplicaManagerTest {
       new SimpleRecord(11, "k2".getBytes, "v2".getBytes)))
     partition.appendRecordsToLeader(batch, AppendOrigin.Client, requiredAcks = 0)
     partition.log.get.updateHighWatermark(2L)
-    partition.log.get.maybeIncrementLogStartOffset(1L)
+    partition.log.get.maybeIncrementLogStartOffset(1L, LeaderOffsetIncremented)
     replicaManager.logManager.checkpointLogRecoveryOffsets()
     replicaManager.logManager.checkpointLogStartOffsets()
     assertTrue(readRecoveryPointCheckpoint().contains(tp0))
