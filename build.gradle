@@ -38,6 +38,8 @@ buildscript {
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
     classpath "gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
     classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
+    classpath "de.undercouch:gradle-download-task:$versions.gradleDownloadTask"
+    classpath "com.github.siom79.japicmp:japicmp:$versions.japicmp"
   }
 }
 
@@ -121,6 +123,7 @@ ext {
 }
 
 apply from: file('wrapper.gradle')
+apply from: file('gradle/compatibility.gradle')
 
 if (file('.git').exists()) {
   apply from: file('gradle/rat.gradle')
@@ -356,7 +359,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
-    
+
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
