@@ -498,7 +498,7 @@ class ConsoleConsumerTest {
   }
 
   @Test
-  def testDefaultMessageFormatter() {
+  def testDefaultMessageFormatter(): Unit = {
     val record = new ConsumerRecord("topic", 0, 123, "key".getBytes, "value".getBytes)
     val formatter = new DefaultMessageFormatter()
     val configs: JMap[String, String] = new HashMap()
