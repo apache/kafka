@@ -218,18 +218,19 @@ public class MirrorConnectorsIntegrationTest {
                                                 final int timeout,
                                                 final ClusterType clusterType,
                                                 final String... topics) throws InterruptedException {
-        final int execBufferTime = 50;
-        waitForCondition(() -> {
+        int retries = 3;
+        while (retries-- > 0) {
             try {
                 int actualNum = clusterType == ClusterType.PRIMARY ?
                         primary.kafka().consume(numRecordsProduces, timeout, topics).count() :
                         backup.kafka().consume(numRecordsProduces, timeout, topics).count();
-                return numRecordsProduces == actualNum;
+                if (numRecordsProduces == actualNum)
+                    return;
             } catch (Throwable e) {
-                log.error("Could not find enough records", e);
-                return false;
+                log.error("Could not find enough records with {} retries left", retries, e);
             }
-        }, (timeout + execBufferTime) * 3, errorMsg);
+        }
+        throw new InterruptedException(errorMsg);
     }
 
     @Test
