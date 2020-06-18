@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -33,7 +33,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
  * {@link ThreadCache}
  */
-public interface InternalProcessorContext extends ProcessorContext {
+public interface InternalApiProcessorContext<KForward, VForward> extends ProcessorContext<KForward, VForward> {
     BytesSerializer BYTES_KEY_SERIALIZER = new BytesSerializer();
     ByteArraySerializer BYTEARRAY_VALUE_SERIALIZER = new ByteArraySerializer();
 
@@ -119,5 +119,4 @@ public interface InternalProcessorContext extends ProcessorContext {
                    final byte[] value,
                    final long timestamp);
 
-    String changelogFor(final String storeName);
 }

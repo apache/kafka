@@ -42,7 +42,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final Serde<?> valueSerde;
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
-    protected ProcessorNode<?, ?> currentNode;
+    protected ProcessorNode<?, ?, ?, ?> currentNode;
     private long currentSystemTimeMs;
 
     protected ThreadCache cache;
@@ -196,12 +196,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
+    public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
         this.currentNode = currentNode;
     }
 
     @Override
-    public ProcessorNode<?, ?> currentNode() {
+    public ProcessorNode<?, ?, ?, ?> currentNode() {
         return currentNode;
     }
 
