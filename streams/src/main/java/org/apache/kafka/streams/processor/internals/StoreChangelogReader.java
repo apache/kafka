@@ -16,10 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ListOffsetsOptions;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -43,6 +48,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
@@ -199,6 +206,9 @@ public class StoreChangelogReader implements ChangelogReader {
     // to update offset limit for standby tasks;
     private Consumer<byte[], byte[]> mainConsumer;
 
+    // the changelog reader needs the admin client to list end offsets
+    private final Admin adminClient;
+
     private long lastUpdateOffsetTime;
 
     void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
@@ -208,11 +218,13 @@ public class StoreChangelogReader implements ChangelogReader {
     public StoreChangelogReader(final Time time,
                                 final StreamsConfig config,
                                 final LogContext logContext,
+                                final Admin adminClient,
                                 final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener stateRestoreListener) {
         this.time = time;
         this.log = logContext.logger(StoreChangelogReader.class);
         this.state = ChangelogReaderState.ACTIVE_RESTORING;
+        this.adminClient = adminClient;
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
@@ -564,8 +576,13 @@ public class StoreChangelogReader implements ChangelogReader {
             return Collections.emptyMap();
 
         try {
-            return restoreConsumer.endOffsets(partitions);
-        } catch (final TimeoutException e) {
+            final ListOffsetsResult result = adminClient.listOffsets(
+                    partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())),
+                    new ListOffsetsOptions(IsolationLevel.READ_UNCOMMITTED)
+            );
+            return result.all().get().entrySet().stream().collect(
+                    Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset()));
+        } catch (final TimeoutException | InterruptedException | ExecutionException e) {
             // if timeout exception gets thrown we just give up this time and retry in the next run loop
             log.debug("Could not fetch all end offsets for {}, will retry in the next run loop", partitions);
             return Collections.emptyMap();
