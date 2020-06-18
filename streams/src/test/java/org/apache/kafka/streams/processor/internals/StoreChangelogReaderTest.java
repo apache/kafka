@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.OffsetSpec;
@@ -477,9 +478,10 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public ListOffsetsResult listOffsets(final Map<TopicPartition, OffsetSpec> topicPartitionOffsets) {
+            public ListOffsetsResult listOffsets(final Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                                 final ListOffsetsOptions options) {
                 if (functionCalled.get()) {
-                    return super.listOffsets(topicPartitionOffsets);
+                    return super.listOffsets(topicPartitionOffsets, options);
                 } else {
                     functionCalled.set(true);
                     throw new TimeoutException("KABOOM!");
@@ -519,10 +521,12 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         final MockAdminClient adminClient = new MockAdminClient() {
             @Override
-            public ListOffsetsResult listOffsets(final Map<TopicPartition, OffsetSpec> topicPartitionOffsets) {
+            public ListOffsetsResult listOffsets(final Map<TopicPartition, OffsetSpec> topicPartitionOffsets,
+                                                 final ListOffsetsOptions options) {
                 throw kaboom;
             }
         };
+        adminClient.updateEndOffsets(Collections.singletonMap(tp, 0L));
 
         final StoreChangelogReader changelogReader =
             new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback);
