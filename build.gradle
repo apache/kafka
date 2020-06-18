@@ -746,6 +746,9 @@ project(':core') {
       exclude module: 'log4j'
       exclude module: 'netty'
     }
+    // pin the netty to 4.1.49.Final since the transitive dependent version 4.1.48.Final is vulnerable
+    compile libs.nettyHandler
+    compile libs.nettyTransportNativeEpoll
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     compile libs.commonsCli
 

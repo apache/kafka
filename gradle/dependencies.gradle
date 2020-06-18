@@ -116,7 +116,8 @@ versions += [
   spotlessPlugin: "3.23.1",
   zookeeper: "3.5.8",
   zstd: "1.4.3-1",
-  conscrypt: "2.1.0"
+  conscrypt: "2.1.0",
+  netty: "4.1.49.Final"
 ]
 
 libs += [
@@ -187,5 +188,7 @@ libs += [
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
   httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient",
-  conscrypt: "org.conscrypt:conscrypt-openjdk-uber:2.2.1"
+  conscrypt: "org.conscrypt:conscrypt-openjdk-uber:2.2.1",
+  nettyHandler: "io.netty:netty-handler:$versions.netty",
+  nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty"
 ]
