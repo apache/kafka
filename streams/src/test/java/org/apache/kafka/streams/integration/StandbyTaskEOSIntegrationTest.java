@@ -29,7 +29,6 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.Stores;
@@ -52,7 +51,9 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
  */
 public class StandbyTaskEOSIntegrationTest {
 
-    private final AtomicBoolean skip = new AtomicBoolean(false);
+    private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
+
+    private final AtomicBoolean skipRecord = new AtomicBoolean(false);
 
     private String appId;
     private String inputTopic;
@@ -117,7 +118,7 @@ public class StandbyTaskEOSIntegrationTest {
                         QueryableStoreTypes.<Integer, Integer>keyValueStore()
                     ).enableStaleStores()
                 ).get(0) != null,
-                120_000L, // use increased timeout to encounter for rebalancing time
+                REBALANCE_TIMEOUT,
                 "Could not get key from standby store"
             );
             // sanity check that first instance is still active
@@ -151,15 +152,14 @@ public class StandbyTaskEOSIntegrationTest {
             );
             streamInstanceOne.close();
 
-            waitForCondition(
-                () -> streamInstanceTwo.store(
-                    StoreQueryParameters.fromNameAndType(
-                        storeName,
-                        QueryableStoreTypes.keyValueStore()
-                    )
-                ).get(0) != null,
-                120_000L, // use increased timeout to encounter for rebalancing time
-                "Could not get key from recovered main store"
+            IntegrationTestUtils.waitUntilMinRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    IntegerDeserializer.class,
+                    IntegerDeserializer.class
+                ),
+                outputTopic,
+                2
             );
 
             // "restart" first client and wait for standby recovery
@@ -176,16 +176,6 @@ public class StandbyTaskEOSIntegrationTest {
                 ).get(0) != null,
                 "Could not get key from recovered standby store"
             );
-            // sanity check that second instance is still active
-            waitForCondition(
-                () -> streamInstanceTwo.store(
-                    StoreQueryParameters.fromNameAndType(
-                        storeName,
-                        QueryableStoreTypes.keyValueStore()
-                    )
-                ).get(0) != null,
-                "Could not get key from recovered main store"
-            );
 
             streamInstanceTwo.close();
             waitForCondition(
@@ -195,12 +185,12 @@ public class StandbyTaskEOSIntegrationTest {
                         QueryableStoreTypes.<Integer, Integer>keyValueStore()
                     )
                 ).get(0) != null,
-                120_000L, // use increased timeout to encounter for rebalancing time
+                REBALANCE_TIMEOUT,
                 "Could not get key from recovered main store"
             );
 
             // re-inject poison pill and wait for crash of first instance
-            skip.set(false);
+            skipRecord.set(false);
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 inputTopic,
                 Collections.singletonList(
@@ -238,34 +228,26 @@ public class StandbyTaskEOSIntegrationTest {
                     @Override
                     public void init(final ProcessorContext context) {
                         store = (KeyValueStore<Integer, Integer>) context.getStateStore(storeName);
-
-                        final KeyValueIterator<Integer, Integer> it = store.all();
-                        System.err.println("mjsax: store content begin");
-                        while (it.hasNext()) {
-                            final KeyValue<Integer, Integer> next = it.next();
-                            System.err.println("mjsax: key/value -> " + next.key + "/" + next.value);
-                        }
-                        System.err.println("mjsax: store content end");
                     }
 
                     @Override
                     public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
-                        if (skip.get()) {
-                            System.err.println("mjsax skip key " + key);
-                            return null;
+                        if (skipRecord.get()) {
+                            // we only forward so we can verify the skipping by reading the output topic
+                            // the goal is skipping is to not modify the state store
+                            return KeyValue.pair(key, value);
                         }
 
                         if (store.get(key) != null) {
-                            System.err.println("mjsax found duplicate for key " + key);
                             return null;
                         }
 
-                        System.err.println("mjsax put key " + key);
                         store.put(key, value);
                         store.flush();
 
                         if (key == 1) {
-                            skip.set(true);
+                            // after error injection, we need to avoid a consecutive error after rebalancing
+                            skipRecord.set(true);
                             throw new RuntimeException("Injected test error");
                         }
 
