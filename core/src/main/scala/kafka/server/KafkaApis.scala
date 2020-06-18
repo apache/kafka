@@ -2436,14 +2436,23 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
     }
-    val authorizedResult = adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+
+    val (controllerRequiredResources, remainingAuthorizedResources) =
+      filterControllerOnlyResources(alterConfigsRequest.version(), authorizedResources)
+
+    val authorizedResult = adminManager.alterConfigs(
+      remainingAuthorizedResources, alterConfigsRequest.validateOnly)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }
+    val requireControllerResult = controllerRequiredResources.keys.map {
+      resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
+    }
+
     def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
       val data = new AlterConfigsResponseData()
         .setThrottleTimeMs(requestThrottleMs)
-      (authorizedResult ++ unauthorizedResult).foreach{ case (resource, error) =>
+      (authorizedResult ++ unauthorizedResult ++ requireControllerResult).foreach{ case (resource, error) =>
         data.responses().add(new AlterConfigsResourceResponse()
           .setErrorCode(error.error.code)
           .setErrorMessage(error.message)
@@ -2571,13 +2580,32 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val authorizedResult = adminManager.incrementalAlterConfigs(authorizedResources, alterConfigsRequest.data.validateOnly)
+    val (controllerRequiredResources, remainingAuthorizedResources) =
+      filterControllerOnlyResources(alterConfigsRequest.version(), authorizedResources)
+
+    val authorizedResult = adminManager.incrementalAlterConfigs(
+      remainingAuthorizedResources, alterConfigsRequest.data.validateOnly)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }
+
+    val requireControllerResult = controllerRequiredResources.keys.map {
+      resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
+    }
+
     sendResponseMaybeThrottle(request, requestThrottleMs =>
       new IncrementalAlterConfigsResponse(IncrementalAlterConfigsResponse.toResponseData(requestThrottleMs,
-        (authorizedResult ++ unauthorizedResult).asJava)))
+        (authorizedResult ++ unauthorizedResult ++ requireControllerResult).asJava)))
+  }
+
+  private def filterControllerOnlyResources[O](requestVersion: Short, authorizedResources: Map[ConfigResource, O]): (
+    Map[ConfigResource, O], Map[ConfigResource, O]
+    ) = {
+    val requireController = requestVersion >= 2 && !controller.isActive
+    authorizedResources.partition {
+      case (resource, _) =>
+        requireController && resource.`type`() == ConfigResource.Type.TOPIC
+    }
   }
 
   def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {

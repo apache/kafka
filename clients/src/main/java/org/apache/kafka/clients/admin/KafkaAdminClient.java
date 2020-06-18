@@ -2041,7 +2041,7 @@ public class KafkaAdminClient extends AdminClient {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // We must make a separate AlterConfigs request for every BROKER resource we want to alter
         // and send the request to that specific broker. Other resources are grouped together into
-        // a single request that may be sent to any broker.
+        // a single request that must be sent to the controller broker.
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
@@ -2053,7 +2053,7 @@ public class KafkaAdminClient extends AdminClient {
                 unifiedRequestResources.add(resource);
         }
         if (!unifiedRequestResources.isEmpty())
-          allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
+          allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources, new ControllerNodeProvider()));
         return new AlterConfigsResult(new HashMap<>(allFutures));
     }
 
@@ -2082,15 +2082,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 AlterConfigsResponse response = (AlterConfigsResponse) abstractResponse;
-                for (Map.Entry<ConfigResource, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
-                    ApiException exception = response.errors().get(entry.getKey()).exception();
-                    if (exception != null) {
-                        future.completeExceptionally(exception);
-                    } else {
-                        future.complete(null);
-                    }
-                }
+                handleAlterConfigResourceResponses(futures, response.errors());
             }
 
             @Override
@@ -2103,7 +2095,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                 final AlterConfigsOptions options) {
+                                                      final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // We must make a separate AlterConfigs request for every BROKER resource we want to alter
         // and send the request to that specific broker. Other resources are grouped together into
@@ -2119,15 +2111,15 @@ public class KafkaAdminClient extends AdminClient {
                 unifiedRequestResources.add(resource);
         }
         if (!unifiedRequestResources.isEmpty())
-            allFutures.putAll(incrementalAlterConfigs(configs, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
+            allFutures.putAll(incrementalAlterConfigs(configs, options, unifiedRequestResources, new ControllerNodeProvider()));
 
         return new AlterConfigsResult(new HashMap<>(allFutures));
     }
 
     private Map<ConfigResource, KafkaFutureImpl<Void>> incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                    final AlterConfigsOptions options,
-                                                                    Collection<ConfigResource> resources,
-                                                                    NodeProvider nodeProvider) {
+                                                                               final AlterConfigsOptions options,
+                                                                               Collection<ConfigResource> resources,
+                                                                               NodeProvider nodeProvider) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();
         for (ConfigResource resource : resources)
             futures.put(resource, new KafkaFutureImpl<>());
@@ -2145,15 +2137,7 @@ public class KafkaAdminClient extends AdminClient {
             public void handleResponse(AbstractResponse abstractResponse) {
                 IncrementalAlterConfigsResponse response = (IncrementalAlterConfigsResponse) abstractResponse;
                 Map<ConfigResource, ApiError> errors = IncrementalAlterConfigsResponse.fromResponseData(response.data());
-                for (Map.Entry<ConfigResource, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
-                    KafkaFutureImpl<Void> future = entry.getValue();
-                    ApiException exception = errors.get(entry.getKey()).exception();
-                    if (exception != null) {
-                        future.completeExceptionally(exception);
-                    } else {
-                        future.complete(null);
-                    }
-                }
+                handleAlterConfigResourceResponses(futures, errors);
             }
 
             @Override
@@ -2162,6 +2146,22 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
         return futures;
+    }
+
+    private void handleAlterConfigResourceResponses(final Map<ConfigResource, KafkaFutureImpl<Void>> futures,
+                                                    final Map<ConfigResource, ApiError> errors) {
+        for (Map.Entry<ConfigResource, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
+            KafkaFutureImpl<Void> future = entry.getValue();
+            ApiException exception = errors.get(entry.getKey()).exception();
+            if (exception != null) {
+                if (exception == Errors.NOT_CONTROLLER.exception()) {
+                    handleNotControllerError();
+                }
+                future.completeExceptionally(exception);
+            } else {
+                future.complete(null);
+            }
+        }
     }
 
     private IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
@@ -3452,7 +3452,7 @@ public class KafkaAdminClient extends AdminClient {
                         receivedResponsesCount += validateTopicResponses(response.data().responses(), errors);
                         break;
                     case NOT_CONTROLLER:
-                        handleNotControllerError(topLevelError);
+                        handleNotControllerError();
                         break;
                     default:
                         for (ReassignableTopicResponse topicResponse : response.data().responses()) {
@@ -3573,7 +3573,7 @@ public class KafkaAdminClient extends AdminClient {
                     case NONE:
                         break;
                     case NOT_CONTROLLER:
-                        handleNotControllerError(error);
+                        handleNotControllerError();
                         break;
                     default:
                         partitionReassignmentsFuture.completeExceptionally(new ApiError(error, response.data().errorMessage()).exception());
@@ -3607,10 +3607,10 @@ public class KafkaAdminClient extends AdminClient {
         return time.milliseconds() + retryBackoffMs;
     }
 
-    private void handleNotControllerError(Errors error) throws ApiException {
+    private void handleNotControllerError() throws ApiException {
         metadataManager.clearController();
         metadataManager.requestUpdate();
-        throw error.exception();
+        throw Errors.NOT_CONTROLLER.exception();
     }
 
     /**

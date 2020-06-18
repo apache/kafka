@@ -18,7 +18,9 @@
   "type": "response",
   "name": "IncrementalAlterConfigsResponse",
   // Version 1 is the first flexible version.
-  "validVersions": "0-1",
+  //
+  // Version 2 will always route to the controller for topic resources change.
+  "validVersions": "0-2",
   "flexibleVersions": "1+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

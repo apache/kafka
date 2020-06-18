@@ -18,7 +18,9 @@
   "type": "request",
   "name": "AlterConfigsRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
+  //
+  // Version 2 will always route to the controller for topic resources change.
+  "validVersions": "0-2",
   "flexibleVersions": "none",
   "fields": [
     { "name": "Resources", "type": "[]AlterConfigsResource", "versions": "0+", 
