@@ -72,6 +72,10 @@ public final class ByteBufferUnmapper {
      * @throws IllegalArgumentException if buffer is not mapped or direct.
      */
     public static void unmap(String resourceDescription, ByteBuffer buffer) throws IOException {
+        if (buffer == null) {
+            return;
+        }
+
         if (!buffer.isDirect())
             throw new IllegalArgumentException("Unmapping only works with direct buffers");
         if (UNMAP == null)
