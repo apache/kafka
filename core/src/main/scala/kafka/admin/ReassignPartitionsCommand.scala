@@ -82,7 +82,8 @@ object ReassignPartitionsCommand extends Logging {
 
   private[admin] val cannotExecuteBecauseOfExistingMessage = "Cannot execute because " +
     "there is an existing partition assignment.  Use --additional to override this and " +
-    "create a new partition assignment in addition to the existing one."
+    "create a new partition assignment in addition to the existing one. Use --alter-throttle " +
+    "to change the throttle of an existing reassignment."
 
   private[admin] val youMustRunVerifyPeriodicallyMessage = "Warning: You must run " +
     "--verify periodically, until the reassignment completes, to ensure the throttle " +
@@ -263,6 +264,10 @@ object ReassignPartitionsCommand extends Logging {
         opts.options.valueOf(opts.timeoutOpt))
     } else if (opts.options.has(opts.listOpt)) {
       listReassignments(adminClient)
+    } else if (opts.options.has(opts.alterThrottleOp)) {
+      alterThrottles(adminClient,
+        opts.options.valueOf(opts.interBrokerThrottleOpt),
+        opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt))
     } else {
       throw new RuntimeException("Unsupported action.")
     }
@@ -308,7 +313,7 @@ object ReassignPartitionsCommand extends Logging {
    * @param jsonString            The JSON string to use for the topics and partitions to verify.
    * @param preserveThrottles     True if we should avoid changing topic or broker throttles.
    *
-   * @returns                     A result that is useful for testing.
+   * @return                      A result that is useful for testing.
    */
   def verifyAssignment(adminClient: Admin, jsonString: String, preserveThrottles: Boolean)
                       : VerifyAssignmentResult = {
@@ -351,7 +356,7 @@ object ReassignPartitionsCommand extends Logging {
    * @param jsonString            The JSON string to use for the topics and partitions to verify.
    * @param preserveThrottles     True if we should avoid changing topic or broker throttles.
    *
-   * @returns                     A result that is useful for testing.  Note that anything that
+   * @return                      A result that is useful for testing.  Note that anything that
    *                              would require AdminClient to see will be left out of this result.
    */
   def verifyAssignment(zkClient: KafkaZkClient, jsonString: String, preserveThrottles: Boolean)
@@ -376,7 +381,7 @@ object ReassignPartitionsCommand extends Logging {
    * @param zkClient              The ZooKeeper client to use.
    * @param targets               The partition reassignments specified by the user.
    *
-   * @returns                     A tuple of partition states and whether there are any
+   * @return                      A tuple of partition states and whether there are any
    *                              ongoing reassignments found in the legacy reassign
    *                              partitions ZNode.
    */
@@ -445,8 +450,8 @@ object ReassignPartitionsCommand extends Logging {
     }
     val foundResults: Seq[(TopicPartition, PartitionReassignmentState)] = foundReassignments.map {
       case (part, targetReplicas) => (part,
-        new PartitionReassignmentState(
-          currentReassignments.get(part).get.replicas.
+        PartitionReassignmentState(
+          currentReassignments(part).replicas.
             asScala.map(i => i.asInstanceOf[Int]),
           targetReplicas,
           false))
@@ -633,7 +638,7 @@ object ReassignPartitionsCommand extends Logging {
   def clearAllThrottles(adminClient: Admin,
                         targetParts: Seq[(TopicPartition, Seq[Int])]): Unit = {
     val activeBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id()).toSet
-    val brokers = activeBrokers ++ targetParts.map(_._2).flatten.toSet
+    val brokers = activeBrokers ++ targetParts.flatMap(_._2).toSet
     println("Clearing broker-level throttles on broker%s %s".format(
       if (brokers.size == 1) "" else "s", brokers.mkString(",")))
     clearBrokerLevelThrottles(adminClient, brokers)
@@ -653,7 +658,7 @@ object ReassignPartitionsCommand extends Logging {
   def clearAllThrottles(zkClient: KafkaZkClient,
                         targetParts: Seq[(TopicPartition, Seq[Int])]): Unit = {
     val activeBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
-    val brokers = activeBrokers ++ targetParts.map(_._2).flatten.toSet
+    val brokers = activeBrokers ++ targetParts.flatMap(_._2).toSet
     println("Clearing broker-level throttles on broker%s %s".format(
       if (brokers.size == 1) "" else "s", brokers.mkString(",")))
     clearBrokerLevelThrottles(zkClient, brokers)
@@ -932,6 +937,38 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   /**
+   * The entry point for --alter-throttles. At least one throttle value must be provided.
+   *
+   * @param admin The Admin instance to use
+   * @param interBrokerThrottle The new inter-broker throttle or -1 to leave it unchanged
+   * @param logDirThrottle The new alter-log-dir throttle or -1 to leave it unchanged
+   */
+  def alterThrottles(admin: Admin,
+                     interBrokerThrottle: Long,
+                     logDirThrottle: Long): Unit = {
+    if (interBrokerThrottle < 0 && logDirThrottle < 0) {
+      throw new TerseReassignmentFailureException("No valid throttle values provided to --alter-throttle")
+    }
+
+    if (interBrokerThrottle >= 0) {
+      val currentReassignments = admin.listPartitionReassignments().reassignments().get().asScala
+      val moveMap = calculateCurrentMoveMap(currentReassignments)
+      modifyReassignmentThrottle(admin, moveMap, interBrokerThrottle)
+    }
+
+    if (logDirThrottle >= 0) {
+      val brokerIds = admin.describeCluster().nodes.get().asScala.map(node => Int.box(node.id())).asJavaCollection
+      val logDirsResult = admin.describeLogDirs(brokerIds).all().get()
+      val movingBrokers = logDirsResult.asScala.filter { case (_, logDirInfo) =>
+        logDirInfo.values.asScala.exists(_.replicaInfos.asScala.exists(_._2.isFuture))
+      }.map { case (brokerId, _) =>
+        Int.unbox(brokerId)
+      }.toSet
+      modifyLogDirThrottle(admin, movingBrokers, logDirThrottle)
+    }
+  }
+
+  /**
    * The entry point for the --execute and --execute-additional commands.
    *
    * @param adminClient                 The AdminClient to use.
@@ -963,22 +1000,18 @@ object ReassignPartitionsCommand extends Logging {
     verifyBrokerIds(adminClient, proposedParts.values.flatten.toSet)
     val currentParts = getReplicaAssignmentForPartitions(adminClient, proposedParts.keySet.toSet)
     println(currentPartitionReplicaAssignmentToString(proposedParts, currentParts))
-    if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
+
+    if (interBrokerThrottle > 0 || logDirThrottle > 0) {
       println(youMustRunVerifyPeriodicallyMessage)
-      val moveMap = calculateMoveMap(currentReassignments, proposedParts, currentParts)
-      val leaderThrottles = calculateLeaderThrottles(moveMap)
-      val followerThrottles = calculateFollowerThrottles(moveMap)
-      modifyTopicThrottles(adminClient, leaderThrottles, followerThrottles)
-      val reassigningBrokers = calculateReassigningBrokers(moveMap)
-      val movingBrokers = calculateMovingBrokers(proposedReplicas.keySet.toSet)
-      modifyBrokerThrottles(adminClient,
-        reassigningBrokers, interBrokerThrottle,
-        movingBrokers, logDirThrottle)
-      if (interBrokerThrottle >= 0) {
-        println(s"The inter-broker throttle limit was set to ${interBrokerThrottle} B/s")
+
+      if (interBrokerThrottle > 0) {
+        val moveMap = calculateProposedMoveMap(currentReassignments, proposedParts, currentParts)
+        modifyReassignmentThrottle(adminClient, moveMap, interBrokerThrottle)
       }
-      if (logDirThrottle >= 0) {
-        println(s"The replica-alter-dir throttle limit was set to ${logDirThrottle} B/s")
+
+      if (logDirThrottle > 0) {
+        val movingBrokers = calculateMovingBrokers(proposedReplicas.keySet.toSet)
+        modifyLogDirThrottle(adminClient, movingBrokers, logDirThrottle)
       }
     }
 
@@ -987,8 +1020,8 @@ object ReassignPartitionsCommand extends Logging {
     if (errors.nonEmpty) {
       throw new TerseReassignmentFailureException(
         "Error reassigning partition(s):%n%s".format(
-          errors.keySet.toBuffer.sortWith(compareTopicPartitions).map {
-            case part => s"${part}: ${errors(part).getMessage}"
+          errors.keySet.toBuffer.sortWith(compareTopicPartitions).map { part =>
+            s"$part: ${errors(part).getMessage}"
           }.mkString(System.lineSeparator())))
     }
     println("Successfully started partition reassignment%s for %s".format(
@@ -1117,7 +1150,8 @@ object ReassignPartitionsCommand extends Logging {
       // Note: older versions of this tool would modify the broker quotas here (but not
       // topic quotas, for some reason).  This behavior wasn't documented in the --execute
       // command line help.  Since it might interfere with other ongoing reassignments,
-      // this behavior was dropped as part of the KIP-455 changes.
+      // this behavior was dropped as part of the KIP-455 changes and a new option
+      // --alter-throttle was added to allow changing the throttle for existing reassignments.
       throw new TerseReassignmentFailureException(cannotExecuteBecauseOfExistingMessage)
     }
     val currentParts = zkClient.getReplicaAssignmentForTopics(
@@ -1126,7 +1160,7 @@ object ReassignPartitionsCommand extends Logging {
 
     if (interBrokerThrottle >= 0) {
       println(youMustRunVerifyPeriodicallyMessage)
-      val moveMap = calculateMoveMap(Map.empty, proposedParts, currentParts)
+      val moveMap = calculateProposedMoveMap(Map.empty, proposedParts, currentParts)
       val leaderThrottles = calculateLeaderThrottles(moveMap)
       val followerThrottles = calculateFollowerThrottles(moveMap)
       modifyTopicThrottles(zkClient, leaderThrottles, followerThrottles)
@@ -1214,22 +1248,38 @@ object ReassignPartitionsCommand extends Logging {
    * @return                  A map from partition objects to error strings.
    */
   def cancelPartitionReassignments(adminClient: Admin,
-                                  reassignments: Set[TopicPartition])
+                                   reassignments: Set[TopicPartition])
   : Map[TopicPartition, Throwable] = {
     val results: Map[TopicPartition, KafkaFuture[Void]] =
       adminClient.alterPartitionReassignments(reassignments.map {
           (_, (None: Option[NewPartitionReassignment]).asJava)
         }.toMap.asJava).values().asScala
     results.flatMap {
-      case (part, future) => {
+      case (part, future) =>
         try {
           future.get()
           None
         } catch {
           case t: ExecutionException => Some(part, t.getCause())
         }
-      }
     }
+  }
+
+  private def calculateCurrentMoveMap(currentReassignments: Map[TopicPartition, PartitionReassignment]): MoveMap = {
+    val moveMap = new mutable.HashMap[String, mutable.Map[Int, PartitionMove]]()
+    // Add the current reassignments to the move map.
+    currentReassignments.foreach { case (part, reassignment) =>
+      val move = PartitionMove(new mutable.HashSet[Int](), new mutable.HashSet[Int]())
+      reassignment.replicas.forEach {
+        replica => move.sources += replica
+          move.destinations += replica
+      }
+      reassignment.addingReplicas.forEach(move.destinations += _)
+      reassignment.removingReplicas.forEach(move.destinations -= _)
+      val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
+      partMoves.put(part.partition, move)
+    }
+    moveMap
   }
 
   /**
@@ -1243,23 +1293,11 @@ object ReassignPartitionsCommand extends Logging {
    *                                The partition map is keyed on partition index and contains
    *                                the movements for that partition.
    */
-  def calculateMoveMap(currentReassignments: Map[TopicPartition, PartitionReassignment],
-                       proposedReassignments: Map[TopicPartition, Seq[Int]],
-                       currentParts: Map[TopicPartition, Seq[Int]]): MoveMap = {
-    val moveMap = new mutable.HashMap[String, mutable.Map[Int, PartitionMove]]()
-    // Add the current reassignments to the move map.
-    currentReassignments.foreach {
-      case (part, reassignment) =>
-        val move = PartitionMove(new mutable.HashSet[Int](), new mutable.HashSet[Int]())
-        reassignment.replicas.forEach {
-          replica => move.sources += replica
-            move.destinations += replica
-        }
-        reassignment.addingReplicas.forEach(move.destinations += _)
-        reassignment.removingReplicas.forEach(move.destinations -= _)
-        val partMoves = moveMap.getOrElseUpdate(part.topic, new mutable.HashMap[Int, PartitionMove])
-        partMoves.put(part.partition, move)
-    }
+  def calculateProposedMoveMap(currentReassignments: Map[TopicPartition, PartitionReassignment],
+                               proposedReassignments: Map[TopicPartition, Seq[Int]],
+                               currentParts: Map[TopicPartition, Seq[Int]]): MoveMap = {
+    val moveMap = calculateCurrentMoveMap(currentReassignments)
+
     // Add the proposed reassignments to the move map.  The proposals will overwrite
     // the current reassignments.
     proposedReassignments.foreach {
@@ -1346,8 +1384,8 @@ object ReassignPartitionsCommand extends Logging {
     moveMap.values.foreach {
       _.values.foreach {
         partMove =>
-          partMove.sources.foreach(reassigningBrokers.add(_))
-          partMove.destinations.foreach(reassigningBrokers.add(_))
+          partMove.sources.foreach(reassigningBrokers.add)
+          partMove.destinations.foreach(reassigningBrokers.add)
       }
     }
     reassigningBrokers.toSet
@@ -1360,7 +1398,7 @@ object ReassignPartitionsCommand extends Logging {
    * @return              A set of all the brokers involved.
    */
   def calculateMovingBrokers(replicaMoves: Set[TopicPartitionReplica]): Set[Int] = {
-    replicaMoves.map(_.brokerId()).toSet
+    replicaMoves.map(_.brokerId())
   }
 
   /**
@@ -1378,15 +1416,11 @@ object ReassignPartitionsCommand extends Logging {
     topicNames.foreach {
       topicName =>
         val ops = new util.ArrayList[AlterConfigOp]
-        leaderThrottles.get(topicName) match {
-          case None =>
-          case Some(value) => ops.add(new AlterConfigOp(new ConfigEntry(topicLevelLeaderThrottle,
-            value), OpType.SET))
+        leaderThrottles.get(topicName).foreach { value =>
+          ops.add(new AlterConfigOp(new ConfigEntry(topicLevelLeaderThrottle, value), OpType.SET))
         }
-        followerThrottles.get(topicName) match {
-          case None =>
-          case Some(value) => ops.add(new AlterConfigOp(new ConfigEntry(topicLevelFollowerThrottle,
-            value), OpType.SET))
+        followerThrottles.get(topicName).foreach { value =>
+          ops.add(new AlterConfigOp(new ConfigEntry(topicLevelFollowerThrottle, value), OpType.SET))
         }
         if (!ops.isEmpty) {
           configs.put(new ConfigResource(ConfigResource.Type.TOPIC, topicName), ops)
@@ -1416,41 +1450,60 @@ object ReassignPartitionsCommand extends Logging {
     }
   }
 
+  private def modifyReassignmentThrottle(admin: Admin, moveMap: MoveMap, interBrokerThrottle: Long): Unit = {
+    val leaderThrottles = calculateLeaderThrottles(moveMap)
+    val followerThrottles = calculateFollowerThrottles(moveMap)
+    modifyTopicThrottles(admin, leaderThrottles, followerThrottles)
+
+    val reassigningBrokers = calculateReassigningBrokers(moveMap)
+    modifyInterBrokerThrottle(admin, reassigningBrokers, interBrokerThrottle)
+  }
+
   /**
-   * Modify the broker-level configurations for leader and follower throttling.
+   * Modify the leader/follower replication throttles for a set of brokers.
    *
-   * @param adminClient                   The adminClient object to use.
-   * @param reassigningBrokers            The brokers that are involved in reassignments.
-   * @param interBrokerThrottle           The inter-broker throttle value to set, or a
-   *                                      negative number if none should be set.
-   * @param movingBrokers                 The brokers that are involved in movements.
-   * @param logDirThrottle                The replica log dir throttle value to set, or a
-   *                                      negative number if none should be set.
+   * @param adminClient The Admin instance to use
+   * @param reassigningBrokers The set of brokers involved in the reassignment
+   * @param interBrokerThrottle The new throttle (ignored if less than 0)
    */
-  def modifyBrokerThrottles(adminClient: Admin,
-                            reassigningBrokers: Set[Int],
-                            interBrokerThrottle: Long,
-                            movingBrokers: Set[Int],
-                            logDirThrottle: Long): Unit = {
-    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
-    (reassigningBrokers ++ movingBrokers).foreach {
-      brokerId =>
+  def modifyInterBrokerThrottle(adminClient: Admin,
+                                reassigningBrokers: Set[Int],
+                                interBrokerThrottle: Long): Unit = {
+    if (interBrokerThrottle >= 0) {
+      val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+      reassigningBrokers.foreach { brokerId =>
         val ops = new util.ArrayList[AlterConfigOp]
-        if (interBrokerThrottle >= 0 && reassigningBrokers.contains(brokerId)) {
-          ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelLeaderThrottle,
-            interBrokerThrottle.toString), OpType.SET))
-          ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelFollowerThrottle,
-            interBrokerThrottle.toString), OpType.SET))
-        }
-        if (logDirThrottle >= 0 && movingBrokers.contains(brokerId)) {
-          ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelLogDirThrottle,
-            logDirThrottle.toString), OpType.SET))
-        }
-        if (!ops.isEmpty) {
-          configs.put(new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString), ops)
-        }
+        ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelLeaderThrottle,
+          interBrokerThrottle.toString), OpType.SET))
+        ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelFollowerThrottle,
+          interBrokerThrottle.toString), OpType.SET))
+        configs.put(new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString), ops)
+      }
+      adminClient.incrementalAlterConfigs(configs).all().get()
+      println(s"The inter-broker throttle limit was set to $interBrokerThrottle B/s")
     }
-    adminClient.incrementalAlterConfigs(configs).all().get()
+  }
+
+  /**
+   * Modify the log dir reassignment throttle for a set of brokers.
+   *
+   * @param admin The Admin instance to use
+   * @param movingBrokers The set of broker to alter the throttle of
+   * @param logDirThrottle The new throttle (ignored if less than 0)
+   */
+  def modifyLogDirThrottle(admin: Admin,
+                           movingBrokers: Set[Int],
+                           logDirThrottle: Long): Unit = {
+    if (logDirThrottle >= 0) {
+      val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+      movingBrokers.foreach { brokerId =>
+        val ops = new util.ArrayList[AlterConfigOp]
+        ops.add(new AlterConfigOp(new ConfigEntry(brokerLevelLogDirThrottle, logDirThrottle.toString), OpType.SET))
+        configs.put(new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString), ops)
+      }
+      admin.incrementalAlterConfigs(configs).all().get()
+      println(s"The replica-alter-dir throttle limit was set to $logDirThrottle B/s")
+    }
   }
 
   /**
@@ -1655,7 +1708,7 @@ object ReassignPartitionsCommand extends Logging {
 
     // Determine which action we should perform.
     val validActions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt,
-                           opts.cancelOpt, opts.listOpt)
+                           opts.cancelOpt, opts.listOpt, opts.alterThrottleOp)
     val allActions = validActions.filter(opts.options.has _)
     if (allActions.size != 1) {
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: %s".format(
@@ -1686,10 +1739,10 @@ object ReassignPartitionsCommand extends Logging {
       opts.cancelOpt -> collection.immutable.Seq(
         opts.reassignmentJsonFileOpt
       ),
-      opts.listOpt -> collection.immutable.Seq(
-      )
+      opts.listOpt -> collection.immutable.Seq.empty,
+      opts.alterThrottleOp -> collection.immutable.Seq.empty
     )
-    CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs.get(action).get: _*)
+    CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs(action): _*)
 
     // Make sure that we didn't specify any arguments that are incompatible with our chosen action.
     val permittedArgs = Map(
@@ -1724,6 +1777,11 @@ object ReassignPartitionsCommand extends Logging {
       opts.listOpt -> Seq(
         opts.bootstrapServerOpt,
         opts.commandConfigOpt
+      ),
+      opts.alterThrottleOp -> Seq(
+        opts.bootstrapServerOpt,
+        opts.interBrokerThrottleOpt,
+        opts.replicaAlterLogDirsThrottleOpt
       )
     )
     opts.options.specs.forEach(opt => {
@@ -1741,6 +1799,7 @@ object ReassignPartitionsCommand extends Logging {
         opts.commandConfigOpt,
         opts.replicaAlterLogDirsThrottleOpt,
         opts.listOpt,
+        opts.alterThrottleOp,
         opts.timeoutOpt
       )
       bootstrapServerOnlyArgs.foreach {
@@ -1783,6 +1842,8 @@ object ReassignPartitionsCommand extends Logging {
     val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.")
     val cancelOpt = parser.accepts("cancel", "Cancel an active reassignment.")
     val listOpt = parser.accepts("list", "List all active partition reassignments.")
+    val alterThrottleOp = parser.accepts("alter-throttle", "Alter the throttle of an active reassignment " +
+      "using either --throttle or --replica-alter-log-dirs-throttle to provide the new throttle value.")
 
     // Arguments
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "the server(s) to use for bootstrapping. REQUIRED if " +
@@ -1820,15 +1881,21 @@ object ReassignPartitionsCommand extends Logging {
                       .describedAs("brokerlist")
                       .ofType(classOf[String])
     val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
-    val interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. The throttle rate should be at least 1 KB/s.")
-                      .withRequiredArg()
-                      .describedAs("throttle")
-                      .ofType(classOf[Long])
-                      .defaultsTo(-1)
-    val replicaAlterLogDirsThrottleOpt = parser.accepts("replica-alter-log-dirs-throttle", "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). Rerunning with this option, whilst a rebalance is in progress, will alter the throttle value. The throttle rate should be at least 1 KB/s.") .withRequiredArg()
-                      .describedAs("replicaAlterLogDirsThrottle")
-                      .ofType(classOf[Long])
-                      .defaultsTo(-1)
+    val interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). " +
+      "This option can be included with --execute when a reassignment is started, and it can be altered with --alter-throttle for reassignments in progress. " +
+      "The throttle rate should be at least 1 KB/s.")
+      .withRequiredArg()
+      .describedAs("throttle")
+      .ofType(classOf[Long])
+      .defaultsTo(-1)
+    val replicaAlterLogDirsThrottleOpt = parser.accepts("replica-alter-log-dirs-throttle",
+      "The movement of replicas between log directories on the same broker will be throttled to this value (bytes/sec). " +
+        "This option can be included with --execute when a reassignment is started, and it can be altered with --alter-throttle for reassignments in progress. " +
+        "The throttle rate should be at least 1 KB/s.")
+      .withRequiredArg()
+      .describedAs("replicaAlterLogDirsThrottle")
+      .ofType(classOf[Long])
+      .defaultsTo(-1)
     val timeoutOpt = parser.accepts("timeout", "The maximum time in ms to wait for log directory replica assignment to begin.")
                       .withRequiredArg()
                       .describedAs("timeout")
