@@ -28,6 +28,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.file.Files;
@@ -35,6 +36,8 @@ import java.nio.file.StandardOpenOption;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+
+
 
 /**
  * A {@link Records} implementation backed by a file. An optional start and end position can be applied to this
@@ -51,6 +54,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private final AtomicInteger size;
     private final FileChannel channel;
     private volatile File file;
+
+    private volatile Boolean ismapped = false;
+    private volatile MappedByteBuffer mbuf = null;
 
     /**
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
@@ -166,6 +172,43 @@ public class FileRecords extends AbstractRecords implements Closeable {
         return written;
     }
 
+    public int rdmaAppend(int expectedPos, int written) throws IOException {
+        if (written > Integer.MAX_VALUE - size.get())
+            throw new IllegalArgumentException("RDMA Append of size " + written +
+                    " bytes is too large for segment with current file position at " + size.get());
+        int curSize = size.getAndAdd(written);
+        assert expectedPos == curSize;
+        return written;
+    }
+
+
+    // I think is thread safe as channel.size() only changed before closing.
+    public Long GetMaxPositionMayExtend() throws Exception {
+        // Long size2 = channel.size();
+        // Long pos = channel.position();
+        // System.out.println("Size " +  channel.size() + channel.toString() );
+        return channel.size();
+    }
+
+
+
+    public  MappedByteBuffer mmap(int len)  throws Exception {
+        return mmap(FileChannel.MapMode.READ_WRITE, 0, len);
+    }
+
+    public  MappedByteBuffer mmap(FileChannel.MapMode mode, int start, int len) throws Exception {
+        if (mbuf != null) {
+            return mbuf;
+        }
+        synchronized (this) {
+            if (!ismapped) {
+                ismapped = true;
+                mbuf = channel.map(mode, start, len);
+            }
+            return mbuf;
+        }
+    }
+
     /**
      * Commit all written data to the physical disk
      */
@@ -179,6 +222,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public void close() throws IOException {
         flush();
         trim();
+        if (ismapped) {
+            mbuf = null;
+            ismapped = false;
+        }
         channel.close();
     }
 

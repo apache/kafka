@@ -17,15 +17,19 @@
 
 package kafka.server
 
+import java.nio.ByteBuffer
 import java.util.Properties
 
 import kafka.log.LogConfig
 import kafka.message.ZStdCompressionCodec
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.{ClientRDMARequest, ExclusiveRdmaClient, ProduceRDMAWriteRequest}
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
+import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, RDMAProduceAddressRequest, RDMAProduceAddressResponse}
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.LogContext
 import org.junit.Assert._
 import org.junit.Test
 
@@ -36,6 +40,11 @@ import scala.collection.JavaConverters._
   * complements those classes with tests that require lower-level access to the protocol.
   */
 class ProduceRequestTest extends BaseRequestTest {
+
+  protected override def propertyOverrides(props: Properties): Unit = {
+    props.put("log.segment.bytes", "1073741824")
+    props.put("log.preallocate","true")
+  }
 
   @Test
   def testSimpleProduceRequest() {
@@ -61,6 +70,95 @@ class ProduceRequestTest extends BaseRequestTest {
     sendAndCheck(MemoryRecords.withRecords(CompressionType.GZIP,
       new SimpleRecord(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
+  }
+
+  @Test
+  def testRdmaProduceRequest() {
+    val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
+
+    def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): ProduceResponse.PartitionResponse = {
+      val topicPartition = new TopicPartition("topic", partition)
+      val partitionRecords = Map(topicPartition -> memoryRecords)
+      val produceResponse = sendProduceRequest(leader,
+        ProduceRequest.Builder.forCurrentMagic(-1, 3000, partitionRecords.asJava).build())
+      assertEquals(1, produceResponse.responses.size)
+      val (tp, partitionResponse) = produceResponse.responses.asScala.head
+      assertEquals(topicPartition, tp)
+      assertEquals(Errors.NONE, partitionResponse.error)
+      assertEquals(expectedOffset, partitionResponse.baseOffset)
+      assertEquals(-1, partitionResponse.logAppendTime)
+      partitionResponse
+    }
+
+    sendAndCheck(MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
+
+    val topicPartition = new TopicPartition("topic", partition)
+    val tplist = List(topicPartition).asJava
+
+    val toUpdate: List[TopicPartition]  = List()
+
+    val request = new RDMAProduceAddressRequest.Builder(-1,tplist,toUpdate.asJava,3000).build()
+    val addressResponse = sendProduceAddressRequest(leader,request)
+
+    val clientAddress = addressResponse.responses().get(topicPartition)
+    assert(clientAddress.error == Errors.NONE)
+
+    val rdmabrokers = servers.map(
+      b => b.config.brokerId.asInstanceOf[java.lang.Integer] -> b.rdmaserver.getPort().asInstanceOf[java.lang.Integer] ).toMap.asJava
+
+
+    val rdmaclient = new ExclusiveRdmaClient("testProducer", new LogContext("[RDMA test client]"),
+      null,100,100,1,1)
+
+    val leaderRdmaPort = rdmabrokers.get(leader)
+
+    val destination = new Node( leader,"10.152.8.96",leaderRdmaPort )
+    rdmaclient.connect( destination)
+    assert(clientAddress.error == Errors.NONE)
+
+
+    val records = MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
+
+    val length = records.sizeInBytes()
+    val buffer  = ByteBuffer.allocateDirect(length)
+
+    buffer.put(records.buffer() )
+    buffer.rewind()
+
+    val mr = rdmaclient.MemReg(buffer)
+
+    val lkey = mr.getLkey
+
+    var builder = new ProduceRDMAWriteRequest(clientAddress.address,clientAddress.rkey,
+      length,buffer,lkey,
+      clientAddress.immdata)
+    var req = new ClientRDMARequest(destination.idString(),1,builder,"testProducer",0,false,false,null)
+
+    rdmaclient.send(req,0)
+    rdmaclient.poll(0,0)
+
+    /* val addressResponse2 = sendProduceAddressRequest(leader,request)
+
+    val clientAddress2 = addressResponse2.responses().get(topicPartition)
+    assert(clientAddress2.error == Errors.NONE)
+
+    assert(clientAddress2.rkey == clientAddress.rkey )
+    //assert(clientAddress2.length == clientAddress.length - length )
+    //assert(clientAddress2.immdata == clientAddress.immdata )
+
+    */
+
+    builder = new ProduceRDMAWriteRequest(clientAddress.address+length,clientAddress.rkey,
+      length,buffer,lkey,
+      clientAddress.immdata)
+
+    req = new ClientRDMARequest(destination.idString(),1,builder,"testProducer",0,false,false,null)
+
+    rdmaclient.send(req,0)
+    rdmaclient.poll(0,0)
+
   }
 
   @Test
@@ -151,6 +249,11 @@ class ProduceRequestTest extends BaseRequestTest {
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
     val response = connectAndSend(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
     ProduceResponse.parse(response, request.version)
+  }
+
+  private def sendProduceAddressRequest(leaderId: Int, request: RDMAProduceAddressRequest): RDMAProduceAddressResponse = {
+    val response = connectAndSend(request, ApiKeys.PRODUCER_RDMA_REGISTER, destination = brokerSocketServer(leaderId))
+    RDMAProduceAddressResponse.parse(response, request.version)
   }
 
 }

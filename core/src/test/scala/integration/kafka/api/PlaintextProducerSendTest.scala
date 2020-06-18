@@ -30,6 +30,12 @@ import org.junit.Test
 
 class PlaintextProducerSendTest extends BaseProducerSendTest {
 
+  protected override def propertyOverrides(props: Properties): Unit = {
+    props.put("log.preallocate","true")
+  }
+
+
+
   @Test(expected = classOf[SerializationException])
   def testWrongSerializer() {
     val producerProps = new Properties()
@@ -40,6 +46,29 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, "key".getBytes, "value".getBytes)
     producer.send(record)
   }
+
+  @Test
+  def testSend() {
+
+    val producer = createProducer(brokerList = brokerList)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, "key".getBytes, "value".getBytes)
+    val future = producer.send(record)
+    val rec = future.get()
+    assert(rec.partition() == 0)
+    producer.close()
+  }
+
+  @Test
+  def testRdmaSend() {
+
+    val producer = createProducer(brokerList = brokerList)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, "key".getBytes, "value".getBytes)
+    val future = producer.RDMAsend(record)
+    val rec = future.get()
+    assert(rec.partition() == 0)
+   // producer.close()
+  }
+
 
   @Test
   def testBatchSizeZero() {

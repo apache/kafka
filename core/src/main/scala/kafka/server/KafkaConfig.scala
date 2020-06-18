@@ -79,6 +79,10 @@ object Defaults {
   val RequestTimeoutMs = 30000
   val FailedAuthenticationDelayMs = 100
 
+  /** ********* RDMA Server Configuration ***********/
+  val RDMAPort: Int = 0
+  val RDMAHostName: String = new String("10.152.8.96")
+
   /** ********* Log Configuration ***********/
   val NumPartitions = 1
   val LogDir = "/tmp/kafka-logs"
@@ -271,6 +275,27 @@ object KafkaConfig {
   val BrokerIdProp = "broker.id"
   val MessageMaxBytesProp = "message.max.bytes"
   val NumNetworkThreadsProp = "num.network.threads"
+
+  val NumRdmaNetworkThreadsProp = "num.rdmanetwork.threads"
+  val MaxCompletionQueueSizeProp =  "num.rdmanetwork.maxcomplqueuesize"
+  val MaxRdmaSendSizeProp = "num.rdmanetwork.maxsendsize"
+  val MaxRdmaRecvSizeProp = "num.rdmanetwork.maxrecvsize"
+  val MaxRdmaWcBatchProp = "num.rdmanetwork.wcbatch"
+
+  val WithRdmaReplicationProp = "rdma.replication"
+  val NumReplicationPushThreadsProp= "num.replication.threads"
+
+  val RdmaPusherWcBatchProp= "num.replication.wcbatch"
+  val RdmaPusherCompletionQueueSizeProp= "num.replication.maxcomplqueuesize"
+  val RdmaPusherSendSizeProp= "num.replication.maxsendsize"
+  val RdmaPusherReceiveSizeProp="num.replication.maxreceivesize"
+  val RdmaPusherRequestQuotaProp= "num.replication.maxrequestquota"
+  val RdmaPusherMaxBatchSizeInBytesProp="num.replication.maxrdmabatch"
+  val RdmaPusherMaxReplicationHandlerBatchProp= "num.replication.replicationbatch"
+  val RdmaPusherrRetryTimeoutProp= "num.replication.tcptimeout"
+  val MaxRdmaConsumersWithSlotsProp = "num.rdmaslots.maxconsumers"
+  val MaxRdmaSlotsPerConsumerProp = "num.rdmaslots.maxslots"
+
   val NumIoThreadsProp = "num.io.threads"
   val BackgroundThreadsProp = "background.threads"
   val NumReplicaAlterLogDirsThreadsProp = "num.replica.alter.log.dirs.threads"
@@ -295,6 +320,9 @@ object KafkaConfig {
   val MaxConnectionsPerIpOverridesProp = "max.connections.per.ip.overrides"
   val ConnectionsMaxIdleMsProp = "connections.max.idle.ms"
   val FailedAuthenticationDelayMsProp = "connection.failed.authentication.delay.ms"
+  /***************** RDMA Server Configuration *************/
+  val RDMAPortProp = "rdmaport"
+  val RDMAHostNameProp = "rdmahost.name"
   /***************** rack configuration *************/
   val RackProp = "broker.rack"
   /** ********* Log Configuration ***********/
@@ -503,6 +531,23 @@ object KafkaConfig {
   val MessageMaxBytesDoc = TopicConfig.MAX_MESSAGE_BYTES_DOC +
     s"<p>This can be set per topic with the topic level <code>${TopicConfig.MAX_MESSAGE_BYTES_CONFIG}</code> config.</p>"
   val NumNetworkThreadsDoc = "The number of threads that the server uses for receiving requests from the network and sending responses to the network"
+  val NumRdmaNetworkThreadsDoc = "The number of threads that the server uses for receiving requests and sending responses via RDMA"
+  val MaxCompletionQueueSizeDoc = "The size of completion queue of each RDMA processor"
+  val MaxRdmaSendSizeDoc = "Rdma send size per connection "
+  val MaxRdmaRecvSizeDoc = "Rdma recv size per connection "
+  val MaxRdmaWcBatchDoc = "The size of the poll request of the completion queue used in general communication module"
+  val NumReplicationPushThreadsDoc = "The number of threads that the server uses push replication via RDMA"
+  val RdmaPusherWcBatchDoc = "The size of the poll request of the completion queue used in replication push module"
+  val RdmaPusherCompletionQueueSizeDoc = "The size of completion queue of each RDMA pusher worker"
+  val RdmaPusherSendSizeDoc = "Rdma send size per connection in RDMA pusher worker"
+  val RdmaPusherReceiveSizeDoc = "Rdma receive size per connection in RDMA pusher worker"
+  val RdmaPusherRequestQuotaDoc = "The maximum number of outstanding requests per connection in RDMA pusher worker"
+  val RdmaPusherMaxBatchSizeInBytesDoc = "The size in bytes of the maximum batch in pusher module"
+  val RdmaPusherMaxReplicationHandlerBatchDoc =  "The maximum number of replication handlers can be taken from work queue at one call in rdma push module"
+  val RdmaPusherrRetryTimeoutDoc = "The delay in ms between get rdma address request and roll segment requests"
+  val MaxRdmaConsumersWithSlotsDoc = "Max number of consumers which can use slots"
+  val MaxRdmaSlotsPerConsumerDoc = "Max number of slots per consumer"
+  val WithRdmaReplicationDoc = "Use rdma push for replication"
   val NumIoThreadsDoc = "The number of threads that the server uses for processing requests, which may include disk I/O"
   val NumReplicaAlterLogDirsThreadsDoc = "The number of threads that can move replicas between log directories, which may include disk I/O"
   val BackgroundThreadsDoc = "The number of threads to use for various background processing tasks"
@@ -565,6 +610,9 @@ object KafkaConfig {
     "control.plane.listener.name = CONTROLLER\n" +
     "then controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.\n" +
     "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections."
+  /** ********* Socket Server Configuration ***********/
+  val RDMAPortDoc = "the RDMA port to listen and accept connections on"
+  val RDMAHostNameDoc = "the RDMA hostname to listen and accept connections on \n"
 
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket sever sockets. If the value is -1, the OS default will be used."
@@ -848,6 +896,23 @@ object KafkaConfig {
       .define(BrokerIdProp, INT, Defaults.BrokerId, HIGH, BrokerIdDoc)
       .define(MessageMaxBytesProp, INT, Defaults.MessageMaxBytes, atLeast(0), HIGH, MessageMaxBytesDoc)
       .define(NumNetworkThreadsProp, INT, Defaults.NumNetworkThreads, atLeast(1), HIGH, NumNetworkThreadsDoc)
+      .define(NumRdmaNetworkThreadsProp, INT, 1, atLeast(1), LOW, NumRdmaNetworkThreadsDoc)
+      .define(MaxCompletionQueueSizeProp,INT,5000,atLeast(1), LOW, MaxCompletionQueueSizeDoc)
+      .define(MaxRdmaSendSizeProp,INT,64,atLeast(1), LOW, MaxRdmaSendSizeDoc)
+      .define(MaxRdmaRecvSizeProp,INT,64,atLeast(1), LOW, MaxRdmaRecvSizeDoc)
+      .define(MaxRdmaWcBatchProp,INT,16,atLeast(1),LOW,MaxRdmaWcBatchDoc)
+      .define(NumReplicationPushThreadsProp,INT,4,atLeast(1),LOW,NumReplicationPushThreadsDoc)
+      .define(RdmaPusherWcBatchProp,INT,16,atLeast(1),LOW,RdmaPusherWcBatchDoc)
+      .define(RdmaPusherCompletionQueueSizeProp,INT,5000,atLeast(1),LOW,RdmaPusherCompletionQueueSizeDoc)
+      .define(RdmaPusherSendSizeProp,INT,128,atLeast(1),LOW,RdmaPusherSendSizeDoc)
+      .define(RdmaPusherReceiveSizeProp,INT,128,atLeast(1),LOW,RdmaPusherReceiveSizeDoc)
+      .define(RdmaPusherRequestQuotaProp,INT,100,atLeast(1),LOW,RdmaPusherRequestQuotaDoc)
+      .define(RdmaPusherMaxBatchSizeInBytesProp,INT,2000,atLeast(1),LOW,RdmaPusherMaxBatchSizeInBytesDoc)
+      .define(RdmaPusherMaxReplicationHandlerBatchProp,INT,30,atLeast(1),LOW,RdmaPusherMaxReplicationHandlerBatchDoc)
+      .define(RdmaPusherrRetryTimeoutProp,INT,5000,atLeast(1),LOW,RdmaPusherrRetryTimeoutDoc)
+      .define(MaxRdmaConsumersWithSlotsProp,INT,50,atLeast(1), LOW,MaxRdmaConsumersWithSlotsDoc)
+      .define(MaxRdmaSlotsPerConsumerProp,INT,50,atLeast(1), LOW, MaxRdmaSlotsPerConsumerDoc)
+      .define(WithRdmaReplicationProp,BOOLEAN,false,LOW,WithRdmaReplicationDoc)
       .define(NumIoThreadsProp, INT, Defaults.NumIoThreads, atLeast(1), HIGH, NumIoThreadsDoc)
       .define(NumReplicaAlterLogDirsThreadsProp, INT, null, HIGH, NumReplicaAlterLogDirsThreadsDoc)
       .define(BackgroundThreadsProp, INT, Defaults.BackgroundThreads, atLeast(1), HIGH, BackgroundThreadsDoc)
@@ -874,6 +939,10 @@ object KafkaConfig {
       .define(MaxConnectionsPerIpOverridesProp, STRING, Defaults.MaxConnectionsPerIpOverrides, MEDIUM, MaxConnectionsPerIpOverridesDoc)
       .define(ConnectionsMaxIdleMsProp, LONG, Defaults.ConnectionsMaxIdleMs, MEDIUM, ConnectionsMaxIdleMsDoc)
       .define(FailedAuthenticationDelayMsProp, INT, Defaults.FailedAuthenticationDelayMs, atLeast(0), LOW, FailedAuthenticationDelayMsDoc)
+
+      /** ********* RDMA Server Configuration ***********/
+      .define(RDMAPortProp, INT, Defaults.RDMAPort, LOW, RDMAPortDoc)
+      .define(RDMAHostNameProp, STRING, Defaults.RDMAHostName, LOW, RDMAHostNameDoc)
 
       /************ Rack Configuration ******************/
       .define(RackProp, STRING, null, MEDIUM, RackDoc)
@@ -1136,6 +1205,35 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   var brokerId: Int = getInt(KafkaConfig.BrokerIdProp)
 
   def numNetworkThreads = getInt(KafkaConfig.NumNetworkThreadsProp)
+
+  def numRdmaNetworkThreads = getInt(KafkaConfig.NumRdmaNetworkThreadsProp)
+  def maxCompletionQueueSize = getInt(KafkaConfig.MaxCompletionQueueSizeProp)
+  def maxRdmaSendSize = getInt(KafkaConfig.MaxRdmaSendSizeProp)
+  def maxRdmaRecvSize = getInt(KafkaConfig.MaxRdmaRecvSizeProp)
+  def maxRdmaWcBatch = getInt(KafkaConfig.MaxRdmaWcBatchProp)
+
+
+
+  def withRdmaReplication = getBoolean(KafkaConfig.WithRdmaReplicationProp)
+
+
+  def numReplicationPushThreads = getInt(KafkaConfig.NumReplicationPushThreadsProp )
+  def RdmaPusherWcBatch = getInt(KafkaConfig.RdmaPusherWcBatchProp )
+  def RdmaPusherCompletionQueueSize = getInt(KafkaConfig.RdmaPusherCompletionQueueSizeProp )
+  def RdmaPusherSendSize = getInt(KafkaConfig.RdmaPusherSendSizeProp )
+  def RdmaPusherReceiveSize = getInt(KafkaConfig.RdmaPusherReceiveSizeProp )
+  def RdmaPusherRequestQuota = getInt(KafkaConfig.RdmaPusherRequestQuotaProp )
+  def RdmaPusherMaxBatchSizeInBytes = getInt(KafkaConfig.RdmaPusherMaxBatchSizeInBytesProp )
+  def RdmaPusherMaxReplicationHandlerBatch = getInt(KafkaConfig.RdmaPusherMaxReplicationHandlerBatchProp )
+  def RdmaPusherrRetryTimeout = getInt(KafkaConfig.RdmaPusherrRetryTimeoutProp )
+
+
+
+  def maxNumberOfRdmaSlotClients = getInt(KafkaConfig.MaxRdmaConsumersWithSlotsProp)
+  def maxNumberOfSlotsPerClient = getInt(KafkaConfig.MaxRdmaSlotsPerConsumerProp)
+
+
+
   def backgroundThreads = getInt(KafkaConfig.BackgroundThreadsProp)
   val queuedMaxRequests = getInt(KafkaConfig.QueuedMaxRequestsProp)
   val queuedMaxBytes = getLong(KafkaConfig.QueuedMaxBytesProp)
@@ -1165,6 +1263,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, getString(KafkaConfig.MaxConnectionsPerIpOverridesProp)).map { case (k, v) => (k, v.toInt)}
   val connectionsMaxIdleMs = getLong(KafkaConfig.ConnectionsMaxIdleMsProp)
   val failedAuthenticationDelayMs = getInt(KafkaConfig.FailedAuthenticationDelayMsProp)
+
+
+  /** ********* RDMA Server Configuration ***********/
+  val rdmaHostName = getString(KafkaConfig.RDMAHostNameProp)
+  val rdmaPort = getInt(KafkaConfig.RDMAPortProp)
 
   /***************** rack configuration **************/
   val rack = Option(getString(KafkaConfig.RackProp))
@@ -1359,7 +1462,9 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def listeners: Seq[EndPoint] = {
     Option(getString(KafkaConfig.ListenersProp)).map { listenerProp =>
       CoreUtils.listenerListToEndPoints(listenerProp, listenerSecurityProtocolMap)
-    }.getOrElse(CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap))
+    }.getOrElse(
+      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port, listenerSecurityProtocolMap)
+    )
   }
 
   def controlPlaneListener: Option[EndPoint] = {
@@ -1367,6 +1472,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       listeners.filter(endpoint => endpoint.listenerName.value() == listenerName.value()).head
     }
   }
+
+  def RDMAListener: Option[EndPoint] = if(rdmaPort == -1) None else  Some(new EndPoint(rdmaHostName, rdmaPort, ListenerName.forSecurityProtocol(SecurityProtocol.RDMA), SecurityProtocol.RDMA))
 
   def dataPlaneListeners: Seq[EndPoint] = {
     Option(getString(KafkaConfig.ControlPlaneListenerNameProp)) match {

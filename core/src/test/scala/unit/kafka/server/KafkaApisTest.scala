@@ -54,11 +54,13 @@ import org.junit.{After, Test}
 import scala.collection.JavaConverters._
 import scala.collection.Map
 
+
 class KafkaApisTest {
 
   private val requestChannel: RequestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
   private val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
   private val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
+  private val rdmaManager: RDMAManager =  EasyMock.createNiceMock(classOf[RDMAManager])
   private val groupCoordinator: GroupCoordinator = EasyMock.createNiceMock(classOf[GroupCoordinator])
   private val adminManager: AdminManager = EasyMock.createNiceMock(classOf[AdminManager])
   private val txnCoordinator: TransactionCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
@@ -88,7 +90,7 @@ class KafkaApisTest {
     val properties = TestUtils.createBrokerConfig(brokerId, "zk")
     properties.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
     properties.put(KafkaConfig.LogMessageFormatVersionProp, interBrokerProtocolVersion.toString)
-    new KafkaApis(requestChannel,
+    return new KafkaApis(requestChannel,
       replicaManager,
       adminManager,
       groupCoordinator,
@@ -105,7 +107,7 @@ class KafkaApisTest {
       brokerTopicStats,
       clusterId,
       time,
-      null
+      null, rdmaManager
     )
   }
 

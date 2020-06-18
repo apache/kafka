@@ -55,7 +55,7 @@ class Replica(val brokerId: Int,
   def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
 
   info(s"Replica loaded for partition $topicPartition with initial high watermark $initialHighWatermarkValue")
-  log.foreach(_.onHighWatermarkIncremented(initialHighWatermarkValue))
+  log.foreach(_.onHighWatermarkIncremented(highWatermarkMetadata))
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -152,13 +152,16 @@ class Replica(val brokerId: Int,
     else
       _logStartOffset
 
+
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {
       if (newHighWatermark.messageOffset < 0)
         throw new IllegalArgumentException("High watermark offset should be non-negative")
 
       highWatermarkMetadata = newHighWatermark
-      log.foreach(_.onHighWatermarkIncremented(newHighWatermark.messageOffset))
+      log.foreach(_.onHighWatermarkIncremented(newHighWatermark))
+
+
       trace(s"Setting high watermark for replica $brokerId partition $topicPartition to [$newHighWatermark]")
     } else {
       throw new KafkaException(s"Should not set high watermark on partition $topicPartition's non-local replica $brokerId")

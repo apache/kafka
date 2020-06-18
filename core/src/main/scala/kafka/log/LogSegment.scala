@@ -17,6 +17,8 @@
 package kafka.log
 
 import java.io.{File, IOException}
+//import java.nio.MappedByteBuffer
+import java.nio.ByteBuffer
 import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
@@ -33,6 +35,24 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.math._
+
+
+
+
+// rdma patch
+case class AddressReadInfo(bytebuffer: ByteBuffer, // Mapped
+                          baseOffset: Long,   // baseOffset if the segment
+                          offset: Long,       // found offset
+                       startPosition: Long,   // offset in file in bytes
+                       endPosition: Long )    // file size at the moment
+
+// rdma patch
+case class ConsumerAddressReadInfo(readInfo: AddressReadInfo, //Mapped
+                                  fileIsSealed: Boolean,
+                           waterMarkPosition: Long,   // watermark
+                           waterMarkOffset: Long,     // watermark
+                                   lsoPosition: Long, // last stable offset
+                                   lsoOffset: Long )  // last stable offset
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileRecords containing
@@ -152,6 +172,40 @@ class LogSegment private[log] (val log: FileRecords,
     }
   }
 
+  // rdma patch
+  @nonthreadsafe
+  def rdmaAppend(expected_position: Int,
+                  largestOffset: Long,
+             largestTimestamp: Long,
+             shallowOffsetOfMaxTimestamp: Long,
+             records: MemoryRecords): Unit = {
+    if (records.sizeInBytes > 0) {
+      trace(s"Rdma Inserting ${records.sizeInBytes} bytes at end offset $largestOffset at position ${log.sizeInBytes} " +
+        s"with largest timestamp $largestTimestamp at shallow offset $shallowOffsetOfMaxTimestamp")
+      val physicalPosition = log.sizeInBytes()
+      if (physicalPosition == 0)
+        rollingBasedTimestamp = Some(largestTimestamp)
+
+      ensureOffsetInRange(largestOffset)
+
+      // append the messages
+      val appendedBytes = log.rdmaAppend(expected_position, records.sizeInBytes())
+      trace(s"Appended $appendedBytes to ${log.file} at end offset $largestOffset")
+      // Update the in memory max timestamp and corresponding offset.
+      if (largestTimestamp > maxTimestampSoFar) {
+        maxTimestampSoFar = largestTimestamp
+        offsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp
+      }
+      // append an entry to the index (if needed)
+      if (bytesSinceLastIndexEntry > indexIntervalBytes) {
+        offsetIndex.append(largestOffset, physicalPosition)
+        timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
+        bytesSinceLastIndexEntry = 0
+      }
+      bytesSinceLastIndexEntry += records.sizeInBytes
+    }
+  }
+
   private def ensureOffsetInRange(offset: Long): Unit = {
     if (!canConvertToRelativeOffset(offset))
       throw new LogSegmentOffsetOverflowException(this, offset)
@@ -253,6 +307,22 @@ class LogSegment private[log] (val log: FileRecords,
   private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): LogOffsetPosition = {
     val mapping = offsetIndex.lookup(offset)
     log.searchForOffsetWithSize(offset, max(mapping.position, startingFilePosition))
+  }
+
+
+  // rdma patch
+  @threadsafe
+  private[log]  def getOffsetPosition(startOffset: Long) : LogOffsetPosition = {
+    val startOffsetAndSize = translateOffset(startOffset)
+    startOffsetAndSize
+  }
+
+  // rdma patch
+  @threadsafe
+  private[log]  def getMappedBuffer(): ByteBuffer = {
+    val till_the_end = log.GetMaxPositionMayExtend()
+    val buffer = log.mmap(till_the_end.toInt)
+    buffer
   }
 
   /**

@@ -123,7 +123,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   private def receiveRequest(channel: RequestChannel, timeout: Long = 2000L): RequestChannel.Request = {
-    channel.receiveRequest(timeout) match {
+    channel.receiveRequest(0,timeout) match {
       case request: RequestChannel.Request => request
       case RequestChannel.ShutdownRequest => fail("Unexpected shutdown received")
       case null => fail("receiveRequest timed out")

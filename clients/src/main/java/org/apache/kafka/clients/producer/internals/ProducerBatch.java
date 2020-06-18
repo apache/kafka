@@ -58,6 +58,8 @@ public final class ProducerBatch {
 
     private enum FinalState { ABORTED, FAILED, SUCCEEDED }
 
+    public enum BatchType { NORMAL, RDMA }
+
     final long createdMs;
     final TopicPartition topicPartition;
     final ProduceRequestResult produceFuture;
@@ -76,11 +78,23 @@ public final class ProducerBatch {
     private boolean retry;
     private boolean reopened;
 
+    public final BatchType type;
+
+    public boolean isRDMA() {
+        return type == BatchType.RDMA;
+    }
+
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
-        this(tp, recordsBuilder, createdMs, false);
+        this(tp, recordsBuilder, createdMs, false, false);
     }
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+        this(tp, recordsBuilder, createdMs, isSplitBatch, false);
+    }
+
+
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch, boolean withRDMA) {
+        this.type = withRDMA ? BatchType.RDMA : BatchType.NORMAL;
         this.createdMs = createdMs;
         this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;

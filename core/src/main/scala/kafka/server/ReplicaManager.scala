@@ -128,6 +128,7 @@ object ReplicaManager {
     interBrokerProtocolVersion = ApiVersion.latestVersion,
     localBrokerId = -1,
     time = null,
+    rdmaManager = null,
     replicaManager = null,
     logManager = null,
     zkClient = null)
@@ -148,7 +149,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectPreferredLeaderPurgatory: DelayedOperationPurgatory[DelayedElectPreferredLeader],
-                     threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
+                     threadNamePrefix: Option[String], val rdmaManager: RDMAManager) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -161,7 +162,8 @@ class ReplicaManager(val config: KafkaConfig,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
-           threadNamePrefix: Option[String] = None) {
+           threadNamePrefix: Option[String] = None,
+           rdmaManager: RDMAManager = null) {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
@@ -175,16 +177,23 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectPreferredLeader](
         purgatoryName = "ElectPreferredLeader", brokerId = config.brokerId),
-      threadNamePrefix)
+      threadNamePrefix, rdmaManager)
   }
+
+
+
 
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch
   private val localBrokerId = config.brokerId
   private val allPartitions = new Pool[TopicPartition, Partition](valueFactory = Some(tp =>
-    Partition(tp, time, this)))
+    Partition(tp, time, rdmaManager, this)))
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
+
+  val leaderPushManager = if (config.withRdmaReplication) createLeaderPushManager(metrics, time, rdmaManager,threadNamePrefix)
+                          else null
+
   val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   @volatile var highWatermarkCheckpoints = logManager.liveLogDirs.map(dir =>
@@ -528,6 +537,85 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  // rdma patch todo
+  def appendRdmaRecords(timeout: Long,
+                    requiredAcks: Short,
+                    internalTopicsAllowed: Boolean,
+                        isFromLeader: Boolean,
+                        bytesPerPartition: Map[TopicPartition, (Int, MemoryRecords) ],
+                    responseCallback: Map[TopicPartition, PartitionResponse] => Unit ) {
+
+
+      if (isFromLeader) {
+
+        appendRdmaRecordsFromLeader(bytesPerPartition,responseCallback)
+        return
+      } else {
+
+        assert(isValidRequiredAcks(requiredAcks))
+
+        val entriesPerPartition = for ((tp, _) <- bytesPerPartition) yield (tp, null)
+
+        val sTime = time.milliseconds
+
+        val localProduceResults = rdmaAppendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
+          isFromClient = !isFromLeader, bytesPerPartition, requiredAcks)
+        debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
+
+        val produceStatus = localProduceResults.map { case (topicPartition, result) =>
+          topicPartition ->
+            ProducePartitionStatus(
+              result.info.lastOffset + 1, // required offset
+              new PartitionResponse(result.error, result.info.firstOffset.getOrElse(-1), result.info.logAppendTime, result.info.logStartOffset)) // response status
+        }
+
+        if (!isFromLeader && delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
+          // create delayed produce operation
+          val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
+          val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, None)
+
+          // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
+          val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
+
+          // try to complete the request immediately, otherwise put it into the purgatory
+          // this is because while the delayed produce operation is being created, new
+          // requests may arrive and hence make this operation completable.
+          delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
+
+        } else {
+          // we can respond immediately
+          val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
+          responseCallback(produceResponseStatus)
+        }
+      }
+  }
+
+  def appendRdmaRecordsFromLeader(
+                        bytesPerPartition: Map[TopicPartition, (Int, MemoryRecords) ],
+                        responseCallback: Map[TopicPartition, PartitionResponse] => Unit ) {
+
+    val localProduceResults =  bytesPerPartition.map{ case (topicPartition, data) =>
+      val replica = localReplicaOrException(topicPartition)
+      val partition = getPartition(topicPartition).get
+      val logAppendInfo = partition.rdmaAppendRecordsToFollower(data._1,data._2)
+
+      // todo has to be updated
+      // we can use 16 bytes posted regions. to get that fields
+     // val followerHighWatermark = replica.logEndOffset.min(partitionData.highWatermark)
+     // val leaderLogStartOffset = partitionData.logStartOffset
+     // replica.highWatermark = new LogOffsetMetadata(followerHighWatermark)
+     // replica.maybeIncrementLogStartOffset(leaderLogStartOffset)
+
+      topicPartition -> logAppendInfo
+    }
+
+    val produceStatus = localProduceResults.map { case (topicPartition, result) =>
+      topicPartition ->   new PartitionResponse( Errors.NONE ) // response status
+    }
+
+    responseCallback(produceStatus)
+  }
+
   /**
    * Delete records on leader replicas of the partition, and wait for delete records operation be propagated to other replicas;
    * the callback function will be triggered either when timeout or logStartOffset of all live replicas have reached the specified offset
@@ -758,8 +846,8 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         try {
           val partition = getPartitionOrException(topicPartition, expectLeader = true)
-          val info = partition.appendRecordsToLeader(records, isFromClient, requiredAcks)
-          val numAppendedMessages = info.numMessages
+          val appendInfo = partition.appendRecordsToLeader(records, isFromClient, requiredAcks, config.withRdmaReplication)
+          val numAppendedMessages = appendInfo.numMessages
 
           // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
           brokerTopicStats.topicStats(topicPartition.topic).bytesInRate.mark(records.sizeInBytes)
@@ -767,9 +855,104 @@ class ReplicaManager(val config: KafkaConfig,
           brokerTopicStats.topicStats(topicPartition.topic).messagesInRate.mark(numAppendedMessages)
           brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
 
+
+
+          appendInfo.toReplicateWithRdma.foreach { regionInfo =>
+            // this data will be used upon successful completion.
+            val dataInfo = new FetchDataInfo(new LogOffsetMetadata(appendInfo.lastOffset+1,regionInfo.baseOffset,regionInfo.endPosition.toInt), MemoryRecords.EMPTY)
+            val logReadResultToInvoke = new LogReadResult(info = dataInfo,
+              highWatermark = 0L,
+              leaderLogStartOffset = appendInfo.logStartOffset,
+              leaderLogEndOffset = appendInfo.lastOffset+1, // can + 1. I am not sure
+              followerLogStartOffset = appendInfo.logStartOffset,
+              fetchTimeMs = time.milliseconds(),
+              readSize = 0,
+              lastStableOffset = None,
+              exception = None)
+            debug(s"After append addToReplicate ${logReadResultToInvoke}")
+            leaderPushManager.addToReplicate(topicPartition,logReadResultToInvoke,regionInfo)
+          }
+
+
+
           trace(s"${records.sizeInBytes} written to log $topicPartition beginning at offset " +
-            s"${info.firstOffset.getOrElse(-1)} and ending at offset ${info.lastOffset}")
-          (topicPartition, LogAppendResult(info))
+            s"${appendInfo.firstOffset.getOrElse(-1)} and ending at offset ${appendInfo.lastOffset}")
+          (topicPartition, LogAppendResult(appendInfo))
+        } catch {
+          // NOTE: Failed produce requests metric is not incremented for known exceptions
+          // it is supposed to indicate un-expected failures of a broker in handling a produce request
+          case e@ (_: UnknownTopicOrPartitionException |
+                   _: NotLeaderForPartitionException |
+                   _: RecordTooLargeException |
+                   _: RecordBatchTooLargeException |
+                   _: CorruptRecordException |
+                   _: KafkaStorageException |
+                   _: InvalidTimestampException) =>
+            (topicPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(e)))
+          case t: Throwable =>
+            val logStartOffset = getPartition(topicPartition) match {
+              case Some(partition) =>
+                partition.logStartOffset
+              case _ =>
+                -1
+            }
+            brokerTopicStats.topicStats(topicPartition.topic).failedProduceRequestRate.mark()
+            brokerTopicStats.allTopicsStats.failedProduceRequestRate.mark()
+            error(s"Error processing append operation on partition $topicPartition", t)
+            (topicPartition, LogAppendResult(LogAppendInfo.unknownLogAppendInfoWithLogStartOffset(logStartOffset), Some(t)))
+        }
+      }
+    }
+  }
+
+  // rdma patch
+  private def rdmaAppendToLocalLog(internalTopicsAllowed: Boolean,
+                                   isFromClient: Boolean,
+                                   bytesPerPartition: Map[TopicPartition, (Int, MemoryRecords) ],
+                                   requiredAcks: Short): Map[TopicPartition, LogAppendResult] = {
+
+    bytesPerPartition.map { case (topicPartition, (expected_position,records )) =>
+      brokerTopicStats.topicStats(topicPartition.topic).totalProduceRequestRate.mark()
+      brokerTopicStats.allTopicsStats.totalProduceRequestRate.mark()
+
+      // reject appending to internal topics if it is not allowed
+      if (Topic.isInternal(topicPartition.topic) && !internalTopicsAllowed) {
+        (topicPartition, LogAppendResult(
+          LogAppendInfo.UnknownLogAppendInfo,
+          Some(new InvalidTopicException(s"Cannot append to internal topic ${topicPartition.topic}"))))
+      } else {
+        try {
+          val partition = getPartitionOrException(topicPartition, expectLeader = true)
+          val appendInfo = partition.rdmaAppendRecordsToLeader(expected_position, records, isFromClient, requiredAcks)
+          val numAppendedMessages = appendInfo.numMessages
+         // expected_position: Int, records: MemoryRecords,
+          // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
+          brokerTopicStats.topicStats(topicPartition.topic).bytesInRate.mark(records.sizeInBytes())
+          brokerTopicStats.allTopicsStats.bytesInRate.mark(records.sizeInBytes)
+          brokerTopicStats.topicStats(topicPartition.topic).messagesInRate.mark(numAppendedMessages)
+          brokerTopicStats.allTopicsStats.messagesInRate.mark(numAppendedMessages)
+
+
+          appendInfo.toReplicateWithRdma.foreach { regionInfo =>
+
+            // this data will be used upon successful completion.
+            val dataInfo = FetchDataInfo(new LogOffsetMetadata(appendInfo.lastOffset+1,regionInfo.baseOffset,regionInfo.endPosition.toInt), MemoryRecords.EMPTY)
+            val logReadResultToInvoke = new LogReadResult(info = dataInfo,
+              highWatermark = 0L,
+              leaderLogStartOffset = appendInfo.logStartOffset,
+              leaderLogEndOffset = appendInfo.lastOffset + 1 ,
+              followerLogStartOffset = appendInfo.logStartOffset,
+              fetchTimeMs = time.milliseconds(),
+              readSize = 0,
+              lastStableOffset = None,
+              exception = None)
+            debug(s"After rdma append addToReplicate ${logReadResultToInvoke}")
+            leaderPushManager.addToReplicate(topicPartition,logReadResultToInvoke,regionInfo)
+          }
+
+          trace(s"RDMA ${records.sizeInBytes} written to log $topicPartition beginning at offset " +
+            s"${appendInfo.firstOffset.getOrElse(-1)} and ending at offset ${appendInfo.lastOffset}")
+          (topicPartition, LogAppendResult(appendInfo))
         } catch {
           // NOTE: Failed produce requests metric is not incremented for known exceptions
           // it is supposed to indicate un-expected failures of a broker in handling a produce request
@@ -804,6 +987,29 @@ class ReplicaManager(val config: KafkaConfig,
                               fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = {
     val partition = getPartitionOrException(topicPartition, expectLeader = fetchOnlyFromLeader)
     partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader)
+  }
+
+  // rdma patch todo
+  def fetchRDMAConsumerAddress(clientId: String,
+                        topicPartition: TopicPartition,
+                       startOffset: Long,
+                       currentLeaderEpoch: Optional[Integer],
+                       fetchOnlyFromLeader: Boolean): Option[ConsumerAddressReadInfo] ={
+    val partition = getPartitionOrException(topicPartition,expectLeader = fetchOnlyFromLeader)
+    partition.fetchAddressForOffset(clientId, startOffset, currentLeaderEpoch, fetchOnlyFromLeader)
+  }
+
+  // rdma patch todo
+  def fetchRDMAProducerAddress(topicPartition: TopicPartition,
+                               requiredAcks: Short, requestNewFile: Boolean, isFromLeader:Boolean ):  Option[AddressReadInfo] = {
+    val responseStatus = if (isValidRequiredAcks(requiredAcks)) {
+      val partition = getPartitionOrException(topicPartition, expectLeader = !isFromLeader)
+      val info = partition.fetchAddress(requestNewFile,isFromLeader)
+      Some(info)
+    } else {
+      None
+    }
+    responseStatus
   }
 
   def legacyFetchOffsetsForTimestamp(topicPartition: TopicPartition,
@@ -1214,6 +1420,21 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
 
+      if(config.withRdmaReplication) {
+        val topicPartitionsToPush  = partitionsToMakeLeaders.map { partition =>
+
+          val listOfFollowers: Set[Replica] = partition.assignedReplicas.filter(_.brokerId != localBrokerId)
+
+
+          val listOfFollowersEndpoints: Set[ (BrokerEndPoint, Replica) ] = listOfFollowers.map{ replica =>
+            val endpoint = metadataCache.getAliveBrokers.find(_.id == replica.brokerId).get.brokerEndPoint(config.interBrokerListenerName)
+            (endpoint,replica)
+          }
+          partition -> listOfFollowersEndpoints.toSet
+        }.toMap
+        leaderPushManager.addPusherForPartitions(topicPartitionsToPush)
+      }
+
     } catch {
       case e: Throwable =>
         partitionState.keys.foreach { partition =>
@@ -1341,7 +1562,10 @@ class ReplicaManager(val config: KafkaConfig,
           val fetchOffset = partition.localReplicaOrException.highWatermark.messageOffset
           partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
         }.toMap
-        replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+
+        if(!config.withRdmaReplication) {
+          replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+        }
 
         partitionsToMakeFollower.foreach { partition =>
           stateChangeLogger.trace(s"Started fetcher to new leader as part of become-follower " +
@@ -1498,6 +1722,9 @@ class ReplicaManager(val config: KafkaConfig,
     if (logDirFailureHandler != null)
       logDirFailureHandler.shutdown()
     replicaFetcherManager.shutdown()
+    if(leaderPushManager != null){
+      leaderPushManager.shutdown()
+    }
     replicaAlterLogDirsManager.shutdown()
     delayedFetchPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
@@ -1510,6 +1737,10 @@ class ReplicaManager(val config: KafkaConfig,
 
   protected def createReplicaFetcherManager(metrics: Metrics, time: Time, threadNamePrefix: Option[String], quotaManager: ReplicationQuotaManager) = {
     new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager)
+  }
+
+  protected def createLeaderPushManager(metrics: Metrics, time: Time,rdmaManager: RDMAManager, threadNamePrefix: Option[String]): LeaderPushManager ={
+    new LeaderPushManager(config, this, metrics, time,rdmaManager, threadNamePrefix)
   }
 
   protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {

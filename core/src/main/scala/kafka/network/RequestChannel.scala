@@ -221,6 +221,25 @@ object RequestChannel extends Logging {
 
   }
 
+  class RdmaRequest(val qpnum: Int,
+                val processor: Int,
+                val startTimeNanos: Long,
+                val imm_data: Int,
+                val byte_len: Int,
+                @volatile private var buffer: ByteBuffer ) extends BaseRequest {
+
+    override def toString = s"RdmaRequest" +
+      s"buffer=$buffer)"
+
+
+    override def hashCode: Int =   imm_data.hashCode()
+  }
+
+  class RdmaResponse(val request: RdmaRequest, val immdata: Int) {
+
+    def processor: Int = request.processor
+  }
+
   abstract class Response(val request: Request) {
     locally {
       val nowNs = Time.SYSTEM.nanoseconds
@@ -272,16 +291,22 @@ object RequestChannel extends Logging {
   }
 }
 
-class RequestChannel(val queueSize: Int, val metricNamePrefix : String) extends KafkaMetricsGroup {
+class RequestChannel(val numberOfIoProcessors: Int, val queueSize: Int, val metricNamePrefix : String) extends KafkaMetricsGroup {
   import RequestChannel._
   val metrics = new RequestChannel.Metrics
-  private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
+
+  private val requestQueue: Vector[ArrayBlockingQueue[BaseRequest]] =
+    Vector.fill(numberOfIoProcessors)(new ArrayBlockingQueue[BaseRequest](queueSize))
+
   private val processors = new ConcurrentHashMap[Int, Processor]()
+  private val rdmaProcessors = new ConcurrentHashMap[Int, RdmaProcessor]()
+
+
   val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
   val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
 
   newGauge(requestQueueSizeMetricName, new Gauge[Int] {
-      def value = requestQueue.size
+      def value = requestQueue.foldLeft(0){(total,q) => total + q.size()} // rdma patch
   })
 
   newGauge(responseQueueSizeMetricName, new Gauge[Int]{
@@ -302,14 +327,25 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String) extends 
     )
   }
 
+  def addRdmaProcessor(processor: RdmaProcessor): Unit = {
+    if (rdmaProcessors.putIfAbsent(processor.id, processor) != null)
+      warn(s"Unexpected rdma processor with processorId ${processor.id}")
+
+  }
+  def removeRdmaProcessor(processorId: Int): Unit = {
+    rdmaProcessors.remove(processorId)
+  }
+
   def removeProcessor(processorId: Int): Unit = {
     processors.remove(processorId)
     removeMetric(responseQueueSizeMetricName, Map(ProcessorMetricTag -> processorId.toString))
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
-  def sendRequest(request: RequestChannel.Request) {
-    requestQueue.put(request)
+  def sendRequest(request: BaseRequest) { // rdma patch
+    val id = request.hashCode() % numberOfIoProcessors
+  //  info(s"Enqueue request to $id");
+    requestQueue(id).put(request)
   }
 
   /** Send a response back to the socket server to be sent over the network */
@@ -339,13 +375,23 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String) extends 
     }
   }
 
+  /** Send a response back to the socket server to be sent over the network */
+  def sendRdmaResponse(response: RequestChannel.RdmaResponse) {
+    val processor = rdmaProcessors.get(response.processor)
+    // The processor may be null if it was shutdown. In this case, the connections
+    // are closed, so the response is dropped.
+    if (processor != null) {
+      processor.enqueueResponse(response)
+    }
+  }
+
   /** Get the next request or block until specified time has elapsed */
-  def receiveRequest(timeout: Long): RequestChannel.BaseRequest =
-    requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+  def receiveRequest(id: Int, timeout: Long): RequestChannel.BaseRequest =
+    requestQueue(id).poll(timeout, TimeUnit.MILLISECONDS)
 
   /** Get the next request or block until there is one */
-  def receiveRequest(): RequestChannel.BaseRequest =
-    requestQueue.take()
+  def receiveRequest(id: Int): RequestChannel.BaseRequest =
+    requestQueue(id).take()
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]) {
     errors.foreach { case (error, count) =>
@@ -354,7 +400,7 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String) extends 
   }
 
   def clear() {
-    requestQueue.clear()
+    requestQueue.foreach( _.clear() ) // rdma patch
   }
 
   def shutdown() {
@@ -362,7 +408,9 @@ class RequestChannel(val queueSize: Int, val metricNamePrefix : String) extends 
     metrics.close()
   }
 
-  def sendShutdownRequest(): Unit = requestQueue.put(ShutdownRequest)
+  def sendShutdownRequest(): Unit = {
+    requestQueue.foreach( _.put(ShutdownRequest))
+  }
 
 }
 

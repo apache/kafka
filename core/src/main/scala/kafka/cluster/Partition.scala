@@ -45,6 +45,7 @@ import scala.collection.Map
 object Partition {
   def apply(topicPartition: TopicPartition,
             time: Time,
+            rdmaManager: RDMAManager,
             replicaManager: ReplicaManager): Partition = {
     new Partition(topicPartition,
       isOffline = false,
@@ -52,6 +53,7 @@ object Partition {
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
       time = time,
+      rdmaManager = rdmaManager,
       replicaManager = replicaManager,
       logManager = replicaManager.logManager,
       zkClient = replicaManager.zkClient)
@@ -67,6 +69,7 @@ class Partition(val topicPartition: TopicPartition,
                 private val interBrokerProtocolVersion: ApiVersion,
                 private val localBrokerId: Int,
                 private val time: Time,
+                private val rdmaManager: RDMAManager,
                 private val replicaManager: ReplicaManager,
                 private val logManager: LogManager,
                 private val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
@@ -736,7 +739,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0): LogAppendInfo = {
+  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0, withRdmaReplication:Boolean = false): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
@@ -751,6 +754,46 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient,
+            interBrokerProtocolVersion,withRdmaReplication)
+
+
+          // we may need to increment high watermark since ISR could be down to 1
+          (info, maybeIncrementLeaderHW(leaderReplica))
+
+        case None =>
+          throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d"
+            .format(topicPartition, localBrokerId))
+      }
+    }
+
+    // some delayed operations may be unblocked after HW changed
+    if (leaderHWIncremented)
+      tryCompleteDelayedRequests()
+    else {
+      // probably unblock some follower fetch requests since log end offset has been updated
+      replicaManager.tryCompleteDelayedFetch(new TopicPartitionOperationKey(topicPartition))
+    }
+
+    info
+  }
+
+  // rdma patch
+  @threadsafe
+  def rdmaAppendRecordsToLeader(expected_position: Int, records: MemoryRecords,  isFromClient: Boolean, requiredAcks: Int = 0): LogAppendInfo = {
+    val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
+      leaderReplicaIfLocal match {
+        case Some(leaderReplica) =>
+          val log = leaderReplica.log.get
+          val minIsr = log.config.minInSyncReplicas
+          val inSyncSize = inSyncReplicas.size
+
+          // Avoid writing to leader if there are not enough insync replicas to make it safe
+          if (inSyncSize < minIsr && requiredAcks == -1) {
+            throw new NotEnoughReplicasException(s"The size of the current ISR ${inSyncReplicas.map(_.brokerId)} " +
+              s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
+          }
+
+          val info = log.rdmaAppendAsLeader(expected_position, records, leaderEpoch = this.leaderEpoch, isFromClient,
             interBrokerProtocolVersion)
 
           // we may need to increment high watermark since ISR could be down to 1
@@ -772,6 +815,15 @@ class Partition(val topicPartition: TopicPartition,
 
     info
   }
+
+
+  def rdmaAppendRecordsToFollower(expected_position: Int, records: MemoryRecords): LogAppendInfo = {
+    inReadLock(leaderIsrUpdateLock) {
+        localReplicaOrException.log.get.rdmaAppendAsFollower(expected_position,records)
+    }
+  }
+
+
 
   def readRecords(fetchOffset: Long,
                   currentLeaderEpoch: Optional[Integer],
@@ -861,6 +913,97 @@ class Partition(val topicPartition: TopicPartition,
         getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
           .orElse(maybeOffsetsError.map(e => throw e))
     }
+  }
+
+  // rdma patch
+  @threadsafe
+  def fetchAddress(requestNewFile: Boolean, isFromLeader:Boolean): AddressReadInfo = {
+    val (info) = inReadLock(leaderIsrUpdateLock) {
+
+      val replica = if(isFromLeader) localReplica else leaderReplicaIfLocal
+
+      replica match {
+        case Some (targetReplica) =>
+          val log = targetReplica.log.get
+          val info: AddressReadInfo = log.fetchAddress(requestNewFile)
+
+          (info)
+        case None =>
+          throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d"
+            .format(topicPartition, localBrokerId))
+      }
+    }
+    info
+  }
+
+  // rdma patch
+  @threadsafe
+  def fetchAddressForOffset(clientId: String,
+                             startOffset: Long,
+                            currentLeaderEpoch: Optional[Integer],
+                            fetchOnlyFromLeader: Boolean): Option[ConsumerAddressReadInfo] = inReadLock(leaderIsrUpdateLock) {
+           // decide whether to only fetch from leader
+    val localReplica = localReplicaWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
+
+    // assert(localReplica.log == logManager.getLog(topicPartition))
+    val log = localReplica.log
+    val address = log match {
+      case Some(log) =>
+        val infoOpt = log.fetchAddressByOffset(startOffset)
+
+        infoOpt.map { addrinfo =>
+
+          val fileIsSealed = (localReplica.highWatermark.segmentBaseOffset > addrinfo.baseOffset);
+          if(!fileIsSealed) {
+            val slot: Option[Slot] = rdmaManager.createNewSlotOrNothing(clientId, topicPartition, addrinfo.baseOffset) // createSlot is thread safe
+            slot.foreach { slot =>
+              // it is local thus threadsafe
+              slot.setWrittenPosition(addrinfo.endPosition)
+              slot.setWatermarkOffset(localReplica.highWatermark.messageOffset)
+              slot.setLSOOffset(localReplica.lastStableOffset.messageOffset)
+
+              // set watermark first
+              if (localReplica.highWatermark.segmentBaseOffset > addrinfo.baseOffset) {
+                // it is an old segment
+                slot.setSealed() // it means written will not change
+                info(s"updateWatermarkSlots3 set wm to ${addrinfo.endPosition}")
+                slot.setWatermarkPosition(addrinfo.endPosition)
+              }
+              else if (localReplica.highWatermark.segmentBaseOffset == addrinfo.baseOffset) {
+                // it is a current segment
+                info(s"updateWatermarkSlots4 set wm to ${localReplica.highWatermark.relativePositionInSegment}")
+                slot.setWatermarkPosition(localReplica.highWatermark.relativePositionInSegment)
+              }
+              else if (localReplica.highWatermark.segmentBaseOffset < addrinfo.baseOffset) {
+                // it is a future segment
+                slot.setLSOPosition(0L)
+                slot.setWatermarkPosition(0L)
+              }
+
+              // set LSO now
+              if (localReplica.lastStableOffset.segmentBaseOffset > addrinfo.baseOffset) {
+                // it is an old lso segment
+                slot.setLSOPosition(addrinfo.endPosition)
+              } else if (localReplica.lastStableOffset.segmentBaseOffset == addrinfo.baseOffset) {
+                // it is a current lso segment
+                slot.setLSOPosition(localReplica.lastStableOffset.relativePositionInSegment)
+              }
+
+           //   info(s"Slot ${slot}")
+
+              log.addSlot(slot) // addSlot is synchronized
+            }
+          }
+
+          return Some(new ConsumerAddressReadInfo(addrinfo,fileIsSealed,localReplica.highWatermark.relativePositionInSegment,localReplica.highWatermark.messageOffset,
+            localReplica.lastStableOffset.messageOffset,localReplica.lastStableOffset.relativePositionInSegment))
+        }
+        None
+      case None =>
+        error(s"Leader does not have a local log")
+        None
+    }
+    address
   }
 
   def fetchOffsetSnapshot(currentLeaderEpoch: Optional[Integer],

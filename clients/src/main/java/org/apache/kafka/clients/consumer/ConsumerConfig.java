@@ -260,6 +260,59 @@ public class ConsumerConfig extends AbstractConfig {
             " consumers will not be able to read up to the high watermark when there are in flight transactions.</p><p> Further, when in <code>read_committed</code> the seekToEnd method will" +
             " return the LSO";
 
+
+
+    /** <code> num.rdmanetwork.maxsendsize </code> */
+    public static final String RDMA_SEND_SIZE = "num.rdmanetwork.maxsendsize";
+    public static final String RDMA_SEND_SIZE_DOC = "maximum send requests per rdma connection";
+
+    /** <code> num.rdmanetwork.maxrecvsize </code> */
+    public static final String RDMA_RECV_SIZE = "num.rdmanetwork.maxrecvsize";
+    public static final String RDMA_RECV_SIZE_DOC = "maximum recv requests per rdma connection";
+
+    /** <code> num.rdmanetwork.maxrequestquota </code> */
+    public static final String RDMA_QUOTA_SIZE = "num.rdmanetwork.maxrequestquota";
+    public static final String RDMA_QUOTA_SIZE_DOC = "maximum outstanding requests per rdma connection";
+
+    /** <code> num.rdmanetwork.maxcomplqueuesize </code> */
+    public static final String RDMA_QUEUE_SIZE = "num.rdmanetwork.maxcomplqueuesize";
+    public static final String RDMA_QUEUE_SIZE_DOC = "maximum queue size per rdma connection per direction. I use separate queue for send and receive";
+
+    /** <code> num.rdmanetwork.wcbatch </code> */
+    public static final String WC_BATCH = "num.rdmanetwork.wcbatch";
+    public static final String WC_BATCH_DOC = "How many completion poll at a time";
+
+    /** <code> num.rdmanetwork.contention </code> */
+    public static final String RDMA_CONTENTION_LIMIT = "num.rdmanetwork.contention";
+    public static final String RDMA_CONTENTION_LIMIT_DOC = "After how many requests in waiting queue consider the connection contended";
+
+
+    /** <code> num.rdmafetch.cachesize </code> */
+    public static final String RDMA_CACHE_SIZE = "num.rdmafetch.cachesize";
+    public static final String RDMA_CACHE_SIZE_DOC = "the size of cache in bytes";
+
+
+    /** <code> num.rdmafetch.wraplimit </code> */
+    public static final String RDMA_CACHE_WRAP_LIMIT = "num.rdmafetch.wraplimit";
+    public static final String RDMA_CACHE_WRAP_LIMIT_DOC = "if cache has less than wraplimit bytes in cache it will wrap around the cache";
+
+
+    /** <code> num.rdmafetch.withslots </code> */
+    public static final String WITH_SLOTS = "num.rdmafetch.withslots";
+    public static final String WITH_SLOTS_DOC = "use rdma slots";
+
+
+    /** <code> num.rdmafetch.slotupdatetimeout </code> */
+    public static final String SLOT_UPDATE_TIMEOUT = "num.rdmafetch.slotupdatetimeout";
+    public static final String SLOT_UPDATE_TIMEOUT_DOC = "How often issue rdma update slot. measured in nanoseconds.";
+
+
+    /** <code> num.rdmafetch.tcptimeout </code> */
+    public static final String TCP_TIMEOUT = "num.rdmafetch.tcptimeout";
+    public static final String TCP_TIMEOUT_DOC = "Timeout for sending get address request, measured in miliseconds";
+
+
+
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
 
     static {
@@ -458,6 +511,71 @@ public class ConsumerConfig extends AbstractConfig {
                                                 Type.BOOLEAN,
                                                 true,
                                                 Importance.LOW)
+                                .define(RDMA_SEND_SIZE,
+                                        Type.INT,
+                                        80,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_SEND_SIZE_DOC)
+                                .define(RDMA_RECV_SIZE,
+                                        Type.INT,
+                                        80,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_RECV_SIZE_DOC)
+                                .define(RDMA_QUOTA_SIZE,
+                                        Type.INT,
+                                        78,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_QUOTA_SIZE_DOC)
+                                .define(RDMA_QUEUE_SIZE,
+                                        Type.INT,
+                                        200,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_QUEUE_SIZE_DOC)
+                                .define(WC_BATCH,
+                                        Type.INT,
+                                        16,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        WC_BATCH_DOC)
+                                .define(RDMA_CONTENTION_LIMIT,
+                                        Type.INT,
+                                        100,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        RDMA_CONTENTION_LIMIT_DOC)
+                                .define(RDMA_CACHE_SIZE,
+                                        Type.INT,
+                                        16 * 1024 * 1024,
+                                        atLeast(1024),
+                                        Importance.LOW,
+                                        RDMA_CACHE_SIZE_DOC)
+                                .define(RDMA_CACHE_WRAP_LIMIT,
+                                        Type.INT,
+                                        1024,
+                                        atLeast(8),
+                                        Importance.LOW,
+                                        RDMA_CACHE_WRAP_LIMIT_DOC)
+                                .define(WITH_SLOTS,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW,
+                                        WITH_SLOTS_DOC)
+                                .define(SLOT_UPDATE_TIMEOUT,
+                                        Type.LONG,
+                                        20000,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        SLOT_UPDATE_TIMEOUT_DOC)
+                                .define(TCP_TIMEOUT,
+                                        Type.LONG,
+                                        1000,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        TCP_TIMEOUT_DOC)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,
