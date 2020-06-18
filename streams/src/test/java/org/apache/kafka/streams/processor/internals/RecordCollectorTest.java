@@ -141,7 +141,7 @@ public class RecordCollectorTest {
 
     @After
     public void cleanup() {
-        collector.close();
+        collector.closeClean();
     }
 
     @Test
@@ -299,7 +299,25 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldAbortTxIfEosEnabled() {
+    public void shouldNotAbortTxOnCloseCleanIfEosEnabled() {
+        final StreamsProducer streamsProducer = mock(StreamsProducer.class);
+        expect(streamsProducer.eosEnabled()).andReturn(true);
+        replay(streamsProducer);
+
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            streamsProducer,
+            productionExceptionHandler,
+            streamsMetrics);
+
+        collector.closeClean();
+
+        verify(streamsProducer);
+    }
+
+    @Test
+    public void shouldAbortTxOnCloseDirtyIfEosEnabled() {
         final StreamsProducer streamsProducer = mock(StreamsProducer.class);
         expect(streamsProducer.eosEnabled()).andReturn(true);
         streamsProducer.abortTransaction();
@@ -312,7 +330,7 @@ public class RecordCollectorTest {
             productionExceptionHandler,
             streamsMetrics);
 
-        collector.close();
+        collector.closeDirty();
 
         verify(streamsProducer);
     }
@@ -474,6 +492,7 @@ public class RecordCollectorTest {
                 " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
         );
 
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         thrown = assertThrows(TaskMigratedException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
         assertThat(
@@ -484,7 +503,8 @@ public class RecordCollectorTest {
                 " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
         );
 
-        thrown = assertThrows(TaskMigratedException.class, collector::close);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        thrown = assertThrows(TaskMigratedException.class, collector::closeClean);
         assertEquals(exception, thrown.getCause());
         assertThat(
             thrown.getMessage(),
@@ -538,6 +558,7 @@ public class RecordCollectorTest {
                 "\nException handler choose to FAIL the processing, no more records would be sent.")
         );
 
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
         assertThat(
@@ -547,7 +568,8 @@ public class RecordCollectorTest {
                 "\nException handler choose to FAIL the processing, no more records would be sent.")
         );
 
-        thrown = assertThrows(StreamsException.class, collector::close);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        thrown = assertThrows(StreamsException.class, collector::closeClean);
         assertEquals(exception, thrown.getCause());
         assertThat(
             thrown.getMessage(),
@@ -616,7 +638,7 @@ public class RecordCollectorTest {
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.flush();
-        collector.close();
+        collector.closeClean();
     }
 
     @Test
@@ -662,6 +684,7 @@ public class RecordCollectorTest {
                 "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
         );
 
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
         assertThat(
@@ -671,7 +694,8 @@ public class RecordCollectorTest {
                 "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
         );
 
-        thrown = assertThrows(StreamsException.class, collector::close);
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+        thrown = assertThrows(StreamsException.class, collector::closeClean);
         assertEquals(exception, thrown.getCause());
         assertThat(
             thrown.getMessage(),
@@ -682,7 +706,7 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldNotAbortTxnOnEOSCloseIfNothingSent() {
+    public void shouldNotAbortTxnOnEOSCloseDirtyIfNothingSent() {
         final AtomicBoolean functionCalled = new AtomicBoolean(false);
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
@@ -709,7 +733,7 @@ public class RecordCollectorTest {
             streamsMetrics
         );
 
-        collector.close();
+        collector.closeDirty();
         assertFalse(functionCalled.get());
     }
 
@@ -774,7 +798,7 @@ public class RecordCollectorTest {
             streamsMetrics
         );
 
-        collector.close();
+        collector.closeClean();
 
         // Flush should not throw as producer is still alive.
         streamsProducer.flush();
@@ -782,7 +806,7 @@ public class RecordCollectorTest {
 
     @Test
     public void shouldNotCloseInternalProducerForNonEOS() {
-        collector.close();
+        collector.closeClean();
 
         // Flush should not throw as producer is still alive.
         streamsProducer.flush();
