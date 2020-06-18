@@ -157,12 +157,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         REQUEST_TIMEOUT_MS_DOC)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
-                                        10 * 1000,
+                                        CommonClientConfigs.Defaults.SocketConnectionSetupTimeoutMs,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
                                         Type.LONG,
-                                        127 * 1000,
+                                        CommonClientConfigs.Defaults.SocketConnectionSetupTimeoutMaxMs,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,

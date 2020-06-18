@@ -20,7 +20,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.utils.GeometricProgression;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -43,19 +43,19 @@ final class ClusterConnectionStates {
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
     private Set<String> connectingNodes;
-    private GeometricProgression reconnectBackoff;
-    private GeometricProgression connectionSetupTimeout;
+    private ExponentialBackoff reconnectBackoff;
+    private ExponentialBackoff connectionSetupTimeout;
 
     public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs,
                                    long connectionSetupTimeoutMs, long connectionSetupTimeoutMaxMs,
                                    LogContext logContext) {
         this.log = logContext.logger(ClusterConnectionStates.class);
-        this.reconnectBackoff = new GeometricProgression(
+        this.reconnectBackoff = new ExponentialBackoff(
                 reconnectBackoffMs,
                 RECONNECT_BACKOFF_EXP_BASE,
                 reconnectBackoffMaxMs,
                 RECONNECT_BACKOFF_JITTER);
-        this.connectionSetupTimeout = new GeometricProgression(
+        this.connectionSetupTimeout = new ExponentialBackoff(
                 connectionSetupTimeoutMs,
                 CONNECTION_SETUP_TIMEOUT_EXP_BASE,
                 connectionSetupTimeoutMaxMs,
@@ -175,7 +175,8 @@ final class ClusterConnectionStates {
      */
     public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
-        incrementReconnectBackoff(nodeState, now);
+        nodeState.lastConnectAttemptMs = now;
+        incrementReconnectBackoff(nodeState);
         if (nodeState.state == ConnectionState.CONNECTING) {
             incrementConnectionSetupTimeout(nodeState);
             connectingNodes.remove(id);
@@ -260,7 +261,8 @@ final class ClusterConnectionStates {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.authenticationException = exception;
         nodeState.state = ConnectionState.AUTHENTICATION_FAILED;
-        incrementReconnectBackoff(nodeState, now);
+        nodeState.lastConnectAttemptMs = now;
+        incrementReconnectBackoff(nodeState);
     }
 
     /**
@@ -349,10 +351,9 @@ final class ClusterConnectionStates {
      *
      * @param nodeState The node state object to update
      */
-    private void incrementReconnectBackoff(NodeConnectionState nodeState, long now) {
+    private void incrementReconnectBackoff(NodeConnectionState nodeState) {
         nodeState.reconnectBackoffMs = reconnectBackoff.term(nodeState.failedAttempts);
         nodeState.failedAttempts++;
-        nodeState.lastConnectAttemptMs = now;
     }
 
     /**
@@ -416,6 +417,8 @@ final class ClusterConnectionStates {
 
     public long connectionSetupTimeoutMs(String id) {
         NodeConnectionState nodeState = this.nodeState.get(id);
+        if (nodeState == null)
+            throw new IllegalStateException("No connection state found for node " + id);
         return nodeState.connectionSetupTimeoutMs;
     }
 

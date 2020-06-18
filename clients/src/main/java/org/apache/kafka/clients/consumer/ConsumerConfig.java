@@ -486,12 +486,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
-                                        10 * 1000,
+                                        CommonClientConfigs.Defaults.SocketConnectionSetupTimeoutMs,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
                                         Type.LONG,
-                                        127 * 1000,
+                                        CommonClientConfigs.Defaults.SocketConnectionSetupTimeoutMaxMs,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
                                 /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */

@@ -661,7 +661,8 @@ public class NetworkClient implements KafkaClient {
     /**
      * Choose the node with the fewest outstanding requests which is at least eligible for connection. This method will
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
-     * connection if all existing connections are in use. This method will never choose a node for which there is no
+     * connection if all existing connections are in use. If no connection exists, this method will prefer a node
+     * with least recent connection attempts. This method will never choose a node for which there is no
      * existing connection and from which we have disconnected within the reconnect backoff period, or an active
      * connection which is being throttled.
      *
@@ -818,7 +819,7 @@ public class NetworkClient implements KafkaClient {
      */
     private void handleTimeoutConnections(List<ClientResponse> responses, long now) {
         Set<String> connectingNodes = connectionStates.connectingNodes();
-        for (String nodeId: connectingNodes) {
+        for (String nodeId : connectingNodes) {
             if (connectionStates.isConnectionSetupTimeout(nodeId, now)) {
                 this.selector.close(nodeId);
                 log.debug(

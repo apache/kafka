@@ -20,18 +20,18 @@ package org.apache.kafka.common.utils;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * An util class for exponential backoff, backoff, etc...
+ * An utility class for exponential backoff, timeout, etc...
  * The formula is Term(n) = random(1 - jitter, 1 + jitter) * scaleFactor * (ratio) ^ n
  * If scaleFactor is greater or equal than termMax, a constant term of will be provided
  * This class is thread-safe
  */
-public class GeometricProgression {
+public class ExponentialBackoff {
     private final int ratio;
     private final double expMax;
     private final long scaleFactor;
     private final double jitter;
 
-    public GeometricProgression(long scaleFactor, int ratio, long termMax, double jitter) {
+    public ExponentialBackoff(long scaleFactor, int ratio, long termMax, double jitter) {
         this.scaleFactor = scaleFactor;
         this.ratio = ratio;
         this.jitter = jitter;
