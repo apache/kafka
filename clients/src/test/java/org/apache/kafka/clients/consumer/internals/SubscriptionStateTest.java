@@ -22,6 +22,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.SubscriptionState.LogTruncation;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -517,9 +518,9 @@ public class SubscriptionStateTest {
         state.seekUnvalidated(tp0, initialPosition);
         assertTrue(state.awaitingValidation(tp0));
 
-        Optional<OffsetAndMetadata> divergentOffsetMetadataOpt = state.maybeCompleteValidation(tp0, initialPosition,
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new EpochEndOffset(initialOffsetEpoch, initialOffset + 5));
-        assertEquals(Optional.empty(), divergentOffsetMetadataOpt);
+        assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertEquals(initialPosition, state.position(tp0));
     }
@@ -572,9 +573,9 @@ public class SubscriptionStateTest {
                 Optional.of(updateOffsetEpoch), new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(currentEpoch)));
         state.seekUnvalidated(tp0, updatePosition);
 
-        Optional<OffsetAndMetadata> divergentOffsetMetadataOpt = state.maybeCompleteValidation(tp0, initialPosition,
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new EpochEndOffset(initialOffsetEpoch, initialOffset + 5));
-        assertEquals(Optional.empty(), divergentOffsetMetadataOpt);
+        assertEquals(Optional.empty(), truncationOpt);
         assertTrue(state.awaitingValidation(tp0));
         assertEquals(updatePosition, state.position(tp0));
     }
@@ -595,9 +596,9 @@ public class SubscriptionStateTest {
 
         state.requestOffsetReset(tp0);
 
-        Optional<OffsetAndMetadata> divergentOffsetMetadataOpt = state.maybeCompleteValidation(tp0, initialPosition,
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
             new EpochEndOffset(initialOffsetEpoch, initialOffset + 5));
-        assertEquals(Optional.empty(), divergentOffsetMetadataOpt);
+        assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
         assertNull(state.position(tp0));
@@ -619,9 +620,9 @@ public class SubscriptionStateTest {
         state.seekUnvalidated(tp0, initialPosition);
         assertTrue(state.awaitingValidation(tp0));
 
-        Optional<OffsetAndMetadata> divergentOffsetMetadata = state.maybeCompleteValidation(tp0, initialPosition,
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new EpochEndOffset(divergentOffsetEpoch, divergentOffset));
-        assertEquals(Optional.empty(), divergentOffsetMetadata);
+        assertEquals(Optional.empty(), truncationOpt);
         assertFalse(state.awaitingValidation(tp0));
 
         SubscriptionState.FetchPosition updatedPosition = new SubscriptionState.FetchPosition(divergentOffset,
@@ -646,10 +647,62 @@ public class SubscriptionStateTest {
         state.seekUnvalidated(tp0, initialPosition);
         assertTrue(state.awaitingValidation(tp0));
 
-        Optional<OffsetAndMetadata> divergentOffsetMetadata = state.maybeCompleteValidation(tp0, initialPosition,
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
                 new EpochEndOffset(divergentOffsetEpoch, divergentOffset));
+        assertTrue(truncationOpt.isPresent());
+        LogTruncation truncation = truncationOpt.get();
+
         assertEquals(Optional.of(new OffsetAndMetadata(divergentOffset, Optional.of(divergentOffsetEpoch), "")),
-                divergentOffsetMetadata);
+                truncation.divergentOffsetOpt);
+        assertEquals(initialPosition, truncation.fetchPosition);
+        assertTrue(state.awaitingValidation(tp0));
+    }
+
+    @Test
+    public void testTruncationDetectionUnknownDivergentOffsetWithResetPolicy() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        int currentEpoch = 10;
+        long initialOffset = 10L;
+        int initialOffsetEpoch = 5;
+
+        SubscriptionState.FetchPosition initialPosition = new SubscriptionState.FetchPosition(initialOffset,
+            Optional.of(initialOffsetEpoch), new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(currentEpoch)));
+        state.seekUnvalidated(tp0, initialPosition);
+        assertTrue(state.awaitingValidation(tp0));
+
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
+            new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+        assertEquals(Optional.empty(), truncationOpt);
+        assertFalse(state.awaitingValidation(tp0));
+        assertTrue(state.isOffsetResetNeeded(tp0));
+        assertEquals(OffsetResetStrategy.EARLIEST, state.resetStrategy(tp0));
+    }
+
+    @Test
+    public void testTruncationDetectionUnknownDivergentOffsetWithoutResetPolicy() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        int currentEpoch = 10;
+        long initialOffset = 10L;
+        int initialOffsetEpoch = 5;
+
+        SubscriptionState.FetchPosition initialPosition = new SubscriptionState.FetchPosition(initialOffset,
+            Optional.of(initialOffsetEpoch), new Metadata.LeaderAndEpoch(Optional.of(broker1), Optional.of(currentEpoch)));
+        state.seekUnvalidated(tp0, initialPosition);
+        assertTrue(state.awaitingValidation(tp0));
+
+        Optional<LogTruncation> truncationOpt = state.maybeCompleteValidation(tp0, initialPosition,
+            new EpochEndOffset(EpochEndOffset.UNDEFINED_EPOCH, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
+        assertTrue(truncationOpt.isPresent());
+        LogTruncation truncation = truncationOpt.get();
+
+        assertEquals(Optional.empty(), truncation.divergentOffsetOpt);
+        assertEquals(initialPosition, truncation.fetchPosition);
         assertTrue(state.awaitingValidation(tp0));
     }
 

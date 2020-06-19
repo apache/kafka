@@ -28,6 +28,7 @@ import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.LogTruncationException;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -3856,12 +3857,16 @@ public class FetcherTest {
         consumerClient.poll(time.timer(Duration.ZERO));
 
         if (offsetResetStrategy == OffsetResetStrategy.NONE) {
-            OffsetOutOfRangeException thrown =
-                assertThrows(OffsetOutOfRangeException.class, () -> fetcher.validateOffsetsIfNeeded());
+            LogTruncationException thrown =
+                assertThrows(LogTruncationException.class, () -> fetcher.validateOffsetsIfNeeded());
+            assertEquals(singletonMap(tp0, initialOffset), thrown.offsetOutOfRangePartitions());
 
-            // If epoch offset is valid, we are testing for the log truncation case.
-            if (!epochEndOffset.hasUndefinedEpochOrOffset()) {
-                assertTrue(thrown instanceof LogTruncationException);
+            if (epochEndOffset.hasUndefinedEpochOrOffset()) {
+                assertEquals(Collections.emptyMap(), thrown.divergentOffsets());
+            } else {
+                OffsetAndMetadata expectedDivergentOffset = new OffsetAndMetadata(
+                    epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()), "");
+                assertEquals(singletonMap(tp0, expectedDivergentOffset), thrown.divergentOffsets());
             }
             assertTrue(subscriptions.awaitingValidation(tp0));
         } else {
