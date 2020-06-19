@@ -28,6 +28,9 @@ import org.junit.Test
 import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
 import kafka.admin.AdminOperationException
+import kafka.server.DynamicConfig.Broker.{DefaultReplicationThrottledRate, FollowerReplicationThrottledRateProp, LeaderReplicationThrottledRateProp}
+import kafka.utils.CoreUtils.propsWith
+import kafka.utils.TestUtils.retry
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.TopicPartition
 
@@ -282,6 +285,48 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(Seq(6), parse(configHandler, "6:102"))
     assertEquals(Seq(6), parse(configHandler, "6:102 "))
     assertEquals(Seq(6), parse(configHandler, " 6:102"))
+  }
+
+  @Test
+  def testDynamicBrokerConfigChange(): Unit ={
+    val brokerIds = servers.map(_.config.brokerId)
+
+    def checkConfig(limit: Long) {
+      retry(10000) {
+        for (server <- servers) {
+          assertEquals("Leader Quota Manager was not updated", limit, server.quotaManagers.leader.upperBound)
+          assertEquals("Follower Quota Manager was not updated", limit, server.quotaManagers.follower.upperBound)
+        }
+      }
+    }
+
+    val limitForBroker: Long = 1000000
+    val limitForDefaultBroker: Long = 2000000
+
+    checkConfig(DefaultReplicationThrottledRate)
+
+    // Set the limit at both broker ids and broker default
+    adminZkClient.changeBrokerConfig(brokerIds, propsWith(
+      (LeaderReplicationThrottledRateProp, limitForBroker.toString),
+      (FollowerReplicationThrottledRateProp, limitForBroker.toString)))
+
+    adminZkClient.changeConfigs(ConfigType.Broker, ConfigEntityName.Default, propsWith(
+      (LeaderReplicationThrottledRateProp, limitForDefaultBroker.toString),
+      (FollowerReplicationThrottledRateProp, limitForDefaultBroker.toString)) )
+
+    // Verify that it is limit at broker id that gets chosen.
+    checkConfig(limitForBroker)
+
+    // Remove limit at broker ids.
+    adminZkClient.changeBrokerConfig(brokerIds, new Properties)
+
+    // Verify that it is limit at broker default that gets chosen.
+    checkConfig(limitForDefaultBroker)
+
+    //Now remove limit at default broker.
+    adminZkClient.changeConfigs(ConfigType.Broker, ConfigEntityName.Default, new Properties())
+
+    checkConfig(DefaultReplicationThrottledRate)
   }
 
   def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {

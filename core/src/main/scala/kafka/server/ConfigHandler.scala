@@ -174,15 +174,28 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
 
   def processConfigChanges(brokerId: String, properties: Properties) {
     def getOrDefault(prop: String): Long = {
-      if (properties.containsKey(prop))
-        properties.getProperty(prop).toLong
-      else
-        DefaultReplicationThrottledRate
+      brokerConfig.dynamicConfig.currentDynamicBrokerConfigs get prop match {
+        case Some(value) => value.toLong
+        case None => {
+          brokerConfig.dynamicConfig.currentDynamicDefaultConfigs get prop match {
+            case Some(defaultV) => defaultV.toLong
+            case None => DefaultReplicationThrottledRate
+          }
+        }
+      }
     }
-    if (brokerId == ConfigEntityName.Default)
+
+    var mayChanged = false
+    if (brokerId == ConfigEntityName.Default) {
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
+      mayChanged = true
+    }
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
+      mayChanged = true
+    }
+
+    if(mayChanged){
       quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp)))
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp)))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp)))
