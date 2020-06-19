@@ -598,18 +598,11 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(1L), client.highWatermark());
         assertEquals(new OffsetAndEpoch(1, epoch), stateMachine.position());
 
-        // Let the follower to send another fetch from offset 2
-        deliverRequest(fetchQuorumRecordsRequest(epoch, otherNodeId, 2L, epoch, 500));
-        pollUntilSend(client);
-        assertEquals(OptionalLong.of(2L), client.highWatermark());
-        assertEquals(new OffsetAndEpoch(2, epoch), stateMachine.position());
-
-        // Let the follower to send another fetch from offset 4, only then the append future can be satisified
+        // Let the follower to send another fetch from offset 4
         deliverRequest(fetchQuorumRecordsRequest(epoch, otherNodeId, 4L, epoch, 500));
         client.poll();
         assertEquals(OptionalLong.of(4L), client.highWatermark());
         assertEquals(new OffsetAndEpoch(4, epoch), stateMachine.position());
-
     }
 
     @Test

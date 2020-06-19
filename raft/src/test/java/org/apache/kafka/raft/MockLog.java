@@ -185,9 +185,12 @@ public class MockLog implements ReplicatedLog {
 
         long maxOffset = maxOffsetOpt.orElse(endOffset());
         for (LogBatch batch : log) {
-            // note start offset is inclusive while max offset is exclusive
-            if (batch.firstOffset() < maxOffset && batch.lastOffset() >= startOffset) {
-                buffer = batch.writeTo(buffer, startOffset, maxOffset);
+            // Note that start offset is inclusive while max offset is exclusive. We only return
+            // complete batches, so batches which end at an offset larger than the max offset are
+            // filtered, which is effectively the same as having the consumer drop an incomplete
+            // batch returned in a fetch response.
+            if (batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset) {
+                buffer = batch.writeTo(buffer);
             }
         }
 
@@ -256,7 +259,7 @@ public class MockLog implements ReplicatedLog {
             return entries.get(entries.size() - 1);
         }
 
-        ByteBuffer writeTo(ByteBuffer buffer, long startOffset, long maxOffset) {
+        ByteBuffer writeTo(ByteBuffer buffer) {
             LogEntry first = first();
 
             MemoryRecordsBuilder builder = MemoryRecords.builder(
@@ -267,12 +270,6 @@ public class MockLog implements ReplicatedLog {
                 isControlBatch, epoch);
 
             for (LogEntry entry : entries) {
-                if (entry.offset < startOffset)
-                    continue;
-
-                if (entry.offset >= maxOffset)
-                    break;
-
                 if (isControlBatch) {
                     builder.appendControlRecordWithOffset(entry.offset, entry.record);
                 } else {

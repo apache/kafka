@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -232,5 +233,79 @@ public class MockLogTest {
             extractRecords.add(record.value());
         }
         assertEquals(Arrays.asList(recordOne.value(), recordTwo.value()), extractRecords);
+    }
+
+    @Test
+    public void testReadCompleteBatches() {
+        appendBatch(20, 1);
+        appendBatch(10, 1);
+        appendBatch(30, 1);
+
+        assertEquals(Optional.empty(), readOffsets(0L, OptionalLong.of(15L)));
+        assertEquals(Optional.of(new OffsetRange(0L, 19L)), readOffsets(0L, OptionalLong.of(20L)));
+        assertEquals(Optional.of(new OffsetRange(0L, 19L)), readOffsets(10L, OptionalLong.of(20L)));
+        assertEquals(Optional.of(new OffsetRange(0L, 19L)), readOffsets(10L, OptionalLong.of(25L)));
+
+        assertEquals(Optional.empty(), readOffsets(25L, OptionalLong.of(27L)));
+        assertEquals(Optional.of(new OffsetRange(0L, 29L)), readOffsets(0L, OptionalLong.of(30L)));
+        assertEquals(Optional.of(new OffsetRange(0L, 29L)), readOffsets(10L, OptionalLong.of(30L)));
+        assertEquals(Optional.of(new OffsetRange(0L, 29L)), readOffsets(10L, OptionalLong.of(35L)));
+        assertEquals(Optional.of(new OffsetRange(20L, 29L)), readOffsets(20L, OptionalLong.of(30L)));
+        assertEquals(Optional.of(new OffsetRange(20L, 29L)), readOffsets(20L, OptionalLong.of(35L)));
+
+        assertEquals(Optional.of(new OffsetRange(0L, 59L)), readOffsets(10L, OptionalLong.of(60L)));
+        assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(20L, OptionalLong.of(60L)));
+        assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(25L, OptionalLong.of(60L)));
+        assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(30L, OptionalLong.of(60L)));
+        assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(35L, OptionalLong.of(60L)));
+    }
+
+    private Optional<OffsetRange> readOffsets(long startOffset, OptionalLong maxOffset) {
+        Records records = log.read(startOffset, maxOffset);
+        long firstReadOffset = -1L;
+        long lastReadOffset = -1L;
+        for (Record record : records.records()) {
+            if (firstReadOffset < 0)
+                firstReadOffset = record.offset();
+            if (record.offset() > lastReadOffset)
+                lastReadOffset = record.offset();
+        }
+        if (firstReadOffset < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(new OffsetRange(firstReadOffset, lastReadOffset));
+        }
+    }
+
+    private static class OffsetRange {
+        public final long startOffset;
+        public final long endOffset;
+
+        private OffsetRange(long startOffset, long endOffset) {
+            this.startOffset = startOffset;
+            this.endOffset = endOffset;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            OffsetRange that = (OffsetRange) o;
+            return startOffset == that.startOffset &&
+                endOffset == that.endOffset;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(startOffset, endOffset);
+        }
+    }
+
+    private void appendBatch(int numRecords, int epoch) {
+        List<SimpleRecord> records = new ArrayList<>(numRecords);
+        for (int i = 0; i < numRecords; i++) {
+            records.add(new SimpleRecord(String.valueOf(i).getBytes()));
+        }
+        log.appendAsLeader(records, epoch);
     }
 }
