@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -88,6 +89,14 @@ public class GlobalStateStoreProviderTest {
                     Duration.ofMillis(10L),
                     Duration.ofMillis(2L),
                     false),
+                Serdes.String(),
+                Serdes.String()).build());
+        stores.put(
+            "s-store",
+            Stores.sessionStoreBuilder(
+                Stores.inMemorySessionStore(
+                    "s-store",
+                    Duration.ofMillis(10L)),
                 Serdes.String(),
                 Serdes.String()).build());
 
@@ -176,6 +185,26 @@ public class GlobalStateStoreProviderTest {
     }
 
     @Test
+    public void shouldReturnWindowStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, String>> stores =
+                provider.stores("w-store", QueryableStoreTypes.windowStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyWindowStore<String, String> store : stores) {
+            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+        }
+    }
+
+    @Test
+    public void shouldNotReturnWindowStoreAsTimestampedStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
+                provider.stores("w-store", QueryableStoreTypes.timestampedWindowStore());
+        assertEquals(0, stores.size());
+    }
+
+    @Test
     public void shouldReturnTimestampedWindowStoreAsWindowStore() {
         final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
         final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
@@ -184,6 +213,17 @@ public class GlobalStateStoreProviderTest {
         for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
             assertThat(store, instanceOf(ReadOnlyWindowStore.class));
             assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
+        }
+    }
+
+    @Test
+    public void shouldReturnSessionStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlySessionStore<String, String>> stores =
+                provider.stores("s-store", QueryableStoreTypes.sessionStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlySessionStore<String, String> store : stores) {
+            assertThat(store, instanceOf(ReadOnlySessionStore.class));
         }
     }
 }
