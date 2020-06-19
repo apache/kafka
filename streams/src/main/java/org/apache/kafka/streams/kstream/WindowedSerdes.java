@@ -65,14 +65,6 @@ public class WindowedSerdes {
     }
 
     /**
-     * Construct a {@code TimeWindowedSerde} object to deserialize changelog topic
-     * for the specified inner class type and window size.
-     */
-    static public <T> Serde<Windowed<T>> timeWindowedSerdeFrom(final Class<T> type, final long windowSize) {
-        return new TimeWindowedSerde<>(Serdes.serdeFrom(type), windowSize);
-    }
-
-    /**
      * Construct a {@code SessionWindowedSerde} object for the specified inner class type.
      */
     static public <T> Serde<Windowed<T>> sessionWindowedSerdeFrom(final Class<T> type) {
