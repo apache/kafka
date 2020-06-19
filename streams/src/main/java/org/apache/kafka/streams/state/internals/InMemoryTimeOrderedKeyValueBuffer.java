@@ -41,6 +41,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -58,10 +59,12 @@ import static java.util.Objects.requireNonNull;
 public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyValueBuffer<K, V> {
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
+    private static final byte[] V_1_CHANGELOG_HEADER_VALUE = {(byte) 1};
     private static final RecordHeaders V_1_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
+        new RecordHeaders(new Header[] {new RecordHeader("v", V_1_CHANGELOG_HEADER_VALUE)});
+    private static final byte[] V_2_CHANGELOG_HEADER_VALUE = {(byte) 2};
     private static final RecordHeaders V_2_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
+        new RecordHeaders(new Header[] {new RecordHeader("v", V_2_CHANGELOG_HEADER_VALUE)});
     private static final String METRIC_SCOPE = "in-memory-suppression";
 
     private final Map<Bytes, BufferKey> index = new HashMap<>();
@@ -286,6 +289,15 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     private void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> batch) {
         for (final ConsumerRecord<byte[], byte[]> record : batch) {
+            if (record.partition() != partition) {
+                throw new IllegalStateException(
+                    String.format(
+                        "record partition [%d] is being restored by the wrong suppress partition [%d]",
+                        record.partition(),
+                        partition
+                    )
+                );
+            }
             final Bytes key = Bytes.wrap(record.key());
             if (record.value() == null) {
                 // This was a tombstone. Delete the record.
@@ -298,16 +310,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     if (bufferKey.time() == minTimestamp) {
                         minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
                     }
-                }
-
-                if (record.partition() != partition) {
-                    throw new IllegalStateException(
-                        String.format(
-                            "record partition [%d] is being restored by the wrong suppress partition [%d]",
-                            record.partition(),
-                            partition
-                        )
-                    );
                 }
             } else {
                 if (record.headers().lastHeader("v") == null) {
@@ -339,7 +341,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                             recordContext
                         )
                     );
-                } else if (V_1_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
+                } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_1_CHANGELOG_HEADER_VALUE)) {
                     // in this case, the changelog value is a serialized ContextualRecord
                     final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
                     final long time = timeAndValue.getLong();
@@ -361,7 +363,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                             contextualRecord.recordContext()
                         )
                     );
-                } else if (V_2_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
+                } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_2_CHANGELOG_HEADER_VALUE)) {
                     // in this case, the changelog value is a serialized BufferValue
 
                     final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
@@ -371,15 +373,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                 } else {
                     throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
                 }
-            }
-            if (record.partition() != partition) {
-                throw new IllegalStateException(
-                    String.format(
-                        "record partition [%d] is being restored by the wrong suppress partition [%d]",
-                        record.partition(),
-                        partition
-                    )
-                );
             }
         }
         updateBufferMetrics();
