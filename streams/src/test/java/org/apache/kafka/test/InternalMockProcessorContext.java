@@ -68,7 +68,7 @@ public class InternalMockProcessorContext
 
     private TaskType taskType = TaskType.ACTIVE;
     private Serde<?> keySerde;
-    private Serde<?> valSerde;
+    private Serde<?> valueSerde;
     private long timestamp = -1L;
 
     public InternalMockProcessorContext() {
@@ -123,12 +123,12 @@ public class InternalMockProcessorContext
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
-                                        final Serde<?> valSerde,
+                                        final Serde<?> valueSerde,
                                         final StreamsConfig config) {
         this(
             stateDir,
             keySerde,
-            valSerde,
+            valueSerde,
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
             config,
             null,
@@ -157,13 +157,13 @@ public class InternalMockProcessorContext
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
-                                        final Serde<?> valSerde,
+                                        final Serde<?> valueSerde,
                                         final RecordCollector collector,
                                         final ThreadCache cache) {
         this(
             stateDir,
             keySerde,
-            valSerde,
+            valueSerde,
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
@@ -173,7 +173,7 @@ public class InternalMockProcessorContext
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
-                                        final Serde<?> valSerde,
+                                        final Serde<?> valueSerde,
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
@@ -188,7 +188,7 @@ public class InternalMockProcessorContext
         super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
-        this.valSerde = valSerde;
+        this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
         this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
     }
@@ -207,8 +207,8 @@ public class InternalMockProcessorContext
         this.keySerde = keySerde;
     }
 
-    public void setValueSerde(final Serde<?> valSerde) {
-        this.valSerde = valSerde;
+    public void setValueSerde(final Serde<?> valueSerde) {
+        this.valueSerde = valueSerde;
     }
 
     @Override
@@ -218,7 +218,7 @@ public class InternalMockProcessorContext
 
     @Override
     public Serde<?> valueSerde() {
-        return valSerde;
+        return valueSerde;
     }
 
     // state mgr will be overridden by the state dir and store maps

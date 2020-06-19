@@ -92,14 +92,14 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
         private final String storeName;
         private final Serde<K> keySerde;
-        private final Serde<V> valSerde;
+        private final Serde<V> valueSerde;
         private boolean loggingEnabled = true;
         private Map<String, String> logConfig = new HashMap<>();
 
-        public Builder(final String storeName, final Serde<K> keySerde, final Serde<V> valSerde) {
+        public Builder(final String storeName, final Serde<K> keySerde, final Serde<V> valueSerde) {
             this.storeName = storeName;
             this.keySerde = keySerde;
-            this.valSerde = valSerde;
+            this.valueSerde = valueSerde;
         }
 
         /**
@@ -140,7 +140,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
         @Override
         public InMemoryTimeOrderedKeyValueBuffer<K, V> build() {
-            return new InMemoryTimeOrderedKeyValueBuffer<>(storeName, loggingEnabled, keySerde, valSerde);
+            return new InMemoryTimeOrderedKeyValueBuffer<>(storeName, loggingEnabled, keySerde, valueSerde);
         }
 
         @Override
