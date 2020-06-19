@@ -154,4 +154,9 @@ public class WindowStoreBuilderTest {
         new WindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerIfMetricsScopeIsNull() {
+        new WindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+    }
+
 }

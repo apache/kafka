@@ -200,4 +200,9 @@ public class TimestampedWindowStoreBuilderTest {
         assertThrows(NullPointerException.class, () -> new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerIfMetricsScopeIsNull() {
+        new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+    }
+
 }
