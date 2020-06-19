@@ -149,6 +149,17 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldReturnDefaultChangelogTopicName() {
+        final String applicationId = "appId";
+        final String storeName = "store";
+
+        assertThat(
+            ProcessorStateManager.storeChangelogTopic(applicationId, storeName),
+            is(applicationId + "-" + storeName + "-changelog")
+        );
+    }
+
+    @Test
     public void shouldReturnBaseDir() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         assertEquals(stateDirectory.directoryForTask(taskId), stateMgr.baseDir());

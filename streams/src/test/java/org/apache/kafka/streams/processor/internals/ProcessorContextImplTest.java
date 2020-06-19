@@ -127,6 +127,7 @@ public class ProcessorContextImplTest {
         expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
         expect(stateManager.getStore("LocalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
         expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
+        expect(stateManager.changelogFor(anyString())).andStubReturn(null);
 
         replay(stateManager);
 

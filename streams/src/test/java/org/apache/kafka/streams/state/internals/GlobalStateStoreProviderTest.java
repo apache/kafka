@@ -42,7 +42,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.replay;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
@@ -89,13 +89,12 @@ public class GlobalStateStoreProviderTest {
                 Serdes.String(),
                 Serdes.String()).build());
 
-        final ProcessorContextImpl mockContext = mock(ProcessorContextImpl.class);
-        expect(mockContext.applicationId()).andReturn("appId").anyTimes();
+        final ProcessorContextImpl mockContext = niceMock(ProcessorContextImpl.class);
+        expect(mockContext.applicationId()).andStubReturn("appId");
         expect(mockContext.metrics())
-            .andReturn(new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST))
-            .anyTimes();
-        expect(mockContext.taskId()).andReturn(new TaskId(0, 0)).anyTimes();
-        expect(mockContext.recordCollector()).andReturn(null).anyTimes();
+            .andStubReturn(new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST));
+        expect(mockContext.taskId()).andStubReturn(new TaskId(0, 0));
+        expect(mockContext.recordCollector()).andStubReturn(null);
         replay(mockContext);
         for (final StateStore store : stores.values()) {
             store.init(mockContext, null);

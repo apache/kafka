@@ -49,7 +49,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
-    final Map<String, String> storeToChangelogTopic = new HashMap<>();
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
     public ProcessorContextImpl(final TaskId id,
@@ -103,7 +102,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
-        storeToChangelogTopic.put(store.name(), ProcessorStateManager.storeChangelogTopic(applicationId(), store.name()));
         super.register(store, stateRestoreCallback);
     }
 
@@ -120,7 +118,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         throwUnsupportedOperationExceptionIfStandby("logChange");
         // Sending null headers to changelog topics (KIP-244)
         collector.send(
-            storeToChangelogTopic.get(storeName),
+            stateManager.changelogFor(storeName),
             key,
             value,
             null,

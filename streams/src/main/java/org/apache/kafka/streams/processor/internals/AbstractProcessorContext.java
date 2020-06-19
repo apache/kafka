@@ -225,4 +225,9 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     public TaskType taskType() {
         return stateManager.taskType();
     }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return stateManager.changelogFor(storeName);
+    }
 }

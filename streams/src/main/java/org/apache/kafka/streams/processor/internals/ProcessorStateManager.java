@@ -61,7 +61,7 @@ import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_U
  * The manager is also responsible for restoring state stores via their registered restore callback,
  * which is used for both updating standby tasks as well as restoring active tasks.
  */
-public class ProcessorStateManager implements StateManager {
+public class ProcessorStateManager extends AbstractProcessorStateManager {
 
     public static class StateStoreMetadata {
         private final StateStore stateStore;
@@ -147,7 +147,6 @@ public class ProcessorStateManager implements StateManager {
     private final TaskId taskId;
     private final boolean eosEnabled;
     private final ChangelogRegister changelogReader;
-    private final Map<String, String> storeToChangelogTopic;
     private final Collection<TopicPartition> sourcePartitions;
 
     // must be maintained in topological order
@@ -175,6 +174,7 @@ public class ProcessorStateManager implements StateManager {
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
 
+        super(storeToChangelogTopic);
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
         this.taskId = taskId;
@@ -182,7 +182,6 @@ public class ProcessorStateManager implements StateManager {
         this.eosEnabled = eosEnabled;
         this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
-        this.storeToChangelogTopic = storeToChangelogTopic;
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
@@ -559,13 +558,13 @@ public class ProcessorStateManager implements StateManager {
         // NOTE we assume the partition of the topic can always be inferred from the task id;
         // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
         // it is not a regression (it would always break anyways)
-        return new TopicPartition(storeToChangelogTopic.get(storeName), taskId.partition);
+        return new TopicPartition(changelogFor(storeName), taskId.partition);
     }
 
     private boolean isLoggingEnabled(final String storeName) {
         // if the store name does not exist in the changelog map, it means the underlying store
         // is not log enabled (including global stores)
-        return storeToChangelogTopic.containsKey(storeName);
+        return changelogFor(storeName) != null;
     }
 
     private StateStoreMetadata findStore(final TopicPartition changelogPartition) {

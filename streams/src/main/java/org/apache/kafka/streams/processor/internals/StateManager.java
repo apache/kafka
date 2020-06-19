@@ -48,6 +48,8 @@ interface StateManager {
 
     TaskType taskType();
 
+    String changelogFor(final String storeName);
+
     // TODO: we can remove this when consolidating global state manager into processor state manager
     StateStore getGlobalStore(final String name);
 }

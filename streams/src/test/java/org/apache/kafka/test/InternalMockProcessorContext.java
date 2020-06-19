@@ -70,6 +70,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private long timestamp = -1L;
+    private Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     public InternalMockProcessorContext() {
         this(null,
@@ -399,5 +400,14 @@ public class InternalMockProcessorContext
             records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
         }
         restoreCallback.restoreBatch(records);
+    }
+
+    public void addChangelogForStore(final String storeName, final String changelogTopic) {
+        storeToChangelogTopic.put(storeName, changelogTopic);
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return storeToChangelogTopic.get(storeName);
     }
 }

@@ -108,7 +108,7 @@ public class ProcessorTopology {
     }
 
     public Map<String, String> storeToChangelogTopic() {
-        return storeToChangelogTopic;
+        return Collections.unmodifiableMap(storeToChangelogTopic);
     }
 
     boolean isRepartitionTopic(final String topic) {
