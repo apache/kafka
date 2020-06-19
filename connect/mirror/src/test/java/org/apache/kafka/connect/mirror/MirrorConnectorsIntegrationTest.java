@@ -58,17 +58,12 @@ public class MirrorConnectorsIntegrationTest {
 
     private static final int NUM_RECORDS_PRODUCED = 100;  // to save trees
     private static final int NUM_PARTITIONS = 10;
-    private static final int RECORD_TRANSFER_DURATION_MS = 10_000;
+    private static final int RECORD_TRANSFER_DURATION_MS = 20_000;
     private static final int CHECKPOINT_DURATION_MS = 20_000;
 
     private MirrorMakerConfig mm2Config; 
     private EmbeddedConnectCluster primary;
     private EmbeddedConnectCluster backup;
-
-    private enum ClusterType {
-        PRIMARY,
-        BACKUP
-    }
 
     @Before
     public void setup() throws InterruptedException {
@@ -212,45 +207,23 @@ public class MirrorConnectorsIntegrationTest {
         backup.stop();
     }
 
-    // throw exception after 3 retries, and print expected error messages
-    private void assertEqualsWithConsumeRetries(final String errorMsg,
-                                                final int numRecordsProduces,
-                                                final int timeout,
-                                                final ClusterType clusterType,
-                                                final String... topics) throws InterruptedException {
-        int retries = 3;
-        while (retries-- > 0) {
-            try {
-                int actualNum = clusterType == ClusterType.PRIMARY ?
-                        primary.kafka().consume(numRecordsProduces, timeout, topics).count() :
-                        backup.kafka().consume(numRecordsProduces, timeout, topics).count();
-                if (numRecordsProduces == actualNum)
-                    return;
-            } catch (Throwable e) {
-                log.error("Could not find enough records with {} retries left", retries, e);
-            }
-        }
-        throw new InterruptedException(errorMsg);
-    }
-
     @Test
     public void testReplication() throws InterruptedException {
         MirrorClient primaryClient = new MirrorClient(mm2Config.clientConfig("primary"));
         MirrorClient backupClient = new MirrorClient(mm2Config.clientConfig("backup"));
 
-        assertEqualsWithConsumeRetries("Records were not produced to primary cluster.", NUM_RECORDS_PRODUCED,
-                RECORD_TRANSFER_DURATION_MS, ClusterType.PRIMARY, "test-topic-1");
-        assertEqualsWithConsumeRetries("Records were not replicated to backup cluster.", NUM_RECORDS_PRODUCED,
-                RECORD_TRANSFER_DURATION_MS, ClusterType.BACKUP, "primary.test-topic-1");
-        assertEqualsWithConsumeRetries("Records were not produced to backup cluster.", NUM_RECORDS_PRODUCED,
-                RECORD_TRANSFER_DURATION_MS, ClusterType.BACKUP, "test-topic-1");
-        assertEqualsWithConsumeRetries("Records were not replicated to primary cluster.", NUM_RECORDS_PRODUCED,
-                RECORD_TRANSFER_DURATION_MS, ClusterType.PRIMARY, "backup.test-topic-1");
-        assertEqualsWithConsumeRetries("Primary cluster doesn't have all records from both clusters.", NUM_RECORDS_PRODUCED * 2,
-                RECORD_TRANSFER_DURATION_MS, ClusterType.PRIMARY, "backup.test-topic-1", "test-topic-1");
-        assertEqualsWithConsumeRetries("Backup cluster doesn't have all records from both clusters.", NUM_RECORDS_PRODUCED * 2,
-                RECORD_TRANSFER_DURATION_MS, ClusterType.BACKUP, "primary.test-topic-1", "test-topic-1");
-
+        assertEquals("Records were not produced to primary cluster.", NUM_RECORDS_PRODUCED,
+            primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count());
+        assertEquals("Records were not replicated to backup cluster.", NUM_RECORDS_PRODUCED,
+            backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "primary.test-topic-1").count());
+        assertEquals("Records were not produced to backup cluster.", NUM_RECORDS_PRODUCED,
+            backup.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "test-topic-1").count());
+        assertEquals("Records were not replicated to primary cluster.", NUM_RECORDS_PRODUCED,
+            primary.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_TRANSFER_DURATION_MS, "backup.test-topic-1").count());
+        assertEquals("Primary cluster doesn't have all records from both clusters.", NUM_RECORDS_PRODUCED * 2,
+            primary.kafka().consume(NUM_RECORDS_PRODUCED * 2, RECORD_TRANSFER_DURATION_MS, "backup.test-topic-1", "test-topic-1").count());
+        assertEquals("Backup cluster doesn't have all records from both clusters.", NUM_RECORDS_PRODUCED * 2,
+            backup.kafka().consume(NUM_RECORDS_PRODUCED * 2, RECORD_TRANSFER_DURATION_MS, "primary.test-topic-1", "test-topic-1").count());
         assertTrue("Heartbeats were not emitted to primary cluster.", primary.kafka().consume(1,
             RECORD_TRANSFER_DURATION_MS, "heartbeats").count() > 0);
         assertTrue("Heartbeats were not emitted to backup cluster.", backup.kafka().consume(1,
