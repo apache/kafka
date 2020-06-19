@@ -23,16 +23,13 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Collection;
 import java.util.Properties;
 import java.util.Set;
 
@@ -45,6 +42,8 @@ import static org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyVal
 
 public final class InMemoryTimeOrderedKeyValueBufferChangelogDumpTool {
     private static final String USAGE = "usage: {consumer properties file} {topic} {partition}";
+
+    private InMemoryTimeOrderedKeyValueBufferChangelogDumpTool() {}
 
     private static String require(final String[] args, final int index) {
         if (args.length <= index) {
@@ -77,7 +76,7 @@ public final class InMemoryTimeOrderedKeyValueBufferChangelogDumpTool {
         }
     }
 
-    public static void main(String[] args) {
+    public static void main(final String[] args) {
 
         final Properties properties;
         try {
@@ -97,7 +96,7 @@ public final class InMemoryTimeOrderedKeyValueBufferChangelogDumpTool {
         return;
     }
 
-    public static void dumpBufferChangelog(final Properties properties, final String topic, final int partition) {
+    private static void dumpBufferChangelog(final Properties properties, final String topic, final int partition) {
         final TopicPartition topicPartition = new TopicPartition(topic, partition);
         final Set<TopicPartition> assignment = singleton(topicPartition);
 
