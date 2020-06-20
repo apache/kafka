@@ -36,8 +36,9 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
 public class TimestampedKeyValueStoreBuilderTest {
@@ -52,6 +53,7 @@ public class TimestampedKeyValueStoreBuilderTest {
     public void setUp() {
         expect(supplier.get()).andReturn(inner);
         expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope");
         expect(inner.persistent()).andReturn(true).anyTimes();
         replay(supplier, inner);
 
@@ -173,11 +175,9 @@ public class TimestampedKeyValueStoreBuilderTest {
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 
-        try {
-            new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
-        } catch (final Exception e) {
-            fail();
-        }
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        assertThat(e.getMessage(), equalTo("bytesStoreSupplier's metricsScope can't be null"));
     }
 
 }

@@ -38,8 +38,9 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
 public class KeyValueStoreBuilderTest {
@@ -54,6 +55,7 @@ public class KeyValueStoreBuilderTest {
     public void setUp() {
         EasyMock.expect(supplier.get()).andReturn(inner);
         EasyMock.expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope");
         EasyMock.replay(supplier);
         builder = new KeyValueStoreBuilder<>(
             supplier,
@@ -145,11 +147,9 @@ public class KeyValueStoreBuilderTest {
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 
-        try {
-            new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
-        } catch (final Exception e) {
-            fail();
-        }
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        assertThat(e.getMessage(), equalTo("bytesStoreSupplier's metricsScope can't be null"));
     }
 
 }

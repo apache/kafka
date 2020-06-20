@@ -40,7 +40,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
 public class SessionStoreBuilderTest {
@@ -56,6 +55,7 @@ public class SessionStoreBuilderTest {
 
         expect(supplier.get()).andReturn(inner);
         expect(supplier.name()).andReturn("name");
+        expect(supplier.metricsScope()).andReturn("metricScope");
         replay(supplier);
 
         builder = new SessionStoreBuilder<>(
@@ -159,11 +159,9 @@ public class SessionStoreBuilderTest {
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 
-        try {
-            new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
-        } catch (final Exception e) {
-            fail();
-        }
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        assertThat(e.getMessage(), equalTo("supplier's metricsScope can't be null"));
     }
 
 }
