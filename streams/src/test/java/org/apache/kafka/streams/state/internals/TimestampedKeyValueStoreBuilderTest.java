@@ -36,9 +36,8 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
 public class TimestampedKeyValueStoreBuilderTest {
@@ -169,13 +168,16 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        final Exception e = assertThrows(NullPointerException.class,
-            () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
-        /*
-         * TODO: The exception is thrown from the constructor of AbstractStoreBuilder, since
-         * TimestampedKeyValueStoreBuilder omits the MetricsScope nullity check in its constructor.
-         */
-        assertThat(e.getMessage(), equalTo("name cannot be null"));
+        reset(supplier);
+        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name", null));
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
+
+        try {
+            new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+        } catch (final Exception e) {
+            fail();
+        }
     }
 
 }
