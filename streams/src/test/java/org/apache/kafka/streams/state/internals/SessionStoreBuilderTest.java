@@ -51,8 +51,7 @@ public class SessionStoreBuilderTest {
     private SessionStoreBuilder<String, String> builder;
 
     @Before
-    public void setUp() throws Exception {
-
+    public void setUp() {
         expect(supplier.get()).andReturn(inner);
         expect(supplier.name()).andReturn("name");
         expect(supplier.metricsScope()).andReturn("metricScope");
