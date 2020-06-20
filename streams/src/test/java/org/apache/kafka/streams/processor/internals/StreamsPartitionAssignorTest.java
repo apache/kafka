@@ -1941,7 +1941,7 @@ public class StreamsPartitionAssignorTest {
 
         createDefaultMockTaskManager();
         EasyMock.expect(taskManager.mainConsumer()).andStubReturn(consumerClient);
-        configurePartitionAssignorWith(singletonMap(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE));
+        configurePartitionAssignorWith(singletonMap(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE));
         overwriteInternalTopicManagerWithMock(false);
 
         EasyMock.expect(consumerClient.committed(changelogs))
