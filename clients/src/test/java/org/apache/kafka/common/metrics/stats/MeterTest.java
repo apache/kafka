@@ -44,7 +44,7 @@ public class MeterTest {
         assertEquals(rateMetricName, rate.name());
         assertEquals(totalMetricName, total.name());
         Rate rateStat = (Rate) rate.stat();
-        Total totalStat = (Total) total.stat();
+        CumulativeSum totalStat = (CumulativeSum) total.stat();
 
         MetricConfig config = new MetricConfig();
         double nextValue = 0.0;

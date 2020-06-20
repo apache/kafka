@@ -35,19 +35,16 @@ public class StreamsUpgradeTest {
      */
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
-        if (args.length < 3) {
-            System.err.println("StreamsUpgradeTest requires three argument (kafka-url, zookeeper-url, properties-file) but only " + args.length + " provided: "
-                + (args.length > 0 ? args[0] + " " : "")
-                + (args.length > 1 ? args[1] : ""));
+        if (args.length < 2) {
+            System.err.println("StreamsUpgradeTest requires two arguments (zookeeper-url, properties-file) but only " + args.length + " provided: "
+                + (args.length > 0 ? args[0] + " " : ""));
         }
-        final String kafka = args[0];
-        final String zookeeper = args[1];
-        final String propFileName = args.length > 2 ? args[2] : null;
+        final String zookeeper = args[0];
+        final String propFileName = args[1];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
         System.out.println("StreamsTest instance started (StreamsUpgradeTest v0.10.1)");
-        System.out.println("kafka=" + kafka);
         System.out.println("zookeeper=" + zookeeper);
         System.out.println("props=" + streamsProperties);
 
@@ -58,7 +55,6 @@ public class StreamsUpgradeTest {
 
         final Properties config = new Properties();
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsUpgradeTest");
-        config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         config.setProperty(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, zookeeper);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         config.putAll(streamsProperties);
@@ -86,7 +82,7 @@ public class StreamsUpgradeTest {
 
                     @Override
                     public void init(final ProcessorContext context) {
-                        System.out.println("initializing processor: topic=data taskId=" + context.taskId());
+                        System.out.println("[0.10.1] initializing processor: topic=data taskId=" + context.taskId());
                         numRecordsProcessed = 0;
                     }
 

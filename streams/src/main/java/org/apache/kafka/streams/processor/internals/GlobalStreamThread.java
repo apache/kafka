@@ -20,8 +20,9 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -34,7 +35,9 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -175,7 +178,7 @@ public class GlobalStreamThread extends Thread {
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
                               final long cacheSizeBytes,
-                              final Metrics metrics,
+                              final StreamsMetricsImpl streamsMetrics,
                               final Time time,
                               final String threadClientId,
                               final StateRestoreListener stateRestoreListener) {
@@ -185,11 +188,11 @@ public class GlobalStreamThread extends Thread {
         this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
+        this.streamsMetrics = streamsMetrics;
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
-        this.cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
         this.stateRestoreListener = stateRestoreListener;
     }
 
@@ -197,7 +200,7 @@ public class GlobalStreamThread extends Thread {
         private final Consumer<byte[], byte[]> globalConsumer;
         private final GlobalStateMaintainer stateMaintainer;
         private final Time time;
-        private final long pollMs;
+        private final Duration pollTime;
         private final long flushInterval;
         private final Logger log;
 
@@ -207,13 +210,13 @@ public class GlobalStreamThread extends Thread {
                       final Consumer<byte[], byte[]> globalConsumer,
                       final GlobalStateMaintainer stateMaintainer,
                       final Time time,
-                      final long pollMs,
+                      final Duration pollTime,
                       final long flushInterval) {
             this.log = logContext.logger(getClass());
             this.globalConsumer = globalConsumer;
             this.stateMaintainer = stateMaintainer;
             this.time = time;
-            this.pollMs = pollMs;
+            this.pollTime = pollTime;
             this.flushInterval = flushInterval;
         }
 
@@ -232,12 +235,12 @@ public class GlobalStreamThread extends Thread {
 
         void pollAndUpdate() {
             try {
-                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollMs);
+                final ConsumerRecords<byte[], byte[]> received = globalConsumer.poll(pollTime);
                 for (final ConsumerRecord<byte[], byte[]> record : received) {
                     stateMaintainer.update(record);
                 }
                 final long now = time.milliseconds();
-                if (flushInterval >= 0 && now >= lastFlush + flushInterval) {
+                if (now >= lastFlush + flushInterval) {
                     stateMaintainer.flushState();
                     lastFlush = now;
                 }
@@ -254,7 +257,7 @@ public class GlobalStreamThread extends Thread {
             } catch (final RuntimeException e) {
                 // just log an error if the consumer throws an exception during close
                 // so we can always attempt to close the state stores.
-                log.error("Failed to close consumer due to the following error:", e);
+                log.error("Failed to close global consumer due to the following error:", e);
             }
 
             stateMaintainer.close();
@@ -275,6 +278,7 @@ public class GlobalStreamThread extends Thread {
             setState(State.DEAD);
 
             log.warn("Error happened during initialization of the global state store; this thread has shutdown");
+            streamsMetrics.removeAllThreadLevelSensors(getName());
 
             return;
         }
@@ -298,7 +302,7 @@ public class GlobalStreamThread extends Thread {
                 log.error("Failed to close state maintainer due to the following error:", e);
             }
 
-            streamsMetrics.removeOwnedSensors();
+            streamsMetrics.removeAllThreadLevelSensors(getName());
 
             setState(DEAD);
 
@@ -334,8 +338,9 @@ public class GlobalStreamThread extends Thread {
                     logContext
                 ),
                 time,
-                config.getLong(StreamsConfig.POLL_MS_CONFIG),
-                config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
+                Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)),
+                config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
+            );
             stateConsumer.initialize();
 
             return stateConsumer;
@@ -367,5 +372,9 @@ public class GlobalStreamThread extends Thread {
         // one could call shutdown() multiple times, so ignore subsequent calls
         // if already shutting down or dead
         setState(PENDING_SHUTDOWN);
+    }
+
+    public Map<MetricName, Metric> consumerMetrics() {
+        return Collections.unmodifiableMap(globalConsumer.metrics());
     }
 }

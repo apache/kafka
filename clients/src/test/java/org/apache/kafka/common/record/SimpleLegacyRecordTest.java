@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -66,7 +68,7 @@ public class SimpleLegacyRecordTest {
     }
 
     /* This scenario can happen if the record size field is corrupt and we end up allocating a buffer that is too small */
-    @Test(expected = InvalidRecordException.class)
+    @Test(expected = CorruptRecordException.class)
     public void testIsValidWithTooSmallBuffer() {
         ByteBuffer buffer = ByteBuffer.allocate(2);
         LegacyRecord record = new LegacyRecord(buffer);
@@ -74,7 +76,7 @@ public class SimpleLegacyRecordTest {
         record.ensureValid();
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test(expected = CorruptRecordException.class)
     public void testIsValidWithChecksumMismatch() {
         ByteBuffer buffer = ByteBuffer.allocate(4);
         // set checksum

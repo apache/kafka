@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor;
 
+import java.util.Objects;
+
 /**
  * This class is used to provide the optional parameters when sending output records to downstream processor
  * using {@link ProcessorContext#forward(Object, Object, To)}.
@@ -53,7 +55,7 @@ public class To {
      * @return a new {@link To} instance configured for all downstream processor
      */
     public static To all() {
-        return new To((String) null, -1);
+        return new To(null, -1);
     }
 
     /**
@@ -65,4 +67,26 @@ public class To {
         this.timestamp = timestamp;
         return this;
     }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final To to = (To) o;
+        return timestamp == to.timestamp &&
+            Objects.equals(childName, to.childName);
+    }
+
+    /**
+     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable.
+     */
+    @Override
+    public int hashCode() {
+        throw new UnsupportedOperationException("To is unsafe for use in Hash collections");
+    }
+
 }

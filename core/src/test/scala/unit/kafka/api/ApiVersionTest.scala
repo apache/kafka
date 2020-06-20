@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import org.apache.kafka.common.record.RecordFormat
+import org.apache.kafka.common.record.RecordVersion
 import org.junit.Test
 import org.junit.Assert._
 
@@ -73,18 +73,80 @@ class ApiVersionTest {
     assertEquals(KAFKA_1_0_IV0, ApiVersion("1.0.0"))
     assertEquals(KAFKA_1_0_IV0, ApiVersion("1.0.0-IV0"))
     assertEquals(KAFKA_1_0_IV0, ApiVersion("1.0.1"))
+
+    assertEquals(KAFKA_1_1_IV0, ApiVersion("1.1-IV0"))
+
+    assertEquals(KAFKA_2_0_IV1, ApiVersion("2.0"))
+    assertEquals(KAFKA_2_0_IV0, ApiVersion("2.0-IV0"))
+    assertEquals(KAFKA_2_0_IV1, ApiVersion("2.0-IV1"))
+
+    assertEquals(KAFKA_2_1_IV2, ApiVersion("2.1"))
+    assertEquals(KAFKA_2_1_IV0, ApiVersion("2.1-IV0"))
+    assertEquals(KAFKA_2_1_IV1, ApiVersion("2.1-IV1"))
+    assertEquals(KAFKA_2_1_IV2, ApiVersion("2.1-IV2"))
+
+    assertEquals(KAFKA_2_2_IV1, ApiVersion("2.2"))
+    assertEquals(KAFKA_2_2_IV0, ApiVersion("2.2-IV0"))
+    assertEquals(KAFKA_2_2_IV1, ApiVersion("2.2-IV1"))
+
+    assertEquals(KAFKA_2_3_IV1, ApiVersion("2.3"))
+    assertEquals(KAFKA_2_3_IV0, ApiVersion("2.3-IV0"))
+    assertEquals(KAFKA_2_3_IV1, ApiVersion("2.3-IV1"))
+
+    assertEquals(KAFKA_2_4_IV1, ApiVersion("2.4"))
+    assertEquals(KAFKA_2_4_IV0, ApiVersion("2.4-IV0"))
+    assertEquals(KAFKA_2_4_IV1, ApiVersion("2.4-IV1"))
   }
 
   @Test
-  def testMinVersionForMessageFormat(): Unit = {
-    assertEquals("0.8.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V0))
-    assertEquals("0.10.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V1))
-    assertEquals("0.11.0", ApiVersion.minVersionForMessageFormat(RecordFormat.V2))
+  def testApiVersionUniqueIds(): Unit = {
+    val allIds: Seq[Int] = ApiVersion.allVersions.map(apiVersion => {
+      apiVersion.id
+    })
 
-    // Ensure that all message format versions have a defined min version so that we remember
-    // to update the function
-    for (messageFormatVersion <- RecordFormat.values)
-      assertNotNull(ApiVersion.minVersionForMessageFormat(messageFormatVersion))
+    val uniqueIds: Set[Int] = allIds.toSet
+
+    assertEquals(allIds.size, uniqueIds.size)
+  }
+
+  @Test
+  def testMinSupportedVersionFor(): Unit = {
+    assertEquals(KAFKA_0_8_0, ApiVersion.minSupportedFor(RecordVersion.V0))
+    assertEquals(KAFKA_0_10_0_IV0, ApiVersion.minSupportedFor(RecordVersion.V1))
+    assertEquals(KAFKA_0_11_0_IV0, ApiVersion.minSupportedFor(RecordVersion.V2))
+
+    // Ensure that all record versions have a defined min version so that we remember to update the method
+    for (recordVersion <- RecordVersion.values)
+      assertNotNull(ApiVersion.minSupportedFor(recordVersion))
+  }
+
+  @Test
+  def testShortVersion(): Unit = {
+    assertEquals("0.8.0", KAFKA_0_8_0.shortVersion)
+    assertEquals("0.10.0", KAFKA_0_10_0_IV0.shortVersion)
+    assertEquals("0.10.0", KAFKA_0_10_0_IV1.shortVersion)
+    assertEquals("0.11.0", KAFKA_0_11_0_IV0.shortVersion)
+    assertEquals("0.11.0", KAFKA_0_11_0_IV1.shortVersion)
+    assertEquals("0.11.0", KAFKA_0_11_0_IV2.shortVersion)
+    assertEquals("1.0", KAFKA_1_0_IV0.shortVersion)
+    assertEquals("1.1", KAFKA_1_1_IV0.shortVersion)
+    assertEquals("2.0", KAFKA_2_0_IV0.shortVersion)
+    assertEquals("2.0", KAFKA_2_0_IV1.shortVersion)
+    assertEquals("2.1", KAFKA_2_1_IV0.shortVersion)
+    assertEquals("2.1", KAFKA_2_1_IV1.shortVersion)
+    assertEquals("2.1", KAFKA_2_1_IV2.shortVersion)
+    assertEquals("2.2", KAFKA_2_2_IV0.shortVersion)
+    assertEquals("2.2", KAFKA_2_2_IV1.shortVersion)
+    assertEquals("2.3", KAFKA_2_3_IV0.shortVersion)
+    assertEquals("2.3", KAFKA_2_3_IV1.shortVersion)
+    assertEquals("2.4", KAFKA_2_4_IV0.shortVersion)
+  }
+
+  @Test
+  def testApiVersionValidator(): Unit = {
+    val str = ApiVersionValidator.toString
+    val apiVersions = str.slice(1, str.length).split(",")
+    assertEquals(ApiVersion.allVersions.size, apiVersions.length)
   }
 
 }

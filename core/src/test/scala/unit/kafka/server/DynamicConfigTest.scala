@@ -26,23 +26,23 @@ class DynamicConfigTest  extends ZooKeeperTestHarness {
   private final val someValue: String = "some interesting value"
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldFailWhenChangingClientIdUnknownConfig() {
+  def shouldFailWhenChangingClientIdUnknownConfig(): Unit = {
     adminZkClient.changeClientIdConfig("ClientId", propsWith(nonExistentConfig, someValue))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def shouldFailWhenChangingUserUnknownConfig() {
+  def shouldFailWhenChangingUserUnknownConfig(): Unit = {
     adminZkClient.changeUserOrUserClientIdConfig("UserId", propsWith(nonExistentConfig, someValue))
   }
 
   @Test(expected = classOf[ConfigException])
-  def shouldFailLeaderConfigsWithInvalidValues() {
+  def shouldFailLeaderConfigsWithInvalidValues(): Unit = {
     adminZkClient.changeBrokerConfig(Seq(0),
       propsWith(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "-100"))
   }
 
   @Test(expected = classOf[ConfigException])
-  def shouldFailFollowerConfigsWithInvalidValues() {
+  def shouldFailFollowerConfigsWithInvalidValues(): Unit = {
     adminZkClient.changeBrokerConfig(Seq(0),
       propsWith(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "-100"))
   }

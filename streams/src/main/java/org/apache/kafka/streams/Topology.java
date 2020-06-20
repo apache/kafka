@@ -21,11 +21,13 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -33,6 +35,7 @@ import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -251,8 +254,8 @@ public class Topology {
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
      */
     public synchronized Topology addSource(final String name,
-                                           final Deserializer keyDeserializer,
-                                           final Deserializer valueDeserializer,
+                                           final Deserializer<?> keyDeserializer,
+                                           final Deserializer<?> valueDeserializer,
                                            final String... topics) {
         internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valueDeserializer, topics);
         return this;
@@ -277,8 +280,8 @@ public class Topology {
      * @throws TopologyException if processor is already added or if topics have already been registered by name
      */
     public synchronized Topology addSource(final String name,
-                                           final Deserializer keyDeserializer,
-                                           final Deserializer valueDeserializer,
+                                           final Deserializer<?> keyDeserializer,
+                                           final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
         internalTopologyBuilder.addSource(null, name, null, keyDeserializer, valueDeserializer, topicPattern);
         return this;
@@ -288,7 +291,7 @@ public class Topology {
      * Add a new source that consumes from topics matching the given pattern and forwards the records to child processor
      * and/or sink nodes.
      * The source will use the specified key and value deserializers.
-     * The provided de-/serializers will be used for all matched topics, so care should be taken to specify patterns for
+     * The provided de-/serializers will be used for all the specified topics, so care should be taken when specifying
      * topics that share the same key-value data format.
      *
      * @param offsetReset        the auto offset reset policy to use for this stream if no committed offsets found;
@@ -303,10 +306,11 @@ public class Topology {
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by name
      */
+    @SuppressWarnings("overloads")
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
                                            final String name,
-                                           final Deserializer keyDeserializer,
-                                           final Deserializer valueDeserializer,
+                                           final Deserializer<?> keyDeserializer,
+                                           final Deserializer<?> valueDeserializer,
                                            final String... topics) {
         internalTopologyBuilder.addSource(offsetReset, name, null, keyDeserializer, valueDeserializer, topics);
         return this;
@@ -333,8 +337,8 @@ public class Topology {
      */
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
                                            final String name,
-                                           final Deserializer keyDeserializer,
-                                           final Deserializer valueDeserializer,
+                                           final Deserializer<?> keyDeserializer,
+                                           final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
         internalTopologyBuilder.addSource(offsetReset, name, null, keyDeserializer, valueDeserializer, topicPattern);
         return this;
@@ -358,12 +362,12 @@ public class Topology {
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
      */
-
+    @SuppressWarnings("overloads")
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
                                            final String name,
                                            final TimestampExtractor timestampExtractor,
-                                           final Deserializer keyDeserializer,
-                                           final Deserializer valueDeserializer,
+                                           final Deserializer<?> keyDeserializer,
+                                           final Deserializer<?> valueDeserializer,
                                            final String... topics) {
         internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keyDeserializer, valueDeserializer, topics);
         return this;
@@ -390,11 +394,12 @@ public class Topology {
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by name
      */
+    @SuppressWarnings("overloads")
     public synchronized Topology addSource(final AutoOffsetReset offsetReset,
                                            final String name,
                                            final TimestampExtractor timestampExtractor,
-                                           final Deserializer keyDeserializer,
-                                           final Deserializer valueDeserializer,
+                                           final Deserializer<?> keyDeserializer,
+                                           final Deserializer<?> valueDeserializer,
                                            final Pattern topicPattern) {
         internalTopologyBuilder.addSource(offsetReset, name, timestampExtractor, keyDeserializer, valueDeserializer, topicPattern);
         return this;
@@ -411,7 +416,7 @@ public class Topology {
      * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
      * @return itself
-     * @throws TopologyException itself
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      * @see #addSink(String, String, StreamPartitioner, String...)
      * @see #addSink(String, String, Serializer, Serializer, String...)
      * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
@@ -517,9 +522,131 @@ public class Topology {
     }
 
     /**
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor}.
+     * The topics that it may ever send to should be pre-created.
+     * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
+     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     * {@link StreamsConfig stream configuration}.
+     *
+     * @param name              the unique name of the sink
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
+     * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
+     *                          and dynamically write to topics
+     * @return                  itself
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @see #addSink(String, String, StreamPartitioner, String...)
+     * @see #addSink(String, String, Serializer, Serializer, String...)
+     * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
+     */
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final TopicNameExtractor<K, V> topicExtractor,
+                                                final String... parentNames) {
+        internalTopologyBuilder.addSink(name, topicExtractor, null, null, null, parentNames);
+        return this;
+    }
+
+    /**
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor},
+     * using the supplied partitioner.
+     * The topics that it may ever send to should be pre-created.
+     * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
+     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     * {@link StreamsConfig stream configuration}.
+     * <p>
+     * The sink will also use the specified {@link StreamPartitioner} to determine how records are distributed among
+     * the named Kafka topic's partitions.
+     * Such control is often useful with topologies that use {@link #addStateStore(StoreBuilder, String...) state
+     * stores} in its processors.
+     * In most other cases, however, a partitioner needs not be specified and Kafka will automatically distribute
+     * records among partitions using Kafka's default partitioning logic.
+     *
+     * @param name              the unique name of the sink
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
+     * @param partitioner       the function that should be used to determine the partition for each record processed by the sink
+     * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
+     *                          and dynamically write to topics
+     * @return                  itself
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @see #addSink(String, String, String...)
+     * @see #addSink(String, String, Serializer, Serializer, String...)
+     * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
+     */
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final TopicNameExtractor<K, V> topicExtractor,
+                                                final StreamPartitioner<? super K, ? super V> partitioner,
+                                                final String... parentNames) {
+        internalTopologyBuilder.addSink(name, topicExtractor, null, null, partitioner, parentNames);
+        return this;
+    }
+
+    /**
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor}.
+     * The topics that it may ever send to should be pre-created.
+     * The sink will use the specified key and value serializers.
+     *
+     * @param name              the unique name of the sink
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
+     * @param keySerializer     the {@link Serializer key serializer} used when consuming records; may be null if the sink
+     *                          should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
+     *                          {@link StreamsConfig stream configuration}
+     * @param valueSerializer   the {@link Serializer value serializer} used when consuming records; may be null if the sink
+     *                          should use the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     *                          {@link StreamsConfig stream configuration}
+     * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
+     *                          and dynamically write to topics
+     * @return                  itself
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @see #addSink(String, String, String...)
+     * @see #addSink(String, String, StreamPartitioner, String...)
+     * @see #addSink(String, String, Serializer, Serializer, StreamPartitioner, String...)
+     */
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final TopicNameExtractor<K, V> topicExtractor,
+                                                final Serializer<K> keySerializer,
+                                                final Serializer<V> valueSerializer,
+                                                final String... parentNames) {
+        internalTopologyBuilder.addSink(name, topicExtractor, keySerializer, valueSerializer, null, parentNames);
+        return this;
+    }
+
+    /**
+     * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor}.
+     * The topics that it may ever send to should be pre-created.
+     * The sink will use the specified key and value serializers, and the supplied partitioner.
+     *
+     * @param name              the unique name of the sink
+     * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
+     * @param keySerializer     the {@link Serializer key serializer} used when consuming records; may be null if the sink
+     *                          should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
+     *                          {@link StreamsConfig stream configuration}
+     * @param valueSerializer   the {@link Serializer value serializer} used when consuming records; may be null if the sink
+     *                          should use the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     *                          {@link StreamsConfig stream configuration}
+     * @param partitioner       the function that should be used to determine the partition for each record processed by the sink
+     * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
+     *                          and dynamically write to topics
+     * @return                  itself
+     * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
+     * @see #addSink(String, String, String...)
+     * @see #addSink(String, String, StreamPartitioner, String...)
+     * @see #addSink(String, String, Serializer, Serializer, String...)
+     */
+    public synchronized <K, V> Topology addSink(final String name,
+                                                final TopicNameExtractor<K, V> topicExtractor,
+                                                final Serializer<K> keySerializer,
+                                                final Serializer<V> valueSerializer,
+                                                final StreamPartitioner<? super K, ? super V> partitioner,
+                                                final String... parentNames) {
+        internalTopologyBuilder.addSink(name, topicExtractor, keySerializer, valueSerializer, partitioner, parentNames);
+        return this;
+    }
+
+    /**
      * Add a new processor node that receives and processes records output by one or more parent source or processor
      * node.
      * Any new record output by this processor will be forwarded to its child processor or sink nodes.
+     * If {@code supplier} provides stores via {@link ConnectedStoreProvider#stores()}, the provided {@link StoreBuilder}s
+     * will be added to the topology and connected to this processor automatically.
      *
      * @param name the unique name of the processor node
      * @param supplier the supplier used to obtain this node's {@link Processor} instance
@@ -528,10 +655,17 @@ public class Topology {
      * @return itself
      * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
+    @SuppressWarnings("rawtypes")
     public synchronized Topology addProcessor(final String name,
                                               final ProcessorSupplier supplier,
                                               final String... parentNames) {
         internalTopologyBuilder.addProcessor(name, supplier, parentNames);
+        final Set<StoreBuilder<?>> stores = supplier.stores();
+        if (stores != null) {
+            for (final StoreBuilder storeBuilder : stores) {
+                internalTopologyBuilder.addStateStore(storeBuilder, name);
+            }
+        }
         return this;
     }
 
@@ -543,7 +677,7 @@ public class Topology {
      * @return itself
      * @throws TopologyException if state store supplier is already added
      */
-    public synchronized Topology addStateStore(final StoreBuilder storeBuilder,
+    public synchronized Topology addStateStore(final StoreBuilder<?> storeBuilder,
                                                final String... processorNames) {
         internalTopologyBuilder.addStateStore(storeBuilder, processorNames);
         return this;
@@ -572,16 +706,23 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    @SuppressWarnings("unchecked")
-    public synchronized Topology addGlobalStore(final StoreBuilder storeBuilder,
-                                                final String sourceName,
-                                                final Deserializer keyDeserializer,
-                                                final Deserializer valueDeserializer,
-                                                final String topic,
-                                                final String processorName,
-                                                final ProcessorSupplier stateUpdateSupplier) {
-        internalTopologyBuilder.addGlobalStore(storeBuilder, sourceName, null, keyDeserializer,
-            valueDeserializer, topic, processorName, stateUpdateSupplier);
+    public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                       final String sourceName,
+                                                       final Deserializer<K> keyDeserializer,
+                                                       final Deserializer<V> valueDeserializer,
+                                                       final String topic,
+                                                       final String processorName,
+                                                       final ProcessorSupplier<K, V> stateUpdateSupplier) {
+        internalTopologyBuilder.addGlobalStore(
+            storeBuilder,
+            sourceName,
+            null,
+            keyDeserializer,
+            valueDeserializer,
+            topic,
+            processorName,
+            stateUpdateSupplier
+        );
         return this;
     }
 
@@ -609,17 +750,24 @@ public class Topology {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    @SuppressWarnings("unchecked")
-    public synchronized Topology addGlobalStore(final StoreBuilder storeBuilder,
-                                                final String sourceName,
-                                                final TimestampExtractor timestampExtractor,
-                                                final Deserializer keyDeserializer,
-                                                final Deserializer valueDeserializer,
-                                                final String topic,
-                                                final String processorName,
-                                                final ProcessorSupplier stateUpdateSupplier) {
-        internalTopologyBuilder.addGlobalStore(storeBuilder, sourceName, timestampExtractor, keyDeserializer,
-            valueDeserializer, topic, processorName, stateUpdateSupplier);
+    public synchronized <K, V> Topology addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                       final String sourceName,
+                                                       final TimestampExtractor timestampExtractor,
+                                                       final Deserializer<K> keyDeserializer,
+                                                       final Deserializer<V> valueDeserializer,
+                                                       final String topic,
+                                                       final String processorName,
+                                                       final ProcessorSupplier<K, V> stateUpdateSupplier) {
+        internalTopologyBuilder.addGlobalStore(
+            storeBuilder,
+            sourceName,
+            timestampExtractor,
+            keyDeserializer,
+            valueDeserializer,
+            topic,
+            processorName,
+            stateUpdateSupplier
+        );
         return this;
     }
 
@@ -646,5 +794,4 @@ public class Topology {
     public synchronized TopologyDescription describe() {
         return internalTopologyBuilder.describe();
     }
-
 }

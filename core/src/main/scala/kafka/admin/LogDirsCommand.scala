@@ -20,13 +20,13 @@ package kafka.admin
 import java.io.PrintStream
 import java.util.Properties
 
-import org.apache.kafka.clients.admin.{AdminClientConfig, DescribeLogDirsResult, AdminClient => JAdminClient}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Json}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, DescribeLogDirsResult}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
+import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Map
-import kafka.utils.{CommandLineUtils, Json}
-import joptsimple._
 
 /**
   * A command for querying log directory usage on the specified brokers
@@ -48,7 +48,7 @@ object LogDirsCommand {
 
         out.println("Querying brokers for log directories information")
         val describeLogDirsResult: DescribeLogDirsResult = adminClient.describeLogDirs(brokerList.map(Integer.valueOf).toSeq.asJava)
-        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.mapValues(_.asScala)
+        val logDirInfosByBroker = describeLogDirsResult.all.get().asScala.map { case (k, v) => k -> v.asScala }
 
         out.println(s"Received log directory information from brokers ${brokerList.mkString(",")}")
         out.println(formatAsJson(logDirInfosByBroker, topicList.toSet))
@@ -65,7 +65,7 @@ object LogDirsCommand {
                         Map(
                             "logDir" -> logDir,
                             "error" -> logDirInfo.error.exceptionName(),
-                            "partitions" -> logDirInfo.replicaInfos.asScala.filter { case (topicPartition, replicaInfo) =>
+                            "partitions" -> logDirInfo.replicaInfos.asScala.filter { case (topicPartition, _) =>
                                 topicSet.isEmpty || topicSet.contains(topicPartition.topic)
                             }.map { case (topicPartition, replicaInfo) =>
                                 Map(
@@ -82,18 +82,24 @@ object LogDirsCommand {
         ).asJava)
     }
 
-    private def createAdminClient(opts: LogDirsCommandOptions): JAdminClient = {
-        val props = new Properties()
+    private def createAdminClient(opts: LogDirsCommandOptions): Admin = {
+        val props = if (opts.options.has(opts.commandConfigOpt))
+            Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
+        else
+            new Properties()
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-        props.put(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool")
-        JAdminClient.create(props)
+        props.putIfAbsent(AdminClientConfig.CLIENT_ID_CONFIG, "log-dirs-tool")
+        Admin.create(props)
     }
 
-    class LogDirsCommandOptions(args: Array[String]) {
-        val parser = new OptionParser(false)
+    class LogDirsCommandOptions(args: Array[String]) extends CommandDefaultOptions(args){
         val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping")
           .withRequiredArg
           .describedAs("The server(s) to use for bootstrapping")
+          .ofType(classOf[String])
+        val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client.")
+          .withRequiredArg
+          .describedAs("Admin client property file")
           .ofType(classOf[String])
         val describeOpt = parser.accepts("describe", "Describe the specified log directories on the specified brokers.")
         val topicListOpt = parser.accepts("topic-list", "The list of topics to be queried in the form \"topic1,topic2,topic3\". " +
@@ -108,7 +114,10 @@ object LogDirsCommand {
           .describedAs("Broker list")
           .ofType(classOf[String])
 
-        val options = parser.parse(args : _*)
+        options = parser.parse(args : _*)
+
+        CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to query log directory usage on the specified brokers.")
+
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, describeOpt)
     }
 }

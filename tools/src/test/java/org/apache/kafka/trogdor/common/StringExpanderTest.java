@@ -58,5 +58,20 @@ public class StringExpanderTest {
             "[[ wow52 ]]"
         ));
         assertEquals(expected3, StringExpander.expand("[[ wow[50-52] ]]"));
+
+        HashSet<String> expected4 = new HashSet<>(Arrays.asList(
+            "foo1bar",
+            "foo2bar",
+            "foo3bar"
+        ));
+        assertEquals(expected4, StringExpander.expand("foo[1-3]bar"));
+
+        // should expand latest range first
+        HashSet<String> expected5 = new HashSet<>(Arrays.asList(
+            "start[1-3]middle1epilogue",
+            "start[1-3]middle2epilogue",
+            "start[1-3]middle3epilogue"
+        ));
+        assertEquals(expected5, StringExpander.expand("start[1-3]middle[1-3]epilogue"));
     }
 }

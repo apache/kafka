@@ -20,20 +20,28 @@ import org.apache.kafka.common.serialization.Serde;
 
 /**
  * The {@code Joined} class represents optional params that can be passed to
- * {@link KStream#join}, {@link KStream#leftJoin}, and  {@link KStream#outerJoin} operations.
+ * {@link KStream#join(KTable, ValueJoiner, Joined) KStream#join(KTable,...)} and
+ * {@link KStream#leftJoin(KTable, ValueJoiner) KStream#leftJoin(KTable,...)} operations.
  */
-public class Joined<K, V, VO> {
+public class Joined<K, V, VO> implements NamedOperation<Joined<K, V, VO>> {
 
-    private Serde<K> keySerde;
-    private Serde<V> valueSerde;
-    private Serde<VO> otherValueSerde;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valueSerde;
+    protected final Serde<VO> otherValueSerde;
+    protected final String name;
 
     private Joined(final Serde<K> keySerde,
                    final Serde<V> valueSerde,
-                   final Serde<VO> otherValueSerde) {
+                   final Serde<VO> otherValueSerde,
+                   final String name) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
+        this.name = name;
+    }
+
+    protected Joined(final Joined<K, V, VO> joined) {
+        this(joined.keySerde, joined.valueSerde, joined.otherValueSerde, joined.name);
     }
 
     /**
@@ -51,7 +59,32 @@ public class Joined<K, V, VO> {
     public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
                                                    final Serde<V> valueSerde,
                                                    final Serde<VO> otherValueSerde) {
-        return new Joined<>(keySerde, valueSerde, otherValueSerde);
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, null);
+    }
+
+    /**
+     * Create an instance of {@code Joined} with key, value, and otherValue {@link Serde} instances.
+     * {@code null} values are accepted and will be replaced by the default serdes as defined in
+     * config.
+     *
+     * @param keySerde the key serde to use. If {@code null} the default key serde from config will be
+     * used
+     * @param valueSerde the value serde to use. If {@code null} the default value serde from config
+     * will be used
+     * @param otherValueSerde the otherValue serde to use. If {@code null} the default value serde
+     * from config will be used
+     * @param name the name used as the base for naming components of the join including any
+     * repartition topics
+     * @param <K> key type
+     * @param <V> value type
+     * @param <VO> other value type
+     * @return new {@code Joined} instance with the provided serdes
+     */
+    public static <K, V, VO> Joined<K, V, VO> with(final Serde<K> keySerde,
+                                                   final Serde<V> valueSerde,
+                                                   final Serde<VO> otherValueSerde,
+                                                   final String name) {
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
     /**
@@ -65,7 +98,7 @@ public class Joined<K, V, VO> {
      * @return new {@code Joined} instance configured with the keySerde
      */
     public static <K, V, VO> Joined<K, V, VO> keySerde(final Serde<K> keySerde) {
-        return with(keySerde, null, null);
+        return new Joined<>(keySerde, null, null, null);
     }
 
     /**
@@ -79,7 +112,7 @@ public class Joined<K, V, VO> {
      * @return new {@code Joined} instance configured with the valueSerde
      */
     public static <K, V, VO> Joined<K, V, VO> valueSerde(final Serde<V> valueSerde) {
-        return with(null, valueSerde, null);
+        return new Joined<>(null, valueSerde, null, null);
     }
 
     /**
@@ -93,19 +126,53 @@ public class Joined<K, V, VO> {
      * @return new {@code Joined} instance configured with the otherValueSerde
      */
     public static <K, V, VO> Joined<K, V, VO> otherValueSerde(final Serde<VO> otherValueSerde) {
-        return with(null, null, otherValueSerde);
+        return new Joined<>(null, null, otherValueSerde, null);
     }
+
+    /**
+     * Create an instance of {@code Joined} with base name for all components of the join, this may
+     * include any repartition topics created to complete the join.
+     *
+     * @param name the name used as the base for naming components of the join including any
+     * repartition topics
+     * @param <K> key type
+     * @param <V> value type
+     * @param <VO> other value type
+     * @return new {@code Joined} instance configured with the name
+     *
+     * @deprecated use {@link #as(String)} instead
+     */
+    @Deprecated
+    public static <K, V, VO> Joined<K, V, VO> named(final String name) {
+        return new Joined<>(null, null, null, name);
+    }
+
+    /**
+     * Create an instance of {@code Joined} with base name for all components of the join, this may
+     * include any repartition topics created to complete the join.
+     *
+     * @param name the name used as the base for naming components of the join including any
+     * repartition topics
+     * @param <K> key type
+     * @param <V> value type
+     * @param <VO> other value type
+     * @return new {@code Joined} instance configured with the name
+     *
+     */
+    public static <K, V, VO> Joined<K, V, VO> as(final String name) {
+        return new Joined<>(null, null, null, name);
+    }
+
 
     /**
      * Set the key {@link Serde} to be used. Null values are accepted and will be replaced by the default
      * key serde as defined in config
      *
      * @param keySerde the key serde to use. If null the default key serde from config will be used
-     * @return this
+     * @return new {@code Joined} instance configured with the {@code name}
      */
     public Joined<K, V, VO> withKeySerde(final Serde<K> keySerde) {
-        this.keySerde = keySerde;
-        return this;
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
     /**
@@ -113,11 +180,10 @@ public class Joined<K, V, VO> {
      * value serde as defined in config
      *
      * @param valueSerde the value serde to use. If null the default value serde from config will be used
-     * @return this
+     * @return new {@code Joined} instance configured with the {@code valueSerde}
      */
     public Joined<K, V, VO> withValueSerde(final Serde<V> valueSerde) {
-        this.valueSerde = valueSerde;
-        return this;
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
     /**
@@ -125,11 +191,23 @@ public class Joined<K, V, VO> {
      * value serde as defined in config
      *
      * @param otherValueSerde the otherValue serde to use. If null the default value serde from config will be used
-     * @return this
+     * @return new {@code Joined} instance configured with the {@code valueSerde}
      */
     public Joined<K, V, VO> withOtherValueSerde(final Serde<VO> otherValueSerde) {
-        this.otherValueSerde = otherValueSerde;
-        return this;
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
+    }
+
+    /**
+     * Set the base name used for all components of the join, this may include any repartition topics
+     * created to complete the join.
+     *
+     * @param name the name used as the base for naming components of the join including any
+     * repartition topics
+     * @return new {@code Joined} instance configured with the {@code name}
+     */
+    @Override
+    public Joined<K, V, VO> withName(final String name) {
+        return new Joined<>(keySerde, valueSerde, otherValueSerde, name);
     }
 
     public Serde<K> keySerde() {
@@ -143,4 +221,13 @@ public class Joined<K, V, VO> {
     public Serde<VO> otherValueSerde() {
         return otherValueSerde;
     }
+
+    /**
+     * @deprecated this method will be removed in a in a future release
+     */
+    @Deprecated
+    public String name() {
+        return name;
+    }
+
 }

@@ -67,6 +67,13 @@ public abstract class TaskSpec {
     }
 
     /**
+     * Get the deadline time of this task in ms
+     */
+    public final long endMs() {
+        return startMs + durationMs;
+    }
+
+    /**
      * Get the duration of this task in ms.
      */
     @JsonProperty

@@ -18,13 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import org.apache.kafka.common.errors.SerializationException;
 
-import java.util.Map;
-
 public class ShortDeserializer implements Deserializer<Short> {
-
-    public void configure(Map<String, ?> configs, boolean isKey) {
-        // nothing to do
-    }
 
     public Short deserialize(String topic, byte[] data) {
         if (data == null)
@@ -39,9 +33,5 @@ public class ShortDeserializer implements Deserializer<Short> {
             value |= b & 0xFF;
         }
         return value;
-    }
-
-    public void close() {
-        // nothing to do
     }
 }

@@ -28,6 +28,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
 public class ExtractFieldTest {
     private final ExtractField<SinkRecord> xform = new ExtractField.Key<>();
@@ -86,4 +87,30 @@ public class ExtractFieldTest {
         assertNull(transformedRecord.key());
     }
 
+    @Test
+    public void nonExistentFieldSchemalessShouldReturnNull() {
+        xform.configure(Collections.singletonMap("field", "nonexistent"));
+
+        final SinkRecord record = new SinkRecord("test", 0, null, Collections.singletonMap("magic", 42), null, null, 0);
+        final SinkRecord transformedRecord = xform.apply(record);
+
+        assertNull(transformedRecord.keySchema());
+        assertNull(transformedRecord.key());
+    }
+
+    @Test
+    public void nonExistentFieldWithSchemaShouldFail() {
+        xform.configure(Collections.singletonMap("field", "nonexistent"));
+
+        final Schema keySchema = SchemaBuilder.struct().field("magic", Schema.INT32_SCHEMA).build();
+        final Struct key = new Struct(keySchema).put("magic", 42);
+        final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
+
+        try {
+            xform.apply(record);
+            fail("Expected exception wasn't raised");
+        } catch (IllegalArgumentException iae) {
+            assertEquals("Unknown field: nonexistent", iae.getMessage());
+        }
+    }
 }

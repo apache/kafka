@@ -16,52 +16,49 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.RecordContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<Bytes, byte[]>, CachedStateStore<K, V> {
+import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
+import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
-    private final KeyValueStore<Bytes, byte[]> underlying;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private CacheFlushListener<K, V> flushListener;
+public class CachingKeyValueStore
+    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
+    implements KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CachingKeyValueStore.class);
+
+    private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
     private String cacheName;
-    private ThreadCache cache;
     private InternalProcessorContext context;
-    private StateSerdes<K, V> serdes;
     private Thread streamThread;
-    private ReadWriteLock lock = new ReentrantReadWriteLock();
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
-    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
-                         final Serde<K> keySerde,
-                         final Serde<V> valueSerde) {
+    CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying) {
         super(underlying);
-        this.underlying = underlying;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        underlying.init(context, root);
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         initInternal(context);
+        super.init(context, root);
         // save the stream thread as we only ever want to trigger a flush
         // when the stream thread is the current thread.
         streamThread = Thread.currentThread();
@@ -70,149 +67,61 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     @SuppressWarnings("unchecked")
     private void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
-        this.serdes = new StateSerdes<>(ProcessorStateManager.storeChangelogTopic(context.applicationId(), underlying.name()),
-                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        this.cache = this.context.getCache();
-        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), underlying.name());
-        cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                for (ThreadCache.DirtyEntry entry : entries) {
-                    putAndMaybeForward(entry, (InternalProcessorContext) context);
-                }
+        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
+        this.context.registerCacheFlushListener(cacheName, entries -> {
+            for (final ThreadCache.DirtyEntry entry : entries) {
+                putAndMaybeForward(entry, (InternalProcessorContext) context);
             }
         });
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        final RecordContext current = context.recordContext();
-        try {
-            context.setRecordContext(entry.recordContext());
-            if (flushListener != null) {
-                V oldValue = null;
-                if (sendOldValues) {
-                    final byte[] oldBytesValue = underlying.get(entry.key());
-                    oldValue = oldBytesValue == null ? null : serdes.valueFrom(oldBytesValue);
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
+                                    final InternalProcessorContext context) {
+        if (flushListener != null) {
+            final byte[] rawNewValue = entry.newValue();
+            final byte[] rawOldValue = rawNewValue == null || sendOldValues ? wrapped().get(entry.key()) : null;
+
+            // this is an optimization: if this key did not exist in underlying store and also not in the cache,
+            // we can skip flushing to downstream as well as writing to underlying store
+            if (rawNewValue != null || rawOldValue != null) {
+                // we need to get the old values if needed, and then put to store, and then flush
+                wrapped().put(entry.key(), entry.newValue());
+
+                final ProcessorRecordContext current = context.recordContext();
+                context.setRecordContext(entry.entry().context());
+                try {
+                    flushListener.apply(
+                        entry.key().get(),
+                        rawNewValue,
+                        sendOldValues ? rawOldValue : null,
+                        entry.entry().context().timestamp());
+                } finally {
+                    context.setRecordContext(current);
                 }
-                // we rely on underlying store to handle null new value bytes as deletes
-                underlying.put(entry.key(), entry.newValue());
-                flushListener.apply(serdes.keyFrom(entry.key().get()),
-                                    serdes.valueFrom(entry.newValue()),
-                                    oldValue);
-            } else {
-                underlying.put(entry.key(), entry.newValue());
             }
-        } finally {
-            context.setRecordContext(current);
+        } else {
+            wrapped().put(entry.key(), entry.newValue());
         }
     }
 
-    public void setFlushListener(final CacheFlushListener<K, V> flushListener,
-                                 final boolean sendOldValues) {
-
+    @Override
+    public boolean setFlushListener(final CacheFlushListener<byte[], byte[]> flushListener,
+                                    final boolean sendOldValues) {
         this.flushListener = flushListener;
         this.sendOldValues = sendOldValues;
+
+        return true;
     }
 
     @Override
-    public void flush() {
-        lock.writeLock().lock();
-        try {
-            cache.flush(cacheName);
-            underlying.flush();
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    @Override
-    public void close() {
-        flush();
-        underlying.close();
-        cache.close(cacheName);
-    }
-
-    @Override
-    public boolean persistent() {
-        return underlying.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return underlying.isOpen();
-    }
-
-    @Override
-    public byte[] get(final Bytes key) {
-        Objects.requireNonNull(key, "key cannot be null");
-        validateStoreOpen();
-        Lock theLock;
-        if (Thread.currentThread().equals(streamThread)) {
-            theLock = lock.writeLock();
-        } else {
-            theLock = lock.readLock();
-        }
-        theLock.lock();
-        try {
-            return getInternal(key);
-        } finally {
-            theLock.unlock();
-        }
-    }
-
-    private byte[] getInternal(final Bytes key) {
-        final LRUCacheEntry entry = cache.get(cacheName, key);
-        if (entry == null) {
-            final byte[] rawValue = underlying.get(key);
-            if (rawValue == null) {
-                return null;
-            }
-            // only update the cache if this call is on the streamThread
-            // as we don't want other threads to trigger an eviction/flush
-            if (Thread.currentThread().equals(streamThread)) {
-                cache.put(cacheName, key, new LRUCacheEntry(rawValue));
-            }
-            return rawValue;
-        } else {
-            return entry.value;
-        }
-    }
-
-    @Override
-    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-        validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.range(from, to);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, from, to);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
-    }
-
-    @Override
-    public KeyValueIterator<Bytes, byte[]> all() {
-        validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(this.name(), underlying.all());
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
-    }
-
-    @Override
-    public long approximateNumEntries() {
-        validateStoreOpen();
-        lock.readLock().lock();
-        try {
-            return underlying.approximateNumEntries();
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
-    @Override
-    public void put(final Bytes key, final byte[] value) {
+    public void put(final Bytes key,
+                    final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();
         try {
+            validateStoreOpen();
             // for null bytes, we still put it into cache indicating tombstones
             putInternal(key, value);
         } finally {
@@ -220,17 +129,29 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         }
     }
 
-    private void putInternal(final Bytes key, final byte[] value) {
-        cache.put(cacheName, key, new LRUCacheEntry(value, true, context.offset(),
-              context.timestamp(), context.partition(), context.topic()));
+    private void putInternal(final Bytes key,
+                             final byte[] value) {
+        context.cache().put(
+            cacheName,
+            key,
+            new LRUCacheEntry(
+                value,
+                context.headers(),
+                true,
+                context.offset(),
+                context.timestamp(),
+                context.partition(),
+                context.topic()));
     }
 
     @Override
-    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
+    public byte[] putIfAbsent(final Bytes key,
+                              final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();
         try {
+            validateStoreOpen();
             final byte[] v = getInternal(key);
             if (v == null) {
                 putInternal(key, value);
@@ -246,7 +167,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         validateStoreOpen();
         lock.writeLock().lock();
         try {
-            for (KeyValue<Bytes, byte[]> entry : entries) {
+            validateStoreOpen();
+            for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 put(entry.key, entry.value);
             }
@@ -261,6 +183,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         validateStoreOpen();
         lock.writeLock().lock();
         try {
+            validateStoreOpen();
             return deleteInternal(key);
         } finally {
             lock.writeLock().unlock();
@@ -273,15 +196,111 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         return v;
     }
 
-    KeyValueStore<Bytes, byte[]> underlying() {
-        return underlying;
+    @Override
+    public byte[] get(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
+        final Lock theLock;
+        if (Thread.currentThread().equals(streamThread)) {
+            theLock = lock.writeLock();
+        } else {
+            theLock = lock.readLock();
+        }
+        theLock.lock();
+        try {
+            validateStoreOpen();
+            return getInternal(key);
+        } finally {
+            theLock.unlock();
+        }
+    }
+
+    private byte[] getInternal(final Bytes key) {
+        LRUCacheEntry entry = null;
+        if (context.cache() != null) {
+            entry = context.cache().get(cacheName, key);
+        }
+        if (entry == null) {
+            final byte[] rawValue = wrapped().get(key);
+            if (rawValue == null) {
+                return null;
+            }
+            // only update the cache if this call is on the streamThread
+            // as we don't want other threads to trigger an eviction/flush
+            if (Thread.currentThread().equals(streamThread)) {
+                context.cache().put(cacheName, key, new LRUCacheEntry(rawValue));
+            }
+            return rawValue;
+        } else {
+            return entry.value();
+        }
     }
 
     @Override
-    public StateStore inner() {
-        if (underlying instanceof WrappedStateStore) {
-            return ((WrappedStateStore) underlying).inner();
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                 final Bytes to) {
+        if (from.compareTo(to) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
         }
-        return underlying;
+
+        validateStoreOpen();
+        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().range(cacheName, from, to);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> all() {
+        validateStoreOpen();
+        final KeyValueIterator<Bytes, byte[]> storeIterator =
+            new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().all(cacheName);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        validateStoreOpen();
+        lock.readLock().lock();
+        try {
+            validateStoreOpen();
+            return wrapped().approximateNumEntries();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    @Override
+    public void flush() {
+        validateStoreOpen();
+        lock.writeLock().lock();
+        try {
+            validateStoreOpen();
+            context.cache().flush(cacheName);
+            wrapped().flush();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public void close() {
+        lock.writeLock().lock();
+        try {
+            final LinkedList<RuntimeException> suppressed = executeAll(
+                () -> context.cache().flush(cacheName),
+                () -> context.cache().close(cacheName),
+                wrapped()::close
+            );
+            if (!suppressed.isEmpty()) {
+                throwSuppressed("Caught an exception while closing caching key value store for store " + name(),
+                                suppressed);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 }

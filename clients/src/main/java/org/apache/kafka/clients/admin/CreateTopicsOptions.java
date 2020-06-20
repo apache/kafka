@@ -22,9 +22,9 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 
 /**
- * Options for {@link AdminClient#createTopics(Collection)}.
+ * Options for {@link Admin#createTopics(Collection)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
@@ -32,7 +32,7 @@ public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
     private boolean validateOnly = false;
 
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */

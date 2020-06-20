@@ -21,7 +21,6 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Properties
 
-import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils._
@@ -33,10 +32,8 @@ import org.apache.kafka.test.{TestUtils => _, _}
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
-
-import scala.collection.mutable.ArrayBuffer
 
 /** The test cases here verify the following conditions.
   * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.
@@ -58,7 +55,7 @@ object EndToEndClusterIdTest {
 
   class MockConsumerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockConsumerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
   }
@@ -69,7 +66,7 @@ object EndToEndClusterIdTest {
 
   class MockProducerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockProducerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
   }
@@ -80,7 +77,7 @@ object EndToEndClusterIdTest {
 
   class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
   }
@@ -100,7 +97,6 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   val topic = "e2etopic"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  val topicAndPartition = TopicAndPartition(topic, part)
   this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, classOf[MockBrokerMetricsReporter].getName)
 
   override def generateConfigs = {
@@ -111,7 +107,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     MockDeserializer.resetStaticVariables
     // create the consumer offset topic
@@ -119,7 +115,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testEndToEnd() {
+  def testEndToEnd(): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
     MockProducerInterceptor.resetCounters()
@@ -187,7 +183,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     MockProducerInterceptor.resetCounters()
   }
 
-  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition) {
+  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int, tp: TopicPartition): Unit = {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
       debug(s"Sending this record: $record")
@@ -204,18 +200,9 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
                              numRecords: Int,
                              startingOffset: Int = 0,
                              topic: String = topic,
-                             part: Int = part) {
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    val maxIters = numRecords * 50
-    var iters = 0
-    while (records.size < numRecords) {
-      for (record <- consumer.poll(50).asScala) {
-        records += record
-      }
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
-    }
+                             part: Int = part): Unit = {
+    val records = TestUtils.consumeRecords(consumer, numRecords)
+
     for (i <- 0 until numRecords) {
       val record = records(i)
       val offset = startingOffset + i

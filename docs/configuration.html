@@ -90,6 +90,23 @@
   using <code>kafka-configs.sh</code> even if the password config is not being altered. This constraint will be removed in
   a future release.</p>
 
+  <h5>Updating Password Configs in ZooKeeper Before Starting Brokers</h5>
+
+  From Kafka 2.0.0 onwards, <code>kafka-configs.sh</code> enables dynamic broker configs to be updated using ZooKeeper before
+  starting brokers for bootstrapping. This enables all password configs to be stored in encrypted form, avoiding the need for
+  clear passwords in <code>server.properties</code>. The broker config <code>password.encoder.secret</code> must also be specified
+  if any password configs are included in the alter command. Additional encryption parameters may also be specified. Password
+  encoder configs will not be persisted in ZooKeeper. For example, to store SSL key password for listener <code>INTERNAL</code>
+  on broker 0:
+
+  <pre class="brush: bash;">
+  &gt; bin/kafka-configs.sh --zookeeper localhost:2182 --zk-tls-config-file zk_tls_config.properties --entity-type brokers --entity-name 0 --alter --add-config
+    'listener.name.internal.ssl.key.password=key-password,password.encoder.secret=secret,password.encoder.iterations=8192'
+  </pre>
+
+  The configuration <code>listener.name.internal.ssl.key.password</code> will be persisted in ZooKeeper in encrypted
+  form using the provided encoder configs. The encoder secret and iterations are not persisted in ZooKeeper.
+
   <h5>Updating SSL Keystore of an Existing Listener</h5>
   Brokers may be configured with SSL keystores with short validity periods to reduce the risk of compromised certificates.
   Keystores may be updated dynamically without restarting the broker. The config name must be prefixed with the listener prefix
@@ -104,6 +121,20 @@
   If the listener is the inter-broker listener, the update is allowed only if the new keystore is trusted by the truststore
   configured for that listener. For other listeners, no trust validation is performed on the keystore by the broker. Certificates
   must be signed by the same certificate authority that signed the old certificate to avoid any client authentication failures.
+
+  <h5>Updating SSL Truststore of an Existing Listener</h5>
+  Broker truststores may be updated dynamically without restarting the broker to add or remove certificates.
+  Updated truststore will be used to authenticate new client connections. The config name must be prefixed with the
+  listener prefix <code>listener.name.{listenerName}.</code> so that only the truststore config of a specific listener
+  is updated. The following configs may be updated in a single alter request at per-broker level:
+  <ul>
+    <li><code>ssl.truststore.type</code></li>
+    <li><code>ssl.truststore.location</code></li>
+    <li><code>ssl.truststore.password</code></li>
+  </ul>
+  If the listener is the inter-broker listener, the update is allowed only if the existing keystore for that listener is trusted by
+  the new truststore. For other listeners, no trust validation is performed by the broker before the update. Removal of CA certificates
+  used to sign client certificates from the new truststore can lead to client authentication failures.
 
   <h5>Updating Default Topic Configuration</h5>
   Default topic configuration options used by brokers may be updated without broker restart. The configs are applied to topics
@@ -125,6 +156,7 @@
     <li><code>log.index.interval.bytes</code></li>
     <li><code>log.cleaner.delete.retention.ms</code></li>
     <li><code>log.cleaner.min.compaction.lag.ms</code></li>
+    <li><code>log.cleaner.max.compaction.lag.ms</code></li>
     <li><code>log.cleaner.min.cleanable.ratio</code></li>
     <li><code>log.cleanup.policy</code></li>
     <li><code>log.segment.delete.delay.ms</code></li>
@@ -137,6 +169,8 @@
     <li><code>log.message.timestamp.difference.max.ms</code></li>
   </ul>
 
+  From Kafka version 2.0.0 onwards, unclean leader election is automatically enabled by the controller when the config
+  <code>unclean.leader.election.enable</code> is dynamically updated.
   In Kafka version 1.1.x, changes to <code>unclean.leader.election.enable</code> take effect only when a new controller is elected.
   Controller re-election may be forced by running:
 
@@ -170,6 +204,14 @@
     <li><code>background.threads</code></li>
   </ul>
 
+  <h5>Updating ConnectionQuota Configs</h5>
+  The maximum number of connections allowed for a given IP/host by the broker may be updated dynamically at cluster-default level used by all brokers.
+  The changes will apply for new connection creations and the existing connections count will be taken into account by the new limits.
+  <ul>
+    <li><code>max.connections.per.ip</code></li>
+    <li><code>max.connections.per.ip.overrides</code></li>
+  </ul>
+
   <h5>Adding and Removing Listeners</h5>
   <p>Listeners may be added or removed dynamically. When a new listener is added, security configs of the listener must be provided
   as listener configs with the listener prefix <code>listener.name.{listenerName}.</code>. If the new listener uses SASL,
@@ -193,23 +235,23 @@
 
   Configurations pertinent to topics have both a server default as well an optional per-topic override. If no per-topic configuration is given the server default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --create --topic my-topic --partitions 1
+  &gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic my-topic --partitions 1 \
       --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1
   </pre>
   Overrides can also be changed or set later using the alter configs command. This example updates the max message size for <i>my-topic</i>:
   <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic
+  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my-topic
       --alter --add-config max.message.bytes=128000
   </pre>
 
   To check overrides set on the topic you can do
   <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper localhost:2181 --entity-type topics --entity-name my-topic --describe
+  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092 --entity-type topics --entity-name my-topic --describe
   </pre>
 
   To remove an override you can do
   <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper localhost:2181  --entity-type topics --entity-name my-topic
+  &gt; bin/kafka-configs.sh --bootstrap-server localhost:9092  --entity-type topics --entity-name my-topic
       --alter --delete-config max.message.bytes
   </pre>
 
@@ -219,199 +261,31 @@
 
   <h3><a id="producerconfigs" href="#producerconfigs">3.3 Producer Configs</a></h3>
 
-  Below is the configuration of the Java producer:
+  Below is the configuration of the producer:
   <!--#include virtual="generated/producer_config.html" -->
-
-  <p>
-      For those interested in the legacy Scala producer configs, information can be found <a href="http://kafka.apache.org/082/documentation.html#producerconfigs">
-      here</a>.
-  </p>
 
   <h3><a id="consumerconfigs" href="#consumerconfigs">3.4 Consumer Configs</a></h3>
 
-  In 0.9.0.0 we introduced the new Java consumer as a replacement for the older Scala-based simple and high-level consumers.
-  The configs for both new and old consumers are described below.
-
-  <h4><a id="newconsumerconfigs" href="#newconsumerconfigs">3.4.1 New Consumer Configs</a></h4>
-  Below is the configuration for the new consumer:
+  Below is the configuration for the consumer:
   <!--#include virtual="generated/consumer_config.html" -->
-
-  <h4><a id="oldconsumerconfigs" href="#oldconsumerconfigs">3.4.2 Old Consumer Configs</a></h4>
-
-  The essential old consumer configurations are the following:
-  <ul>
-          <li><code>group.id</code>
-          <li><code>zookeeper.connect</code>
-  </ul>
-
-  <table class="data-table">
-  <tbody><tr>
-          <th>Property</th>
-          <th>Default</th>
-          <th>Description</th>
-  </tr>
-      <tr>
-        <td>group.id</td>
-        <td colspan="1"></td>
-        <td>A string that uniquely identifies the group of consumer processes to which this consumer belongs. By setting the same group id multiple processes indicate that they are all part of the same consumer group.</td>
-      </tr>
-      <tr>
-        <td>zookeeper.connect</td>
-        <td colspan="1"></td>
-            <td>Specifies the ZooKeeper connection string in the form <code>hostname:port</code> where host and port are the host and port of a ZooKeeper server. To allow connecting through other ZooKeeper nodes when that ZooKeeper machine is down you can also specify multiple hosts in the form <code>hostname1:port1,hostname2:port2,hostname3:port3</code>.
-          <p>
-      The server may also have a ZooKeeper chroot path as part of its ZooKeeper connection string which puts its data under some path in the global ZooKeeper namespace. If so the consumer should use the same chroot path in its connection string. For example to give a chroot path of <code>/chroot/path</code> you would give the connection string as  <code>hostname1:port1,hostname2:port2,hostname3:port3/chroot/path</code>.</td>
-      </tr>
-      <tr>
-        <td>consumer.id</td>
-        <td colspan="1">null</td>
-        <td>
-          <p>Generated automatically if not set.</p>
-      </td>
-      </tr>
-      <tr>
-        <td>socket.timeout.ms</td>
-        <td colspan="1">30 * 1000</td>
-        <td>The socket timeout for network requests. The actual timeout set will be fetch.wait.max.ms + socket.timeout.ms.</td>
-      </tr>
-      <tr>
-        <td>socket.receive.buffer.bytes</td>
-        <td colspan="1">64 * 1024</td>
-        <td>The socket receive buffer for network requests</td>
-      </tr>
-      <tr>
-        <td>fetch.message.max.bytes</td>
-        <td nowrap>1024 * 1024</td>
-        <td>The number of bytes of messages to attempt to fetch for each topic-partition in each fetch request. These bytes will be read into memory for each partition, so this helps control the memory used by the consumer. The fetch request size must be at least as large as the maximum message size the server allows or else it is possible for the producer to send messages larger than the consumer can fetch.</td>
-      </tr>
-      <tr>
-        <td>num.consumer.fetchers</td>
-        <td colspan="1">1</td>
-        <td>The number fetcher threads used to fetch data.</td>
-      </tr>
-      <tr>
-        <td>auto.commit.enable</td>
-        <td colspan="1">true</td>
-        <td>If true, periodically commit to ZooKeeper the offset of messages already fetched by the consumer. This committed offset will be used when the process fails as the position from which the new consumer will begin.</td>
-      </tr>
-      <tr>
-        <td>auto.commit.interval.ms</td>
-        <td colspan="1">60 * 1000</td>
-        <td>The frequency in ms that the consumer offsets are committed to zookeeper.</td>
-      </tr>
-      <tr>
-        <td>queued.max.message.chunks</td>
-        <td colspan="1">2</td>
-        <td>Max number of message chunks buffered for consumption. Each chunk can be up to fetch.message.max.bytes.</td>
-      </tr>
-      <tr>
-        <td>rebalance.max.retries</td>
-        <td colspan="1">4</td>
-        <td>When a new consumer joins a consumer group the set of consumers attempt to "rebalance" the load to assign partitions to each consumer. If the set of consumers changes while this assignment is taking place the rebalance will fail and retry. This setting controls the maximum number of attempts before giving up.</td>
-      </tr>
-      <tr>
-        <td>fetch.min.bytes</td>
-        <td colspan="1">1</td>
-        <td>The minimum amount of data the server should return for a fetch request. If insufficient data is available the request will wait for that much data to accumulate before answering the request.</td>
-      </tr>
-      <tr>
-        <td>fetch.wait.max.ms</td>
-        <td colspan="1">100</td>
-        <td>The maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediately satisfy fetch.min.bytes</td>
-      </tr>
-      <tr>
-        <td>rebalance.backoff.ms</td>
-        <td>2000</td>
-        <td>Backoff time between retries during rebalance. If not set explicitly, the value in zookeeper.sync.time.ms is used.
-        </td>
-      </tr>
-      <tr>
-        <td>refresh.leader.backoff.ms</td>
-        <td colspan="1">200</td>
-        <td>Backoff time to wait before trying to determine the leader of a partition that has just lost its leader.</td>
-      </tr>
-      <tr>
-        <td>auto.offset.reset</td>
-        <td colspan="1">largest</td>
-        <td>
-          <p>What to do when there is no initial offset in ZooKeeper or if an offset is out of range:<br/>* smallest : automatically reset the offset to the smallest offset<br/>* largest : automatically reset the offset to the largest offset<br/>* anything else: throw exception to the consumer</p>
-      </td>
-      </tr>
-      <tr>
-        <td>consumer.timeout.ms</td>
-        <td colspan="1">-1</td>
-        <td>Throw a timeout exception to the consumer if no message is available for consumption after the specified interval</td>
-      </tr>
-      <tr>
-        <td>exclude.internal.topics</td>
-        <td colspan="1">true</td>
-        <td>Whether messages from internal topics (such as offsets) should be exposed to the consumer.</td>
-      </tr>
-      <tr>
-        <td>client.id</td>
-        <td colspan="1">group id value</td>
-        <td>The client id is a user-specified string sent in each request to help trace calls. It should logically identify the application making the request.</td>
-      </tr>
-      <tr>
-        <td>zookeeper.session.timeout.ms </td>
-        <td colspan="1">6000</td>
-        <td>ZooKeeper session timeout. If the consumer fails to heartbeat to ZooKeeper for this period of time it is considered dead and a rebalance will occur.</td>
-      </tr>
-      <tr>
-        <td>zookeeper.connection.timeout.ms</td>
-        <td colspan="1">6000</td>
-        <td>The max time that the client waits while establishing a connection to zookeeper.</td>
-      </tr>
-      <tr>
-        <td>zookeeper.sync.time.ms </td>
-        <td colspan="1">2000</td>
-        <td>How far a ZK follower can be behind a ZK leader</td>
-      </tr>
-      <tr>
-        <td>offsets.storage</td>
-        <td colspan="1">zookeeper</td>
-        <td>Select where offsets should be stored (zookeeper or kafka).</td>
-      </tr>
-      <tr>
-        <td>offsets.channel.backoff.ms</td>
-        <td colspan="1">1000</td>
-        <td>The backoff period when reconnecting the offsets channel or retrying failed offset fetch/commit requests.</td>
-      </tr>
-      <tr>
-        <td>offsets.channel.socket.timeout.ms</td>
-        <td colspan="1">10000</td>
-        <td>Socket timeout when reading responses for offset fetch/commit requests. This timeout is also used for ConsumerMetadata requests that are used to query for the offset manager.</td>
-      </tr>
-      <tr>
-        <td>offsets.commit.max.retries</td>
-        <td colspan="1">5</td>
-        <td>Retry the offset commit up to this many times on failure. This retry count only applies to offset commits during shut-down. It does not apply to commits originating from the auto-commit thread. It also does not apply to attempts to query for the offset coordinator before committing offsets. i.e., if a consumer metadata request fails for any reason, it will be retried and that retry does not count toward this limit.</td>
-      </tr>
-      <tr>
-        <td>dual.commit.enabled</td>
-        <td colspan="1">true</td>
-        <td>If you are using "kafka" as offsets.storage, you can dual commit offsets to ZooKeeper (in addition to Kafka). This is required during migration from zookeeper-based offset storage to kafka-based offset storage. With respect to any given consumer group, it is safe to turn this off after all instances within that group have been migrated to the new version that commits offsets to the broker (instead of directly to ZooKeeper).</td>
-      </tr>
-      <tr>
-        <td>partition.assignment.strategy</td>
-        <td colspan="1">range</td>
-        <td><p>Select between the "range" or "roundrobin" strategy for assigning partitions to consumer streams.<p>The round-robin partition assignor lays out all the available partitions and all the available consumer threads. It then proceeds to do a round-robin assignment from partition to consumer thread. If the subscriptions of all consumer instances are identical, then the partitions will be uniformly distributed. (i.e., the partition ownership counts will be within a delta of exactly one across all consumer threads.) Round-robin assignment is permitted only if: (a) Every topic has the same number of streams within a consumer instance (b) The set of subscribed topics is identical for every consumer instance within the group.<p> Range partitioning works on a per-topic basis. For each topic, we lay out the available partitions in numeric order and the consumer threads in lexicographic order. We then divide the number of partitions by the total number of consumer streams (threads) to determine the number of partitions to assign to each consumer. If it does not evenly divide, then the first few consumers will have one extra partition.</td>
-      </tr>
-  </tbody>
-  </table>
-
-
-  <p>More details about consumer configuration can be found in the scala class <code>kafka.consumer.ConsumerConfig</code>.</p>
 
   <h3><a id="connectconfigs" href="#connectconfigs">3.5 Kafka Connect Configs</a></h3>
   Below is the configuration of the Kafka Connect framework.
   <!--#include virtual="generated/connect_config.html" -->
 
+  <h4><a id="sourceconnectconfigs" href="#sourceconnectconfigs">3.5.1 Source Connector Configs</a></h4>
+  Below is the configuration of a source connector.
+  <!--#include virtual="generated/source_connector_config.html" -->
+
+  <h4><a id="sinkconnectconfigs" href="#sinkconnectconfigs">3.5.2 Sink Connector Configs</a></h4>
+  Below is the configuration of a sink connector.
+  <!--#include virtual="generated/sink_connector_config.html" -->
+
   <h3><a id="streamsconfigs" href="#streamsconfigs">3.6 Kafka Streams Configs</a></h3>
   Below is the configuration of the Kafka Streams client library.
   <!--#include virtual="generated/streams_config.html" -->
 
-  <h3><a id="adminclientconfigs" href="#adminclientconfigs">3.7 AdminClient Configs</a></h3>
+  <h3><a id="adminclientconfigs" href="#adminclientconfigs">3.7 Admin Configs</a></h3>
   Below is the configuration of the Kafka Admin client library.
   <!--#include virtual="generated/admin_client_config.html" -->
 </script>

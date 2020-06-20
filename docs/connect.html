@@ -32,7 +32,7 @@
 
     <h3><a id="connect_user" href="#connect_user">8.2 User Guide</a></h3>
 
-    <p>The quickstart provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.</p>
+    <p>The <a href="../quickstart">quickstart</a> provides a brief example of how to run a standalone version of Kafka Connect. This section describes how to configure, run, and manage Kafka Connect in more detail.</p>
 
     <h4><a id="connect_running" href="#connect_running">Running Kafka Connect</a></h4>
 
@@ -56,7 +56,9 @@
         <li><code>offset.storage.file.filename</code> - File to store offset data in</li>
     </ul>
 
-    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of Kafka source and Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>consumer.</code> and <code>producer.</code> respectively. The only parameter that is inherited from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sinks and once for Kafka sources.</p>
+    <p>The parameters that are configured here are intended for producers and consumers used by Kafka Connect to access the configuration, offset and status topics. For configuration of the producers used by Kafka source tasks and the consumers used by Kafka sink tasks, the same parameters can be used but need to be prefixed with <code>producer.</code> and <code>consumer.</code> respectively. The only Kafka client parameter that is inherited without a prefix from the worker configuration is <code>bootstrap.servers</code>, which in most cases will be sufficient, since the same cluster is often used for all purposes. A notable exception is a secured cluster, which requires extra parameters to allow connections. These parameters will need to be set up to three times in the worker configuration, once for management access, once for Kafka sources and once for Kafka sinks.</p> 
+    
+    <p>Starting with 2.3.0, client configuration overrides can be configured individually per connector by using the prefixes <code>producer.override.</code> and <code>consumer.override.</code> for Kafka sources or Kafka sinks respectively. These overrides are included with the rest of the connector's configuration properties.</p>
 
     <p>The remaining parameters are connector configuration files. You may include as many as you want, but all will execute within the same process (on different threads).</p>
 
@@ -165,25 +167,94 @@
     </pre>
 
     <p>You can see that the lines we've read are now part of a JSON map, and there is an extra field with the static value we specified. This is just one example of what you can do with transformations.</p>
+    
+    <h5><a id="connect_included_transformation" href="#connect_included_transformation">Included transformations</a></h5>
 
     <p>Several widely-applicable data and routing transformations are included with Kafka Connect:</p>
 
     <ul>
         <li>InsertField - Add a field using either static data or record metadata</li>
         <li>ReplaceField - Filter or rename fields</li>
-        <li>MaskField - Replace field with valid null value for the type (0, empty string, etc)</li>
-        <li>ValueToKey</li>
+        <li>MaskField - Replace field with valid null value for the type (0, empty string, etc) or custom replacement (non-empty string or numeric value only)</li>
+        <li>ValueToKey - Replace the record key with a new key formed from a subset of fields in the record value</li>
         <li>HoistField - Wrap the entire event as a single field inside a Struct or a Map</li>
         <li>ExtractField - Extract a specific field from Struct and Map and include only this field in results</li>
         <li>SetSchemaMetadata - modify the schema name or version</li>
         <li>TimestampRouter - Modify the topic of a record based on original topic and timestamp. Useful when using a sink that needs to write to different tables or indexes based on timestamps</li>
         <li>RegexRouter - modify the topic of a record based on original topic, replacement string and a regular expression</li>
+        <li>Filter - Removes messages from all further processing. This is used with a <a href="#connect_predicates">predicate</a> to selectively filter certain messages.</li>
     </ul>
 
     <p>Details on how to configure each transformation are listed below:</p>
 
 
     <!--#include virtual="generated/connect_transforms.html" -->
+
+
+    <h5><a id="connect_predicates" href="#connect_predicates">Predicates</a></h5>
+
+    <p>Transformations can be configured with predicates so that the transformation is applied only to messages which satisfy some condition. In particular, when combined with the <b>Filter</b> transformation predicates can be used to selectively filter out certain messages.</p>
+
+    <p>Predicates are specified in the connector configuration.</p>
+
+    <ul>
+        <li><code>predicates</code> - Set of aliases for the predicates to be applied to some of the transformations.</li>
+        <li><code>predicates.$alias.type</code> - Fully qualified class name for the predicate.</li>
+        <li><code>predicates.$alias.$predicateSpecificConfig</code> - Configuration properties for the predicate.</li>
+    </ul>
+
+    <p>All transformations have the implicit config properties <code>predicate</code> and <code>negate</code>. A predicular predicate is associated with a transformation by setting the transformation's <code>predicate</code> config to the predicate's alias. The predicate's value can be reversed using the <code>negate</code> configuration property.</p>
+
+    <p>For example, suppose you have a source connector which produces messages to many different topics and you want to:</p>
+    <ul>
+        <li>filter out the messages in the 'foo' topic entirely</li>
+        <li>apply the ExtractField transformation with the field name 'other_field' to records in all topics <i>except</i> the topic 'bar'</li>
+    </ul>
+
+    <p>To do this we need first to filter out the records destined for the topic 'foo'. The Filter transformation removes records from further processing, and can use the TopicNameMatches predicate to apply the transformation only to records in topics which match a certain regular expression. TopicNameMatches's only configuration property is <code>pattern</code> which is a Java regular expression for matching against the topic name. The configuration would look like this:</p>
+
+    <pre class="brush: text;">
+        transforms=Filter
+        transforms.Filter.type=org.apache.kafka.connect.transforms.Filter
+        transforms.Filter.predicate=IsFoo
+
+        predicates=IsFoo
+        predicates.IsFoo.type=org.apache.kafka.connect.predicates.TopicNameMatches
+        predicates.IsFoo.pattern=foo
+    </pre>
+        
+    <p>Next we need to apply ExtractField only when the topic name of the record is not 'bar'. We can't just use TopicNameMatches directly, because that would apply the transformation to matching topic names, not topic names which do <i>not</i> match. The transformation's implicit <code>negate</code> config properties allows us to invert the set of records which a predicate matches. Adding the configuration for this to the previous example we arrive at:</p>
+
+    <pre class="brush: text;">
+        transforms=Filter,Extract
+        transforms.Filter.type=org.apache.kafka.connect.transforms.Filter
+        transforms.Filter.predicate=IsFoo
+
+        transforms.Extract.type=org.apache.kafka.connect.transforms.ExtractField$Key
+        transforms.Extract.field=other_field
+        transforms.Extract.predicate=IsBar
+        transforms.Extract.negate=true
+
+        predicates=IsFoo,IsBar
+        predicates.IsFoo.type=org.apache.kafka.connect.predicates.TopicNameMatches
+        predicates.IsFoo.pattern=foo
+
+        predicates.IsBar.type=org.apache.kafka.connect.predicates.TopicNameMatches
+        predicates.IsBar.pattern=bar
+    </pre>
+
+    <p>Kafka Connect includes the following predicates:</p>
+
+    <ul>
+        <li><code>TopicNameMatches</code> - matches records in a topic with a name matching a particular Java regular expression.</li>
+        <li><code>HasHeaderKey</code> - matches records which have a header with the given key.</li>
+        <li><code>RecordIsTombstone</code> - matches tombstone records, that is records with a null value.</li>
+    </ul>
+
+    <p>Details on how to configure each predicate are listed below:</p>
+    
+    <!--#include virtual="generated/connect_predicates.html" -->
+
 
     <h4><a id="connect_rest" href="#connect_rest">REST API</a></h4>
 
@@ -239,6 +310,8 @@
         <li><code>POST /connectors/{name}/restart</code> - restart a connector (typically because it has failed)</li>
         <li><code>POST /connectors/{name}/tasks/{taskId}/restart</code> - restart an individual task (typically because it has failed)</li>
         <li><code>DELETE /connectors/{name}</code> - delete a connector, halting all tasks and deleting its configuration</li>
+        <li><code>GET /connectors/{name}/topics</code> - get the set of topics that a specific connector is using since the connector was created or since a request to reset its set of active topics was issued</li>
+        <li><code>PUT /connectors/{name}/topics/reset</code> - send a request to empty the set of active topics of a connector</li>
     </ul>
 
     <p>Kafka Connect also provides a REST API for getting information about connector plugins:</p>
@@ -246,6 +319,12 @@
     <ul>
         <li><code>GET /connector-plugins</code>- return a list of connector plugins installed in the Kafka Connect cluster. Note that the API only checks for connectors on the worker that handles the request, which means you may see inconsistent results, especially during a rolling upgrade if you add new connector jars</li>
         <li><code>PUT /connector-plugins/{connector-type}/config/validate</code> - validate the provided configuration values against the configuration definition. This API performs per config validation, returns suggested values and error messages during validation.</li>
+    </ul>
+
+    <p>The following is a supported REST request at the top-level (root) endpoint:</p>
+
+    <ul>
+        <li><code>GET /</code>- return basic information about the Kafka Connect cluster such as the version of the Connect worker that serves the REST request (including git commit ID of the source code) and the Kafka cluster ID that is connected to.
     </ul>
 
     <h3><a id="connect_development" href="#connect_development">8.3 Connector Development Guide</a></h3>
@@ -299,7 +378,7 @@
     }
     </pre>
 
-    <p>We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code></p>:
+    <p>We will define the <code>FileStreamSourceTask</code> class below. Next, we add some standard lifecycle methods, <code>start()</code> and <code>stop()</code>:</p>
 
     <pre class="brush: java;">
     @Override
@@ -487,7 +566,7 @@
     Schema schema = SchemaBuilder.struct().name(NAME)
         .field("name", Schema.STRING_SCHEMA)
         .field("age", Schema.INT_SCHEMA)
-        .field("admin", new SchemaBuilder.boolean().defaultValue(false).build())
+        .field("admin", SchemaBuilder.bool().defaultValue(false).build())
         .build();
 
     Struct struct = new Struct(schema)
@@ -508,7 +587,39 @@
     </p>
 
     <p>
-    When a connector is first submitted to the cluster, the workers rebalance the full set of connectors in the cluster and their tasks so that each worker has approximately the same amount of work. This same rebalancing procedure is also used when connectors increase or decrease the number of tasks they require, or when a connector's configuration is changed. You can use the REST API to view the current status of a connector and its tasks, including the id of the worker to which each was assigned. For example, querying the status of a file source (using <code>GET /connectors/file-source/status</code>) might produce output like the following:
+    When a connector is first submitted to the cluster, a rebalance is triggered between the Connect workers in order to distribute the load that consists of the tasks of the new connector.
+    This same rebalancing procedure is also used when connectors increase or decrease the number of tasks they require, when a connector's configuration is changed, or when a
+    worker is added or removed from the group as part of an intentional upgrade of the Connect cluster or due to a failure.
+    </p>
+
+    <p>
+    In versions prior to 2.3.0, the Connect workers would rebalance the full set of connectors and their tasks in the cluster as a simple way to make sure that each worker has approximately the same amount of work.
+    This behavior can be still enabled by setting <code>connect.protocol=eager</code>.
+    </p>
+
+    <p>
+    Starting with 2.3.0, Kafka Connect is using by default a protocol that performs
+    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative+Rebalancing+in+Kafka+Connect">incremental cooperative rebalancing</a>
+    that incrementally balances the connectors and tasks across the Connect workers, affecting only tasks that are new, to be removed, or need to move from one worker to another.
+    Other tasks are not stopped and restarted during the rebalance, as they would have been with the old protocol.
+    </p>
+
+    <p>
+    If a Connect worker leaves the group, intentionally or due to a failure, Connect waits for <code>scheduled.rebalance.max.delay.ms</code> before triggering a rebalance.
+    This delay defaults to five minutes (<code>300000ms</code>) to tolerate failures or upgrades of workers without immediately redistributing the load of a departing worker.
+    If this worker returns within the configured delay, it gets its previously assigned tasks in full.
+    However, this means that the tasks will remain unassigned until the time specified by <code>scheduled.rebalance.max.delay.ms</code> elapses.
+    If a worker does not return within that time limit, Connect will reassign those tasks among the remaining workers in the Connect cluster.
+    </p>
+
+    <p>
+    The new Connect protocol is enabled when all the workers that form the Connect cluster are configured with <code>connect.protocol=compatible</code>, which is also the default value when this property is missing.
+    Therefore, upgrading to the new Connect protocol happens automatically when all the workers upgrade to 2.3.0.
+    A rolling upgrade of the Connect cluster will activate incremental cooperative rebalancing when the last worker joins on version 2.3.0.
+    </p>
+
+    <p>
+    You can use the REST API to view the current status of a connector and its tasks, including the ID of the worker to which each was assigned. For example, the <code>GET /connectors/file-source/status</code> request shows the status of a connector named <code>file-source</code>:
     </p>
 
     <pre class="brush: json;">
@@ -537,10 +648,15 @@
     <li><b>RUNNING:</b> The connector/task is running.</li>
     <li><b>PAUSED:</b> The connector/task has been administratively paused.</li>
     <li><b>FAILED:</b> The connector/task has failed (usually by raising an exception, which is reported in the status output).</li>
+    <li><b>DESTROYED:</b> The connector/task has been administratively removed and will stop appearing in the Connect cluster.</li>
     </ul>
 
     <p>
     In most cases, connector and task states will match, though they may be different for short periods of time when changes are occurring or if tasks have failed. For example, when a connector is first started, there may be a noticeable delay before the connector and its tasks have all transitioned to the RUNNING state. States will also diverge when tasks fail since Connect does not automatically restart failed tasks. To restart a connector/task manually, you can use the restart APIs listed above. Note that if you try to restart a task while a rebalance is taking place, Connect will return a 409 (Conflict) status code. You can retry after the rebalance completes, but it might not be necessary since rebalances effectively restart all the connectors and tasks in the cluster.
+    </p>
+
+    <p>
+    Starting with 2.5.0, Kafka Connect uses the <code>status.storage.topic</code> to also store information related to the topics that each connector is using. Connect Workers use these per-connector topic status updates to respond to requests to the REST endpoint <code>GET /connectors/{name}/topics</code> by returning the set of topic names that a connector is using. A request to the REST endpoint <code>PUT /connectors/{name}/topics/reset</code> resets the set of active topics for a connector and allows a new set to be populated, based on the connector's latest pattern of topic usage. Upon connector deletion, the set of the connector's active topics is also deleted. Topic tracking is enabled by default but can be disabled by setting <code>topic.tracking.enable=false</code>. If you want to disallow requests to reset the active topics of connectors during runtime, set the Worker property <code>topic.tracking.allow.reset=false</code>.
     </p>
 
     <p>

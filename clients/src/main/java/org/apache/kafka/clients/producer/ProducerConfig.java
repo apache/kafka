@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -30,6 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -51,9 +55,19 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>bootstrap.servers</code> */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
+    /** <code>client.dns.lookup</code> */
+    public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
+
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
     private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
+
+    /** <code>metadata.max.idle.ms</code> */
+    public static final String METADATA_MAX_IDLE_CONFIG = "metadata.max.idle.ms";
+    private static final String METADATA_MAX_IDLE_DOC =
+            "Controls how long the producer will cache metadata for a topic that's idle. If the elapsed " +
+            "time since a topic was last produced to exceeds the metadata idle duration, then the topic's " +
+            "metadata is forgotten and the next access to it will force a metadata fetch request.";
 
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
@@ -78,13 +92,14 @@ public class ProducerConfig extends AbstractConfig {
                                            + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
                                            + " made that the server has received the record in this case, and the <code>retries</code> configuration will not"
                                            + " take effect (as the client won't generally know of any failures). The offset given back for each record will"
-                                           + " always be set to -1."
+                                           + " always be set to <code>-1</code>."
                                            + " <li><code>acks=1</code> This will mean the leader will write the record to its local log but will respond"
                                            + " without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after"
                                            + " acknowledging the record but before the followers have replicated it then the record will be lost."
                                            + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
-                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting.";
+                                           + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting."
+                                           + "</ul>";
 
     /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
@@ -99,6 +114,23 @@ public class ProducerConfig extends AbstractConfig {
                                                 + "specified time waiting for more records to show up. This setting defaults to 0 (i.e. no delay). Setting <code>" + LINGER_MS_CONFIG + "=5</code>, "
                                                 + "for example, would have the effect of reducing the number of requests sent but would add up to 5ms of latency to records sent in the absence of load.";
 
+    /** <code>request.timeout.ms</code> */
+    public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
+    private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
+        + " This should be larger than <code>replica.lag.time.max.ms</code> (a broker configuration)"
+        + " to reduce the possibility of message duplication due to unnecessary producer retries.";
+
+    /** <code>delivery.timeout.ms</code> */
+    public static final String DELIVERY_TIMEOUT_MS_CONFIG = "delivery.timeout.ms";
+    private static final String DELIVERY_TIMEOUT_MS_DOC = "An upper bound on the time to report success or failure "
+            + "after a call to <code>send()</code> returns. This limits the total time that a record will be delayed "
+            + "prior to sending, the time to await acknowledgement from the broker (if expected), and the time allowed "
+            + "for retriable send failures. The producer may report failure to send a record earlier than this config if "
+            + "either an unrecoverable error is encountered, the retries have been exhausted, "
+            + "or the record is added to a batch which reached an earlier delivery expiration deadline. "
+            + "The value of this config should be greater than or equal to the sum of <code>" + REQUEST_TIMEOUT_MS_CONFIG + "</code> "
+            + "and <code>" + LINGER_MS_CONFIG + "</code>.";
+
     /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
@@ -110,10 +142,11 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>max.request.size</code> */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
-    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request in bytes. This setting will limit the number of record "
-                                                       + "batches the producer will send in a single request to avoid sending huge requests. "
-                                                       + "This is also effectively a cap on the maximum record batch size. Note that the server "
-                                                       + "has its own cap on record batch size which may be different from this.";
+    private static final String MAX_REQUEST_SIZE_DOC =
+        "The maximum size of a request in bytes. This setting will limit the number of record " +
+        "batches the producer will send in a single request to avoid sending huge requests. " +
+        "This is also effectively a cap on the maximum uncompressed record batch size. Note that the server " +
+        "has its own cap on the record batch size (after compression if compression is enabled) which may be different from this.";
 
     /** <code>reconnect.backoff.ms</code> */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
@@ -142,7 +175,7 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>compression.type</code> */
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     private static final String COMPRESSION_TYPE_DOC = "The compression type for all data generated by the producer. The default is none (i.e. no compression). Valid "
-                                                       + " values are <code>none</code>, <code>gzip</code>, <code>snappy</code>, or <code>lz4</code>. "
+                                                       + " values are <code>none</code>, <code>gzip</code>, <code>snappy</code>, <code>lz4</code>, or <code>zstd</code>. "
                                                        + "Compression is of full batches of data, so the efficacy of batching will also impact the compression ratio (more batching means better compression).";
 
     /** <code>metrics.sample.window.ms</code> */
@@ -152,7 +185,7 @@ public class ProducerConfig extends AbstractConfig {
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
 
     /**
-     * <code>metrics.log.level</code>
+     * <code>metrics.recording.level</code>
      */
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
@@ -168,10 +201,14 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
-                                              + " Note that this retry is no different than if the client resent the record upon receiving the error."
-                                              + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
-                                              + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
-                                              + " succeeds, then the records in the second batch may appear first.";
+            + " Note that this retry is no different than if the client resent the record upon receiving the error."
+            + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
+            + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
+            + " succeeds, then the records in the second batch may appear first. Note additionally that produce requests will be"
+            + " failed before the number of retries has been exhausted if the timeout configured by"
+            + " <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires first before successful acknowledgement. Users should generally"
+            + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"
+            + " retry behavior.";
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
@@ -188,12 +225,6 @@ public class ProducerConfig extends AbstractConfig {
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
     private static final String PARTITIONER_CLASS_DOC = "Partitioner class that implements the <code>org.apache.kafka.clients.producer.Partitioner</code> interface.";
 
-    /** <code>request.timeout.ms</code> */
-    public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
-    private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
-                                                        + " This should be larger than replica.lag.time.max.ms (a broker configuration)"
-                                                        + " to reduce the possibility of message duplication due to unnecessary producer retries.";
-
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
     public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
@@ -205,26 +236,57 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
                                                         + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5, "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and " + ACKS_CONFIG + " must be 'all'. If these values "
+                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and <code>" + ACKS_CONFIG + "</code> must be 'all'. If these values "
                                                         + "are not explicitly set by the user, suitable values will be chosen. If incompatible values are set, "
-                                                        + "a ConfigException will be thrown.";
+                                                        + "a <code>ConfigException</code> will be thrown.";
 
     /** <code> transaction.timeout.ms </code> */
     public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
     public static final String TRANSACTION_TIMEOUT_DOC = "The maximum amount of time in ms that the transaction coordinator will wait for a transaction status update from the producer before proactively aborting the ongoing transaction." +
-            "If this value is larger than the transaction.max.timeout.ms setting in the broker, the request will fail with a `InvalidTransactionTimeout` error.";
+            "If this value is larger than the transaction.max.timeout.ms setting in the broker, the request will fail with a <code>InvalidTransactionTimeout</code> error.";
 
     /** <code> transactional.id </code> */
     public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
     public static final String TRANSACTIONAL_ID_DOC = "The TransactionalId to use for transactional delivery. This enables reliability semantics which span multiple producer sessions since it allows the client to guarantee that transactions using the same TransactionalId have been completed prior to starting any new transactions. If no TransactionalId is provided, then the producer is limited to idempotent delivery. " +
-            "Note that enable.idempotence must be enabled if a TransactionalId is configured. " +
-            "The default is <code>null</code>, which means transactions cannot be used. " +
-            "Note that transactions requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting `transaction.state.log.replication.factor`.";
+            "If a TransactionalId is configured, <code>enable.idempotence</code> is implied. " +
+            "By default the TransactionId is not configured, which means transactions cannot be used. " +
+            "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
+
+    /**
+     * <code>security.providers</code>
+     */
+    public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
+    private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
+
+    /**
+     * <code>internal.auto.downgrade.txn.commit</code>
+     * Whether or not the producer should automatically downgrade the transactional commit request when the new group metadata
+     * feature is not supported by the broker.
+     * <p>
+     * The purpose of this flag is to make Kafka Streams being capable of working with old brokers when applying this new API.
+     * Non Kafka Streams users who are building their own EOS applications should be careful playing around
+     * with config as there is a risk of violating EOS semantics when turning on this flag.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    static final String AUTO_DOWNGRADE_TXN_COMMIT = "internal.auto.downgrade.txn.commit";
+
+    private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+                                .define(CLIENT_DNS_LOOKUP_CONFIG,
+                                        Type.STRING,
+                                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                                        in(ClientDnsLookup.DEFAULT.toString(),
+                                           ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                                           ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
-                                .define(RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
+                                .define(RETRIES_CONFIG, Type.INT, Integer.MAX_VALUE, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
                                         "1",
@@ -233,13 +295,14 @@ public class ProducerConfig extends AbstractConfig {
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
-                                .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0L), Importance.MEDIUM, LINGER_MS_DOC)
+                                .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
+                                .define(DELIVERY_TIMEOUT_MS_CONFIG, Type.INT, 120 * 1000, atLeast(0), Importance.MEDIUM, DELIVERY_TIMEOUT_MS_DOC)
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
-                                .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(-1), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
-                                .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(-1), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
+                                .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
+                                .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,
                                         Type.INT,
-                                        1 * 1024 * 1024,
+                                        1024 * 1024,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_REQUEST_SIZE_DOC)
@@ -259,6 +322,12 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         REQUEST_TIMEOUT_MS_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), Importance.LOW, METADATA_MAX_AGE_DOC)
+                                .define(METADATA_MAX_IDLE_CONFIG,
+                                        Type.LONG,
+                                        5 * 60 * 1000,
+                                        atLeast(5000),
+                                        Importance.LOW,
+                                        METADATA_MAX_IDLE_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,
@@ -313,6 +382,11 @@ public class ProducerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(SECURITY_PROVIDERS_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.LOW,
+                                        SECURITY_PROVIDERS_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,
@@ -330,12 +404,71 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .defineInternal(AUTO_DOWNGRADE_TXN_COMMIT,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW);
     }
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        CommonClientConfigs.warnIfDeprecatedDnsLookupValue(this);
+        Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        maybeOverrideEnableIdempotence(refinedConfigs);
+        maybeOverrideClientId(refinedConfigs);
+        maybeOverrideAcksAndRetries(refinedConfigs);
+        return refinedConfigs;
+    }
+
+    private void maybeOverrideClientId(final Map<String, Object> configs) {
+        String refinedClientId;
+        boolean userConfiguredClientId = this.originals().containsKey(CLIENT_ID_CONFIG);
+        if (userConfiguredClientId) {
+            refinedClientId = this.getString(CLIENT_ID_CONFIG);
+        } else {
+            String transactionalId = this.getString(TRANSACTIONAL_ID_CONFIG);
+            refinedClientId = "producer-" + (transactionalId != null ? transactionalId : PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement());
+        }
+        configs.put(CLIENT_ID_CONFIG, refinedClientId);
+    }
+
+    private void maybeOverrideEnableIdempotence(final Map<String, Object> configs) {
+        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
+
+        if (userConfiguredTransactions && !userConfiguredIdempotence) {
+            configs.put(ENABLE_IDEMPOTENCE_CONFIG, true);
+        }
+    }
+
+    private void maybeOverrideAcksAndRetries(final Map<String, Object> configs) {
+        final String acksStr = parseAcks(this.getString(ACKS_CONFIG));
+        configs.put(ACKS_CONFIG, acksStr);
+        // For idempotence producers, values for `RETRIES_CONFIG` and `ACKS_CONFIG` might need to be overridden.
+        if (idempotenceEnabled()) {
+            boolean userConfiguredRetries = this.originals().containsKey(RETRIES_CONFIG);
+            if (this.getInt(RETRIES_CONFIG) == 0) {
+                throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
+            }
+            configs.put(RETRIES_CONFIG, userConfiguredRetries ? this.getInt(RETRIES_CONFIG) : Integer.MAX_VALUE);
+
+            boolean userConfiguredAcks = this.originals().containsKey(ACKS_CONFIG);
+            final short acks = Short.valueOf(acksStr);
+            if (userConfiguredAcks && acks != (short) -1) {
+                throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
+                        "producer. Otherwise we cannot guarantee idempotence.");
+            }
+            configs.put(ACKS_CONFIG, "-1");
+        }
+    }
+
+    private static String parseAcks(String acksString) {
+        try {
+            return acksString.trim().equalsIgnoreCase("all") ? "-1" : Short.parseShort(acksString.trim()) + "";
+        } catch (NumberFormatException e) {
+            throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
+        }
     }
 
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
@@ -368,6 +501,16 @@ public class ProducerConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
+    boolean idempotenceEnabled() {
+        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
+        boolean idempotenceEnabled = userConfiguredIdempotence && this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
+
+        if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
+            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
+        return userConfiguredTransactions || idempotenceEnabled;
+    }
+
     ProducerConfig(Map<?, ?> props, boolean doLog) {
         super(CONFIG, props, doLog);
     }
@@ -376,8 +519,12 @@ public class ProducerConfig extends AbstractConfig {
         return CONFIG.names();
     }
 
+    public static ConfigDef configDef() {
+        return new ConfigDef(CONFIG);
+    }
+
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtmlTable());
+        System.out.println(CONFIG.toHtml());
     }
 
 }

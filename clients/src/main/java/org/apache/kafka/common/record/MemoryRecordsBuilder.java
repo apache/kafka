@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -37,11 +38,11 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * and the builder is closed (e.g. the Producer), it's important to call `closeForRecordAppends` when the former happens.
  * This will release resources like compression buffers that can be relatively large (64 KB for LZ4).
  */
-public class MemoryRecordsBuilder {
+public class MemoryRecordsBuilder implements AutoCloseable {
     private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
     private static final DataOutputStream CLOSED_STREAM = new DataOutputStream(new OutputStream() {
         @Override
-        public void write(int b) throws IOException {
+        public void write(int b) {
             throw new IllegalStateException("MemoryRecordsBuilder is closed for record appends");
         }
     });
@@ -102,6 +103,8 @@ public class MemoryRecordsBuilder {
                 throw new IllegalArgumentException("Transactional records are not supported for magic " + magic);
             if (isControlBatch)
                 throw new IllegalArgumentException("Control records are not supported for magic " + magic);
+            if (compressionType == CompressionType.ZSTD)
+                throw new IllegalArgumentException("ZStandard compression is not supported for magic " + magic);
         }
 
         this.magic = magic;
@@ -416,7 +419,7 @@ public class MemoryRecordsBuilder {
                 appendDefaultRecord(offset, timestamp, key, value, headers);
                 return null;
             } else {
-                return appendLegacyRecord(offset, timestamp, key, value);
+                return appendLegacyRecord(offset, timestamp, key, value, magic);
             }
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
@@ -586,6 +589,35 @@ public class MemoryRecordsBuilder {
     }
 
     /**
+     * Append a record without doing offset/magic validation (this should only be used in testing).
+     *
+     * @param offset The offset of the record
+     * @param record The record to add
+     */
+    public void appendUncheckedWithOffset(long offset, SimpleRecord record) throws IOException {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            int offsetDelta = (int) (offset - baseOffset);
+            long timestamp = record.timestamp();
+            if (firstTimestamp == null)
+                firstTimestamp = timestamp;
+
+            int sizeInBytes = DefaultRecord.writeTo(appendStream,
+                offsetDelta,
+                timestamp - firstTimestamp,
+                record.key(),
+                record.value(),
+                record.headers());
+            recordWritten(offset, timestamp, sizeInBytes);
+        } else {
+            LegacyRecord legacyRecord = LegacyRecord.create(magic,
+                record.timestamp(),
+                Utils.toNullableArray(record.key()),
+                Utils.toNullableArray(record.value()));
+            appendUncheckedWithOffset(offset, legacyRecord);
+        }
+    }
+
+    /**
      * Append a record at the next sequential offset.
      * @param record the record to add
      */
@@ -630,7 +662,7 @@ public class MemoryRecordsBuilder {
         recordWritten(offset, timestamp, sizeInBytes);
     }
 
-    private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
+    private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value, byte magic) throws IOException {
         ensureOpenForRecordAppend();
         if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;

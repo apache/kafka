@@ -22,15 +22,17 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 
 /**
- * Options for {@link AdminClient#describeTopics(Collection)}.
+ * Options for {@link Admin#describeTopics(Collection)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
+    private boolean includeAuthorizedOperations;
+
     /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
+     * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
      * AdminClient should be used.
      *
      */
@@ -38,6 +40,15 @@ public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions
     public DescribeTopicsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
+    }
+
+    public DescribeTopicsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
+        return this;
+    }
+
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
     }
 
 }

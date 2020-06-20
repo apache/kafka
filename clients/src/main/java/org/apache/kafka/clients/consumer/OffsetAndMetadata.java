@@ -19,6 +19,8 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 
 import java.io.Serializable;
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * The Kafka offset commit API allows users to provide additional metadata (in the form of a string)
@@ -26,8 +28,37 @@ import java.io.Serializable;
  * node made the commit, what time the commit was made, etc.
  */
 public class OffsetAndMetadata implements Serializable {
+    private static final long serialVersionUID = 2019555404968089681L;
+
     private final long offset;
     private final String metadata;
+
+    // We use null to represent the absence of a leader epoch to simplify serialization.
+    // I.e., older serializations of this class which do not have this field will automatically
+    // initialize its value to null.
+    private final Integer leaderEpoch;
+
+    /**
+     * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
+     *
+     * @param offset The offset to be committed
+     * @param leaderEpoch Optional leader epoch of the last consumed record
+     * @param metadata Non-null metadata
+     */
+    public OffsetAndMetadata(long offset, Optional<Integer> leaderEpoch, String metadata) {
+        if (offset < 0)
+            throw new IllegalArgumentException("Invalid negative offset");
+
+        this.offset = offset;
+        this.leaderEpoch = leaderEpoch.orElse(null);
+
+        // The server converts null metadata to an empty string. So we store it as an empty string as well on the client
+        // to be consistent.
+        if (metadata == null)
+            this.metadata = OffsetFetchResponse.NO_METADATA;
+        else
+            this.metadata = metadata;
+    }
 
     /**
      * Construct a new OffsetAndMetadata object for committing through {@link KafkaConsumer}.
@@ -35,13 +66,7 @@ public class OffsetAndMetadata implements Serializable {
      * @param metadata Non-null metadata
      */
     public OffsetAndMetadata(long offset, String metadata) {
-        this.offset = offset;
-        // The server converts null metadata to an empty string. So we store it as an empty string as well on the client
-        // to be consistent.
-        if (metadata == null)
-            this.metadata = OffsetFetchResponse.NO_METADATA;
-        else
-            this.metadata = metadata;
+        this(offset, Optional.empty(), metadata);
     }
 
     /**
@@ -61,29 +86,41 @@ public class OffsetAndMetadata implements Serializable {
         return metadata;
     }
 
+    /**
+     * Get the leader epoch of the previously consumed record (if one is known). Log truncation is detected
+     * if there exists a leader epoch which is larger than this epoch and begins at an offset earlier than
+     * the committed offset.
+     *
+     * @return the leader epoch or empty if not known
+     */
+    public Optional<Integer> leaderEpoch() {
+        if (leaderEpoch == null || leaderEpoch < 0)
+            return Optional.empty();
+        return Optional.of(leaderEpoch);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
         OffsetAndMetadata that = (OffsetAndMetadata) o;
-
-        if (offset != that.offset) return false;
-        return metadata.equals(that.metadata);
+        return offset == that.offset &&
+                Objects.equals(metadata, that.metadata) &&
+                Objects.equals(leaderEpoch, that.leaderEpoch);
     }
 
     @Override
     public int hashCode() {
-        int result = (int) (offset ^ (offset >>> 32));
-        result = 31 * result + metadata.hashCode();
-        return result;
+        return Objects.hash(offset, metadata, leaderEpoch);
     }
 
     @Override
     public String toString() {
         return "OffsetAndMetadata{" +
                 "offset=" + offset +
+                ", leaderEpoch=" + leaderEpoch +
                 ", metadata='" + metadata + '\'' +
                 '}';
     }
+
 }

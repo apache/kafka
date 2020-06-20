@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.kstream.Window;
 
 /**
@@ -29,7 +28,6 @@ import org.apache.kafka.streams.kstream.Window;
  * @see org.apache.kafka.streams.kstream.SessionWindows
  * @see org.apache.kafka.streams.processor.TimestampExtractor
  */
-@InterfaceStability.Unstable
 public final class SessionWindow extends Window {
 
     /**
@@ -48,7 +46,7 @@ public final class SessionWindow extends Window {
      *
      * @param other another window
      * @return {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
-     * @throws IllegalArgumentException if the {@code other} window has a different type than {@link this} window
+     * @throws IllegalArgumentException if the {@code other} window has a different type than {@code this} window
      */
     public boolean overlap(final Window other) throws IllegalArgumentException {
         if (getClass() != other.getClass()) {

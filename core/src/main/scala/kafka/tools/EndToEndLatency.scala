@@ -18,14 +18,18 @@
 package kafka.tools
 
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util.{Arrays, Collections, Properties}
 
 import kafka.utils.Exit
+import org.apache.kafka.clients.admin.{Admin, NewTopic}
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 
@@ -42,8 +46,10 @@ import scala.util.Random
 
 object EndToEndLatency {
   private val timeout: Long = 60000
+  private val defaultReplicationFactor: Short = 1
+  private val defaultNumPartitions: Int = 1
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     if (args.length != 5 && args.length != 6) {
       System.err.println("USAGE: java " + getClass.getName + " broker_list topic num_messages producer_acks message_size_bytes [optional] properties_file")
       Exit.exit(1)
@@ -59,22 +65,22 @@ object EndToEndLatency {
     if (!List("1", "all").contains(producerAcks))
       throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all")
 
-    def loadProps: Properties = propsFile.map(Utils.loadProps).getOrElse(new Properties())
+    def loadPropsWithBootstrapServers: Properties = {
+      val props = propsFile.map(Utils.loadProps).getOrElse(new Properties())
+      props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+      props
+    }
 
-    val consumerProps = loadProps
-    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val consumerProps = loadPropsWithBootstrapServers
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
-
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
-    consumer.subscribe(Collections.singletonList(topic))
 
-    val producerProps = loadProps
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val producerProps = loadPropsWithBootstrapServers
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0") //ensure writes are synchronous
     producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
     producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
@@ -82,16 +88,28 @@ object EndToEndLatency {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
-    def finalise() {
+    def finalise(): Unit = {
       consumer.commitSync()
       producer.close()
       consumer.close()
     }
 
-    //Ensure we are at latest offset. seekToEnd evaluates lazily, that is to say actually performs the seek only when
-    //a poll() or position() request is issued. Hence we need to poll after we seek to ensure we see our first write.
-    consumer.seekToEnd(Collections.emptyList())
-    consumer.poll(0)
+    // create topic if it does not exist
+    if (!consumer.listTopics().containsKey(topic)) {
+      try {
+        createTopic(topic, loadPropsWithBootstrapServers)
+      } catch {
+        case t: Throwable =>
+          finalise()
+          throw new RuntimeException(s"Failed to create topic $topic", t)
+      }
+    }
+
+    val topicPartitions = consumer.partitionsFor(topic).asScala
+      .map(p => new TopicPartition(p.topic(), p.partition())).asJava
+    consumer.assign(topicPartitions)
+    consumer.seekToEnd(topicPartitions)
+    consumer.assignment.forEach(consumer.position(_))
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
@@ -103,7 +121,7 @@ object EndToEndLatency {
 
       //Send message (of random bytes) synchronously then immediately poll for it
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, message)).get()
-      val recordIter = consumer.poll(timeout).iterator
+      val recordIter = consumer.poll(Duration.ofMillis(timeout)).iterator
 
       val elapsed = System.nanoTime - begin
 
@@ -129,7 +147,7 @@ object EndToEndLatency {
 
       //Report progress
       if (i % 1000 == 0)
-        println(i + "\t" + elapsed / 1000.0 / 1000.0)
+        println(i.toString + "\t" + elapsed / 1000.0 / 1000.0)
       totalTime += elapsed
       latencies(i) = elapsed / 1000 / 1000
     }
@@ -147,5 +165,15 @@ object EndToEndLatency {
 
   def randomBytesOfLen(random: Random, len: Int): Array[Byte] = {
     Array.fill(len)((random.nextInt(26) + 65).toByte)
+  }
+
+  def createTopic(topic: String, props: Properties): Unit = {
+    println("Topic \"%s\" does not exist. Will create topic with %d partition(s) and replication factor = %d"
+              .format(topic, defaultNumPartitions, defaultReplicationFactor))
+
+    val adminClient = Admin.create(props)
+    val newTopic = new NewTopic(topic, defaultNumPartitions, defaultReplicationFactor)
+    try adminClient.createTopics(Collections.singleton(newTopic)).all().get()
+    finally Utils.closeQuietly(adminClient, "AdminClient")
   }
 }

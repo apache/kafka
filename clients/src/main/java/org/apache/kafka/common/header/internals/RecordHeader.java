@@ -60,7 +60,7 @@ public class RecordHeader implements Header {
             return false;
 
         RecordHeader header = (RecordHeader) o;
-        return (key == null ? header.key == null : key.equals(header.key)) && 
+        return Objects.equals(key, header.key) &&
                Arrays.equals(value(), header.value());
     }
 

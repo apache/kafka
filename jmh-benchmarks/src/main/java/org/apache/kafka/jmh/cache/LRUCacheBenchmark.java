@@ -52,7 +52,7 @@ public class LRUCacheBenchmark {
 
     private LRUCache<String, String> lruCache;
 
-    int counter;
+    private long counter = 0;
 
     @Setup(Level.Trial)
     public void setUp() {
@@ -66,7 +66,7 @@ public class LRUCacheBenchmark {
     @Benchmark
     public String testCachePerformance() {
         counter++;
-        int index = counter % DISTINCT_KEYS;
+        int index = (int) (counter % DISTINCT_KEYS);
         String hashkey = keys[index];
         lruCache.put(hashkey, values[index]);
         return lruCache.get(hashkey);

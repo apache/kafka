@@ -24,13 +24,20 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
+import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
+import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -43,6 +50,7 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
 public abstract class Cast<R extends ConnectRecord<R>> implements Transformation<R> {
+    private static final Logger log = LoggerFactory.getLogger(Cast.class);
 
     // TODO: Currently we only support top-level field casting. Ideally we could use a dotted notation in the spec to
     // allow casting nested fields.
@@ -78,9 +86,16 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
     private static final String PURPOSE = "cast types";
 
-    private static final Set<Schema.Type> SUPPORTED_CAST_TYPES = EnumSet.of(
+    private static final Set<Schema.Type> SUPPORTED_CAST_INPUT_TYPES = EnumSet.of(
             Schema.Type.INT8, Schema.Type.INT16, Schema.Type.INT32, Schema.Type.INT64,
-                    Schema.Type.FLOAT32, Schema.Type.FLOAT64, Schema.Type.BOOLEAN, Schema.Type.STRING
+                    Schema.Type.FLOAT32, Schema.Type.FLOAT64, Schema.Type.BOOLEAN,
+                            Schema.Type.STRING, Schema.Type.BYTES
+    );
+
+    private static final Set<Schema.Type> SUPPORTED_CAST_OUTPUT_TYPES = EnumSet.of(
+            Schema.Type.INT8, Schema.Type.INT16, Schema.Type.INT32, Schema.Type.INT64,
+                    Schema.Type.FLOAT32, Schema.Type.FLOAT64, Schema.Type.BOOLEAN,
+                            Schema.Type.STRING
     );
 
     // As a special case for casting the entire value (e.g. the incoming key is a int64 but you know it could be an
@@ -96,7 +111,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         casts = parseFieldTypes(config.getList(SPEC_CONFIG));
         wholeValueCastType = casts.get(WHOLE_VALUE_CAST);
-        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override
@@ -120,14 +135,14 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
     private R applySchemaless(R record) {
         if (wholeValueCastType != null) {
-            return newRecord(record, null, castValueToType(operatingValue(record), wholeValueCastType));
+            return newRecord(record, null, castValueToType(null, operatingValue(record), wholeValueCastType));
         }
 
         final Map<String, Object> value = requireMap(operatingValue(record), PURPOSE);
         final HashMap<String, Object> updatedValue = new HashMap<>(value);
         for (Map.Entry<String, Schema.Type> fieldSpec : casts.entrySet()) {
             String field = fieldSpec.getKey();
-            updatedValue.put(field, castValueToType(value.get(field), fieldSpec.getValue()));
+            updatedValue.put(field, castValueToType(null, value.get(field), fieldSpec.getValue()));
         }
         return newRecord(record, null, updatedValue);
     }
@@ -138,7 +153,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
         // Whole-record casting
         if (wholeValueCastType != null)
-            return newRecord(record, updatedSchema, castValueToType(operatingValue(record), wholeValueCastType));
+            return newRecord(record, updatedSchema, castValueToType(valueSchema, operatingValue(record), wholeValueCastType));
 
         // Casting within a struct
         final Struct value = requireStruct(operatingValue(record), PURPOSE);
@@ -147,7 +162,8 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         for (Field field : value.schema().fields()) {
             final Object origFieldValue = value.get(field);
             final Schema.Type targetType = casts.get(field.name());
-            final Object newFieldValue = targetType != null ? castValueToType(origFieldValue, targetType) : origFieldValue;
+            final Object newFieldValue = targetType != null ? castValueToType(field.schema(), origFieldValue, targetType) : origFieldValue;
+            log.trace("Cast field '{}' from '{}' to '{}'", field.name(), origFieldValue, newFieldValue);
             updatedValue.put(updatedSchema.field(field.name()), newFieldValue);
         }
         return newRecord(record, updatedSchema, updatedValue);
@@ -164,20 +180,25 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
         } else {
             builder = SchemaUtil.copySchemaBasics(valueSchema, SchemaBuilder.struct());
             for (Field field : valueSchema.fields()) {
-                SchemaBuilder fieldBuilder =
-                        convertFieldType(casts.containsKey(field.name()) ? casts.get(field.name()) : field.schema().type());
-                if (field.schema().isOptional())
-                    fieldBuilder.optional();
-                if (field.schema().defaultValue() != null)
-                    fieldBuilder.defaultValue(castValueToType(field.schema().defaultValue(), fieldBuilder.type()));
-                builder.field(field.name(), fieldBuilder.build());
+                if (casts.containsKey(field.name())) {
+                    SchemaBuilder fieldBuilder = convertFieldType(casts.get(field.name()));
+                    if (field.schema().isOptional())
+                        fieldBuilder.optional();
+                    if (field.schema().defaultValue() != null) {
+                        Schema fieldSchema = field.schema();
+                        fieldBuilder.defaultValue(castValueToType(fieldSchema, fieldSchema.defaultValue(), fieldBuilder.type()));
+                    }
+                    builder.field(field.name(), fieldBuilder.build());
+                } else {
+                    builder.field(field.name(), field.schema());
+                }
             }
         }
 
         if (valueSchema.isOptional())
             builder.optional();
         if (valueSchema.defaultValue() != null)
-            builder.defaultValue(castValueToType(valueSchema.defaultValue(), builder.type()));
+            builder.defaultValue(castValueToType(valueSchema, valueSchema.defaultValue(), builder.type()));
 
         updatedSchema = builder.build();
         schemaUpdateCache.put(valueSchema, updatedSchema);
@@ -205,20 +226,37 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
             default:
                 throw new DataException("Unexpected type in Cast transformation: " + type);
         }
-
     }
 
-    private static Object castValueToType(Object value, Schema.Type targetType) {
+    private static Object encodeLogicalType(Schema schema, Object value) {
+        switch (schema.name()) {
+            case Date.LOGICAL_NAME:
+                return Date.fromLogical(schema, (java.util.Date) value);
+            case Time.LOGICAL_NAME:
+                return Time.fromLogical(schema, (java.util.Date) value);
+            case Timestamp.LOGICAL_NAME:
+                return Timestamp.fromLogical(schema, (java.util.Date) value);
+        }
+        return value;
+    }
+
+    private static Object castValueToType(Schema schema, Object value, Schema.Type targetType) {
         try {
             if (value == null) return null;
 
-            Schema.Type inferredType = ConnectSchema.schemaType(value.getClass());
+            Schema.Type inferredType = schema == null ? ConnectSchema.schemaType(value.getClass()) :
+                    schema.type();
             if (inferredType == null) {
                 throw new DataException("Cast transformation was passed a value of type " + value.getClass()
                         + " which is not supported by Connect's data API");
             }
             // Ensure the type we are trying to cast from is supported
             validCastType(inferredType, FieldType.INPUT);
+
+            // Perform logical type encoding to their internal representation.
+            if (schema != null && schema.name() != null && targetType != Type.STRING) {
+                value = encodeLogicalType(schema, value);
+            }
 
             switch (targetType) {
                 case INT8:
@@ -323,7 +361,12 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     }
 
     private static String castToString(Object value) {
-        return value.toString();
+        if (value instanceof java.util.Date) {
+            java.util.Date dateValue = (java.util.Date) value;
+            return Values.dateFormatFor(dateValue).format(dateValue);
+        } else {
+            return value.toString();
+        }
     }
 
     protected abstract Schema operatingSchema(R record);
@@ -366,15 +409,19 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     }
 
     private static Schema.Type validCastType(Schema.Type type, FieldType fieldType) {
-        if (!SUPPORTED_CAST_TYPES.contains(type)) {
-            String message = "Cast transformation does not support casting to/from " + type
-                    + "; supported types are " + SUPPORTED_CAST_TYPES;
-            switch (fieldType) {
-                case INPUT:
-                    throw new DataException(message);
-                case OUTPUT:
-                    throw new ConfigException(message);
-            }
+        switch (fieldType) {
+            case INPUT:
+                if (!SUPPORTED_CAST_INPUT_TYPES.contains(type)) {
+                    throw new DataException("Cast transformation does not support casting from " +
+                        type + "; supported types are " + SUPPORTED_CAST_INPUT_TYPES);
+                }
+                break;
+            case OUTPUT:
+                if (!SUPPORTED_CAST_OUTPUT_TYPES.contains(type)) {
+                    throw new ConfigException("Cast transformation does not support casting to " +
+                        type + "; supported types are " + SUPPORTED_CAST_OUTPUT_TYPES);
+                }
+                break;
         }
         return type;
     }

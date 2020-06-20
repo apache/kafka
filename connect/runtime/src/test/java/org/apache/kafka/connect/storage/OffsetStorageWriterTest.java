@@ -165,7 +165,7 @@ public class OffsetStorageWriterTest {
     }
 
     @Test(expected = ConnectException.class)
-    public void testAlreadyFlushing() throws Exception {
+    public void testAlreadyFlushing() {
         @SuppressWarnings("unchecked")
         final Callback<Void> callback = PowerMock.createMock(Callback.class);
         // Trigger the send, but don't invoke the callback so we'll still be mid-flush

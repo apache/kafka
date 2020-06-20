@@ -37,6 +37,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 
+@SuppressWarnings("deprecation")
 public class ConnectMetricsTest {
 
     private static final Map<String, String> DEFAULT_WORKER_CONFIG = new HashMap<>();
@@ -52,7 +53,7 @@ public class ConnectMetricsTest {
 
     @Before
     public void setUp() {
-        metrics = new ConnectMetrics("worker1", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime());
+        metrics = new ConnectMetrics("worker1", new WorkerConfig(WorkerConfig.baseConfigDef(), DEFAULT_WORKER_CONFIG), new MockTime(), "cluster-1");
     }
 
     @After

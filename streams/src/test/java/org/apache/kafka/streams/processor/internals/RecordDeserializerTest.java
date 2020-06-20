@@ -17,33 +17,35 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.Test;
 
-import java.util.Collections;
-
 import static org.junit.Assert.assertEquals;
 
 public class RecordDeserializerTest {
 
+    private final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
     private final ConsumerRecord<byte[], byte[]> rawRecord = new ConsumerRecord<>("topic",
         1,
         1,
         10,
         TimestampType.LOG_APPEND_TIME,
-        5,
+        5L,
         3,
         5,
         new byte[0],
-        new byte[0]);
-
+        new byte[0],
+        headers);
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldReturnNewConsumerRecordWithDeserializedValueWhenNoExceptions() {
+    public void shouldReturnConsumerRecordWithDeserializedValueWhenNoExceptions() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
             new TheSourceNode(
                 false,
@@ -52,7 +54,7 @@ public class RecordDeserializerTest {
             ),
             null,
             new LogContext(),
-            new Metrics().sensor("skipped-records")
+            new Metrics().sensor("dropped-records")
         );
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(null, rawRecord);
         assertEquals(rawRecord.topic(), record.topic());
@@ -63,6 +65,7 @@ public class RecordDeserializerTest {
         assertEquals("value", record.value());
         assertEquals(rawRecord.timestamp(), record.timestamp());
         assertEquals(TimestampType.CREATE_TIME, record.timestampType());
+        assertEquals(rawRecord.headers(), record.headers());
     }
 
     static class TheSourceNode extends SourceNode<Object, Object> {
@@ -75,7 +78,7 @@ public class RecordDeserializerTest {
                       final boolean valueThrowsException,
                       final Object key,
                       final Object value) {
-            super("", Collections.<String>emptyList(), null, null);
+            super("", null, null);
             this.keyThrowsException = keyThrowsException;
             this.valueThrowsException = valueThrowsException;
             this.key = key;

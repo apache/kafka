@@ -26,35 +26,35 @@ public class MockMapper {
 
     private static class NoOpKeyValueMapper<K, V> implements KeyValueMapper<K, V, KeyValue<K, V>> {
         @Override
-        public KeyValue<K, V> apply(K key, V value) {
+        public KeyValue<K, V> apply(final K key, final V value) {
             return KeyValue.pair(key, value);
         }
     }
 
     private static class NoOpFlatKeyValueMapper<K, V> implements KeyValueMapper<K, V, Iterable<KeyValue<K, V>>> {
         @Override
-        public Iterable<KeyValue<K, V>> apply(K key, V value) {
+        public Iterable<KeyValue<K, V>> apply(final K key, final V value) {
             return Collections.singletonList(KeyValue.pair(key, value));
         }
     }
 
     private static class SelectValueKeyValueMapper<K, V> implements KeyValueMapper<K, V, KeyValue<V, V>> {
         @Override
-        public KeyValue<V, V> apply(K key, V value) {
+        public KeyValue<V, V> apply(final K key, final V value) {
             return KeyValue.pair(value, value);
         }
     }
 
     private static class SelectValueMapper<K, V> implements KeyValueMapper<K, V, V> {
         @Override
-        public V apply(K key, V value) {
+        public V apply(final K key, final V value) {
             return value;
         }
     }
 
     private static class SelectKeyMapper<K, V> implements KeyValueMapper<K, V, K> {
         @Override
-        public K apply(K key, V value) {
+        public K apply(final K key, final V value) {
             return key;
         }
     }

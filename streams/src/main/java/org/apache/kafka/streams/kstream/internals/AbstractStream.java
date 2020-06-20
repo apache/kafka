@@ -16,132 +16,103 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueTransformer;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.state.StoreBuilder;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-public abstract class AbstractStream<K> {
+/*
+ * Any classes (KTable, KStream, etc) extending this class should follow the serde specification precedence ordering as:
+ *
+ * 1) Overridden values via control objects (e.g. Materialized, Serialized, Consumed, etc)
+ * 2) Serdes that can be inferred from the operator itself (e.g. groupBy().count(), where value serde can default to `LongSerde`).
+ * 3) Serde inherited from parent operator if possible (note if the key / value types have been changed, then the corresponding serde cannot be inherited).
+ * 4) Default serde specified in the config.
+ */
+public abstract class AbstractStream<K, V> {
 
-    protected final InternalStreamsBuilder builder;
     protected final String name;
-    final Set<String> sourceNodes;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valueSerde;
+    protected final Set<String> subTopologySourceNodes;
+    protected final StreamsGraphNode streamsGraphNode;
+    protected final InternalStreamsBuilder builder;
 
     // This copy-constructor will allow to extend KStream
     // and KTable APIs with new methods without impacting the public interface.
-    public AbstractStream(AbstractStream<K> stream) {
-        this.builder = stream.builder;
+    public AbstractStream(final AbstractStream<K, V> stream) {
         this.name = stream.name;
-        this.sourceNodes = stream.sourceNodes;
+        this.builder = stream.builder;
+        this.keySerde = stream.keySerde;
+        this.valueSerde = stream.valueSerde;
+        this.subTopologySourceNodes = stream.subTopologySourceNodes;
+        this.streamsGraphNode = stream.streamsGraphNode;
     }
 
-    AbstractStream(final InternalStreamsBuilder builder, String name, final Set<String> sourceNodes) {
-        if (sourceNodes == null || sourceNodes.isEmpty()) {
+    AbstractStream(final String name,
+                   final Serde<K> keySerde,
+                   final Serde<V> valueSerde,
+                   final Set<String> subTopologySourceNodes,
+                   final StreamsGraphNode streamsGraphNode,
+                   final InternalStreamsBuilder builder) {
+        if (subTopologySourceNodes == null || subTopologySourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
         }
 
-        this.builder = builder;
         this.name = name;
-        this.sourceNodes = sourceNodes;
+        this.builder = builder;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+        this.subTopologySourceNodes = subTopologySourceNodes;
+        this.streamsGraphNode = streamsGraphNode;
     }
 
+    // This method allows to expose the InternalTopologyBuilder instance
+    // to subclasses that extend AbstractStream class.
+    protected InternalTopologyBuilder internalTopologyBuilder() {
+        return builder.internalTopologyBuilder;
+    }
 
-    Set<String> ensureJoinableWith(final AbstractStream<K> other) {
-        Set<String> allSourceNodes = new HashSet<>();
-        allSourceNodes.addAll(sourceNodes);
-        allSourceNodes.addAll(other.sourceNodes);
-
+    Set<String> ensureCopartitionWith(final Collection<? extends AbstractStream<K, ?>> otherStreams) {
+        final Set<String> allSourceNodes = new HashSet<>(subTopologySourceNodes);
+        for (final AbstractStream<K, ?> other: otherStreams) {
+            allSourceNodes.addAll(other.subTopologySourceNodes);
+        }
         builder.internalTopologyBuilder.copartitionSources(allSourceNodes);
 
         return allSourceNodes;
     }
 
-    String getOrCreateName(final String queryableStoreName, final String prefix) {
-        final String returnName = queryableStoreName != null ? queryableStoreName : builder.newStoreName(prefix);
-        Topic.validate(returnName);
-        return returnName;
-    }
-
     static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
-        return new ValueJoiner<T2, T1, R>() {
-            @Override
-            public R apply(T2 value2, T1 value1) {
-                return joiner.apply(value1, value2);
-            }
-        };
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    static <T, K>  org.apache.kafka.streams.processor.StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
-                                                                   final Serde<T> aggValueSerde,
-                                                                   final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return storeFactory(keySerde, aggValueSerde, storeName).build();
-    }
-
-    @SuppressWarnings({"unchecked", "deprecation"})
-    static  <W extends Window, T, K> org.apache.kafka.streams.processor.StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
-                                                                                   final Serde<T> aggValSerde,
-                                                                                   final Windows<W> windows,
-                                                                                   final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return storeFactory(keySerde, aggValSerde, storeName)
-                .windowed(windows.size(), windows.maintainMs(), windows.segments, false)
-                .build();
-    }
-
-    @SuppressWarnings("deprecation")
-    static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
-                                                                       final Serde<T> aggValueSerde,
-                                                                       final String storeName) {
-        return Stores.create(storeName)
-                .withKeys(keySerde)
-                .withValues(aggValueSerde)
-                .persistent()
-                .enableCaching();
+        return (value2, value1) -> joiner.apply(value1, value2);
     }
 
     static <K, V, VR> ValueMapperWithKey<K, V, VR> withKey(final ValueMapper<V, VR> valueMapper) {
         Objects.requireNonNull(valueMapper, "valueMapper can't be null");
-        return new ValueMapperWithKey<K, V, VR>() {
-            @Override
-            public VR apply(final K readOnlyKey, final V value) {
-                return valueMapper.apply(value);
-            }
-        };
+        return (readOnlyKey, value) -> valueMapper.apply(value);
     }
 
-    static <K, V, VR> InternalValueTransformerWithKeySupplier<K, V, VR> toInternalValueTransformerSupplier(final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
+    static <K, V, VR> ValueTransformerWithKeySupplier<K, V, VR> toValueTransformerWithKeySupplier(
+        final ValueTransformerSupplier<V, VR> valueTransformerSupplier) {
         Objects.requireNonNull(valueTransformerSupplier, "valueTransformerSupplier can't be null");
-        return new InternalValueTransformerWithKeySupplier<K, V, VR>() {
+        return new ValueTransformerWithKeySupplier<K, V, VR>() {
             @Override
-            public InternalValueTransformerWithKey<K, V, VR> get() {
+            public ValueTransformerWithKey<K, V, VR> get() {
                 final ValueTransformer<V, VR> valueTransformer = valueTransformerSupplier.get();
-                return new InternalValueTransformerWithKey<K, V, VR>() {
-                    @SuppressWarnings("deprecation")
-                    @Override
-                    public VR punctuate(final long timestamp) {
-                        return valueTransformer.punctuate(timestamp);
-                    }
-
+                return new ValueTransformerWithKey<K, V, VR>() {
                     @Override
                     public void init(final ProcessorContext context) {
                         valueTransformer.init(context);
@@ -158,37 +129,20 @@ public abstract class AbstractStream<K> {
                     }
                 };
             }
+
+            @Override
+            public Set<StoreBuilder<?>> stores() {
+                return valueTransformerSupplier.stores();
+            }
         };
     }
 
-    static <K, V, VR> InternalValueTransformerWithKeySupplier<K, V, VR> toInternalValueTransformerSupplier(final ValueTransformerWithKeySupplier<K, V, VR> valueTransformerWithKeySupplier) {
-        Objects.requireNonNull(valueTransformerWithKeySupplier, "valueTransformerSupplier can't be null");
-        return new InternalValueTransformerWithKeySupplier<K, V, VR>() {
-            @Override
-            public InternalValueTransformerWithKey<K, V, VR> get() {
-                final ValueTransformerWithKey<K, V, VR> valueTransformerWithKey = valueTransformerWithKeySupplier.get();
-                return new InternalValueTransformerWithKey<K, V, VR>() {
-                    @Override
-                    public VR punctuate(final long timestamp) {
-                        throw new StreamsException("ValueTransformerWithKey#punctuate should not be called.");
-                    }
+    // for testing only
+    public Serde<K> keySerde() {
+        return keySerde;
+    }
 
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        valueTransformerWithKey.init(context);
-                    }
-
-                    @Override
-                    public VR transform(final K readOnlyKey, final V value) {
-                        return valueTransformerWithKey.transform(readOnlyKey, value);
-                    }
-
-                    @Override
-                    public void close() {
-                        valueTransformerWithKey.close();
-                    }
-                };
-            }
-        };
+    public Serde<V> valueSerde() {
+        return valueSerde;
     }
 }

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import org.apache.kafka.streams.processor.StateStore;
 
 import java.util.Collections;
@@ -23,116 +25,77 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ProcessorTopology {
+    private final Logger log = LoggerFactory.getLogger(ProcessorTopology.class);
 
-    private final List<ProcessorNode> processorNodes;
-    private final Map<String, SourceNode> sourcesByTopic;
-    private final Map<String, SinkNode> sinksByTopic;
+    private final List<ProcessorNode<?, ?>> processorNodes;
+    private final Map<String, SourceNode<?, ?>> sourceNodesByName;
+    private final Map<String, SourceNode<?, ?>> sourceNodesByTopic;
+    private final Map<String, SinkNode<?, ?>> sinksByTopic;
+    private final Set<String> terminalNodes;
     private final List<StateStore> stateStores;
-    private final List<StateStore> globalStateStores;
-    private final Map<String, String> storeToChangelogTopic;
     private final Set<String> repartitionTopics;
 
-    public static ProcessorTopology with(final List<ProcessorNode> processorNodes,
-                                         final Map<String, SourceNode> sourcesByTopic,
-                                         final List<StateStore> stateStoresByName,
-                                         final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(processorNodes,
-                sourcesByTopic,
-                Collections.<String, SinkNode>emptyMap(),
-                stateStoresByName,
-                Collections.<StateStore>emptyList(),
-                storeToChangelogTopic,
-                Collections.<String>emptySet());
-    }
+    // the following contains entries for the entire topology, eg stores that do not belong to this ProcessorTopology
+    private final List<StateStore> globalStateStores;
+    private final Map<String, String> storeToChangelogTopic;
 
-    static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
-                                         final Map<String, SourceNode> sourcesByTopic) {
-        return new ProcessorTopology(processorNodes,
-                sourcesByTopic,
-                Collections.<String, SinkNode>emptyMap(),
-                Collections.<StateStore>emptyList(),
-                Collections.<StateStore>emptyList(),
-                Collections.<String, String>emptyMap(),
-                Collections.<String>emptySet());
-    }
-
-    static ProcessorTopology withLocalStores(final List<StateStore> stateStores,
-                                             final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                Collections.<String, SourceNode>emptyMap(),
-                Collections.<String, SinkNode>emptyMap(),
-                stateStores,
-                Collections.<StateStore>emptyList(),
-                storeToChangelogTopic,
-                Collections.<String>emptySet());
-    }
-
-    static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
-                                              final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                Collections.<String, SourceNode>emptyMap(),
-                Collections.<String, SinkNode>emptyMap(),
-                Collections.<StateStore>emptyList(),
-                stateStores,
-                storeToChangelogTopic,
-                Collections.<String>emptySet());
-    }
-
-    static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
-                                                   final Map<String, SourceNode> sourcesByTopic,
-                                                   final Set<String> repartitionTopics) {
-        return new ProcessorTopology(processorNodes,
-                sourcesByTopic,
-                Collections.<String, SinkNode>emptyMap(),
-                Collections.<StateStore>emptyList(),
-                Collections.<StateStore>emptyList(),
-                Collections.<String, String>emptyMap(),
-                repartitionTopics);
-    }
-
-    public ProcessorTopology(final List<ProcessorNode> processorNodes,
-                             final Map<String, SourceNode> sourcesByTopic,
-                             final Map<String, SinkNode> sinksByTopic,
+    public ProcessorTopology(final List<ProcessorNode<?, ?>> processorNodes,
+                             final Map<String, SourceNode<?, ?>> sourceNodesByTopic,
+                             final Map<String, SinkNode<?, ?>> sinksByTopic,
                              final List<StateStore> stateStores,
                              final List<StateStore> globalStateStores,
-                             final Map<String, String> stateStoreToChangelogTopic,
+                             final Map<String, String> storeToChangelogTopic,
                              final Set<String> repartitionTopics) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
-        this.sourcesByTopic = Collections.unmodifiableMap(sourcesByTopic);
+        this.sourceNodesByTopic = new HashMap<>(sourceNodesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
         this.stateStores = Collections.unmodifiableList(stateStores);
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
-        this.storeToChangelogTopic = Collections.unmodifiableMap(stateStoreToChangelogTopic);
+        this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
+
+        this.terminalNodes = new HashSet<>();
+        for (final ProcessorNode<?, ?> node : processorNodes) {
+            if (node.isTerminalNode()) {
+                terminalNodes.add(node.name());
+            }
+        }
+
+        this.sourceNodesByName = new HashMap<>();
+        for (final SourceNode<?, ?> source : sourceNodesByTopic.values()) {
+            sourceNodesByName.put(source.name(), source);
+        }
     }
 
     public Set<String> sourceTopics() {
-        return sourcesByTopic.keySet();
+        return sourceNodesByTopic.keySet();
     }
 
-    public SourceNode source(String topic) {
-        return sourcesByTopic.get(topic);
+    public SourceNode<?, ?> source(final String topic) {
+        return sourceNodesByTopic.get(topic);
     }
 
-    public Set<SourceNode> sources() {
-        return new HashSet<>(sourcesByTopic.values());
+    public Set<SourceNode<?, ?>> sources() {
+        return new HashSet<>(sourceNodesByTopic.values());
     }
 
     public Set<String> sinkTopics() {
         return sinksByTopic.keySet();
     }
 
-    public SinkNode sink(String topic) {
+    public SinkNode<?, ?> sink(final String topic) {
         return sinksByTopic.get(topic);
     }
 
-    public Set<SinkNode> sinks() {
-        return new HashSet<>(sinksByTopic.values());
+    public Set<String> terminalNodes() {
+        return terminalNodes;
     }
 
-    public List<ProcessorNode> processors() {
+    public List<ProcessorNode<?, ?>> processors() {
         return processorNodes;
     }
 
@@ -148,17 +111,65 @@ public class ProcessorTopology {
         return storeToChangelogTopic;
     }
 
-    boolean isRepartitionTopic(String topic) {
+    boolean isRepartitionTopic(final String topic) {
         return repartitionTopics.contains(topic);
     }
 
-    private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {
+    boolean hasStateWithChangelogs() {
+        for (final StateStore stateStore : stateStores) {
+            if (storeToChangelogTopic.containsKey(stateStore.name())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasPersistentLocalStore() {
+        for (final StateStore store : stateStores) {
+            if (store.persistent()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasPersistentGlobalStore() {
+        for (final StateStore store : globalStateStores) {
+            if (store.persistent()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void updateSourceTopics(final Map<String, List<String>> sourceTopicsByName) {
+        if (!sourceTopicsByName.keySet().equals(sourceNodesByName.keySet())) {
+            log.error("Set of source nodes do not match: \n" +
+                "sourceNodesByName = {}\n" +
+                "sourceTopicsByName = {}",
+                sourceNodesByName.keySet(), sourceTopicsByName.keySet());
+            throw new IllegalStateException("Tried to update source topics but source nodes did not match");
+        }
+        sourceNodesByTopic.clear();
+        for (final Map.Entry<String, List<String>> sourceEntry : sourceTopicsByName.entrySet()) {
+            final String nodeName = sourceEntry.getKey();
+            for (final String topic : sourceEntry.getValue()) {
+                if (sourceNodesByTopic.containsKey(topic)) {
+                    throw new IllegalStateException("Topic " + topic + " was already registered to source node "
+                        + sourceNodesByTopic.get(topic).name());
+                }
+                sourceNodesByTopic.put(topic, sourceNodesByName.get(nodeName));
+            }
+        }
+    }
+
+    private String childrenToString(final String indent, final List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
         }
 
-        StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
-        for (ProcessorNode child : children) {
+        final StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
+        for (final ProcessorNode<?, ?> child : children) {
             sb.append(child.name());
             sb.append(", ");
         }
@@ -166,7 +177,7 @@ public class ProcessorTopology {
         sb.append("]\n");
 
         // recursively print children
-        for (ProcessorNode<?, ?> child : children) {
+        for (final ProcessorNode<?, ?> child : children) {
             sb.append(child.toString(indent)).append(childrenToString(indent, child.children()));
         }
         return sb.toString();
@@ -188,12 +199,36 @@ public class ProcessorTopology {
      * @return A string representation of this instance.
      */
     public String toString(final String indent) {
+        final Map<SourceNode<?, ?>, List<String>> sourceToTopics = new HashMap<>();
+        for (final Map.Entry<String, SourceNode<?, ?>> sourceNodeEntry : sourceNodesByTopic.entrySet()) {
+            final String topic = sourceNodeEntry.getKey();
+            final SourceNode<?, ?> source = sourceNodeEntry.getValue();
+            sourceToTopics.computeIfAbsent(source, s -> new ArrayList<>());
+            sourceToTopics.get(source).add(topic);
+        }
+
         final StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
-        for (SourceNode<?, ?> source : sourcesByTopic.values()) {
-            sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
+        for (final Map.Entry<SourceNode<?, ?>, List<String>> sourceNodeEntry : sourceToTopics.entrySet()) {
+            final SourceNode<?, ?> source = sourceNodeEntry.getKey();
+            final List<String> topics = sourceNodeEntry.getValue();
+            sb.append(source.toString(indent + "\t"))
+                .append(topicsToString(indent + "\t", topics))
+                .append(childrenToString(indent + "\t", source.children()));
         }
+        return sb.toString();
+    }
+
+    private static String topicsToString(final String indent, final List<String> topics) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append(indent).append("\ttopics:\t\t[");
+        for (final String topic : topics) {
+            sb.append(topic);
+            sb.append(", ");
+        }
+        sb.setLength(sb.length() - 2);  // remove the last comma
+        sb.append("]\n");
         return sb.toString();
     }
 

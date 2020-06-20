@@ -1,6 +1,6 @@
 ## Contributing to Kafka
 
-*Before opening a pull request*, review the [Contributing](http://kafka.apache.org/contributing.html) and [Contributing Code Changes](https://cwiki.apache.org/confluence/display/KAFKA/Contributing+Code+Changes) pages.
+*Before opening a pull request*, review the [Contributing](https://kafka.apache.org/contributing.html) and [Contributing Code Changes](https://cwiki.apache.org/confluence/display/KAFKA/Contributing+Code+Changes) pages.
 
 It lists steps that are required before creating a PR.
 

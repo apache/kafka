@@ -29,13 +29,13 @@ import org.apache.kafka.connect.errors.DataException;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 
@@ -46,28 +46,6 @@ public class ConnectHeaders implements Headers {
 
     private static final int EMPTY_HASH = Objects.hash(new LinkedList<>());
 
-    /**
-     * An immutable and therefore sharable empty iterator.
-     */
-    private static final Iterator<Header> EMPTY_ITERATOR = new Iterator<Header>() {
-        @Override
-        public boolean hasNext() {
-            return false;
-        }
-
-        @Override
-        public Header next() {
-            throw new NoSuchElementException();
-        }
-
-        @Override
-        public void remove() {
-            throw new IllegalStateException();
-        }
-    };
-
-
-    // This field is set lazily, but once set to a list it is never set back to null
     private LinkedList<Header> headers;
 
     public ConnectHeaders() {
@@ -265,16 +243,14 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Iterator<Header> iterator() {
-        if (headers != null) {
-            return headers.iterator();
-        }
-        return EMPTY_ITERATOR;
+        return headers == null ? Collections.emptyIterator() :
+            headers.iterator();
     }
 
     @Override
     public Headers remove(String key) {
         checkKey(key);
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             Iterator<Header> iterator = iterator();
             while (iterator.hasNext()) {
                 if (iterator.next().key().equals(key)) {
@@ -287,7 +263,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Headers retainLatest() {
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             Set<String> keys = new HashSet<>();
             ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
@@ -304,7 +280,7 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers retainLatest(String key) {
         checkKey(key);
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             boolean found = false;
             ListIterator<Header> iter = headers.listIterator(headers.size());
             while (iter.hasPrevious()) {
@@ -322,7 +298,7 @@ public class ConnectHeaders implements Headers {
     @Override
     public Headers apply(String key, HeaderTransform transform) {
         checkKey(key);
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             ListIterator<Header> iter = headers.listIterator();
             while (iter.hasNext()) {
                 Header orig = iter.next();
@@ -341,7 +317,7 @@ public class ConnectHeaders implements Headers {
 
     @Override
     public Headers apply(HeaderTransform transform) {
-        if (!headers.isEmpty()) {
+        if (!isEmpty()) {
             ListIterator<Header> iter = headers.listIterator();
             while (iter.hasNext()) {
                 Header orig = iter.next();

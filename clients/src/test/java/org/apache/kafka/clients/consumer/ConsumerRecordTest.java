@@ -21,6 +21,8 @@ import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
+import java.util.Optional;
+
 import static org.junit.Assert.assertEquals;
 
 public class ConsumerRecordTest {
@@ -45,6 +47,7 @@ public class ConsumerRecordTest {
         assertEquals(ConsumerRecord.NULL_CHECKSUM, record.checksum());
         assertEquals(ConsumerRecord.NULL_SIZE, record.serializedKeySize());
         assertEquals(ConsumerRecord.NULL_SIZE, record.serializedValueSize());
+        assertEquals(Optional.empty(), record.leaderEpoch());
         assertEquals(new RecordHeaders(), record.headers());
     }
 

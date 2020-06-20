@@ -21,29 +21,30 @@ import java.util.NoSuchElementException;
 
 public class QuickUnion<T> {
 
-    private HashMap<T, T> ids = new HashMap<>();
+    private final HashMap<T, T> ids = new HashMap<>();
 
-    public void add(T id) {
+    public void add(final T id) {
         ids.put(id, id);
     }
 
-    public boolean exists(T id) {
+    public boolean exists(final T id) {
         return ids.containsKey(id);
     }
 
     /**
      * @throws NoSuchElementException if the parent of this node is null
      */
-    public T root(T id) {
+    public T root(final T id) {
         T current = id;
         T parent = ids.get(current);
 
-        if (parent == null)
+        if (parent == null) {
             throw new NoSuchElementException("id: " + id.toString());
+        }
 
         while (!parent.equals(current)) {
-            // do the path compression
-            T grandparent = ids.get(parent);
+            // do the path splitting
+            final T grandparent = ids.get(parent);
             ids.put(current, grandparent);
 
             current = parent;
@@ -53,18 +54,19 @@ public class QuickUnion<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public void unite(T id1, T... idList) {
-        for (T id2 : idList) {
+    void unite(final T id1, final T... idList) {
+        for (final T id2 : idList) {
             unitePair(id1, id2);
         }
     }
 
-    private void unitePair(T id1, T id2) {
-        T root1 = root(id1);
-        T root2 = root(id2);
+    private void unitePair(final T id1, final T id2) {
+        final T root1 = root(id1);
+        final T root2 = root(id2);
 
-        if (!root1.equals(root2))
+        if (!root1.equals(root2)) {
             ids.put(root1, root2);
+        }
     }
 
 }

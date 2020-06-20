@@ -16,57 +16,67 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
-import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StreamTask;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
-import org.apache.kafka.streams.processor.internals.WrappedBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
+import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
+import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
+
+public class InternalMockProcessorContext
+    extends AbstractProcessorContext
+    implements RecordCollector.Supplier {
 
     private final File stateDir;
-    private final Metrics metrics;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
     private final Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
     private final ToInternal toInternal = new ToInternal();
 
+    private TaskType taskType = TaskType.ACTIVE;
     private Serde<?> keySerde;
-    private Serde<?> valSerde;
+    private Serde<?> valueSerde;
     private long timestamp = -1L;
 
     public InternalMockProcessorContext() {
         this(null,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null
         );
@@ -74,7 +84,56 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config) {
-        this(stateDir, null, null, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+        this(
+            stateDir,
+            null,
+            null,
+            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+            config,
+            null,
+            null
+        );
+    }
+
+    public InternalMockProcessorContext(final StreamsMetricsImpl streamsMetrics) {
+        this(
+            null,
+            null,
+            null,
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            null,
+            null
+        );
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final StreamsConfig config,
+                                        final RecordCollector collector) {
+        this(
+            stateDir,
+            null,
+            null,
+            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+            config,
+            () -> collector,
+            null
+        );
+    }
+
+    public InternalMockProcessorContext(final File stateDir,
+                                        final Serde<?> keySerde,
+                                        final Serde<?> valueSerde,
+                                        final StreamsConfig config) {
+        this(
+            stateDir,
+            keySerde,
+            valueSerde,
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            config,
+            null,
+            null
+        );
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
@@ -89,54 +148,49 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()), new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return collector;
-                }
-            },
+            new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            () -> collector,
             null
         );
     }
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
-                                        final Serde<?> valSerde,
+                                        final Serde<?> valueSerde,
                                         final RecordCollector collector,
                                         final ThreadCache cache) {
-        this(stateDir,
+        this(
+            stateDir,
             keySerde,
-            valSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock"),
-            new StreamsConfig(StreamsTestUtils.minimalStreamsConfig()),
-            new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return collector;
-                }
-            },
+            valueSerde,
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            () -> collector,
             cache
         );
     }
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
-                                        final Serde<?> valSerde,
+                                        final Serde<?> valueSerde,
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
                                         final ThreadCache cache) {
-        super(new TaskId(0, 0),
+        super(
+            new TaskId(0, 0),
             config,
             metrics,
             null,
-            cache);
+            cache
+        );
+        super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
-        this.valSerde = valSerde;
-        this.metrics = metrics.registry();
+        this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
+        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
     }
 
     @Override
@@ -153,11 +207,10 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this.keySerde = keySerde;
     }
 
-    public void setValueSerde(final Serde<?> valSerde) {
-        this.valSerde = valSerde;
+    public void setValueSerde(final Serde<?> valueSerde) {
+        this.valueSerde = valueSerde;
     }
 
-    // serdes will override whatever specified in the configs
     @Override
     public Serde<?> keySerde() {
         return keySerde;
@@ -165,25 +218,23 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
 
     @Override
     public Serde<?> valueSerde() {
-        return valSerde;
+        return valueSerde;
     }
 
     // state mgr will be overridden by the state dir and store maps
     @Override
-    public void initialized() {}
+    public void initialize() {}
 
     @Override
     public File stateDir() {
         if (stateDir == null) {
             throw new UnsupportedOperationException("State directory not specified");
         }
-
         return stateDir;
     }
 
     @Override
     public void register(final StateStore store,
-                         final boolean deprecatedAndIgnoredLoggingEnabled,
                          final StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
@@ -195,48 +246,53 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     }
 
     @Override
-    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    @Deprecated
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 
     @Override
-    public void schedule(final long interval) { }
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
+        throw new UnsupportedOperationException("schedule() not supported.");
+    }
 
     @Override
-    public void commit() { }
+    public void commit() {}
 
     @Override
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(final K key, final V value) {
+    public void forward(final Object key, final Object value) {
         forward(key, value, To.all());
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
-        forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
+    @Deprecated
+    public void forward(final Object key, final Object value, final int childIndex) {
+        forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    @Deprecated
+    public void forward(final Object key, final Object value, final String childName) {
         forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
+    public void forward(final Object key, final Object value, final To to) {
         toInternal.update(to);
         if (toInternal.hasTimestamp()) {
             setTime(toInternal.timestamp());
         }
-        final ProcessorNode thisNode = currentNode;
+        final ProcessorNode<?, ?> thisNode = currentNode;
         try {
-            for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            for (final ProcessorNode<?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    childNode.process(key, value);
-                    toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple Processors and toInternal might have been modified
+                    ((ProcessorNode<Object, Object>) childNode).process(key, value);
+                    toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
+                                           // Processors and toInternal might have been modified
                 }
             }
         } finally {
@@ -248,7 +304,13 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     // and also not throwing exceptions if record context is not available.
     public void setTime(final long timestamp) {
         if (recordContext != null) {
-            recordContext = new ProcessorRecordContext(timestamp, recordContext.offset(), recordContext.partition(), recordContext.topic());
+            recordContext = new ProcessorRecordContext(
+                timestamp,
+                recordContext.offset(),
+                recordContext.partition(),
+                recordContext.topic(),
+                recordContext.headers()
+            );
         }
         this.timestamp = timestamp;
     }
@@ -285,45 +347,57 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return recordContext.offset();
     }
 
-    Map<String, StateStore> allStateStores() {
-        return Collections.unmodifiableMap(storeMap);
+    @Override
+    public Headers headers() {
+        if (recordContext == null) {
+            return new RecordHeaders();
+        }
+        return recordContext.headers();
+    }
+
+    @Override
+    public TaskType taskType() {
+        return taskType;
+    }
+
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        recordCollector().send(
+            storeName + "-changelog",
+            key,
+            value,
+            null,
+            taskId().partition,
+            timestamp,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER);
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        taskType = TaskType.ACTIVE;
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        taskType = TaskType.STANDBY;
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache().addDirtyEntryFlushListener(namespace, listener);
     }
 
     public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
+        final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreFuncs.get(storeName));
 
-        final BatchingStateRestoreCallback restoreCallback = getBatchingRestoreCallback(restoreFuncs.get(storeName));
-        final StateRestoreListener restoreListener = getStateRestoreListener(restoreCallback);
-
-        restoreListener.onRestoreStart(null, storeName, 0L, 0L);
-
-        List<KeyValue<byte[], byte[]>> records = new ArrayList<>();
-        for (KeyValue<byte[], byte[]> keyValue : changeLog) {
-            records.add(keyValue);
+        final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
+        for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
+            records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
         }
-
-        restoreCallback.restoreAll(records);
-
-        restoreListener.onRestoreEnd(null, storeName, 0L);
+        restoreCallback.restoreBatch(records);
     }
-
-    public void close() {
-        metrics.close();
-    }
-
-    private StateRestoreListener getStateRestoreListener(StateRestoreCallback restoreCallback) {
-        if (restoreCallback instanceof StateRestoreListener) {
-            return (StateRestoreListener) restoreCallback;
-        }
-
-        return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
-    }
-
-    private BatchingStateRestoreCallback getBatchingRestoreCallback(StateRestoreCallback restoreCallback) {
-        if (restoreCallback instanceof BatchingStateRestoreCallback) {
-            return (BatchingStateRestoreCallback) restoreCallback;
-        }
-
-        return new WrappedBatchingStateRestoreCallback(restoreCallback);
-    }
-
 }

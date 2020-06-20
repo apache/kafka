@@ -49,9 +49,4 @@ public class StringDeserializer implements Deserializer<String> {
             throw new SerializationException("Error when deserializing byte[] to string due to unsupported encoding " + encoding);
         }
     }
-
-    @Override
-    public void close() {
-        // nothing to do
-    }
 }

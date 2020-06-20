@@ -56,13 +56,12 @@ public class SessionKeySchemaTest {
 
     @Before
     public void before() {
-        sessionKeySchema.init("topic");
-        final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(KeyValue.pair(Bytes.wrap(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(0, 0)))), 1),
-                                                                  KeyValue.pair(Bytes.wrap(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0)))), 2),
-                                                                  KeyValue.pair(Bytes.wrap(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(0, 0)))), 3),
-                                                                  KeyValue.pair(Bytes.wrap(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(10, 20)))), 4),
-                                                                  KeyValue.pair(Bytes.wrap(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(10, 20)))), 5),
-                                                                  KeyValue.pair(Bytes.wrap(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(10, 20)))), 6));
+        final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(KeyValue.pair(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(0, 0))), 1),
+                                                                  KeyValue.pair(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0))), 2),
+                                                                  KeyValue.pair(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(0, 0))), 3),
+                                                                  KeyValue.pair(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(10, 20))), 4),
+                                                                  KeyValue.pair(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new SessionWindow(10, 20))), 5),
+                                                                  KeyValue.pair(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new SessionWindow(10, 20))), 6));
         iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
     }
 
@@ -90,86 +89,80 @@ public class SessionKeySchemaTest {
     
     @Test
     public void testUpperBoundWithLargeTimestamps() {
-        Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
+        final Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
         assertThat(
             "shorter key with max timestamp should be in range",
-            upper.compareTo(Bytes.wrap(
-                    SessionKeySchema.toBinary(
-                    new Windowed<>(
-                        Bytes.wrap(new byte[]{0xA}),
-                        new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-                )
+            upper.compareTo(SessionKeySchema.toBinary(
+                new Windowed<>(
+                    Bytes.wrap(new byte[]{0xA}),
+                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
             )) >= 0
         );
 
         assertThat(
             "shorter key with max timestamp should be in range",
-            upper.compareTo(Bytes.wrap(
-                    SessionKeySchema.toBinary(
-                    new Windowed<>(
-                        Bytes.wrap(new byte[]{0xA, 0xB}),
-                        new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-                )
+            upper.compareTo(SessionKeySchema.toBinary(
+                new Windowed<>(
+                    Bytes.wrap(new byte[]{0xA, 0xB}),
+                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
+
             )) >= 0
         );
 
-        assertThat(upper, equalTo(Bytes.wrap(SessionKeySchema.toBinary(
+        assertThat(upper, equalTo(SessionKeySchema.toBinary(
             new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
-        ));
+        );
     }
 
     @Test
     public void testUpperBoundWithKeyBytesLargerThanFirstTimestampByte() {
-        Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), Long.MAX_VALUE);
+        final Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), Long.MAX_VALUE);
 
         assertThat(
             "shorter key with max timestamp should be in range",
-            upper.compareTo(Bytes.wrap(
-                    SessionKeySchema.toBinary(
-                    new Windowed<>(
-                        Bytes.wrap(new byte[]{0xA, (byte) 0x8F}),
-                        new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
+            upper.compareTo(SessionKeySchema.toBinary(
+                new Windowed<>(
+                    Bytes.wrap(new byte[]{0xA, (byte) 0x8F}),
+                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
                 )
-            )) >= 0
+            ) >= 0
         );
 
-        assertThat(upper, equalTo(Bytes.wrap(SessionKeySchema.toBinary(
+        assertThat(upper, equalTo(SessionKeySchema.toBinary(
             new Windowed<>(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
-        ));
+        );
     }
 
     @Test
     public void testUpperBoundWithZeroTimestamp() {
-        Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
+        final Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
 
-        assertThat(upper, equalTo(Bytes.wrap(SessionKeySchema.toBinary(
-            new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))))
-        ));
+        assertThat(upper, equalTo(SessionKeySchema.toBinary(
+            new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(0, Long.MAX_VALUE))))
+        );
     }
 
     @Test
     public void testLowerBoundWithZeroTimestamp() {
-        Bytes lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
-        assertThat(lower, equalTo(Bytes.wrap(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))))));
+        final Bytes lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
+        assertThat(lower, equalTo(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
     }
 
     @Test
     public void testLowerBoundMatchesTrailingZeros() {
-        Bytes lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
+        final Bytes lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
         assertThat(
             "appending zeros to key should still be in range",
-            lower.compareTo(Bytes.wrap(
-                    SessionKeySchema.toBinary(
-                    new Windowed<>(
-                        Bytes.wrap(new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
-                        new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
-                )
+            lower.compareTo(SessionKeySchema.toBinary(
+                new Windowed<>(
+                    Bytes.wrap(new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
+                    new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
             )) < 0
         );
 
-        assertThat(lower, equalTo(Bytes.wrap(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))))));
+        assertThat(lower, equalTo(SessionKeySchema.toBinary(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
     }
 
     @Test
@@ -235,7 +228,7 @@ public class SessionKeySchemaTest {
     public void shouldExtractBytesKeyFromBinary() {
         final Bytes bytesKey = Bytes.wrap(key.getBytes());
         final Windowed<Bytes> windowedBytesKey = new Windowed<>(bytesKey, window);
-        final Bytes serialized = Bytes.wrap(SessionKeySchema.toBinary(windowedBytesKey));
+        final Bytes serialized = SessionKeySchema.toBinary(windowedBytesKey);
         assertEquals(windowedBytesKey, SessionKeySchema.from(serialized));
     }
 

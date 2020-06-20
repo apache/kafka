@@ -52,12 +52,16 @@ object ToolsUtils {
         if (maxLengthOfDisplayName < mergedKeyName.length) {
           maxLengthOfDisplayName = mergedKeyName.length
         }
-        (mergedKeyName, value.value())
+        (mergedKeyName, value.metricValue)
     }
     println(s"\n%-${maxLengthOfDisplayName}s   %s".format("Metric Name", "Value"))
     sortedMap.foreach {
       case (metricName, value) =>
-        println(s"%-${maxLengthOfDisplayName}s : %.3f".format(metricName, value))
+        val specifier = value match {
+          case _ @ (_: java.lang.Float | _: java.lang.Double) => "%.3f"
+          case _ => "%s"
+        }
+        println(s"%-${maxLengthOfDisplayName}s : $specifier".format(metricName, value))
     }
   }
 }

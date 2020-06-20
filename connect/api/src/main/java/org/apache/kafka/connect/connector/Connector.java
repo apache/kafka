@@ -19,6 +19,8 @@ package org.apache.kafka.connect.connector;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.components.Versioned;
 
 import java.util.List;
 import java.util.Map;
@@ -27,29 +29,24 @@ import java.util.Map;
  * <p>
  * Connectors manage integration of Kafka Connect with another system, either as an input that ingests
  * data into Kafka or an output that passes data to an external system. Implementations should
- * not use this class directly; they should inherit from SourceConnector or SinkConnector.
+ * not use this class directly; they should inherit from {@link org.apache.kafka.connect.source.SourceConnector SourceConnector}
+ * or {@link org.apache.kafka.connect.sink.SinkConnector SinkConnector}.
  * </p>
  * <p>
  * Connectors have two primary tasks. First, given some configuration, they are responsible for
  * creating configurations for a set of {@link Task}s that split up the data processing. For
  * example, a database Connector might create Tasks by dividing the set of tables evenly among
  * tasks. Second, they are responsible for monitoring inputs for changes that require
- * reconfiguration and notifying the Kafka Connect runtime via the ConnectorContext. Continuing the
+ * reconfiguration and notifying the Kafka Connect runtime via the {@link ConnectorContext}. Continuing the
  * previous example, the connector might periodically check for new tables and notify Kafka Connect of
  * additions and deletions. Kafka Connect will then request new configurations and update the running
  * Tasks.
  * </p>
  */
-public abstract class Connector {
+public abstract class Connector implements Versioned {
 
     protected ConnectorContext context;
 
-    /**
-     * Get the version of this connector.
-     *
-     * @return the version, formatted as a String
-     */
-    public abstract String version();
 
     /**
      * Initialize this connector, using the provided ConnectorContext to notify the runtime of
@@ -80,6 +77,15 @@ public abstract class Connector {
         context = ctx;
         // Ignore taskConfigs. May result in more churn of tasks during recovery if updated configs
         // are very different, but reduces the difficulty of implementing a Connector
+    }
+
+    /**
+     * Returns the context object used to interact with the Kafka Connect runtime.
+     *
+     * @return the context for this Connector.
+     */
+    protected ConnectorContext context() {
+        return context;
     }
 
     /**
@@ -130,13 +136,18 @@ public abstract class Connector {
      */
     public Config validate(Map<String, String> connectorConfigs) {
         ConfigDef configDef = config();
+        if (null == configDef) {
+            throw new ConnectException(
+                String.format("%s.config() must return a ConfigDef that is not null.", this.getClass().getName())
+            );
+        }
         List<ConfigValue> configValues = configDef.validate(connectorConfigs);
         return new Config(configValues);
     }
 
     /**
      * Define the configuration for the connector.
-     * @return The ConfigDef for this connector.
+     * @return The ConfigDef for this connector; may not be null.
      */
     public abstract ConfigDef config();
 }

@@ -31,7 +31,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
   val brokerId = 0
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
     super.tearDown()
   }

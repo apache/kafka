@@ -44,7 +44,7 @@ public class WordCountProcessorTest {
                 .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                 .build();
         store.init(context, store);
-        context.register(store, false, null);
+        context.register(store, null);
 
         // Create and initialize the processor under test
         final Processor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
@@ -53,8 +53,7 @@ public class WordCountProcessorTest {
         // send a record to the processor
         processor.process("key", "alpha beta gamma alpha");
 
-        // note that the processor commits, but does not forward, during process()
-        assertTrue(context.committed());
+        // note that the processor does not forward during process()
         assertTrue(context.forwarded().isEmpty());
 
         // now, we trigger the punctuator, which iterates over the state store and forwards the contents.

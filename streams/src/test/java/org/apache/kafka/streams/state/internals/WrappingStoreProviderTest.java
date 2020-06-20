@@ -17,10 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.test.StateStoreProviderStub;
 import org.junit.Before;
@@ -42,24 +45,32 @@ public class WrappingStoreProviderTest {
         final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub(false);
 
 
-        stubProviderOne.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", "app-id", String.class, String.class));
+        stubProviderOne.addStore("kv", Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv"),
+                Serdes.serdeFrom(String.class),
+                Serdes.serdeFrom(String.class))
+                .build());
         stubProviderOne.addStore("window", new NoOpWindowStore());
-        stubProviderTwo.addStore("kv", StateStoreTestUtils.newKeyValueStore("kv", "app-id", String.class, String.class));
+        stubProviderTwo.addStore("kv", Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv"),
+                Serdes.serdeFrom(String.class),
+                Serdes.serdeFrom(String.class))
+                .build());
         stubProviderTwo.addStore("window", new NoOpWindowStore());
-
         wrappingStoreProvider = new WrappingStoreProvider(
-                Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo));
+            Arrays.asList(stubProviderOne, stubProviderTwo),
+            StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.keyValueStore())
+        );
     }
 
     @Test
     public void shouldFindKeyValueStores() {
-        List<ReadOnlyKeyValueStore<String, String>> results =
+        final List<ReadOnlyKeyValueStore<String, String>> results =
                 wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
         assertEquals(2, results.size());
     }
 
     @Test
     public void shouldFindWindowStores() {
+        wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("window", windowStore()));
         final List<ReadOnlyWindowStore<Object, Object>>
                 windowStores =
                 wrappingStoreProvider.stores("window", windowStore());
@@ -68,6 +79,7 @@ public class WrappingStoreProviderTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionIfNoStoreOfTypeFound() {
-        wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.keyValueStore());
+        wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore()));
+        wrappingStoreProvider.stores("doesn't exist", QueryableStoreTypes.<String, String>keyValueStore());
     }
 }

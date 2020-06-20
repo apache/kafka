@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
@@ -40,7 +39,7 @@ public class Rate implements MeasurableStat {
     }
 
     public Rate(TimeUnit unit) {
-        this(unit, new SampledTotal());
+        this(unit, new WindowedSum());
     }
 
     public Rate(SampledStat stat) {
@@ -115,24 +114,10 @@ public class Rate implements MeasurableStat {
         }
     }
 
-    public static class SampledTotal extends SampledStat {
-
-        public SampledTotal() {
-            super(0.0d);
-        }
-
-        @Override
-        protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
-            sample.value += value;
-        }
-
-        @Override
-        public double combine(List<Sample> samples, MetricConfig config, long now) {
-            double total = 0.0;
-            for (Sample sample : samples)
-                total += sample.value;
-            return total;
-        }
-
+    /**
+     * @deprecated since 2.4 Use {@link WindowedSum} instead.
+     */
+    @Deprecated
+    public static class SampledTotal extends WindowedSum {
     }
 }

@@ -24,11 +24,7 @@ import java.nio.ByteBuffer;
 public class NetworkSend extends ByteBufferSend {
 
     public NetworkSend(String destination, ByteBuffer buffer) {
-        super(destination, sizeDelimit(buffer));
-    }
-
-    private static ByteBuffer[] sizeDelimit(ByteBuffer buffer) {
-        return new ByteBuffer[] {sizeBuffer(buffer.remaining()), buffer};
+        super(destination, sizeBuffer(buffer.remaining()), buffer);
     }
 
     private static ByteBuffer sizeBuffer(int size) {

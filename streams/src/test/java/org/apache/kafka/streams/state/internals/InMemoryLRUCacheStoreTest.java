@@ -19,19 +19,17 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
-
 import java.util.Arrays;
 import java.util.List;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
@@ -39,16 +37,15 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context) {
-
-        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder = Stores.keyValueStoreBuilder(
                 Stores.lruMap("my-store", 10),
                 (Serde<K>) context.keySerde(),
                 (Serde<V>) context.valueSerde());
 
-        final StateStore store = storeBuilder.build();
+        final KeyValueStore<K, V> store = storeBuilder.build();
         store.init(context, store);
 
-        return (KeyValueStore<K, V>) store;
+        return store;
     }
 
     @Test
@@ -61,7 +58,7 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         assertThat(store.approximateNumEntries(), equalTo(3L));
 
-        for (KeyValue<Integer, String> kvPair : kvPairs) {
+        for (final KeyValue<Integer, String> kvPair : kvPairs) {
             assertThat(store.get(kvPair.key), equalTo(kvPair.value));
         }
     }
@@ -83,7 +80,7 @@ public class InMemoryLRUCacheStoreTest extends AbstractKeyValueStoreTest {
 
         assertThat(store.approximateNumEntries(), equalTo(3L));
         
-        for (KeyValue<Integer, String> kvPair : updatedKvPairs) {
+        for (final KeyValue<Integer, String> kvPair : updatedKvPairs) {
             assertThat(store.get(kvPair.key), equalTo(kvPair.value));
         }
     }

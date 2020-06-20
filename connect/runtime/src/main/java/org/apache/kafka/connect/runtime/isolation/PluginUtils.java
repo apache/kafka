@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
 /**
  * Connect plugin utility methods.
@@ -43,7 +44,7 @@ public class PluginUtils {
     private static final Logger log = LoggerFactory.getLogger(PluginUtils.class);
 
     // Be specific about javax packages and exclude those existing in Java SE and Java EE libraries.
-    private static final String BLACKLIST = "^(?:"
+    private static final Pattern BLACKLIST = Pattern.compile("^(?:"
             + "java"
             + "|javax\\.accessibility"
             + "|javax\\.activation"
@@ -120,15 +121,26 @@ public class PluginUtils {
             + "|org\\.xml\\.sax"
             + "|org\\.apache\\.kafka"
             + "|org\\.slf4j"
-            + ")\\..*$";
+            + ")\\..*$");
 
-    private static final String WHITELIST = "^org\\.apache\\.kafka\\.connect\\.(?:"
-            + "transforms\\.(?!Transformation$).*"
+    // If the base interface or class that will be used to identify Connect plugins resides within
+    // the same java package as the plugins that need to be loaded in isolation (and thus are
+    // added to the WHITELIST), then this base interface or class needs to be excluded in the
+    // regular expression pattern
+    private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.(?:connect\\.(?:"
+            + "transforms\\.(?!Transformation|predicates\\.Predicate$).*"
             + "|json\\..*"
             + "|file\\..*"
+            + "|mirror\\..*"
+            + "|mirror-client\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
-            + ")$";
+            + "|storage\\.SimpleHeaderConverter"
+            + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
+            + "|connector\\.policy\\.(?!ConnectorClientConfig(?:OverridePolicy|Request(?:\\$ClientType)?)$).*"
+            + ")"
+            + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
+            + ")$");
 
     private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
             .Filter<Path>() {
@@ -146,7 +158,7 @@ public class PluginUtils {
      * @return true if this class should be loaded in isolation, false otherwise.
      */
     public static boolean shouldLoadInIsolation(String name) {
-        return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
+        return !(BLACKLIST.matcher(name).matches() && !WHITELIST.matcher(name).matches());
     }
 
     /**

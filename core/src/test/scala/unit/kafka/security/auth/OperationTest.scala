@@ -20,9 +20,9 @@ package kafka.security.auth
 import org.apache.kafka.common.acl.AclOperation
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
-class OperationTest extends JUnitSuite {
+@deprecated("Scala Authorizer API classes gave been deprecated", "Since 2.5")
+class OperationTest {
   /**
     * Test round trip conversions between org.apache.kafka.common.acl.AclOperation and
     * kafka.security.auth.Operation.

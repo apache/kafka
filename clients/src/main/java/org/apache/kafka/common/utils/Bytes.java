@@ -25,6 +25,8 @@ import java.util.Comparator;
  */
 public class Bytes implements Comparable<Bytes> {
 
+    public static final byte[] EMPTY = new byte[0];
+
     private static final char[] HEX_CHARS_UPPER = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
     private final byte[] bytes;
@@ -136,6 +138,32 @@ public class Bytes implements Comparable<Bytes> {
             }
         }
         return result.toString();
+    }
+
+    /**
+     * Increment the underlying byte array by adding 1. Throws an IndexOutOfBoundsException if incrementing would cause
+     * the underlying input byte array to overflow.
+     *
+     * @param input - The byte array to increment
+     * @return A new copy of the incremented byte array.
+     */
+    public static Bytes increment(Bytes input) throws IndexOutOfBoundsException {
+        byte[] inputArr = input.get();
+        byte[] ret = new byte[inputArr.length];
+        int carry = 1;
+        for (int i = inputArr.length - 1; i >= 0; i--) {
+            if (inputArr[i] == (byte) 0xFF && carry == 1) {
+                ret[i] = (byte) 0x00;
+            } else {
+                ret[i] = (byte) (inputArr[i] + carry);
+                carry = 0;
+            }
+        }
+        if (carry == 0) {
+            return wrap(ret);
+        } else {
+            throw new IndexOutOfBoundsException();
+        }
     }
 
     /**

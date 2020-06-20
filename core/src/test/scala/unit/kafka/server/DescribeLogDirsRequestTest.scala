@@ -17,18 +17,19 @@
 
 package kafka.server
 
+import java.io.File
+
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.message.DescribeLogDirsRequestData
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
-import java.io.File
 
 class DescribeLogDirsRequestTest extends BaseRequestTest {
-
-  override def numBrokers: Int = 1
-  override def logDirCount: Int = 2
+  override val logDirCount = 2
+  override val brokerCount: Int = 1
 
   val topic = "topic"
   val partitionNum = 2
@@ -41,11 +42,11 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
     servers.head.replicaManager.handleLogDirFailure(offlineDir)
     createTopic(topic, partitionNum, 1)
-    TestUtils.produceMessages(servers, topic, 10)
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
 
-    val request = new DescribeLogDirsRequest.Builder(null).build()
-    val response = connectAndSend(request, ApiKeys.DESCRIBE_LOG_DIRS, controllerSocketServer)
-    val logDirInfos = DescribeLogDirsResponse.parse(response, request.version).logDirInfos()
+    val request = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(null)).build()
+    val response = connectAndReceive[DescribeLogDirsResponse](request, destination = controllerSocketServer)
+    val logDirInfos = response.logDirInfos()
 
     assertEquals(logDirCount, logDirInfos.size())
     assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos.get(offlineDir).error)
@@ -58,7 +59,8 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     val log1 = servers.head.logManager.getLog(tp1).get
     assertEquals(log0.size, replicaInfo0.size)
     assertEquals(log1.size, replicaInfo1.size)
-    assertTrue(servers.head.logManager.getLog(tp0).get.logEndOffset > 0)
+    val logEndOffset = servers.head.logManager.getLog(tp0).get.logEndOffset
+    assertTrue(s"LogEndOffset '$logEndOffset' should be > 0", logEndOffset > 0)
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0, log0.logEndOffset, false), replicaInfo0.offsetLag)
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1, log1.logEndOffset, false), replicaInfo1.offsetLag)
   }

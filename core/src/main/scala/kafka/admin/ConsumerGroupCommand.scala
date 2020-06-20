@@ -18,74 +18,76 @@
 package kafka.admin
 
 import java.text.{ParseException, SimpleDateFormat}
-import java.util.{Date, Properties}
-import javax.xml.datatype.DatatypeFactory
-import joptsimple.{OptionParser, OptionSpec}
+import java.time.{Duration, Instant}
+import java.util.Properties
 
-import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
-import kafka.client.ClientUtils
-import kafka.common.{OffsetMetadataAndError, TopicAndPartition}
-import kafka.consumer.SimpleConsumer
+import com.fasterxml.jackson.dataformat.csv.CsvMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
+import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import kafka.utils._
-import kafka.utils.Implicits._
-
-import org.I0Itec.zkclient.exception.ZkNoNodeException
+import org.apache.kafka.clients.admin._
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
-import org.apache.kafka.common.errors.BrokerNotAvailableException
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
-import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
-import scala.collection.JavaConverters._
-import scala.collection.{Seq, Set, mutable}
+import scala.jdk.CollectionConverters._
+import scala.collection.mutable.ListBuffer
+import scala.collection.{Map, Seq, immutable, mutable}
+import scala.util.{Failure, Success, Try}
+import joptsimple.OptionSpec
+import org.apache.kafka.common.protocol.Errors
+
+import scala.collection.immutable.TreeMap
+import scala.reflect.ClassTag
+import org.apache.kafka.common.requests.ListOffsetResponse
+import org.apache.kafka.common.ConsumerGroupState
+import joptsimple.OptionException
 
 object ConsumerGroupCommand extends Logging {
 
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
+
     val opts = new ConsumerGroupCommandOptions(args)
+    try {
+      opts.checkArgs()
+      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
+      // should have exactly one action
+      val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
+      if (actions != 1)
+        CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
 
-    // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt).count(opts.options.has)
-    if (actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets")
-
-    opts.checkArgs()
-
-    val consumerGroupService = {
-      if (opts.useOldConsumer) {
-        Console.err.println("Note: This will only show information about consumers that use ZooKeeper (not those using the Java consumer API).")
-        new ZkConsumerGroupService(opts)
-      } else {
-        Console.err.println("Note: This will not show information about old Zookeeper-based consumers.")
-        new KafkaConsumerGroupService(opts)
-      }
+      run(opts)
+    } catch {
+      case e: OptionException =>
+        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
     }
+  }
 
+  def run(opts: ConsumerGroupCommandOptions): Unit = {
+    val consumerGroupService = new ConsumerGroupService(opts)
     try {
       if (opts.options.has(opts.listOpt))
-        consumerGroupService.listGroups().foreach(println(_))
+        consumerGroupService.listGroups()
       else if (opts.options.has(opts.describeOpt))
-        consumerGroupService.describeGroup()
+        consumerGroupService.describeGroups()
       else if (opts.options.has(opts.deleteOpt))
         consumerGroupService.deleteGroups()
       else if (opts.options.has(opts.resetOffsetsOpt)) {
         val offsetsToReset = consumerGroupService.resetOffsets()
         if (opts.options.has(opts.exportOpt)) {
-          val exported = consumerGroupService.exportOffsetsToReset(offsetsToReset)
+          val exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset)
           println(exported)
         } else
           printOffsetsToReset(offsetsToReset)
       }
+      else if (opts.options.has(opts.deleteOffsetsOpt)) {
+        consumerGroupService.deleteOffsets()
+      }
     } catch {
+      case e: IllegalArgumentException =>
+        CommandLineUtils.printUsageAndDie(opts.parser, e.getMessage)
       case e: Throwable =>
         printError(s"Executing consumer group command failed due to ${e.getMessage}", Some(e))
     } finally {
@@ -93,11 +95,20 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
+  def consumerGroupStatesFromString(input: String): Set[ConsumerGroupState] = {
+    val parsedStates = input.split(',').map(s => ConsumerGroupState.parse(s.trim)).toSet
+    if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
+      val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
+      throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
+    }
+    parsedStates
+  }
+
   val MISSING_COLUMN_VALUE = "-"
 
   def printError(msg: String, e: Option[Throwable] = None): Unit = {
-    println(s"Error: $msg")
-    e.foreach(debug("Exception in consumer group command", _))
+    println(s"\nError: $msg")
+    e.foreach(_.printStackTrace())
   }
 
   def convertTimestamp(timeString: String): java.lang.Long = {
@@ -113,192 +124,277 @@ object ConsumerGroupCommand extends Logging {
     date.getTime
   }
 
-  def printOffsetsToReset(groupAssignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): Unit = {
-    println("\n%-30s %-10s %-15s".format("TOPIC", "PARTITION", "NEW-OFFSET"))
-
-    groupAssignmentsToReset.foreach {
-      case (consumerAssignment, offsetAndMetadata) =>
-        println("%-30s %-10s %-15s".format(
-          consumerAssignment.topic,
-          consumerAssignment.partition,
-          offsetAndMetadata.offset))
+  def printOffsetsToReset(groupAssignmentsToReset: Map[String, Map[TopicPartition, OffsetAndMetadata]]): Unit = {
+    if (groupAssignmentsToReset.nonEmpty)
+      println("\n%-30s %-30s %-10s %-15s".format("GROUP", "TOPIC", "PARTITION", "NEW-OFFSET"))
+    for {
+      (groupId, assignment) <- groupAssignmentsToReset
+      (consumerAssignment, offsetAndMetadata) <- assignment
+    } {
+      println("%-30s %-30s %-10s %-15s".format(
+        groupId,
+        consumerAssignment.topic,
+        consumerAssignment.partition,
+        offsetAndMetadata.offset))
     }
   }
 
-  protected case class PartitionAssignmentState(group: String, coordinator: Option[Node], topic: Option[String],
+  private[admin] case class PartitionAssignmentState(group: String, coordinator: Option[Node], topic: Option[String],
                                                 partition: Option[Int], offset: Option[Long], lag: Option[Long],
                                                 consumerId: Option[String], host: Option[String],
                                                 clientId: Option[String], logEndOffset: Option[Long])
 
-  protected case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String,
+  private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String, groupInstanceId: String,
                                              numPartitions: Int, assignment: List[TopicPartition])
 
-  protected case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
+  private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
-  sealed trait ConsumerGroupService {
+  private[admin] sealed trait CsvRecord
+  private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord
+  private[admin] case class CsvRecordNoGroup(topic: String, partition: Int, offset: Long) extends CsvRecord
+  private[admin] object CsvRecordWithGroup {
+    val fields = Array("group", "topic", "partition", "offset")
+  }
+  private[admin] object CsvRecordNoGroup {
+    val fields = Array("topic", "partition", "offset")
+  }
+  // Example: CsvUtils().readerFor[CsvRecordWithoutGroup]
+  private[admin] case class CsvUtils() {
+    val mapper = new CsvMapper with ScalaObjectMapper
+    mapper.registerModule(DefaultScalaModule)
+    def readerFor[T <: CsvRecord: ClassTag] = {
+      val schema = getSchema[T]
+      val clazz = implicitly[ClassTag[T]].runtimeClass
+      mapper.readerFor(clazz).`with`(schema)
+    }
+    def writerFor[T <: CsvRecord: ClassTag] = {
+      val schema = getSchema[T]
+      val clazz = implicitly[ClassTag[T]].runtimeClass
+      mapper.writerFor(clazz).`with`(schema)
+    }
+    private def getSchema[T <: CsvRecord: ClassTag] = {
+      val clazz = implicitly[ClassTag[T]].runtimeClass
+      val fields = clazz match {
+        case _ if classOf[CsvRecordWithGroup] == clazz => CsvRecordWithGroup.fields
+        case _ if classOf[CsvRecordNoGroup]   == clazz => CsvRecordNoGroup.fields
+      }
+      val schema = mapper.schemaFor(clazz).sortedBy(fields: _*)
+      schema
+    }
+  }
 
-    def listGroups(): List[String]
+  class ConsumerGroupService(val opts: ConsumerGroupCommandOptions,
+                             private[admin] val configOverrides: Map[String, String] = Map.empty) {
+
+    private val adminClient = createAdminClient(configOverrides)
+
+    // We have to make sure it is evaluated once and available
+    private lazy val resetPlanFromFile: Option[Map[String, Map[TopicPartition, OffsetAndMetadata]]] = {
+      if (opts.options.has(opts.resetFromFileOpt)) {
+        val resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt)
+        val resetPlanCsv = Utils.readFileAsString(resetPlanPath)
+        val resetPlan = parseResetPlan(resetPlanCsv)
+        Some(resetPlan)
+      } else None
+    }
+
+    def listGroups(): Unit = {
+      if (opts.options.has(opts.stateOpt)) {
+        val stateValue = opts.options.valueOf(opts.stateOpt)
+        val states = if (stateValue == null || stateValue.isEmpty)
+          Set[ConsumerGroupState]()
+        else
+          consumerGroupStatesFromString(stateValue)
+        val listings = listConsumerGroupsWithState(states)
+        printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
+      } else
+        listConsumerGroups().foreach(println(_))
+    }
+
+    def listConsumerGroups(): List[String] = {
+      val result = adminClient.listConsumerGroups(withTimeoutMs(new ListConsumerGroupsOptions))
+      val listings = result.all.get.asScala
+      listings.map(_.groupId).toList
+    }
+
+    def listConsumerGroupsWithState(states: Set[ConsumerGroupState]): List[ConsumerGroupListing] = {
+      val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
+      listConsumerGroupsOptions.inStates(states.asJava)
+      val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
+      result.all.get.asScala.toList
+    }
+
+    private def printGroupStates(groupsAndStates: List[(String, String)]): Unit = {
+      // find proper columns width
+      var maxGroupLen = 15
+      for ((groupId, state) <- groupsAndStates) {
+        maxGroupLen = Math.max(maxGroupLen, groupId.length)
+      }
+      println(s"%${-maxGroupLen}s %s".format("GROUP", "STATE"))
+      for ((groupId, state) <- groupsAndStates) {
+        println(s"%${-maxGroupLen}s %s".format(groupId, state))
+      }
+    }
 
     private def shouldPrintMemberState(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
       // numRows contains the number of data rows, if any, compiled from the API call in the caller method.
       // if it's undefined or 0, there is no relevant group information to display.
       numRows match {
         case None =>
-          // applies to both old and new consumer
           printError(s"The consumer group '$group' does not exist.")
           false
-        case Some(num) =>
-          opts.useOldConsumer || {
-            state match {
-              case Some("Dead") =>
-                printError(s"Consumer group '$group' does not exist.")
-              case Some("Empty") =>
-                Console.err.println(s"Consumer group '$group' has no active members.")
-              case Some("PreparingRebalance") | Some("CompletingRebalance") =>
-                Console.err.println(s"Warning: Consumer group '$group' is rebalancing.")
-              case Some("Stable") =>
-              case other =>
-                // the control should never reach here
-                throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
-            }
-            !state.contains("Dead") && num > 0
-          }
+        case Some(num) => state match {
+          case Some("Dead") =>
+            printError(s"Consumer group '$group' does not exist.")
+          case Some("Empty") =>
+            Console.err.println(s"\nConsumer group '$group' has no active members.")
+          case Some("PreparingRebalance") | Some("CompletingRebalance") =>
+            Console.err.println(s"\nWarning: Consumer group '$group' is rebalancing.")
+          case Some("Stable") =>
+          case other =>
+            // the control should never reach here
+            throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
+        }
+        !state.contains("Dead") && num > 0
       }
     }
 
     private def size(colOpt: Option[Seq[Object]]): Option[Int] = colOpt.map(_.size)
 
-    private def printOffsets(group: String, state: Option[String], assignments: Option[Seq[PartitionAssignmentState]]): Unit = {
-      if (shouldPrintMemberState(group, state, size(assignments))) {
-        // find proper columns width
-        var (maxTopicLen, maxConsumerIdLen, maxHostLen) = (15, 15, 15)
-        assignments match {
-          case None => // do nothing
-          case Some(consumerAssignments) =>
-            consumerAssignments.foreach { consumerAssignment =>
-              maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE).length)
-              maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE).length)
-              if (!opts.useOldConsumer)
+    private def printOffsets(offsets: Map[String, (Option[String], Option[Seq[PartitionAssignmentState]])]): Unit = {
+      for ((groupId, (state, assignments)) <- offsets) {
+        if (shouldPrintMemberState(groupId, state, size(assignments))) {
+          // find proper columns width
+          var (maxGroupLen, maxTopicLen, maxConsumerIdLen, maxHostLen) = (15, 15, 15, 15)
+          assignments match {
+            case None => // do nothing
+            case Some(consumerAssignments) =>
+              consumerAssignments.foreach { consumerAssignment =>
+                maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group.length)
+                maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE).length)
+                maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE).length)
                 maxHostLen = Math.max(maxHostLen, consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE).length)
-            }
-        }
-
-        print(s"\n%${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s "
-          .format("TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID"))
-
-        if (!opts.useOldConsumer)
-          print(s"%${-maxHostLen}s %s".format("HOST", "CLIENT-ID"))
-        println()
-
-        assignments match {
-          case None => // do nothing
-          case Some(consumerAssignments) =>
-            consumerAssignments.foreach { consumerAssignment =>
-              print(s"%${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s ".format(
-                consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
-                consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
-                consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
-              if (!opts.useOldConsumer)
-                print(s"%${-maxHostLen}s %s".format(consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE),
-                  consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE)))
-              println()
-            }
-        }
-      }
-    }
-
-    private def printMembers(group: String, state: Option[String], assignments: Option[Seq[MemberAssignmentState]], verbose: Boolean): Unit = {
-      if (shouldPrintMemberState(group, state, size(assignments))) {
-        // find proper columns width
-        var (maxConsumerIdLen, maxHostLen, maxClientIdLen) = (15, 15, 15)
-        assignments match {
-          case None => // do nothing
-          case Some(memberAssignments) =>
-            memberAssignments.foreach { memberAssignment =>
-              maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId.length)
-              maxHostLen = Math.max(maxHostLen, memberAssignment.host.length)
-              maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length)
-            }
-        }
-
-        print(s"\n%${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
-          .format("CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
-        if (verbose)
-          print("%s".format("ASSIGNMENT"))
-        println()
-
-        assignments match {
-          case None => // do nothing
-          case Some(memberAssignments) =>
-            memberAssignments.foreach { memberAssignment =>
-              print(s"%${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
-                memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions))
-              if (verbose) {
-                val partitions = memberAssignment.assignment match {
-                  case List() => MISSING_COLUMN_VALUE
-                  case assignment =>
-                    assignment.groupBy(_.topic).map {
-                      case (topic, partitionList) => topic + partitionList.map(_.partition).sorted.mkString("(", ",", ")")
-                    }.toList.sorted.mkString(", ")
-                }
-                print("%s".format(partitions))
               }
-              println()
-            }
+          }
+
+          println(s"\n%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %s"
+            .format("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID"))
+
+          assignments match {
+            case None => // do nothing
+            case Some(consumerAssignments) =>
+              consumerAssignments.foreach { consumerAssignment =>
+                println(s"%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %s".format(
+                  consumerAssignment.group,
+                  consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
+                  consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
+                  consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE),
+                  consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE))
+                )
+              }
+          }
         }
       }
     }
 
-    private def printState(group: String, state: GroupState): Unit = {
-      // this method is reachable only for the new consumer option (where the given state is always defined)
-      if (shouldPrintMemberState(group, Some(state.state), Some(1))) {
-        val coordinator = s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})"
-        val coordinatorColLen = Math.max(25, coordinator.length)
-        print(s"\n%${-coordinatorColLen}s %-25s %-20s %s".format("COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
-        print(s"\n%${-coordinatorColLen}s %-25s %-20s %s".format(coordinator, state.assignmentStrategy, state.state, state.numMembers))
-        println()
+    private def printMembers(members: Map[String, (Option[String], Option[Seq[MemberAssignmentState]])], verbose: Boolean): Unit = {
+      for ((groupId, (state, assignments)) <- members) {
+        if (shouldPrintMemberState(groupId, state, size(assignments))) {
+          // find proper columns width
+          var (maxGroupLen, maxConsumerIdLen, maxGroupInstanceIdLen, maxHostLen, maxClientIdLen, includeGroupInstanceId) = (15, 15, 17, 15, 15, false)
+          assignments match {
+            case None => // do nothing
+            case Some(memberAssignments) =>
+              memberAssignments.foreach { memberAssignment =>
+                maxGroupLen = Math.max(maxGroupLen, memberAssignment.group.length)
+                maxConsumerIdLen = Math.max(maxConsumerIdLen, memberAssignment.consumerId.length)
+                maxGroupInstanceIdLen =  Math.max(maxGroupInstanceIdLen, memberAssignment.groupInstanceId.length)
+                maxHostLen = Math.max(maxHostLen, memberAssignment.host.length)
+                maxClientIdLen = Math.max(maxClientIdLen, memberAssignment.clientId.length)
+                includeGroupInstanceId = includeGroupInstanceId || memberAssignment.groupInstanceId.length > 0
+              }
+          }
+
+          if (includeGroupInstanceId) {
+            print(s"\n%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxGroupInstanceIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
+                .format("GROUP", "CONSUMER-ID", "GROUP-INSTANCE-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
+          } else {
+            print(s"\n%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
+                .format("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
+          }
+          if (verbose)
+            print(s"%s".format("ASSIGNMENT"))
+          println()
+
+          assignments match {
+            case None => // do nothing
+            case Some(memberAssignments) =>
+              memberAssignments.foreach { memberAssignment =>
+                if (includeGroupInstanceId) {
+                  print(s"%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxGroupInstanceIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
+                    memberAssignment.group, memberAssignment.consumerId, memberAssignment.groupInstanceId, memberAssignment.host,
+                    memberAssignment.clientId, memberAssignment.numPartitions))
+                } else {
+                  print(s"%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
+                    memberAssignment.group, memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions))
+                }
+                if (verbose) {
+                  val partitions = memberAssignment.assignment match {
+                    case List() => MISSING_COLUMN_VALUE
+                    case assignment =>
+                      assignment.groupBy(_.topic).map {
+                        case (topic, partitionList) => topic + partitionList.map(_.partition).sorted.mkString("(", ",", ")")
+                      }.toList.sorted.mkString(", ")
+                  }
+                  print(s"%s".format(partitions))
+                }
+                println()
+              }
+          }
+        }
       }
     }
 
-    def describeGroup(): Unit = {
-      val group = opts.options.valuesOf(opts.groupOpt).asScala.head
+    private def printStates(states: Map[String, GroupState]): Unit = {
+      for ((groupId, state) <- states) {
+        if (shouldPrintMemberState(groupId, Some(state.state), Some(1))) {
+          val coordinator = s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})"
+          val coordinatorColLen = Math.max(25, coordinator.length)
+          print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+          print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format(state.group, coordinator, state.assignmentStrategy, state.state, state.numMembers))
+          println()
+        }
+      }
+    }
+
+    def describeGroups(): Unit = {
+      val groupIds =
+        if (opts.options.has(opts.allGroupsOpt)) listConsumerGroups()
+        else opts.options.valuesOf(opts.groupOpt).asScala
       val membersOptPresent = opts.options.has(opts.membersOpt)
       val stateOptPresent = opts.options.has(opts.stateOpt)
       val offsetsOptPresent = opts.options.has(opts.offsetsOpt)
       val subActions = Seq(membersOptPresent, offsetsOptPresent, stateOptPresent).count(_ == true)
 
       if (subActions == 0 || offsetsOptPresent) {
-        val offsets = collectGroupOffsets()
-        printOffsets(group, offsets._1, offsets._2)
+        val offsets = collectGroupsOffsets(groupIds)
+        printOffsets(offsets)
       } else if (membersOptPresent) {
-        val members = collectGroupMembers(opts.options.has(opts.verboseOpt))
-        printMembers(group, members._1, members._2, opts.options.has(opts.verboseOpt))
-      } else
-        printState(group, collectGroupState())
+        val members = collectGroupsMembers(groupIds, opts.options.has(opts.verboseOpt))
+        printMembers(members, opts.options.has(opts.verboseOpt))
+      } else {
+        val states = collectGroupsState(groupIds)
+        printStates(states)
+      }
     }
 
-    def close(): Unit
-
-    protected def opts: ConsumerGroupCommandOptions
-
-    protected def getLogEndOffset(topicPartition: TopicPartition): LogOffsetResult =
-      getLogEndOffsets(Seq(topicPartition)).getOrElse(topicPartition, LogOffsetResult.Ignore)
-
-    protected def getLogEndOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult]
-
-    def collectGroupOffsets(): (Option[String], Option[Seq[PartitionAssignmentState]])
-
-    def collectGroupMembers(verbose: Boolean): (Option[String], Option[Seq[MemberAssignmentState]]) = throw new UnsupportedOperationException
-
-    def collectGroupState(): GroupState = throw new UnsupportedOperationException
-
-    protected def collectConsumerAssignment(group: String,
-                                            coordinator: Option[Node],
-                                            topicPartitions: Seq[TopicPartition],
-                                            getPartitionOffset: TopicPartition => Option[Long],
-                                            consumerIdOpt: Option[String],
-                                            hostOpt: Option[String],
-                                            clientIdOpt: Option[String]): Array[PartitionAssignmentState] = {
+    private def collectConsumerAssignment(group: String,
+                                          coordinator: Option[Node],
+                                          topicPartitions: Seq[TopicPartition],
+                                          getPartitionOffset: TopicPartition => Option[Long],
+                                          consumerIdOpt: Option[String],
+                                          hostOpt: Option[String],
+                                          clientIdOpt: Option[String]): Array[PartitionAssignmentState] = {
       if (topicPartitions.isEmpty) {
         Array[PartitionAssignmentState](
           PartitionAssignmentState(group, coordinator, None, None, None, getLag(None, None), consumerIdOpt, hostOpt, clientIdOpt, None)
@@ -325,7 +421,7 @@ object ConsumerGroupCommand extends Logging {
           getLag(offset, logEndOffsetOpt), consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt)
       }
 
-      getLogEndOffsets(topicPartitions).map {
+      getLogEndOffsets(group, topicPartitions).map {
         logEndOffsetResult =>
           logEndOffsetResult._2 match {
             case LogOffsetResult.LogOffset(logEndOffset) => getDescribePartitionResult(logEndOffsetResult._1, Some(logEndOffset))
@@ -335,374 +431,314 @@ object ConsumerGroupCommand extends Logging {
       }.toArray
     }
 
-    def resetOffsets(): Map[TopicPartition, OffsetAndMetadata] = throw new UnsupportedOperationException
+    def resetOffsets(): Map[String, Map[TopicPartition, OffsetAndMetadata]] = {
+      val groupIds =
+        if (opts.options.has(opts.allGroupsOpt)) listConsumerGroups()
+        else opts.options.valuesOf(opts.groupOpt).asScala
 
-    def exportOffsetsToReset(assignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): String = throw new UnsupportedOperationException
+      val consumerGroups = adminClient.describeConsumerGroups(
+        groupIds.asJava,
+        withTimeoutMs(new DescribeConsumerGroupsOptions)
+      ).describedGroups()
 
-    def deleteGroups(): Map[String, Errors]
-  }
+      val result =
+        consumerGroups.asScala.foldLeft(immutable.Map[String, Map[TopicPartition, OffsetAndMetadata]]()) {
+          case (acc, (groupId, groupDescription)) =>
+            groupDescription.get.state().toString match {
+              case "Empty" | "Dead" =>
+                val partitionsToReset = getPartitionsToReset(groupId)
+                val preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset)
 
-  @deprecated("This class has been deprecated and will be removed in a future release.", "0.11.0.0")
-  class ZkConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
-
-    private val zkUtils = {
-      val zkUrl = opts.options.valueOf(opts.zkConnectOpt)
-      ZkUtils(zkUrl, 30000, 30000, JaasUtils.isZkSecurityEnabled)
-    }
-
-    def close() {
-      zkUtils.close()
-    }
-
-    def listGroups(): List[String] = {
-      zkUtils.getConsumerGroups().toList
-    }
-
-    def deleteGroups(): Map[String, Errors] = {
-      if (opts.options.has(opts.groupOpt) && opts.options.has(opts.topicOpt))
-        deleteGroupsInfoForTopic()
-      else if (opts.options.has(opts.groupOpt))
-        deleteGroupsInfo()
-      else if (opts.options.has(opts.topicOpt))
-        deleteAllGroupsInfoForTopic()
-
-      Map()
-    }
-
-    def collectGroupOffsets(): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
-      val group = opts.options.valueOf(opts.groupOpt)
-      val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
-      val channelSocketTimeoutMs = props.getProperty("channelSocketTimeoutMs", "600").toInt
-      val channelRetryBackoffMs = props.getProperty("channelRetryBackoffMsOpt", "300").toInt
-      if (!zkUtils.getConsumerGroups().contains(group))
-        return (None, None)
-
-      val topics = zkUtils.getTopicsByConsumerGroup(group)
-      val topicPartitions = getAllTopicPartitions(topics)
-      var groupConsumerIds = zkUtils.getConsumersInGroup(group)
-
-      // mapping of topic partition -> consumer id
-      val consumerIdByTopicPartition = topicPartitions.map { topicPartition =>
-        val owner = zkUtils.readDataMaybeNull(new ZKGroupTopicDirs(group, topicPartition.topic).consumerOwnerDir + "/" + topicPartition.partition)._1
-        topicPartition -> owner.map(o => o.substring(0, o.lastIndexOf('-'))).getOrElse(MISSING_COLUMN_VALUE)
-      }.toMap
-
-      // mapping of consumer id -> list of topic partitions
-      val consumerTopicPartitions = consumerIdByTopicPartition groupBy{_._2} map {
-        case (key, value) => (key, value.unzip._1.toArray) }
-
-      // mapping of consumer id -> list of subscribed topics
-      val topicsByConsumerId = zkUtils.getTopicsPerMemberId(group)
-
-      var assignmentRows = topicPartitions.flatMap { topicPartition =>
-        val partitionOffsets = getPartitionOffsets(group, List(topicPartition), channelSocketTimeoutMs, channelRetryBackoffMs)
-        val consumerId = consumerIdByTopicPartition.get(topicPartition)
-        // since consumer id is repeated in client id, leave host and client id empty
-        consumerId.foreach(id => groupConsumerIds = groupConsumerIds.filterNot(_ == id))
-        collectConsumerAssignment(group, None, List(topicPartition), partitionOffsets.get, consumerId, None, None)
-      }
-
-      assignmentRows ++= groupConsumerIds.sortBy(- consumerTopicPartitions.get(_).size).flatMap { consumerId =>
-        topicsByConsumerId(consumerId).flatMap { _ =>
-          // since consumers with no topic partitions are processed here, we pass empty for topic partitions and offsets
-          // since consumer id is repeated in client id, leave host and client id empty
-          collectConsumerAssignment(group, None, Array[TopicPartition](), Map[TopicPartition, Option[Long]](), Some(consumerId), None, None)
-        }
-      }
-
-      (None, Some(assignmentRows))
-    }
-
-    private def getAllTopicPartitions(topics: Seq[String]): Seq[TopicPartition] = {
-      val topicPartitionMap = zkUtils.getPartitionsForTopics(topics)
-      topics.flatMap { topic =>
-        val partitions = topicPartitionMap.getOrElse(topic, Seq.empty)
-        partitions.map(new TopicPartition(topic, _))
-      }
-    }
-
-    protected def getLogEndOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
-      topicPartitions.map { topicPartition => (topicPartition,
-        zkUtils.getLeaderForPartition(topicPartition.topic, topicPartition.partition) match {
-          case Some(-1) => LogOffsetResult.Unknown
-          case Some(brokerId) =>
-            getZkConsumer(brokerId).map { consumer =>
-              val topicAndPartition = new TopicAndPartition(topicPartition)
-              val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
-              val logEndOffset = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
-              consumer.close()
-              LogOffsetResult.LogOffset(logEndOffset)
-            }.getOrElse(LogOffsetResult.Ignore)
-          case None =>
-            printError(s"No broker for partition '$topicPartition'")
-            LogOffsetResult.Ignore
-        }
-      )}.toMap
-    }
-
-    private def getPartitionOffsets(group: String,
-                                    topicPartitions: Seq[TopicPartition],
-                                    channelSocketTimeoutMs: Int,
-                                    channelRetryBackoffMs: Int): Map[TopicPartition, Long] = {
-      val offsetMap = mutable.Map[TopicAndPartition, Long]()
-      val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
-      channel.send(OffsetFetchRequest(group, topicPartitions.map(new TopicAndPartition(_))))
-      val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
-
-      offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>
-        offsetAndMetadata match {
-          case OffsetMetadataAndError.NoOffset =>
-            val topicDirs = new ZKGroupTopicDirs(group, topicAndPartition.topic)
-            // this group may not have migrated off zookeeper for offsets storage (we don't expose the dual-commit option in this tool
-            // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
-            try {
-              val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-              offsetMap.put(topicAndPartition, offset)
-            } catch {
-              case z: ZkNoNodeException =>
-                printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
+                // Dry-run is the default behavior if --execute is not specified
+                val dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt)
+                if (!dryRun) {
+                  adminClient.alterConsumerGroupOffsets(
+                    groupId,
+                    preparedOffsets.asJava,
+                    withTimeoutMs(new AlterConsumerGroupOffsetsOptions)
+                  ).all.get
+                }
+                acc.updated(groupId, preparedOffsets)
+              case currentState =>
+                printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state is $currentState.")
+                acc.updated(groupId, Map.empty)
             }
-          case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE =>
-            offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
-          case _ =>
-            printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${offsetAndMetadata.error.message}.")
+        }
+      result
+    }
+
+    def deleteOffsets(groupId: String, topics: List[String]): (Errors, Map[TopicPartition, Throwable]) = {
+      val partitionLevelResult = mutable.Map[TopicPartition, Throwable]()
+
+      val (topicWithPartitions, topicWithoutPartitions) = topics.partition(_.contains(":"))
+
+      val knownPartitions = topicWithPartitions.flatMap { topicArg =>
+        val split = topicArg.split(":")
+        split(1).split(",").map { partition =>
+          new TopicPartition(split(0), partition.toInt)
         }
       }
-      channel.disconnect()
-      offsetMap.map { case (topicAndPartition, offset) =>
-        (new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offset)
-      }.toMap
-    }
 
-    private def deleteGroupsInfo(): Map[String, Errors] = {
-      val groups = opts.options.valuesOf(opts.groupOpt)
-      groups.asScala.map { group =>
-        try {
-          if (AdminUtils.deleteConsumerGroupInZK(zkUtils, group)) {
-            println(s"Deleted all consumer group information for group '$group' in zookeeper.")
-            group -> Errors.NONE
+      // Get the partitions of topics that the user did not explicitly specify the partitions
+      val describeTopicsResult = adminClient.describeTopics(
+        topicWithoutPartitions.asJava,
+        withTimeoutMs(new DescribeTopicsOptions))
+
+      val unknownPartitions = describeTopicsResult.values().asScala.flatMap { case (topic, future) =>
+        Try(future.get()) match {
+          case Success(description) => description.partitions().asScala.map { partition =>
+            new TopicPartition(topic, partition.partition())
           }
-          else {
-            printError(s"Delete for group '$group' failed because its consumers are still active.")
-            group -> Errors.NON_EMPTY_GROUP
-          }
+          case Failure(e) =>
+            partitionLevelResult += new TopicPartition(topic, -1) -> e
+            List.empty
         }
-        catch {
-          case e: ZkNoNodeException =>
-            printError(s"Delete for group '$group' failed because group does not exist.", Some(e))
-            group -> Errors.forException(e)
-        }
-      }.toMap
-    }
-
-    private def deleteGroupsInfoForTopic(): Map[String, Errors] = {
-      val groups = opts.options.valuesOf(opts.groupOpt)
-      val topic = opts.options.valueOf(opts.topicOpt)
-      Topic.validate(topic)
-      groups.asScala.map { group =>
-        try {
-          if (AdminUtils.deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic)) {
-            println(s"Deleted consumer group information for group '$group' topic '$topic' in zookeeper.")
-            group -> Errors.NONE
-          }
-          else {
-            printError(s"Delete for group '$group' topic '$topic' failed because its consumers are still active.")
-            group -> Errors.NON_EMPTY_GROUP
-          }
-        }
-        catch {
-          case e: ZkNoNodeException =>
-            printError(s"Delete for group '$group' topic '$topic' failed because group does not exist.", Some(e))
-            group -> Errors.forException(e)
-        }
-      }.toMap
-    }
-
-    private def deleteAllGroupsInfoForTopic(): Map[String, Errors] = {
-      val topic = opts.options.valueOf(opts.topicOpt)
-      Topic.validate(topic)
-      val deletedGroups = AdminUtils.deleteAllConsumerGroupInfoForTopicInZK(zkUtils, topic)
-      println(s"Deleted consumer group information for all inactive consumer groups for topic '$topic' in zookeeper.")
-      deletedGroups.map(_ -> Errors.NONE).toMap
-
-    }
-
-    private def getZkConsumer(brokerId: Int): Option[SimpleConsumer] = {
-      try {
-        zkUtils.getBrokerInfo(brokerId)
-          .map(_.brokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
-          .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerGroupCommand"))
-          .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(brokerId)))
-      } catch {
-        case t: Throwable =>
-          printError(s"Could not parse broker info due to ${t.getMessage}", Some(t))
-          None
-      }
-    }
-  }
-
-  class KafkaConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
-
-    private val adminClient = createAdminClient()
-
-    // `consumer` is only needed for `describe`, so we instantiate it lazily
-    private var consumer: KafkaConsumer[String, String] = _
-
-    override def listGroups(): List[String] = {
-      adminClient.listAllConsumerGroupsFlattened().map(_.groupId)
-    }
-
-    override def collectGroupOffsets(): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
-      val group = opts.options.valueOf(opts.groupOpt)
-      val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.timeoutMsOpt))
-      val assignments = consumerGroupSummary.consumers.map { consumers =>
-        var assignedTopicPartitions = Array[TopicPartition]()
-        val offsets = adminClient.listGroupOffsets(group)
-        val rowsWithConsumer =
-          if (offsets.isEmpty)
-            List[PartitionAssignmentState]()
-          else {
-            consumers.filter(_.assignment.nonEmpty).sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
-              val topicPartitions = consumerSummary.assignment
-              assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
-              val partitionOffsets: Map[TopicPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
-                new TopicPartition(topicPartition.topic, topicPartition.partition) -> offsets.get(topicPartition)
-              }.toMap
-              collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
-                partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
-                Some(s"${consumerSummary.clientId}"))
-            }
-          }
-
-        val rowsWithoutConsumer = offsets.filterKeys(!assignedTopicPartitions.contains(_)).flatMap {
-          case (topicPartition, offset) =>
-            collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicPartition),
-              Map(topicPartition -> Some(offset)), Some(MISSING_COLUMN_VALUE),
-              Some(MISSING_COLUMN_VALUE), Some(MISSING_COLUMN_VALUE))
-        }
-
-        rowsWithConsumer ++ rowsWithoutConsumer
       }
 
-      (Some(consumerGroupSummary.state), assignments)
-    }
+      val partitions = knownPartitions ++ unknownPartitions
 
-    override def collectGroupMembers(verbose: Boolean): (Option[String], Option[Seq[MemberAssignmentState]]) = {
-      val group = opts.options.valueOf(opts.groupOpt)
-      val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.timeoutMsOpt))
-      (Some(consumerGroupSummary.state),
-        consumerGroupSummary.consumers.map(_.map {
-          consumer => MemberAssignmentState(group, consumer.consumerId, consumer.host, consumer.clientId, consumer.assignment.length,
-            if (verbose) consumer.assignment else List())
-        })
+      val deleteResult = adminClient.deleteConsumerGroupOffsets(
+        groupId,
+        partitions.toSet.asJava,
+        withTimeoutMs(new DeleteConsumerGroupOffsetsOptions)
       )
+
+      var topLevelException = Errors.NONE
+      Try(deleteResult.all.get) match {
+        case Success(_) =>
+        case Failure(e) => topLevelException = Errors.forException(e.getCause)
+      }
+
+      partitions.foreach { partition =>
+        Try(deleteResult.partitionResult(partition).get()) match {
+          case Success(_) => partitionLevelResult += partition -> null
+          case Failure(e) => partitionLevelResult += partition -> e
+        }
+      }
+
+      (topLevelException, partitionLevelResult)
     }
 
-    override def collectGroupState(): GroupState = {
-      val group = opts.options.valueOf(opts.groupOpt)
-      val consumerGroupSummary = adminClient.describeConsumerGroup(group, opts.options.valueOf(opts.timeoutMsOpt))
-      GroupState(group, consumerGroupSummary.coordinator, consumerGroupSummary.assignmentStrategy,
-        consumerGroupSummary.state, consumerGroupSummary.consumers.get.size)
+    def deleteOffsets(): Unit = {
+      val groupId = opts.options.valueOf(opts.groupOpt)
+      val topics = opts.options.valuesOf(opts.topicOpt).asScala.toList
+
+      val (topLevelResult, partitionLevelResult) = deleteOffsets(groupId, topics)
+
+      topLevelResult match {
+        case Errors.NONE =>
+          println(s"Request succeed for deleting offsets with topic ${topics.mkString(", ")} group $groupId")
+        case Errors.INVALID_GROUP_ID =>
+          printError(s"'$groupId' is not valid.")
+        case Errors.GROUP_ID_NOT_FOUND =>
+          printError(s"'$groupId' does not exist.")
+        case Errors.GROUP_AUTHORIZATION_FAILED =>
+          printError(s"Access to '$groupId' is not authorized.")
+        case Errors.NON_EMPTY_GROUP =>
+          printError(s"Deleting offsets of a consumer group '$groupId' is forbidden if the group is not empty.")
+        case Errors.GROUP_SUBSCRIBED_TO_TOPIC |
+             Errors.TOPIC_AUTHORIZATION_FAILED |
+             Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+          printError(s"Encounter some partition level error, see the follow-up details:")
+        case _ =>
+          printError(s"Encounter some unknown error: $topLevelResult")
+      }
+
+      println("\n%-30s %-15s %-15s".format("TOPIC", "PARTITION", "STATUS"))
+      partitionLevelResult.toList.sortBy(t => t._1.topic + t._1.partition.toString).foreach { case (tp, error) =>
+        println("%-30s %-15s %-15s".format(
+          tp.topic,
+          if (tp.partition >= 0) tp.partition else "Not Provided",
+          if (error != null) s"Error: ${error.getMessage}" else "Successful"
+        ))
+      }
     }
 
-    protected def getLogEndOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
-      val offsets = getConsumer.endOffsets(topicPartitions.asJava)
+    private[admin] def describeConsumerGroups(groupIds: Seq[String]): mutable.Map[String, ConsumerGroupDescription] = {
+      adminClient.describeConsumerGroups(
+        groupIds.asJava,
+        withTimeoutMs(new DescribeConsumerGroupsOptions)
+      ).describedGroups().asScala.map {
+        case (groupId, groupDescriptionFuture) => (groupId, groupDescriptionFuture.get())
+      }
+    }
+
+    /**
+      * Returns the state of the specified consumer group and partition assignment states
+      */
+    def collectGroupOffsets(groupId: String): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
+      collectGroupsOffsets(List(groupId)).getOrElse(groupId, (None, None))
+    }
+
+    /**
+      * Returns states of the specified consumer groups and partition assignment states
+      */
+    def collectGroupsOffsets(groupIds: Seq[String]): TreeMap[String, (Option[String], Option[Seq[PartitionAssignmentState]])] = {
+      val consumerGroups = describeConsumerGroups(groupIds)
+
+      val groupOffsets = TreeMap[String, (Option[String], Option[Seq[PartitionAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
+        val state = consumerGroup.state
+        val committedOffsets = getCommittedOffsets(groupId)
+        var assignedTopicPartitions = ListBuffer[TopicPartition]()
+        val rowsWithConsumer = consumerGroup.members.asScala.filter(!_.assignment.topicPartitions.isEmpty).toSeq
+          .sortWith(_.assignment.topicPartitions.size > _.assignment.topicPartitions.size).flatMap { consumerSummary =>
+          val topicPartitions = consumerSummary.assignment.topicPartitions.asScala
+          assignedTopicPartitions = assignedTopicPartitions ++ topicPartitions
+          val partitionOffsets = consumerSummary.assignment.topicPartitions.asScala
+            .map { topicPartition =>
+              topicPartition -> committedOffsets.get(topicPartition).map(_.offset)
+            }.toMap
+          collectConsumerAssignment(groupId, Option(consumerGroup.coordinator), topicPartitions.toList,
+            partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
+            Some(s"${consumerSummary.clientId}"))
+        }
+        val rowsWithoutConsumer = committedOffsets.filter { case (tp, _) =>
+          !assignedTopicPartitions.contains(tp)
+        }.flatMap { case (topicPartition, offset) =>
+          collectConsumerAssignment(
+            groupId,
+            Option(consumerGroup.coordinator),
+            Seq(topicPartition),
+            Map(topicPartition -> Some(offset.offset)),
+            Some(MISSING_COLUMN_VALUE),
+            Some(MISSING_COLUMN_VALUE),
+            Some(MISSING_COLUMN_VALUE)).toSeq
+        }
+        groupId -> (Some(state.toString), Some(rowsWithConsumer ++ rowsWithoutConsumer))
+      }).toMap
+
+      groupOffsets
+    }
+
+    private[admin] def collectGroupMembers(groupId: String, verbose: Boolean): (Option[String], Option[Seq[MemberAssignmentState]]) = {
+      collectGroupsMembers(Seq(groupId), verbose)(groupId)
+    }
+
+    private[admin] def collectGroupsMembers(groupIds: Seq[String], verbose: Boolean): TreeMap[String, (Option[String], Option[Seq[MemberAssignmentState]])] = {
+      val consumerGroups = describeConsumerGroups(groupIds)
+      TreeMap[String, (Option[String], Option[Seq[MemberAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
+        val state = consumerGroup.state.toString
+        val memberAssignmentStates = consumerGroup.members().asScala.map(consumer =>
+          MemberAssignmentState(
+            groupId,
+            consumer.consumerId,
+            consumer.host,
+            consumer.clientId,
+            consumer.groupInstanceId.orElse(""),
+            consumer.assignment.topicPartitions.size(),
+            if (verbose) consumer.assignment.topicPartitions.asScala.toList else List()
+          )).toList
+        groupId -> (Some(state), Option(memberAssignmentStates))
+      }).toMap
+    }
+
+    private[admin] def collectGroupState(groupId: String): GroupState = {
+      collectGroupsState(Seq(groupId))(groupId)
+    }
+
+    private[admin] def collectGroupsState(groupIds: Seq[String]): TreeMap[String, GroupState] = {
+      val consumerGroups = describeConsumerGroups(groupIds)
+      TreeMap[String, GroupState]() ++ (for ((groupId, groupDescription) <- consumerGroups) yield {
+        groupId -> GroupState(
+          groupId,
+          groupDescription.coordinator,
+          groupDescription.partitionAssignor(),
+          groupDescription.state.toString,
+          groupDescription.members().size
+        )
+      }).toMap
+    }
+
+    private def getLogEndOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
+      val endOffsets = topicPartitions.map { topicPartition =>
+        topicPartition -> OffsetSpec.latest
+      }.toMap
+      val offsets = adminClient.listOffsets(
+        endOffsets.asJava,
+        withTimeoutMs(new ListOffsetsOptions)
+      ).all.get
       topicPartitions.map { topicPartition =>
-        val logEndOffset = offsets.get(topicPartition)
-        topicPartition -> LogOffsetResult.LogOffset(logEndOffset)
+        Option(offsets.get(topicPartition)) match {
+          case Some(listOffsetsResultInfo) => topicPartition -> LogOffsetResult.LogOffset(listOffsetsResultInfo.offset)
+          case _ => topicPartition -> LogOffsetResult.Unknown
+        }
       }.toMap
     }
 
-    protected def getLogStartOffsets(topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
-      val offsets = getConsumer.beginningOffsets(topicPartitions.asJava)
+    private def getLogStartOffsets(groupId: String, topicPartitions: Seq[TopicPartition]): Map[TopicPartition, LogOffsetResult] = {
+      val startOffsets = topicPartitions.map { topicPartition =>
+        topicPartition -> OffsetSpec.earliest
+      }.toMap
+      val offsets = adminClient.listOffsets(
+        startOffsets.asJava,
+        withTimeoutMs(new ListOffsetsOptions)
+      ).all.get
       topicPartitions.map { topicPartition =>
-        val logStartOffset = offsets.get(topicPartition)
-        topicPartition -> LogOffsetResult.LogOffset(logStartOffset)
+        Option(offsets.get(topicPartition)) match {
+          case Some(listOffsetsResultInfo) => topicPartition -> LogOffsetResult.LogOffset(listOffsetsResultInfo.offset)
+          case _ => topicPartition -> LogOffsetResult.Unknown
+        }
       }.toMap
     }
 
-    protected def getLogTimestampOffsets(topicPartitions: Seq[TopicPartition], timestamp: java.lang.Long): Map[TopicPartition, LogOffsetResult] = {
-      val consumer = getConsumer
-      consumer.assign(topicPartitions.asJava)
-
+    private def getLogTimestampOffsets(groupId: String, topicPartitions: Seq[TopicPartition], timestamp: java.lang.Long): Map[TopicPartition, LogOffsetResult] = {
+      val timestampOffsets = topicPartitions.map { topicPartition =>
+        topicPartition -> OffsetSpec.forTimestamp(timestamp)
+      }.toMap
+      val offsets = adminClient.listOffsets(
+        timestampOffsets.asJava,
+        withTimeoutMs(new ListOffsetsOptions)
+      ).all.get
       val (successfulOffsetsForTimes, unsuccessfulOffsetsForTimes) =
-        consumer.offsetsForTimes(topicPartitions.map(_ -> timestamp).toMap.asJava).asScala.partition(_._2 != null)
+        offsets.asScala.partition(_._2.offset != ListOffsetResponse.UNKNOWN_OFFSET)
 
       val successfulLogTimestampOffsets = successfulOffsetsForTimes.map {
-        case (topicPartition, offsetAndTimestamp) => topicPartition -> LogOffsetResult.LogOffset(offsetAndTimestamp.offset)
+        case (topicPartition, listOffsetsResultInfo) => topicPartition -> LogOffsetResult.LogOffset(listOffsetsResultInfo.offset)
       }.toMap
 
-      successfulLogTimestampOffsets ++ getLogEndOffsets(unsuccessfulOffsetsForTimes.keySet.toSeq)
+      successfulLogTimestampOffsets ++ getLogEndOffsets(groupId, unsuccessfulOffsetsForTimes.keySet.toSeq)
     }
 
-    def close() {
+    def close(): Unit = {
       adminClient.close()
-      if (consumer != null) consumer.close()
     }
 
-    private def createAdminClient(): AdminClient = {
+    private def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-      AdminClient.create(props)
+      configOverrides.foreach { case (k, v) => props.put(k, v)}
+      Admin.create(props)
     }
 
-    private def getConsumer = {
-      if (consumer == null)
-        consumer = createNewConsumer()
-      consumer
+    private def withTimeoutMs [T <: AbstractOptions[T]] (options : T) =  {
+      val t = opts.options.valueOf(opts.timeoutMsOpt).intValue()
+      options.timeoutMs(t)
     }
 
-    private def createNewConsumer(): KafkaConsumer[String, String] = {
-      val properties = new Properties()
-      val deserializer = (new StringDeserializer).getClass.getName
-      val brokerUrl = opts.options.valueOf(opts.bootstrapServerOpt)
-      properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-      properties.put(ConsumerConfig.GROUP_ID_CONFIG, opts.options.valueOf(opts.groupOpt))
-      properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-      properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000")
-      properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, deserializer)
-      properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, deserializer)
-      if (opts.options.has(opts.commandConfigOpt))
-        properties ++= Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
-
-      new KafkaConsumer(properties)
-    }
-
-    override def resetOffsets(): Map[TopicPartition, OffsetAndMetadata] = {
-      val groupId = opts.options.valueOf(opts.groupOpt)
-      val consumerGroupSummary = adminClient.describeConsumerGroup(groupId, opts.options.valueOf(opts.timeoutMsOpt))
-      consumerGroupSummary.state match {
-        case "Empty" | "Dead" =>
-          val partitionsToReset = getPartitionsToReset(groupId)
-          val preparedOffsets = prepareOffsetsToReset(groupId, partitionsToReset)
-
-          // Dry-run is the default behavior if --execute is not specified
-          val dryRun = opts.options.has(opts.dryRunOpt) || !opts.options.has(opts.executeOpt)
-          if (!dryRun)
-            getConsumer.commitSync(preparedOffsets.asJava)
-          preparedOffsets
-        case currentState =>
-          printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state is $currentState.")
-          Map.empty
-      }
-    }
-
-    private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {
+    private def parseTopicPartitionsToReset(groupId: String, topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {
       case topicArg if topicArg.contains(":") =>
         val topicPartitions = topicArg.split(":")
         val topic = topicPartitions(0)
         topicPartitions(1).split(",").map(partition => new TopicPartition(topic, partition.toInt))
-      case topic => getConsumer.partitionsFor(topic).asScala
-        .map(partitionInfo => new TopicPartition(topic, partitionInfo.partition))
+      case topic =>
+        val descriptionMap = adminClient.describeTopics(
+          Seq(topic).asJava,
+          withTimeoutMs(new DescribeTopicsOptions)
+        ).all().get.asScala
+        val r = descriptionMap.flatMap{ case(topic, description) =>
+          description.partitions().asScala.map{ tpInfo =>
+            new TopicPartition(topic, tpInfo.partition)
+          }
+        }
+        r
     }
 
     private def getPartitionsToReset(groupId: String): Seq[TopicPartition] = {
       if (opts.options.has(opts.allTopicsOpt)) {
-        val allTopicPartitions = adminClient.listGroupOffsets(groupId).keys.toSeq
-        allTopicPartitions
+        getCommittedOffsets(groupId).keys.toSeq
       } else if (opts.options.has(opts.topicOpt)) {
         val topics = opts.options.valuesOf(opts.topicOpt).asScala
-        parseTopicPartitionsToReset(topics)
+        parseTopicPartitionsToReset(groupId, topics)
       } else {
         if (opts.options.has(opts.resetFromFileOpt))
           Nil
@@ -711,24 +747,53 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def parseResetPlan(resetPlanCsv: String): Map[TopicPartition, OffsetAndMetadata] = {
-      resetPlanCsv.split("\n")
-        .map { line =>
-          val Array(topic, partition, offset) = line.split(",").map(_.trim)
-          val topicPartition = new TopicPartition(topic, partition.toInt)
-          val offsetAndMetadata = new OffsetAndMetadata(offset.toLong)
-          (topicPartition, offsetAndMetadata)
-        }.toMap
+    private def getCommittedOffsets(groupId: String): Map[TopicPartition, OffsetAndMetadata] = {
+      adminClient.listConsumerGroupOffsets(
+        groupId,
+        withTimeoutMs(new ListConsumerGroupOffsetsOptions)
+      ).partitionsToOffsetAndMetadata.get.asScala
     }
 
-    private def prepareOffsetsToReset(groupId: String, partitionsToReset: Seq[TopicPartition]): Map[TopicPartition, OffsetAndMetadata] = {
+    type GroupMetadata = immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]
+    private def parseResetPlan(resetPlanCsv: String): GroupMetadata = {
+      def updateGroupMetadata(group: String, topic: String, partition: Int, offset: Long, acc: GroupMetadata) = {
+        val topicPartition = new TopicPartition(topic, partition)
+        val offsetAndMetadata = new OffsetAndMetadata(offset)
+        val dataMap = acc.getOrElse(group, immutable.Map()).updated(topicPartition, offsetAndMetadata)
+        acc.updated(group, dataMap)
+      }
+      val csvReader = CsvUtils().readerFor[CsvRecordNoGroup]
+      val lines = resetPlanCsv.split("\n")
+      val isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1
+      val isOldCsvFormat = lines.headOption.flatMap(line =>
+        Try(csvReader.readValue[CsvRecordNoGroup](line)).toOption).nonEmpty
+      // Single group CSV format: "topic,partition,offset"
+      val dataMap = if (isSingleGroupQuery && isOldCsvFormat) {
+        val group = opts.options.valueOf(opts.groupOpt)
+        lines.foldLeft(immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
+          val CsvRecordNoGroup(topic, partition, offset) = csvReader.readValue[CsvRecordNoGroup](line)
+          updateGroupMetadata(group, topic, partition, offset, acc)
+        }
+        // Multiple group CSV format: "group,topic,partition,offset"
+      } else {
+        val csvReader = CsvUtils().readerFor[CsvRecordWithGroup]
+        lines.foldLeft(immutable.Map[String, immutable.Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
+          val CsvRecordWithGroup(group, topic, partition, offset) = csvReader.readValue[CsvRecordWithGroup](line)
+          updateGroupMetadata(group, topic, partition, offset, acc)
+        }
+      }
+      dataMap
+    }
+
+    private def prepareOffsetsToReset(groupId: String,
+                                      partitionsToReset: Seq[TopicPartition]): Map[TopicPartition, OffsetAndMetadata] = {
       if (opts.options.has(opts.resetToOffsetOpt)) {
         val offset = opts.options.valueOf(opts.resetToOffsetOpt)
-        checkOffsetsRange(partitionsToReset.map((_, offset)).toMap).map {
+        checkOffsetsRange(groupId, partitionsToReset.map((_, offset)).toMap).map {
           case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
         }
       } else if (opts.options.has(opts.resetToEarliestOpt)) {
-        val logStartOffsets = getLogStartOffsets(partitionsToReset)
+        val logStartOffsets = getLogStartOffsets(groupId, partitionsToReset)
         partitionsToReset.map { topicPartition =>
           logStartOffsets.get(topicPartition) match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
@@ -736,7 +801,7 @@ object ConsumerGroupCommand extends Logging {
           }
         }.toMap
       } else if (opts.options.has(opts.resetToLatestOpt)) {
-        val logEndOffsets = getLogEndOffsets(partitionsToReset)
+        val logEndOffsets = getLogEndOffsets(groupId, partitionsToReset)
         partitionsToReset.map { topicPartition =>
           logEndOffsets.get(topicPartition) match {
             case Some(LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
@@ -744,19 +809,19 @@ object ConsumerGroupCommand extends Logging {
           }
         }.toMap
       } else if (opts.options.has(opts.resetShiftByOpt)) {
-        val currentCommittedOffsets = adminClient.listGroupOffsets(groupId)
+        val currentCommittedOffsets = getCommittedOffsets(groupId)
         val requestedOffsets = partitionsToReset.map { topicPartition =>
           val shiftBy = opts.options.valueOf(opts.resetShiftByOpt)
           val currentOffset = currentCommittedOffsets.getOrElse(topicPartition,
-            throw new IllegalArgumentException(s"Cannot shift offset for partition $topicPartition since there is no current committed offset"))
+            throw new IllegalArgumentException(s"Cannot shift offset for partition $topicPartition since there is no current committed offset")).offset
           (topicPartition, currentOffset + shiftBy)
         }.toMap
-        checkOffsetsRange(requestedOffsets).map {
+        checkOffsetsRange(groupId, requestedOffsets).map {
           case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
         }
       } else if (opts.options.has(opts.resetToDatetimeOpt)) {
         val timestamp = convertTimestamp(opts.options.valueOf(opts.resetToDatetimeOpt))
-        val logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp)
+        val logTimestampOffsets = getLogTimestampOffsets(groupId, partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)
           logTimestampOffset match {
@@ -766,11 +831,11 @@ object ConsumerGroupCommand extends Logging {
         }.toMap
       } else if (opts.options.has(opts.resetByDurationOpt)) {
         val duration = opts.options.valueOf(opts.resetByDurationOpt)
-        val durationParsed = DatatypeFactory.newInstance().newDuration(duration)
-        val now = new Date()
-        durationParsed.negate().addTo(now)
-        val timestamp = now.getTime
-        val logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp)
+        val durationParsed = Duration.parse(duration)
+        val now = Instant.now()
+        durationParsed.negated().addTo(now)
+        val timestamp = now.minus(durationParsed).toEpochMilli
+        val logTimestampOffsets = getLogTimestampOffsets(groupId, partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)
           logTimestampOffset match {
@@ -778,29 +843,33 @@ object ConsumerGroupCommand extends Logging {
             case _ => CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting offset by timestamp of topic partition: $topicPartition")
           }
         }.toMap
-      } else if (opts.options.has(opts.resetFromFileOpt)) {
-        val resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt)
-        val resetPlanCsv = Utils.readFileAsString(resetPlanPath)
-        val resetPlan = parseResetPlan(resetPlanCsv)
-        val requestedOffsets = resetPlan.keySet.map { topicPartition =>
-          (topicPartition, resetPlan(topicPartition).offset())
-        }.toMap
-        checkOffsetsRange(requestedOffsets).map {
-          case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
-        }
+      } else if (resetPlanFromFile.isDefined) {
+        resetPlanFromFile.map(resetPlan => resetPlan.get(groupId).map { resetPlanForGroup =>
+          val requestedOffsets = resetPlanForGroup.keySet.map { topicPartition =>
+            topicPartition -> resetPlanForGroup(topicPartition).offset
+          }.toMap
+          checkOffsetsRange(groupId, requestedOffsets).map {
+            case (topicPartition, newOffset) => (topicPartition, new OffsetAndMetadata(newOffset))
+          }
+        } match {
+          case Some(resetPlanForGroup) => resetPlanForGroup
+          case None =>
+            printError(s"No reset plan for group $groupId found")
+            Map[TopicPartition, OffsetAndMetadata]()
+        }).getOrElse(Map.empty)
       } else if (opts.options.has(opts.resetToCurrentOpt)) {
-        val currentCommittedOffsets = adminClient.listGroupOffsets(groupId)
+        val currentCommittedOffsets = getCommittedOffsets(groupId)
         val (partitionsToResetWithCommittedOffset, partitionsToResetWithoutCommittedOffset) =
           partitionsToReset.partition(currentCommittedOffsets.keySet.contains(_))
 
         val preparedOffsetsForPartitionsWithCommittedOffset = partitionsToResetWithCommittedOffset.map { topicPartition =>
           (topicPartition, new OffsetAndMetadata(currentCommittedOffsets.get(topicPartition) match {
-            case Some(offset) => offset
-            case _ => throw new IllegalStateException(s"Expected a valid current offset for topic partition: $topicPartition")
+            case Some(offset) => offset.offset
+            case None => throw new IllegalStateException(s"Expected a valid current offset for topic partition: $topicPartition")
           }))
         }.toMap
 
-        val preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(partitionsToResetWithoutCommittedOffset).map {
+        val preparedOffsetsForPartitionsWithoutCommittedOffset = getLogEndOffsets(groupId, partitionsToResetWithoutCommittedOffset).map {
           case (topicPartition, LogOffsetResult.LogOffset(offset)) => (topicPartition, new OffsetAndMetadata(offset))
           case (topicPartition, _) => CommandLineUtils.printUsageAndDie(opts.parser, s"Error getting ending offset of topic partition: $topicPartition")
         }
@@ -811,9 +880,9 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def checkOffsetsRange(requestedOffsets: Map[TopicPartition, Long]) = {
-      val logStartOffsets = getLogStartOffsets(requestedOffsets.keySet.toSeq)
-      val logEndOffsets = getLogEndOffsets(requestedOffsets.keySet.toSeq)
+    private def checkOffsetsRange(groupId: String, requestedOffsets: Map[TopicPartition, Long]) = {
+      val logStartOffsets = getLogStartOffsets(groupId, requestedOffsets.keySet.toSeq)
+      val logEndOffsets = getLogEndOffsets(groupId, requestedOffsets.keySet.toSeq)
       requestedOffsets.map { case (topicPartition, offset) => (topicPartition,
         logEndOffsets.get(topicPartition) match {
           case Some(LogOffsetResult.LogOffset(endOffset)) if offset > endOffset =>
@@ -834,31 +903,56 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    override def exportOffsetsToReset(assignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): String = {
-      val rows = assignmentsToReset.map { case (k,v) => s"${k.topic},${k.partition},${v.offset}" }(collection.breakOut): List[String]
-      rows.foldRight("")(_ + "\n" + _)
+    def exportOffsetsToCsv(assignments: Map[String, Map[TopicPartition, OffsetAndMetadata]]): String = {
+      val isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1
+      val csvWriter =
+        if (isSingleGroupQuery) CsvUtils().writerFor[CsvRecordNoGroup]
+        else CsvUtils().writerFor[CsvRecordWithGroup]
+      val rows = assignments.flatMap { case (groupId, partitionInfo) =>
+        partitionInfo.map { case (k: TopicPartition, v: OffsetAndMetadata) =>
+          val csvRecord =
+            if (isSingleGroupQuery) CsvRecordNoGroup(k.topic, k.partition, v.offset)
+            else CsvRecordWithGroup(groupId, k.topic, k.partition, v.offset)
+          csvWriter.writeValueAsString(csvRecord)
+        }
+      }
+      rows.mkString("")
     }
 
-    override def deleteGroups(): Map[String, Errors] = {
-      val groupsToDelete = opts.options.valuesOf(opts.groupOpt).asScala.toList
-      val result = adminClient.deleteConsumerGroups(groupsToDelete)
-      val successfullyDeleted = result.filter {
-        case (_, error) => error == Errors.NONE
-      }.keySet
+    def deleteGroups(): Map[String, Throwable] = {
+      val groupIds =
+        if (opts.options.has(opts.allGroupsOpt)) listConsumerGroups()
+        else opts.options.valuesOf(opts.groupOpt).asScala
 
-      if (successfullyDeleted.size == result.size)
-        println(s"Deletion of requested consumer groups (${successfullyDeleted.mkString("'", "', '", "'")}) was successful.")
-      else {
-        printError("Deletion of some consumer groups failed:")
-        result.foreach {
-          case (group, error) if error != Errors.NONE => println(s"* Group '$group' could not be deleted due to: ${error.toString}")
-          case _ => // no need to print successful deletions individually
+      val groupsToDelete = adminClient.deleteConsumerGroups(
+        groupIds.asJava,
+        withTimeoutMs(new DeleteConsumerGroupsOptions)
+      ).deletedGroups().asScala
+
+      val result = groupsToDelete.map { case (g, f) =>
+        Try(f.get) match {
+          case Success(_) => g -> null
+          case Failure(e) => g -> e
         }
-        if (successfullyDeleted.nonEmpty)
-          println(s"\nThese consumer groups were deleted successfully: ${successfullyDeleted.mkString("'", "', '", "'")}")
       }
 
-      result
+      val (success, failed) = result.partition {
+        case (_, error) => error == null
+      }
+
+      if (failed.isEmpty) {
+        println(s"Deletion of requested consumer groups (${success.keySet.mkString("'", "', '", "'")}) was successful.")
+      }
+      else {
+        printError("Deletion of some consumer groups failed:")
+        failed.foreach {
+          case (group, error) => println(s"* Group '$group' could not be deleted due to: ${error.toString}")
+        }
+        if (success.nonEmpty)
+          println(s"\nThese consumer groups were deleted successfully: ${success.keySet.mkString("'", "', '", "'")}")
+      }
+
+      result.toMap
     }
   }
 
@@ -870,10 +964,8 @@ object ConsumerGroupCommand extends Logging {
     case object Ignore extends LogOffsetResult
   }
 
-  class ConsumerGroupCommandOptions(args: Array[String]) {
-    val ZkConnectDoc = "REQUIRED (for consumer groups based on the old consumer): The connection string for the zookeeper connection in the form host:port. " +
-      "Multiple URLS can be given to allow fail-over."
-    val BootstrapServerDoc = "REQUIRED (for consumer groups based on the new consumer): The server to connect to."
+  class ConsumerGroupCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+    val BootstrapServerDoc = "REQUIRED: The server(s) to connect to."
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
       "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
@@ -881,16 +973,10 @@ object ConsumerGroupCommand extends Logging {
     val AllTopicsDoc = "Consider all topics assigned to a group in the `reset-offsets` process."
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
+    val AllGroupsDoc = "Apply to all consumer groups."
     val nl = System.getProperty("line.separator")
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
-      "over the entire consumer group. For instance --group g1 --group g2" + nl +
-      "Pass in groups with a single topic to just delete the given topic's partition offsets and ownership " +
-      "information for the given consumer groups. For instance --group g1 --group g2 --topic t1" + nl +
-      "Pass in just a topic to delete the given topic's partition offsets and ownership information " +
-      "for every consumer group. For instance --topic t1" + nl +
-      "WARNING: Group deletion only works for old ZK-based consumer groups, and one has to use it carefully to only delete groups that are not active."
-    val NewConsumerDoc = "Use the new consumer implementation. This is the default, so this option is deprecated and " +
-      "will be removed in a future release."
+      "over the entire consumer group. For instance --group g1 --group g2"
     val TimeoutMsDoc = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
       "to specify the maximum amount of time in milliseconds to wait before the group stabilizes (when the group is just created, " +
       "or is going through some changes)."
@@ -919,14 +1005,13 @@ object ConsumerGroupCommand extends Logging {
     val OffsetsDoc = "Describe the group and list all topic partitions in the group along with their offset lag. " +
       "This is the default sub-action of and may be used with '--describe' and '--bootstrap-server' options only." + nl +
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --offsets"
-    val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
-      "Example: --bootstrap-server localhost:9092 --describe --group group1 --state"
+    val StateDoc = "When specified with '--describe', includes the state of the group." + nl +
+      "Example: --bootstrap-server localhost:9092 --describe --group group1 --state" + nl +
+      "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + nl +
+      "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + nl +
+      "This option may be used with '--describe', '--list' and '--bootstrap-server' options only."
+    val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
 
-    val parser = new OptionParser(false)
-    val zkConnectOpt = parser.accepts("zookeeper", ZkConnectDoc)
-                             .withRequiredArg
-                             .describedAs("urls")
-                             .ofType(classOf[String])
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
                                    .describedAs("server to connect to")
@@ -942,8 +1027,8 @@ object ConsumerGroupCommand extends Logging {
     val allTopicsOpt = parser.accepts("all-topics", AllTopicsDoc)
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
+    val allGroupsOpt = parser.accepts("all-groups", AllGroupsDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
-    val newConsumerOpt = parser.accepts("new-consumer", NewConsumerDoc)
     val timeoutMsOpt = parser.accepts("timeout", TimeoutMsDoc)
                              .withRequiredArg
                              .describedAs("timeout (ms)")
@@ -954,6 +1039,7 @@ object ConsumerGroupCommand extends Logging {
                                   .describedAs("command config property file")
                                   .ofType(classOf[String])
     val resetOffsetsOpt = parser.accepts("reset-offsets", ResetOffsetsDoc)
+    val deleteOffsetsOpt = parser.accepts("delete-offsets", DeleteOffsetsDoc)
     val dryRunOpt = parser.accepts("dry-run", DryRunDoc)
     val executeOpt = parser.accepts("execute", ExecuteDoc)
     val exportOpt = parser.accepts("export", ExportDoc)
@@ -982,55 +1068,58 @@ object ConsumerGroupCommand extends Logging {
                              .ofType(classOf[Long])
     val membersOpt = parser.accepts("members", MembersDoc)
                            .availableIf(describeOpt)
-                           .availableUnless(zkConnectOpt)
     val verboseOpt = parser.accepts("verbose", VerboseDoc)
                            .availableIf(describeOpt)
-                           .availableUnless(zkConnectOpt)
     val offsetsOpt = parser.accepts("offsets", OffsetsDoc)
                            .availableIf(describeOpt)
-                           .availableUnless(zkConnectOpt)
     val stateOpt = parser.accepts("state", StateDoc)
-                         .availableIf(describeOpt)
-                         .availableUnless(zkConnectOpt)
-    parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt)
+                         .availableIf(describeOpt, listOpt)
+                         .withOptionalArg()
+                         .ofType(classOf[String])
 
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
 
-    val useOldConsumer = options.has(zkConnectOpt)
-    val describeOptPresent = options.has(describeOpt)
-
-    val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
-    val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
+    val allGroupSelectionScopeOpts = immutable.Set[OptionSpec[_]](groupOpt, allGroupsOpt)
+    val allConsumerGroupLevelOpts = immutable.Set[OptionSpec[_]](listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
+    val allResetOffsetScenarioOpts = immutable.Set[OptionSpec[_]](resetToOffsetOpt, resetShiftByOpt,
       resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
+    val allDeleteOffsetsOpts = immutable.Set[OptionSpec[_]](groupOpt, topicOpt)
 
-    def checkArgs() {
-      // check required args
-      if (options.has(timeoutMsOpt) && (!describeOptPresent || useOldConsumer))
-        debug(s"Option $timeoutMsOpt is applicable only when both $bootstrapServerOpt and $describeOpt are used.")
+    def checkArgs(): Unit = {
 
-      if (useOldConsumer) {
-        if (options.has(bootstrapServerOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $bootstrapServerOpt is not valid with $zkConnectOpt.")
-        else if (options.has(newConsumerOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"Option $newConsumerOpt is not valid with $zkConnectOpt.")
-      } else {
-        CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
+      CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
-        if (options.has(newConsumerOpt)) {
-          Console.err.println(s"The --new-consumer option is deprecated and will be removed in a future major release. " +
-            s"The new consumer is used by default if the --bootstrap-server option is provided.")
+      if (options.has(describeOpt)) {
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $describeOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
+        val mutuallyExclusiveOpts: Set[OptionSpec[_]] = Set(membersOpt, offsetsOpt, stateOpt)
+        if (mutuallyExclusiveOpts.toList.map(o => if (options.has(o)) 1 else 0).sum > 1) {
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $describeOpt takes at most one of these options: ${mutuallyExclusiveOpts.mkString(", ")}")
         }
-
-        if (options.has(deleteOpt) && options.has(topicOpt))
-          CommandLineUtils.printUsageAndDie(parser, s"When deleting a consumer group the option $topicOpt is only " +
-            s"valid with $zkConnectOpt. The new consumer does not support topic-specific offset deletion from a consumer group.")
+        if (options.has(stateOpt) && options.valueOf(stateOpt) != null)
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $describeOpt does not take a value for $stateOpt")
+      } else {
+        if (options.has(timeoutMsOpt))
+          debug(s"Option $timeoutMsOpt is applicable only when $describeOpt is used.")
       }
 
-      if (describeOptPresent)
-        CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
+      if (options.has(deleteOpt)) {
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $deleteOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
+        if (options.has(topicOpt))
+          CommandLineUtils.printUsageAndDie(parser, s"The consumer does not support topic-specific offset " +
+            "deletion from a consumer group.")
+      }
 
-      if (options.has(deleteOpt) && !options.has(groupOpt) && !options.has(topicOpt))
-        CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt either takes $groupOpt, $topicOpt, or both")
+      if (options.has(deleteOffsetsOpt)) {
+        if (!options.has(groupOpt) || !options.has(topicOpt))
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $deleteOffsetsOpt takes the following options: ${allDeleteOffsetsOpts.mkString(", ")}")
+      }
 
       if (options.has(resetOffsetsOpt)) {
         if (options.has(dryRunOpt) && options.has(executeOpt))
@@ -1043,18 +1132,20 @@ object ConsumerGroupCommand extends Logging {
             "if you are scripting this command and want to keep the current default behavior without prompting.")
         }
 
-        CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, allResetOffsetScenarioOpts - resetToOffsetOpt)
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $resetOffsetsOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt,   allResetOffsetScenarioOpts - resetToOffsetOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, allResetOffsetScenarioOpts - resetToDatetimeOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, allResetOffsetScenarioOpts - resetByDurationOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, allResetOffsetScenarioOpts - resetToEarliestOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, allResetOffsetScenarioOpts - resetToLatestOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, allResetOffsetScenarioOpts - resetToCurrentOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, allResetOffsetScenarioOpts - resetShiftByOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, allResetOffsetScenarioOpts - resetFromFileOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt,   allResetOffsetScenarioOpts - resetToLatestOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt,  allResetOffsetScenarioOpts - resetToCurrentOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt,    allResetOffsetScenarioOpts - resetShiftByOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt,   allResetOffsetScenarioOpts - resetFromFileOpt)
       }
 
-      // check invalid args
+      CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allGroupSelectionScopeOpts - groupOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt - resetOffsetsOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, allConsumerGroupLevelOpts - deleteOpt - resetOffsetsOpt)
     }

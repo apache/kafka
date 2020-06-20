@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
+
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -26,10 +29,10 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.util.List;
+import java.time.Duration;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
-
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
                                       final StateManager stateMgr,
@@ -40,17 +43,18 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     @Override
     public StateStore getStateStore(final String name) {
-        return stateManager.getGlobalStore(name);
+        final StateStore store = stateManager.getGlobalStore(name);
+        return getReadWriteStore(store);
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode previousNode = currentNode();
+        final ProcessorNode<?, ?> previousNode = currentNode();
         try {
-            for (final ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
+            for (final ProcessorNode<?, ?> child : currentNode().children()) {
                 setCurrentNode(child);
-                child.process(key, value);
+                ((ProcessorNode<K, V>) child).process(key, value);
             }
         } finally {
             setCurrentNode(previousNode);
@@ -58,18 +62,20 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     }
 
     /**
-     * @throws UnsupportedOperationException on every invocation
+     * No-op. This should only be called on GlobalStateStore#flush and there should be no child nodes
      */
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
+        if (!currentNode().children().isEmpty()) {
+            throw new IllegalStateException("This method should only be called on 'GlobalStateStore.flush' that should not have any children.");
+        }
     }
 
     /**
      * @throws UnsupportedOperationException on every invocation
      */
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
@@ -77,8 +83,8 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     /**
      * @throws UnsupportedOperationException on every invocation
      */
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
@@ -92,18 +98,39 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    @Deprecated
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
-
 
     /**
      * @throws UnsupportedOperationException on every invocation
      */
-    @SuppressWarnings("deprecation")
     @Override
-    public void schedule(long interval) {
+    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
 
+    @Override
+    public void logChange(final String storeName,
+                          final Bytes key,
+                          final byte[] value,
+                          final long timestamp) {
+        throw new UnsupportedOperationException("this should not happen: logChange() not supported in global processor context.");
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        throw new UnsupportedOperationException("this should not happen: transitionToActive() not supported in global processor context.");
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        throw new UnsupportedOperationException("this should not happen: transitionToStandby() not supported in global processor context.");
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cache.addDirtyEntryFlushListener(namespace, listener);
+    }
 }

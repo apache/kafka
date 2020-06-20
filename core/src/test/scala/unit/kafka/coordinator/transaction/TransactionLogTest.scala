@@ -17,16 +17,16 @@
 package kafka.coordinator.transaction
 
 
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
-
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
-class TransactionLogTest extends JUnitSuite {
+class TransactionLogTest {
 
   val producerEpoch: Short = 0
   val transactionTimeoutMs: Int = 1000
@@ -38,7 +38,7 @@ class TransactionLogTest extends JUnitSuite {
     new TopicPartition("topic2", 2))
 
   @Test
-  def shouldThrowExceptionWriteInvalidTxn() {
+  def shouldThrowExceptionWriteInvalidTxn(): Unit = {
     val transactionalId = "transactionalId"
     val producerId = 23423L
 
@@ -51,7 +51,7 @@ class TransactionLogTest extends JUnitSuite {
   }
 
   @Test
-  def shouldReadWriteMessages() {
+  def shouldReadWriteMessages(): Unit = {
     val pidMappings = Map[String, Long]("zero" -> 0L,
       "one" -> 1L,
       "two" -> 2L,
@@ -86,7 +86,7 @@ class TransactionLogTest extends JUnitSuite {
     for (record <- records.records.asScala) {
       val txnKey = TransactionLog.readTxnRecordKey(record.key)
       val transactionalId = txnKey.transactionalId
-      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
+      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value).get
 
       assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
       assertEquals(producerEpoch, txnMetadata.producerEpoch)
@@ -102,6 +102,40 @@ class TransactionLogTest extends JUnitSuite {
     }
 
     assertEquals(pidMappings.size, count)
+  }
+
+  @Test
+  def testTransactionMetadataParsing(): Unit = {
+    val transactionalId = "id"
+    val producerId = 1334L
+    val topicPartition = new TopicPartition("topic", 0)
+
+    val txnMetadata = TransactionMetadata(transactionalId, producerId, producerEpoch,
+      transactionTimeoutMs, Ongoing, 0)
+    txnMetadata.addPartitions(Set(topicPartition))
+
+    val keyBytes = TransactionLog.keyToBytes(transactionalId)
+    val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
+    val transactionMetadataRecord = TestUtils.records(Seq(
+      new SimpleRecord(keyBytes, valueBytes)
+    )).records.asScala.head
+
+    val (keyStringOpt, valueStringOpt) = TransactionLog.formatRecordKeyAndValue(transactionMetadataRecord)
+    assertEquals(Some(s"transaction_metadata::transactionalId=$transactionalId"), keyStringOpt)
+    assertEquals(Some(s"producerId:$producerId,producerEpoch:$producerEpoch,state=Ongoing," +
+      s"partitions=[$topicPartition],txnLastUpdateTimestamp=0,txnTimeoutMs=$transactionTimeoutMs"), valueStringOpt)
+  }
+
+  @Test
+  def testTransactionMetadataTombstoneParsing(): Unit = {
+    val transactionalId = "id"
+    val transactionMetadataRecord = TestUtils.records(Seq(
+      new SimpleRecord(TransactionLog.keyToBytes(transactionalId), null)
+    )).records.asScala.head
+
+    val (keyStringOpt, valueStringOpt) = TransactionLog.formatRecordKeyAndValue(transactionMetadataRecord)
+    assertEquals(Some(s"transaction_metadata::transactionalId=$transactionalId"), keyStringOpt)
+    assertEquals(Some("<DELETE>"), valueStringOpt)
   }
 
 }

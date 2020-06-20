@@ -18,21 +18,22 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 public class ConsumedInternal<K, V> extends Consumed<K, V> {
+
     public ConsumedInternal(final Consumed<K, V> consumed) {
         super(consumed);
     }
 
 
     public ConsumedInternal(final Serde<K> keySerde,
-                            final Serde<V> valSerde,
+                            final Serde<V> valueSerde,
                             final TimestampExtractor timestampExtractor,
                             final Topology.AutoOffsetReset offsetReset) {
-        this(Consumed.with(keySerde, valSerde, timestampExtractor, offsetReset));
+        this(Consumed.with(keySerde, valueSerde, timestampExtractor, offsetReset));
     }
 
     public ConsumedInternal() {
@@ -61,5 +62,9 @@ public class ConsumedInternal<K, V> extends Consumed<K, V> {
 
     public Topology.AutoOffsetReset offsetResetPolicy() {
         return resetPolicy;
+    }
+
+    public String name() {
+        return processorName;
     }
 }

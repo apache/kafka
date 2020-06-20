@@ -29,9 +29,9 @@ class OrderedBytes {
      *
      * Assumes the minimum key length is one byte
      */
-    static Bytes upperRange(Bytes key, byte[] maxSuffix) {
+    static Bytes upperRange(final Bytes key, final byte[] maxSuffix) {
         final byte[] bytes = key.get();
-        ByteBuffer rangeEnd = ByteBuffer.allocate(bytes.length + maxSuffix.length);
+        final ByteBuffer rangeEnd = ByteBuffer.allocate(bytes.length + maxSuffix.length);
 
         int i = 0;
         while (i < bytes.length && (
@@ -44,14 +44,14 @@ class OrderedBytes {
         rangeEnd.put(maxSuffix);
         rangeEnd.flip();
 
-        byte[] res = new byte[rangeEnd.remaining()];
+        final byte[] res = new byte[rangeEnd.remaining()];
         ByteBuffer.wrap(res).put(rangeEnd);
         return Bytes.wrap(res);
     }
 
-    static Bytes lowerRange(Bytes key, byte[] minSuffix) {
+    static Bytes lowerRange(final Bytes key, final byte[] minSuffix) {
         final byte[] bytes = key.get();
-        ByteBuffer rangeStart = ByteBuffer.allocate(bytes.length + minSuffix.length);
+        final ByteBuffer rangeStart = ByteBuffer.allocate(bytes.length + minSuffix.length);
         // any key in the range would start at least with the given prefix to be
         // in the range, and have at least SUFFIX_SIZE number of trailing zero bytes.
 

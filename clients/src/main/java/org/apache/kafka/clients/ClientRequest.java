@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.RequestHeader;
@@ -31,6 +32,7 @@ public final class ClientRequest {
     private final String clientId;
     private final long createdTimeMs;
     private final boolean expectResponse;
+    private final int requestTimeoutMs;
     private final RequestCompletionHandler callback;
 
     /**
@@ -48,6 +50,7 @@ public final class ClientRequest {
                          String clientId,
                          long createdTimeMs,
                          boolean expectResponse,
+                         int requestTimeoutMs,
                          RequestCompletionHandler callback) {
         this.destination = destination;
         this.requestBuilder = requestBuilder;
@@ -55,6 +58,7 @@ public final class ClientRequest {
         this.clientId = clientId;
         this.createdTimeMs = createdTimeMs;
         this.expectResponse = expectResponse;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.callback = callback;
     }
 
@@ -79,7 +83,14 @@ public final class ClientRequest {
     }
 
     public RequestHeader makeHeader(short version) {
-        return new RequestHeader(apiKey(), version, clientId, correlationId);
+        short requestApiKey = requestBuilder.apiKey().id;
+        return new RequestHeader(
+            new RequestHeaderData().
+                setRequestApiKey(requestApiKey).
+                setRequestApiVersion(version).
+                setClientId(clientId).
+                setCorrelationId(correlationId),
+            ApiKeys.forId(requestApiKey).requestHeaderVersion(version));
     }
 
     public AbstractRequest.Builder<?> requestBuilder() {
@@ -100,5 +111,9 @@ public final class ClientRequest {
 
     public int correlationId() {
         return correlationId;
+    }
+
+    public int requestTimeoutMs() {
+        return requestTimeoutMs;
     }
 }

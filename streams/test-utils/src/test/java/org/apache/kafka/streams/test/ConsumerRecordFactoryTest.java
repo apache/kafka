@@ -30,6 +30,7 @@ import java.util.List;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
+@Deprecated
 public class ConsumerRecordFactoryTest {
     private final StringSerializer stringSerializer = new StringSerializer();
     private final IntegerSerializer integerSerializer = new IntegerSerializer();
@@ -63,12 +64,17 @@ public class ConsumerRecordFactoryTest {
     }
 
     @Test(expected = NullPointerException.class)
+    public void shouldNotAllowToCreateTopicWithNullHeaders() {
+        factory.create(topicName, rawKey, value, null, timestamp);
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicNameWithDefaultTimestamp() {
         factory.create(null, rawKey, value);
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowToCreateTopicWithNullTopicNameWithNulKey() {
+    public void shouldNotAllowToCreateTopicWithNullTopicNameWithNullKey() {
         factory.create((String) null, value, timestamp);
     }
 

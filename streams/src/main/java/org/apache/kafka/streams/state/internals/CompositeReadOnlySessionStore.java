@@ -42,7 +42,6 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
         this.storeName = storeName;
     }
 
-
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         Objects.requireNonNull(key, "key can't be null");
@@ -58,7 +57,8 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
             } catch (final InvalidStateStoreException ise) {
                 throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
                                                              " and may have been migrated to another instance; " +
-                                                             "please re-discover its location from the state metadata.");
+                                                             "please re-discover its location from the state metadata. " +
+                                                             "Original error message: " + ise.toString());
             }
         }
         return KeyValueIterators.emptyIterator();
@@ -68,12 +68,7 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
         Objects.requireNonNull(from, "from can't be null");
         Objects.requireNonNull(to, "to can't be null");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>>() {
-            @Override
-            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlySessionStore<K, V> store) {
-                return store.fetch(from, to);
-            }
-        };
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> store.fetch(from, to);
         return new DelegatingPeekingKeyValueIterator<>(storeName,
                                                        new CompositeKeyValueIterator<>(
                                                                storeProvider.stores(storeName, queryableStoreType).iterator(),

@@ -18,31 +18,31 @@ package kafka.api
 
 import kafka.utils.JaasTestUtils
 import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.common.security.scram.internal.ScramMechanism
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.scram.internals.ScramMechanism
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.junit.Before
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"
   override protected def kafkaServerSaslMechanisms = ScramMechanism.mechanismNames.asScala.toList
-  override val clientPrincipal = JaasTestUtils.KafkaScramUser
-  override val kafkaPrincipal = JaasTestUtils.KafkaScramAdmin
-  private val clientPassword = JaasTestUtils.KafkaScramPassword
+  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramUser)
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KafkaScramAdmin)
   private val kafkaPassword = JaasTestUtils.KafkaScramAdminPassword
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker credentials before starting brokers
-    createScramCredentials(zkConnect, kafkaPrincipal, kafkaPassword)
+    createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
   }
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     // Create client credentials after starting brokers so that dynamic credential creation is also tested
-    createScramCredentials(zkConnect, clientPrincipal, clientPassword)
+    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
   }
 }

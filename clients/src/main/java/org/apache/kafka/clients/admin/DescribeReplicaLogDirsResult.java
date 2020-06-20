@@ -28,9 +28,9 @@ import java.util.concurrent.ExecutionException;
 
 
 /**
- * The result of {@link AdminClient#describeReplicaLogDirs(Collection)}.
+ * The result of {@link Admin#describeReplicaLogDirs(Collection)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class DescribeReplicaLogDirsResult {

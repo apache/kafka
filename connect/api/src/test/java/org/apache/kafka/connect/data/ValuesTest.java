@@ -21,7 +21,11 @@ import org.apache.kafka.connect.data.Values.Parser;
 import org.apache.kafka.connect.errors.DataException;
 import org.junit.Test;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +38,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ValuesTest {
+
+    private static final String WHITESPACE = "\n \t \t\n";
+
+    private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 
     private static final Map<String, String> STRING_MAP = new LinkedHashMap<>();
     private static final Schema STRING_MAP_SCHEMA = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA).schema();
@@ -66,6 +74,149 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldNotParseUnquotedEmbeddedMapKeysAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("{foo: 3}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{foo: 3}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseUnquotedEmbeddedMapValuesAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("{3: foo}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{3: foo}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseUnquotedArrayElementsAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("[foo]");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("[foo]", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseStringsBeginningWithNullAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("null=");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("null=", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseStringsBeginningWithTrueAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("true}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("true}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseStringsBeginningWithFalseAsStrings() {
+        SchemaAndValue schemaAndValue = Values.parseString("false]");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("false]", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseTrueAsBooleanIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "true" + WHITESPACE);
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().type());
+        assertEquals(true, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseFalseAsBooleanIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "false" + WHITESPACE);
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().type());
+        assertEquals(false, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseNullAsNullIfSurroundedByWhitespace() {
+        SchemaAndValue schemaAndValue = Values.parseString(WHITESPACE + "null" + WHITESPACE);
+        assertNull(schemaAndValue);
+    }
+
+    @Test
+    public void shouldParseBooleanLiteralsEmbeddedInArray() {
+        SchemaAndValue schemaAndValue = Values.parseString("[true, false]");
+        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().valueSchema().type());
+        assertEquals(Arrays.asList(true, false), schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseBooleanLiteralsEmbeddedInMap() {
+        SchemaAndValue schemaAndValue = Values.parseString("{true: false, false: true}");
+        assertEquals(Type.MAP, schemaAndValue.schema().type());
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().keySchema().type());
+        assertEquals(Type.BOOLEAN, schemaAndValue.schema().valueSchema().type());
+        Map<Boolean, Boolean> expectedValue = new HashMap<>();
+        expectedValue.put(true, false);
+        expectedValue.put(false, true);
+        assertEquals(expectedValue, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseAsMapWithoutCommas() {
+        SchemaAndValue schemaAndValue = Values.parseString("{6:9 4:20}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{6:9 4:20}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseAsArrayWithoutCommas() {
+        SchemaAndValue schemaAndValue = Values.parseString("[0 1 2]");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("[0 1 2]", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseEmptyMap() {
+        SchemaAndValue schemaAndValue = Values.parseString("{}");
+        assertEquals(Type.MAP, schemaAndValue.schema().type());
+        assertEquals(Collections.emptyMap(), schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseEmptyArray() {
+        SchemaAndValue schemaAndValue = Values.parseString("[]");
+        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
+        assertEquals(Collections.emptyList(), schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldNotParseAsMapWithNullKeys() {
+        SchemaAndValue schemaAndValue = Values.parseString("{null: 3}");
+        assertEquals(Type.STRING, schemaAndValue.schema().type());
+        assertEquals("{null: 3}", schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseNull() {
+        SchemaAndValue schemaAndValue = Values.parseString("null");
+        assertNull(schemaAndValue);
+    }
+
+    @Test
+    public void shouldConvertStringOfNull() {
+        assertRoundTrip(Schema.STRING_SCHEMA, "null");
+    }
+
+    @Test
+    public void shouldParseNullMapValues() {
+        SchemaAndValue schemaAndValue = Values.parseString("{3: null}");
+        assertEquals(Type.MAP, schemaAndValue.schema().type());
+        assertEquals(Type.INT8, schemaAndValue.schema().keySchema().type());
+        assertEquals(Collections.singletonMap((byte) 3, null), schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseNullArrayElements() {
+        SchemaAndValue schemaAndValue = Values.parseString("[null]");
+        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
+        assertEquals(Collections.singletonList(null), schemaAndValue.value());
+    }
+
+    @Test
     public void shouldEscapeStringsWithEmbeddedQuotesAndBackslashes() {
         String original = "three\"blind\\\"mice";
         String expected = "three\\\"blind\\\\\\\"mice";
@@ -76,6 +227,24 @@ public class ValuesTest {
     public void shouldConvertNullValue() {
         assertRoundTrip(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA, null);
         assertRoundTrip(Schema.OPTIONAL_STRING_SCHEMA, Schema.STRING_SCHEMA, null);
+    }
+
+    @Test
+    public void shouldConvertBooleanValues() {
+        assertRoundTrip(Schema.BOOLEAN_SCHEMA, Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
+        SchemaAndValue resultFalse = roundTrip(Schema.BOOLEAN_SCHEMA, "false");
+        assertEquals(Schema.BOOLEAN_SCHEMA, resultFalse.schema());
+        assertEquals(Boolean.FALSE, resultFalse.value());
+
+        assertRoundTrip(Schema.BOOLEAN_SCHEMA, Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
+        SchemaAndValue resultTrue = roundTrip(Schema.BOOLEAN_SCHEMA, "true");
+        assertEquals(Schema.BOOLEAN_SCHEMA, resultTrue.schema());
+        assertEquals(Boolean.TRUE, resultTrue.value());
+    }
+
+    @Test(expected = DataException.class)
+    public void shouldFailToParseInvalidBooleanValueString() {
+        Values.convertToBoolean(Schema.STRING_SCHEMA, "\"green\"");
     }
 
     @Test
@@ -194,7 +363,8 @@ public class ValuesTest {
     public void shouldParseStringListWithMultipleElementTypesAndReturnListWithNoSchema() {
         String str = "[1, 2, 3, \"four\"]";
         SchemaAndValue result = Values.parseString(str);
-        assertNull(result.schema());
+        assertEquals(Type.ARRAY, result.schema().type());
+        assertNull(result.schema().valueSchema());
         List<?> list = (List<?>) result.value();
         assertEquals(4, list.size());
         assertEquals(1, ((Number) list.get(0)).intValue());
@@ -212,6 +382,146 @@ public class ValuesTest {
         SchemaAndValue result = Values.parseString(str);
         assertEquals(Type.STRING, result.schema().type());
         assertEquals(str, result.value());
+    }
+
+    @Test
+    public void shouldParseTimestampStringAsTimestamp() throws Exception {
+        String str = "2019-08-23T14:34:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT64, result.schema().type());
+        assertEquals(Timestamp.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseDateStringAsDate() throws Exception {
+        String str = "2019-08-23";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Date.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_DATE_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringAsDate() throws Exception {
+        String str = "14:34:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Time.LOGICAL_NAME, result.schema().name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(str);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimestampStringWithEscapedColonsAsTimestamp() throws Exception {
+        String str = "2019-08-23T14\\:34\\:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT64, result.schema().type());
+        assertEquals(Timestamp.LOGICAL_NAME, result.schema().name());
+        String expectedStr = "2019-08-23T14:34:54.346Z";
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(expectedStr);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringWithEscapedColonsAsDate() throws Exception {
+        String str = "14\\:34\\:54.346Z";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.INT32, result.schema().type());
+        assertEquals(Time.LOGICAL_NAME, result.schema().name());
+        String expectedStr = "14:34:54.346Z";
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(expectedStr);
+        assertEquals(expected, result.value());
+    }
+
+    @Test
+    public void shouldParseDateStringAsDateInArray() throws Exception {
+        String dateStr = "2019-08-23";
+        String arrayStr = "[" + dateStr + "]";
+        SchemaAndValue result = Values.parseString(arrayStr);
+        assertEquals(Type.ARRAY, result.schema().type());
+        Schema elementSchema = result.schema().valueSchema();
+        assertEquals(Type.INT32, elementSchema.type());
+        assertEquals(Date.LOGICAL_NAME, elementSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_DATE_FORMAT_PATTERN).parse(dateStr);
+        assertEquals(Collections.singletonList(expected), result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringAsTimeInArray() throws Exception {
+        String timeStr = "14:34:54.346Z";
+        String arrayStr = "[" + timeStr + "]";
+        SchemaAndValue result = Values.parseString(arrayStr);
+        assertEquals(Type.ARRAY, result.schema().type());
+        Schema elementSchema = result.schema().valueSchema();
+        assertEquals(Type.INT32, elementSchema.type());
+        assertEquals(Time.LOGICAL_NAME, elementSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
+        assertEquals(Collections.singletonList(expected), result.value());
+    }
+
+    @Test
+    public void shouldParseTimestampStringAsTimestampInArray() throws Exception {
+        String tsStr = "2019-08-23T14:34:54.346Z";
+        String arrayStr = "[" + tsStr + "]";
+        SchemaAndValue result = Values.parseString(arrayStr);
+        assertEquals(Type.ARRAY, result.schema().type());
+        Schema elementSchema = result.schema().valueSchema();
+        assertEquals(Type.INT64, elementSchema.type());
+        assertEquals(Timestamp.LOGICAL_NAME, elementSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr);
+        assertEquals(Collections.singletonList(expected), result.value());
+    }
+
+    @Test
+    public void shouldParseMultipleTimestampStringAsTimestampInArray() throws Exception {
+        String tsStr1 = "2019-08-23T14:34:54.346Z";
+        String tsStr2 = "2019-01-23T15:12:34.567Z";
+        String tsStr3 = "2019-04-23T19:12:34.567Z";
+        String arrayStr = "[" + tsStr1 + "," + tsStr2 + ",   " + tsStr3 + "]";
+        SchemaAndValue result = Values.parseString(arrayStr);
+        assertEquals(Type.ARRAY, result.schema().type());
+        Schema elementSchema = result.schema().valueSchema();
+        assertEquals(Type.INT64, elementSchema.type());
+        assertEquals(Timestamp.LOGICAL_NAME, elementSchema.name());
+        java.util.Date expected1 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr1);
+        java.util.Date expected2 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr2);
+        java.util.Date expected3 = new SimpleDateFormat(Values.ISO_8601_TIMESTAMP_FORMAT_PATTERN).parse(tsStr3);
+        assertEquals(Arrays.asList(expected1, expected2, expected3), result.value());
+    }
+
+    @Test
+    public void shouldParseQuotedTimeStringAsTimeInMap() throws Exception {
+        String keyStr = "k1";
+        String timeStr = "14:34:54.346Z";
+        String mapStr = "{\"" + keyStr + "\":\"" + timeStr + "\"}";
+        SchemaAndValue result = Values.parseString(mapStr);
+        assertEquals(Type.MAP, result.schema().type());
+        Schema keySchema = result.schema().keySchema();
+        Schema valueSchema = result.schema().valueSchema();
+        assertEquals(Type.STRING, keySchema.type());
+        assertEquals(Type.INT32, valueSchema.type());
+        assertEquals(Time.LOGICAL_NAME, valueSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
+        assertEquals(Collections.singletonMap(keyStr, expected), result.value());
+    }
+
+    @Test
+    public void shouldParseTimeStringAsTimeInMap() throws Exception {
+        String keyStr = "k1";
+        String timeStr = "14:34:54.346Z";
+        String mapStr = "{\"" + keyStr + "\":" + timeStr + "}";
+        SchemaAndValue result = Values.parseString(mapStr);
+        assertEquals(Type.MAP, result.schema().type());
+        Schema keySchema = result.schema().keySchema();
+        Schema valueSchema = result.schema().valueSchema();
+        assertEquals(Type.STRING, keySchema.type());
+        assertEquals(Type.INT32, valueSchema.type());
+        assertEquals(Time.LOGICAL_NAME, valueSchema.name());
+        java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
+        assertEquals(Collections.singletonMap(keyStr, expected), result.value());
     }
 
     /**
@@ -236,7 +546,7 @@ public class ValuesTest {
      */
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntry() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 ,, \"bar\" : 0,  \"baz\" : -987654321 }  ");
+        Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 ,, \"bar\" : 0,  \"baz\" : -987654321 }  ");
     }
 
     /**
@@ -244,7 +554,7 @@ public class ValuesTest {
      */
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMalformedMap() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 , \"a\", \"bar\" : 0,  \"baz\" : -987654321 }  ");
+        Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  1234567890 , \"a\", \"bar\" : 0,  \"baz\" : -987654321 }  ");
     }
 
     /**
@@ -252,7 +562,7 @@ public class ValuesTest {
      */
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMapWithIntValuesWithOnlyBlankEntries() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { ,,  , , }  ");
+        Values.convertToMap(Schema.STRING_SCHEMA, " { ,,  , , }  ");
     }
 
     /**
@@ -260,15 +570,21 @@ public class ValuesTest {
      */
     @Test(expected = DataException.class)
     public void shouldFailToParseStringOfMapWithIntValuesWithBlankEntries() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  ");
+        Values.convertToMap(Schema.STRING_SCHEMA, " { \"foo\" :  \"1234567890\" ,, \"bar\" : \"0\",  \"baz\" : \"boz\" }  ");
     }
 
-    /**
-     * Schema for Map requires a schema for key and value, but we have no key or value and Connect has no "any" type
-     */
-    @Test(expected = DataException.class)
-    public void shouldFailToParseStringOfEmptyMap() {
-        Values.convertToList(Schema.STRING_SCHEMA, " { }  ");
+    @Test
+    public void shouldConsumeMultipleTokens() {
+        String value = "a:b:c:d:e:f:g:h";
+        Parser parser = new Parser(value);
+        String firstFive = parser.next(5);
+        assertEquals("a:b:c", firstFive);
+        assertEquals(":", parser.next());
+        assertEquals("d", parser.next());
+        assertEquals(":", parser.next());
+        String lastEight = parser.next(8); // only 7 remain
+        assertNull(lastEight);
+        assertEquals("e", parser.next());
     }
 
     @Test
@@ -328,6 +644,85 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldConvertTimeValues() {
+        java.util.Date current = new java.util.Date();
+        long currentMillis = current.getTime() % MILLIS_PER_DAY;
+
+        // java.util.Date - just copy
+        java.util.Date t1 = Values.convertToTime(Time.SCHEMA, current);
+        assertEquals(current, t1);
+
+        // java.util.Date as a Timestamp - discard the date and keep just day's milliseconds
+        t1 = Values.convertToTime(Timestamp.SCHEMA, current);
+        assertEquals(new java.util.Date(currentMillis), t1);
+
+        // ISO8601 strings - currently broken because tokenization breaks at colon
+
+        // Millis as string
+        java.util.Date t3 = Values.convertToTime(Time.SCHEMA, Long.toString(currentMillis));
+        assertEquals(currentMillis, t3.getTime());
+
+        // Millis as long
+        java.util.Date t4 = Values.convertToTime(Time.SCHEMA, currentMillis);
+        assertEquals(currentMillis, t4.getTime());
+    }
+
+    @Test
+    public void shouldConvertDateValues() {
+        java.util.Date current = new java.util.Date();
+        long currentMillis = current.getTime() % MILLIS_PER_DAY;
+        long days = current.getTime() / MILLIS_PER_DAY;
+
+        // java.util.Date - just copy
+        java.util.Date d1 = Values.convertToDate(Date.SCHEMA, current);
+        assertEquals(current, d1);
+
+        // java.util.Date as a Timestamp - discard the day's milliseconds and keep the date
+        java.util.Date currentDate = new java.util.Date(current.getTime() - currentMillis);
+        d1 = Values.convertToDate(Timestamp.SCHEMA, currentDate);
+        assertEquals(currentDate, d1);
+
+        // ISO8601 strings - currently broken because tokenization breaks at colon
+
+        // Days as string
+        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
+        assertEquals(currentDate, d3);
+
+        // Days as long
+        java.util.Date d4 = Values.convertToDate(Date.SCHEMA, days);
+        assertEquals(currentDate, d4);
+    }
+
+    @Test
+    public void shouldConvertTimestampValues() {
+        java.util.Date current = new java.util.Date();
+        long currentMillis = current.getTime() % MILLIS_PER_DAY;
+
+        // java.util.Date - just copy
+        java.util.Date ts1 = Values.convertToTimestamp(Timestamp.SCHEMA, current);
+        assertEquals(current, ts1);
+
+        // java.util.Date as a Timestamp - discard the day's milliseconds and keep the date
+        java.util.Date currentDate = new java.util.Date(current.getTime() - currentMillis);
+        ts1 = Values.convertToTimestamp(Date.SCHEMA, currentDate);
+        assertEquals(currentDate, ts1);
+
+        // java.util.Date as a Time - discard the date and keep the day's milliseconds
+        ts1 = Values.convertToTimestamp(Time.SCHEMA, currentMillis);
+        assertEquals(new java.util.Date(currentMillis), ts1);
+
+        // ISO8601 strings - currently broken because tokenization breaks at colon
+
+        // Millis as string
+        java.util.Date ts3 = Values.convertToTimestamp(Timestamp.SCHEMA, Long.toString(current.getTime()));
+        assertEquals(current, ts3);
+
+        // Millis as long
+        java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, current.getTime());
+        assertEquals(current, ts4);
+    }
+
+    @Test
     public void canConsume() {
     }
 
@@ -367,7 +762,7 @@ public class ValuesTest {
         assertConsumable(parser, expectedTokens);
     }
 
-    protected void assertConsumable(Parser parser, String ... expectedTokens) {
+    protected void assertConsumable(Parser parser, String... expectedTokens) {
         for (String expectedToken : expectedTokens) {
             if (!expectedToken.trim().isEmpty()) {
                 int position = parser.mark();
@@ -383,7 +778,6 @@ public class ValuesTest {
     protected SchemaAndValue roundTrip(Schema desiredSchema, String currentValue) {
         return roundTrip(desiredSchema, new SchemaAndValue(Schema.STRING_SCHEMA, currentValue));
     }
-
 
     protected SchemaAndValue roundTrip(Schema desiredSchema, SchemaAndValue input) {
         String serialized = Values.convertToString(input.schema(), input.value());
@@ -458,5 +852,4 @@ public class ValuesTest {
             assertEquals(result, result2);
         }
     }
-
 }

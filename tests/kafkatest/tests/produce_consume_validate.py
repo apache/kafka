@@ -15,7 +15,8 @@
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-import time
+
+from kafkatest.utils import validate_delivery
 
 class ProduceConsumeValidateTest(Test):
     """This class provides a shared template for tests which follow the common pattern of:
@@ -44,8 +45,8 @@ class ProduceConsumeValidateTest(Test):
         self.consumer_init_timeout_sec = 0
         self.enable_idempotence = False
 
-    def setup_producer_and_consumer(self):
-        raise NotImplementedError("Subclasses should implement this")
+        # Allow tests to tolerate some data loss by overriding this for tests using older message formats
+        self.may_truncate_acked_records = False
 
     def start_producer_and_consumer(self):
         # Start background producer and consumer
@@ -53,20 +54,15 @@ class ProduceConsumeValidateTest(Test):
         if (self.consumer_init_timeout_sec > 0):
             self.logger.debug("Waiting %ds for the consumer to initialize.",
                               self.consumer_init_timeout_sec)
-            start = int(time.time())
             wait_until(lambda: self.consumer.alive(self.consumer.nodes[0]) is True,
                        timeout_sec=self.consumer_init_timeout_sec,
                        err_msg="Consumer process took more than %d s to fork" %\
                        self.consumer_init_timeout_sec)
-            end = int(time.time())
-            remaining_time = self.consumer_init_timeout_sec - (end - start)
-            if remaining_time < 0 :
-                remaining_time = 0
-            if self.consumer.new_consumer:
-                wait_until(lambda: self.consumer.has_partitions_assigned(self.consumer.nodes[0]) is True,
-                           timeout_sec=remaining_time,
-                           err_msg="Consumer process took more than %d s to have partitions assigned" %\
-                           remaining_time)
+
+        # If consuming only latest messages, wait for offset reset to ensure all messages are consumed
+        if not self.consumer.from_beginning:
+            self.consumer.wait_for_offset_reset(self.consumer.nodes[0], self.topic, self.num_partitions)
+
 
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5,
@@ -115,68 +111,22 @@ class ProduceConsumeValidateTest(Test):
                 self.mark_for_collect(s)
             raise
 
-    @staticmethod
-    def annotate_missing_msgs(missing, acked, consumed, msg):
-        missing_list = list(missing)
-        msg += "%s acked message did not make it to the Consumer. They are: " %\
-            len(missing_list)
-        if len(missing_list) < 20:
-            msg += str(missing_list) + ". "
-        else:
-            msg += ", ".join(str(m) for m in missing_list[:20])
-            msg += "...plus %s more. Total Acked: %s, Total Consumed: %s. " \
-                   % (len(missing_list) - 20, len(set(acked)), len(set(consumed)))
-        return msg
-
-    @staticmethod
-    def annotate_data_lost(data_lost, msg, number_validated):
-        print_limit = 10
-        if len(data_lost) > 0:
-            msg += "The first %s missing messages were validated to ensure they are in Kafka's data files. " \
-                   "%s were missing. This suggests data loss. Here are some of the messages not found in the data files: %s\n" \
-                   % (number_validated, len(data_lost), str(data_lost[0:print_limit]) if len(data_lost) > print_limit else str(data_lost))
-        else:
-            msg += "We validated that the first %s of these missing messages correctly made it into Kafka's data files. " \
-                   "This suggests they were lost on their way to the consumer." % number_validated
-        return msg
-
     def validate(self):
-        """Check that each acked message was consumed."""
-        success = True
-        msg = ""
-        acked = self.producer.acked
-        consumed = self.consumer.messages_consumed[1]
-        # Correctness of the set difference operation depends on using equivalent message_validators in procuder and consumer
-        missing = set(acked) - set(consumed)
+        messages_consumed = self.consumer.messages_consumed[1]
 
-        self.logger.info("num consumed:  %d" % len(consumed))
+        self.logger.info("Number of acked records: %d" % len(self.producer.acked))
+        self.logger.info("Number of consumed records: %d" % len(messages_consumed))
 
-        # Were all acked messages consumed?
-        if len(missing) > 0:
-            msg = self.annotate_missing_msgs(missing, acked, consumed, msg)
-            success = False
+        def check_lost_data(missing_records):
+            return self.kafka.search_data_files(self.topic, missing_records)
 
-            #Did we miss anything due to data loss?
-            to_validate = list(missing)[0:1000 if len(missing) > 1000 else len(missing)]
-            data_lost = self.kafka.search_data_files(self.topic, to_validate)
-            msg = self.annotate_data_lost(data_lost, msg, len(to_validate))
-
-
-        if self.enable_idempotence:
-            self.logger.info("Ran a test with idempotence enabled. We expect no duplicates")
-        else:
-            self.logger.info("Ran a test with idempotence disabled.")
-
-        # Are there duplicates?
-        if len(set(consumed)) != len(consumed):
-            num_duplicates = abs(len(set(consumed)) - len(consumed))
-            msg += "(There are also %s duplicate messages in the log - but that is an acceptable outcome)\n" % num_duplicates
-            if self.enable_idempotence:
-                assert False, "Detected %s duplicates even though idempotence was enabled." % num_duplicates
+        succeeded, error_msg = validate_delivery(self.producer.acked, messages_consumed,
+                                                 self.enable_idempotence, check_lost_data,
+                                                 self.may_truncate_acked_records)
 
         # Collect all logs if validation fails
-        if not success:
+        if not succeeded:
             for s in self.test_context.services:
                 self.mark_for_collect(s)
 
-        assert success, msg
+        assert succeeded, error_msg

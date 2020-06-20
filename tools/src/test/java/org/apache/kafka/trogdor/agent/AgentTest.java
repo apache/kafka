@@ -28,29 +28,36 @@ import org.apache.kafka.trogdor.basic.BasicPlatform;
 import org.apache.kafka.trogdor.basic.BasicTopology;
 import org.apache.kafka.trogdor.common.ExpectedTasks;
 import org.apache.kafka.trogdor.common.ExpectedTasks.ExpectedTaskBuilder;
+import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
+import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.fault.FilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.fault.Kibosh;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshControlFile;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshFilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
-
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.TaskDone;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
+import org.apache.kafka.trogdor.task.TaskSpec;
 import org.junit.Assert;
 import org.junit.Rule;
-import org.junit.rules.Timeout;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -59,6 +66,7 @@ import java.util.HashMap;
 import java.util.TreeMap;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 public class AgentTest {
     @Rule
@@ -67,6 +75,7 @@ public class AgentTest {
     private static BasicPlatform createBasicPlatform(Scheduler scheduler) {
         TreeMap<String, Node> nodes = new TreeMap<>();
         HashMap<String, String> config = new HashMap<>();
+        config.put(Platform.Config.TROGDOR_AGENT_PORT, Integer.toString(Agent.DEFAULT_PORT));
         nodes.put("node01", new BasicNode("node01", "localhost",
             config, Collections.<String>emptySet()));
         BasicTopology topology = new BasicTopology(nodes);
@@ -105,6 +114,61 @@ public class AgentTest {
             maxTries(10).target("localhost", agent.port()).build();
         AgentStatusResponse status = client.status();
         assertEquals(agent.status(), status);
+        agent.beginShutdown();
+        agent.waitForShutdown();
+    }
+
+    @Test
+    public void testCreateExpiredWorkerIsNotScheduled() throws Exception {
+        long initialTimeMs = 100;
+        long tickMs = 15;
+        final boolean[] toSleep = {true};
+        MockTime time = new MockTime(tickMs, initialTimeMs, 0) {
+            /**
+             * Modify sleep() to call super.sleep() every second call
+             * in order to avoid the endless loop in the tick() calls to the MockScheduler listener
+             */
+            @Override
+            public void sleep(long ms) {
+                toSleep[0] = !toSleep[0];
+                if (toSleep[0])
+                    super.sleep(ms);
+            }
+        };
+        MockScheduler scheduler = new MockScheduler(time);
+        Agent agent = createAgent(scheduler);
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
+        AgentStatusResponse status = client.status();
+
+        assertEquals(Collections.emptyMap(), status.workers());
+        new ExpectedTasks().waitFor(client);
+
+        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 10);
+        client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
+        long actualStartTimeMs = initialTimeMs + tickMs;
+        long doneMs = actualStartTimeMs + 2 * tickMs;
+        new ExpectedTasks().addTask(new ExpectedTaskBuilder("foo").
+            workerState(new WorkerDone("foo", fooSpec, actualStartTimeMs,
+                doneMs, null, "worker expired")).
+            taskState(new TaskDone(fooSpec, actualStartTimeMs, doneMs, "worker expired", false, null)).
+            build()).
+            waitFor(client);
+    }
+
+    @Test
+    public void testAgentGetUptime() throws Exception {
+        MockTime time = new MockTime(0, 111, 0);
+        MockScheduler scheduler = new MockScheduler(time);
+        Agent agent = createAgent(scheduler);
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
+
+        UptimeResponse uptime = client.uptime();
+        assertEquals(agent.uptime(), uptime);
+
+        time.setCurrentTimeMs(150);
+        assertNotEquals(agent.uptime(), uptime);
         agent.beginShutdown();
         agent.waitForShutdown();
     }
@@ -171,53 +235,58 @@ public class AgentTest {
 
     @Test
     public void testAgentFinishesTasks() throws Exception {
-        MockTime time = new MockTime(0, 0, 0);
+        long startTimeMs = 2000;
+        MockTime time = new MockTime(0, startTimeMs, 0);
         MockScheduler scheduler = new MockScheduler(time);
         Agent agent = createAgent(scheduler);
         AgentClient client = new AgentClient.Builder().
             maxTries(10).target("localhost", agent.port()).build();
         new ExpectedTasks().waitFor(client);
 
-        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 2);
+        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(startTimeMs, 2);
+        long fooSpecStartTimeMs = startTimeMs;
         client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning("foo", fooSpec, 0, new TextNode("active"))).
+                workerState(new WorkerRunning("foo", fooSpec, startTimeMs, new TextNode("active"))).
                 build()).
             waitFor(client);
 
         time.sleep(1);
 
-        final NoOpTaskSpec barSpec = new NoOpTaskSpec(2000, 900000);
-        client.createWorker(new CreateWorkerRequest(1, "bar", barSpec));
+        long barSpecWorkerId = 1;
+        long barSpecStartTimeMs = startTimeMs + 1;
+        final NoOpTaskSpec barSpec = new NoOpTaskSpec(startTimeMs, 900000);
+        client.createWorker(new CreateWorkerRequest(barSpecWorkerId, "bar", barSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning("foo", fooSpec, 0, new TextNode("active"))).
+                workerState(new WorkerRunning("foo", fooSpec, fooSpecStartTimeMs, new TextNode("active"))).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning("bar", barSpec, 1, new TextNode("active"))).
+                workerState(new WorkerRunning("bar", barSpec, barSpecStartTimeMs, new TextNode("active"))).
                 build()).
             waitFor(client);
 
         time.sleep(1);
 
+        // foo task expired
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerDone("foo", fooSpec, 0, 2, new TextNode("done"), "")).
+                workerState(new WorkerDone("foo", fooSpec, fooSpecStartTimeMs, fooSpecStartTimeMs + 2, new TextNode("done"), "")).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning("bar", barSpec, 1, new TextNode("active"))).
+                workerState(new WorkerRunning("bar", barSpec, barSpecStartTimeMs, new TextNode("active"))).
                 build()).
             waitFor(client);
 
         time.sleep(5);
-        client.stopWorker(new StopWorkerRequest(1));
+        client.stopWorker(new StopWorkerRequest(barSpecWorkerId));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerDone("foo", fooSpec, 0, 2, new TextNode("done"), "")).
+                workerState(new WorkerDone("foo", fooSpec, fooSpecStartTimeMs, fooSpecStartTimeMs + 2, new TextNode("done"), "")).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerDone("bar", barSpec, 1, 7, new TextNode("done"), "")).
+                workerState(new WorkerDone("bar", barSpec, barSpecStartTimeMs, startTimeMs + 7, new TextNode("done"), "")).
                 build()).
             waitFor(client);
 
@@ -304,7 +373,7 @@ public class AgentTest {
         try (MockKibosh mockKibosh = new MockKibosh()) {
             Assert.assertEquals(KiboshControlFile.EMPTY, mockKibosh.read());
             FilesUnreadableFaultSpec fooSpec = new FilesUnreadableFaultSpec(0, 900000,
-                Collections.singleton("myAgent"), mockKibosh.tempDir.getPath().toString(), "/foo", 123);
+                Collections.singleton("myAgent"), mockKibosh.tempDir.getPath(), "/foo", 123);
             client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
@@ -314,7 +383,7 @@ public class AgentTest {
             Assert.assertEquals(new KiboshControlFile(Collections.<Kibosh.KiboshFaultSpec>singletonList(
                 new KiboshFilesUnreadableFaultSpec("/foo", 123))), mockKibosh.read());
             FilesUnreadableFaultSpec barSpec = new FilesUnreadableFaultSpec(0, 900000,
-                Collections.singleton("myAgent"), mockKibosh.tempDir.getPath().toString(), "/bar", 456);
+                Collections.singleton("myAgent"), mockKibosh.tempDir.getPath(), "/bar", 456);
             client.createWorker(new CreateWorkerRequest(1, "bar", barSpec));
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
@@ -348,7 +417,7 @@ public class AgentTest {
             maxTries(10).target("localhost", agent.port()).build();
         new ExpectedTasks().waitFor(client);
 
-        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 5);
+        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(0, 5);
         client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
@@ -363,7 +432,7 @@ public class AgentTest {
         new ExpectedTasks().waitFor(client);
         time.sleep(1);
 
-        final NoOpTaskSpec fooSpec2 = new NoOpTaskSpec(100, 1);
+        final NoOpTaskSpec fooSpec2 = new NoOpTaskSpec(2, 1);
         client.createWorker(new CreateWorkerRequest(1, "foo", fooSpec2));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
@@ -385,4 +454,42 @@ public class AgentTest {
         agent.beginShutdown();
         agent.waitForShutdown();
     }
+
+    static void testExec(Agent agent, String expected, boolean expectedReturn, TaskSpec spec) throws Exception {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        PrintStream p = new PrintStream(b, true, StandardCharsets.UTF_8.toString());
+        boolean actualReturn = agent.exec(spec, p);
+        assertEquals(expected, b.toString());
+        assertEquals(expectedReturn, actualReturn);
+    }
+
+    @Test
+    public void testAgentExecWithTimeout() throws Exception {
+        Agent agent = createAgent(Scheduler.SYSTEM);
+        NoOpTaskSpec spec = new NoOpTaskSpec(0, 1);
+        TaskSpec rebasedSpec = agent.rebaseTaskSpecTime(spec);
+        testExec(agent,
+            String.format("Waiting for completion of task:%s%n",
+                JsonUtil.toPrettyJsonString(rebasedSpec)) +
+            String.format("Task failed with status null and error worker expired%n"),
+            false, rebasedSpec);
+        agent.beginShutdown();
+        agent.waitForShutdown();
+    }
+
+    @Test
+    public void testAgentExecWithNormalExit() throws Exception {
+        Agent agent = createAgent(Scheduler.SYSTEM);
+        SampleTaskSpec spec = new SampleTaskSpec(0, 120000,
+            Collections.singletonMap("node01", 1L), "");
+        TaskSpec rebasedSpec = agent.rebaseTaskSpecTime(spec);
+        testExec(agent,
+            String.format("Waiting for completion of task:%s%n",
+                JsonUtil.toPrettyJsonString(rebasedSpec)) +
+                String.format("Task succeeded with status \"halted\"%n"),
+            true, rebasedSpec);
+        agent.beginShutdown();
+        agent.waitForShutdown();
+    }
+
 };

@@ -50,7 +50,7 @@ object KafkaMetricReporterClusterIdTest {
 
   class MockBrokerMetricsReporter extends MockMetricsReporter with ClusterResourceListener {
 
-    override def onUpdate(clusterMetadata: ClusterResource) {
+    override def onUpdate(clusterMetadata: ClusterResource): Unit = {
       MockBrokerMetricsReporter.CLUSTER_META.set(clusterMetadata)
     }
 
@@ -80,20 +80,20 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
   var config: KafkaConfig = null
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     super.setUp()
     val props = TestUtils.createBrokerConfig(1, zkConnect)
-    props.setProperty("kafka.metrics.reporters", "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
+    props.setProperty(KafkaConfig.KafkaMetricsReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
     props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
     props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
     props.setProperty(KafkaConfig.BrokerIdProp, "-1")
     config = KafkaConfig.fromProps(props)
-    server = KafkaServerStartable.fromProps(props)
+    server = KafkaServerStartable.fromProps(props, threadNamePrefix = Option(this.getClass.getName))
     server.startup()
   }
 
   @Test
-  def testClusterIdPresent() {
+  def testClusterIdPresent(): Unit = {
     assertEquals("", KafkaMetricReporterClusterIdTest.setupError.get())
 
     assertNotNull(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META)
@@ -104,13 +104,15 @@ class KafkaMetricReporterClusterIdTest extends ZooKeeperTestHarness {
 
     assertEquals(KafkaMetricReporterClusterIdTest.MockKafkaMetricsReporter.CLUSTER_META.get().clusterId(),
       KafkaMetricReporterClusterIdTest.MockBrokerMetricsReporter.CLUSTER_META.get().clusterId())
+
+    server.shutdown()
+    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
   }
 
   @After
-  override def tearDown() {
+  override def tearDown(): Unit = {
     server.shutdown()
     CoreUtils.delete(config.logDirs)
-    TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
     super.tearDown()
   }
 }

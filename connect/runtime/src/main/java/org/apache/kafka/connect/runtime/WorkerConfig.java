@@ -16,27 +16,47 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
+import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.SimpleHeaderConverter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.regex.Pattern;
+
+import org.eclipse.jetty.util.StringUtil;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_PREFIX;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
  */
 public class WorkerConfig extends AbstractConfig {
+    private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
+
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+    private static final Collection<String> HEADER_ACTIONS = Collections.unmodifiableList(
+            Arrays.asList("set", "add", "setDate", "addDate")
+    );
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
@@ -49,6 +69,9 @@ public class WorkerConfig extends AbstractConfig {
             + "dynamically), this list need not contain the full set of servers (you may want more "
             + "than one, though, in case a server is down).";
     public static final String BOOTSTRAP_SERVERS_DEFAULT = "localhost:9092";
+
+    public static final String CLIENT_DNS_LOOKUP_CONFIG = CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG;
+    public static final String CLIENT_DNS_LOOKUP_DOC = CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC;
 
     public static final String KEY_CONVERTER_CLASS_CONFIG = "key.converter";
     public static final String KEY_CONVERTER_CLASS_DOC =
@@ -73,6 +96,10 @@ public class WorkerConfig extends AbstractConfig {
                     " header values to strings and deserialize them by inferring the schemas.";
     public static final String HEADER_CONVERTER_CLASS_DEFAULT = SimpleHeaderConverter.class.getName();
 
+    /**
+     * @deprecated As of 2.0.0
+     */
+    @Deprecated
     public static final String INTERNAL_KEY_CONVERTER_CLASS_CONFIG = "internal.key.converter";
     public static final String INTERNAL_KEY_CONVERTER_CLASS_DOC =
             "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
@@ -80,8 +107,13 @@ public class WorkerConfig extends AbstractConfig {
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro." +
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
-                    " configs and offsets, so users can typically use any functioning Converter implementation.";
+                    " configs and offsets, so users can typically use any functioning Converter implementation." +
+                    " Deprecated; will be removed in an upcoming version.";
 
+    /**
+     * @deprecated As of 2.0.0
+     */
+    @Deprecated
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_DOC =
             "Converter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
@@ -89,7 +121,10 @@ public class WorkerConfig extends AbstractConfig {
                     " independent of connectors it allows any connector to work with any serialization format." +
                     " Examples of common formats include JSON and Avro." +
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
-                    " configs and offsets, so users can typically use any functioning Converter implementation.";
+                    " configs and offsets, so users can typically use any functioning Converter implementation." +
+                    " Deprecated; will be removed in an upcoming version.";
+
+    private static final Class<? extends Converter> INTERNAL_CONVERTER_DEFAULT = JsonConverter.class;
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -160,6 +195,14 @@ public class WorkerConfig extends AbstractConfig {
         + "The default value of the Access-Control-Allow-Methods header allows cross origin requests for GET, POST and HEAD.";
     protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
 
+    public static final String ADMIN_LISTENERS_CONFIG = "admin.listeners";
+    protected static final String ADMIN_LISTENERS_DOC = "List of comma-separated URIs the Admin REST API will listen on." +
+            " The supported protocols are HTTP and HTTPS." +
+            " An empty or blank string will disable this feature." +
+            " The default behavior is to use the regular listener (specified by the 'listeners' property).";
+    protected static final List<String> ADMIN_LISTENERS_DEFAULT = null;
+    public static final String ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX = "admin.listeners.https.";
+
     public static final String PLUGIN_PATH_CONFIG = "plugin.path";
     protected static final String PLUGIN_PATH_DOC = "List of paths separated by commas (,) that "
             + "contain plugins (connectors, converters, transformations). The list should consist"
@@ -170,12 +213,62 @@ public class WorkerConfig extends AbstractConfig {
             + "plugins and their dependencies\n"
             + "Note: symlinks will be followed to discover dependencies or plugins.\n"
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
-            + "/opt/connectors";
+            + "/opt/connectors\n" 
+            + "Do not use config provider variables in this property, since the raw path is used "
+            + "by the worker's scanner before config providers are initialized and used to "
+            + "replace variables.";
+
+    public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
+    protected static final String CONFIG_PROVIDERS_DOC =
+            "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
+            + "in the order specified. Implementing the interface  "
+            + "<code>ConfigProvider</code> allows you to replace variable references in connector configurations, "
+            + "such as for externalized secrets. ";
+
+    public static final String REST_EXTENSION_CLASSES_CONFIG = "rest.extension.classes";
+    protected static final String REST_EXTENSION_CLASSES_DOC =
+            "Comma-separated names of <code>ConnectRestExtension</code> classes, loaded and called "
+            + "in the order specified. Implementing the interface  "
+            + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources like filters. "
+            + "Typically used to add custom capability like logging, security, etc. ";
+
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "connector.client.config.override.policy";
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
+        "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
+        + "overriden by the connector. The default implementation is `None`. The other possible policies in the framework include `All` "
+        + "and `Principal`. ";
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "None";
+
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
+
+    public static final String TOPIC_TRACKING_ENABLE_CONFIG = "topic.tracking.enable";
+    protected static final String TOPIC_TRACKING_ENABLE_DOC = "Enable tracking the set of active "
+            + "topics per connector during runtime.";
+    protected static final boolean TOPIC_TRACKING_ENABLE_DEFAULT = true;
+
+    public static final String TOPIC_TRACKING_ALLOW_RESET_CONFIG = "topic.tracking.allow.reset";
+    protected static final String TOPIC_TRACKING_ALLOW_RESET_DOC = "If set to true, it allows "
+            + "user requests to reset the set of active topics per connector.";
+    protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
+
+    public static final String CONNECT_KAFKA_CLUSTER_ID = "connect.kafka.cluster.id";
+    public static final String CONNECT_GROUP_ID = "connect.group.id";
+
+    public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
+    protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
+            + "automatic creation of topics used by source connectors, when source connectors "
+            + "are configured with `" + TOPIC_CREATION_PREFIX + "` properties. Each task will use an "
+            + "admin client to create its topics and will not depend on the Kafka brokers "
+            + "to create topics automatically.";
+    protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
+
+    public static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
+    protected static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
+    protected static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
 
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
@@ -186,13 +279,21 @@ public class WorkerConfig extends AbstractConfig {
         return new ConfigDef()
                 .define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, BOOTSTRAP_SERVERS_DEFAULT,
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
+                .define(CLIENT_DNS_LOOKUP_CONFIG,
+                        Type.STRING,
+                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                        in(ClientDnsLookup.DEFAULT.toString(),
+                           ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
+                           ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
+                        Importance.MEDIUM,
+                        CLIENT_DNS_LOOKUP_DOC)
                 .define(KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, KEY_CONVERTER_CLASS_DOC)
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
-                .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS, INTERNAL_CONVERTER_DEFAULT,
                         Importance.LOW, INTERNAL_KEY_CONVERTER_CLASS_DOC)
-                .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
+                .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, INTERNAL_CONVERTER_DEFAULT,
                         Importance.LOW, INTERNAL_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
@@ -236,7 +337,103 @@ public class WorkerConfig extends AbstractConfig {
                         ConfigDef.Type.STRING, "none", ConfigDef.Importance.LOW, BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         HEADER_CONVERTER_CLASS_DEFAULT,
-                        Importance.LOW, HEADER_CONVERTER_CLASS_DOC);
+                        Importance.LOW, HEADER_CONVERTER_CLASS_DOC)
+                .define(CONFIG_PROVIDERS_CONFIG, Type.LIST,
+                        Collections.emptyList(),
+                        Importance.LOW, CONFIG_PROVIDERS_DOC)
+                .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
+                        Importance.LOW, REST_EXTENSION_CLASSES_DOC)
+                .define(ADMIN_LISTENERS_CONFIG, Type.LIST, null,
+                        new AdminListenersValidator(), Importance.LOW, ADMIN_LISTENERS_DOC)
+                .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
+                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)
+                .define(TOPIC_TRACKING_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ENABLE_DEFAULT,
+                        Importance.LOW, TOPIC_TRACKING_ENABLE_DOC)
+                .define(TOPIC_TRACKING_ALLOW_RESET_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ALLOW_RESET_DEFAULT,
+                        Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC)
+                .define(TOPIC_CREATION_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_CREATION_ENABLE_DEFAULT, Importance.LOW,
+                        TOPIC_CREATION_ENABLE_DOC)
+                .define(RESPONSE_HTTP_HEADERS_CONFIG, Type.STRING, RESPONSE_HTTP_HEADERS_DEFAULT,
+                        new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC)
+                // security support
+                .withClientSslSupport();
+    }
+
+    private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
+        String[] deprecatedConfigs = new String[] {
+            INTERNAL_KEY_CONVERTER_CLASS_CONFIG,
+            INTERNAL_VALUE_CONVERTER_CLASS_CONFIG
+        };
+        for (String config : deprecatedConfigs) {
+            if (props.containsKey(config)) {
+                Class<?> internalConverterClass = getClass(config);
+                logDeprecatedProperty(config, internalConverterClass.getCanonicalName(), INTERNAL_CONVERTER_DEFAULT.getCanonicalName(), null);
+                if (internalConverterClass.equals(INTERNAL_CONVERTER_DEFAULT)) {
+                    // log the properties for this converter ...
+                    for (Map.Entry<String, Object> propEntry : originalsWithPrefix(config + ".").entrySet()) {
+                        String prop = propEntry.getKey();
+                        String propValue = propEntry.getValue().toString();
+                        String defaultValue = JsonConverterConfig.SCHEMAS_ENABLE_CONFIG.equals(prop) ? "false" : null;
+                        logDeprecatedProperty(config + "." + prop, propValue, defaultValue, config);
+                    }
+                }
+            }
+        }
+    }
+
+    private void logDeprecatedProperty(String propName, String propValue, String defaultValue, String prefix) {
+        String prefixNotice = prefix != null
+            ? " (along with all configuration for '" + prefix + "')"
+            : "";
+        if (defaultValue != null && defaultValue.equalsIgnoreCase(propValue)) {
+            log.info(
+                "Worker configuration property '{}'{} is deprecated and may be removed in an upcoming release. "
+                    + "The specified value '{}' matches the default, so this property can be safely removed from the worker configuration.",
+                propName,
+                prefixNotice,
+                propValue
+            );
+        } else if (defaultValue != null) {
+            log.warn(
+                "Worker configuration property '{}'{} is deprecated and may be removed in an upcoming release. "
+                    + "The specified value '{}' does NOT match the default and recommended value '{}'.",
+                propName,
+                prefixNotice,
+                propValue,
+                defaultValue
+            );
+        } else {
+            log.warn(
+                "Worker configuration property '{}'{} is deprecated and may be removed in an upcoming release.",
+                propName,
+                prefixNotice
+            );
+        }
+    }
+
+    private void logPluginPathConfigProviderWarning(Map<String, String> rawOriginals) {
+        String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
+        // Can't use AbstractConfig::originalsStrings here since some values may be null, which
+        // causes that method to fail
+        String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG));
+        if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
+            log.warn(
+                "Variables cannot be used in the 'plugin.path' property, since the property is "
+                + "used by plugin scanning before the config providers that replace the " 
+                + "variables are initialized. The raw value '{}' was used for plugin scanning, as " 
+                + "opposed to the transformed value '{}', and this may cause unexpected results.",
+                rawPluginPath,
+                transformedPluginPath
+            );
+        }
+    }
+
+    public Integer getRebalanceTimeout() {
+        return null;
+    }
+
+    public boolean topicCreationEnable() {
+        return getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
     }
 
     @Override
@@ -248,10 +445,101 @@ public class WorkerConfig extends AbstractConfig {
         String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
         return locationList == null
                          ? new ArrayList<String>()
-                         : Arrays.asList(locationList.trim().split("\\s*,\\s*", -1));
+                         : Arrays.asList(COMMA_WITH_WHITESPACE.split(locationList.trim(), -1));
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
+        logInternalConverterDeprecationWarnings(props);
+        logPluginPathConfigProviderWarning(props);
+    }
+
+    // Visible for testing
+    static void validateHttpResponseHeaderConfig(String config) {
+        try {
+            // validate format
+            String[] configTokens = config.trim().split("\\s+", 2);
+            if (configTokens.length != 2) {
+                throw new ConfigException(String.format("Invalid format of header config '%s\'. "
+                        + "Expected: '[ation] [header name]:[header value]'", config));
+            }
+
+            // validate action
+            String method = configTokens[0].trim();
+            validateHeaderConfigAction(method);
+
+            // validate header name and header value pair
+            String header = configTokens[1];
+            String[] headerTokens = header.trim().split(":");
+            if (headerTokens.length != 2) {
+                throw new ConfigException(
+                        String.format("Invalid format of header name and header value pair '%s'. "
+                                + "Expected: '[header name]:[header value]'", header));
+            }
+
+            // validate header name
+            String headerName = headerTokens[0].trim();
+            if (headerName.isEmpty() || headerName.matches(".*\\s+.*")) {
+                throw new ConfigException(String.format("Invalid header name '%s'. "
+                        + "The '[header name]' cannot contain whitespace", headerName));
+            }
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw new ConfigException(String.format("Invalid header config '%s'.", config), e);
+        }
+    }
+
+    // Visible for testing
+    static void validateHeaderConfigAction(String action) {
+        if (!HEADER_ACTIONS.stream().anyMatch(action::equalsIgnoreCase)) {
+            throw new ConfigException(String.format("Invalid header config action: '%s'. "
+                    + "Expected one of %s", action, HEADER_ACTIONS));
+        }
+    }
+
+    private static class AdminListenersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                return;
+            }
+
+            if (!(value instanceof List)) {
+                throw new ConfigException("Invalid value type (list expected).");
+            }
+
+            List items = (List) value;
+            if (items.isEmpty()) {
+                return;
+            }
+
+            for (Object item: items) {
+                if (!(item instanceof String)) {
+                    throw new ConfigException("Invalid type for admin listener (expected String).");
+                }
+                if (((String) item).trim().isEmpty()) {
+                    throw new ConfigException("Empty listener found when parsing list.");
+                }
+            }
+        }
+    }
+
+    private static class ResponseHttpHeadersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            String strValue = (String) value;
+            if (strValue == null || strValue.trim().isEmpty()) {
+                return;
+            }
+
+            String[] configs = StringUtil.csvSplit(strValue); // handles and removed surrounding quotes
+            Arrays.stream(configs).forEach(WorkerConfig::validateHttpResponseHeaderConfig);
+        }
+
+        @Override
+        public String toString() {
+            return "Comma-separated header rules, where each header rule is of the form "
+                    + "'[action] [header name]:[header value]' and optionally surrounded by double quotes "
+                    + "if any part of a header rule contains a comma";
+        }
     }
 }

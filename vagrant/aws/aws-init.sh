@@ -25,21 +25,26 @@ sudo apt-get install -y \
   ruby-dev \
   zlib1g-dev \
   realpath \
-  python-setuptools
+  python-setuptools \
+  iperf \
+  traceroute
 
 base_dir=`dirname $0`/../..
 
 if [ -z `which vagrant` ]; then
     echo "Installing vagrant..."
-    wget https://releases.hashicorp.com/vagrant/1.9.3/vagrant_1.9.3_x86_64.deb
-    sudo dpkg -i vagrant_1.9.3_x86_64.deb
-    rm -f vagrant_1.9.3_x86_64.deb
+    wget https://releases.hashicorp.com/vagrant/2.1.5/vagrant_2.1.5_x86_64.deb
+    sudo dpkg -i vagrant_2.1.5_x86_64.deb
+    rm -f vagrant_2.1.5_x86_64.deb
 fi
 
 # Install necessary vagrant plugins
 # Note: Do NOT install vagrant-cachier since it doesn't work on AWS and only
 # adds log noise
-vagrant_plugins="vagrant-aws vagrant-hostmanager"
+
+# Custom vagrant-aws with spot instance support. See https://github.com/mitchellh/vagrant-aws/issues/32
+wget -nv https://s3-us-west-2.amazonaws.com/confluent-packaging-tools/vagrant-aws-0.7.2.spot.gem -P /tmp
+vagrant_plugins="/tmp/vagrant-aws-0.7.2.spot.gem vagrant-hostmanager"
 existing=`vagrant plugin list`
 for plugin in $vagrant_plugins; do
     echo $existing | grep $plugin > /dev/null

@@ -18,21 +18,22 @@
 package kafka.api
 
 import org.junit._
-import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
+
 import scala.util.Random
 import java.nio.ByteBuffer
-import kafka.common.KafkaException
+
 import kafka.utils.TestUtils
+import org.apache.kafka.common.KafkaException
 
 object ApiUtilsTest {
   val rnd: Random = new Random()
 }
 
-class ApiUtilsTest extends JUnitSuite {
+class ApiUtilsTest {
 
   @Test
-  def testShortStringNonASCII() {
+  def testShortStringNonASCII(): Unit = {
     // Random-length strings
     for(_ <- 0 to 100) {
       // Since we're using UTF-8 encoding, each encoded byte will be one to four bytes long 
@@ -45,7 +46,7 @@ class ApiUtilsTest extends JUnitSuite {
   }
 
   @Test
-  def testShortStringASCII() {
+  def testShortStringASCII(): Unit = {
     // Random-length strings
     for(_ <- 0 to 100) {
       val s: String = TestUtils.randomString(math.abs(ApiUtilsTest.rnd.nextInt()) % Short.MaxValue)  

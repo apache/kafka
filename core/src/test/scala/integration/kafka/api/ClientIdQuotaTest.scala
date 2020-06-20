@@ -27,20 +27,23 @@ class ClientIdQuotaTest extends BaseQuotaTest {
   override def consumerClientId = "QuotasTestConsumer-!@#$%^&*()"
 
   @Before
-  override def setUp() {
+  override def setUp(): Unit = {
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, defaultProducerQuota.toString)
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, defaultConsumerQuota.toString)
     super.setUp()
   }
 
   override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
-    new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producers.head, consumers.head) {
+    val producer = createProducer()
+    val consumer = createConsumer()
+
+    new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer) {
       override def userPrincipal: KafkaPrincipal = KafkaPrincipal.ANONYMOUS
       override def quotaMetricTags(clientId: String): Map[String, String] = {
         Map("user" -> "", "client-id" -> clientId)
       }
 
-      override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double) {
+      override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit = {
         val producerProps = new Properties()
         producerProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.toString)
         producerProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota.toString)
@@ -52,13 +55,13 @@ class ClientIdQuotaTest extends BaseQuotaTest {
         updateQuotaOverride(consumerClientId, consumerProps)
       }
 
-      override def removeQuotaOverrides() {
+      override def removeQuotaOverrides(): Unit = {
         val emptyProps = new Properties
         updateQuotaOverride(producerClientId, emptyProps)
         updateQuotaOverride(consumerClientId, emptyProps)
       }
 
-      private def updateQuotaOverride(clientId: String, properties: Properties) {
+      private def updateQuotaOverride(clientId: String, properties: Properties): Unit = {
         adminZkClient.changeClientIdConfig(Sanitizer.sanitize(clientId), properties)
       }
     }

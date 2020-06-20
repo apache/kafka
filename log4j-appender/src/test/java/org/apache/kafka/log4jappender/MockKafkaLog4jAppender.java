@@ -29,9 +29,16 @@ public class MockKafkaLog4jAppender extends KafkaLog4jAppender {
     private MockProducer<byte[], byte[]> mockProducer =
             new MockProducer<>(false, new MockSerializer(), new MockSerializer());
 
+    private Properties producerProperties;
+
     @Override
     protected Producer<byte[], byte[]> getKafkaProducer(Properties props) {
+        producerProperties = props;
         return mockProducer;
+    }
+
+    void setKafkaProducer(MockProducer<byte[], byte[]> producer) {
+        this.mockProducer = producer;
     }
 
     @Override
@@ -42,7 +49,11 @@ public class MockKafkaLog4jAppender extends KafkaLog4jAppender {
         super.append(event);
     }
 
-    protected List<ProducerRecord<byte[], byte[]>> getHistory() {
+    List<ProducerRecord<byte[], byte[]>> getHistory() {
         return mockProducer.history();
+    }
+
+    public Properties getProducerProperties() {
+        return producerProperties;
     }
 }

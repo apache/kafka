@@ -17,6 +17,7 @@
   */
 
 package kafka.server
+
 import java.util.Collections
 
 import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
@@ -26,7 +27,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Tests that there are no failed authentications during broker startup. This is to verify
@@ -35,9 +36,7 @@ import scala.collection.JavaConverters._
  */
 class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
 
-  override val producerCount = 0
-  override val consumerCount = 0
-  override val serverCount = 1
+  override val brokerCount = 1
 
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   private val kafkaServerSaslMechanisms = Collections.singletonList("SCRAM-SHA-256").asScala
@@ -47,7 +46,7 @@ class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
 
-  override def configureSecurityBeforeServersStart() {
+  override def configureSecurityBeforeServersStart(): Unit = {
     super.configureSecurityBeforeServersStart()
     zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create credentials before starting brokers
@@ -58,16 +57,9 @@ class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
 
   @Test
   def testAuthentications(): Unit = {
-    val successfulAuths = totalAuthentications("successful-authentication-total")
+    val successfulAuths = TestUtils.totalMetricValue(servers.head, "successful-authentication-total")
     assertTrue("No successful authentications", successfulAuths > 0)
-    val failedAuths = totalAuthentications("failed-authentication-total")
+    val failedAuths = TestUtils.totalMetricValue(servers.head, "failed-authentication-total")
     assertEquals(0, failedAuths)
-  }
-
-  private def totalAuthentications(metricName: String): Int = {
-    val allMetrics = servers.head.metrics.metrics
-    val totalAuthCount = allMetrics.values().asScala.filter(_.metricName().name() == metricName)
-      .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
-    totalAuthCount.toInt
   }
 }

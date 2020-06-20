@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.kstream.Window;
 
 /**
@@ -32,7 +31,6 @@ import org.apache.kafka.streams.kstream.Window;
  * @see org.apache.kafka.streams.kstream.UnlimitedWindows
  * @see org.apache.kafka.streams.processor.TimestampExtractor
  */
-@InterfaceStability.Unstable
 public class UnlimitedWindow extends Window {
 
     /**
@@ -51,7 +49,7 @@ public class UnlimitedWindow extends Window {
      *
      * @param other another window
      * @return {@code true}
-     * @throws IllegalArgumentException if the {@code other} window has a different type than {@link this} window
+     * @throws IllegalArgumentException if the {@code other} window has a different type than {@code this} window
      */
     @Override
     public boolean overlap(final Window other) {

@@ -16,35 +16,45 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.TopicAdmin;
+import org.apache.kafka.connect.util.TopicCreation;
+import org.apache.kafka.connect.util.TopicCreationGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +63,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 /**
  * WorkerTask that uses a SourceTask to ingest data into Kafka.
@@ -64,15 +77,19 @@ class WorkerSourceTask extends WorkerTask {
 
     private final WorkerConfig workerConfig;
     private final SourceTask task;
+    private final ClusterConfigState configState;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
     private final TransformationChain<SourceRecord> transformationChain;
-    private KafkaProducer<byte[], byte[]> producer;
-    private final OffsetStorageReader offsetReader;
+    private final KafkaProducer<byte[], byte[]> producer;
+    private final TopicAdmin admin;
+    private final CloseableOffsetStorageReader offsetReader;
     private final OffsetStorageWriter offsetWriter;
-    private final Time time;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
+    private final AtomicReference<Exception> producerSendException;
+    private final boolean isTopicTrackingEnabled;
+    private final TopicCreation topicCreation;
 
     private List<SourceRecord> toSend;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
@@ -87,6 +104,7 @@ class WorkerSourceTask extends WorkerTask {
     private Map<String, String> taskConfig;
     private boolean finishedStart = false;
     private boolean startedShutdownBeforeStartCompleted = false;
+    private boolean stopped = false;
 
     public WorkerSourceTask(ConnectorTaskId id,
                             SourceTask task,
@@ -97,24 +115,32 @@ class WorkerSourceTask extends WorkerTask {
                             HeaderConverter headerConverter,
                             TransformationChain<SourceRecord> transformationChain,
                             KafkaProducer<byte[], byte[]> producer,
-                            OffsetStorageReader offsetReader,
+                            TopicAdmin admin,
+                            Map<String, TopicCreationGroup> topicGroups,
+                            CloseableOffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
+                            ClusterConfigState configState,
                             ConnectMetrics connectMetrics,
                             ClassLoader loader,
-                            Time time) {
-        super(id, statusListener, initialState, loader, connectMetrics);
+                            Time time,
+                            RetryWithToleranceOperator retryWithToleranceOperator,
+                            StatusBackingStore statusBackingStore) {
+
+        super(id, statusListener, initialState, loader, connectMetrics,
+                retryWithToleranceOperator, time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;
+        this.configState = configState;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
         this.headerConverter = headerConverter;
         this.transformationChain = transformationChain;
         this.producer = producer;
+        this.admin = admin;
         this.offsetReader = offsetReader;
         this.offsetWriter = offsetWriter;
-        this.time = time;
 
         this.toSend = null;
         this.lastSendFailed = false;
@@ -123,6 +149,9 @@ class WorkerSourceTask extends WorkerTask {
         this.flushing = false;
         this.stopRequestedLatch = new CountDownLatch(1);
         this.sourceTaskMetricsGroup = new SourceTaskMetricsGroup(id, connectMetrics);
+        this.producerSendException = new AtomicReference<>();
+        this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        this.topicCreation = TopicCreation.newTopicCreation(workerConfig, topicGroups);
     }
 
     @Override
@@ -137,13 +166,40 @@ class WorkerSourceTask extends WorkerTask {
 
     @Override
     protected void close() {
-        producer.close(30, TimeUnit.SECONDS);
-        transformationChain.close();
+        if (!shouldPause()) {
+            tryStop();
+        }
+        if (producer != null) {
+            try {
+                producer.close(Duration.ofSeconds(30));
+            } catch (Throwable t) {
+                log.warn("Could not close producer", t);
+            }
+        }
+        if (admin != null) {
+            try {
+                admin.close(Duration.ofSeconds(30));
+            } catch (Throwable t) {
+                log.warn("Failed to close admin client on time", t);
+            }
+        }
+        Utils.closeQuietly(transformationChain, "transformation chain");
+        Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
     }
 
     @Override
-    protected void releaseResources() {
-        sourceTaskMetricsGroup.close();
+    public void removeMetrics() {
+        try {
+            sourceTaskMetricsGroup.close();
+        } finally {
+            super.removeMetrics();
+        }
+    }
+
+    @Override
+    public void cancel() {
+        super.cancel();
+        offsetReader.close();
     }
 
     @Override
@@ -152,21 +208,32 @@ class WorkerSourceTask extends WorkerTask {
         stopRequestedLatch.countDown();
         synchronized (this) {
             if (finishedStart)
-                task.stop();
+                tryStop();
             else
                 startedShutdownBeforeStartCompleted = true;
+        }
+    }
+
+    private synchronized void tryStop() {
+        if (!stopped) {
+            try {
+                task.stop();
+                stopped = true;
+            } catch (Throwable t) {
+                log.warn("Could not stop task", t);
+            }
         }
     }
 
     @Override
     public void execute() {
         try {
-            task.initialize(new WorkerSourceTaskContext(offsetReader));
+            task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
             task.start(taskConfig);
             log.info("{} Source task finished initialization and start", this);
             synchronized (this) {
                 if (startedShutdownBeforeStartCompleted) {
-                    task.stop();
+                    tryStop();
                     return;
                 }
                 finishedStart = true;
@@ -181,17 +248,19 @@ class WorkerSourceTask extends WorkerTask {
                     continue;
                 }
 
+                maybeThrowProducerSendException();
+
                 if (toSend == null) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
                     long start = time.milliseconds();
-                    toSend = task.poll();
+                    toSend = poll();
                     if (toSend != null) {
                         recordPollReturned(toSend.size(), time.milliseconds() - start);
                     }
                 }
                 if (toSend == null)
                     continue;
-                log.debug("{} About to send " + toSend.size() + " records to Kafka", this);
+                log.trace("{} About to send {} records to Kafka", this, toSend.size());
                 if (!sendRecords())
                     stopRequestedLatch.await(SEND_FAILED_BACKOFF_MS, TimeUnit.MILLISECONDS);
             }
@@ -206,6 +275,53 @@ class WorkerSourceTask extends WorkerTask {
         }
     }
 
+    private void maybeThrowProducerSendException() {
+        if (producerSendException.get() != null) {
+            throw new ConnectException(
+                "Unrecoverable exception from producer send callback",
+                producerSendException.get()
+            );
+        }
+    }
+
+    protected List<SourceRecord> poll() throws InterruptedException {
+        try {
+            return task.poll();
+        } catch (RetriableException | org.apache.kafka.common.errors.RetriableException e) {
+            log.warn("{} failed to poll records from SourceTask. Will retry operation.", this, e);
+            // Do nothing. Let the framework poll whenever it's ready.
+            return null;
+        }
+    }
+
+    /**
+     * Convert the source record into a producer record.
+     *
+     * @param record the transformed record
+     * @return the producer record which can sent over to Kafka. A null is returned if the input is null or
+     * if an error was encountered during any of the converter stages.
+     */
+    private ProducerRecord<byte[], byte[]> convertTransformedRecord(SourceRecord record) {
+        if (record == null) {
+            return null;
+        }
+
+        RecordHeaders headers = retryWithToleranceOperator.execute(() -> convertHeaderFor(record), Stage.HEADER_CONVERTER, headerConverter.getClass());
+
+        byte[] key = retryWithToleranceOperator.execute(() -> keyConverter.fromConnectData(record.topic(), headers, record.keySchema(), record.key()),
+                Stage.KEY_CONVERTER, keyConverter.getClass());
+
+        byte[] value = retryWithToleranceOperator.execute(() -> valueConverter.fromConnectData(record.topic(), headers, record.valueSchema(), record.value()),
+                Stage.VALUE_CONVERTER, valueConverter.getClass());
+
+        if (retryWithToleranceOperator.failed()) {
+            return null;
+        }
+
+        return new ProducerRecord<>(record.topic(), record.kafkaPartition(),
+                ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
+    }
+
     /**
      * Try to send a batch of records. If a send fails and is retriable, this saves the remainder of the batch so it can
      * be retried after backing off. If a send fails and is not retriable, this will throw a ConnectException.
@@ -214,21 +330,20 @@ class WorkerSourceTask extends WorkerTask {
     private boolean sendRecords() {
         int processed = 0;
         recordBatch(toSend.size());
-        final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
+        final SourceRecordWriteCounter counter =
+                toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
-            final SourceRecord record = transformationChain.apply(preTransformRecord);
+            maybeThrowProducerSendException();
 
-            if (record == null) {
+            retryWithToleranceOperator.sourceRecord(preTransformRecord);
+            final SourceRecord record = transformationChain.apply(preTransformRecord);
+            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
+            if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
-                commitTaskRecord(preTransformRecord);
+                commitTaskRecord(preTransformRecord, null);
                 continue;
             }
 
-            RecordHeaders headers = convertHeaderFor(record);
-            byte[] key = keyConverter.fromConnectData(record.topic(), record.keySchema(), record.key());
-            byte[] value = valueConverter.fromConnectData(record.topic(), record.valueSchema(), record.value());
-            final ProducerRecord<byte[], byte[]> producerRecord = new ProducerRecord<>(record.topic(), record.kafkaPartition(),
-                    ConnectUtils.checkAndConvertTimestamp(record.timestamp()), key, value, headers);
             log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted
@@ -246,38 +361,41 @@ class WorkerSourceTask extends WorkerTask {
                 }
             }
             try {
+                maybeCreateTopic(record.topic());
                 final String topic = producerRecord.topic();
                 producer.send(
-                        producerRecord,
-                        new Callback() {
-                            @Override
-                            public void onCompletion(RecordMetadata recordMetadata, Exception e) {
-                                if (e != null) {
-                                    // Given the default settings for zero data loss, this should basically never happen --
-                                    // between "infinite" retries, indefinite blocking on full buffers, and "infinite" request
-                                    // timeouts, callbacks with exceptions should never be invoked in practice. If the
-                                    // user overrode these settings, the best we can do is notify them of the failure via
-                                    // logging.
-                                    log.error("{} failed to send record to {}: {}", this, topic, e);
-                                    log.debug("{} Failed record: {}", this, preTransformRecord);
-                                } else {
-                                    log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
-                                            this,
-                                            recordMetadata.topic(), recordMetadata.partition(),
-                                            recordMetadata.offset());
-                                    commitTaskRecord(preTransformRecord);
-                                }
-                                recordSent(producerRecord);
-                                counter.completeRecord();
+                    producerRecord,
+                    (recordMetadata, e) -> {
+                        if (e != null) {
+                            log.error("{} failed to send record to {}: ", WorkerSourceTask.this, topic, e);
+                            log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
+                            producerSendException.compareAndSet(null, e);
+                        } else {
+                            recordSent(producerRecord);
+                            counter.completeRecord();
+                            log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
+                                    WorkerSourceTask.this,
+                                    recordMetadata.topic(), recordMetadata.partition(),
+                                    recordMetadata.offset());
+                            commitTaskRecord(preTransformRecord, recordMetadata);
+                            if (isTopicTrackingEnabled) {
+                                recordActiveTopic(producerRecord.topic());
                             }
-                        });
+                        }
+                    });
                 lastSendFailed = false;
-            } catch (RetriableException e) {
-                log.warn("{} Failed to send {}, backing off before retrying:", this, producerRecord, e);
+            } catch (RetriableException | org.apache.kafka.common.errors.RetriableException e) {
+                log.warn("{} Failed to send record to topic '{}' and partition '{}'. Backing off before retrying: ",
+                        this, producerRecord.topic(), producerRecord.partition(), e);
                 toSend = toSend.subList(processed, toSend.size());
                 lastSendFailed = true;
                 counter.retryRemaining();
                 return false;
+            } catch (ConnectException e) {
+                log.warn("{} Failed to send record to topic '{}' and partition '{}' due to an unrecoverable exception: ",
+                        this, producerRecord.topic(), producerRecord.partition(), e);
+                log.warn("{} Failed to send {} with unrecoverable exception: ", this, producerRecord, e);
+                throw e;
             } catch (KafkaException e) {
                 throw new ConnectException("Unrecoverable exception trying to send", e);
             }
@@ -285,6 +403,37 @@ class WorkerSourceTask extends WorkerTask {
         }
         toSend = null;
         return true;
+    }
+
+    // Due to transformations that may change the destination topic of a record (such as
+    // RegexRouter) topic creation can not be batched for multiple topics
+    private void maybeCreateTopic(String topic) {
+        if (!topicCreation.isTopicCreationRequired(topic)) {
+            return;
+        }
+        log.info("The task will send records to topic '{}' for the first time. Checking "
+                + "whether topic exists", topic);
+        Map<String, TopicDescription> existing = admin.describeTopics(topic);
+        if (!existing.isEmpty()) {
+            log.info("Topic '{}' already exists.", topic);
+            topicCreation.addTopic(topic);
+            return;
+        }
+
+        log.info("Creating topic '{}'", topic);
+        TopicCreationGroup topicGroup = topicCreation.findFirstGroup(topic);
+        log.debug("Topic '{}' matched topic creation group: {}", topic, topicGroup);
+        NewTopic newTopic = topicGroup.newTopic(topic);
+
+        if (admin.createTopic(newTopic)) {
+            topicCreation.addTopic(topic);
+            log.info("Created topic '{}' using creation group {}", newTopic, topicGroup);
+        } else {
+            log.warn("Request to create new topic '{}' failed", topic);
+            throw new ConnectException("Task failed to create new topic " + topic + ". Ensure "
+                    + "that the task is authorized to create topics or that the topic exists and "
+                    + "restart the task");
+        }
     }
 
     private RecordHeaders convertHeaderFor(SourceRecord record) {
@@ -301,9 +450,9 @@ class WorkerSourceTask extends WorkerTask {
         return result;
     }
 
-    private void commitTaskRecord(SourceRecord record) {
+    private void commitTaskRecord(SourceRecord record, RecordMetadata metadata) {
         try {
-            task.commitRecord(record);
+            task.commitRecord(record, metadata);
         } catch (Throwable t) {
             log.error("{} Exception thrown while calling task.commitRecord()", this, t);
         }
@@ -382,14 +531,11 @@ class WorkerSourceTask extends WorkerTask {
         }
 
         // Now we can actually flush the offsets to user storage.
-        Future<Void> flushFuture = offsetWriter.doFlush(new org.apache.kafka.connect.util.Callback<Void>() {
-            @Override
-            public void onCompletion(Throwable error, Void result) {
-                if (error != null) {
-                    log.error("{} Failed to flush offsets to storage: ", this, error);
-                } else {
-                    log.trace("{} Finished flushing offsets to storage", this);
-                }
+        Future<Void> flushFuture = offsetWriter.doFlush((error, result) -> {
+            if (error != null) {
+                log.error("{} Failed to flush offsets to storage: ", WorkerSourceTask.this, error);
+            } else {
+                log.trace("{} Finished flushing offsets to storage", WorkerSourceTask.this);
             }
         });
         // Very rare case: offsets were unserializable and we finished immediately, unable to store
@@ -522,11 +668,11 @@ class WorkerSourceTask extends WorkerTask {
 
             sourceRecordPoll = metricGroup.sensor("source-record-poll");
             sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollRate), new Rate());
-            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new Total());
+            sourceRecordPoll.add(metricGroup.metricName(registry.sourceRecordPollTotal), new CumulativeSum());
 
             sourceRecordWrite = metricGroup.sensor("source-record-write");
             sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteRate), new Rate());
-            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new Total());
+            sourceRecordWrite.add(metricGroup.metricName(registry.sourceRecordWriteTotal), new CumulativeSum());
 
             pollTime = metricGroup.sensor("poll-batch-time");
             pollTime.add(metricGroup.metricName(registry.sourceRecordPollBatchTimeMax), new Max());

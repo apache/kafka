@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.NavigableMap;
+import java.util.TreeMap;
+import java.util.TreeSet;
+
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.internals.metrics.NamedCacheMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,21 +32,22 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
     private final String name;
-    private final TreeMap<Bytes, LRUNode> cache = new TreeMap<>();
+    private final String storeName;
+    private final String taskName;
+    private final NavigableMap<Bytes, LRUNode> cache = new TreeMap<>();
     private final Set<Bytes> dirtyKeys = new LinkedHashSet<>();
     private ThreadCache.DirtyEntryFlushListener listener;
     private LRUNode tail;
     private LRUNode head;
     private long currentSizeBytes;
-    private final NamedCacheMetrics namedCacheMetrics;
+
+    private final StreamsMetricsImpl streamsMetrics;
+    private final Sensor hitRatioSensor;
 
     // internal stats
     private long numReadHits = 0;
@@ -53,9 +55,17 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
-    NamedCache(final String name, final StreamsMetrics metrics) {
+    NamedCache(final String name, final StreamsMetricsImpl streamsMetrics) {
         this.name = name;
-        this.namedCacheMetrics = new NamedCacheMetrics(metrics, name);
+        this.streamsMetrics = streamsMetrics;
+        storeName = ThreadCache.underlyingStoreNamefromCacheName(name);
+        taskName = ThreadCache.taskIDfromCacheName(name);
+        hitRatioSensor = NamedCacheMetrics.hitRatioSensor(
+            streamsMetrics,
+            Thread.currentThread().getName(),
+            taskName,
+            storeName
+        );
     }
 
     synchronized final String name() {
@@ -121,7 +131,7 @@ class NamedCache {
         // evicted already been removed from the cache so add it to the list of
         // flushed entries and remove from dirtyKeys.
         if (evicted != null) {
-            entries.add(new ThreadCache.DirtyEntry(evicted.key, evicted.entry.value, evicted.entry));
+            entries.add(new ThreadCache.DirtyEntry(evicted.key, evicted.entry.value(), evicted.entry));
             dirtyKeys.remove(evicted.key);
         }
 
@@ -130,9 +140,9 @@ class NamedCache {
             if (node == null) {
                 throw new IllegalStateException("Key = " + key + " found in dirty key set, but entry is null");
             }
-            entries.add(new ThreadCache.DirtyEntry(key, node.entry.value, node.entry));
+            entries.add(new ThreadCache.DirtyEntry(key, node.entry.value(), node.entry));
             node.entry.markClean();
-            if (node.entry.value == null) {
+            if (node.entry.value() == null) {
                 deleted.add(node.key);
             }
         }
@@ -186,7 +196,7 @@ class NamedCache {
             return null;
         } else {
             numReadHits++;
-            namedCacheMetrics.hitRatioSensor.record((double) numReadHits / (double) (numReadHits + numReadMisses));
+            hitRatioSensor.record((double) numReadHits / (double) (numReadHits + numReadMisses));
         }
         return node;
     }
@@ -257,7 +267,6 @@ class NamedCache {
         }
 
         remove(node);
-        cache.remove(key);
         dirtyKeys.remove(key);
         currentSizeBytes -= node.size();
         return node.entry();
@@ -265,6 +274,10 @@ class NamedCache {
 
     public long size() {
         return cache.size();
+    }
+
+    public boolean isEmpty() {
+        return cache.isEmpty();
     }
 
     synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to) {
@@ -307,7 +320,7 @@ class NamedCache {
         currentSizeBytes = 0;
         dirtyKeys.clear();
         cache.clear();
-        namedCacheMetrics.removeAllSensors();
+        streamsMetrics.removeAllCacheLevelSensors(Thread.currentThread().getName(), taskName, storeName);
     }
 
     /**
@@ -353,47 +366,4 @@ class NamedCache {
         }
     }
 
-    private static class NamedCacheMetrics {
-        private final StreamsMetricsImpl metrics;
-        private final String groupName;
-        private final Map<String, String> metricTags;
-        private final Map<String, String> allMetricTags;
-        private final Sensor hitRatioSensor;
-
-        private NamedCacheMetrics(final StreamsMetrics metrics, final String name) {
-            final String scope = "record-cache";
-            final String opName = "hitRatio";
-            final String tagKey = scope + "-id";
-            final String tagValue = ThreadCache.underlyingStoreNamefromCacheName(name);
-            this.groupName = "stream-" + scope + "-metrics";
-            this.metrics = (StreamsMetricsImpl) metrics;
-            this.allMetricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, "all",
-                "task-id", ThreadCache.taskIDfromCacheName(name));
-            this.metricTags = ((StreamsMetricsImpl) metrics).tagMap(tagKey, tagValue,
-                "task-id", ThreadCache.taskIDfromCacheName(name));
-
-            // add parent
-            final Sensor parent = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG);
-            parent.add(this.metrics.registry().metricName(opName + "-avg", groupName,
-                    "The average cache hit ratio.", allMetricTags), new Avg());
-            parent.add(this.metrics.registry().metricName(opName + "-min", groupName,
-                    "The minimum cache hit ratio.", allMetricTags), new Min());
-            parent.add(this.metrics.registry().metricName(opName + "-max", groupName,
-                    "The maximum cache hit ratio.", allMetricTags), new Max());
-
-            // add child
-            hitRatioSensor = this.metrics.registry().sensor(opName, Sensor.RecordingLevel.DEBUG, parent);
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-avg", groupName,
-                    "The average cache hit ratio.", metricTags), new Avg());
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-min", groupName,
-                    "The minimum cache hit ratio.", metricTags), new Min());
-            hitRatioSensor.add(this.metrics.registry().metricName(opName + "-max", groupName,
-                    "The maximum cache hit ratio.", metricTags), new Max());
-
-        }
-
-        private void removeAllSensors() {
-            metrics.removeSensor(hitRatioSensor);
-        }
-    }
 }

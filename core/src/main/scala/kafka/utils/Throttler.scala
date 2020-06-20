@@ -49,7 +49,7 @@ class Throttler(desiredRatePerSec: Double,
   private var periodStartNs: Long = time.nanoseconds
   private var observedSoFar: Double = 0.0
   
-  def maybeThrottle(observed: Double) {
+  def maybeThrottle(observed: Double): Unit = {
     val msPerSec = TimeUnit.SECONDS.toMillis(1)
     val nsPerSec = TimeUnit.SECONDS.toNanos(1)
 
@@ -73,7 +73,7 @@ class Throttler(desiredRatePerSec: Double,
             time.sleep(sleepTime)
           }
         }
-        periodStartNs = now
+        periodStartNs = time.nanoseconds()
         observedSoFar = 0
       }
     }
@@ -83,7 +83,7 @@ class Throttler(desiredRatePerSec: Double,
 
 object Throttler {
   
-  def main(args: Array[String]) {
+  def main(args: Array[String]): Unit = {
     val rand = new Random()
     val throttler = new Throttler(100000, 100, true, time = Time.SYSTEM)
     val interval = 30000

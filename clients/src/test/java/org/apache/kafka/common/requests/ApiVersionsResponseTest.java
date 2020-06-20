@@ -17,6 +17,12 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.feature.FinalizedVersionRange;
+import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -36,61 +42,104 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() {
-        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(10, RecordBatch.MAGIC_VALUE_V1);
+        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            10,
+            RecordBatch.MAGIC_VALUE_V1,
+            Features.emptySupportedFeatures());
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
+        assertTrue(response.data.supportedFeatures().isEmpty());
+        assertTrue(response.data.finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data.finalizedFeaturesEpoch());
     }
 
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
-        assertEquals(apiKeysInResponse(ApiVersionsResponse.defaultApiVersionsResponse()), Utils.mkSet(ApiKeys.values()));
+        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
     }
 
     @Test
     public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
-        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            AbstractResponse.DEFAULT_THROTTLE_TIME,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            Features.emptySupportedFeatures());
         assertEquals(Utils.mkSet(ApiKeys.values()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
+        assertTrue(response.data.supportedFeatures().isEmpty());
+        assertTrue(response.data.finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, response.data.finalizedFeaturesEpoch());
     }
 
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
-        Collection<ApiVersionsResponse.ApiVersion> apiVersions = ApiVersionsResponse.defaultApiVersionsResponse().apiVersions();
+        Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys();
         assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.values().length);
 
         for (ApiKeys key : ApiKeys.values()) {
-            ApiVersionsResponse.ApiVersion version = ApiVersionsResponse.defaultApiVersionsResponse().apiVersion(key.id);
+            ApiVersionsResponseKey version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
             assertNotNull("Could not find ApiVersion for API " + key.name, version);
-            assertEquals("Incorrect min version for Api " + key.name, version.minVersion, key.oldestVersion());
-            assertEquals("Incorrect max version for Api " + key.name, version.maxVersion, key.latestVersion());
+            assertEquals("Incorrect min version for Api " + key.name, version.minVersion(), key.oldestVersion());
+            assertEquals("Incorrect max version for Api " + key.name, version.maxVersion(), key.latestVersion());
 
             // Check if versions less than min version are indeed set as null, i.e., deprecated.
-            for (int i = 0; i < version.minVersion; ++i) {
-                assertNull("Request version " + i + " for API " + version.apiKey + " must be null", key.requestSchemas[i]);
-                assertNull("Response version " + i + " for API " + version.apiKey + " must be null", key.responseSchemas[i]);
+            for (int i = 0; i < version.minVersion(); ++i) {
+                assertNull("Request version " + i + " for API " + version.apiKey() + " must be null", key.requestSchemas[i]);
+                assertNull("Response version " + i + " for API " + version.apiKey() + " must be null", key.responseSchemas[i]);
             }
 
             // Check if versions between min and max versions are non null, i.e., valid.
-            for (int i = version.minVersion; i <= version.maxVersion; ++i) {
-                assertNotNull("Request version " + i + " for API " + version.apiKey + " must not be null", key.requestSchemas[i]);
-                assertNotNull("Response version " + i + " for API " + version.apiKey + " must not be null", key.responseSchemas[i]);
+            for (int i = version.minVersion(); i <= version.maxVersion(); ++i) {
+                assertNotNull("Request version " + i + " for API " + version.apiKey() + " must not be null", key.requestSchemas[i]);
+                assertNotNull("Response version " + i + " for API " + version.apiKey() + " must not be null", key.responseSchemas[i]);
             }
         }
+
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
+        assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
+        assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
+    }
+
+    @Test
+    public void shouldReturnFeatureKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(
+            10,
+            RecordBatch.MAGIC_VALUE_V1,
+            Features.supportedFeatures(Utils.mkMap(Utils.mkEntry("feature", new SupportedVersionRange((short) 1, (short) 4)))),
+            Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry("feature", new FinalizedVersionRange((short) 2, (short) 3)))),
+            10);
+        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
+        assertEquals(10, response.throttleTimeMs());
+
+        assertEquals(1, response.data.supportedFeatures().size());
+        SupportedFeatureKey sKey = response.data.supportedFeatures().find("feature");
+        assertNotNull(sKey);
+        assertEquals(1, sKey.minVersion());
+        assertEquals(4, sKey.maxVersion());
+
+        assertEquals(1, response.data.finalizedFeatures().size());
+        FinalizedFeatureKey fKey = response.data.finalizedFeatures().find("feature");
+        assertNotNull(fKey);
+        assertEquals(2, fKey.minVersionLevel());
+        assertEquals(3, fKey.maxVersionLevel());
+
+        assertEquals(10, response.data.finalizedFeaturesEpoch());
     }
     
     private void verifyApiKeysForMagic(final ApiVersionsResponse response, final byte maxMagic) {
-        for (final ApiVersionsResponse.ApiVersion version : response.apiVersions()) {
-            assertTrue(ApiKeys.forId(version.apiKey).minRequiredInterBrokerMagic <= maxMagic);
+        for (final ApiVersionsResponseKey version : response.data.apiKeys()) {
+            assertTrue(ApiKeys.forId(version.apiKey()).minRequiredInterBrokerMagic <= maxMagic);
         }
     }
 
     private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
         final Set<ApiKeys> apiKeys = new HashSet<>();
-        for (final ApiVersionsResponse.ApiVersion version : apiVersions.apiVersions()) {
-            apiKeys.add(ApiKeys.forId(version.apiKey));
+        for (final ApiVersionsResponseKey version : apiVersions.data.apiKeys()) {
+            apiKeys.add(ApiKeys.forId(version.apiKey()));
         }
         return apiKeys;
     }
-
-
 }

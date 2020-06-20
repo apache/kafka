@@ -35,7 +35,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
-import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
 public abstract class Flatten<R extends ConnectRecord<R>> implements Transformation<R> {
 
@@ -64,12 +64,14 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         delimiter = config.getString(DELIMITER_CONFIG);
-        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     @Override
     public R apply(R record) {
-        if (operatingSchema(record) == null) {
+        if (operatingValue(record) == null) {
+            return record;
+        } else if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {
             return applyWithSchema(record);
@@ -136,20 +138,24 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
     }
 
     private R applyWithSchema(R record) {
-        final Struct value = requireStruct(operatingValue(record), PURPOSE);
+        final Struct value = requireStructOrNull(operatingValue(record), PURPOSE);
 
-        Schema updatedSchema = schemaUpdateCache.get(value.schema());
+        Schema schema = operatingSchema(record);
+        Schema updatedSchema = schemaUpdateCache.get(schema);
         if (updatedSchema == null) {
-            final SchemaBuilder builder = SchemaUtil.copySchemaBasics(value.schema(), SchemaBuilder.struct());
-            Struct defaultValue = (Struct) value.schema().defaultValue();
-            buildUpdatedSchema(value.schema(), "", builder, value.schema().isOptional(), defaultValue);
+            final SchemaBuilder builder = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
+            Struct defaultValue = (Struct) schema.defaultValue();
+            buildUpdatedSchema(schema, "", builder, schema.isOptional(), defaultValue);
             updatedSchema = builder.build();
-            schemaUpdateCache.put(value.schema(), updatedSchema);
+            schemaUpdateCache.put(schema, updatedSchema);
         }
-
-        final Struct updatedValue = new Struct(updatedSchema);
-        buildWithSchema(value, "", updatedValue);
-        return newRecord(record, updatedSchema, updatedValue);
+        if (value == null) {
+            return newRecord(record, updatedSchema, null);
+        } else {
+            final Struct updatedValue = new Struct(updatedSchema);
+            buildWithSchema(value, "", updatedValue);
+            return newRecord(record, updatedSchema, updatedValue);
+        }
     }
 
     /**
@@ -190,7 +196,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                     break;
                 default:
                     throw new DataException("Flatten transformation does not support " + field.schema().type()
-                            + " for record without schemas (for field " + fieldName + ").");
+                            + " for record with schemas (for field " + fieldName + ").");
             }
         }
     }
@@ -216,6 +222,9 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
     }
 
     private void buildWithSchema(Struct record, String fieldNamePrefix, Struct newRecord) {
+        if (record == null) {
+            return;
+        }
         for (Field field : record.schema().fields()) {
             final String fieldName = fieldName(fieldNamePrefix, field.name());
             switch (field.schema().type()) {
@@ -235,7 +244,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                     break;
                 default:
                     throw new DataException("Flatten transformation does not support " + field.schema().type()
-                            + " for record without schemas (for field " + fieldName + ").");
+                            + " for record with schemas (for field " + fieldName + ").");
             }
         }
     }

@@ -85,10 +85,20 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         return nextSchedule;
     }
 
+    @Override
+    public boolean equals(final Object other) {
+        return super.equals(other);
+    }
+
+    @Override
+    public int hashCode() {
+        return super.hashCode();
+    }
+
     private static class RepointableCancellable implements Cancellable {
         private PunctuationSchedule schedule;
 
-        synchronized void setSchedule(PunctuationSchedule schedule) {
+        synchronized void setSchedule(final PunctuationSchedule schedule) {
             this.schedule = schedule;
         }
 

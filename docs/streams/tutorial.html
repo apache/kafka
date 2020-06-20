@@ -74,8 +74,12 @@
     </pre>
 
     <p>
-        The <code>pom.xml</code> file included in the project already has the Streams dependency defined,
-        and there are already several example programs written with Streams library under <code>src/main/java</code>.
+        The <code>pom.xml</code> file included in the project already has the Streams dependency defined.
+        Note, that the generated <code>pom.xml</code> targets Java 8, and does not work with higher Java versions.
+    </p>
+
+    <p>
+        There are already several example programs written with Streams library under <code>src/main/java</code>.
         Since we are going to start writing such programs from scratch, we can now delete these examples:
     </p>
 
@@ -86,7 +90,7 @@
 
     <h4><a id="tutorial_code_pipe" href="#tutorial_code_pipe">Writing a first Streams application: Pipe</a></h4>
 
-    It's coding time now! Feel free to open your favorite IDE and import this Maven project, or simply open a text editor and create a java file under <code>src/main/java</code>.
+    It's coding time now! Feel free to open your favorite IDE and import this Maven project, or simply open a text editor and create a java file under <code>src/main/java/myapps</code>.
     Let's name it <code>Pipe.java</code>:
 
     <pre class="brush: java;">
@@ -208,9 +212,7 @@
     <p>
         Note that we can always describe the topology as we did above at any given point while we are building it in the code, so as a user you can interactively "try and taste" your computational logic defined in the topology until you are happy with it.
         Suppose we are already done with this simple topology that just pipes data from one Kafka topic to another in an endless streaming manner,
-        we can now construct the Streams client with the two components we have just constructed above: the configuration map and the topology object
-        (one can also construct a <code>StreamsConfig</code> object from the <code>props</code> map and then pass that object to the constructor,
-        <code>KafkaStreams</code> have overloaded constructor functions to takes either type).
+        we can now construct the Streams client with the two components we have just constructed above: the configuration map specified in a <code>java.util.Properties</code> instance and the <code>Topology</code> object.
     </p>
 
     <pre class="brush: java;">
@@ -532,7 +534,7 @@
               .groupBy((key, value) -> value)
               .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
               .toStream()
-              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
+              .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
     </pre>
 
     <p>
@@ -606,7 +608,7 @@
                       .groupBy((key, value) -> value)
                       .count(Materialized.&lt;String, Long, KeyValueStore&lt;Bytes, byte[]&gt;&gt;as("counts-store"))
                       .toStream()
-                      .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long());
+                      .to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
 
                 final Topology topology = builder.build();
                 final KafkaStreams streams = new KafkaStreams(topology, props);

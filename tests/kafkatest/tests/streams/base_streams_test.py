@@ -38,13 +38,16 @@ class BaseStreamsTest(KafkaTest):
                                   client_id,
                                   max_messages=num_messages)
 
-    def get_producer(self, topic, num_messages):
+    def get_producer(self, topic, num_messages, throughput=1000, repeating_keys=None):
         return VerifiableProducer(self.test_context,
                                   1,
                                   self.kafka,
                                   topic,
                                   max_messages=num_messages,
-                                  acks=1)
+                                  acks=-1,
+                                  throughput=throughput,
+                                  repeating_keys=repeating_keys,
+                                  retries=10)
 
     def assert_produce_consume(self,
                                streams_source_topic,
@@ -95,5 +98,9 @@ class BaseStreamsTest(KafkaTest):
     @staticmethod
     def verify_from_file(processor, message, file):
         result = processor.node.account.ssh_output("grep -E '%s' %s | wc -l" % (message, file), allow_fail=False)
-        return int(result)
+        try:
+          return int(result)
+        except ValueError:
+          self.logger.warn("Command failed with ValueError: " + result)
+          return 0
 

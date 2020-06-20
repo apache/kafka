@@ -20,25 +20,27 @@ import org.apache.kafka.common.protocol.Errors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
+import java.util.Objects;
+
 /**
  * The offset, fetched from a leader, for a particular partition.
  */
-
 public class EpochEndOffset {
     public static final long UNDEFINED_EPOCH_OFFSET = NO_PARTITION_LEADER_EPOCH;
-    public static final int UNDEFINED_EPOCH = -1;
+    public static final int UNDEFINED_EPOCH = NO_PARTITION_LEADER_EPOCH;
 
     private Errors error;
+    private int leaderEpoch;  // introduced in V1
     private long endOffset;
 
-    public EpochEndOffset(Errors error, long endOffset) {
+    public EpochEndOffset(Errors error, int leaderEpoch, long endOffset) {
         this.error = error;
+        this.leaderEpoch = leaderEpoch;
         this.endOffset = endOffset;
     }
 
-    public EpochEndOffset(long endOffset) {
-        this.error = Errors.NONE;
-        this.endOffset = endOffset;
+    public EpochEndOffset(int leaderEpoch, long endOffset) {
+        this(Errors.NONE, leaderEpoch, endOffset);
     }
 
     public Errors error() {
@@ -53,10 +55,15 @@ public class EpochEndOffset {
         return endOffset;
     }
 
+    public int leaderEpoch() {
+        return leaderEpoch;
+    }
+
     @Override
     public String toString() {
         return "EpochEndOffset{" +
                 "error=" + error +
+                ", leaderEpoch=" + leaderEpoch +
                 ", endOffset=" + endOffset +
                 '}';
     }
@@ -68,14 +75,18 @@ public class EpochEndOffset {
 
         EpochEndOffset that = (EpochEndOffset) o;
 
-        if (error != that.error) return false;
-        return endOffset == that.endOffset;
+        return Objects.equals(error, that.error)
+               && Objects.equals(leaderEpoch, that.leaderEpoch)
+               && Objects.equals(endOffset, that.endOffset);
     }
 
     @Override
     public int hashCode() {
-        int result = (int) error.code();
-        result = 31 * result + (int) (endOffset ^ (endOffset >>> 32));
-        return result;
+        return Objects.hash(error, leaderEpoch, endOffset);
+    }
+
+    public boolean hasUndefinedEpochOrOffset() {
+        return this.endOffset == UNDEFINED_EPOCH_OFFSET ||
+            this.leaderEpoch == UNDEFINED_EPOCH;
     }
 }

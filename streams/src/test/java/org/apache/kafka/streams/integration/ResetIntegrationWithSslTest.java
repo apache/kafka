@@ -42,7 +42,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     private static final String TEST_ID = "reset-with-ssl-integration-test";
 
-    private static Map<String, Object> sslConfig;
+    private static final Map<String, Object> SSL_CONFIG;
 
     static {
         final Properties brokerProps = new Properties();
@@ -52,11 +52,11 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
 
         try {
-            sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+            SSL_CONFIG = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
 
             brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
             brokerProps.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
-            brokerProps.putAll(sslConfig);
+            brokerProps.putAll(SSL_CONFIG);
         } catch (final Exception e) {
             throw new RuntimeException(e);
         }
@@ -66,7 +66,7 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     @Override
     Map<String, Object> getClientSslConfig() {
-        return sslConfig;
+        return SSL_CONFIG;
     }
 
     @Before
@@ -88,6 +88,11 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic();
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
+    }
+
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
     }
 }

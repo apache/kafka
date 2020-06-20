@@ -20,7 +20,7 @@ then
   exit 1
 fi
 
-# CYGINW == 1 if Cygwin is detected, else 0.
+# CYGWIN == 1 if Cygwin is detected, else 0.
 if [[ $(uname -a) =~ "CYGWIN" ]]; then
   CYGWIN=1
 else
@@ -32,7 +32,7 @@ if [ -z "$INCLUDE_TEST_JARS" ]; then
 fi
 
 # Exclude jars not necessary for running commands.
-regex="(-(test|src|scaladoc|javadoc)\.jar|jar.asc)$"
+regex="(-(test|test-sources|src|scaladoc|javadoc)\.jar|jar.asc)$"
 should_include_file() {
   if [ "$INCLUDE_TEST_JARS" = true ]; then
     return 0
@@ -48,7 +48,10 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.11.12
+  SCALA_VERSION=2.13.2
+  if [[ -f "$base_dir/gradle.properties" ]]; then
+    SCALA_VERSION=`grep "^scalaVersion=" "$base_dir/gradle.properties" | cut -d= -f 2`
+  fi
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
@@ -57,10 +60,12 @@ fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
 shopt -s nullglob
-for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
-do
-  CLASSPATH="$CLASSPATH:$dir/*"
-done
+if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
+  for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
+  do
+    CLASSPATH="$CLASSPATH:$dir/*"
+  done
+fi
 
 for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
@@ -72,11 +77,11 @@ done
 if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
   clients_lib_dir=$(dirname $0)/../clients/build/libs
   streams_lib_dir=$(dirname $0)/../streams/build/libs
-  rocksdb_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
+  streams_dependant_clients_lib_dir=$(dirname $0)/../streams/build/dependant-libs-${SCALA_VERSION}
 else
   clients_lib_dir=/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs
   streams_lib_dir=$clients_lib_dir
-  rocksdb_lib_dir=$streams_lib_dir
+  streams_dependant_clients_lib_dir=$streams_lib_dir
 fi
 
 
@@ -107,12 +112,25 @@ else
   for file in "$base_dir"/streams/upgrade-system-tests-$SHORT_VERSION_NO_DOTS/build/libs/kafka-streams-upgrade-system-tests*.jar;
   do
     if should_include_file "$file"; then
-      CLASSPATH="$CLASSPATH":"$file"
+      CLASSPATH="$file":"$CLASSPATH"
     fi
   done
+  if [ "$SHORT_VERSION_NO_DOTS" = "0100" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.8.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.6.jar":"$CLASSPATH"
+  fi
+  if [ "$SHORT_VERSION_NO_DOTS" = "0101" ]; then
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zkclient-0.9.jar":"$CLASSPATH"
+    CLASSPATH="/opt/kafka-$UPGRADE_KAFKA_STREAMS_TEST_VERSION/libs/zookeeper-3.4.8.jar":"$CLASSPATH"
+  fi
 fi
 
-for file in "$rocksdb_lib_dir"/rocksdb*.jar;
+for file in "$streams_dependant_clients_lib_dir"/rocksdb*.jar;
+do
+  CLASSPATH="$CLASSPATH":"$file"
+done
+
+for file in "$streams_dependant_clients_lib_dir"/*hamcrest*.jar;
 do
   CLASSPATH="$CLASSPATH":"$file"
 done
@@ -129,7 +147,7 @@ do
   CLASSPATH="$CLASSPATH:$dir/*"
 done
 
-for cc_pkg in "api" "transforms" "runtime" "file" "json" "tools"
+for cc_pkg in "api" "transforms" "runtime" "file" "mirror" "mirror-client" "json" "tools" "basic-auth-extension"
 do
   for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
   do
@@ -234,10 +252,10 @@ if [ -z "$KAFKA_HEAP_OPTS" ]; then
 fi
 
 # JVM performance options
+# MaxInlineLevel=15 is the default since JDK 14 and can be removed once older JDKs are no longer supported
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -XX:MaxInlineLevel=15 -Djava.awt.headless=true"
 fi
-
 
 while [ $# -gt 0 ]; do
   COMMAND=$1
@@ -277,9 +295,9 @@ if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   # 10 -> java version "10" 2018-03-20
   # 10.0.1 -> java version "10.0.1" 2018-04-17
   # We need to match to the end of the line to prevent sed from printing the characters that do not match
-  JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
+  JAVA_MAJOR_VERSION=$("$JAVA" -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
   if [[ "$JAVA_MAJOR_VERSION" -ge "9" ]] ; then
-    KAFKA_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=102400"
+    KAFKA_GC_LOG_OPTS="-Xlog:gc*:file=$LOG_DIR/$GC_LOG_FILE_NAME:time,tags:filecount=10,filesize=100M"
   else
     KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
   fi
@@ -295,7 +313,7 @@ CLASSPATH=${CLASSPATH#:}
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
-  nohup $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
+  nohup "$JAVA" $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp "$CLASSPATH" $KAFKA_OPTS "$@" > "$CONSOLE_OUTPUT_FILE" 2>&1 < /dev/null &
 else
-  exec $JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@"
+  exec "$JAVA" $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp "$CLASSPATH" $KAFKA_OPTS "$@"
 fi

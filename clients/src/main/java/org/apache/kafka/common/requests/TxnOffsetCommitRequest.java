@@ -17,196 +17,192 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.record.RecordBatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-
-import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
-import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
-import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
-    private static final String TOPICS_KEY_NAME = "topics";
-    private static final String PARTITIONS_KEY_NAME = "partitions";
-    private static final String OFFSET_KEY_NAME = "offset";
-    private static final String METADATA_KEY_NAME = "metadata";
 
-    private static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
-            PARTITION_ID,
-            new Field(OFFSET_KEY_NAME, INT64),
-            new Field(METADATA_KEY_NAME, NULLABLE_STRING));
+    private static final Logger log = LoggerFactory.getLogger(TxnOffsetCommitRequest.class);
 
-    private static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
-            TRANSACTIONAL_ID,
-            GROUP_ID,
-            PRODUCER_ID,
-            PRODUCER_EPOCH,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
-                    "The partitions to write markers for."));
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0};
-    }
+    public final TxnOffsetCommitRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
-        private final String transactionalId;
-        private final String consumerGroupId;
-        private final long producerId;
-        private final short producerEpoch;
-        private final Map<TopicPartition, CommittedOffset> offsets;
 
-        public Builder(String transactionalId, String consumerGroupId, long producerId, short producerEpoch,
-                       Map<TopicPartition, CommittedOffset> offsets) {
+        public final TxnOffsetCommitRequestData data;
+
+        private final boolean autoDowngrade;
+
+        public Builder(final String transactionalId,
+                       final String consumerGroupId,
+                       final long producerId,
+                       final short producerEpoch,
+                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
+                       final boolean autoDowngrade) {
+            this(transactionalId,
+                consumerGroupId,
+                producerId,
+                producerEpoch,
+                pendingTxnOffsetCommits,
+                JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                JoinGroupRequest.UNKNOWN_GENERATION_ID,
+                Optional.empty(),
+                autoDowngrade);
+        }
+
+        public Builder(final String transactionalId,
+                       final String consumerGroupId,
+                       final long producerId,
+                       final short producerEpoch,
+                       final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits,
+                       final String memberId,
+                       final int generationId,
+                       final Optional<String> groupInstanceId,
+                       final boolean autoDowngrade) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
-            this.transactionalId = transactionalId;
-            this.consumerGroupId = consumerGroupId;
-            this.producerId = producerId;
-            this.producerEpoch = producerEpoch;
-            this.offsets = offsets;
-        }
-
-        public String consumerGroupId() {
-            return consumerGroupId;
-        }
-
-        public Map<TopicPartition, CommittedOffset> offsets() {
-            return offsets;
+            this.data = new TxnOffsetCommitRequestData()
+                            .setTransactionalId(transactionalId)
+                            .setGroupId(consumerGroupId)
+                            .setProducerId(producerId)
+                            .setProducerEpoch(producerEpoch)
+                            .setTopics(getTopics(pendingTxnOffsetCommits))
+                            .setMemberId(memberId)
+                            .setGenerationId(generationId)
+                            .setGroupInstanceId(groupInstanceId.orElse(null));
+            this.autoDowngrade = autoDowngrade;
         }
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
-            return new TxnOffsetCommitRequest(version, transactionalId, consumerGroupId, producerId, producerEpoch, offsets);
+            if (version < 3 && groupMetadataSet()) {
+                if (autoDowngrade) {
+                    log.trace("Downgrade the request by resetting group metadata fields: " +
+                                  "[member.id:{}, generation.id:{}, group.instance.id:{}], because broker " +
+                                  "only supports TxnOffsetCommit version {}. Need " +
+                                  "v3 or newer to enable this feature",
+                        data.memberId(), data.generationId(), data.groupInstanceId(), version);
+
+                    data.setGenerationId(JoinGroupRequest.UNKNOWN_GENERATION_ID)
+                        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+                        .setGroupInstanceId(null);
+                } else {
+                    throw new UnsupportedVersionException("Broker unexpectedly " +
+                        "doesn't support group metadata commit API on version " + version);
+                }
+            }
+            return new TxnOffsetCommitRequest(data, version);
+        }
+
+        private boolean groupMetadataSet() {
+            return !data.memberId().equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) ||
+                       data.generationId() != JoinGroupRequest.UNKNOWN_GENERATION_ID ||
+                       data.groupInstanceId() != null;
         }
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=TxnOffsetCommitRequest").
-                    append(", transactionalId=").append(transactionalId).
-                    append(", producerId=").append(producerId).
-                    append(", producerEpoch=").append(producerEpoch).
-                    append(", consumerGroupId=").append(consumerGroupId).
-                    append(", offsets=").append(offsets).
-                    append(")");
-            return bld.toString();
+            return data.toString();
         }
     }
 
-    private final String transactionalId;
-    private final String consumerGroupId;
-    private final long producerId;
-    private final short producerEpoch;
-    private final Map<TopicPartition, CommittedOffset> offsets;
-
-    public TxnOffsetCommitRequest(short version, String transactionalId, String consumerGroupId, long producerId,
-                                  short producerEpoch, Map<TopicPartition, CommittedOffset> offsets) {
-        super(version);
-        this.transactionalId = transactionalId;
-        this.consumerGroupId = consumerGroupId;
-        this.producerId = producerId;
-        this.producerEpoch = producerEpoch;
-        this.offsets = offsets;
+    public TxnOffsetCommitRequest(TxnOffsetCommitRequestData data, short version) {
+        super(ApiKeys.TXN_OFFSET_COMMIT, version);
+        this.data = data;
     }
 
     public TxnOffsetCommitRequest(Struct struct, short version) {
-        super(version);
-        this.transactionalId = struct.get(TRANSACTIONAL_ID);
-        this.consumerGroupId = struct.get(GROUP_ID);
-        this.producerId = struct.get(PRODUCER_ID);
-        this.producerEpoch = struct.get(PRODUCER_EPOCH);
-
-        Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
-        Object[] topicPartitionsArray = struct.getArray(TOPICS_KEY_NAME);
-        for (Object topicPartitionObj : topicPartitionsArray) {
-            Struct topicPartitionStruct = (Struct) topicPartitionObj;
-            String topic = topicPartitionStruct.get(TOPIC_NAME);
-            for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
-                Struct partitionStruct = (Struct) partitionObj;
-                TopicPartition partition = new TopicPartition(topic, partitionStruct.get(PARTITION_ID));
-                long offset = partitionStruct.getLong(OFFSET_KEY_NAME);
-                String metadata = partitionStruct.getString(METADATA_KEY_NAME);
-                offsets.put(partition, new CommittedOffset(offset, metadata));
-            }
-        }
-        this.offsets = offsets;
-    }
-
-    public String transactionalId() {
-        return transactionalId;
-    }
-
-    public String consumerGroupId() {
-        return consumerGroupId;
-    }
-
-    public long producerId() {
-        return producerId;
-    }
-
-    public short producerEpoch() {
-        return producerEpoch;
+        super(ApiKeys.TXN_OFFSET_COMMIT, version);
+        this.data = new TxnOffsetCommitRequestData(struct, version);
     }
 
     public Map<TopicPartition, CommittedOffset> offsets() {
-        return offsets;
+        List<TxnOffsetCommitRequestTopic> topics = data.topics();
+        Map<TopicPartition, CommittedOffset> offsetMap = new HashMap<>();
+        for (TxnOffsetCommitRequestTopic topic : topics) {
+            for (TxnOffsetCommitRequestPartition partition : topic.partitions()) {
+                offsetMap.put(new TopicPartition(topic.name(), partition.partitionIndex()),
+                              new CommittedOffset(partition.committedOffset(),
+                                                  partition.committedMetadata(),
+                                                  RequestUtils.getLeaderEpoch(partition.committedLeaderEpoch()))
+                );
+            }
+        }
+        return offsetMap;
+    }
+
+    static List<TxnOffsetCommitRequestTopic> getTopics(Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits) {
+        Map<String, List<TxnOffsetCommitRequestPartition>> topicPartitionMap = new HashMap<>();
+        for (Map.Entry<TopicPartition, CommittedOffset> entry : pendingTxnOffsetCommits.entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
+            CommittedOffset offset = entry.getValue();
+
+            List<TxnOffsetCommitRequestPartition> partitions =
+                topicPartitionMap.getOrDefault(topicPartition.topic(), new ArrayList<>());
+            partitions.add(new TxnOffsetCommitRequestPartition()
+                               .setPartitionIndex(topicPartition.partition())
+                               .setCommittedOffset(offset.offset)
+                               .setCommittedLeaderEpoch(offset.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                               .setCommittedMetadata(offset.metadata)
+            );
+            topicPartitionMap.put(topicPartition.topic(), partitions);
+        }
+        return topicPartitionMap.entrySet().stream()
+                   .map(entry -> new TxnOffsetCommitRequestTopic()
+                                     .setName(entry.getKey())
+                                     .setPartitions(entry.getValue()))
+                   .collect(Collectors.toList());
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.TXN_OFFSET_COMMIT.requestSchema(version()));
-        struct.set(TRANSACTIONAL_ID, transactionalId);
-        struct.set(GROUP_ID, consumerGroupId);
-        struct.set(PRODUCER_ID, producerId);
-        struct.set(PRODUCER_EPOCH, producerEpoch);
+        return data.toStruct(version());
+    }
 
-        Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupDataByTopic(offsets);
-        Object[] partitionsArray = new Object[mappedPartitionOffsets.size()];
-        int i = 0;
-        for (Map.Entry<String, Map<Integer, CommittedOffset>> topicAndPartitions : mappedPartitionOffsets.entrySet()) {
-            Struct topicPartitionsStruct = struct.instance(TOPICS_KEY_NAME);
-            topicPartitionsStruct.set(TOPIC_NAME, topicAndPartitions.getKey());
-
-            Map<Integer, CommittedOffset> partitionOffsets = topicAndPartitions.getValue();
-            Object[] partitionOffsetsArray = new Object[partitionOffsets.size()];
-            int j = 0;
-            for (Map.Entry<Integer, CommittedOffset> partitionOffset : partitionOffsets.entrySet()) {
-                Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
-                partitionOffsetStruct.set(PARTITION_ID, partitionOffset.getKey());
-                CommittedOffset committedOffset = partitionOffset.getValue();
-                partitionOffsetStruct.set(OFFSET_KEY_NAME, committedOffset.offset);
-                partitionOffsetStruct.set(METADATA_KEY_NAME, committedOffset.metadata);
-                partitionOffsetsArray[j++] = partitionOffsetStruct;
+    static List<TxnOffsetCommitResponseTopic> getErrorResponseTopics(List<TxnOffsetCommitRequestTopic> requestTopics,
+                                                                     Errors e) {
+        List<TxnOffsetCommitResponseTopic> responseTopicData = new ArrayList<>();
+        for (TxnOffsetCommitRequestTopic entry : requestTopics) {
+            List<TxnOffsetCommitResponsePartition> responsePartitions = new ArrayList<>();
+            for (TxnOffsetCommitRequestPartition requestPartition : entry.partitions()) {
+                responsePartitions.add(new TxnOffsetCommitResponsePartition()
+                                           .setPartitionIndex(requestPartition.partitionIndex())
+                                           .setErrorCode(e.code()));
             }
-            topicPartitionsStruct.set(PARTITIONS_KEY_NAME, partitionOffsetsArray);
-            partitionsArray[i++] = topicPartitionsStruct;
+            responseTopicData.add(new TxnOffsetCommitResponseTopic()
+                                      .setName(entry.name())
+                                      .setPartitions(responsePartitions)
+            );
         }
-
-        struct.set(TOPICS_KEY_NAME, partitionsArray);
-        return struct;
+        return responseTopicData;
     }
 
     @Override
     public TxnOffsetCommitResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Errors error = Errors.forException(e);
-        Map<TopicPartition, Errors> errors = new HashMap<>(offsets.size());
-        for (TopicPartition partition : offsets.keySet())
-            errors.put(partition, error);
-        return new TxnOffsetCommitResponse(throttleTimeMs, errors);
+        List<TxnOffsetCommitResponseTopic> responseTopicData =
+            getErrorResponseTopics(data.topics(), Errors.forException(e));
+
+        return new TxnOffsetCommitResponse(new TxnOffsetCommitResponseData()
+                                               .setThrottleTimeMs(throttleTimeMs)
+                                               .setTopics(responseTopicData));
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
@@ -214,28 +210,39 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public static class CommittedOffset {
-        private final long offset;
-        private final String metadata;
+        public final long offset;
+        public final String metadata;
+        public final Optional<Integer> leaderEpoch;
 
-        public CommittedOffset(long offset, String metadata) {
+        public CommittedOffset(long offset, String metadata, Optional<Integer> leaderEpoch) {
             this.offset = offset;
             this.metadata = metadata;
+            this.leaderEpoch = leaderEpoch;
         }
 
         @Override
         public String toString() {
             return "CommittedOffset(" +
                     "offset=" + offset +
+                    ", leaderEpoch=" + leaderEpoch +
                     ", metadata='" + metadata + "')";
         }
 
-        public long offset() {
-            return offset;
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof CommittedOffset)) {
+                return false;
+            }
+            CommittedOffset otherOffset = (CommittedOffset) other;
+
+            return this.offset == otherOffset.offset
+                       && this.leaderEpoch.equals(otherOffset.leaderEpoch)
+                       && Objects.equals(this.metadata, otherOffset.metadata);
         }
 
-        public String metadata() {
-            return metadata;
+        @Override
+        public int hashCode() {
+            return Objects.hash(offset, leaderEpoch, metadata);
         }
     }
-
 }

@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.clients.producer.MockProducer;
-import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -31,11 +29,16 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.StreamsProducer;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
@@ -53,7 +56,7 @@ import java.util.Set;
  * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
  * all entries written to the Kafka topic by the store during {@link KeyValueStore#flush()} are captured for testing purposes.
  * This class simplifies testing of various {@link KeyValueStore} instances, especially those that use
- * {@link org.apache.kafka.streams.state.internals.MeteredKeyValueStore} to monitor and write its entries to the Kafka topic.
+ * {@link MeteredKeyValueStore} to monitor and write its entries to the Kafka topic.
  *
  * <h2>Basic usage</h2>
  * This component can be used to help test a {@link KeyValueStore}'s ability to read and write entries.
@@ -98,7 +101,7 @@ import java.util.Set;
  *
  * <h2>Restoring a store</h2>
  * This component can be used to test whether a {@link KeyValueStore} implementation properly
- * {@link ProcessorContext#register(StateStore, boolean, StateRestoreCallback) registers itself} with the {@link ProcessorContext}, so that
+ * {@link ProcessorContext#register(StateStore, StateRestoreCallback) registers itself} with the {@link ProcessorContext}, so that
  * the persisted contents of a store are properly restored from the flushed entries when the store instance is started.
  * <p>
  * To do this, create an instance of this driver component, {@link #addEntryToRestoreLog(Object, Object) add entries} that will be
@@ -184,28 +187,42 @@ public class KeyValueStoreTestDriver<K, V> {
     private final StateSerdes<K, V> stateSerdes;
 
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
-        final ByteArraySerializer rawSerializer = new ByteArraySerializer();
-        final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
+        props = new Properties();
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
+        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBKeyValueStoreTest.TheRocksDbConfigSetter.class);
+        props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
 
+        final LogContext logContext = new LogContext("KeyValueStoreTestDriver ");
         final RecordCollector recordCollector = new RecordCollectorImpl(
-            producer,
-            "KeyValueStoreTestDriver",
-            new LogContext("KeyValueStoreTestDriver "),
+            logContext,
+            new TaskId(0, 0),
+            new StreamsProducer(
+                new StreamsConfig(props),
+                "threadId",
+                new MockClientSupplier(),
+                null,
+                null,
+                logContext),
             new DefaultProductionExceptionHandler(),
-            new Metrics().sensor("skipped-records")
+            new MockStreamsMetrics(new Metrics())
         ) {
             @Override
             public <K1, V1> void send(final String topic,
                                       final K1 key,
                                       final V1 value,
+                                      final Headers headers,
                                       final Integer partition,
                                       final Long timestamp,
                                       final Serializer<K1> keySerializer,
                                       final Serializer<V1> valueSerializer) {
                 // for byte arrays we need to wrap it for comparison
 
-                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, key));
-                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, value));
+                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, headers, key));
+                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, headers, value));
 
                 recordFlushed(keyTest, valueTest);
             }
@@ -214,6 +231,7 @@ public class KeyValueStoreTestDriver<K, V> {
             public <K1, V1> void send(final String topic,
                                       final K1 key,
                                       final V1 value,
+                                      final Headers headers,
                                       final Long timestamp,
                                       final Serializer<K1> keySerializer,
                                       final Serializer<V1> valueSerializer,
@@ -227,19 +245,11 @@ public class KeyValueStoreTestDriver<K, V> {
         stateDir.mkdirs();
         stateSerdes = serdes;
 
-        props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
-        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBKeyValueStoreTest.TheRocksDbConfigSetter.class);
-
         context = new InternalMockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
-            ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
+            final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override
-            public ThreadCache getCache() {
+            public ThreadCache cache() {
                 return cache;
             }
 

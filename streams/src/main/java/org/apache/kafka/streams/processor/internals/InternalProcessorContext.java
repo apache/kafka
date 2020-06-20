@@ -16,9 +16,17 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.BytesSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.RecordContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 /**
  * For internal use so we can update the {@link RecordContext} and current
@@ -26,40 +34,89 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
  * {@link ThreadCache}
  */
 public interface InternalProcessorContext extends ProcessorContext {
+    BytesSerializer BYTES_KEY_SERIALIZER = new BytesSerializer();
+    ByteArraySerializer BYTEARRAY_VALUE_SERIALIZER = new ByteArraySerializer();
 
     @Override
     StreamsMetricsImpl metrics();
 
     /**
+     * @param timeMs current wall-clock system timestamp in milliseconds
+     */
+    void setSystemTimeMs(long timeMs);
+
+    /**
+     * @retun the current wall-clock system timestamp in milliseconds
+     */
+    long currentSystemTimeMs();
+
+    /**
      * Returns the current {@link RecordContext}
      * @return the current {@link RecordContext}
      */
-    RecordContext recordContext();
+    ProcessorRecordContext recordContext();
 
     /**
-     * @param recordContext the {@link RecordContext} for the record about to be processes
+     * @param recordContext the {@link ProcessorRecordContext} for the record about to be processes
      */
-    void setRecordContext(RecordContext recordContext);
+    void setRecordContext(ProcessorRecordContext recordContext);
 
     /**
      * @param currentNode the current {@link ProcessorNode}
      */
-    void setCurrentNode(ProcessorNode currentNode);
+    void setCurrentNode(ProcessorNode<?, ?> currentNode);
 
-    ProcessorNode currentNode();
+    /**
+     * Get the current {@link ProcessorNode}
+     */
+    ProcessorNode<?, ?> currentNode();
 
     /**
      * Get the thread-global cache
      */
-    ThreadCache getCache();
+    ThreadCache cache();
 
     /**
      * Mark this context as being initialized
      */
-    void initialized();
+    void initialize();
 
     /**
      * Mark this context as being uninitialized
      */
     void uninitialize();
+
+    /**
+     * @return the type of task (active/standby/global) that this context corresponds to
+     */
+    TaskType taskType();
+
+    /**
+     * Transition to active task and register a new task and cache to this processor context
+     */
+    void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache);
+
+    /**
+     * Transition to standby task and register a dummy cache to this processor context
+     */
+    void transitionToStandby(final ThreadCache newCache);
+
+    /**
+     * Register a dirty entry flush listener for a particular namespace
+     */
+    void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener);
+
+    /**
+     * Get a correctly typed state store, given a handle on the original builder.
+     */
+    @SuppressWarnings("unchecked")
+    default <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
+        return (T) getStateStore(builder.name());
+    }
+
+    void logChange(final String storeName,
+                   final Bytes key,
+                   final byte[] value,
+                   final long timestamp);
+
 }

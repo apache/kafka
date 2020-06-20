@@ -21,6 +21,7 @@ import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
@@ -63,6 +64,12 @@ public class AgentRestResource {
     @Path("/status")
     public AgentStatusResponse getStatus() throws Throwable {
         return agent().status();
+    }
+
+    @GET
+    @Path("/uptime")
+    public UptimeResponse uptime() {
+        return agent().uptime();
     }
 
     @POST

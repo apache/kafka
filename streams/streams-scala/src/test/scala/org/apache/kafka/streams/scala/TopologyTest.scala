@@ -19,181 +19,449 @@
  */
 package org.apache.kafka.streams.scala
 
-import java.util.Properties
+import java.time.Duration
+import java.util
+import java.util.{Locale, Properties}
 import java.util.regex.Pattern
 
-import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
+import org.apache.kafka.streams.kstream.{
+  Aggregator,
+  Initializer,
+  JoinWindows,
+  KeyValueMapper,
+  KGroupedStream => KGroupedStreamJ,
+  KStream => KStreamJ,
+  KTable => KTableJ,
+  Materialized => MaterializedJ,
+  Reducer,
+  StreamJoined => StreamJoinedJ,
+  Transformer,
+  ValueJoiner,
+  ValueMapper
+}
+import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
+import org.apache.kafka.streams.scala.ImplicitConversions._
+import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.{KeyValue, StreamsConfig, TopologyDescription, StreamsBuilder => StreamsBuilderJ}
 import org.junit.Assert._
 import org.junit._
 
-import org.apache.kafka.streams.scala.kstream._
-
-import org.apache.kafka.common.serialization._
-
-import ImplicitConversions._
-import com.typesafe.scalalogging.LazyLogging
-
-import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ, _}
-import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
-import collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
- */ 
-class TopologyTest extends JUnitSuite with LazyLogging {
+ */
+class TopologyTest {
 
-  val inputTopic = "input-topic"
-  val userClicksTopic = "user-clicks-topic"
-  val userRegionsTopic = "user-regions-topic"
+  private val inputTopic = "input-topic"
+  private val userClicksTopic = "user-clicks-topic"
+  private val userRegionsTopic = "user-regions-topic"
 
-  val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
+  private val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
 
-  @Test def shouldBuildIdenticalTopologyInJavaNScalaSimple() = {
+  @Test
+  def shouldBuildIdenticalTopologyInJavaNScalaSimple(): Unit = {
 
     // build the Scala topology
-    def getTopologyScala(): TopologyDescription = {
+    def getTopologyScala: TopologyDescription = {
 
-      import DefaultSerdes._
-      import collection.JavaConverters._
-  
+      import Serdes._
+
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
-  
-      val _: KStream[String, String] =
-        textLines.flatMapValues(v => pattern.split(v.toLowerCase))
-  
+
+      val _: KStream[String, String] = textLines.flatMapValues(v => pattern.split(v.toLowerCase))
+
       streamBuilder.build().describe()
     }
-  
-    // build the Java topology
-    def getTopologyJava(): TopologyDescription = {
 
+    // build the Java topology
+    def getTopologyJava: TopologyDescription = {
       val streamBuilder = new StreamsBuilderJ
       val textLines = streamBuilder.stream[String, String](inputTopic)
-  
-      val _: KStreamJ[String, String] = textLines.flatMapValues {
-        new ValueMapper[String, java.lang.Iterable[String]] {
-          def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
-        }
-      }
+      val _: KStreamJ[String, String] = textLines.flatMapValues(s => pattern.split(s.toLowerCase).toIterable.asJava)
       streamBuilder.build().describe()
     }
 
     // should match
-    assertEquals(getTopologyScala(), getTopologyJava())
+    assertEquals(getTopologyScala, getTopologyJava)
   }
 
-  @Test def shouldBuildIdenticalTopologyInJavaNScalaAggregate() = {
+  @Test
+  def shouldBuildIdenticalTopologyInJavaNScalaAggregate(): Unit = {
 
     // build the Scala topology
-    def getTopologyScala(): TopologyDescription = {
+    def getTopologyScala: TopologyDescription = {
 
-      import DefaultSerdes._
-      import collection.JavaConverters._
-  
+      import org.apache.kafka.streams.scala.Serdes._
+
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
-  
-      val _: KTable[String, Long] =
-        textLines.flatMapValues(v => pattern.split(v.toLowerCase))
-          .groupBy((k, v) => v)
-          .count()
-  
+
+      textLines
+        .flatMapValues(v => pattern.split(v.toLowerCase))
+        .groupBy((_, v) => v)
+        .count()
+
       streamBuilder.build().describe()
     }
 
     // build the Java topology
-    def getTopologyJava(): TopologyDescription = {
+    def getTopologyJava: TopologyDescription = {
 
       val streamBuilder = new StreamsBuilderJ
       val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
-  
-      val splits: KStreamJ[String, String] = textLines.flatMapValues {
-        new ValueMapper[String, java.lang.Iterable[String]] {
-          def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
-        }
-      }
-  
-      val grouped: KGroupedStreamJ[String, String] = splits.groupBy {
-        new KeyValueMapper[String, String, String] {
-          def apply(k: String, v: String): String = v
-        }
-      }
-  
-      val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
-  
+
+      val splits: KStreamJ[String, String] =
+        textLines.flatMapValues(s => pattern.split(s.toLowerCase).toIterable.asJava)
+
+      val grouped: KGroupedStreamJ[String, String] = splits.groupBy((_, v) => v)
+
+      grouped.count()
+
       streamBuilder.build().describe()
     }
 
     // should match
-    assertEquals(getTopologyScala(), getTopologyJava())
+    assertEquals(getTopologyScala, getTopologyJava)
   }
 
-  @Test def shouldBuildIdenticalTopologyInJavaNScalaJoin() = {
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaCogroupSimple(): Unit = {
 
     // build the Scala topology
-    def getTopologyScala(): TopologyDescription = {
-      import DefaultSerdes._
-  
+    def getTopologyScala: TopologyDescription = {
+
+      import org.apache.kafka.streams.scala.Serdes._
+
+      val streamBuilder = new StreamsBuilder
+      val textLines = streamBuilder.stream[String, String](inputTopic)
+      textLines
+        .mapValues(v => v.length)
+        .groupByKey
+        .cogroup((_, v1, v2: Long) => v1 + v2)
+        .aggregate(0L)
+
+      streamBuilder.build().describe()
+    }
+
+    // build the Java topology
+    def getTopologyJava: TopologyDescription = {
+
+      val streamBuilder = new StreamsBuilderJ
+      val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
+
+      val splits: KStreamJ[String, Int] = textLines.mapValues(
+        new ValueMapper[String, Int] {
+          def apply(s: String): Int = s.length
+        }
+      )
+
+      splits.groupByKey
+        .cogroup((k: String, v: Int, a: Long) => a + v)
+        .aggregate(() => 0L)
+
+      streamBuilder.build().describe()
+    }
+
+    // should match
+    assertEquals(getTopologyScala, getTopologyJava)
+  }
+
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaCogroup(): Unit = {
+
+    // build the Scala topology
+    def getTopologyScala: TopologyDescription = {
+
+      import org.apache.kafka.streams.scala.Serdes._
+
+      val streamBuilder = new StreamsBuilder
+      val textLines1 = streamBuilder.stream[String, String](inputTopic)
+      val textLines2 = streamBuilder.stream[String, String]("inputTopic2")
+
+      textLines1
+        .mapValues(v => v.length)
+        .groupByKey
+        .cogroup((_, v1, v2: Long) => v1 + v2)
+        .cogroup(textLines2.groupByKey, (_, v: String, a) => v.length + a)
+        .aggregate(0L)
+
+      streamBuilder.build().describe()
+    }
+
+    // build the Java topology
+    def getTopologyJava: TopologyDescription = {
+
+      val streamBuilder = new StreamsBuilderJ
+      val textLines1: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
+      val textLines2: KStreamJ[String, String] = streamBuilder.stream[String, String]("inputTopic2")
+
+      val splits: KStreamJ[String, Int] = textLines1.mapValues(
+        new ValueMapper[String, Int] {
+          def apply(s: String): Int = s.length
+        }
+      )
+
+      splits.groupByKey
+        .cogroup((k: String, v: Int, a: Long) => a + v)
+        .cogroup(textLines2.groupByKey(), (k: String, v: String, a: Long) => v.length + a)
+        .aggregate(() => 0L)
+
+      streamBuilder.build().describe()
+    }
+
+    // should match
+    assertEquals(getTopologyScala, getTopologyJava)
+  }
+
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaJoin(): Unit = {
+
+    // build the Scala topology
+    def getTopologyScala: TopologyDescription = {
+      import Serdes._
+
       val builder = new StreamsBuilder()
-  
+
       val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
-  
+
       val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
-  
-      val clicksPerRegion: KTable[String, Long] =
-        userClicksStream
-          .leftJoin(userRegionsTable, (clicks: Long, region: String) => (if (region == null) "UNKNOWN" else region, clicks))
-          .map((_, regionWithClicks) => regionWithClicks)
-          .groupByKey
-          .reduce(_ + _)
+
+      // clicks per region
+      userClicksStream
+        .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
+        .map((_, regionWithClicks) => regionWithClicks)
+        .groupByKey
+        .reduce(_ + _)
 
       builder.build().describe()
     }
 
     // build the Java topology
-    def getTopologyJava(): TopologyDescription = {
+    def getTopologyJava: TopologyDescription = {
 
       import java.lang.{Long => JLong}
-  
+
       val builder: StreamsBuilderJ = new StreamsBuilderJ()
-  
-      val userClicksStream: KStreamJ[String, JLong] = 
-        builder.stream[String, JLong](userClicksTopic, Consumed.`with`(Serdes.String(), Serdes.Long()))
-  
-      val userRegionsTable: KTableJ[String, String] = 
-        builder.table[String, String](userRegionsTopic, Consumed.`with`(Serdes.String(), Serdes.String()))
-  
+
+      val userClicksStream: KStreamJ[String, JLong] =
+        builder.stream[String, JLong](userClicksTopic, Consumed.`with`[String, JLong])
+
+      val userRegionsTable: KTableJ[String, String] =
+        builder.table[String, String](userRegionsTopic, Consumed.`with`[String, String])
+
       // Join the stream against the table.
-      val userClicksJoinRegion: KStreamJ[String, (String, JLong)] = userClicksStream
-        .leftJoin(userRegionsTable, 
-          new ValueJoiner[JLong, String, (String, JLong)] {
-            def apply(clicks: JLong, region: String): (String, JLong) = 
-              (if (region == null) "UNKNOWN" else region, clicks)
-          }, 
-          Joined.`with`[String, JLong, String](Serdes.String(), Serdes.Long(), Serdes.String())) 
-  
+      val valueJoinerJ: ValueJoiner[JLong, String, (String, JLong)] =
+        (clicks: JLong, region: String) => (if (region == null) "UNKNOWN" else region, clicks)
+      val userClicksJoinRegion: KStreamJ[String, (String, JLong)] = userClicksStream.leftJoin(
+        userRegionsTable,
+        valueJoinerJ,
+        Joined.`with`[String, JLong, String]
+      )
+
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
-      val clicksByRegion : KStreamJ[String, JLong] = userClicksJoinRegion
-        .map { 
-          new KeyValueMapper[String, (String, JLong), KeyValue[String, JLong]] {
-            def apply(k: String, regionWithClicks: (String, JLong)) = new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
-          }
-        }
-          
+      val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion.map { (_, regionWithClicks) =>
+        new KeyValue(regionWithClicks._1, regionWithClicks._2)
+      }
+
       // Compute the total per region by summing the individual click counts per region.
-      val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
-        .groupByKey(Serialized.`with`(Serdes.String(), Serdes.Long()))
-        .reduce {
-          new Reducer[JLong] {
-            def apply(v1: JLong, v2: JLong) = v1 + v2
-          }
-        }
+      clicksByRegion
+        .groupByKey(Grouped.`with`[String, JLong])
+        .reduce((v1, v2) => v1 + v2)
 
       builder.build().describe()
     }
 
     // should match
-    assertEquals(getTopologyScala(), getTopologyJava())
+    assertEquals(getTopologyScala, getTopologyJava)
+  }
+
+  @Test
+  def shouldBuildIdenticalTopologyInJavaNScalaTransform(): Unit = {
+
+    // build the Scala topology
+    def getTopologyScala: TopologyDescription = {
+
+      import Serdes._
+
+      val streamBuilder = new StreamsBuilder
+      val textLines = streamBuilder.stream[String, String](inputTopic)
+
+      val _: KTable[String, Long] = textLines
+        .transform(
+          () =>
+            new Transformer[String, String, KeyValue[String, String]] {
+              override def init(context: ProcessorContext): Unit = ()
+              override def transform(key: String, value: String): KeyValue[String, String] =
+                new KeyValue(key, value.toLowerCase)
+              override def close(): Unit = ()
+          }
+        )
+        .groupBy((_, v) => v)
+        .count()
+
+      streamBuilder.build().describe()
+    }
+
+    // build the Java topology
+    def getTopologyJava: TopologyDescription = {
+
+      val streamBuilder = new StreamsBuilderJ
+      val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
+
+      val lowered: KStreamJ[String, String] = textLines.transform(
+        () =>
+          new Transformer[String, String, KeyValue[String, String]] {
+            override def init(context: ProcessorContext): Unit = ()
+            override def transform(key: String, value: String): KeyValue[String, String] =
+              new KeyValue(key, value.toLowerCase)
+            override def close(): Unit = ()
+        }
+      )
+
+      val grouped: KGroupedStreamJ[String, String] = lowered.groupBy((_, v) => v)
+
+      // word counts
+      grouped.count()
+
+      streamBuilder.build().describe()
+    }
+
+    // should match
+    assertEquals(getTopologyScala, getTopologyJava)
+  }
+
+  @Test
+  def shouldBuildIdenticalTopologyInJavaNScalaProperties(): Unit = {
+
+    val props = new Properties()
+    props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE)
+
+    val propsNoOptimization = new Properties()
+    propsNoOptimization.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION)
+
+    val AGGREGATION_TOPIC = "aggregationTopic"
+    val REDUCE_TOPIC = "reduceTopic"
+    val JOINED_TOPIC = "joinedTopic"
+
+    // build the Scala topology
+    def getTopologyScala: StreamsBuilder = {
+
+      val aggregator = (_: String, v: String, agg: Int) => agg + v.length
+      val reducer = (v1: String, v2: String) => v1 + ":" + v2
+      val processorValueCollector: util.List[String] = new util.ArrayList[String]
+
+      val builder: StreamsBuilder = new StreamsBuilder
+
+      val sourceStream: KStream[String, String] =
+        builder.stream(inputTopic)(Consumed.`with`(Serdes.String, Serdes.String))
+
+      val mappedStream: KStream[String, String] =
+        sourceStream.map((k: String, v: String) => (k.toUpperCase(Locale.getDefault), v))
+      mappedStream
+        .filter((k: String, _: String) => k == "B")
+        .mapValues((v: String) => v.toUpperCase(Locale.getDefault))
+        .process(() => new SimpleProcessor(processorValueCollector))
+
+      val stream2 = mappedStream.groupByKey
+        .aggregate(0)(aggregator)(Materialized.`with`(Serdes.String, Serdes.Integer))
+        .toStream
+      stream2.to(AGGREGATION_TOPIC)(Produced.`with`(Serdes.String, Serdes.Integer))
+
+      // adding operators for case where the repartition node is further downstream
+      val stream3 = mappedStream
+        .filter((_: String, _: String) => true)
+        .peek((k: String, v: String) => System.out.println(k + ":" + v))
+        .groupByKey
+        .reduce(reducer)(Materialized.`with`(Serdes.String, Serdes.String))
+        .toStream
+      stream3.to(REDUCE_TOPIC)(Produced.`with`(Serdes.String, Serdes.String))
+
+      mappedStream
+        .filter((k: String, _: String) => k == "A")
+        .join(stream2)((v1: String, v2: Int) => v1 + ":" + v2.toString, JoinWindows.of(Duration.ofMillis(5000)))(
+          StreamJoined.`with`(Serdes.String, Serdes.String, Serdes.Integer)
+        )
+        .to(JOINED_TOPIC)
+
+      mappedStream
+        .filter((k: String, _: String) => k == "A")
+        .join(stream3)((v1: String, v2: String) => v1 + ":" + v2.toString, JoinWindows.of(Duration.ofMillis(5000)))(
+          StreamJoined.`with`(Serdes.String, Serdes.String, Serdes.String)
+        )
+        .to(JOINED_TOPIC)
+
+      builder
+    }
+
+    // build the Java topology
+    def getTopologyJava: StreamsBuilderJ = {
+
+      val keyValueMapper: KeyValueMapper[String, String, KeyValue[String, String]] =
+        (key, value) => KeyValue.pair(key.toUpperCase(Locale.getDefault), value)
+      val initializer: Initializer[Integer] = () => 0
+      val aggregator: Aggregator[String, String, Integer] = (_, value, aggregate) => aggregate + value.length
+      val reducer: Reducer[String] = (v1, v2) => v1 + ":" + v2
+      val valueMapper: ValueMapper[String, String] = v => v.toUpperCase(Locale.getDefault)
+      val processorValueCollector = new util.ArrayList[String]
+      val processorSupplier: ProcessorSupplier[String, String] = () => new SimpleProcessor(processorValueCollector)
+      val valueJoiner2: ValueJoiner[String, Integer, String] = (value1, value2) => value1 + ":" + value2.toString
+      val valueJoiner3: ValueJoiner[String, String, String] = (value1, value2) => value1 + ":" + value2
+
+      val builder = new StreamsBuilderJ
+
+      val sourceStream = builder.stream(inputTopic, Consumed.`with`(Serdes.String, Serdes.String))
+
+      val mappedStream: KStreamJ[String, String] =
+        sourceStream.map(keyValueMapper)
+      mappedStream
+        .filter((key, _) => key == "B")
+        .mapValues[String](valueMapper)
+        .process(processorSupplier)
+
+      val stream2: KStreamJ[String, Integer] = mappedStream.groupByKey
+        .aggregate(initializer, aggregator, MaterializedJ.`with`(Serdes.String, SerdesJ.Integer))
+        .toStream
+      stream2.to(AGGREGATION_TOPIC, Produced.`with`(Serdes.String, SerdesJ.Integer))
+
+      // adding operators for case where the repartition node is further downstream
+      val stream3 = mappedStream
+        .filter((_, _) => true)
+        .peek((k, v) => System.out.println(k + ":" + v))
+        .groupByKey
+        .reduce(reducer, MaterializedJ.`with`(Serdes.String, Serdes.String))
+        .toStream
+      stream3.to(REDUCE_TOPIC, Produced.`with`(Serdes.String, Serdes.String))
+
+      mappedStream
+        .filter((key, _) => key == "A")
+        .join[Integer, String](stream2,
+                               valueJoiner2,
+                               JoinWindows.of(Duration.ofMillis(5000)),
+                               StreamJoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.Integer))
+        .to(JOINED_TOPIC)
+
+      mappedStream
+        .filter((key, _) => key == "A")
+        .join(stream3,
+              valueJoiner3,
+              JoinWindows.of(Duration.ofMillis(5000)),
+              StreamJoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.String))
+        .to(JOINED_TOPIC)
+
+      builder
+    }
+
+    assertNotEquals(getTopologyScala.build(props).describe.toString,
+                    getTopologyScala.build(propsNoOptimization).describe.toString)
+    assertEquals(getTopologyScala.build(propsNoOptimization).describe.toString,
+                 getTopologyJava.build(propsNoOptimization).describe.toString)
+    assertEquals(getTopologyScala.build(props).describe.toString, getTopologyJava.build(props).describe.toString)
+  }
+
+  private class SimpleProcessor private[TopologyTest] (val valueList: util.List[String])
+      extends AbstractProcessor[String, String] {
+    override def process(key: String, value: String): Unit =
+      valueList.add(value)
   }
 }

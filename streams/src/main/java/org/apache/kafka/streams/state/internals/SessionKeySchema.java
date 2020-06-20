@@ -17,14 +17,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -36,38 +33,31 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
-    private String topic;
-    private final Serde<Bytes> bytesSerdes = Serdes.Bytes();
-
-    @Override
-    public void init(final String topic) {
-        this.topic = topic;
-    }
-
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
-        return Bytes.wrap(SessionKeySchema.toBinary(sessionKey, bytesSerdes.serializer(), topic));
+        return SessionKeySchema.toBinary(sessionKey);
     }
 
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
-        return Bytes.wrap(SessionKeySchema.toBinary(sessionKey, bytesSerdes.serializer(), topic));
+        return SessionKeySchema.toBinary(sessionKey);
     }
 
     @Override
-    public Bytes upperRange(Bytes key, long to) {
+    public Bytes upperRange(final Bytes key, final long to) {
         final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
-            .putLong(to)
-            // start can at most be equal to end
+            // the end timestamp can be as large as possible as long as it's larger than start time
+            .putLong(Long.MAX_VALUE)
+            // this is the start timestamp
             .putLong(to)
             .array();
         return OrderedBytes.upperRange(key, maxSuffix);
     }
 
     @Override
-    public Bytes lowerRange(Bytes key, long from) {
+    public Bytes lowerRange(final Bytes key, final long from) {
         return OrderedBytes.lowerRange(key, MIN_SUFFIX);
     }
 
@@ -78,29 +68,26 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
-        return new HasNextCondition() {
-            @Override
-            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                while (iterator.hasNext()) {
-                    final Bytes bytes = iterator.peekNextKey();
-                    final Windowed<Bytes> windowedKey = SessionKeySchema.from(bytes);
-                    if ((binaryKeyFrom == null || windowedKey.key().compareTo(binaryKeyFrom) >= 0)
-                        && (binaryKeyTo == null || windowedKey.key().compareTo(binaryKeyTo) <= 0)
-                        && windowedKey.window().end() >= from
-                        && windowedKey.window().start() <= to) {
-                        return true;
-                    }
-                    iterator.next();
+        return iterator -> {
+            while (iterator.hasNext()) {
+                final Bytes bytes = iterator.peekNextKey();
+                final Windowed<Bytes> windowedKey = SessionKeySchema.from(bytes);
+                if ((binaryKeyFrom == null || windowedKey.key().compareTo(binaryKeyFrom) >= 0)
+                    && (binaryKeyTo == null || windowedKey.key().compareTo(binaryKeyTo) <= 0)
+                    && windowedKey.window().end() >= from
+                    && windowedKey.window().start() <= to) {
+                    return true;
                 }
-                return false;
+                iterator.next();
             }
+            return false;
         };
     }
 
     @Override
-    public List<Segment> segmentsToSearch(final Segments segments,
-                                          final long from,
-                                          final long to) {
+    public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
+                                                        final long from,
+                                                        final long to) {
         return segments.segments(from, Long.MAX_VALUE);
     }
 
@@ -110,21 +97,21 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return deserializer.deserialize(topic, extractKeyBytes(binaryKey));
     }
 
-    public static byte[] extractKeyBytes(final byte[] binaryKey) {
+    static byte[] extractKeyBytes(final byte[] binaryKey) {
         final byte[] bytes = new byte[binaryKey.length - 2 * TIMESTAMP_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
         return bytes;
     }
 
-    public static long extractEndTimestamp(final byte[] binaryKey) {
+    static long extractEndTimestamp(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
     }
 
-    public static long extractStartTimestamp(final byte[] binaryKey) {
+    static long extractStartTimestamp(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE);
     }
 
-    public static Window extractWindow(final byte[] binaryKey) {
+    static Window extractWindow(final byte[] binaryKey) {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
         final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
@@ -145,23 +132,32 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return new Windowed<>(Bytes.wrap(extractKeyBytes(binaryKey)), window);
     }
 
+    public static <K> Windowed<K> from(final Windowed<Bytes> keyBytes,
+                                       final Deserializer<K> keyDeserializer,
+                                       final String topic) {
+        final K key = keyDeserializer.deserialize(topic, keyBytes.key().get());
+        return new Windowed<>(key, keyBytes.window());
+    }
+
     public static <K> byte[] toBinary(final Windowed<K> sessionKey,
                                       final Serializer<K> serializer,
                                       final String topic) {
         final byte[] bytes = serializer.serialize(topic, sessionKey.key());
-        final ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
-        buf.put(bytes);
-        buf.putLong(sessionKey.window().end());
-        buf.putLong(sessionKey.window().start());
-        return buf.array();
+        return toBinary(Bytes.wrap(bytes), sessionKey.window().start(), sessionKey.window().end()).get();
     }
 
-    public static byte[] toBinary(final Windowed<Bytes> sessionKey) {
-        final byte[] bytes = sessionKey.key().get();
+    public static Bytes toBinary(final Windowed<Bytes> sessionKey) {
+        return toBinary(sessionKey.key(), sessionKey.window().start(), sessionKey.window().end());
+    }
+
+    public static Bytes toBinary(final Bytes key,
+                                 final long startTime,
+                                 final long endTime) {
+        final byte[] bytes = key.get();
         final ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
         buf.put(bytes);
-        buf.putLong(sessionKey.window().end());
-        buf.putLong(sessionKey.window().start());
-        return buf.array();
+        buf.putLong(endTime);
+        buf.putLong(startTime);
+        return Bytes.wrap(buf.array());
     }
 }

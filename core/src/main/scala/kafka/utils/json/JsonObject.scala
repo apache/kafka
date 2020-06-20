@@ -19,7 +19,7 @@ package kafka.utils.json
 
 import com.fasterxml.jackson.databind.JsonMappingException
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 import com.fasterxml.jackson.databind.node.ObjectNode
 
@@ -31,7 +31,7 @@ import scala.collection.Iterator
 class JsonObject private[json] (protected val node: ObjectNode) extends JsonValue {
 
   def apply(name: String): JsonValue =
-    get(name).getOrElse(throw new JsonMappingException(s"No such field exists: `$name`"))
+    get(name).getOrElse(throw new JsonMappingException(null, s"No such field exists: `$name`"))
 
   def get(name: String): Option[JsonValue] = Option(node.get(name)).map(JsonValue(_))
 

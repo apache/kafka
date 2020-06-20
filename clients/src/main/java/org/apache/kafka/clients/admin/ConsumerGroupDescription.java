@@ -17,55 +17,72 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.utils.Utils;
 
-import java.util.List;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * A detailed description of a single consumer group in the cluster.
  */
 public class ConsumerGroupDescription {
-
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
-    private final List<MemberDescription> members;
+    private final Collection<MemberDescription> members;
     private final String partitionAssignor;
+    private final ConsumerGroupState state;
+    private final Node coordinator;
+    private final Set<AclOperation> authorizedOperations;
 
-    /**
-     * Creates an instance with the specified parameters.
-     *
-     * @param groupId               The consumer group id
-     * @param isSimpleConsumerGroup If Consumer Group is simple
-     * @param members               The consumer group members
-     * @param partitionAssignor     The consumer group partition assignor
-     */
-    public ConsumerGroupDescription(String groupId, boolean isSimpleConsumerGroup, List<MemberDescription> members, String partitionAssignor) {
-        this.groupId = groupId;
+    public ConsumerGroupDescription(String groupId,
+                                    boolean isSimpleConsumerGroup,
+                                    Collection<MemberDescription> members,
+                                    String partitionAssignor,
+                                    ConsumerGroupState state,
+                                    Node coordinator) {
+        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Collections.emptySet());
+    }
+
+    ConsumerGroupDescription(String groupId,
+                             boolean isSimpleConsumerGroup,
+                             Collection<MemberDescription> members,
+                             String partitionAssignor,
+                             ConsumerGroupState state,
+                             Node coordinator,
+                             Set<AclOperation> authorizedOperations) {
+        this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
-        this.members = members;
-        this.partitionAssignor = partitionAssignor;
+        this.members = members == null ? Collections.emptyList() :
+            Collections.unmodifiableList(new ArrayList<>(members));
+        this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
+        this.state = state;
+        this.coordinator = coordinator;
+        this.authorizedOperations = authorizedOperations;
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-
-        ConsumerGroupDescription that = (ConsumerGroupDescription) o;
-
-        if (isSimpleConsumerGroup != that.isSimpleConsumerGroup) return false;
-        if (groupId != null ? !groupId.equals(that.groupId) : that.groupId != null) return false;
-        if (members != null ? !members.equals(that.members) : that.members != null) return false;
-        return partitionAssignor != null ? partitionAssignor.equals(that.partitionAssignor) : that.partitionAssignor == null;
+        final ConsumerGroupDescription that = (ConsumerGroupDescription) o;
+        return isSimpleConsumerGroup == that.isSimpleConsumerGroup &&
+            Objects.equals(groupId, that.groupId) &&
+            Objects.equals(members, that.members) &&
+            Objects.equals(partitionAssignor, that.partitionAssignor) &&
+            state == that.state &&
+            Objects.equals(coordinator, that.coordinator) &&
+            Objects.equals(authorizedOperations, that.authorizedOperations);
     }
 
     @Override
     public int hashCode() {
-        int result = groupId != null ? groupId.hashCode() : 0;
-        result = 31 * result + (isSimpleConsumerGroup ? 1 : 0);
-        result = 31 * result + (members != null ? members.hashCode() : 0);
-        result = 31 * result + (partitionAssignor != null ? partitionAssignor.hashCode() : 0);
-        return result;
+        return Objects.hash(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, authorizedOperations);
     }
 
     /**
@@ -85,7 +102,7 @@ public class ConsumerGroupDescription {
     /**
      * A list of the members of the consumer group.
      */
-    public List<MemberDescription> members() {
+    public Collection<MemberDescription> members() {
         return members;
     }
 
@@ -96,9 +113,36 @@ public class ConsumerGroupDescription {
         return partitionAssignor;
     }
 
+    /**
+     * The consumer group state, or UNKNOWN if the state is too new for us to parse.
+     */
+    public ConsumerGroupState state() {
+        return state;
+    }
+
+    /**
+     * The consumer group coordinator, or null if the coordinator is not known.
+     */
+    public Node coordinator() {
+        return coordinator;
+    }
+
+    /**
+     * authorizedOperations for this group, or null if that information is not known.
+     */
+    public  Set<AclOperation> authorizedOperations() {
+        return authorizedOperations;
+    }
+
     @Override
     public String toString() {
-        return "(groupId=" + groupId + ", isSimpleConsumerGroup=" + isSimpleConsumerGroup + ", members=" +
-            Utils.join(members, ",") + ", partitionAssignor=" + partitionAssignor + ")";
+        return "(groupId=" + groupId +
+            ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
+            ", members=" + Utils.join(members, ",") +
+            ", partitionAssignor=" + partitionAssignor +
+            ", state=" + state +
+            ", coordinator=" + coordinator +
+            ", authorizedOperations=" + authorizedOperations +
+            ")";
     }
 }

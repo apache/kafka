@@ -18,11 +18,18 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampSerde;
 import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
+import static org.junit.Assert.assertThrows;
+
+@SuppressWarnings("unchecked")
 public class StateSerdesTest {
 
     @Test(expected = NullPointerException.class)
@@ -84,6 +91,49 @@ public class StateSerdesTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfValueClassIsNull() {
         new StateSerdes<>("anyName", Serdes.ByteArray(), null);
+    }
+
+    @Test
+    public void shouldThrowIfIncompatibleSerdeForValue() throws ClassNotFoundException {
+        final Class myClass = Class.forName("java.lang.String");
+        final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
+        final Integer myInt = 123;
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(myInt));
+        assertThat(
+            e.getMessage(),
+            equalTo(
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+                "is not compatible to the actual value type (value type: java.lang.Integer). " +
+                "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
+    }
+
+    @Test
+    public void shouldSkipValueAndTimestampeInformationForErrorOnTimestampAndValueSerialization() throws ClassNotFoundException {
+        final Class myClass = Class.forName("java.lang.String");
+        final StateSerdes<Object, Object> stateSerdes =
+            new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), new ValueAndTimestampSerde(Serdes.serdeFrom(myClass)));
+        final Integer myInt = 123;
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawValue(ValueAndTimestamp.make(myInt, 0L)));
+        assertThat(
+            e.getMessage(),
+            equalTo(
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+                    "is not compatible to the actual value type (value type: java.lang.Integer). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
+    }
+
+    @Test
+    public void shouldThrowIfIncompatibleSerdeForKey() throws ClassNotFoundException {
+        final Class myClass = Class.forName("java.lang.String");
+        final StateSerdes<Object, Object> stateSerdes = new StateSerdes<Object, Object>("anyName", Serdes.serdeFrom(myClass), Serdes.serdeFrom(myClass));
+        final Integer myInt = 123;
+        final Exception e = assertThrows(StreamsException.class, () -> stateSerdes.rawKey(myInt));
+        assertThat(
+            e.getMessage(),
+            equalTo(
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
+                    "is not compatible to the actual key type (key type: java.lang.Integer). " +
+                    "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
     }
 
 }

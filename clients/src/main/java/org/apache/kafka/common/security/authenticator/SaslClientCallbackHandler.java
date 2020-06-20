@@ -30,14 +30,19 @@ import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
 /**
  * Default callback handler for Sasl clients. The callbacks required for the SASL mechanism
  * configured for the client should be supported by this callback handler. See
  * <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/sasl/sasl-refguide.html">Java SASL API</a>
  * for the list of SASL callback handlers required for each SASL mechanism.
+ *
+ * For adding custom SASL extensions, a {@link SaslExtensions} may be added to the subject's public credentials
  */
 public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
 
@@ -78,9 +83,16 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
             } else if (callback instanceof ScramExtensionsCallback) {
-                ScramExtensionsCallback sc = (ScramExtensionsCallback) callback;
-                if (!SaslConfigs.GSSAPI_MECHANISM.equals(mechanism) && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
-                    sc.extensions((Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next());
+                if (ScramMechanism.isScram(mechanism) && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
+                    ((ScramExtensionsCallback) callback).extensions(extensions);
+                }
+            } else if (callback instanceof SaslExtensionsCallback) {
+                if (!SaslConfigs.GSSAPI_MECHANISM.equals(mechanism) &&
+                        subject != null && !subject.getPublicCredentials(SaslExtensions.class).isEmpty()) {
+                    SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
+                    ((SaslExtensionsCallback) callback).extensions(extensions);
                 }
             }  else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");

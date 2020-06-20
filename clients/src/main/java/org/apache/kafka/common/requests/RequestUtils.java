@@ -16,80 +16,36 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.acl.AccessControlEntry;
-import org.apache.kafka.common.acl.AccessControlEntryFilter;
-import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.Resource;
-import org.apache.kafka.common.resource.ResourceFilter;
-import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.record.RecordBatch;
 
-import static org.apache.kafka.common.protocol.CommonFields.HOST;
-import static org.apache.kafka.common.protocol.CommonFields.HOST_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
-import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
-import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
-import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME_FILTER;
-import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
+import java.nio.ByteBuffer;
+import java.util.Optional;
 
-final class RequestUtils {
+public final class RequestUtils {
 
     private RequestUtils() {}
 
-    static Resource resourceFromStructFields(Struct struct) {
-        byte resourceType = struct.get(RESOURCE_TYPE);
-        String name = struct.get(RESOURCE_NAME);
-        return new Resource(ResourceType.fromCode(resourceType), name);
+    static void setLeaderEpochIfExists(Struct struct, Field.Int32 leaderEpochField, Optional<Integer> leaderEpoch) {
+        struct.setIfExists(leaderEpochField, leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH));
     }
 
-    static void resourceSetStructFields(Resource resource, Struct struct) {
-        struct.set(RESOURCE_TYPE, resource.resourceType().code());
-        struct.set(RESOURCE_NAME, resource.name());
+    static Optional<Integer> getLeaderEpoch(Struct struct, Field.Int32 leaderEpochField) {
+        int leaderEpoch = struct.getOrElse(leaderEpochField, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        return getLeaderEpoch(leaderEpoch);
     }
 
-    static ResourceFilter resourceFilterFromStructFields(Struct struct) {
-        byte resourceType = struct.get(RESOURCE_TYPE);
-        String name = struct.get(RESOURCE_NAME_FILTER);
-        return new ResourceFilter(ResourceType.fromCode(resourceType), name);
+    static Optional<Integer> getLeaderEpoch(int leaderEpoch) {
+        return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+            Optional.empty() : Optional.of(leaderEpoch);
     }
 
-    static void resourceFilterSetStructFields(ResourceFilter resourceFilter, Struct struct) {
-        struct.set(RESOURCE_TYPE, resourceFilter.resourceType().code());
-        struct.set(RESOURCE_NAME_FILTER, resourceFilter.name());
-    }
-
-    static AccessControlEntry aceFromStructFields(Struct struct) {
-        String principal = struct.get(PRINCIPAL);
-        String host = struct.get(HOST);
-        byte operation = struct.get(OPERATION);
-        byte permissionType = struct.get(PERMISSION_TYPE);
-        return new AccessControlEntry(principal, host, AclOperation.fromCode(operation),
-            AclPermissionType.fromCode(permissionType));
-    }
-
-    static void aceSetStructFields(AccessControlEntry data, Struct struct) {
-        struct.set(PRINCIPAL, data.principal());
-        struct.set(HOST, data.host());
-        struct.set(OPERATION, data.operation().code());
-        struct.set(PERMISSION_TYPE, data.permissionType().code());
-    }
-
-    static AccessControlEntryFilter aceFilterFromStructFields(Struct struct) {
-        String principal = struct.get(PRINCIPAL_FILTER);
-        String host = struct.get(HOST_FILTER);
-        byte operation = struct.get(OPERATION);
-        byte permissionType = struct.get(PERMISSION_TYPE);
-        return new AccessControlEntryFilter(principal, host, AclOperation.fromCode(operation),
-            AclPermissionType.fromCode(permissionType));
-    }
-
-    static void aceFilterSetStructFields(AccessControlEntryFilter filter, Struct struct) {
-        struct.set(PRINCIPAL_FILTER, filter.principal());
-        struct.set(HOST_FILTER, filter.host());
-        struct.set(OPERATION, filter.operation().code());
-        struct.set(PERMISSION_TYPE, filter.permissionType().code());
+    public static ByteBuffer serialize(Struct headerStruct, Struct bodyStruct) {
+        ByteBuffer buffer = ByteBuffer.allocate(headerStruct.sizeOf() + bodyStruct.sizeOf());
+        headerStruct.writeTo(buffer);
+        bodyStruct.writeTo(buffer);
+        buffer.rewind();
+        return buffer;
     }
 }

@@ -14,9 +14,8 @@
 # limitations under the License.
 
 
-from kafkatest.utils import kafkatest_version
-
 from distutils.version import LooseVersion
+from kafkatest.utils import kafkatest_version
 
 
 class KafkaVersion(LooseVersion):
@@ -50,6 +49,18 @@ class KafkaVersion(LooseVersion):
         else:
             return LooseVersion.__str__(self)
 
+    def supports_named_listeners(self):
+        return self >= V_0_10_2_0
+
+    def topic_command_supports_bootstrap_server(self):
+        return self >= V_2_3_0
+
+    def supports_tls_to_zookeeper(self):
+        # indicate if KIP-515 is available
+        return self > LATEST_2_4
+
+    def reassign_partitions_command_supports_bootstrap_server(self):
+        return self >= V_2_5_0
 
 def get_version(node=None):
     """Return the version attached to the given node.
@@ -61,7 +72,7 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("1.2.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("2.7.0-SNAPSHOT")
 
 # 0.8.2.x versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")
@@ -86,7 +97,8 @@ LATEST_0_10_1 = V_0_10_1_1
 # 0.10.2.x versions
 V_0_10_2_0 = KafkaVersion("0.10.2.0")
 V_0_10_2_1 = KafkaVersion("0.10.2.1")
-LATEST_0_10_2 = V_0_10_2_1
+V_0_10_2_2 = KafkaVersion("0.10.2.2")
+LATEST_0_10_2 = V_0_10_2_2
 
 LATEST_0_10 = LATEST_0_10_2
 
@@ -94,14 +106,51 @@ LATEST_0_10 = LATEST_0_10_2
 V_0_11_0_0 = KafkaVersion("0.11.0.0")
 V_0_11_0_1 = KafkaVersion("0.11.0.1")
 V_0_11_0_2 = KafkaVersion("0.11.0.2")
-LATEST_0_11_0 = V_0_11_0_2
+V_0_11_0_3 = KafkaVersion("0.11.0.3")
+LATEST_0_11_0 = V_0_11_0_3
 LATEST_0_11 = LATEST_0_11_0
 
 # 1.0.x versions
 V_1_0_0 = KafkaVersion("1.0.0")
 V_1_0_1 = KafkaVersion("1.0.1")
-LATEST_1_0 = V_1_0_1
+V_1_0_2 = KafkaVersion("1.0.2")
+LATEST_1_0 = V_1_0_2
 
 # 1.1.x versions
 V_1_1_0 = KafkaVersion("1.1.0")
-LATEST_1_1 = V_1_1_0
+V_1_1_1 = KafkaVersion("1.1.1")
+LATEST_1_1 = V_1_1_1
+
+# 2.0.x versions
+V_2_0_0 = KafkaVersion("2.0.0")
+V_2_0_1 = KafkaVersion("2.0.1")
+LATEST_2_0 = V_2_0_1
+
+# 2.1.x versions
+V_2_1_0 = KafkaVersion("2.1.0")
+V_2_1_1 = KafkaVersion("2.1.1")
+LATEST_2_1 = V_2_1_1
+
+# 2.2.x versions
+V_2_2_0 = KafkaVersion("2.2.0")
+V_2_2_1 = KafkaVersion("2.2.1")
+V_2_2_2 = KafkaVersion("2.2.2")
+LATEST_2_2 = V_2_2_2
+
+# 2.3.x versions
+V_2_3_0 = KafkaVersion("2.3.0")
+V_2_3_1 = KafkaVersion("2.3.1")
+LATEST_2_3 = V_2_3_1
+
+# 2.4.x versions
+V_2_4_0 = KafkaVersion("2.4.0")
+V_2_4_1 = KafkaVersion("2.4.1")
+LATEST_2_4 = V_2_4_1
+
+# 2.5.x versions
+V_2_5_0 = KafkaVersion("2.5.0")
+LATEST_2_5 = V_2_5_0
+
+# 2.6.x versions
+V_2_6_0 = KafkaVersion("2.6.0")
+LATEST_2_6 = V_2_6_0

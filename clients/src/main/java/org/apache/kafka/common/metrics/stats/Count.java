@@ -16,30 +16,14 @@
  */
 package org.apache.kafka.common.metrics.stats;
 
-import java.util.List;
-
-import org.apache.kafka.common.metrics.MetricConfig;
-
 /**
  * A {@link SampledStat} that maintains a simple count of what it has seen.
+ * This is a special kind of {@link WindowedSum} that always records a value of {@code 1} instead of the provided value.
+ *
+ * See also {@link CumulativeCount} for a non-sampled version of this metric.
+ *
+ * @deprecated since 2.4 . Use {@link WindowedCount} instead
  */
-public class Count extends SampledStat {
-
-    public Count() {
-        super(0);
-    }
-
-    @Override
-    protected void update(Sample sample, MetricConfig config, double value, long now) {
-        sample.value += 1.0;
-    }
-
-    @Override
-    public double combine(List<Sample> samples, MetricConfig config, long now) {
-        double total = 0.0;
-        for (Sample sample : samples)
-            total += sample.value;
-        return total;
-    }
-
+@Deprecated
+public class Count extends WindowedCount {
 }

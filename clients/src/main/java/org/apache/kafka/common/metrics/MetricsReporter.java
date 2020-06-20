@@ -16,38 +16,62 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.Reconfigurable;
+import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigException;
 
 /**
  * A plugin interface to allow things to listen as new metrics are created so they can be reported.
  * <p>
  * Implement {@link org.apache.kafka.common.ClusterResourceListener} to receive cluster metadata once it's available. Please see the class documentation for ClusterResourceListener for more information.
  */
-public interface MetricsReporter extends Configurable {
+public interface MetricsReporter extends Reconfigurable, AutoCloseable {
 
     /**
      * This is called when the reporter is first registered to initially register all existing metrics
      * @param metrics All currently existing metrics
      */
-    public void init(List<KafkaMetric> metrics);
+    void init(List<KafkaMetric> metrics);
 
     /**
      * This is called whenever a metric is updated or added
      * @param metric
      */
-    public void metricChange(KafkaMetric metric);
+    void metricChange(KafkaMetric metric);
 
     /**
      * This is called whenever a metric is removed
      * @param metric
      */
-    public void metricRemoval(KafkaMetric metric);
+    void metricRemoval(KafkaMetric metric);
 
     /**
      * Called when the metrics repository is closed.
      */
-    public void close();
+    void close();
 
+    // default methods for backwards compatibility with reporters that only implement Configurable
+    default Set<String> reconfigurableConfigs() {
+        return Collections.emptySet();
+    }
+
+    default void validateReconfiguration(Map<String, ?> configs) throws ConfigException {
+    }
+
+    default void reconfigure(Map<String, ?> configs) {
+    }
+
+    /**
+     * Sets the context labels for the service or library exposing metrics. This will be called before {@link #init(List)} and may be called anytime after that.
+     *
+     * @param metricsContext the metric context
+     */
+    @InterfaceStability.Evolving
+    default void contextChange(MetricsContext metricsContext) {
+    }
 }

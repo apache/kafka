@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.Windowed;
  * @param <AGG> the aggregated value type
  */
 public interface ReadOnlySessionStore<K, AGG> {
-
     /**
      * Retrieve all aggregated sessions for the provided key.
      * This iterator must be closed after use.

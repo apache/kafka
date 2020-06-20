@@ -22,36 +22,28 @@ package org.apache.kafka.streams.scala
 import java.util.Properties
 import java.util.regex.Pattern
 
-import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
-
-import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.streams._
+import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.apache.kafka.streams.scala.kstream._
-
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-
-import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.test.TestUtils
-
+import org.apache.kafka.test.{IntegrationTest, TestUtils}
 import ImplicitConversions._
-import com.typesafe.scalalogging.LazyLogging
+import org.apache.kafka.common.serialization.{LongDeserializer, StringDeserializer, StringSerializer}
+import org.junit.experimental.categories.Category
 
 /**
  * Test suite that does a classic word count example.
  * <p>
  * The suite contains the test case using Scala APIs `testShouldCountWords` and the same test case using the
  * Java APIs `testShouldCountWordsJava`. The idea is to demonstrate that both generate the same result.
- * <p>
- * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
- * Hence the native Java API based version is more verbose.
- */ 
-class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
+ */
+@Category(Array(classOf[IntegrationTest]))
+class WordCountTest extends WordCountTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 
@@ -61,10 +53,8 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
   val mockTime: MockTime = cluster.time
   mockTime.setCurrentTimeMs(alignedTime)
 
-
   val tFolder: TemporaryFolder = new TemporaryFolder(TestUtils.tempDirectory())
   @Rule def testFolder: TemporaryFolder = tFolder
-    
 
   @Before
   def startKafkaCluster(): Unit = {
@@ -74,9 +64,9 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
     cluster.createTopic(outputTopicJ)
   }
 
-  @Test def testShouldCountWords(): Unit = {
-
-    import DefaultSerdes._
+  @Test
+  def testShouldCountWords(): Unit = {
+    import Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
 
@@ -87,14 +77,15 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
 
     // generate word counts
     val wordCounts: KTable[String, Long] =
-      textLines.flatMapValues(v => pattern.split(v.toLowerCase))
-        .groupBy((k, v) => v)
+      textLines
+        .flatMapValues(v => pattern.split(v.toLowerCase))
+        .groupBy((_, v) => v)
         .count()
 
     // write to output topic
     wordCounts.toStream.to(outputTopic)
 
-    val streams: KafkaStreams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    val streams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
     streams.start()
 
     // produce and consume synchronously
@@ -102,40 +93,75 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
 
     streams.close()
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
   }
 
-  @Test def testShouldCountWordsJava(): Unit = {
-
-    import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
-    import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
-    import collection.JavaConverters._
+  @Test
+  def testShouldCountWordsMaterialized(): Unit = {
+    import Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
-    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName())
-    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName())
+
+    val streamBuilder = new StreamsBuilder
+    val textLines = streamBuilder.stream[String, String](inputTopic)
+
+    val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
+
+    // generate word counts
+    val wordCounts: KTable[String, Long] =
+      textLines
+        .flatMapValues(v => pattern.split(v.toLowerCase))
+        .groupBy((k, v) => v)
+        .count()(Materialized.as("word-count"))
+
+    // write to output topic
+    wordCounts.toStream.to(outputTopic)
+
+    val streams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    streams.start()
+
+    // produce and consume synchronously
+    val actualWordCounts: java.util.List[KeyValue[String, Long]] = produceNConsume(inputTopic, outputTopic)
+
+    streams.close()
+
+    import scala.jdk.CollectionConverters._
+    assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
+  }
+
+  @Test
+  def testShouldCountWordsJava(): Unit = {
+
+    import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
+    import org.apache.kafka.streams.kstream.{
+      KTable => KTableJ,
+      KStream => KStreamJ,
+      KGroupedStream => KGroupedStreamJ,
+      _
+    }
+    import scala.jdk.CollectionConverters._
+
+    val streamsConfiguration = getStreamsConfiguration()
+    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
 
     val streamBuilder = new StreamsBuilderJ
     val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopicJ)
 
     val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
 
-    val splits: KStreamJ[String, String] = textLines.flatMapValues {
-      new ValueMapper[String, java.lang.Iterable[String]] {
-        def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
-      }
+    val splits: KStreamJ[String, String] = textLines.flatMapValues { line =>
+      pattern.split(line.toLowerCase).toIterable.asJava
     }
 
-    val grouped: KGroupedStreamJ[String, String] = splits.groupBy {
-      new KeyValueMapper[String, String, String] {
-        def apply(k: String, v: String): String = v
-      }
+    val grouped: KGroupedStreamJ[String, String] = splits.groupBy { (_, v) =>
+      v
     }
 
     val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
 
-    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.String(), Serdes.Long()))
+    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))
 
     val streams: KafkaStreamsJ = new KafkaStreamsJ(streamBuilder.build(), streamsConfiguration)
     streams.start()
@@ -154,7 +180,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
     streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "10000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath())
+    streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot.getPath)
     streamsConfiguration
   }
 
@@ -182,7 +208,7 @@ class WordCountTest extends JUnitSuite with WordCountTestData with LazyLogging {
 
     val linesProducerConfig: Properties = getProducerConfig()
 
-    import collection.JavaConverters._
+    import scala.jdk.CollectionConverters._
     IntegrationTestUtils.produceValuesSynchronously(inputTopic, inputValues.asJava, linesProducerConfig, mockTime)
 
     val consumerConfig = getConsumerConfig()
@@ -220,4 +246,3 @@ trait WordCountTestData {
     new KeyValue("слова", 1L)
   )
 }
-

@@ -21,8 +21,6 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
-import org.apache.kafka.common.utils.Utils;
-
 /**
  * A template for a MetricName. It contains a name, group, and description, as
  * well as all the tags that will be used to create the mBean name. Tag values
@@ -46,10 +44,10 @@ public class MetricNameTemplate {
      * @param tagsNames the set of metric tag names, which can/should be a set that maintains order; may not be null
      */
     public MetricNameTemplate(String name, String group, String description, Set<String> tagsNames) {
-        this.name = Utils.notNull(name);
-        this.group = Utils.notNull(group);
-        this.description = Utils.notNull(description);
-        this.tags = new LinkedHashSet<>(Utils.notNull(tagsNames));
+        this.name = Objects.requireNonNull(name);
+        this.group = Objects.requireNonNull(group);
+        this.description = Objects.requireNonNull(description);
+        this.tags = new LinkedHashSet<>(Objects.requireNonNull(tagsNames));
     }
 
     /**

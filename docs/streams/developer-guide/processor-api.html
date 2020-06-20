@@ -53,6 +53,7 @@
                     </ul>
                 </li>
                 <li><a class="reference internal" href="#connecting-processors-and-state-stores" id="id8">Connecting Processors and State Stores</a></li>
+                <li><a class="reference internal" href="#accessing-processor-context" id="id10">Accessing Processor Context</a></li>
             </ul>
         </div>
         <div class="section" id="overview">
@@ -65,11 +66,11 @@
                     You can combine the convenience of the DSL with the power and flexibility of the Processor API as described in the
                     section <a class="reference internal" href="dsl-api.html#streams-developer-guide-dsl-process"><span class="std std-ref">Applying processors and transformers (Processor API integration)</span></a>.</p>
             </div>
-            <p>For a complete list of available API functionality, see the <a href="../../../javadoc/org/apache/kafka/streams/package-summary.html">Streams</a> API docs.</p>
+            <p>For a complete list of available API functionality, see the <a href="/{{version}}/javadoc/org/apache/kafka/streams/package-summary.html">Streams</a> API docs.</p>
         </div>
         <div class="section" id="defining-a-stream-processor">
             <span id="streams-developer-guide-stream-processor"></span><h2><a class="toc-backref" href="#id2">Defining a Stream Processor</a><a class="headerlink" href="#defining-a-stream-processor" title="Permalink to this headline"></a></h2>
-            <p>A <a class="reference internal" href="../concepts.html#streams-concepts"><span class="std std-ref">stream processor</span></a> is a node in the processor topology that represents a single processing step.
+            <p>A <a class="reference internal" href="../core-concepts.html#streams_processor_node"><span class="std std-ref">stream processor</span></a> is a node in the processor topology that represents a single processing step.
                 With the Processor API, you can define arbitrary stream processors that processes one received record at a time, and connect
                 these processors with their associated state stores to compose the processor topology.</p>
             <p>You can define a customized stream processor by implementing the <code class="docutils literal"><span class="pre">Processor</span></code> interface, which provides the <code class="docutils literal"><span class="pre">process()</span></code> API method.
@@ -79,14 +80,18 @@
                 instance, which provides access to the metadata of the currently processed record, including its source Kafka topic and partition,
                 its corresponding message offset, and further such information. You can also use this context instance to schedule a punctuation
                 function (via <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code>), to forward a new record as a key-value pair to the downstream processors (via <code class="docutils literal"><span class="pre">ProcessorContext#forward()</span></code>),
-                and to commit the current processing progress (via <code class="docutils literal"><span class="pre">ProcessorContext#commit()</span></code>).</p>
+              and to commit the current processing progress (via <code class="docutils literal"><span class="pre">ProcessorContext#commit()</span></code>).
+              Any resources you set up in <code class="docutils literal"><span class="pre">init()</span></code> can be cleaned up in the
+              <code class="docutils literal"><span class="pre">close()</span></code> method. Note that Kafka Streams may re-use a single
+              <code class="docutils literal"><span class="pre">Processor</span></code> object by calling
+              <code class="docutils literal"><span class="pre">init()</span></code> on it again after <code class="docutils literal"><span class="pre">close()</span></code>.</p>
             <p>When records are forwarded via downstream processors they also get a timestamp assigned. There are two different default behaviors:
 	       (1) If <code class="docutils literal"><span class="pre">#forward()</span></code> is called within <code class="docutils literal"><span class="pre">#process()</span></code> the output record inherits the input record timestamp.
 	       (2) If <code class="docutils literal"><span class="pre">#forward()</span></code> is called within <code class="docutils literal"><span class="pre">punctuate()</span></code></p> the output record inherits the current punctuation timestamp (either current 'stream time' or system wall-clock time).
 	       Note, that <code class="docutils literal"><span class="pre">#forward()</span></code> also allows to change the default behavior by passing a custom timestamp for the output record.</p>
             <p>Specifically, <code class="docutils literal"><span class="pre">ProcessorContext#schedule()</span></code> accepts a user <code class="docutils literal"><span class="pre">Punctuator</span></code> callback interface, which triggers its <code class="docutils literal"><span class="pre">punctuate()</span></code>
                 API method periodically based on the <code class="docutils literal"><span class="pre">PunctuationType</span></code>. The <code class="docutils literal"><span class="pre">PunctuationType</span></code> determines what notion of time is used
-                for the punctuation scheduling: either <a class="reference internal" href="../concepts.html#streams-concepts-time"><span class="std std-ref">stream-time</span></a> or wall-clock-time (by default, stream-time
+                for the punctuation scheduling: either <a class="reference internal" href="../core-concepts.html#streams_time"><span class="std std-ref">stream-time</span></a> or wall-clock-time (by default, stream-time
                 is configured to represent event-time via <code class="docutils literal"><span class="pre">TimestampExtractor</span></code>). When stream-time is used, <code class="docutils literal"><span class="pre">punctuate()</span></code> is triggered purely
                 by data because stream-time is determined (and advanced forward) by the timestamps derived from the input data. When there
                 is no new input data arriving, stream-time is not advanced and thus <code class="docutils literal"><span class="pre">punctuate()</span></code> is not called.</p>
@@ -127,8 +132,8 @@
       <span class="c1">// retrieve the key-value store named &quot;Counts&quot;</span>
       <span class="n">kvStore</span> <span class="o">=</span> <span class="o">(</span><span class="n">KeyValueStore</span><span class="o">)</span> <span class="n">context</span><span class="o">.</span><span class="na">getStateStore</span><span class="o">(</span><span class="s">&quot;Counts&quot;</span><span class="o">);</span>
 
-      <span class="c1">// schedule a punctuate() method every 1000 milliseconds based on stream-time</span>
-      <span class="k">this</span><span class="o">.</span><span class="na">context</span><span class="o">.</span><span class="na">schedule</span><span class="o">(</span><span class="mi">1000</span><span class="o">,</span> <span class="n">PunctuationType</span><span class="o">.</span><span class="na">STREAM_TIME</span><span class="o">,</span> <span class="o">(</span><span class="n">timestamp</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
+      <span class="c1">// schedule a punctuate() method every second based on stream-time</span>
+      <span class="k">this</span><span class="o">.</span><span class="na">context</span><span class="o">.</span><span class="na">schedule</span><span class="o">(</span><span class="na">Duration</span><span class="o">.</span><span class="na">ofSeconds</span><span class="o">(</span><span class="mi">1000</span><span class="o">),</span> <span class="n">PunctuationType</span><span class="o">.</span><span class="na">STREAM_TIME</span><span class="o">,</span> <span class="o">(</span><span class="n">timestamp</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="o">{</span>
           <span class="n">KeyValueIterator</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">iter</span> <span class="o">=</span> <span class="k">this</span><span class="o">.</span><span class="na">kvStore</span><span class="o">.</span><span class="na">all</span><span class="o">();</span>
           <span class="k">while</span> <span class="o">(</span><span class="n">iter</span><span class="o">.</span><span class="na">hasNext</span><span class="o">())</span> <span class="o">{</span>
               <span class="n">KeyValue</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">entry</span> <span class="o">=</span> <span class="n">iter</span><span class="o">.</span><span class="na">next</span><span class="o">();</span>
@@ -190,7 +195,7 @@
                     <a class="reference internal" href="#streams-developer-guide-state-store-custom"><span class="std std-ref">implement your own custom store type</span></a>.
                     It&#8217;s common practice to leverage an existing store type via the <code class="docutils literal"><span class="pre">Stores</span></code> factory.</p>
                 <p>Note that, when using Kafka Streams, you normally don&#8217;t create or instantiate state stores directly in your code.
-                    Rather, you define state stores indirectly by creating a so-called <code class="docutils literal"><span class="pre">StoreBuilder</span></code>.  This buildeer is used by
+                    Rather, you define state stores indirectly by creating a so-called <code class="docutils literal"><span class="pre">StoreBuilder</span></code>.  This builder is used by
                     Kafka Streams as a factory to instantiate the actual state stores locally in application instances when and where
                     needed.</p>
                 <p>The following store types are available out of the box.</p>
@@ -222,7 +227,7 @@
                                 space.</li>
                             <li>RocksDB settings can be fine-tuned, see
                                 <a class="reference internal" href="config-streams.html#streams-developer-guide-rocksdb-config"><span class="std std-ref">RocksDB configuration</span></a>.</li>
-                            <li>Available <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/state/Stores.PersistentKeyValueFactory.html">store variants</a>:
+                            <li>Available <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#persistentKeyValueStore-java.lang.String-">store variants</a>:
                                 time window key-value store, session window key-value store.</li>
                         </ul>
                             <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Creating a persistent key-value store:</span>
@@ -253,6 +258,8 @@
                             <li>Useful when application instances run in an environment where local
                                 disk space is either not available or local disk space is wiped
                                 in-between app instance restarts.</li>
+                            <li>Available <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/Stores.html#inMemoryKeyValueStore-java.lang.String-">store variants</a>:
+                                time window key-value store, session window key-value store.</li>
                         </ul>
                             <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Creating an in-memory key-value store:</span>
 <span class="c1">// here, we create a `KeyValueStore&lt;String, Long&gt;` named &quot;inmemory-counts&quot;.</span>
@@ -282,11 +289,11 @@
                     you experience machine failure, the state store and the application&#8217;s state can be fully restored from its changelog. You can
                     <a class="reference internal" href="#streams-developer-guide-state-store-enable-disable-fault-tolerance"><span class="std std-ref">enable or disable this backup feature</span></a> for a
                     state store.</p>
-                <p>By default, persistent key-value stores are fault-tolerant.  They are backed by a
+                <p>Fault-tolerant state stores are backed by a
                     <a class="reference external" href="https://kafka.apache.org/documentation.html#compaction">compacted</a> changelog topic.  The purpose of compacting this
                     topic is to prevent the topic from growing indefinitely, to reduce the storage consumed in the associated Kafka cluster,
                     and to minimize recovery time if a state store needs to be restored from its changelog topic.</p>
-                <p>Similarly, persistent window stores are fault-tolerant.  They are backed by a topic that uses both compaction and
+                <p>Fault-tolerant windowed state stores are backed by a topic that uses both compaction and
                     deletion. Because of the structure of the message keys that are being sent to the changelog topics, this combination of
                     deletion and compaction is required for the changelog topics of window stores. For window stores, the message keys are
                     composite keys that include the &#8220;normal&#8221; key and window timestamps.  For these types of composite keys it would not
@@ -302,7 +309,7 @@
                 <span id="streams-developer-guide-state-store-enable-disable-fault-tolerance"></span><h3><a class="toc-backref" href="#id6">Enable or Disable Fault Tolerance of State Stores (Store Changelogs)</a><a class="headerlink" href="#enable-or-disable-fault-tolerance-of-state-stores-store-changelogs" title="Permalink to this headline"></a></h3>
                 <p>You can enable or disable fault tolerance for a state store by enabling or disabling the change logging
                     of the store through <code class="docutils literal"><span class="pre">enableLogging()</span></code> and <code class="docutils literal"><span class="pre">disableLogging()</span></code>.
-                    You can also fine-tune the associated topic’s configuration if needed.</p>
+                    You can also fine-tune the associated topic&#8217;s configuration if needed.</p>
                 <p>Example for disabling fault-tolerance:</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
@@ -319,14 +326,14 @@
                     <p class="last">If the changelog is disabled then the attached state store is no longer fault tolerant and it can&#8217;t have any <a class="reference internal" href="config-streams.html#streams-developer-guide-standby-replicas"><span class="std std-ref">standby replicas</span></a>.</p>
                 </div>
                 <p>Here is an example for enabling fault tolerance, with additional changelog-topic configuration:
-                    You can add any log config from <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/core/src/main/scala/kafka/log/LogConfig.scala#L61">kafka.log.LogConfig</a>.
+                    You can add any log config from <a class="reference external" href="https://github.com/apache/kafka/blob/trunk/core/src/main/scala/kafka/log/LogConfig.scala">kafka.log.LogConfig</a>.
                     Unrecognized configs will be ignored.</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.StoreBuilder</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.state.Stores</span><span class="o">;</span>
 
 <span class="n">Map</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">changelogConfig</span> <span class="o">=</span> <span class="k">new</span> <span class="n">HashMap</span><span class="o">();</span>
 <span class="c1">// override min.insync.replicas</span>
-<span class="n">changelogConfig</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="s">&quot;min.insyc.replicas&quot;</span><span class="o">,</span> <span class="s">&quot;1&quot;</span><span class="o">)</span>
+<span class="n">changelogConfig</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">TopicConfig</span><span class="o">.</span><span class="na">MIN_IN_SYNC_REPLICAS_CONFIG</span><span class="o">,</span> <span class="s">&quot;1&quot;</span><span class="o">)</span>
 
 <span class="n">StoreBuilder</span><span class="o">&lt;</span><span class="n">KeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;&gt;</span> <span class="n">countStoreSupplier</span> <span class="o">=</span> <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
   <span class="n">Stores</span><span class="o">.</span><span class="na">persistentKeyValueStore</span><span class="o">(</span><span class="s">&quot;Counts&quot;</span><span class="o">),</span>
@@ -342,10 +349,29 @@
                     The primary interface to implement for the store is
                     <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateStore</span></code>.  Kafka Streams also has a few extended interfaces such
                     as <code class="docutils literal"><span class="pre">KeyValueStore</span></code>.</p>
+                <p>Note that your customized <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateStore</span></code> implementation also needs to provide the logic on how to restore the state
+                    via the <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.StateRestoreCallback</span></code> or <code class="docutils literal"><span class="pre">org.apache.kafka.streams.processor.BatchingStateRestoreCallback</span></code> interface.
+                    Details on how to instantiate these interfaces can be found in the <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/StateStore.html">javadocs</a>.</p>
                 <p>You also need to provide a &#8220;builder&#8221; for the store by implementing the
                     <code class="docutils literal"><span class="pre">org.apache.kafka.streams.state.StoreBuilder</span></code> interface, which Kafka Streams uses to create instances of
                     your store.</p>
             </div>
+        </div>
+        <div class="section" id="accessing-processor-context">
+            <h2><a class="toc-backref" href="#id10">Accessing Processor Context</a><a class="headerlink" href="#accessing-processor-context" title="Permalink to this headline"></a></h2>
+            <p>As we have mentioned in the <a href=#defining-a-stream-processor>Defining a Stream Processor</a> section, a <code>ProcessorContext</code> control the processing workflow, such as scheduling a punctuation function, and committing the current processed state.</p>
+            <p>This object can also be used to access the metadata related with the application like
+            <code class="docutils literal"><span class="pre">applicationId</span></code>, <code class="docutils literal"><span class="pre">taskId</span></code>,
+                and <code class="docutils literal"><span class="pre">stateDir</span></code>, and also record related metadata as <code class="docutils literal"><span class="pre">topic</span></code>,
+                <code class="docutils literal"><span class="pre">partition</span></code>, <code class="docutils literal"><span class="pre">offset</span></code>, <code class="docutils literal"><span class="pre">timestamp</span></code> and
+                <code class="docutils literal"><span class="pre">headers</span></code>.</p>
+            <p>Here is an example implementation of how to add a new header to the record:</p>
+            <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">public void process(String key, String value) {</span>
+
+    <span class="c1">// add a header to the elements</span>
+    <span class="n">context()</span><span class="o">.</span><span class="na">headers</span><span class="o">()</span><span class="o">.</span><span class="na">add</span><span class="o">.</span><span class="o">(</span><span class="s">&quot;key&quot;</span><span class="o">,</span> <span class="s">&quot;key&quot;</span>
+<span class="o">}</span>
+</pre></div>
         </div>
         <div class="section" id="connecting-processors-and-state-stores">
             <h2><a class="toc-backref" href="#id8">Connecting Processors and State Stores</a><a class="headerlink" href="#connecting-processors-and-state-stores" title="Permalink to this headline"></a></h2>
@@ -355,22 +381,18 @@
                 to generate input data streams into the topology, and sink processors with the specified Kafka topics to generate
                 output data streams out of the topology.</p>
             <p>Here is an example implementation:</p>
-            <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">Topology</span> <span class="n">builder</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Topology</span><span class="o">();</span>
-
-<span class="c1">// add the source processor node that takes Kafka topic &quot;source-topic&quot; as input</span>
-<span class="n">builder</span><span class="o">.</span><span class="na">addSource</span><span class="o">(</span><span class="s">&quot;Source&quot;</span><span class="o">,</span> <span class="s">&quot;source-topic&quot;</span><span class="o">)</span>
-
-    <span class="c1">// add the WordCountProcessor node which takes the source processor as its upstream processor</span>
-    <span class="o">.</span><span class="na">addProcessor</span><span class="o">(</span><span class="s">&quot;Process&quot;</span><span class="o">,</span> <span class="o">()</span> <span class="o">-&gt;</span> <span class="k">new</span> <span class="n">WordCountProcessor</span><span class="o">(),</span> <span class="s">&quot;Source&quot;</span><span class="o">)</span>
-
-    <span class="c1">// add the count store associated with the WordCountProcessor processor</span>
-    <span class="o">.</span><span class="na">addStateStore</span><span class="o">(</span><span class="n">countStoreBuilder</span><span class="o">,</span> <span class="s">&quot;Process&quot;</span><span class="o">)</span>
-
-    <span class="c1">// add the sink processor node that takes Kafka topic &quot;sink-topic&quot; as output</span>
-    <span class="c1">// and the WordCountProcessor node as its upstream processor</span>
-    <span class="o">.</span><span class="na">addSink</span><span class="o">(</span><span class="s">&quot;Sink&quot;</span><span class="o">,</span> <span class="s">&quot;sink-topic&quot;</span><span class="o">,</span> <span class="s">&quot;Process&quot;</span><span class="o">);</span>
-</pre></div>
-            </div>
+            <pre class="brush: java">
+                Topology builder = new Topology();
+                // add the source processor node that takes Kafka topic "source-topic" as input
+                builder.addSource("Source", "source-topic")
+                    // add the WordCountProcessor node which takes the source processor as its upstream processor
+                    .addProcessor("Process", () -> new WordCountProcessor(), "Source")
+                    // add the count store associated with the WordCountProcessor processor
+                    .addStateStore(countStoreBuilder, "Process")
+                    // add the sink processor node that takes Kafka topic "sink-topic" as output
+                    // and the WordCountProcessor node as its upstream processor
+                    .addSink("Sink", "sink-topic", "Process");
+            </pre>
             <p>Here is a quick explanation of this example:</p>
             <ul class="simple">
                 <li>A source processor node named <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> is added to the topology using the <code class="docutils literal"><span class="pre">addSource</span></code> method, with one Kafka topic
@@ -380,9 +402,34 @@
                 <li>A predefined persistent key-value state store is created and associated with the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> node, using
                     <code class="docutils literal"><span class="pre">countStoreBuilder</span></code>.</li>
                 <li>A sink processor node is then added to complete the topology using the <code class="docutils literal"><span class="pre">addSink</span></code> method, taking the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> node
-                    as its upstream processor and writing to a separate <code class="docutils literal"><span class="pre">&quot;sink-topic&quot;</span></code> Kafka topic.</li>
+                    as its upstream processor and writing to a separate <code class="docutils literal"><span class="pre">&quot;sink-topic&quot;</span></code> Kafka topic (note that users can also use another overloaded variant of <code class="docutils literal"><span class="pre">addSink</span></code>
+                    to dynamically determine the Kafka topic to write to for each received record from the upstream processor).</li>
             </ul>
-            <p>In this topology, the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> stream processor node is considered a downstream processor of the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node, and an
+            <p>In some cases, it may be more convenient to add and connect a state store at the same time as you add the processor to the topology.
+                This can be done by implementing <code class="docutils literal"><span class="pre">ConnectedStoreProvider#stores()</span></code> on the <code class="docutils literal"><span class="pre">ProcessorSupplier</span></code>
+                instead of calling <code class="docutils literal"><span class="pre">Topology#addStateStore()</span></code>, like this:
+            </p>
+            <pre class="brush: java">
+                Topology builder = new Topology();
+                // add the source processor node that takes Kafka "source-topic" as input
+                builder.addSource("Source", "source-topic")
+                    // add the WordCountProcessor node which takes the source processor as its upstream processor.
+                    // the ProcessorSupplier provides the count store associated with the WordCountProcessor
+                    .addProcessor("Process", new ProcessorSupplier&ltString, String&gt() {
+                        public Processor&ltString, String&gt get() {
+                            return new WordCountProcessor();
+                        }
+                        public Set&ltStoreBuilder&lt?&gt&gt stores() {
+                            return countStoreBuilder;
+                        }
+                    }, "Source")
+                    // add the sink processor node that takes Kafka topic "sink-topic" as output
+                    // and the WordCountProcessor node as its upstream processor
+                    .addSink("Sink", "sink-topic", "Process");
+            </pre>
+            <p>This allows for a processor to "own" state stores, effectively encapsulating their usage from the user wiring the topology.
+                Multiple processors that share a state store may provide the same store with this technique, as long as the <code class="docutils literal"><span class="pre">StoreBuilder</span></code> is the same <code class="docutils literal"><span class="pre">instance</span></code>.</p>
+            <p>In these topologies, the <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> stream processor node is considered a downstream processor of the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node, and an
                 upstream processor of the <code class="docutils literal"><span class="pre">&quot;Sink&quot;</span></code> node.  As a result, whenever the <code class="docutils literal"><span class="pre">&quot;Source&quot;</span></code> node forwards a newly fetched record from
                 Kafka to its downstream <code class="docutils literal"><span class="pre">&quot;Process&quot;</span></code> node, the <code class="docutils literal"><span class="pre">WordCountProcessor#process()</span></code> method is triggered to process the record and
                 update the associated state store. Whenever <code class="docutils literal"><span class="pre">context#forward()</span></code> is called in the
@@ -394,8 +441,8 @@
                 runtime, indicating the state store is not accessible from this processor.</p>
             <p>Now that you have fully defined your processor topology in your application, you can proceed to
                 <a class="reference internal" href="running-app.html#streams-developer-guide-execution"><span class="std std-ref">running the Kafka Streams application</span></a>.</p>
-</div>
-</div>
+        </div>
+        </div>
 
 
                </div>
