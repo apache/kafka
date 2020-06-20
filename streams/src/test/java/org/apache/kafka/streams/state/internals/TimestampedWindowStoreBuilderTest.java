@@ -39,6 +39,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
@@ -200,9 +201,15 @@ public class TimestampedWindowStoreBuilderTest {
         assertThrows(NullPointerException.class, () -> new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        /*
+        * TODO: The exception is thrown from the constructor of AbstractStoreBuilder, since
+        * TimestampedWindowStoreBuilder omits the MetricsScope nullity check in its constructor.
+        */
+        assertThat(e.getMessage(), equalTo("name cannot be null"));
     }
 
 }

@@ -35,7 +35,9 @@ import org.junit.runner.RunWith;
 import java.util.Collections;
 
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
 public class KeyValueStoreBuilderTest {
@@ -134,9 +136,15 @@ public class KeyValueStoreBuilderTest {
         new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        /*
+         * TODO: The exception is thrown from the constructor of AbstractStoreBuilder, since
+         * KeyValueStoreBuilder omits the MetricsScope nullity check in its constructor.
+         */
+        assertThat(e.getMessage(), equalTo("name cannot be null"));
     }
 
 }

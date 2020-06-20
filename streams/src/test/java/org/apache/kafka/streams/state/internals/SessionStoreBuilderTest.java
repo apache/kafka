@@ -146,7 +146,12 @@ public class SessionStoreBuilderTest {
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        final Exception e = assertThrows(NullPointerException.class,
+            () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        /*
+         * TODO: The exception is thrown from the constructor of AbstractStoreBuilder, since
+         * SessionStoreBuilder omits the MetricsScope nullity check in its constructor.
+         */
         assertThat(e.getMessage(), equalTo("name cannot be null"));
     }
 
