@@ -66,7 +66,7 @@ class BrokerMetadataCheckpoint(val file: File) extends Logging {
   }
 
   def read(): Option[BrokerMetadata] = {
-    Files.deleteIfExists(new File(file + ".tmp").toPath()) // try to delete any existing temp files for cleanliness
+    Files.deleteIfExists(new File(file.getPath + ".tmp").toPath()) // try to delete any existing temp files for cleanliness
 
     lock synchronized {
       try {

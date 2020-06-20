@@ -18,8 +18,9 @@
   "type": "request",
   "name": "DescribeDelegationTokenRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 adds flexible version support
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "Owners", "type": "[]DescribeDelegationTokenOwner", "versions": "0+", "nullableVersions": "0+",
       "about": "Each owner that we want to describe delegation tokens for, or null to describe all tokens.", "fields": [

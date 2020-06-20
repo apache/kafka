@@ -410,6 +410,12 @@ public class DefaultRecordBatchTest {
         assertEquals(4, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE - 5, 10));
     }
 
+    @Test
+    public void testDecrementSequence() {
+        assertEquals(0, DefaultRecordBatch.decrementSequence(5, 5));
+        assertEquals(Integer.MAX_VALUE, DefaultRecordBatch.decrementSequence(0, 1));
+    }
+
     private static DefaultRecordBatch recordsWithInvalidRecordCount(Byte magicValue, long timestamp,
                                               CompressionType codec, int invalidCount) {
         ByteBuffer buf = ByteBuffer.allocate(512);

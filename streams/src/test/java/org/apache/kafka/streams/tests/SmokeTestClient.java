@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -53,6 +54,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     private KafkaStreams streams;
     private boolean uncaughtException = false;
     private boolean started;
+    private boolean closed;
 
     public SmokeTestClient(final String name) {
         super();
@@ -63,6 +65,10 @@ public class SmokeTestClient extends SmokeTestUtil {
         return started;
     }
 
+    public boolean closed() {
+        return closed;
+    }
+
     public void start(final Properties streamsProperties) {
         streams = createKafkaStreams(streamsProperties);
         streams.setUncaughtExceptionHandler((t, e) -> {
@@ -71,7 +77,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             e.printStackTrace();
         });
 
-        Runtime.getRuntime().addShutdownHook(new Thread(this::close));
+        Exit.addShutdownHook("streams-shutdown-hook", () -> close());
 
         thread = new Thread(() -> streams.start());
         thread.start();
@@ -119,6 +125,10 @@ public class SmokeTestClient extends SmokeTestUtil {
             System.out.printf("%s %s: %s -> %s%n", name, Instant.now(), oldState, newState);
             if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
                 started = true;
+            }
+
+            if (newState == KafkaStreams.State.NOT_RUNNING) {
+                closed = true;
             }
         });
         streamsClient.setUncaughtExceptionHandler((t, e) -> {

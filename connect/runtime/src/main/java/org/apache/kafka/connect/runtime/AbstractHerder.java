@@ -30,6 +30,7 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -60,8 +61,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
@@ -92,6 +96,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final StatusBackingStore statusBackingStore;
     protected final ConfigBackingStore configBackingStore;
     private final ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
+    protected volatile boolean running = false;
+    private final ExecutorService connectorExecutor;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
 
@@ -108,6 +114,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore = statusBackingStore;
         this.configBackingStore = configBackingStore;
         this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
+        this.connectorExecutor = Executors.newCachedThreadPool();
     }
 
     @Override
@@ -127,6 +134,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.statusBackingStore.stop();
         this.configBackingStore.stop();
         this.worker.stop();
+        this.connectorExecutor.shutdown();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return running;
     }
 
     @Override
@@ -187,8 +200,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     @Override
     public void onDeletion(String connector) {
         for (TaskStatus status : statusBackingStore.getAll(connector))
-            statusBackingStore.put(new TaskStatus(status.id(), TaskStatus.State.DESTROYED, workerId, generation()));
+            onDeletion(status.id());
         statusBackingStore.put(new ConnectorStatus(connector, ConnectorStatus.State.DESTROYED, workerId, generation()));
+    }
+
+    @Override
+    public void onDeletion(ConnectorTaskId id) {
+        statusBackingStore.put(new TaskStatus(id, TaskStatus.State.DESTROYED, workerId, generation()));
     }
 
     @Override
@@ -261,6 +279,25 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
+    public ActiveTopicsInfo connectorActiveTopics(String connName) {
+        Collection<String> topics = statusBackingStore.getAllTopics(connName).stream()
+                .map(TopicStatus::topic)
+                .collect(Collectors.toList());
+        return new ActiveTopicsInfo(connName, topics);
+    }
+
+    @Override
+    public void resetConnectorActiveTopics(String connName) {
+        statusBackingStore.getAllTopics(connName).stream()
+                .forEach(status -> statusBackingStore.deleteTopic(status.connector(), status.topic()));
+    }
+
+    @Override
+    public StatusBackingStore statusBackingStore() {
+        return statusBackingStore;
+    }
+
+    @Override
     public ConnectorStateInfo.TaskState taskStatus(ConnectorTaskId id) {
         TaskStatus status = statusBackingStore.get(id);
 
@@ -278,7 +315,23 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps) {
+    public void validateConnectorConfig(Map<String, String> connectorProps, Callback<ConfigInfos> callback) {
+        validateConnectorConfig(connectorProps, callback, true);
+    }
+
+    @Override
+    public void validateConnectorConfig(Map<String, String> connectorProps, Callback<ConfigInfos> callback, boolean doLog) {
+        connectorExecutor.submit(() -> {
+            try {
+                ConfigInfos result = validateConnectorConfig(connectorProps, doLog);
+                callback.onCompletion(null, result);
+            } catch (Throwable t) {
+                callback.onCompletion(t, null);
+            }
+        });
+    }
+
+    ConfigInfos validateConnectorConfig(Map<String, String> connectorProps, boolean doLog) {
         if (worker.configTransformer() != null) {
             connectorProps = worker.configTransformer().transform(connectorProps);
         }
@@ -310,22 +363,22 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Set<String> allGroups = new LinkedHashSet<>(enrichedConfigDef.groups());
 
             // do custom connector-specific validation
-            Config config = connector.validate(connectorProps);
-            if (null == config) {
-                throw new BadRequestException(
-                    String.format(
-                        "%s.validate() must return a Config that is not null.",
-                        connector.getClass().getName()
-                    )
-                );
-            }
             ConfigDef configDef = connector.config();
             if (null == configDef) {
                 throw new BadRequestException(
-                    String.format(
-                        "%s.config() must return a ConfigDef that is not null.",
-                        connector.getClass().getName()
-                    )
+                        String.format(
+                                "%s.config() must return a ConfigDef that is not null.",
+                                connector.getClass().getName()
+                        )
+                );
+            }
+            Config config = connector.validate(connectorProps);
+            if (null == config) {
+                throw new BadRequestException(
+                        String.format(
+                                "%s.validate() must return a Config that is not null.",
+                                connector.getClass().getName()
+                        )
                 );
             }
             configKeys.putAll(configDef.configKeys());
@@ -333,7 +386,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             configValues.addAll(config.configValues());
             ConfigInfos configInfos =  generateResult(connType, configKeys, configValues, new ArrayList<>(allGroups));
 
-            AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps);
+            AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps, doLog);
             String connName = connectorProps.get(ConnectorConfig.NAME_CONFIG);
             ConfigInfos producerConfigInfos = null;
             ConfigInfos consumerConfigInfos = null;
@@ -556,7 +609,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             callback.onCompletion(
                 new BadRequestException(
                     messages.append(
-                        "\nYou can also find the above list of errors at the endpoint `/{connectorType}/config/validate`"
+                        "\nYou can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
                     ).toString()
                 ), null
             );

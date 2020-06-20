@@ -34,13 +34,18 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
+
+import org.eclipse.jetty.util.StringUtil;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_PREFIX;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
@@ -49,6 +54,9 @@ public class WorkerConfig extends AbstractConfig {
     private static final Logger log = LoggerFactory.getLogger(WorkerConfig.class);
 
     private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+    private static final Collection<String> HEADER_ACTIONS = Collections.unmodifiableList(
+            Arrays.asList("set", "add", "setDate", "addDate")
+    );
 
     public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
     public static final String BOOTSTRAP_SERVERS_DOC
@@ -205,7 +213,10 @@ public class WorkerConfig extends AbstractConfig {
             + "plugins and their dependencies\n"
             + "Note: symlinks will be followed to discover dependencies or plugins.\n"
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
-            + "/opt/connectors";
+            + "/opt/connectors\n" 
+            + "Do not use config provider variables in this property, since the raw path is used "
+            + "by the worker's scanner before config providers are initialized and used to "
+            + "replace variables.";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
     protected static final String CONFIG_PROVIDERS_DOC =
@@ -234,6 +245,31 @@ public class WorkerConfig extends AbstractConfig {
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
+    public static final String TOPIC_TRACKING_ENABLE_CONFIG = "topic.tracking.enable";
+    protected static final String TOPIC_TRACKING_ENABLE_DOC = "Enable tracking the set of active "
+            + "topics per connector during runtime.";
+    protected static final boolean TOPIC_TRACKING_ENABLE_DEFAULT = true;
+
+    public static final String TOPIC_TRACKING_ALLOW_RESET_CONFIG = "topic.tracking.allow.reset";
+    protected static final String TOPIC_TRACKING_ALLOW_RESET_DOC = "If set to true, it allows "
+            + "user requests to reset the set of active topics per connector.";
+    protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
+
+    public static final String CONNECT_KAFKA_CLUSTER_ID = "connect.kafka.cluster.id";
+    public static final String CONNECT_GROUP_ID = "connect.group.id";
+
+    public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
+    protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
+            + "automatic creation of topics used by source connectors, when source connectors "
+            + "are configured with `" + TOPIC_CREATION_PREFIX + "` properties. Each task will use an "
+            + "admin client to create its topics and will not depend on the Kafka brokers "
+            + "to create topics automatically.";
+    protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
+
+    public static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
+    protected static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
+    protected static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -245,7 +281,7 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                         Type.STRING,
-                        ClientDnsLookup.DEFAULT.toString(),
+                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                         in(ClientDnsLookup.DEFAULT.toString(),
                            ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
@@ -310,7 +346,17 @@ public class WorkerConfig extends AbstractConfig {
                 .define(ADMIN_LISTENERS_CONFIG, Type.LIST, null,
                         new AdminListenersValidator(), Importance.LOW, ADMIN_LISTENERS_DOC)
                 .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
-                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC);
+                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC)
+                .define(TOPIC_TRACKING_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ENABLE_DEFAULT,
+                        Importance.LOW, TOPIC_TRACKING_ENABLE_DOC)
+                .define(TOPIC_TRACKING_ALLOW_RESET_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ALLOW_RESET_DEFAULT,
+                        Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC)
+                .define(TOPIC_CREATION_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_CREATION_ENABLE_DEFAULT, Importance.LOW,
+                        TOPIC_CREATION_ENABLE_DOC)
+                .define(RESPONSE_HTTP_HEADERS_CONFIG, Type.STRING, RESPONSE_HTTP_HEADERS_DEFAULT,
+                        new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC)
+                // security support
+                .withClientSslSupport();
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
@@ -365,8 +411,29 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    private void logPluginPathConfigProviderWarning(Map<String, String> rawOriginals) {
+        String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
+        // Can't use AbstractConfig::originalsStrings here since some values may be null, which
+        // causes that method to fail
+        String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG));
+        if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
+            log.warn(
+                "Variables cannot be used in the 'plugin.path' property, since the property is "
+                + "used by plugin scanning before the config providers that replace the " 
+                + "variables are initialized. The raw value '{}' was used for plugin scanning, as " 
+                + "opposed to the transformed value '{}', and this may cause unexpected results.",
+                rawPluginPath,
+                transformedPluginPath
+            );
+        }
+    }
+
     public Integer getRebalanceTimeout() {
         return null;
+    }
+
+    public boolean topicCreationEnable() {
+        return getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
     }
 
     @Override
@@ -384,6 +451,49 @@ public class WorkerConfig extends AbstractConfig {
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
         logInternalConverterDeprecationWarnings(props);
+        logPluginPathConfigProviderWarning(props);
+    }
+
+    // Visible for testing
+    static void validateHttpResponseHeaderConfig(String config) {
+        try {
+            // validate format
+            String[] configTokens = config.trim().split("\\s+", 2);
+            if (configTokens.length != 2) {
+                throw new ConfigException(String.format("Invalid format of header config '%s\'. "
+                        + "Expected: '[ation] [header name]:[header value]'", config));
+            }
+
+            // validate action
+            String method = configTokens[0].trim();
+            validateHeaderConfigAction(method);
+
+            // validate header name and header value pair
+            String header = configTokens[1];
+            String[] headerTokens = header.trim().split(":");
+            if (headerTokens.length != 2) {
+                throw new ConfigException(
+                        String.format("Invalid format of header name and header value pair '%s'. "
+                                + "Expected: '[header name]:[header value]'", header));
+            }
+
+            // validate header name
+            String headerName = headerTokens[0].trim();
+            if (headerName.isEmpty() || headerName.matches(".*\\s+.*")) {
+                throw new ConfigException(String.format("Invalid header name '%s'. "
+                        + "The '[header name]' cannot contain whitespace", headerName));
+            }
+        } catch (ArrayIndexOutOfBoundsException e) {
+            throw new ConfigException(String.format("Invalid header config '%s'.", config), e);
+        }
+    }
+
+    // Visible for testing
+    static void validateHeaderConfigAction(String action) {
+        if (!HEADER_ACTIONS.stream().anyMatch(action::equalsIgnoreCase)) {
+            throw new ConfigException(String.format("Invalid header config action: '%s'. "
+                    + "Expected one of %s", action, HEADER_ACTIONS));
+        }
     }
 
     private static class AdminListenersValidator implements ConfigDef.Validator {
@@ -413,4 +523,23 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    private static class ResponseHttpHeadersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            String strValue = (String) value;
+            if (strValue == null || strValue.trim().isEmpty()) {
+                return;
+            }
+
+            String[] configs = StringUtil.csvSplit(strValue); // handles and removed surrounding quotes
+            Arrays.stream(configs).forEach(WorkerConfig::validateHttpResponseHeaderConfig);
+        }
+
+        @Override
+        public String toString() {
+            return "Comma-separated header rules, where each header rule is of the form "
+                    + "'[action] [header name]:[header value]' and optionally surrounded by double quotes "
+                    + "if any part of a header rule contains a comma";
+        }
+    }
 }

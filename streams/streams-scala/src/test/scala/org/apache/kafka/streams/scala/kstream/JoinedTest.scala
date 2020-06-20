@@ -21,8 +21,8 @@ package org.apache.kafka.streams.scala.kstream
 import org.apache.kafka.streams.scala.Serdes
 import org.apache.kafka.streams.scala.Serdes._
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class JoinedTest extends FlatSpec with Matchers {

@@ -17,11 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.admin.ConfigEntry.ConfigType;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -87,5 +89,10 @@ public class ConfigTest {
     public void shouldImplementToStringProperly() {
         assertThat(config.toString(), containsString(E1.toString()));
         assertThat(config.toString(), containsString(E2.toString()));
+    }
+
+    public static ConfigEntry newConfigEntry(String name, String value, ConfigEntry.ConfigSource source, boolean isSensitive,
+                                             boolean isReadOnly, List<ConfigEntry.ConfigSynonym> synonyms) {
+        return new ConfigEntry(name, value, source, isSensitive, isReadOnly, synonyms, ConfigType.UNKNOWN, null);
     }
 }

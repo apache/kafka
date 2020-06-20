@@ -297,4 +297,29 @@ public class FlattenTest {
         Schema transformedOptFieldSchema = SchemaBuilder.string().optional().defaultValue("child_default").build();
         assertEquals(transformedOptFieldSchema, transformedSchema.field("opt_field").schema());
     }
+
+    @Test
+    public void tombstoneEventWithoutSchemaShouldPassThrough() {
+        xformValue.configure(Collections.<String, String>emptyMap());
+
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                null, null);
+        final SourceRecord transformedRecord = xformValue.apply(record);
+
+        assertEquals(null, transformedRecord.value());
+        assertEquals(null, transformedRecord.valueSchema());
+    }
+
+    @Test
+    public void tombstoneEventWithSchemaShouldPassThrough() {
+        xformValue.configure(Collections.<String, String>emptyMap());
+
+        final Schema simpleStructSchema = SchemaBuilder.struct().name("name").version(1).doc("doc").field("magic", Schema.OPTIONAL_INT64_SCHEMA).build();
+        final SourceRecord record = new SourceRecord(null, null, "test", 0,
+                simpleStructSchema, null);
+        final SourceRecord transformedRecord = xformValue.apply(record);
+
+        assertEquals(null, transformedRecord.value());
+        assertEquals(simpleStructSchema, transformedRecord.valueSchema());
+    }
 }

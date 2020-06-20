@@ -22,6 +22,9 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
+import org.apache.kafka.streams.state.StoreBuilder;
+
+import java.util.Set;
 
 public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
 
@@ -34,6 +37,11 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
     @Override
     public Processor<K, V> get() {
         return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return valueTransformerSupplier.stores();
     }
 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {

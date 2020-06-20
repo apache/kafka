@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -42,19 +43,23 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
+    final boolean repartitionRequired;
+    final String userProvidedRepartitionTopicName;
 
     KGroupedStreamImpl(final String name,
-                       final Set<String> sourceNodes,
+                       final Set<String> subTopologySourceNodes,
                        final GroupedInternal<K, V> groupedInternal,
                        final boolean repartitionRequired,
                        final StreamsGraphNode streamsGraphNode,
                        final InternalStreamsBuilder builder) {
-        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, streamsGraphNode, builder);
+        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), subTopologySourceNodes, streamsGraphNode, builder);
+        this.repartitionRequired = repartitionRequired;
+        this.userProvidedRepartitionTopicName = groupedInternal.name();
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(
             builder,
             groupedInternal,
             repartitionRequired,
-            sourceNodes,
+            subTopologySourceNodes,
             name,
             streamsGraphNode
         );
@@ -62,7 +67,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer) {
-        return reduce(reducer, Materialized.with(keySerde, valSerde));
+        return reduce(reducer, Materialized.with(keySerde, valueSerde));
     }
 
     @Override
@@ -86,7 +91,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             materializedInternal.withKeySerde(keySerde);
         }
         if (materializedInternal.valueSerde() == null) {
-            materializedInternal.withValueSerde(valSerde);
+            materializedInternal.withValueSerde(valueSerde);
         }
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
@@ -188,10 +193,10 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         return new TimeWindowedKStreamImpl<>(
             windows,
             builder,
-            sourceNodes,
+            subTopologySourceNodes,
             name,
             keySerde,
-            valSerde,
+            valueSerde,
             aggregateBuilder,
             streamsGraphNode
         );
@@ -203,10 +208,10 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
         return new SessionWindowedKStreamImpl<>(
             windows,
             builder,
-            sourceNodes,
+            subTopologySourceNodes,
             name,
             keySerde,
-            valSerde,
+            valueSerde,
             aggregateBuilder,
             streamsGraphNode
         );
@@ -222,5 +227,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde());
+    }
+
+    @Override
+    public <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator) {
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        return new CogroupedKStreamImpl<K, Vout>(name, subTopologySourceNodes, streamsGraphNode, builder)
+            .cogroup(this, aggregator);
     }
 }

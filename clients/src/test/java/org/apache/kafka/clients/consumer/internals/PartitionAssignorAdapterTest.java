@@ -27,7 +27,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -102,7 +101,6 @@ public class PartitionAssignorAdapterTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testOnAssignment() {
         OldPartitionAssignor oldAssignor = new OldPartitionAssignor();
         ConsumerPartitionAssignor adaptedAssignor = new PartitionAssignorAdapter(oldAssignor);
@@ -111,7 +109,7 @@ public class PartitionAssignorAdapterTest {
         TopicPartition tp2 = new TopicPartition("tp2", 2);
         List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
 
-        adaptedAssignor.onAssignment(new Assignment(partitions), new ConsumerGroupMetadata("", 1, "", Optional.empty()));
+        adaptedAssignor.onAssignment(new Assignment(partitions), new ConsumerGroupMetadata(""));
 
         assertEquals(oldAssignor.partitions, partitions);
     }

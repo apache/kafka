@@ -25,6 +25,9 @@ import java.util.Comparator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.Iterator;
+import java.util.HashSet;
+import java.util.function.Function;
 
 /**
  * PartitionGroup is used to buffer all co-partitioned records for processing.
@@ -59,14 +62,14 @@ public class PartitionGroup {
     private boolean allBuffered;
 
 
-    public static class RecordInfo {
+    static class RecordInfo {
         RecordQueue queue;
 
-        public ProcessorNode node() {
+        ProcessorNode<?, ?> node() {
             return queue.source();
         }
 
-        public TopicPartition partition() {
+        TopicPartition partition() {
             return queue.partition();
         }
 
@@ -88,15 +91,37 @@ public class PartitionGroup {
     long partitionTimestamp(final TopicPartition partition) {
         final RecordQueue queue = partitionQueues.get(partition);
         if (queue == null) {
-            throw new NullPointerException("Partition " + partition + " not found.");
+            throw new IllegalStateException("Partition " + partition + " not found.");
         }
         return queue.partitionTime();
+    }
+
+    // creates queues for new partitions, removes old queues, saves cached records for previously assigned partitions
+    void updatePartitions(final Set<TopicPartition> newInputPartitions, final Function<TopicPartition, RecordQueue> recordQueueCreator) {
+        final Set<TopicPartition> removedPartitions = new HashSet<>();
+        final Iterator<Map.Entry<TopicPartition, RecordQueue>> queuesIterator = partitionQueues.entrySet().iterator();
+        while (queuesIterator.hasNext()) {
+            final Map.Entry<TopicPartition, RecordQueue> queueEntry = queuesIterator.next();
+            final TopicPartition topicPartition = queueEntry.getKey();
+            if (!newInputPartitions.contains(topicPartition)) {
+                // if partition is removed should delete its queue
+                totalBuffered -= queueEntry.getValue().size();
+                queuesIterator.remove();
+                removedPartitions.add(topicPartition);
+            }
+            newInputPartitions.remove(topicPartition);
+        }
+        for (final TopicPartition newInputPartition : newInputPartitions) {
+            partitionQueues.put(newInputPartition, recordQueueCreator.apply(newInputPartition));
+        }
+        nonEmptyQueuesByTime.removeIf(q -> removedPartitions.contains(q.partition()));
+        allBuffered = allBuffered && newInputPartitions.isEmpty();
     }
 
     void setPartitionTime(final TopicPartition partition, final long partitionTime) {
         final RecordQueue queue = partitionQueues.get(partition);
         if (queue == null) {
-            throw new NullPointerException("Partition " + partition + " not found.");
+            throw new IllegalStateException("Partition " + partition + " not found.");
         }
         if (streamTime < partitionTime) {
             streamTime = partitionTime;
@@ -109,7 +134,7 @@ public class PartitionGroup {
      *
      * @return StampedRecord
      */
-    StampedRecord nextRecord(final RecordInfo info) {
+    StampedRecord nextRecord(final RecordInfo info, final long wallClockTime) {
         StampedRecord record = null;
 
         final RecordQueue queue = nonEmptyQueuesByTime.poll();
@@ -132,9 +157,9 @@ public class PartitionGroup {
                 // always update the stream-time to the record's timestamp yet to be processed if it is larger
                 if (record.timestamp > streamTime) {
                     streamTime = record.timestamp;
-                    recordLatenessSensor.record(0);
+                    recordLatenessSensor.record(0, wallClockTime);
                 } else {
-                    recordLatenessSensor.record(streamTime - record.timestamp);
+                    recordLatenessSensor.record(streamTime - record.timestamp, wallClockTime);
                 }
             }
         }
@@ -151,6 +176,10 @@ public class PartitionGroup {
      */
     int addRawRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
 
         final int oldSize = recordQueue.size();
         final int newSize = recordQueue.addRawRecords(rawRecords);
@@ -172,15 +201,25 @@ public class PartitionGroup {
         return newSize;
     }
 
-    public Set<TopicPartition> partitions() {
+    Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(partitionQueues.keySet());
     }
 
     /**
      * Return the stream-time of this partition group defined as the largest timestamp seen across all partitions
      */
-    public long streamTime() {
+    long streamTime() {
         return streamTime;
+    }
+
+    Long headRecordOffset(final TopicPartition partition) {
+        final RecordQueue recordQueue = partitionQueues.get(partition);
+
+        if (recordQueue == null) {
+            throw new IllegalStateException("Partition " + partition + " not found.");
+        }
+
+        return recordQueue.headRecordOffset();
     }
 
     /**
@@ -190,7 +229,7 @@ public class PartitionGroup {
         final RecordQueue recordQueue = partitionQueues.get(partition);
 
         if (recordQueue == null) {
-            throw new IllegalStateException(String.format("Record's partition %s does not belong to this partition-group.", partition));
+            throw new IllegalStateException("Partition " + partition + " not found.");
         }
 
         return recordQueue.size();
@@ -204,16 +243,12 @@ public class PartitionGroup {
         return allBuffered;
     }
 
-    public void close() {
-        clear();
-        partitionQueues.clear();
-    }
-
-    public void clear() {
-        nonEmptyQueuesByTime.clear();
-        streamTime = RecordQueue.UNKNOWN;
+    void clear() {
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }
+        nonEmptyQueuesByTime.clear();
+        totalBuffered = 0;
+        streamTime = RecordQueue.UNKNOWN;
     }
 }

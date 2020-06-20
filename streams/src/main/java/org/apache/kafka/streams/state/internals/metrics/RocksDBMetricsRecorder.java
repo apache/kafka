@@ -51,7 +51,6 @@ public class RocksDBMetricsRecorder {
     private final String threadId;
     private TaskId taskId;
     private StreamsMetricsImpl streamsMetrics;
-    private boolean isInitialized = false;
 
     public RocksDBMetricsRecorder(final String metricsScope,
                                   final String threadId,
@@ -71,20 +70,26 @@ public class RocksDBMetricsRecorder {
         return taskId;
     }
 
+    /**
+     * The initialisation of the metrics recorder is idempotent.
+     */
+    public void init(final StreamsMetricsImpl streamsMetrics,
+                     final TaskId taskId) {
+        if (this.taskId != null && !this.taskId.equals(taskId)) {
+            throw new IllegalStateException("Metrics recorder is re-initialised with different task: previous task is " +
+                this.taskId + " whereas current task is " + taskId + ". This is a bug in Kafka Streams.");
+        }
+        if (this.streamsMetrics != null && this.streamsMetrics != streamsMetrics) {
+            throw new IllegalStateException("Metrics recorder is re-initialised with different Streams metrics. "
+                + "This is a bug in Kafka Streams.");
+        }
+        initSensors(streamsMetrics, taskId);
+        this.taskId = taskId;
+        this.streamsMetrics = streamsMetrics;
+    }
+
     public void addStatistics(final String segmentName,
-                              final Statistics statistics,
-                              final StreamsMetricsImpl streamsMetrics,
-                              final TaskId taskId) {
-        if (!isInitialized) {
-            initSensors(streamsMetrics, taskId);
-            this.taskId = taskId;
-            this.streamsMetrics = streamsMetrics;
-            isInitialized = true;
-        }
-        if (this.taskId != taskId) {
-            throw new IllegalStateException("Statistics of store \"" + segmentName + "\" for task " + taskId
-                + " cannot be added to metrics recorder for task " + this.taskId + ". This is a bug in Kafka Streams.");
-        }
+                              final Statistics statistics) {
         if (statisticsToRecord.isEmpty()) {
             logger.debug(
                 "Adding metrics recorder of task {} to metrics recording trigger",
@@ -136,7 +141,7 @@ public class RocksDBMetricsRecorder {
         }
     }
 
-    public void record() {
+    public void record(final long now) {
         logger.debug("Recording metrics for store {}", storeName);
         long bytesWrittenToDatabase = 0;
         long bytesReadFromDatabase = 0;
@@ -173,18 +178,18 @@ public class RocksDBMetricsRecorder {
                 - statistics.getAndResetTickerCount(TickerType.NO_FILE_CLOSES);
             numberOfFileErrors += statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
         }
-        bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase);
-        bytesReadFromDatabaseSensor.record(bytesReadFromDatabase);
-        memtableBytesFlushedSensor.record(memtableBytesFlushed);
-        memtableHitRatioSensor.record(computeHitRatio(memtableHits, memtableMisses));
-        blockCacheDataHitRatioSensor.record(computeHitRatio(blockCacheDataHits, blockCacheDataMisses));
-        blockCacheIndexHitRatioSensor.record(computeHitRatio(blockCacheIndexHits, blockCacheIndexMisses));
-        blockCacheFilterHitRatioSensor.record(computeHitRatio(blockCacheFilterHits, blockCacheFilterMisses));
-        writeStallDurationSensor.record(writeStallDuration);
-        bytesWrittenDuringCompactionSensor.record(bytesWrittenDuringCompaction);
-        bytesReadDuringCompactionSensor.record(bytesReadDuringCompaction);
-        numberOfOpenFilesSensor.record(numberOfOpenFiles);
-        numberOfFileErrorsSensor.record(numberOfFileErrors);
+        bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase, now);
+        bytesReadFromDatabaseSensor.record(bytesReadFromDatabase, now);
+        memtableBytesFlushedSensor.record(memtableBytesFlushed, now);
+        memtableHitRatioSensor.record(computeHitRatio(memtableHits, memtableMisses), now);
+        blockCacheDataHitRatioSensor.record(computeHitRatio(blockCacheDataHits, blockCacheDataMisses), now);
+        blockCacheIndexHitRatioSensor.record(computeHitRatio(blockCacheIndexHits, blockCacheIndexMisses), now);
+        blockCacheFilterHitRatioSensor.record(computeHitRatio(blockCacheFilterHits, blockCacheFilterMisses), now);
+        writeStallDurationSensor.record(writeStallDuration, now);
+        bytesWrittenDuringCompactionSensor.record(bytesWrittenDuringCompaction, now);
+        bytesReadDuringCompactionSensor.record(bytesReadDuringCompaction, now);
+        numberOfOpenFilesSensor.record(numberOfOpenFiles, now);
+        numberOfFileErrorsSensor.record(numberOfFileErrors, now);
     }
 
     private double computeHitRatio(final long hits, final long misses) {

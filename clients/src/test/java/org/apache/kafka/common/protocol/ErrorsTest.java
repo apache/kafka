@@ -40,7 +40,7 @@ public class ErrorsTest {
 
     @Test
     public void testUniqueExceptions() {
-        Set<Class> exceptionSet = new HashSet<>();
+        Set<Class<?>> exceptionSet = new HashSet<>();
         for (Errors error : Errors.values()) {
             if (error != Errors.NONE)
                 exceptionSet.add(error.exception().getClass());

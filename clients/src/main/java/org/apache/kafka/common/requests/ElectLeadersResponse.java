@@ -22,10 +22,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
-import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -90,12 +90,11 @@ public class ElectLeadersResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         HashMap<Errors, Integer> counts = new HashMap<>();
-        for (ReplicaElectionResult result : data.replicaElectionResults()) {
-            for (PartitionResult partitionResult : result.partitionResult()) {
-                Errors error = Errors.forCode(partitionResult.errorCode());
-                counts.put(error, counts.getOrDefault(error, 0) + 1);
-            }
-        }
+        data.replicaElectionResults().forEach(result ->
+            result.partitionResult().forEach(partitionResult ->
+                updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
+            )
+        );
         return counts;
     }
 

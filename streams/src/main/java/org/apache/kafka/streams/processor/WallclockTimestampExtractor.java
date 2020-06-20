@@ -28,7 +28,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
  *
  * @see FailOnInvalidTimestamp
  * @see LogAndSkipOnInvalidTimestamp
- * @see UsePreviousTimeOnInvalidTimestamp
+ * @see UsePartitionTimeOnInvalidTimestamp
  */
 public class WallclockTimestampExtractor implements TimestampExtractor {
 

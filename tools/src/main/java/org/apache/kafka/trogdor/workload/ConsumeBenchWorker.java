@@ -28,11 +28,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
-import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.slf4j.Logger;
@@ -200,7 +200,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         private final ThreadSafeConsumer consumer;
 
         private ConsumeMessages(ThreadSafeConsumer consumer) {
-            this.latencyHistogram = new Histogram(5000);
+            this.latencyHistogram = new Histogram(10000);
             this.messageSizeHistogram = new Histogram(2 * 1024 * 1024);
             this.clientId = consumer.clientId();
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(

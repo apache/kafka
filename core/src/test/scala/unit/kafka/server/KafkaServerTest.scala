@@ -17,9 +17,13 @@
 
 package kafka.server
 
+import java.util.Properties
+
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.zookeeper.client.ZKClientConfig
 import org.junit.Test
+import org.junit.Assert.assertEquals
 import org.scalatest.Assertions.intercept
 
 class KafkaServerTest extends ZooKeeperTestHarness {
@@ -38,6 +42,64 @@ class KafkaServerTest extends ZooKeeperTestHarness {
     val server2 = createServer(2, "myhost", TestUtils.RandomPort)
 
     TestUtils.shutdownServers(Seq(server1, server2))
+  }
+
+  @Test
+  def testCreatesProperZkTlsConfigWhenDisabled(): Unit = {
+    val props = new Properties
+    props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
+    props.put(KafkaConfig.ZkSslClientEnableProp, "false")
+    assertEquals(None, KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props)))
+  }
+
+  @Test
+  def testCreatesProperZkTlsConfigWithTrueValues(): Unit = {
+    val props = new Properties
+    props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
+    // should get correct config for all properties if TLS is enabled
+    val someValue = "some_value"
+    def kafkaConfigValueToSet(kafkaProp: String) : String = kafkaProp match {
+      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "true"
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => "HTTPS"
+      case _ => someValue
+    }
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
+    val zkClientConfig: Option[ZKClientConfig] = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
+    // now check to make sure the values were set correctly
+    def zkClientValueToExpect(kafkaProp: String) : String = kafkaProp match {
+      case KafkaConfig.ZkSslClientEnableProp | KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "true"
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => "true"
+      case _ => someValue
+    }
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(kafkaProp =>
+      assertEquals(zkClientValueToExpect(kafkaProp), zkClientConfig.get.getProperty(KafkaConfig.ZkSslConfigToSystemPropertyMap(kafkaProp))))
+  }
+
+  @Test
+  def testCreatesProperZkTlsConfigWithFalseAndListValues(): Unit = {
+    val props = new Properties
+    props.put(KafkaConfig.ZkConnectProp, zkConnect) // required, otherwise we would leave it out
+    // should get correct config for all properties if TLS is enabled
+    val someValue = "some_value"
+    def kafkaConfigValueToSet(kafkaProp: String) : String = kafkaProp match {
+      case KafkaConfig.ZkSslClientEnableProp => "true"
+      case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "false"
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => ""
+      case KafkaConfig.ZkSslEnabledProtocolsProp | KafkaConfig.ZkSslCipherSuitesProp => "A,B"
+      case _ => someValue
+    }
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(kafkaProp => props.put(kafkaProp, kafkaConfigValueToSet(kafkaProp)))
+    val zkClientConfig: Option[ZKClientConfig] = KafkaServer.zkClientConfigFromKafkaConfig(KafkaConfig.fromProps(props))
+    // now check to make sure the values were set correctly
+    def zkClientValueToExpect(kafkaProp: String) : String = kafkaProp match {
+      case KafkaConfig.ZkSslClientEnableProp => "true"
+      case KafkaConfig.ZkSslCrlEnableProp | KafkaConfig.ZkSslOcspEnableProp => "false"
+      case KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp => "false"
+      case KafkaConfig.ZkSslEnabledProtocolsProp | KafkaConfig.ZkSslCipherSuitesProp => "A,B"
+      case _ => someValue
+    }
+    KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.foreach(kafkaProp =>
+      assertEquals(zkClientValueToExpect(kafkaProp), zkClientConfig.get.getProperty(KafkaConfig.ZkSslConfigToSystemPropertyMap(kafkaProp))))
   }
 
   def createServer(nodeId: Int, hostName: String, port: Int): KafkaServer = {

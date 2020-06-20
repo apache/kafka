@@ -69,7 +69,6 @@ public class MirrorMakerConfig extends AbstractConfig {
     private static final String HEADER_CONVERTER_CLASS_CONFIG = "header.converter";
     private static final String BYTE_ARRAY_CONVERTER_CLASS =
         "org.apache.kafka.connect.converters.ByteArrayConverter";
-    private static final String REPLICATION_FACTOR = "replication.factor";
 
     static final String SOURCE_CLUSTER_PREFIX = "source.cluster.";
     static final String TARGET_CLUSTER_PREFIX = "target.cluster.";
@@ -175,7 +174,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     // loads properties of the form cluster.x.y.z and source->target.x.y.z
-    Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class connectorClass) {
+    Map<String, String> connectorBaseConfig(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         Map<String, String> props = new HashMap<>();
 
         props.putAll(originalsStrings());

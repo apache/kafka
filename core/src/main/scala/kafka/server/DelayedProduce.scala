@@ -17,7 +17,6 @@
 
 package kafka.server
 
-
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
 
@@ -86,17 +85,15 @@ class DelayedProduce(delayMs: Long,
       trace(s"Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
-        val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
-          case HostedPartition.Online(partition) =>
-            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
-
-          case HostedPartition.Offline =>
-            (false, Errors.KAFKA_STORAGE_ERROR)
-
-          case HostedPartition.None =>
+        val (hasEnough, error) = replicaManager.getPartitionOrError(topicPartition, expectLeader = true) match {
+          case Left(err) =>
             // Case A
-            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+            (false, err)
+
+          case Right(partition) =>
+            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
         }
+
         // Case B.1 || B.2
         if (error != Errors.NONE || hasEnough) {
           status.acksPending = false

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +49,7 @@ public class Connect {
     public void start() {
         try {
             log.info("Kafka Connect starting");
-            Runtime.getRuntime().addShutdownHook(shutdownHook);
+            Exit.addShutdownHook("connect-shutdown-hook", shutdownHook);
 
             herder.start();
             rest.initializeResources(herder);
@@ -81,6 +82,10 @@ public class Connect {
         } catch (InterruptedException e) {
             log.error("Interrupted waiting for Kafka Connect to shutdown");
         }
+    }
+
+    public boolean isRunning() {
+        return herder.isRunning();
     }
 
     // Visible for testing

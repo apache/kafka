@@ -28,7 +28,7 @@ import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.common.MessageFormatter
 import kafka.utils.Implicits._
-import kafka.utils._
+import kafka.utils.{Exit, _}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
@@ -37,7 +37,8 @@ import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters._
+import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 /**
  * Consumer that dumps messages to standard out.
@@ -85,8 +86,7 @@ object ConsoleConsumer extends Logging {
   }
 
   def addShutdownHook(consumer: ConsumerWrapper, conf: ConsumerConfig): Unit = {
-    Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run(): Unit = {
+    Exit.addShutdownHook("consumer-shutdown-hook", {
         consumer.wakeup()
 
         shutdownLatch.await()
@@ -94,7 +94,6 @@ object ConsoleConsumer extends Logging {
         if (conf.enableSystestEventsLogging) {
           System.out.println("shutdown_complete")
         }
-      }
     })
   }
 
@@ -264,7 +263,7 @@ object ConsoleConsumer extends Logging {
       "Log lifecycle events of the consumer in addition to logging consumed " +
         "messages. (This is specific for system tests.)")
     val isolationLevelOpt = parser.accepts("isolation-level",
-      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted" +
+      "Set to read_committed in order to filter out transactional messages which are not committed. Set to read_uncommitted " +
         "to read all messages.")
       .withRequiredArg()
       .ofType(classOf[String])
@@ -457,9 +456,10 @@ object ConsoleConsumer extends Logging {
 }
 
 class DefaultMessageFormatter extends MessageFormatter {
+  var printTimestamp = false
   var printKey = false
   var printValue = true
-  var printTimestamp = false
+  var printPartition = false
   var keySeparator = "\t".getBytes(StandardCharsets.UTF_8)
   var lineSeparator = "\n".getBytes(StandardCharsets.UTF_8)
 
@@ -473,6 +473,8 @@ class DefaultMessageFormatter extends MessageFormatter {
       printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.value"))
       printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
+    if (props.containsKey("print.partition"))
+      printPartition = props.getProperty("print.partition").trim.equalsIgnoreCase("true")
     if (props.containsKey("key.separator"))
       keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
     if (props.containsKey("line.separator"))
@@ -511,7 +513,7 @@ class DefaultMessageFormatter extends MessageFormatter {
 
     def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String): Unit = {
       val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
-      val convertedBytes = deserializer.map(_.deserialize(topic, nonNullBytes).toString.
+      val convertedBytes = deserializer.map(_.deserialize(topic, consumerRecord.headers, nonNullBytes).toString.
         getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
       output.write(convertedBytes)
     }
@@ -533,6 +535,11 @@ class DefaultMessageFormatter extends MessageFormatter {
 
     if (printValue) {
       write(valueDeserializer, value, topic)
+      writeSeparator(printPartition)
+    }
+
+    if (printPartition) {
+      output.write(s"$partition".getBytes(StandardCharsets.UTF_8))
       output.write(lineSeparator)
     }
   }
@@ -569,6 +576,7 @@ class ChecksumMessageFormatter extends MessageFormatter {
       topicStr = ""
   }
 
+  @nowarn("cat=deprecation")
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
     output.println(topicStr + "checksum:" + consumerRecord.checksum)
   }

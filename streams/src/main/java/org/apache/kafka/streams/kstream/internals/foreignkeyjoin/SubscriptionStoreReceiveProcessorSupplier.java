@@ -27,8 +27,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -56,17 +55,21 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
         return new AbstractProcessor<KO, SubscriptionWrapper<K>>() {
 
             private TimestampedKeyValueStore<Bytes, SubscriptionWrapper<K>> store;
-            private StreamsMetricsImpl metrics;
-            private Sensor skippedRecordsSensor;
+            private Sensor droppedRecordsSensor;
 
             @Override
             public void init(final ProcessorContext context) {
                 super.init(context);
                 final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
 
-                metrics = internalProcessorContext.metrics();
-                skippedRecordsSensor = ThreadMetrics.skipRecordSensor(Thread.currentThread().getName(), metrics);
+                droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+                    Thread.currentThread().getName(),
+                    internalProcessorContext.taskId().toString(),
+                    internalProcessorContext.metrics()
+                );
                 store = internalProcessorContext.getStateStore(storeBuilder);
+
+                keySchema.init(context);
             }
 
             @Override
@@ -76,7 +79,7 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                         "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                         value, context().topic(), context().partition(), context().offset()
                     );
-                    skippedRecordsSensor.record();
+                    droppedRecordsSensor.record();
                     return;
                 }
                 if (value.getVersion() != SubscriptionWrapper.CURRENT_VERSION) {
@@ -91,9 +94,9 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                 final ValueAndTimestamp<SubscriptionWrapper<K>> newValue = ValueAndTimestamp.make(value, context().timestamp());
                 final ValueAndTimestamp<SubscriptionWrapper<K>> oldValue = store.get(subscriptionKey);
 
-                //If the subscriptionWrapper hash indicates a null, must delete from statestore.
                 //This store is used by the prefix scanner in ForeignJoinSubscriptionProcessorSupplier
-                if (value.getHash() == null) {
+                if (value.getInstruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE) ||
+                    value.getInstruction().equals(SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE)) {
                     store.delete(subscriptionKey);
                 } else {
                     store.put(subscriptionKey, newValue);

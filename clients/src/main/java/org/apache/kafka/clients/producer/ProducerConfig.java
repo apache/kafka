@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
@@ -32,6 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -59,6 +61,13 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
     private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
+
+    /** <code>metadata.max.idle.ms</code> */
+    public static final String METADATA_MAX_IDLE_CONFIG = "metadata.max.idle.ms";
+    private static final String METADATA_MAX_IDLE_DOC =
+            "Controls how long the producer will cache metadata for a topic that's idle. If the elapsed " +
+            "time since a topic was last produced to exceeds the metadata idle duration, then the topic's " +
+            "metadata is forgotten and the next access to it will force a metadata fetch request.";
 
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
@@ -133,10 +142,11 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>max.request.size</code> */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
-    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request in bytes. This setting will limit the number of record "
-                                                       + "batches the producer will send in a single request to avoid sending huge requests. "
-                                                       + "This is also effectively a cap on the maximum record batch size. Note that the server "
-                                                       + "has its own cap on record batch size which may be different from this.";
+    private static final String MAX_REQUEST_SIZE_DOC =
+        "The maximum size of a request in bytes. This setting will limit the number of record " +
+        "batches the producer will send in a single request to avoid sending huge requests. " +
+        "This is also effectively a cap on the maximum uncompressed record batch size. Note that the server " +
+        "has its own cap on the record batch size (after compression if compression is enabled) which may be different from this.";
 
     /** <code>reconnect.backoff.ms</code> */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
@@ -238,8 +248,8 @@ public class ProducerConfig extends AbstractConfig {
     /** <code> transactional.id </code> */
     public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
     public static final String TRANSACTIONAL_ID_DOC = "The TransactionalId to use for transactional delivery. This enables reliability semantics which span multiple producer sessions since it allows the client to guarantee that transactions using the same TransactionalId have been completed prior to starting any new transactions. If no TransactionalId is provided, then the producer is limited to idempotent delivery. " +
-            "Note that <code>enable.idempotence</code> must be enabled if a TransactionalId is configured. " +
-            "The default is <code>null</code>, which means transactions cannot be used. " +
+            "If a TransactionalId is configured, <code>enable.idempotence</code> is implied. " +
+            "By default the TransactionId is not configured, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
     /**
@@ -248,11 +258,28 @@ public class ProducerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    /**
+     * <code>internal.auto.downgrade.txn.commit</code>
+     * Whether or not the producer should automatically downgrade the transactional commit request when the new group metadata
+     * feature is not supported by the broker.
+     * <p>
+     * The purpose of this flag is to make Kafka Streams being capable of working with old brokers when applying this new API.
+     * Non Kafka Streams users who are building their own EOS applications should be careful playing around
+     * with config as there is a risk of violating EOS semantics when turning on this flag.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    static final String AUTO_DOWNGRADE_TXN_COMMIT = "internal.auto.downgrade.txn.commit";
+
+    private static final AtomicInteger PRODUCER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
-                                        ClientDnsLookup.DEFAULT.toString(),
+                                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                                         in(ClientDnsLookup.DEFAULT.toString(),
                                            ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
@@ -275,7 +302,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,
                                         Type.INT,
-                                        1 * 1024 * 1024,
+                                        1024 * 1024,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_REQUEST_SIZE_DOC)
@@ -295,6 +322,12 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         REQUEST_TIMEOUT_MS_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), Importance.LOW, METADATA_MAX_AGE_DOC)
+                                .define(METADATA_MAX_IDLE_CONFIG,
+                                        Type.LONG,
+                                        5 * 60 * 1000,
+                                        atLeast(5000),
+                                        Importance.LOW,
+                                        METADATA_MAX_IDLE_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,
@@ -371,12 +404,71 @@ public class ProducerConfig extends AbstractConfig {
                                         null,
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
-                                        TRANSACTIONAL_ID_DOC);
+                                        TRANSACTIONAL_ID_DOC)
+                                .defineInternal(AUTO_DOWNGRADE_TXN_COMMIT,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW);
     }
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        CommonClientConfigs.warnIfDeprecatedDnsLookupValue(this);
+        Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        maybeOverrideEnableIdempotence(refinedConfigs);
+        maybeOverrideClientId(refinedConfigs);
+        maybeOverrideAcksAndRetries(refinedConfigs);
+        return refinedConfigs;
+    }
+
+    private void maybeOverrideClientId(final Map<String, Object> configs) {
+        String refinedClientId;
+        boolean userConfiguredClientId = this.originals().containsKey(CLIENT_ID_CONFIG);
+        if (userConfiguredClientId) {
+            refinedClientId = this.getString(CLIENT_ID_CONFIG);
+        } else {
+            String transactionalId = this.getString(TRANSACTIONAL_ID_CONFIG);
+            refinedClientId = "producer-" + (transactionalId != null ? transactionalId : PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement());
+        }
+        configs.put(CLIENT_ID_CONFIG, refinedClientId);
+    }
+
+    private void maybeOverrideEnableIdempotence(final Map<String, Object> configs) {
+        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
+
+        if (userConfiguredTransactions && !userConfiguredIdempotence) {
+            configs.put(ENABLE_IDEMPOTENCE_CONFIG, true);
+        }
+    }
+
+    private void maybeOverrideAcksAndRetries(final Map<String, Object> configs) {
+        final String acksStr = parseAcks(this.getString(ACKS_CONFIG));
+        configs.put(ACKS_CONFIG, acksStr);
+        // For idempotence producers, values for `RETRIES_CONFIG` and `ACKS_CONFIG` might need to be overridden.
+        if (idempotenceEnabled()) {
+            boolean userConfiguredRetries = this.originals().containsKey(RETRIES_CONFIG);
+            if (this.getInt(RETRIES_CONFIG) == 0) {
+                throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
+            }
+            configs.put(RETRIES_CONFIG, userConfiguredRetries ? this.getInt(RETRIES_CONFIG) : Integer.MAX_VALUE);
+
+            boolean userConfiguredAcks = this.originals().containsKey(ACKS_CONFIG);
+            final short acks = Short.valueOf(acksStr);
+            if (userConfiguredAcks && acks != (short) -1) {
+                throw new ConfigException("Must set " + ACKS_CONFIG + " to all in order to use the idempotent " +
+                        "producer. Otherwise we cannot guarantee idempotence.");
+            }
+            configs.put(ACKS_CONFIG, "-1");
+        }
+    }
+
+    private static String parseAcks(String acksString) {
+        try {
+            return acksString.trim().equalsIgnoreCase("all") ? "-1" : Short.parseShort(acksString.trim()) + "";
+        } catch (NumberFormatException e) {
+            throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
+        }
     }
 
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
@@ -407,6 +499,16 @@ public class ProducerConfig extends AbstractConfig {
 
     public ProducerConfig(Map<String, Object> props) {
         super(CONFIG, props);
+    }
+
+    boolean idempotenceEnabled() {
+        boolean userConfiguredIdempotence = this.originals().containsKey(ENABLE_IDEMPOTENCE_CONFIG);
+        boolean userConfiguredTransactions = this.originals().containsKey(TRANSACTIONAL_ID_CONFIG);
+        boolean idempotenceEnabled = userConfiguredIdempotence && this.getBoolean(ENABLE_IDEMPOTENCE_CONFIG);
+
+        if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
+            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
+        return userConfiguredTransactions || idempotenceEnabled;
     }
 
     ProducerConfig(Map<?, ?> props, boolean doLog) {

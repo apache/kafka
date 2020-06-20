@@ -137,7 +137,6 @@ public class ListOffsetResponse extends AbstractResponse {
     public static final class PartitionData {
         public final Errors error;
         // The offsets list is only used in ListOffsetResponse v0.
-        @Deprecated
         public final List<Long> offsets;
         public final Long timestamp;
         public final Long offset;
@@ -146,7 +145,6 @@ public class ListOffsetResponse extends AbstractResponse {
         /**
          * Constructor for ListOffsetResponse v0
          */
-        @Deprecated
         public PartitionData(Errors error, List<Long> offsets) {
             this.error = error;
             this.offsets = offsets;
@@ -170,7 +168,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("PartitionData(").
-                    append("errorCode: ").append((int) error.code());
+                    append("errorCode: ").append(error.code());
 
             if (offsets == null) {
                 bld.append(", timestamp: ").append(timestamp).
@@ -242,8 +240,9 @@ public class ListOffsetResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (PartitionData response : responseData.values())
-            updateErrorCounts(errorCounts, response.error);
+        responseData.values().forEach(response ->
+            updateErrorCounts(errorCounts, response.error)
+        );
         return errorCounts;
     }
 

@@ -17,13 +17,18 @@
 
 package kafka.server
 
+import kafka.api.LeaderAndIsr
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
+import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
-import collection.JavaConverters._
+
+import scala.jdk.CollectionConverters._
+import scala.collection.Seq
 
 class StopReplicaRequestTest extends BaseRequestTest {
   override val logDirCount = 2
@@ -43,17 +48,31 @@ class StopReplicaRequestTest extends BaseRequestTest {
     val offlineDir = server.logManager.getLog(tp1).get.dir.getParent
     server.replicaManager.handleLogDirFailure(offlineDir, sendZkNotification = false)
 
+    val topicStates = Seq(
+      new StopReplicaTopicState()
+        .setTopicName(tp0.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(tp0.partition())
+          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setDeletePartition(true)).asJava),
+      new StopReplicaTopicState()
+        .setTopicName(tp1.topic())
+        .setPartitionStates(Seq(new StopReplicaPartitionState()
+          .setPartitionIndex(tp1.partition())
+          .setLeaderEpoch(LeaderAndIsr.initialLeaderEpoch + 2)
+          .setDeletePartition(true)).asJava)
+    ).asJava
+
     for (_ <- 1 to 2) {
-      val request1 = new StopReplicaRequest.Builder(1,
+      val request1 = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion,
         server.config.brokerId, server.replicaManager.controllerEpoch, server.kafkaController.brokerEpoch,
-        true, Set(tp0, tp1).asJava).build()
-      val response1 = connectAndSend(request1, ApiKeys.STOP_REPLICA, controllerSocketServer)
-      val partitionErrors1 = StopReplicaResponse.parse(response1, request1.version).partitionErrors.asScala
+        false, topicStates).build()
+      val response1 = connectAndReceive[StopReplicaResponse](request1, destination = controllerSocketServer)
+      val partitionErrors1 = response1.partitionErrors.asScala
       assertEquals(Some(Errors.NONE.code),
         partitionErrors1.find(pe => pe.topicName == tp0.topic && pe.partitionIndex == tp0.partition).map(_.errorCode))
       assertEquals(Some(Errors.KAFKA_STORAGE_ERROR.code),
         partitionErrors1.find(pe => pe.topicName == tp1.topic && pe.partitionIndex == tp1.partition).map(_.errorCode))
     }
   }
-
 }

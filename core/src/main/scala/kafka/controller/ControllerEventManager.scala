@@ -21,14 +21,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 import java.util.concurrent.locks.ReentrantLock
 
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.utils.Time
 
 import scala.collection._
-import scala.collection.JavaConverters._
 
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
@@ -82,14 +80,7 @@ class ControllerEventManager(controllerId: Int,
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
-  newGauge(
-    EventQueueSizeMetricName,
-    new Gauge[Int] {
-      def value: Int = {
-        queue.size()
-      }
-    }
-  )
+  newGauge(EventQueueSizeMetricName, () => queue.size)
 
   def state: ControllerState = _state
 
@@ -113,7 +104,7 @@ class ControllerEventManager(controllerId: Int,
   }
 
   def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock) {
-    queue.asScala.foreach(_.preempt(processor))
+    queue.forEach(_.preempt(processor))
     queue.clear()
     put(event)
   }
@@ -133,8 +124,11 @@ class ControllerEventManager(controllerId: Int,
           eventQueueTimeHist.update(time.milliseconds() - dequeued.enqueueTimeMs)
 
           try {
-            rateAndTimeMetrics(state).time {
-              dequeued.process(processor)
+            def process(): Unit = dequeued.process(processor)
+
+            rateAndTimeMetrics.get(state) match {
+              case Some(timer) => timer.time { process() }
+              case None => process()
             }
           } catch {
             case e: Throwable => error(s"Uncaught error processing event $controllerEvent", e)

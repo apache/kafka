@@ -17,13 +17,15 @@
 
 package kafka.server
 
+import java.io.File
+
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.message.DescribeLogDirsRequestData
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
-import java.io.File
 
 class DescribeLogDirsRequestTest extends BaseRequestTest {
   override val logDirCount = 2
@@ -42,9 +44,9 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     createTopic(topic, partitionNum, 1)
     TestUtils.generateAndProduceMessages(servers, topic, 10)
 
-    val request = new DescribeLogDirsRequest.Builder(null).build()
-    val response = connectAndSend(request, ApiKeys.DESCRIBE_LOG_DIRS, controllerSocketServer)
-    val logDirInfos = DescribeLogDirsResponse.parse(response, request.version).logDirInfos()
+    val request = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(null)).build()
+    val response = connectAndReceive[DescribeLogDirsResponse](request, destination = controllerSocketServer)
+    val logDirInfos = response.logDirInfos()
 
     assertEquals(logDirCount, logDirInfos.size())
     assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos.get(offlineDir).error)

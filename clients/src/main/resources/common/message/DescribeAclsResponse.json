@@ -19,8 +19,9 @@
   "name": "DescribeAclsResponse",
   // Version 1 adds PatternType.
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 enables flexible versions.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -30,9 +31,9 @@
       "about": "The error message, or null if there was no error." },
     { "name": "Resources", "type": "[]DescribeAclsResource", "versions": "0+",
       "about": "Each Resource that is referenced in an ACL.", "fields": [
-      { "name": "Type", "type": "int8", "versions": "0+",
+      { "name": "ResourceType", "type": "int8", "versions": "0+",
         "about": "The resource type." },
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "ResourceName", "type": "string", "versions": "0+",
         "about": "The resource name." },
       { "name": "PatternType", "type": "int8", "versions": "1+", "default": "3", "ignorable": false,
         "about": "The resource pattern type." },

@@ -30,9 +30,9 @@ import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.io.File;
@@ -74,6 +74,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     private final List<CapturedPunctuator> punctuators = new LinkedList<>();
     private final List<CapturedForward> capturedForwards = new LinkedList<>();
     private boolean committed = false;
+
 
     /**
      * {@link CapturedPunctuator} holds captured punctuators, along with their scheduling information.
@@ -161,6 +162,15 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         public KeyValue keyValue() {
             return keyValue;
         }
+
+        @Override
+        public String toString() {
+            return "CapturedForward{" +
+                "childName='" + childName + '\'' +
+                ", timestamp=" + timestamp +
+                ", keyValue=" + keyValue +
+                '}';
+        }
     }
 
     // constructors ================================================
@@ -214,8 +224,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         final MetricConfig metricConfig = new MetricConfig();
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
         final String threadId = Thread.currentThread().getName();
-        this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig), threadId, StreamsConfig.METRICS_LATEST);
-        ThreadMetrics.skipRecordSensor(threadId, metrics);
+        this.metrics = new StreamsMetricsImpl(
+            new Metrics(metricConfig),
+            threadId,
+            streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)
+        );
+        TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(threadId, taskId.toString(), metrics);
     }
 
     @Override

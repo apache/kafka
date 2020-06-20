@@ -66,11 +66,24 @@
     </p>
 
     <p>
+        Slightly simplified, the maximum parallelism at which your application may run is bounded by the maximum number of stream tasks, which itself is determined by
+        maximum number of partitions of the input topic(s) the application is reading from. For example, if your input topic has 5 partitions, then you can run up to 5
+        applications instances. These instances will collaboratively process the topic’s data. If you run a larger number of app instances than partitions of the input
+        topic, the “excess” app instances will launch but remain idle; however, if one of the busy instances goes down, one of the idle instances will resume the former’s
+        work.
+    </p>
+
+    <p>
         It is important to understand that Kafka Streams is not a resource manager, but a library that "runs" anywhere its stream processing application runs.
         Multiple instances of the application are executed either on the same machine, or spread across multiple machines and tasks can be distributed automatically
         by the library to those running application instances. The assignment of partitions to tasks never changes; if an application instance fails, all its assigned
         tasks will be automatically restarted on other instances and continue to consume from the same stream partitions.
     </p>
+
+    <p><b>NOTE:</b> Topic partitions are assigned to tasks, and tasks are assigned to all threads over all instances, in a best-effort attempt
+        to trade off load-balancing and stickiness of stateful tasks. For this assignment, Kafka Streams uses the
+        <a href="https://github.com/apache/kafka/blob/trunk/streams/src/main/java/org/apache/kafka/streams/processor/internals/StreamsPartitionAssignor.java">StreamsPartitionAssignor</a>
+        class and doesn't let you change to a different assignor. If you try to use a different assignor, Kafka Streams ignores it.
 
     <p>
         The following diagram shows two tasks each assigned with one partition of the input streams.
@@ -103,7 +116,7 @@
 
     <p>
         Kafka Streams provides so-called <b>state stores</b>, which can be used by stream processing applications to store and query data,
-        which is an important capability when implementing stateful operations. The <a href="/{{version}}/documentation/streams/developer-guide#streams_dsl">Kafka Streams DSL</a>, for example, automatically creates
+        which is an important capability when implementing stateful operations. The <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html">Kafka Streams DSL</a>, for example, automatically creates
         and manages such state stores when you are calling stateful operators such as <code>join()</code> or <code>aggregate()</code>, or when you are windowing a stream.
     </p>
 

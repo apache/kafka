@@ -145,14 +145,14 @@ public class DeveloperGuideTesting {
         assertThat(outputTopic.isEmpty(), is(true));
     }
 
-    public class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
+    public static class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
         @Override
         public Processor<String, Long> get() {
             return new CustomMaxAggregator();
         }
     }
 
-    public class CustomMaxAggregator implements Processor<String, Long> {
+    public static class CustomMaxAggregator implements Processor<String, Long> {
         ProcessorContext context;
         private KeyValueStore<String, Long> store;
 

@@ -162,7 +162,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
-        waitForCompletion(streams, 2, 30000);
+        waitForCompletion(streams, 2, 30000L);
         streams.close();
 
         final Properties changelogProps = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "Counts"));
@@ -170,7 +170,7 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-Counts-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(3, repartitionProps.size());
+        assertEquals(4, repartitionProps.size());
     }
 
     @Test
@@ -202,7 +202,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
-        waitForCompletion(streams, 2, 30000);
+        waitForCompletion(streams, 2, 30000L);
         streams.close();
         final Properties properties = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "CountWindows"));
         final List<String> policies = Arrays.asList(properties.getProperty(LogConfig.CleanupPolicyProp()).split(","));
@@ -215,6 +215,6 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-CountWindows-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(3, repartitionProps.size());
+        assertEquals(4, repartitionProps.size());
     }
 }

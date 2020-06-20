@@ -22,7 +22,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.io.IOException;
 
-public interface Segment extends KeyValueStore<Bytes, byte[]>, BulkLoadingStore {
+public interface Segment extends KeyValueStore<Bytes, byte[]>, BatchWritingStore {
 
     void destroy() throws IOException;
 

@@ -20,6 +20,7 @@ import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.message.ResponseHeaderData;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.TaggedFields;
 import org.apache.kafka.common.protocol.types.Type;
 
 import java.util.LinkedHashMap;
@@ -50,6 +51,8 @@ public class Protocol {
                 if (!subTypes.containsKey(field.def.name)) {
                     subTypes.put(field.def.name, type.arrayElementType().get());
                 }
+            } else if (type instanceof TaggedFields) {
+                b.append("TAG_BUFFER ");
             } else {
                 b.append(field.def.name);
                 b.append(" ");

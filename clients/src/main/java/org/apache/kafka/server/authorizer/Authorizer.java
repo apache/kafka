@@ -114,6 +114,8 @@ public interface Authorizer extends Configurable, Closeable {
      * This is an asynchronous API that enables the caller to avoid blocking during the update. Implementations of this
      * API can return completed futures using {@link java.util.concurrent.CompletableFuture#completedFuture(Object)}
      * to process the update synchronously on the request thread.
+     * <p>
+     * Refer to the authorizer implementation docs for details on concurrent update guarantees.
      *
      * @param requestContext Request context if the ACL is being deleted by a broker to handle
      *        a client request to delete ACLs. This may be null if ACLs are deleted directly in ZooKeeper

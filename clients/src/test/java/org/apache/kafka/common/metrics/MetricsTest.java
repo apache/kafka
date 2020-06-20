@@ -25,6 +25,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
@@ -493,6 +494,88 @@ public class MetricsTest {
     }
 
     @Test
+    public void shouldPinSmallerValuesToMin() {
+        final double min = 0.0d;
+        final double max = 100d;
+        Percentiles percs = new Percentiles(1000,
+                                            min,
+                                            max,
+                                            BucketSizing.LINEAR,
+                                            new Percentile(metrics.metricName("test.p50", "grp1"), 50));
+        MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
+        Sensor sensor = metrics.sensor("test", config);
+        sensor.add(percs);
+        Metric p50 = this.metrics.metrics().get(metrics.metricName("test.p50", "grp1"));
+
+        sensor.record(min - 100);
+        sensor.record(min - 100);
+        assertEquals(min, (double) p50.metricValue(), 0d);
+    }
+
+    @Test
+    public void shouldPinLargerValuesToMax() {
+        final double min = 0.0d;
+        final double max = 100d;
+        Percentiles percs = new Percentiles(1000,
+                                            min,
+                                            max,
+                                            BucketSizing.LINEAR,
+                                            new Percentile(metrics.metricName("test.p50", "grp1"), 50));
+        MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
+        Sensor sensor = metrics.sensor("test", config);
+        sensor.add(percs);
+        Metric p50 = this.metrics.metrics().get(metrics.metricName("test.p50", "grp1"));
+
+        sensor.record(max + 100);
+        sensor.record(max + 100);
+        assertEquals(max, (double) p50.metricValue(), 0d);
+    }
+
+    @Test
+    public void testPercentilesWithRandomNumbersAndLinearBucketing() {
+        long seed = new Random().nextLong();
+        int sizeInBytes = 100 * 1000;   // 100kB
+        long maximumValue = 1000 * 24 * 60 * 60 * 1000L; // if values are ms, max is 1000 days
+
+        try {
+            Random prng = new Random(seed);
+            int numberOfValues = 5000 + prng.nextInt(10_000);  // range is [5000, 15000]
+
+            Percentiles percs = new Percentiles(sizeInBytes,
+                                                maximumValue,
+                                                BucketSizing.LINEAR,
+                                                new Percentile(metrics.metricName("test.p90", "grp1"), 90),
+                                                new Percentile(metrics.metricName("test.p99", "grp1"), 99));
+            MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
+            Sensor sensor = metrics.sensor("test", config);
+            sensor.add(percs);
+            Metric p90 = this.metrics.metrics().get(metrics.metricName("test.p90", "grp1"));
+            Metric p99 = this.metrics.metrics().get(metrics.metricName("test.p99", "grp1"));
+
+            final List<Long> values = new ArrayList<>(numberOfValues);
+            // record two windows worth of sequential values
+            for (int i = 0; i < numberOfValues; ++i) {
+                long value = (Math.abs(prng.nextLong()) - 1) % maximumValue;
+                values.add(value);
+                sensor.record(value);
+            }
+
+            Collections.sort(values);
+
+            int p90Index = (int) Math.ceil(((double) (90 * numberOfValues)) / 100);
+            int p99Index = (int) Math.ceil(((double) (99 * numberOfValues)) / 100);
+
+            double expectedP90 = values.get(p90Index - 1);
+            double expectedP99 = values.get(p99Index - 1);
+
+            assertEquals(expectedP90, (Double) p90.metricValue(), expectedP90 / 5);
+            assertEquals(expectedP99, (Double) p99.metricValue(), expectedP99 / 5);
+        } catch (AssertionError e) {
+            throw new AssertionError("Assertion failed in randomized test. Reproduce with seed = " + seed + " .", e);
+        }
+    }
+
+    @Test
     public void testRateWindowing() throws Exception {
         // Use the default time window. Set 3 samples
         MetricConfig cfg = new MetricConfig().samples(3);
@@ -770,6 +853,7 @@ public class MetricsTest {
             this.opName = opName;
             this.op = op;
         }
+        @Override
         public void run() {
             try {
                 while (alive.get()) {

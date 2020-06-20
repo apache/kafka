@@ -60,10 +60,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
-                      final Set<String> sourceNodes,
+                      final Set<String> subTopologySourceNodes,
                       final GroupedInternal<K, V> groupedInternal,
                       final StreamsGraphNode streamsGraphNode) {
-        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, streamsGraphNode, builder);
+        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), subTopologySourceNodes, streamsGraphNode, builder);
 
         this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
@@ -116,7 +116,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
             .withSinkName(sinkName)
             .withSourceName(sourceName)
             .withKeySerde(keySerde)
-            .withValueSerde(valSerde)
+            .withValueSerde(valueSerde)
             .withNodeName(sourceName).build();
     }
 
@@ -143,7 +143,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
             materializedInternal.withKeySerde(keySerde);
         }
         if (materializedInternal.valueSerde() == null) {
-            materializedInternal.withValueSerde(valSerde);
+            materializedInternal.withValueSerde(valueSerde);
         }
         final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(
             materializedInternal.storeName(),
@@ -155,7 +155,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor) {
-        return reduce(adder, subtractor, Materialized.with(keySerde, valSerde));
+        return reduce(adder, subtractor, Materialized.with(keySerde, valueSerde));
     }
 
 

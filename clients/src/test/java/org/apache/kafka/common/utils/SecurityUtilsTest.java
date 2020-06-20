@@ -17,7 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.config.SecurityConfig;
-import org.apache.kafka.common.security.SecurityProviderCreator;
+import org.apache.kafka.common.security.auth.SecurityProviderCreator;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.ssl.mock.TestPlainSaslServerProviderCreator;
 import org.apache.kafka.common.security.ssl.mock.TestScramSaslServerProviderCreator;

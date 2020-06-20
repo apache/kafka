@@ -19,6 +19,7 @@ package org.apache.kafka.common.network;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
@@ -30,8 +31,10 @@ import java.net.InetAddress;
 import java.security.Principal;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
@@ -62,6 +65,39 @@ public class ChannelBuildersTest {
         KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null, null);
         assertTrue(builder instanceof ConfigurableKafkaPrincipalBuilder);
         assertTrue(((ConfigurableKafkaPrincipalBuilder) builder).configured);
+    }
+
+    @Test
+    public void testChannelBuilderConfigs() {
+        Properties props = new Properties();
+        props.put("listener.name.listener1.gssapi.sasl.kerberos.service.name", "testkafka");
+        props.put("listener.name.listener1.sasl.kerberos.service.name", "testkafkaglobal");
+        props.put("plain.sasl.server.callback.handler.class", "callback");
+        props.put("listener.name.listener1.gssapi.config1.key", "custom.config1");
+        props.put("custom.config2.key", "custom.config2");
+        TestSecurityConfig securityConfig = new TestSecurityConfig(props);
+
+        // test configs with listener prefix
+        Map<String, Object> configs = ChannelBuilders.channelBuilderConfigs(securityConfig, new ListenerName("listener1"));
+        assertNull(configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"));
+        assertEquals(configs.get("gssapi.sasl.kerberos.service.name"), "testkafka");
+        assertEquals(configs.get("sasl.kerberos.service.name"), "testkafkaglobal");
+        assertNull(configs.get("listener.name.listener1.sasl.kerberos.service.name"));
+
+        assertNull(configs.get("plain.sasl.server.callback.handler.class"));
+        assertEquals(configs.get("listener.name.listener1.gssapi.config1.key"), "custom.config1");
+        assertEquals(configs.get("custom.config2.key"), "custom.config2");
+
+        // test configs without listener prefix
+        configs = ChannelBuilders.channelBuilderConfigs(securityConfig, null);
+        assertEquals(configs.get("listener.name.listener1.gssapi.sasl.kerberos.service.name"), "testkafka");
+        assertNull(configs.get("gssapi.sasl.kerberos.service.name"));
+        assertEquals(configs.get("listener.name.listener1.sasl.kerberos.service.name"), "testkafkaglobal");
+        assertNull(configs.get("sasl.kerberos.service.name"));
+
+        assertEquals(configs.get("plain.sasl.server.callback.handler.class"), "callback");
+        assertEquals(configs.get("listener.name.listener1.gssapi.config1.key"), "custom.config1");
+        assertEquals(configs.get("custom.config2.key"), "custom.config2");
     }
 
     @SuppressWarnings("deprecation")

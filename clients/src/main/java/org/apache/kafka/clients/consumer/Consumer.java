@@ -244,6 +244,16 @@ public interface Consumer<K, V> extends Closeable {
     Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout);
 
     /**
+     * @see KafkaConsumer#groupMetadata()
+     */
+    ConsumerGroupMetadata groupMetadata();
+
+    /**
+     * @see KafkaConsumer#enforceRebalance()
+     */
+    void enforceRebalance();
+
+    /**
      * @see KafkaConsumer#close()
      */
     void close();

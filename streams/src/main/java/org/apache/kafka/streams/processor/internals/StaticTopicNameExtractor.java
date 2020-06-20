@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 
+import java.util.Objects;
+
 /**
  * Static topic name extractor
  */
@@ -37,5 +39,22 @@ public class StaticTopicNameExtractor<K, V> implements TopicNameExtractor<K, V> 
     @Override
     public String toString() {
         return "StaticTopicNameExtractor(" + topicName + ")";
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final StaticTopicNameExtractor<?, ?> that = (StaticTopicNameExtractor<?, ?>) o;
+        return Objects.equals(topicName, that.topicName);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(topicName);
     }
 }

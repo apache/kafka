@@ -55,9 +55,14 @@ public final class MessageGenerator {
 
     static final String ARRAYS_CLASS = "java.util.Arrays";
 
+    static final String OBJECTS_CLASS = "java.util.Objects";
+
     static final String LIST_CLASS = "java.util.List";
 
     static final String ARRAYLIST_CLASS = "java.util.ArrayList";
+
+    static final String IMPLICIT_LINKED_HASH_COLLECTION_CLASS =
+        "org.apache.kafka.common.utils.ImplicitLinkedHashCollection";
 
     static final String IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS =
         "org.apache.kafka.common.utils.ImplicitLinkedHashMultiCollection";
@@ -106,6 +111,30 @@ public final class MessageGenerator {
     static final String NAVIGABLE_MAP_CLASS = "java.util.NavigableMap";
 
     static final String MAP_ENTRY_CLASS = "java.util.Map.Entry";
+
+    static final String JSON_NODE_CLASS = "com.fasterxml.jackson.databind.JsonNode";
+
+    static final String OBJECT_NODE_CLASS = "com.fasterxml.jackson.databind.node.ObjectNode";
+
+    static final String JSON_NODE_FACTORY_CLASS = "com.fasterxml.jackson.databind.node.JsonNodeFactory";
+
+    static final String BOOLEAN_NODE_CLASS = "com.fasterxml.jackson.databind.node.BooleanNode";
+
+    static final String SHORT_NODE_CLASS = "com.fasterxml.jackson.databind.node.ShortNode";
+
+    static final String INT_NODE_CLASS = "com.fasterxml.jackson.databind.node.IntNode";
+
+    static final String LONG_NODE_CLASS = "com.fasterxml.jackson.databind.node.LongNode";
+
+    static final String TEXT_NODE_CLASS = "com.fasterxml.jackson.databind.node.TextNode";
+
+    static final String BINARY_NODE_CLASS = "com.fasterxml.jackson.databind.node.BinaryNode";
+
+    static final String NULL_NODE_CLASS = "com.fasterxml.jackson.databind.node.NullNode";
+
+    static final String ARRAY_NODE_CLASS = "com.fasterxml.jackson.databind.node.ArrayNode";
+
+    static final String DOUBLE_NODE_CLASS = "com.fasterxml.jackson.databind.node.DoubleNode";
 
     /**
      * The Jackson serializer we use for JSON objects.

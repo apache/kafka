@@ -81,7 +81,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
     @Override
     @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String topicName = getTopicNames().iterator().next();
+        final String topicName = topicNames().iterator().next();
 
         // TODO: we assume source KTables can only be timestamped-key-value stores for now.
         // should be expanded for other types of stores as well.
@@ -109,7 +109,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
 
             // only add state store if the source KTable should be materialized
             final KTableSource<K, V> ktableSource = (KTableSource<K, V>) processorParameters.processorSupplier();
-            if (ktableSource.queryableName() != null) {
+            if (ktableSource.materialized()) {
                 topologyBuilder.addStateStore(storeBuilder, nodeName());
 
                 if (shouldReuseSourceTopicForChangelog) {

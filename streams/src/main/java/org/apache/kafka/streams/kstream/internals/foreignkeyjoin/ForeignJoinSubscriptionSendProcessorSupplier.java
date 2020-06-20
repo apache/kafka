@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -24,33 +25,42 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.internals.Murmur3;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.function.Function;
 import java.util.Arrays;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
-import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_AND_PROPAGATE;
 import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.DELETE_KEY_NO_PROPAGATE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE;
+import static org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper.Instruction.PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
 
 public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSupplier<K, Change<V>> {
+    private static final Logger LOG = LoggerFactory.getLogger(ForeignJoinSubscriptionSendProcessorSupplier.class);
 
     private final Function<V, KO> foreignKeyExtractor;
-    private final String repartitionTopicName;
-    private final Serializer<V> valueSerializer;
+    private final Supplier<String> foreignKeySerdeTopicSupplier;
+    private final Supplier<String> valueSerdeTopicSupplier;
     private final boolean leftJoin;
     private Serializer<KO> foreignKeySerializer;
+    private Serializer<V> valueSerializer;
 
     public ForeignJoinSubscriptionSendProcessorSupplier(final Function<V, KO> foreignKeyExtractor,
+                                                        final Supplier<String> foreignKeySerdeTopicSupplier,
+                                                        final Supplier<String> valueSerdeTopicSupplier,
                                                         final Serde<KO> foreignKeySerde,
-                                                        final String repartitionTopicName,
                                                         final Serializer<V> valueSerializer,
                                                         final boolean leftJoin) {
         this.foreignKeyExtractor = foreignKeyExtractor;
+        this.foreignKeySerdeTopicSupplier = foreignKeySerdeTopicSupplier;
+        this.valueSerdeTopicSupplier = valueSerdeTopicSupplier;
         this.valueSerializer = valueSerializer;
         this.leftJoin = leftJoin;
-        this.repartitionTopicName = repartitionTopicName;
         foreignKeySerializer = foreignKeySerde == null ? null : foreignKeySerde.serializer();
     }
 
@@ -60,30 +70,62 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
     }
 
     private class UnbindChangeProcessor extends AbstractProcessor<K, Change<V>> {
-        
+
+        private Sensor droppedRecordsSensor;
+        private String foreignKeySerdeTopic;
+        private String valueSerdeTopic;
+
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
+            foreignKeySerdeTopic = foreignKeySerdeTopicSupplier.get();
+            valueSerdeTopic = valueSerdeTopicSupplier.get();
             // get default key serde if it wasn't supplied directly at construction
             if (foreignKeySerializer == null) {
                 foreignKeySerializer = (Serializer<KO>) context.keySerde().serializer();
             }
+            if (valueSerializer == null) {
+                valueSerializer = (Serializer<V>) context.valueSerde().serializer();
+            }
+            droppedRecordsSensor = TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor(
+                Thread.currentThread().getName(),
+                context.taskId().toString(),
+                (StreamsMetricsImpl) context.metrics()
+            );
         }
 
         @Override
         public void process(final K key, final Change<V> change) {
             final long[] currentHash = change.newValue == null ?
-                    null :
-                    Murmur3.hash128(valueSerializer.serialize(repartitionTopicName, change.newValue));
+                null :
+                Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, change.newValue));
 
             if (change.oldValue != null) {
                 final KO oldForeignKey = foreignKeyExtractor.apply(change.oldValue);
+                if (oldForeignKey == null) {
+                    LOG.warn(
+                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        change.oldValue, context().topic(), context().partition(), context().offset()
+                    );
+                    droppedRecordsSensor.record();
+                    return;
+                }
                 if (change.newValue != null) {
                     final KO newForeignKey = foreignKeyExtractor.apply(change.newValue);
+                    if (newForeignKey == null) {
+                        LOG.warn(
+                            "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                            change.newValue, context().topic(), context().partition(), context().offset()
+                        );
+                        droppedRecordsSensor.record();
+                        return;
+                    }
 
-                    final byte[] serialOldForeignKey = foreignKeySerializer.serialize(repartitionTopicName, oldForeignKey);
-                    final byte[] serialNewForeignKey = foreignKeySerializer.serialize(repartitionTopicName, newForeignKey);
+                    final byte[] serialOldForeignKey =
+                        foreignKeySerializer.serialize(foreignKeySerdeTopic, oldForeignKey);
+                    final byte[] serialNewForeignKey =
+                        foreignKeySerializer.serialize(foreignKeySerdeTopic, newForeignKey);
                     if (!Arrays.equals(serialNewForeignKey, serialOldForeignKey)) {
                         //Different Foreign Key - delete the old key value and propagate the new one.
                         //Delete it from the oldKey's state store
@@ -109,7 +151,16 @@ public class ForeignJoinSubscriptionSendProcessorSupplier<K, KO, V> implements P
                 } else {
                     instruction = PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE;
                 }
-                context().forward(foreignKeyExtractor.apply(change.newValue), new SubscriptionWrapper<>(currentHash, instruction, key));
+                final KO newForeignKey = foreignKeyExtractor.apply(change.newValue);
+                if (newForeignKey == null) {
+                    LOG.warn(
+                        "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        change.newValue, context().topic(), context().partition(), context().offset()
+                    );
+                    droppedRecordsSensor.record();
+                } else {
+                    context().forward(newForeignKey, new SubscriptionWrapper<>(currentHash, instruction, key));
+                }
             }
         }
     }

@@ -35,13 +35,11 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 
 public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
@@ -50,6 +48,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private final String name;
     private final String metricScope;
     private Sensor expiredRecordSensor;
+    private InternalProcessorContext context;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     private final long retentionPeriod;
@@ -74,21 +73,17 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        final StreamsMetricsImpl metrics = ((InternalProcessorContext) context).metrics();
+        this.context = (InternalProcessorContext) context;
+
+        final StreamsMetricsImpl metrics = this.context.metrics();
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
-        expiredRecordSensor = metrics.storeLevelSensor(
+        expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
             threadId,
             taskName,
-            name(),
-            EXPIRED_WINDOW_RECORD_DROP,
-            Sensor.RecordingLevel.INFO
-        );
-        addInvocationRateAndCountToSensor(
-            expiredRecordSensor,
-            "stream-" + metricScope + "-metrics",
-            metrics.storeLevelTagMap(threadId, taskName, metricScope, name()),
-            EXPIRED_WINDOW_RECORD_DROP
+            metricScope,
+            name,
+            metrics
         );
 
         if (root != null) {
@@ -105,8 +100,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         observedStreamTime = Math.max(observedStreamTime, windowEndTimestamp);
 
         if (windowEndTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record();
-            LOG.debug("Skipping record for expired segment.");
+            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            LOG.warn("Skipping record for expired segment.");
         } else {
             if (aggregate != null) {
                 endTimeMap.computeIfAbsent(windowEndTimestamp, t -> new ConcurrentSkipListMap<>());

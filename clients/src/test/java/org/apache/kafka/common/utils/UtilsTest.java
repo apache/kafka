@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.mockito.stubbing.OngoingStubbing;
@@ -30,25 +31,39 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
+import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
+import static org.apache.kafka.common.utils.Utils.diff;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
+import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -70,8 +85,8 @@ public class UtilsTest {
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
         cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
 
-        for (Map.Entry c : cases.entrySet()) {
-            assertEquals((int) c.getValue(), murmur2((byte[]) c.getKey()));
+        for (Map.Entry<byte[], Integer> c : cases.entrySet()) {
+            assertEquals(c.getValue().intValue(), murmur2(c.getKey()));
         }
     }
 
@@ -265,6 +280,61 @@ public class UtilsTest {
     }
 
     @Test
+    public void testFileAsStringSimpleFile() throws IOException {
+        File tempFile = TestUtils.tempFile();
+        try {
+            String testContent = "Test Content";
+            Files.write(tempFile.toPath(), testContent.getBytes());
+            assertEquals(testContent, Utils.readFileAsString(tempFile.getPath()));
+        } finally {
+            Files.deleteIfExists(tempFile.toPath());
+        }
+    }
+
+    /**
+     * Test to read content of named pipe as string. As reading/writing to a pipe can block,
+     * timeout test after a minute (test finishes within 100 ms normally).
+     */
+    @Test(timeout = 60 * 1000)
+    public void testFileAsStringNamedPipe() throws Exception {
+
+        // Create a temporary name for named pipe
+        Random random = new Random();
+        long n = random.nextLong();
+        n = n == Long.MIN_VALUE ? 0 : Math.abs(n);
+
+        // Use the name to create a FIFO in tmp directory
+        String tmpDir = System.getProperty("java.io.tmpdir");
+        String fifoName = "fifo-" + n + ".tmp";
+        File fifo = new File(tmpDir, fifoName);
+        Thread producerThread = null;
+        try {
+            Process mkFifoCommand = new ProcessBuilder("mkfifo", fifo.getCanonicalPath()).start();
+            mkFifoCommand.waitFor();
+
+            // Send some data to fifo and then read it back, but as FIFO blocks if the consumer isn't present,
+            // we need to send data in a separate thread.
+            final String testFileContent = "This is test";
+            producerThread = new Thread(() -> {
+                try {
+                    Files.write(fifo.toPath(), testFileContent.getBytes());
+                } catch (IOException e) {
+                    fail("Error when producing to fifo : " + e.getMessage());
+                }
+            }, "FIFO-Producer");
+            producerThread.start();
+
+            assertEquals(testFileContent, Utils.readFileAsString(fifo.getCanonicalPath()));
+        } finally {
+            Files.deleteIfExists(fifo.toPath());
+            if (producerThread != null) {
+                producerThread.join(30 * 1000); // Wait for thread to terminate
+                assertFalse(producerThread.isAlive());
+            }
+        }
+    }
+
+    @Test
     public void testMin() {
         assertEquals(1, Utils.min(1));
         assertEquals(1, Utils.min(1, 2, 3));
@@ -397,6 +467,27 @@ public class UtilsTest {
         verify(channelMock, atLeastOnce()).read(any(), anyLong());
     }
 
+    @Test
+    public void testLoadProps() throws IOException {
+        File tempFile = TestUtils.tempFile();
+        try {
+            String testContent = "a=1\nb=2\n#a comment\n\nc=3\nd=";
+            Files.write(tempFile.toPath(), testContent.getBytes());
+            Properties props = Utils.loadProps(tempFile.getPath());
+            assertEquals(4, props.size());
+            assertEquals("1", props.get("a"));
+            assertEquals("2", props.get("b"));
+            assertEquals("3", props.get("c"));
+            assertEquals("", props.get("d"));
+            Properties restrictedProps = Utils.loadProps(tempFile.getPath(), Arrays.asList("b", "d", "e"));
+            assertEquals(2, restrictedProps.size());
+            assertEquals("2", restrictedProps.get("b"));
+            assertEquals("", restrictedProps.get("d"));
+        } finally {
+            Files.deleteIfExists(tempFile.toPath());
+        }
+    }
+
     /**
      * Expectation setter for multiple reads where each one reads random bytes to the buffer.
      *
@@ -503,5 +594,132 @@ public class UtilsTest {
             fail("Expected exception not thrown");
         } catch (IllegalArgumentException e) {
         }
+    }
+
+    @Test
+    public void testUnion() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> anotherSet = mkSet("c", "d", "e");
+        final Set<String> union = union(TreeSet::new, oneSet, anotherSet);
+
+        assertThat(union, is(mkSet("a", "b", "c", "d", "e")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testUnionOfOne() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> union = union(TreeSet::new, oneSet);
+
+        assertThat(union, is(mkSet("a", "b", "c")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testUnionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> fourSet = mkSet("x", "y", "z");
+        final Set<String> union = union(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
+
+        assertThat(union, is(mkSet("a", "b", "c", "d", "e", "x", "y", "z")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testUnionOfNone() {
+        final Set<String> union = union(TreeSet::new);
+
+        assertThat(union, is(emptySet()));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testIntersection() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> anotherSet = mkSet("c", "d", "e");
+        final Set<String> intersection = intersection(TreeSet::new, oneSet, anotherSet);
+
+        assertThat(intersection, is(mkSet("c")));
+        assertThat(intersection.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testIntersectionOfOne() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> intersection = intersection(TreeSet::new, oneSet);
+
+        assertThat(intersection, is(mkSet("a", "b", "c")));
+        assertThat(intersection.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testIntersectionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> union = intersection(TreeSet::new, oneSet, twoSet, threeSet);
+
+        assertThat(union, is(mkSet("c")));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testDisjointIntersectionOfMany() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> twoSet = mkSet("c", "d", "e");
+        final Set<String> threeSet = mkSet("b", "c", "d");
+        final Set<String> fourSet = mkSet("x", "y", "z");
+        final Set<String> union = intersection(TreeSet::new, oneSet, twoSet, threeSet, fourSet);
+
+        assertThat(union, is(emptySet()));
+        assertThat(union.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testDiff() {
+        final Set<String> oneSet = mkSet("a", "b", "c");
+        final Set<String> anotherSet = mkSet("c", "d", "e");
+        final Set<String> diff = diff(TreeSet::new, oneSet, anotherSet);
+
+        assertThat(diff, is(mkSet("a", "b")));
+        assertThat(diff.getClass(), equalTo(TreeSet.class));
+    }
+
+    @Test
+    public void testPropsToMap() {
+        assertThrows(ConfigException.class, () -> {
+            Properties props = new Properties();
+            props.put(1, 2);
+            Utils.propsToMap(props);
+        });
+        assertValue(false);
+        assertValue(1);
+        assertValue("string");
+        assertValue(1.1);
+        assertValue(Collections.emptySet());
+        assertValue(Collections.emptyList());
+        assertValue(Collections.emptyMap());
+    }
+
+    private static void assertValue(Object value) {
+        Properties props = new Properties();
+        props.put("key", value);
+        assertEquals(Utils.propsToMap(props).get("key"), value);
+    }
+
+    @Test
+    public void testCloseAllQuietly() {
+        AtomicReference<Throwable> exception = new AtomicReference<>();
+        String msg = "you should fail";
+        AtomicInteger count = new AtomicInteger(0);
+        AutoCloseable c0 = () -> {
+            throw new RuntimeException(msg);
+        };
+        AutoCloseable c1 = count::incrementAndGet;
+        Utils.closeAllQuietly(exception, "test", Stream.of(c0, c1).toArray(AutoCloseable[]::new));
+        assertEquals(msg, exception.get().getMessage());
+        assertEquals(1, count.get());
     }
 }

@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.NoOpRecordCollector;
+import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -59,10 +59,11 @@ public class KeyValueSegmentsTest {
             stateDirectory,
             Serdes.String(),
             Serdes.Long(),
-            new NoOpRecordCollector(),
+            new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
         segments = new KeyValueSegments(storeName, METRICS_SCOPE, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        segments.openExisting(context, -1L);
     }
 
     @After
@@ -154,6 +155,7 @@ public class KeyValueSegmentsTest {
     @Test
     public void shouldOpenExistingSegments() {
         segments = new KeyValueSegments("test",  METRICS_SCOPE, 4, 1);
+        segments.openExisting(context, -1L);
         segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.getOrCreateSegmentIfLive(1, context, -1L);
         segments.getOrCreateSegmentIfLive(2, context, -1L);

@@ -61,7 +61,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
         try {
             iter.close();
         } finally {
-            metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
+            sensor.record(time.nanoseconds() - startNs);
         }
     }
 

@@ -46,11 +46,7 @@ public class KafkaThread extends Thread {
 
     private void configureThread(final String name, boolean daemon) {
         setDaemon(daemon);
-        setUncaughtExceptionHandler(new UncaughtExceptionHandler() {
-            public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in thread '{}':", name, e);
-            }
-        });
+        setUncaughtExceptionHandler((t, e) -> log.error("Uncaught exception in thread '{}':", name, e));
     }
 
 }

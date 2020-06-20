@@ -56,6 +56,8 @@ public final class FieldSpec {
 
     private final Optional<Integer> tag;
 
+    private boolean zeroCopy;
+
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
                      @JsonProperty("versions") String versions,
@@ -69,12 +71,16 @@ public final class FieldSpec {
                      @JsonProperty("about") String about,
                      @JsonProperty("taggedVersions") String taggedVersions,
                      @JsonProperty("flexibleVersions") String flexibleVersions,
-                     @JsonProperty("tag") Integer tag) {
+                     @JsonProperty("tag") Integer tag,
+                     @JsonProperty("zeroCopy") boolean zeroCopy) {
         this.name = Objects.requireNonNull(name);
         if (!VALID_FIELD_NAMES.matcher(this.name).matches()) {
             throw new RuntimeException("Invalid field name " + this.name);
         }
-        this.versions = Versions.parse(versions, null);
+        this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
+        // If versions is not set, but taggedVersions is, default to taggedVersions.
+        this.versions = Versions.parse(versions, this.taggedVersions.empty() ?
+            null : this.taggedVersions);
         if (this.versions == null) {
             throw new RuntimeException("You must specify the version of the " +
                 name + " structure.");
@@ -96,11 +102,11 @@ public final class FieldSpec {
 
         this.about = about == null ? "" : about;
         if (!this.fields().isEmpty()) {
-            if (!this.type.isArray()) {
-                throw new RuntimeException("Non-array field " + name + " cannot have fields");
+            if (!this.type.isArray() && !this.type.isStruct()) {
+                throw new RuntimeException("Non-array or Struct field " + name + " cannot have fields");
             }
         }
-        this.taggedVersions = Versions.parse(taggedVersions, Versions.NONE);
+
         if (flexibleVersions == null || flexibleVersions.isEmpty()) {
             this.flexibleVersions = Optional.empty();
         } else {
@@ -115,7 +121,16 @@ public final class FieldSpec {
             }
         }
         this.tag = Optional.ofNullable(tag);
+        if (this.tag.isPresent() && mapKey) {
+            throw new RuntimeException("Tagged fields cannot be used as keys.");
+        }
         checkTagInvariants();
+
+        this.zeroCopy = zeroCopy;
+        if (this.zeroCopy && !this.type.isBytes()) {
+            throw new RuntimeException("Invalid zeroCopy value for " + name +
+                ". Only fields of type bytes can use zeroCopy flag.");
+        }
     }
 
     private void checkTagInvariants() {
@@ -216,6 +231,11 @@ public final class FieldSpec {
         return ignorable;
     }
 
+    @JsonProperty("entityType")
+    public EntityType entityType() {
+        return entityType;
+    }
+
     @JsonProperty("about")
     public String about() {
         return about;
@@ -246,5 +266,10 @@ public final class FieldSpec {
 
     public Optional<Integer> tag() {
         return tag;
+    }
+
+    @JsonProperty("zeroCopy")
+    public boolean zeroCopy() {
+        return zeroCopy;
     }
 }

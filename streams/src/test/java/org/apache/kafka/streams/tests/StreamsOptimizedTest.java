@@ -19,6 +19,7 @@ package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
@@ -131,15 +132,12 @@ public class StreamsOptimizedTest {
 
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                System.out.println("closing Kafka Streams instance");
-                System.out.flush();
-                streams.close(Duration.ofMillis(5000));
-                System.out.println("OPTIMIZE_TEST Streams Stopped");
-                System.out.flush();
-            }
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
+            System.out.println("closing Kafka Streams instance");
+            System.out.flush();
+            streams.close(Duration.ofMillis(5000));
+            System.out.println("OPTIMIZE_TEST Streams Stopped");
+            System.out.flush();
         });
 
     }

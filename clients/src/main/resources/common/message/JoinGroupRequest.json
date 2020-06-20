@@ -27,7 +27,9 @@
   // with assigned id.
   //
   // Version 6 is the first flexible version.
-  "validVersions": "0-6",
+  //
+  // Version 7 is the same as version 6.
+  "validVersions": "0-7",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",

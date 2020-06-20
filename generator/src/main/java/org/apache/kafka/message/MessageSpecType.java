@@ -27,5 +27,8 @@ public enum MessageSpecType {
     RESPONSE,
 
     @JsonProperty("header")
-    HEADER;
+    HEADER,
+
+    @JsonProperty("data")
+    DATA;
 }

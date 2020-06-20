@@ -27,19 +27,17 @@ import kafka.common.IndexOffsetOverflowException
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.utils.{MappedByteBuffers, OperatingSystem, Utils}
-
-import scala.math.ceil
+import org.apache.kafka.common.utils.{ByteBufferUnmapper, OperatingSystem, Utils}
 
 /**
  * The abstract index class which holds entry format agnostic methods.
  *
- * @param file The index file
+ * @param _file The index file
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long,
-                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Closeable {
+abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: Long, val maxIndexSize: Int = -1,
+                             val writable: Boolean) extends Closeable {
   import AbstractIndex._
 
   // Length of the index file
@@ -144,22 +142,26 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * The maximum number of entries this index can hold
    */
   @volatile
-  private[this] var _maxEntries = mmap.limit() / entrySize
+  private[this] var _maxEntries: Int = mmap.limit() / entrySize
 
   /** The number of entries in this index */
   @volatile
-  protected var _entries = mmap.position() / entrySize
+  protected var _entries: Int = mmap.position() / entrySize
 
   /**
    * True iff there are no more slots available in this index
    */
   def isFull: Boolean = _entries >= _maxEntries
 
+  def file: File = _file
+
   def maxEntries: Int = _maxEntries
 
   def entries: Int = _entries
 
   def length: Long = _length
+
+  def updateParentDir(parentDir: File): Unit = _file = new File(parentDir, file.getName)
 
   /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
@@ -182,8 +184,8 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
         try {
           val position = mmap.position()
 
-          /* Windows won't let us modify the file length while the file is mmapped :-( */
-          if (OperatingSystem.IS_WINDOWS)
+          /* Windows or z/OS won't let us modify the file length while the file is mmapped :-( */
+          if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
             safeForceUnmap()
           raf.setLength(roundedNewSize)
           _length = roundedNewSize
@@ -207,7 +209,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def renameTo(f: File): Unit = {
     try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    finally file = f
+    finally _file = f
   }
 
   /**
@@ -244,7 +246,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /**
    * The number of bytes actually used by this index
    */
-  def sizeInBytes = entrySize * _entries
+  def sizeInBytes: Int = entrySize * _entries
 
   /** Close the index */
   def close(): Unit = {
@@ -319,21 +321,21 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * Forcefully free the buffer's mmap.
    */
   protected[log] def forceUnmap(): Unit = {
-    try MappedByteBuffers.unmap(file.getAbsolutePath, mmap)
+    try ByteBufferUnmapper.unmap(file.getAbsolutePath, mmap)
     finally mmap = null // Accessing unmapped mmap crashes JVM by SEGV so we null it out to be safe
   }
 
   /**
-   * Execute the given function in a lock only if we are running on windows. We do this
-   * because Windows won't let us resize a file while it is mmapped. As a result we have to force unmap it
+   * Execute the given function in a lock only if we are running on windows or z/OS. We do this
+   * because Windows or z/OS won't let us resize a file while it is mmapped. As a result we have to force unmap it
    * and this requires synchronizing reads.
    */
   protected def maybeLock[T](lock: Lock)(fun: => T): T = {
-    if (OperatingSystem.IS_WINDOWS)
+    if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
       lock.lock()
     try fun
     finally {
-      if (OperatingSystem.IS_WINDOWS)
+      if (OperatingSystem.IS_WINDOWS || OperatingSystem.IS_ZOS)
         lock.unlock()
     }
   }
@@ -377,7 +379,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       var lo = begin
       var hi = end
       while(lo < hi) {
-        val mid = ceil(hi/2.0 + lo/2.0).toInt
+        val mid = (lo + hi + 1) >>> 1
         val found = parseEntry(idx, mid)
         val compareResult = compareIndexEntry(found, target, searchEntity)
         if(compareResult > 0)
@@ -427,7 +429,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 }
 
 object AbstractIndex extends Logging {
-  override val loggerName: String = classOf[AbstractIndex[_, _]].getName
+  override val loggerName: String = classOf[AbstractIndex].getName
 }
 
 object IndexSearchType extends Enumeration {

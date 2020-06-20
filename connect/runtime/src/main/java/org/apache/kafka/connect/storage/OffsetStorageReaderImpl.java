@@ -26,20 +26,27 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Implementation of OffsetStorageReader. Unlike OffsetStorageWriter which is implemented
  * directly, the interface is only separate from this implementation because it needs to be
  * included in the public API package.
  */
-public class OffsetStorageReaderImpl implements OffsetStorageReader {
+public class OffsetStorageReaderImpl implements CloseableOffsetStorageReader {
     private static final Logger log = LoggerFactory.getLogger(OffsetStorageReaderImpl.class);
 
     private final OffsetBackingStore backingStore;
     private final String namespace;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final AtomicBoolean closed;
+    private final Set<Future<Map<ByteBuffer, ByteBuffer>>> offsetReadFutures;
 
     public OffsetStorageReaderImpl(OffsetBackingStore backingStore, String namespace,
                                    Converter keyConverter, Converter valueConverter) {
@@ -47,6 +54,8 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         this.namespace = namespace;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.closed = new AtomicBoolean(false);
+        this.offsetReadFutures = new HashSet<>();
     }
 
     @Override
@@ -76,7 +85,30 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         // Get serialized key -> serialized value from backing store
         Map<ByteBuffer, ByteBuffer> raw;
         try {
-            raw = backingStore.get(serializedToOriginal.keySet(), null).get();
+            Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture;
+            synchronized (offsetReadFutures) {
+                if (closed.get()) {
+                    throw new ConnectException(
+                        "Offset reader is closed. This is likely because the task has already been "
+                            + "scheduled to stop but has taken longer than the graceful shutdown "
+                            + "period to do so.");
+                }
+                offsetReadFuture = backingStore.get(serializedToOriginal.keySet());
+                offsetReadFutures.add(offsetReadFuture);
+            }
+
+            try {
+                raw = offsetReadFuture.get();
+            } catch (CancellationException e) {
+                throw new ConnectException(
+                    "Offset reader closed while attempting to read offsets. This is likely because "
+                        + "the task was been scheduled to stop but has taken longer than the "
+                        + "graceful shutdown period to do so.");
+            } finally {
+                synchronized (offsetReadFutures) {
+                    offsetReadFutures.remove(offsetReadFuture);
+                }
+            }
         } catch (Exception e) {
             log.error("Failed to fetch offsets from namespace {}: ", namespace, e);
             throw new ConnectException("Failed to fetch offsets.", e);
@@ -107,5 +139,20 @@ public class OffsetStorageReaderImpl implements OffsetStorageReader {
         }
 
         return result;
+    }
+
+    public void close() {
+        if (!closed.getAndSet(true)) {
+            synchronized (offsetReadFutures) {
+                for (Future<Map<ByteBuffer, ByteBuffer>> offsetReadFuture : offsetReadFutures) {
+                    try {
+                        offsetReadFuture.cancel(true);
+                    } catch (Throwable t) {
+                        log.error("Failed to cancel offset read future", t);
+                    }
+                }
+                offsetReadFutures.clear();
+            }
+        }
     }
 }

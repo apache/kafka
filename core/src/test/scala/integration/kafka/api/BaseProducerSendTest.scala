@@ -36,7 +36,8 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
 
@@ -76,7 +77,8 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
                                deliveryTimeoutMs: Int = 2 * 60 * 1000,
                                batchSize: Int = 16384,
                                compressionType: String = "none",
-                               maxBlockMs: Long = 60 * 1000L): KafkaProducer[Array[Byte],Array[Byte]] = {
+                               maxBlockMs: Long = 60 * 1000L,
+                               bufferSize: Long = 1024L * 1024L): KafkaProducer[Array[Byte],Array[Byte]] = {
     val producer = TestUtils.createProducer(brokerList,
       compressionType = compressionType,
       securityProtocol = securityProtocol,
@@ -84,7 +86,9 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       saslProperties = clientSaslProperties,
       lingerMs = lingerMs,
       deliveryTimeoutMs = deliveryTimeoutMs,
-      maxBlockMs = maxBlockMs)
+      maxBlockMs = maxBlockMs,
+      batchSize = batchSize,
+      bufferSize = bufferSize)
     registerProducer(producer)
   }
 
@@ -99,6 +103,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
    * 1. Send with null key/value/partition-id should be accepted; send with null topic should be rejected.
    * 2. Last message of the non-blocking send should return the correct offset metadata
    */
+  @nowarn("cat=deprecation")
   @Test
   def testSendOffset(): Unit = {
     val producer = createProducer(brokerList)

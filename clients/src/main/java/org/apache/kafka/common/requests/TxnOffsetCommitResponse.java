@@ -41,6 +41,9 @@ import java.util.Map;
  *   - {@link Errors#INVALID_COMMIT_OFFSET_SIZE}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  *   - {@link Errors#REQUEST_TIMED_OUT}
+ *   - {@link Errors#UNKNOWN_MEMBER_ID}
+ *   - {@link Errors#FENCED_INSTANCE_ID}
+ *   - {@link Errors#ILLEGAL_GENERATION}
  */
 public class TxnOffsetCommitResponse extends AbstractResponse {
 
@@ -88,7 +91,9 @@ public class TxnOffsetCommitResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(errors().values());
+        return errorCounts(data.topics().stream().flatMap(topic ->
+                topic.partitions().stream().map(partition ->
+                        Errors.forCode(partition.errorCode()))));
     }
 
     public Map<TopicPartition, Errors> errors() {

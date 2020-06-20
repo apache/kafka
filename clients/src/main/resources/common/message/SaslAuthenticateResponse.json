@@ -18,8 +18,9 @@
   "type": "response",
   "name": "SaslAuthenticateResponse",
   // Version 1 adds the session lifetime.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+  // Version 2 adds flexible version support
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
@@ -27,7 +28,7 @@
       "about": "The error message, or null if there was no error." },
     { "name": "AuthBytes", "type": "bytes", "versions": "0+",
       "about": "The SASL authentication bytes from the server, as defined by the SASL mechanism." },
-    { "name": "SessionLifetimeMs", "type": "int64", "versions": "1+", "default": "0",
+    { "name": "SessionLifetimeMs", "type": "int64", "versions": "1+", "default": "0", "ignorable": true,
       "about": "The SASL authentication bytes from the server, as defined by the SASL mechanism." }
   ]
 }

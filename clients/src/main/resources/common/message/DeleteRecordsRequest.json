@@ -18,8 +18,10 @@
   "type": "request",
   "name": "DeleteRecordsRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
-  "flexibleVersions": "none",
+
+  // Version 2 is the first flexible version.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "Topics", "type": "[]DeleteRecordsTopic", "versions": "0+",
       "about": "Each topic that we want to delete records from.", "fields": [

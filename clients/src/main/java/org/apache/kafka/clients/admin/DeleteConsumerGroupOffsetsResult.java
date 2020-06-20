@@ -18,8 +18,6 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Set;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.KafkaFuture.BaseFunction;
-import org.apache.kafka.common.KafkaFuture.BiConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
@@ -35,50 +33,65 @@ import org.apache.kafka.common.protocol.Errors;
 @InterfaceStability.Evolving
 public class DeleteConsumerGroupOffsetsResult {
     private final KafkaFuture<Map<TopicPartition, Errors>> future;
+    private final Set<TopicPartition> partitions;
 
-    DeleteConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future) {
+
+    DeleteConsumerGroupOffsetsResult(KafkaFuture<Map<TopicPartition, Errors>> future, Set<TopicPartition> partitions) {
         this.future = future;
+        this.partitions = partitions;
     }
 
     /**
      * Return a future which can be used to check the result for a given partition.
      */
     public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
+        if (!partitions.contains(partition)) {
+            throw new IllegalArgumentException("Partition " + partition + " was not included in the original request");
+        }
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
-        this.future.whenComplete(new BiConsumer<Map<TopicPartition, Errors>, Throwable>() {
-            @Override
-            public void accept(final Map<TopicPartition, Errors> topicPartitions, final Throwable throwable) {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else if (!topicPartitions.containsKey(partition)) {
-                    result.completeExceptionally(new IllegalArgumentException(
-                        "Group offset deletion for partition \"" + partition +
-                        "\" was not attempted"));
-                } else {
-                    final Errors error = topicPartitions.get(partition);
-                    if (error == Errors.NONE) {
-                        result.complete(null);
-                    } else {
-                        result.completeExceptionally(error.exception());
-                    }
-                }
-
+        this.future.whenComplete((topicPartitions, throwable) -> {
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else if (!maybeCompleteExceptionally(topicPartitions, partition, result)) {
+                result.complete(null);
             }
         });
-
         return result;
     }
 
     /**
      * Return a future which succeeds only if all the deletions succeed.
+     * If not, the first partition error shall be returned.
      */
     public KafkaFuture<Void> all() {
-        return this.future.thenApply(new BaseFunction<Map<TopicPartition, Errors>, Void>() {
-            @Override
-            public Void apply(final Map<TopicPartition, Errors> topicPartitionErrorsMap) {
-                return null;
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+
+        this.future.whenComplete((topicPartitions, throwable) -> {
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else {
+                for (TopicPartition partition : partitions) {
+                    if (maybeCompleteExceptionally(topicPartitions, partition, result)) {
+                        return;
+                    }
+                }
+                result.complete(null);
             }
         });
+        return result;
+    }
+
+    private boolean maybeCompleteExceptionally(Map<TopicPartition, Errors> partitionLevelErrors,
+                                               TopicPartition partition,
+                                               KafkaFutureImpl<Void> result) {
+        Throwable exception = KafkaAdminClient.getSubLevelError(partitionLevelErrors, partition,
+            "Offset deletion result for partition \"" + partition + "\" was not included in the response");
+        if (exception != null) {
+            result.completeExceptionally(exception);
+            return true;
+        } else {
+            return false;
+        }
     }
 }

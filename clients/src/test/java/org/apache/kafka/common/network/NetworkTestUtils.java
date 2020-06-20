@@ -74,7 +74,7 @@ public class NetworkTestUtils {
         requests++;
         while (responses < messageCount) {
             selector.poll(0L);
-            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
+            assertEquals("No disconnects should have occurred ." + selector.disconnected(),  0, selector.disconnected().size());
 
             for (NetworkReceive receive : selector.completedReceives()) {
                 assertEquals(prefix + "-" + responses, new String(Utils.toArray(receive.payload()), StandardCharsets.UTF_8));

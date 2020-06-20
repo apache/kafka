@@ -17,8 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
-import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
-import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -69,13 +67,12 @@ public class OffsetDeleteResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        counts.put(Errors.forCode(data.errorCode()), 1);
-        for (OffsetDeleteResponseTopic topic : data.topics()) {
-            for (OffsetDeleteResponsePartition partition : topic.partitions()) {
-                Errors error = Errors.forCode(partition.errorCode());
-                counts.put(error, counts.getOrDefault(error, 0) + 1);
-            }
-        }
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
+        data.topics().forEach(topic ->
+            topic.partitions().forEach(partition ->
+                updateErrorCounts(counts, Errors.forCode(partition.errorCode()))
+            )
+        );
         return counts;
     }
 

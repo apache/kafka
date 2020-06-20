@@ -367,6 +367,42 @@ public abstract class Type {
         }
     };
 
+    public static final DocumentedType FLOAT64 = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteUtils.writeDouble((Double) o, buffer);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            return ByteUtils.readDouble(buffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 8;
+        }
+
+        @Override
+        public String typeName() {
+            return "FLOAT64";
+        }
+
+        @Override
+        public Double validate(Object item) {
+            if (item instanceof Double)
+                return (Double) item;
+            else
+                throw new SchemaException(item + " is not a Double.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a double-precision 64-bit format IEEE 754 value. " +
+                    "The values are encoded using eight bytes in network byte order (big-endian).";
+        }
+    };
+
     public static final DocumentedType STRING = new DocumentedType() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
@@ -956,7 +992,7 @@ public abstract class Type {
     private static String toHtml() {
         DocumentedType[] types = {
             BOOLEAN, INT8, INT16, INT32, INT64,
-            UNSIGNED_INT32, VARINT, VARLONG, UUID,
+            UNSIGNED_INT32, VARINT, VARLONG, UUID, FLOAT64,
             STRING, COMPACT_STRING, NULLABLE_STRING, COMPACT_NULLABLE_STRING,
             BYTES, COMPACT_BYTES, NULLABLE_BYTES, COMPACT_NULLABLE_BYTES,
             RECORDS, new ArrayOf(STRING), new CompactArrayOf(COMPACT_STRING)};

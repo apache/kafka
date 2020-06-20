@@ -38,7 +38,6 @@ public class TestRecord<K, V> {
     private final V value;
     private final Instant recordTime;
 
-
     /**
      * Creates a record.
      *
@@ -54,7 +53,6 @@ public class TestRecord<K, V> {
         this.headers = new RecordHeaders(headers);
     }
 
-
     /**
      * Creates a record.
      * 
@@ -67,7 +65,7 @@ public class TestRecord<K, V> {
         if (timestampMs != null) {
             if (timestampMs < 0) {
                 throw new IllegalArgumentException(
-                        String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestampMs));
+                    String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestampMs));
             }
             this.recordTime = Instant.ofEpochMilli(timestampMs);
         } else {
@@ -152,22 +150,21 @@ public class TestRecord<K, V> {
     }
 
     /**
-     * @return The headers
+     * @return The headers.
      */
     public Headers headers() {
         return headers;
     }
 
     /**
-     * @return The key (or null if no key is specified)
+     * @return The key (or {@code null} if no key is specified).
      */
     public K key() {
         return key;
     }
 
-
     /**
-     * @return The value
+     * @return The value.
      */
     public V value() {
         return value;
@@ -181,7 +178,7 @@ public class TestRecord<K, V> {
     }
 
     /**
-     * @return The headers
+     * @return The headers.
      */
     public Headers getHeaders() {
         return headers;
@@ -195,14 +192,14 @@ public class TestRecord<K, V> {
     }
 
     /**
-     * @return The value
+     * @return The value.
      */
     public V getValue() {
         return value;
     }
 
     /**
-     * @return The recordTime as Instant
+     * @return The timestamp.
      */
     public Instant getRecordTime() {
         return recordTime;
@@ -220,31 +217,21 @@ public class TestRecord<K, V> {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o)
+        if (this == o) {
             return true;
-        else if (!(o instanceof TestRecord))
+        }
+        if (o == null || getClass() != o.getClass()) {
             return false;
-
+        }
         final TestRecord<?, ?> that = (TestRecord<?, ?>) o;
-
-        if (key != null ? !key.equals(that.key) : that.key != null) 
-            return false;
-        else if (headers != null ? !headers.equals(that.headers) : that.headers != null)
-            return false;
-        else if (value != null ? !value.equals(that.value) : that.value != null) 
-            return false;
-        else if (recordTime != null ? !recordTime.equals(that.recordTime) : that.recordTime != null)
-            return false;
-
-        return true;
+        return Objects.equals(headers, that.headers) &&
+            Objects.equals(key, that.key) &&
+            Objects.equals(value, that.value) &&
+            Objects.equals(recordTime, that.recordTime);
     }
 
     @Override
     public int hashCode() {
-        int result = headers != null ? headers.hashCode() : 0;
-        result = 31 * result + (key != null ? key.hashCode() : 0);
-        result = 31 * result + (value != null ? value.hashCode() : 0);
-        result = 31 * result + (recordTime != null ? recordTime.hashCode() : 0);
-        return result;
+        return Objects.hash(headers, key, value, recordTime);
     }
 }

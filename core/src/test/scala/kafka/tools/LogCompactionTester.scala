@@ -26,15 +26,15 @@ import java.util.{Properties, Random}
 
 import joptsimple.OptionParser
 import kafka.utils._
-import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.{CommonClientConfigs, admin}
+import org.apache.kafka.clients.admin.{Admin, NewTopic}
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
 import org.apache.kafka.common.utils.{AbstractIterator, Utils}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  * This is a torture test that runs against an existing broker
@@ -138,7 +138,7 @@ object LogCompactionTester {
   def createTopics(brokerUrl: String, topics: Seq[String]): Unit = {
     val adminConfig = new Properties
     adminConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    val adminClient = admin.AdminClient.create(adminConfig)
+    val adminClient = Admin.create(adminConfig)
 
     try {
       val topicConfigs = Map(TopicConfig.CLEANUP_POLICY_CONFIG -> TopicConfig.CLEANUP_POLICY_COMPACT)
@@ -302,7 +302,7 @@ object LogCompactionTester {
 
   def consumeMessages(brokerUrl: String, topics: Array[String]): Path = {
     val consumer = createConsumer(brokerUrl)
-    consumer.subscribe(topics.seq.asJava)
+    consumer.subscribe(topics.toSeq.asJava)
     val consumedFilePath = Files.createTempFile("kafka-log-cleaner-consumed-", ".txt")
     println(s"Logging consumed messages to $consumedFilePath")
     val consumedWriter: BufferedWriter = Files.newBufferedWriter(consumedFilePath, UTF_8)

@@ -23,8 +23,7 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log.LogConfig
-import kafka.security.auth._
-import kafka.server.ConfigType
+import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
@@ -36,16 +35,24 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.util.Random
-import kafka.controller.{LeaderIsrAndControllerEpoch, PartitionReplicaAssignment}
+import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
+import kafka.security.authorizer.AclEntry
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
+import org.apache.kafka.common.acl.AclOperation.READ
+import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.common.feature.Features._
+import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.ZooDefs
+import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.data.Stat
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
@@ -67,9 +74,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   override def setUp(): Unit = {
     super.setUp()
     zkClient.createControllerEpochRaw(1)
-    otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
+    otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
-    expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled),
+    expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled),
       zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
 
@@ -84,6 +91,31 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   private val topicPartition = new TopicPartition("topic", 0)
+
+  @Test
+  def testConnectionViaNettyClient(): Unit = {
+    // Confirm that we can explicitly set client connection configuration, which is necessary for TLS.
+    // TLS connectivity itself is tested in system tests rather than here to avoid having to add TLS support
+    // to kafka.zk.EmbeddedZoopeeper
+    val clientConfig = new ZKClientConfig()
+    val propKey = KafkaConfig.ZkClientCnxnSocketProp
+    val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
+    KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
+    val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(clientConfig))
+    try {
+      assertEquals(Some(propVal), KafkaConfig.getZooKeeperClientProperty(client.currentZooKeeper.getClientConfig, propKey))
+      // For a sanity check, make sure a bad client connection socket class name generates an exception
+      val badClientConfig = new ZKClientConfig()
+      KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
+      intercept[Exception] {
+        KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
+          zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, zkClientConfig = Some(badClientConfig))
+      }
+    } finally {
+      client.close()
+    }
+  }
 
   @Test
   def testSetAndGetConsumerOffset(): Unit = {
@@ -146,7 +178,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testTopicAssignmentMethods(): Unit = {
-    assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
 
     // test with non-existing topic
     assertFalse(zkClient.topicExists(topic1))
@@ -169,7 +201,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val expectedAssignment = assignment map { topicAssignment =>
       val partition = topicAssignment._1.partition
       val assignment = topicAssignment._2
-      partition -> PartitionReplicaAssignment(assignment, List(), List())
+      partition -> ReplicaAssignment(assignment, List(), List())
     }
 
     assertEquals(assignment.size, zkClient.getTopicPartitionCount(topic1).get)
@@ -179,7 +211,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
 
-    zkClient.setTopicAssignment(topic1, updatedAssignment.mapValues { case v => PartitionReplicaAssignment(v, List(), List()) }.toMap)
+    zkClient.setTopicAssignment(topic1, updatedAssignment.map { case (k, v) => k -> ReplicaAssignment(v, List(), List()) })
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
 
     // add second topic
@@ -190,7 +222,56 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     zkClient.createTopicAssignment(topic2, secondAssignment)
 
-    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
+  }
+
+  @Test
+  def testGetAllTopicsInClusterTriggersWatch(): Unit = {
+    zkClient.createTopLevelPaths()
+    val latch = registerChildChangeHandler(1)
+
+    // Listing all the topics and register the watch
+    assertTrue(zkClient.getAllTopicsInCluster(true).isEmpty)
+
+    // Verifies that listing all topics without registering the watch does
+    // not interfere with the previous registered watcher
+    assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
+
+    zkClient.createTopicAssignment(topic1, Map.empty)
+
+    assertTrue("Failed to receive watch notification",
+      latch.await(5, TimeUnit.SECONDS))
+
+    assertTrue(zkClient.topicExists(topic1))
+  }
+
+  @Test
+  def testGetAllTopicsInClusterDoesNotTriggerWatch(): Unit = {
+    zkClient.createTopLevelPaths()
+    val latch = registerChildChangeHandler(1)
+
+    // Listing all the topics and don't register the watch
+    assertTrue(zkClient.getAllTopicsInCluster(false).isEmpty)
+
+    zkClient.createTopicAssignment(topic1, Map.empty)
+
+    assertFalse("Received watch notification",
+      latch.await(100, TimeUnit.MILLISECONDS))
+
+    assertTrue(zkClient.topicExists(topic1))
+  }
+
+  private def registerChildChangeHandler(count: Int): CountDownLatch = {
+    val znodeChildChangeHandlerCountDownLatch = new CountDownLatch(1)
+    val znodeChildChangeHandler = new ZNodeChildChangeHandler {
+      override val path: String = TopicsZNode.path
+
+      override def handleChildChange(): Unit = {
+        znodeChildChangeHandlerCountDownLatch.countDown()
+      }
+    }
+    zkClient.registerZNodeChildChangeHandler(znodeChildChangeHandler)
+    znodeChildChangeHandlerCountDownLatch
   }
 
   @Test
@@ -465,7 +546,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     ZkAclStore.stores.foreach(store => {
       assertFalse(zkClient.pathExists(store.aclPath))
       assertFalse(zkClient.pathExists(store.changeStore.aclChangePath))
-      ResourceType.values.foreach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
+      AclEntry.ResourceTypes.foreach(resource => assertFalse(zkClient.pathExists(store.path(resource))))
     })
 
     // create acl paths
@@ -474,10 +555,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     ZkAclStore.stores.foreach(store => {
       assertTrue(zkClient.pathExists(store.aclPath))
       assertTrue(zkClient.pathExists(store.changeStore.aclChangePath))
-      ResourceType.values.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
+      AclEntry.ResourceTypes.foreach(resource => assertTrue(zkClient.pathExists(store.path(resource))))
 
-      val resource1 = new Resource(Topic, UUID.randomUUID().toString, store.patternType)
-      val resource2 = new Resource(Topic, UUID.randomUUID().toString, store.patternType)
+      val resource1 = new ResourcePattern(TOPIC, UUID.randomUUID().toString, store.patternType)
+      val resource2 = new ResourcePattern(TOPIC, UUID.randomUUID().toString, store.patternType)
 
       // try getting acls for non-existing resource
       var versionedAcls = zkClient.getVersionedAclsForResource(resource1)
@@ -486,9 +567,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       assertFalse(zkClient.resourceExists(resource1))
 
 
-      val acl1 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), Deny, "host1" , Read)
-      val acl2 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Allow, "*", Read)
-      val acl3 = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), Deny, "host1", Read)
+      val acl1 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "alice"), DENY, "host1" , READ)
+      val acl2 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), ALLOW, "*", READ)
+      val acl3 = AclEntry(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "bob"), DENY, "host1", READ)
 
       // Conditional set should fail if path not created
       assertFalse(zkClient.conditionalSetAclsForResource(resource1, Set(acl1, acl3), 0)._1)
@@ -513,10 +594,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       assertEquals(1, versionedAcls.zkVersion)
 
       //get resource Types
-      assertTrue(ResourceType.values.map( rt => rt.name).toSet == zkClient.getResourceTypes(store.patternType).toSet)
+      assertEquals(AclEntry.ResourceTypes.map(SecurityUtils.resourceTypeName), zkClient.getResourceTypes(store.patternType).toSet)
 
       //get resource name
-      val resourceNames = zkClient.getResourceNames(store.patternType, Topic)
+      val resourceNames = zkClient.getResourceNames(store.patternType, TOPIC)
       assertEquals(2, resourceNames.size)
       assertTrue(Set(resource1.name,resource2.name) == resourceNames.toSet)
 
@@ -529,8 +610,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       //delete with valid expected zk version
       assertTrue(zkClient.conditionalDelete(resource2, 0))
 
-      zkClient.createAclChangeNotification(Resource(Group, "resource1", store.patternType))
-      zkClient.createAclChangeNotification(Resource(Topic, "resource2", store.patternType))
+      zkClient.createAclChangeNotification(new ResourcePattern(GROUP, "resource1", store.patternType))
+      zkClient.createAclChangeNotification(new ResourcePattern(TOPIC, "resource2", store.patternType))
 
       assertEquals(2, zkClient.getChildren(store.changeStore.aclChangePath).size)
 
@@ -673,16 +754,31 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   private def createBrokerInfo(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol,
-                               rack: Option[String] = None): BrokerInfo =
-    BrokerInfo(Broker(id, Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol
-    (securityProtocol), securityProtocol)), rack = rack), ApiVersion.latestVersion, jmxPort = port + 10)
+                               rack: Option[String] = None,
+                               features: Features[SupportedVersionRange] = emptySupportedFeatures): BrokerInfo =
+    BrokerInfo(
+      Broker(
+        id,
+        Seq(new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)),
+        rack = rack,
+        features = features),
+      ApiVersion.latestVersion, jmxPort = port + 10)
 
   @Test
   def testRegisterBrokerInfo(): Unit = {
     zkClient.createTopLevelPaths()
 
-    val brokerInfo = createBrokerInfo(1, "test.host", 9999, SecurityProtocol.PLAINTEXT)
-    val differentBrokerInfoWithSameId = createBrokerInfo(1, "test.host2", 9995, SecurityProtocol.SSL)
+    val brokerInfo = createBrokerInfo(
+      1, "test.host", 9999, SecurityProtocol.PLAINTEXT,
+      rack = None,
+      features = Features.supportedFeatures(
+        Map[String, SupportedVersionRange](
+          "feature1" -> new SupportedVersionRange(1, 2)).asJava))
+    val differentBrokerInfoWithSameId = createBrokerInfo(
+      1, "test.host2", 9995, SecurityProtocol.SSL,
+      features = Features.supportedFeatures(
+        Map[String, SupportedVersionRange](
+          "feature2" -> new SupportedVersionRange(4, 7)).asJava))
 
     zkClient.registerBroker(brokerInfo)
     assertEquals(Some(brokerInfo.broker), zkClient.getBroker(1))
@@ -732,8 +828,16 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(Seq.empty, zkClient.getSortedBrokerList)
     assertEquals(None, zkClient.getBroker(0))
 
-    val brokerInfo0 = createBrokerInfo(0, "test.host0", 9998, SecurityProtocol.PLAINTEXT)
-    val brokerInfo1 = createBrokerInfo(1, "test.host1", 9999, SecurityProtocol.SSL)
+    val brokerInfo0 = createBrokerInfo(
+      0, "test.host0", 9998, SecurityProtocol.PLAINTEXT,
+      features = Features.supportedFeatures(
+        Map[String, SupportedVersionRange](
+          "feature1" -> new SupportedVersionRange(1, 2)).asJava))
+    val brokerInfo1 = createBrokerInfo(
+      1, "test.host1", 9999, SecurityProtocol.SSL,
+      features = Features.supportedFeatures(
+        Map[String, SupportedVersionRange](
+          "feature2" -> new SupportedVersionRange(3, 6)).asJava))
 
     zkClient.registerBroker(brokerInfo1)
     otherZkClient.registerBroker(brokerInfo0)
@@ -785,10 +889,11 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   val initialLeaderIsrAndControllerEpochs: Map[TopicPartition, LeaderIsrAndControllerEpoch] =
     leaderIsrAndControllerEpochs(0, 0)
 
-  val initialLeaderIsrs: Map[TopicPartition, LeaderAndIsr] = initialLeaderIsrAndControllerEpochs.mapValues(_.leaderAndIsr).toMap
+  val initialLeaderIsrs: Map[TopicPartition, LeaderAndIsr] =
+    initialLeaderIsrAndControllerEpochs.map { case (k, v) => k -> v.leaderAndIsr }
 
   private def leaderIsrs(state: Int, zkVersion: Int): Map[TopicPartition, LeaderAndIsr] =
-    leaderIsrAndControllerEpochs(state, zkVersion).mapValues(_.leaderAndIsr).toMap
+    leaderIsrAndControllerEpochs(state, zkVersion).map { case (k, v) => k -> v.leaderAndIsr }
 
   private def checkUpdateLeaderAndIsrResult(
                   expectedSuccessfulPartitions: Map[TopicPartition, LeaderAndIsr],
@@ -817,7 +922,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createTopicAssignment(topicPartition.topic(),
       Map(topicPartition -> Seq()))
 
-    val expectedAssignment = PartitionReplicaAssignment(Seq(1,2,3), Seq(1), Seq(3))
+    val expectedAssignment = ReplicaAssignment(Seq(1,2,3), Seq(1), Seq(3))
     val response = zkClient.setTopicAssignmentRaw(topicPartition.topic(),
       Map(topicPartition -> expectedAssignment), controllerEpochZkVersion)
     assertEquals(Code.OK, response.resultCode)
@@ -896,12 +1001,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testGetTopicsAndPartitions(): Unit = {
-    assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
+    assertTrue(zkClient.getAllTopicsInCluster().isEmpty)
     assertTrue(zkClient.getAllPartitions.isEmpty)
 
     zkClient.createRecursive(TopicZNode.path(topic1))
     zkClient.createRecursive(TopicZNode.path(topic2))
-    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster.toSet)
+    assertEquals(Set(topic1, topic2), zkClient.getAllTopicsInCluster())
 
     assertTrue(zkClient.getAllPartitions.isEmpty)
 
