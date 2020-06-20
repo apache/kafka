@@ -19,23 +19,11 @@ package kafka.server
 
 import java.util.Properties
 
-import DynamicConfig.Broker._
-import kafka.api.ApiVersion
-import kafka.controller.KafkaController
-import kafka.log.{LogConfig, LogManager}
-import kafka.security.CredentialProvider
-import kafka.server.Constants._
-import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
-
-import scala.jdk.CollectionConverters._
-import scala.collection.Seq
-import scala.util.Try
 
 /**
   * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
@@ -199,16 +187,14 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
       }
     }
 
-    var mayChanged = false
-    if (brokerId == ConfigEntityName.Default) {
-      brokerConfig.dynamicConfig.updateDefaultConfig(properties)
-      mayChanged = true
-    }
-    else if (brokerConfig.brokerId == brokerId.trim.toInt) {
-      brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
-<<<<<<< HEAD
-      mayChanged = true
-    }
+    val mayChanged =
+      if (brokerId == ConfigEntityName.Default) {
+        brokerConfig.dynamicConfig.updateDefaultConfig(properties)
+        true
+      } else if (brokerConfig.brokerId == brokerId.trim.toInt) {
+        brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
+        true
+      } else false
 
     if(mayChanged){
       quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp).toDouble))
