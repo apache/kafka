@@ -149,7 +149,7 @@ public class KeyValueStoreBuilderTest {
 
         final Exception e = assertThrows(NullPointerException.class,
             () -> new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
-        assertThat(e.getMessage(), equalTo("bytesStoreSupplier's metricsScope can't be null"));
+        assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
     }
 
 }

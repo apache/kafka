@@ -120,7 +120,7 @@ public class SessionStoreBuilderTest {
     @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
         final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
-        assertThat(e.getMessage(), equalTo("supplier cannot be null"));
+        assertThat(e.getMessage(), equalTo("storeSupplier cannot be null"));
     }
 
     @Test
@@ -160,7 +160,7 @@ public class SessionStoreBuilderTest {
 
         final Exception e = assertThrows(NullPointerException.class,
             () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
-        assertThat(e.getMessage(), equalTo("supplier's metricsScope can't be null"));
+        assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
     }
 
 }
