@@ -754,7 +754,7 @@ public class TaskManager {
 
         executeAndMaybeSwallow(
             clean,
-            () -> activeTaskCreator.closeThreadProducerIfNeeded(),
+            activeTaskCreator::closeThreadProducerIfNeeded,
             e -> firstException.compareAndSet(null, e),
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
