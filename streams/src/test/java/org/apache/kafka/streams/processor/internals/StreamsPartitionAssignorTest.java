@@ -74,9 +74,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -1693,6 +1696,60 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldThrowIfV2SubscriptionAndFutureSubscriptionIsMixed() {
         shouldThrowIfPreVersionProbingSubscriptionAndFutureSubscriptionIsMixed(2);
+    }
+
+    @Test
+    public void shouldCorrectlySetRepartitionTopicMetadataNumberOfPartitions() {
+        // Test out a topology built with 3 levels of sub-topology as below:
+        //         input-t1   input-t2
+        //           |           |
+        //        topicInfo0 topicInfo4
+        //        /        \  /
+        //       t1         t2
+        //        |          |
+        // topicInfo1     topicInfo2
+        //        |           |
+        //      t1_1         t2_1
+        //         \         /
+        //         topicsInfo3
+        // t1, t2... are topics are the sourceTopics/sinkTopics of these sub-topologies, numberOfPartitions of a given
+        // topic should be the maximum of its upstream topics' numberOfPartitions.
+        // For example(use NoP instead of numberOfPartitions for simplicity):
+        // NoP(t2_1) = max(NoP(t2))
+        // NoP(t2) = max(NoP(input-t1), NoP(input-t2))
+        final String repartitionTopic1 = "Repartition-Topic1";
+        final String repartitionTopic2 = "Repartition-Topic2";
+        final String repartitionTopic11 = "Repartition-Topic1_1";
+        final String repartitionTopic21 = "Repartition-Topic2_1";
+        final String inputTopic1 = "input-topic1";
+        final String inputTopic2 = "input-topic2";
+        final Map<String, InternalTopicConfig> repartitionTopicMetadata = asList(repartitionTopic1, repartitionTopic2, repartitionTopic11, repartitionTopic21).stream().collect(Collectors.toMap(Function.identity(), t -> new RepartitionTopicConfig(t, Collections.emptyMap())));
+
+        final TopicsInfo topicsInfo0 = new TopicsInfo(mkSet(repartitionTopic1, repartitionTopic2), mkSet(inputTopic1), Collections.emptyMap(), Collections.emptyMap());
+        final TopicsInfo topicsInfo1 = new TopicsInfo(mkSet(repartitionTopic11), mkSet(repartitionTopic1), Collections.emptyMap(), Collections.emptyMap());
+        final TopicsInfo topicsInfo2 = new TopicsInfo(mkSet(repartitionTopic21), mkSet(repartitionTopic2), Collections.emptyMap(), Collections.emptyMap());
+        final TopicsInfo topicsInfo3 = new TopicsInfo(Collections.emptySet(), mkSet(repartitionTopic11, repartitionTopic21), repartitionTopicMetadata, Collections.emptyMap());
+        final TopicsInfo topicsInfo4 = new TopicsInfo(mkSet(repartitionTopic2), mkSet(inputTopic2), Collections.emptyMap(), Collections.emptyMap());
+
+        final Map<Integer, TopicsInfo> topicsGroups = new HashMap<>();
+        topicsGroups.put(0, topicsInfo0);
+        topicsGroups.put(1, topicsInfo1);
+        topicsGroups.put(2, topicsInfo2);
+        topicsGroups.put(3, topicsInfo3);
+        topicsGroups.put(4, topicsInfo4);
+
+        final Node leader = new Node(-1, "-1", -1);
+        final Cluster metadata = new Cluster("cluster", asList(leader), asList(
+                new PartitionInfo(inputTopic1, 0, leader, null, null),
+                new PartitionInfo(inputTopic2, 0, leader, null, null),
+                new PartitionInfo(inputTopic2, 1, leader, null, null)),
+                Collections.emptySet(), Collections.emptySet());
+
+        partitionAssignor.setRepartitionTopicMetadataNumberOfPartitions(repartitionTopicMetadata, topicsGroups, metadata);
+        assertEquals(Optional.of(1), repartitionTopicMetadata.get(repartitionTopic1).numberOfPartitions());
+        assertEquals(Optional.of(2), repartitionTopicMetadata.get(repartitionTopic2).numberOfPartitions());
+        assertEquals(Optional.of(1), repartitionTopicMetadata.get(repartitionTopic11).numberOfPartitions());
+        assertEquals(Optional.of(2), repartitionTopicMetadata.get(repartitionTopic21).numberOfPartitions());
     }
 
     @Test

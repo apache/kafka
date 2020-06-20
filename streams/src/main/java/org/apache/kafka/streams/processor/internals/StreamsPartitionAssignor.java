@@ -148,13 +148,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     /**
-     * A TopicNode is a node that contains topic information and upstream/downstream TopicsInfo. Graph built of TopicNode and TopicsInfo is useful
+     * A TopicNode is a node that contains topic information and upstream/downstream TopicsInfo. Graph built of TopicNode and TopicsInfoNode is useful
      * when in certain cases traverse is needed. For example, {@link #setRepartitionTopicMetadataNumberOfPartitions(Map, Map, Cluster)}
      * internally do a DFS search along with the graph.
      *
      TopicNode("t1")      TopicNode("t2")                                    TopicNode("t6")             TopicNode("t7")
                 \           /                                                            \                           /
-                  TopicsInfo(source = (t1,t2), sink = (t3,t4))                           TopicsInfo(source = (t6,t7), sink = (t4))
+           TopicsInfoNode(source = (t1,t2), sink = (t3,t4))                           TopicsInfoNode(source = (t6,t7), sink = (t4))
                                 /           \                                                                        /
                              /                 \                                                          /
                           /                        \                                           /
@@ -162,27 +162,52 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                  /                                       \            /
      TopicNode("t3")                                     TopicNode("t4")
             \
-     TopicsInfo(source = (t3), sink = ())
+     TopicsInfoNode(source = (t3), sink = ())
 
      t3 = max(t1,t2)
      t4 = max(max(t1,t2), max(t6,t7))
      */
     private static class TopicNode {
         public final String topicName;
-        public final Set<TopicsInfo> upStreams; // upStream TopicsInfo's sinkTopics contains this
-        public final Set<TopicsInfo> downStreams; // downStreams TopicsInfo's sourceTopics contains this
+        public final Set<TopicsInfoNode> upStreams; // upStream TopicsInfo's sinkTopics contains this
+        public final Set<TopicsInfoNode> downStreams; // downStreams TopicsInfo's sourceTopics contains this
+        public Optional<Integer> numOfRepartitions;
         TopicNode(final String topicName) {
             this.topicName = topicName;
             this.upStreams = new HashSet<>();
             this.downStreams = new HashSet<>();
+            this.numOfRepartitions = Optional.empty();
         }
 
         public void addUpStreamTopicsInfo(final TopicsInfo topicsInfo) {
-            this.upStreams.add(topicsInfo);
+            this.upStreams.add(new TopicsInfoNode(topicsInfo));
         }
 
         public void addDownStreamTopicsInfo(final TopicsInfo topicsInfo) {
-            this.downStreams.add(topicsInfo);
+            this.downStreams.add(new TopicsInfoNode(topicsInfo));
+        }
+    }
+
+    // Node wrapper for TopicsInfo, which can be used together with TopicNode to build a graph to calculate
+    // numOfRepartitions, and numOfRepartitions of underlying TopicsInfo can be cached for memoization.
+    private static class TopicsInfoNode {
+        public TopicsInfo topicsInfo;
+        private Optional<Integer> numOfRepartitions;
+        TopicsInfoNode(final TopicsInfo topicsInfo) {
+            this.topicsInfo = topicsInfo;
+            this.numOfRepartitions = Optional.empty();
+        }
+
+        public void setNumOfRepartitions(final int numOfRepartitions) {
+            this.numOfRepartitions = Optional.of(numOfRepartitions);
+        }
+
+        public Optional<Integer> numOfRepartitions() {
+            return this.numOfRepartitions;
+        }
+
+        public Set<String> sourceTopics() {
+            return this.topicsInfo.sourceTopics;
         }
     }
 
@@ -551,12 +576,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     /**
      * Computes the number of partitions and sets it for each repartition topic in repartitionTopicMetadata
      */
-    private void setRepartitionTopicMetadataNumberOfPartitions(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+    // visible for testing
+    public void setRepartitionTopicMetadataNumberOfPartitions(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
                                                                final Map<Integer, TopicsInfo> topicGroups,
                                                                final Cluster metadata) {
         final Set<String> allRepartitionSourceTopics = new HashSet<>();
         final Map<String, TopicNode> builtTopicNodes = new HashMap<>();
-        // 1. Build a graph containing the TopicsInfo and TopicsNode
+        // 1. Build a graph containing the TopicsInfoNode and TopicsNode
         for (final TopicsInfo topicsInfo : topicGroups.values()) {
             allRepartitionSourceTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
             for (final String sourceTopic : topicsInfo.sourceTopics) {
@@ -570,34 +596,34 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
         }
 
-        // 2. Use DFS along with memoization to calc repartition number of all repartitionSourceTopics
+        // 2. Use DFS along with memoization to calculate repartition number of all repartitionSourceTopics
         for (final String topic : allRepartitionSourceTopics) {
-            calcRepartitionNumForTopic(topic, repartitionTopicMetadata, metadata, builtTopicNodes, new HashMap<TopicsInfo, Integer>());
+            calcNumOfRepartitionsForTopicNode(topic, repartitionTopicMetadata, metadata, builtTopicNodes);
         }
     }
 
-    private int calcRepartitionNumForTopic(final String topic,
-                                           final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                           final Cluster metadata,
-                                           final Map<String, TopicNode> builtTopicNodes,
-                                           final Map<TopicsInfo, Integer> topicsInfoNumberOfPartitions) {
-
+    private int calcNumOfRepartitionsForTopicNode(final String topic,
+                                                  final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+                                                  final Cluster metadata,
+                                                  final Map<String, TopicNode> builtTopicNodes) {
+        final TopicNode topicNode = builtTopicNodes.get(topic);
+        if (topicNode.numOfRepartitions.isPresent()) {
+            return topicNode.numOfRepartitions.get();
+        }
+        Integer numOfRepartitionsCandidate = null;
         if (repartitionTopicMetadata.containsKey(topic)) {
             final Optional<Integer> maybeNumberPartitions = repartitionTopicMetadata.get(topic).numberOfPartitions();
             // if numberOfPartitions already calculated, return directly
             if (maybeNumberPartitions.isPresent()) {
-                return maybeNumberPartitions.get();
+                numOfRepartitionsCandidate = maybeNumberPartitions.get();
             } else {
-                // else calculate the max numRepartitions of its upStream TopicsInfo and set the repartitionTopicMetadata for memoization before return
-                final TopicNode topicNode = builtTopicNodes.get(topic);
-                Integer maxNumberPartitions = 0;
-                for (final TopicsInfo upstream : topicNode.upStreams) {
-                    final Integer upStreamRepartitionNum = calcRepartitionNumForTopicInfo(upstream, repartitionTopicMetadata,
-                            metadata, builtTopicNodes, topicsInfoNumberOfPartitions);
-                    maxNumberPartitions = upStreamRepartitionNum > maxNumberPartitions ? upStreamRepartitionNum : maxNumberPartitions;
+                // calculate the max numOfRepartitions of its upStream TopicsInfoNodes and set the repartitionTopicMetadata for memoization before return
+                for (final TopicsInfoNode upstream : topicNode.upStreams) {
+                    final Integer upStreamRepartitionNum = calcNumOfRepartitionsForTopicInfoNode(upstream, repartitionTopicMetadata, metadata, builtTopicNodes);
+                    numOfRepartitionsCandidate = numOfRepartitionsCandidate == null ? upStreamRepartitionNum :
+                            (upStreamRepartitionNum > numOfRepartitionsCandidate ? upStreamRepartitionNum : numOfRepartitionsCandidate);
                 }
-                repartitionTopicMetadata.get(topic).setNumberOfPartitions(maxNumberPartitions);
-                return maxNumberPartitions;
+                repartitionTopicMetadata.get(topic).setNumberOfPartitions(numOfRepartitionsCandidate);
             }
         } else {
             final Integer count = metadata.partitionCountForTopic(topic);
@@ -608,26 +634,27 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                 + ", but it should have been."
                 );
             }
-            return count;
+            numOfRepartitionsCandidate = count;
         }
+        topicNode.numOfRepartitions = Optional.of(numOfRepartitionsCandidate);
+        return numOfRepartitionsCandidate;
     }
 
-    private int calcRepartitionNumForTopicInfo(final TopicsInfo topicsInfo,
-                                               final Map<String, InternalTopicConfig> repartitionTopicMetadata,
-                                               final Cluster metadata,
-                                               final Map<String, TopicNode> builtTopicNode,
-                                               final Map<TopicsInfo, Integer> topicsInfoNumberOfPartitions) {
-        if (topicsInfoNumberOfPartitions.containsKey(topicsInfo)) {
-            return topicsInfoNumberOfPartitions.get(topicsInfo);
+    private int calcNumOfRepartitionsForTopicInfoNode(final TopicsInfoNode topicsInfoNode,
+                                                      final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+                                                      final Cluster metadata,
+                                                      final Map<String, TopicNode> builtTopicNode) {
+        Integer numOfRepartitionsCandidate = null;
+        if (topicsInfoNode.numOfRepartitions().isPresent()) {
+            return topicsInfoNode.numOfRepartitions().get();
         } else {
-            Integer maxNumberPartitions = 0;
-            for (final String sourceTopic : topicsInfo.sourceTopics) {
-                final Integer sourceTopicNumPartitions = calcRepartitionNumForTopic(sourceTopic, repartitionTopicMetadata,
-                        metadata, builtTopicNode, topicsInfoNumberOfPartitions);
-                maxNumberPartitions = sourceTopicNumPartitions > maxNumberPartitions ? sourceTopicNumPartitions : maxNumberPartitions;
+            for (final String sourceTopic : topicsInfoNode.sourceTopics()) {
+                final Integer sourceTopicNumPartitions = calcNumOfRepartitionsForTopicNode(sourceTopic, repartitionTopicMetadata, metadata, builtTopicNode);
+                numOfRepartitionsCandidate = numOfRepartitionsCandidate == null ? sourceTopicNumPartitions :
+                        (sourceTopicNumPartitions > numOfRepartitionsCandidate ? sourceTopicNumPartitions : numOfRepartitionsCandidate);
             }
-            topicsInfoNumberOfPartitions.put(topicsInfo, maxNumberPartitions);
-            return maxNumberPartitions;
+            topicsInfoNode.setNumOfRepartitions(numOfRepartitionsCandidate);
+            return numOfRepartitionsCandidate;
         }
     }
 
