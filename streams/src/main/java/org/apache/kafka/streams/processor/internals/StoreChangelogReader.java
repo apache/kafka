@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class StoreChangelogReader implements ChangelogReader {
+    private static final long RESTORE_LOG_INTERVAL_MS = 10_000L;
 
     private final Logger log;
     private final Consumer<byte[], byte[]> restoreConsumer;
@@ -52,6 +53,8 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Set<TopicPartition> needsInitializing = new HashSet<>();
     private final Set<TopicPartition> completedRestorers = new HashSet<>();
     private final Duration pollTime;
+
+    private long lastRestoreLogTime = 0L;
 
     public StoreChangelogReader(final Consumer<byte[], byte[]> restoreConsumer,
                                 final Duration pollTime,
@@ -120,7 +123,40 @@ public class StoreChangelogReader implements ChangelogReader {
 
         checkForCompletedRestoration();
 
+        maybeLogRestorationProgress();
+
         return completedRestorers;
+    }
+
+    private void maybeLogRestorationProgress() {
+        if (needsRestoring.isEmpty()) {
+            lastRestoreLogTime = 0L;
+        } else {
+            final long now = System.currentTimeMillis();
+            if (now - lastRestoreLogTime > RESTORE_LOG_INTERVAL_MS) {
+                final Set<TopicPartition> topicPartitions = needsRestoring;
+                if (!topicPartitions.isEmpty()) {
+                    final StringBuilder builder = new StringBuilder().append("Restoration in progress for ")
+                                                                     .append(topicPartitions.size())
+                                                                     .append(" partitions.");
+                    for (final TopicPartition partition : topicPartitions) {
+                        final StateRestorer stateRestorer = stateRestorers.get(partition);
+                        builder.append(" {")
+                               .append(partition)
+                               .append(": ")
+                               .append("position=")
+                               .append(stateRestorer.restoredOffset())
+                               .append(", end=")
+                               .append(restoreToOffsets.get(partition))
+                               .append(", totalRestored=")
+                               .append(stateRestorer.restoredNumRecords())
+                               .append("}");
+                    }
+                    log.info(builder.toString());
+                    lastRestoreLogTime = now;
+                }
+            }
+        }
     }
 
     private void initialize(final RestoringTasks active) {
