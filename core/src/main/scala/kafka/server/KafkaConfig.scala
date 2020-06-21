@@ -782,7 +782,7 @@ object KafkaConfig {
     "<code>message.max.bytes</code> (broker config) or <code>max.message.bytes</code> (topic config)."
   val ReplicaFetchWaitMaxMsDoc = "max wait time for each fetcher request issued by follower replicas. This value should always be less than the " +
   "replica.lag.time.max.ms at all times to prevent frequent shrinking of ISR for low throughput topics"
-  val ReplicaFetchMinBytesDoc = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs"
+  val ReplicaFetchMinBytesDoc = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to <code>replica.fetch.wait.max.ms</code> (broker config)."
   val ReplicaFetchResponseMaxBytesDoc = "Maximum bytes expected for the entire fetch response. Records are fetched in batches, " +
     "and if the first record batch in the first non-empty partition of the fetch is larger than this value, the record batch " +
     "will still be returned to ensure that progress can be made. As such, this is not an absolute maximum. The maximum " +
