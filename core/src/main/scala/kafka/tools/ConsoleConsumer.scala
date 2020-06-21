@@ -222,16 +222,22 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property",
-      "The properties to initialize the message formatter. Default properties include:\n" +
-        "\tprint.timestamp=true|false\n" +
-        "\tprint.key=true|false\n" +
-        "\tprint.value=true|false\n" +
-        "\tkey.separator=<key.separator>\n" +
-        "\tline.separator=<line.separator>\n" +
-        "\tkey.deserializer=<key.deserializer>\n" +
-        "\tvalue.deserializer=<value.deserializer>\n" +
-        "\nUsers can also pass in customized properties for their formatter; more specifically, users " +
-        "can pass in properties keyed with \'key.deserializer.\' and \'value.deserializer.\' prefixes to configure their deserializers.")
+    """The properties to initialize the message formatter. Default properties include:
+      |	print.timestamp=true|false
+      |	print.key=true|false
+      |	print.offset=true|false
+      |	print.partition=true|false
+      |	print.headers=true|false
+      |	print.value=true|false
+      |	key.separator=<key.separator>
+      |	line.separator=<line.separator>
+      |	headers.separator=<line.separator>
+      |	key.deserializer=<key.deserializer>
+      |	value.deserializer=<value.deserializer>
+      |	header.deserializer=<header.deserializer>
+      |
+      |Users can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers."""
+      .stripMargin)
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -460,46 +466,31 @@ class DefaultMessageFormatter extends MessageFormatter {
   var printKey = false
   var printValue = true
   var printPartition = false
-  var keySeparator = "\t".getBytes(StandardCharsets.UTF_8)
-  var lineSeparator = "\n".getBytes(StandardCharsets.UTF_8)
+  var printOffset = false
+  var printHeaders = false
+  var keySeparator = utfBytes("\t")
+  var lineSeparator = utfBytes("\n")
+  var headersSeparator = utfBytes(",")
 
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
+  var headersDeserializer: Option[Deserializer[_]] = None
 
   override def init(props: Properties): Unit = {
-    if (props.containsKey("print.timestamp"))
-      printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.key"))
-      printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.value"))
-      printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.partition"))
-      printPartition = props.getProperty("print.partition").trim.equalsIgnoreCase("true")
-    if (props.containsKey("key.separator"))
-      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
-    if (props.containsKey("line.separator"))
-      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
-    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("key.deserializer")) {
-      keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).getDeclaredConstructor()
-        .newInstance().asInstanceOf[Deserializer[_]])
-      keyDeserializer.get.configure(propertiesWithKeyPrefixStripped("key.deserializer.", props).asScala.asJava, true)
-    }
-    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("value.deserializer")) {
-      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).getDeclaredConstructor()
-        .newInstance().asInstanceOf[Deserializer[_]])
-      valueDeserializer.get.configure(propertiesWithKeyPrefixStripped("value.deserializer.", props).asScala.asJava, false)
-    }
-  }
+    getPropertyIfExists(props, "print.timestamp", getBoolProperty).foreach(printTimestamp = _)
+    getPropertyIfExists(props, "print.key", getBoolProperty).foreach(printKey = _)
+    getPropertyIfExists(props, "print.offset", getBoolProperty).foreach(printOffset = _)
+    getPropertyIfExists(props, "print.partition", getBoolProperty).foreach(printPartition = _)
+    getPropertyIfExists(props, "print.headers", getBoolProperty).foreach(printHeaders = _)
+    getPropertyIfExists(props, "print.value", getBoolProperty).foreach(printValue = _)
+    getPropertyIfExists(props, "key.separator", getByteProperty).foreach(keySeparator = _)
+    getPropertyIfExists(props, "line.separator", getByteProperty).foreach(lineSeparator = _)
+    getPropertyIfExists(props, "headers.separator", getByteProperty).foreach(headersSeparator = _)
 
-  private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
-    val newProps = new Properties()
-    props.asScala.foreach { case (key, value) =>
-      if (key.startsWith(prefix) && key.length > prefix.length)
-        newProps.put(key.substring(prefix.length), value)
-    }
-    newProps
+    keyDeserializer = getPropertyIfExists(props, "key.deserializer", getDeserializerProperty(true))
+    valueDeserializer = getPropertyIfExists(props, "value.deserializer", getDeserializerProperty(false))
+    headersDeserializer = getPropertyIfExists(props, "headers.deserializer", getDeserializerProperty(false))
+
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
@@ -512,36 +503,97 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
 
     def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String): Unit = {
-      val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
-      val convertedBytes = deserializer.map(_.deserialize(topic, consumerRecord.headers, nonNullBytes).toString.
-        getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
-      output.write(convertedBytes)
+      output.write(deserialize(deserializer, sourceBytes, topic))
     }
 
     import consumerRecord._
 
     if (printTimestamp) {
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
-        output.write(s"$timestampType:$timestamp".getBytes(StandardCharsets.UTF_8))
+        output.write(utfBytes(s"$timestampType:$timestamp"))
       else
-        output.write(s"NO_TIMESTAMP".getBytes(StandardCharsets.UTF_8))
-      writeSeparator(printKey || printValue)
+        output.write(utfBytes("NO_TIMESTAMP"))
+      writeSeparator(columnSeparator = printKey || printOffset || printPartition || printHeaders || printValue)
     }
 
     if (printKey) {
       write(keyDeserializer, key, topic)
-      writeSeparator(printValue)
+      writeSeparator(columnSeparator = printOffset || printPartition || printHeaders || printValue)
+    }
+
+    if (printOffset) {
+      output.write(utfBytes(offset().toString))
+      writeSeparator(columnSeparator = printPartition || printHeaders || printValue)
+    }
+
+    if (printPartition) {
+      output.write(utfBytes(partition().toString))
+      writeSeparator(columnSeparator = printHeaders || printValue)
+    }
+
+    if (printHeaders) {
+      val headersIt = headers().iterator.asScala
+      if (headersIt.hasNext) {
+        headersIt.foreach { header =>
+          output.write(utfBytes(header.key() + ":"))
+          output.write(deserialize(headersDeserializer, header.value(), topic))
+          if (headersIt.hasNext) {
+            output.write(headersSeparator)
+          }
+        }
+      } else {
+        output.write(utfBytes("NO_HEADERS"))
+      }
+      writeSeparator(columnSeparator = printValue)
     }
 
     if (printValue) {
       write(valueDeserializer, value, topic)
-      writeSeparator(printPartition)
-    }
-
-    if (printPartition) {
-      output.write(s"$partition".getBytes(StandardCharsets.UTF_8))
       output.write(lineSeparator)
     }
+  }
+
+  private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
+    val newProps = new Properties()
+    props.asScala.foreach { case (key, value) =>
+      if (key.startsWith(prefix) && key.length > prefix.length)
+        newProps.put(key.substring(prefix.length), value)
+    }
+    newProps
+  }
+
+  private def deserialize(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) = {
+    val nonNullBytes = Option(sourceBytes).getOrElse(utfBytes("null"))
+    val convertedBytes = deserializer
+      .map(d => utfBytes(d.deserialize(topic, nonNullBytes).toString))
+      .getOrElse(nonNullBytes)
+    convertedBytes
+  }
+
+  private def utfBytes(str: String) = str.getBytes(StandardCharsets.UTF_8)
+
+  private def getByteProperty(props: Properties, key: String): Array[Byte] = {
+    utfBytes(props.getProperty(key))
+  }
+
+  private def getBoolProperty(props: Properties, key: String): Boolean = {
+    props.getProperty(key).trim.equalsIgnoreCase("true")
+  }
+
+  private def getDeserializerProperty(isKey: Boolean)(props: Properties, propertyName: String): Deserializer[_] = {
+    val deserializer = Class.forName(props.getProperty(propertyName)).newInstance().asInstanceOf[Deserializer[_]]
+    val deserializerConfig = propertiesWithKeyPrefixStripped(propertyName + ".", props)
+      .asScala
+      .asJava
+    deserializer.configure(deserializerConfig, isKey)
+    deserializer
+  }
+
+  private def getPropertyIfExists[T](props: Properties, key: String, getter: (Properties, String) => T): Option[T] = {
+    if (props.containsKey(key))
+      Some(getter(props, key))
+    else
+      None
   }
 }
 

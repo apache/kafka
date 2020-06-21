@@ -1,0 +1,226 @@
+/**
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
+
+package unit.kafka.tools
+
+import java.io.{ByteArrayOutputStream, Closeable, PrintStream}
+import java.nio.charset.StandardCharsets
+import java.util
+import java.util.Properties
+
+import kafka.tools.DefaultMessageFormatter
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.header.Header
+import org.apache.kafka.common.header.internals.{RecordHeader, RecordHeaders}
+import org.apache.kafka.common.record.TimestampType
+import org.apache.kafka.common.serialization.Deserializer
+import org.junit.Assert._
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
+
+import scala.jdk.CollectionConverters._
+
+@RunWith(value = classOf[Parameterized])
+class DefaultMessageFormatterTest(name: String, record: ConsumerRecord[Array[Byte], Array[Byte]], properties: Map[String, String], expected: String) {
+  import DefaultMessageFormatterTest._
+
+  @Test
+  def testWriteRecord()= {
+    withResource(new ByteArrayOutputStream()) { baos =>
+      withResource(new PrintStream(baos)) { ps =>
+        val formatter = buildFormatter(properties)
+        formatter.writeTo(record, ps)
+        val actual = new String(baos.toByteArray(), StandardCharsets.UTF_8)
+        assertEquals(expected, actual)
+
+      }
+    }
+  }
+}
+
+object DefaultMessageFormatterTest {
+  @Parameters(name = "Test {index} - {0}")
+  def parameters: java.util.Collection[Array[Object]] = {
+    Seq(
+      Array(
+        "print nothing",
+        consumerRecord(),
+        Map("print.value" -> "false"),
+        ""),
+      Array(
+        "print key",
+        consumerRecord(),
+        Map("print.key" -> "true", "print.value" -> "false"),
+        "someKey\n"),
+      Array(
+        "print value",
+        consumerRecord(),
+        Map(),
+        "someValue\n"),
+      Array(
+        "print empty timestamp",
+        consumerRecord(timestampType = TimestampType.NO_TIMESTAMP_TYPE),
+        Map("print.timestamp" -> "true", "print.value" -> "false"),
+        "NO_TIMESTAMP\n"),
+      Array(
+        "print log append time timestamp",
+        consumerRecord(timestampType = TimestampType.LOG_APPEND_TIME),
+        Map("print.timestamp" -> "true", "print.value" -> "false"),
+        "LogAppendTime:1234\n"),
+      Array(
+        "print create time timestamp",
+        consumerRecord(timestampType = TimestampType.CREATE_TIME),
+        Map("print.timestamp" -> "true", "print.value" -> "false"),
+        "CreateTime:1234\n"),
+      Array(
+        "print partition",
+        consumerRecord(),
+        Map("print.partition" -> "true", "print.value" -> "false"),
+        "9\n"),
+      Array(
+        "print offset",
+        consumerRecord(),
+        Map("print.offset" -> "true", "print.value" -> "false"),
+        "9876\n"),
+      Array(
+        "print headers",
+        consumerRecord(),
+        Map("print.headers" -> "true", "print.value" -> "false"),
+        "h1:v1,h2:v2\n"),
+      Array(
+        "print empty headers",
+        consumerRecord(headers = Nil),
+        Map("print.headers" -> "true", "print.value" -> "false"),
+        "NO_HEADERS\n"),
+      Array(
+        "print all possible fields with default delimiters",
+        consumerRecord(),
+        Map("print.key" -> "true",
+          "print.timestamp" -> "true",
+          "print.partition" -> "true",
+          "print.offset" -> "true",
+          "print.headers" -> "true",
+          "print.value" -> "true"),
+        "CreateTime:1234\tsomeKey\t9876\t9\th1:v1,h2:v2\tsomeValue\n"),
+      Array(
+        "print all possible fields with custom delimiters",
+        consumerRecord(),
+        Map(
+          "key.separator" -> "|",
+          "line.separator" -> "^",
+          "headers.separator" -> "#",
+          "print.key" -> "true",
+          "print.timestamp" -> "true",
+          "print.partition" -> "true",
+          "print.offset" -> "true",
+          "print.headers" -> "true",
+          "print.value" -> "true"),
+        "CreateTime:1234|someKey|9876|9|h1:v1#h2:v2|someValue^"),
+      Array(
+        "print key with custom deserializer",
+        consumerRecord(),
+        Map(
+          "print.key" -> "true",
+          "print.headers" -> "true",
+          "print.value" -> "true",
+          "key.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+        "SOMEKEY\th1:v1,h2:v2\tsomeValue\n"),
+      Array(
+        "print value with custom deserializer",
+        consumerRecord(),
+        Map(
+          "print.key" -> "true",
+          "print.headers" -> "true",
+          "print.value" -> "true",
+          "value.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+        "someKey\th1:v1,h2:v2\tSOMEVALUE\n"),
+      Array(
+        "print headers with custom deserializer",
+        consumerRecord(),
+        Map(
+          "print.key" -> "true",
+          "print.headers" -> "true",
+          "print.value" -> "true",
+          "headers.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
+        "someKey\th1:V1,h2:V2\tsomeValue\n"),
+      Array(
+        "print key and value",
+        consumerRecord(),
+        Map("print.key" -> "true", "print.value" -> "true"),
+        "someKey\tsomeValue\n"),
+      Array(
+        "print fields in the beginning, middle and the end",
+        consumerRecord(),
+        Map("print.key" -> "true", "print.value" -> "true", "print.partition" -> "true"),
+        "someKey\t9\tsomeValue\n")
+    ).asJava
+  }
+
+  private def buildFormatter(propsToSet: Map[String, String]): DefaultMessageFormatter = {
+    val properties = new Properties()
+    //putAll doesn't work on java 9 - https://github.com/scala/bug/issues/10418
+    propsToSet.foreach { case (k, v) =>
+      properties.setProperty(k, v)
+    }
+    val formatter = new DefaultMessageFormatter()
+    formatter.init(properties)
+    formatter
+  }
+
+
+  private def header(key: String, value: String) = {
+    new RecordHeader(key, value.getBytes(StandardCharsets.UTF_8))
+  }
+
+  private def consumerRecord(key: String = "someKey",
+                             value: String = "someValue",
+                             headers: Iterable[Header] = Seq(header("h1", "v1"), header("h2", "v2")),
+                             partition: Int = 9,
+                             offset: Long = 9876,
+                             timestamp: Long = 1234,
+                             timestampType: TimestampType = TimestampType.CREATE_TIME) = {
+    new ConsumerRecord[Array[Byte], Array[Byte]](
+      "someTopic",
+      partition,
+      offset,
+      timestamp,
+      timestampType,
+      0L,
+      0,
+      0,
+      key.getBytes(StandardCharsets.UTF_8),
+      value.getBytes(StandardCharsets.UTF_8),
+      new RecordHeaders(headers.asJava))
+
+  }
+
+  private def withResource[Resource <: Closeable, Result](resource: Resource)(handler: Resource => Result): Result = {
+    try {
+      handler(resource)
+    } finally {
+      resource.close()
+    }
+  }
+}
+
+class UpperCaseDeserializer extends Deserializer[String] {
+  override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = {}
+  override def deserialize(topic: String, data: Array[Byte]): String = new String(data, StandardCharsets.UTF_8).toUpperCase
+  override def close(): Unit = {}
+}
