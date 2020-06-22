@@ -1402,6 +1402,64 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testEmptyRecordSetInFetchResponse() throws Exception {
+        int otherNodeId = 1;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, otherNodeId, voters));
+        KafkaRaftClient client = buildClient(voters, stateMachine);
+
+        assertEquals(ElectionState.withElectedLeader(epoch, otherNodeId, voters), quorumStateStore.readElectionState());
+        assertTrue(stateMachine.isFollower());
+        assertEquals(epoch, stateMachine.epoch());
+
+        initializeVoterConnections(client, voters, epoch, OptionalInt.of(otherNodeId));
+
+        // Receive an empty fetch response
+        pollUntilSend(client);
+        int fetchQuorumCorrelationId = assertSentFetchQuorumRecordsRequest(epoch, 0L, 0);
+        FetchQuorumRecordsResponseData fetchResponse = fetchRecordsResponse(epoch, otherNodeId,
+            MemoryRecords.EMPTY, 0L, Errors.NONE);
+        deliverResponse(fetchQuorumCorrelationId, otherNodeId, fetchResponse);
+        client.poll();
+        assertEquals(0L, log.endOffset());
+        assertEquals(OptionalLong.of(0L), client.highWatermark());
+
+        // Receive some records in the next poll, but do not advance high watermark
+        pollUntilSend(client);
+        Records records = MemoryRecords.withRecords(0L, CompressionType.NONE,
+            epoch, new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes()));
+        fetchQuorumCorrelationId = assertSentFetchQuorumRecordsRequest(epoch, 0L, 0);
+        fetchResponse = fetchRecordsResponse(epoch, otherNodeId,
+            records, 0L, Errors.NONE);
+        deliverResponse(fetchQuorumCorrelationId, otherNodeId, fetchResponse);
+        client.poll();
+        assertEquals(2L, log.endOffset());
+        assertEquals(OptionalLong.of(0L), client.highWatermark());
+
+        // The next fetch response is empty, but should still advance the high watermark
+        pollUntilSend(client);
+        fetchQuorumCorrelationId = assertSentFetchQuorumRecordsRequest(epoch, 2L, epoch);
+        fetchResponse = fetchRecordsResponse(epoch, otherNodeId,
+            MemoryRecords.EMPTY, 2L, Errors.NONE);
+        deliverResponse(fetchQuorumCorrelationId, otherNodeId, fetchResponse);
+        client.poll();
+        assertEquals(2L, log.endOffset());
+        assertEquals(OptionalLong.of(2L), client.highWatermark());
+    }
+
+    @Test
+    public void testAppendEmptyRecordSetNotAllowed() throws Exception {
+        int epoch = 5;
+
+        Set<Integer> voters = Collections.singleton(localId);
+        quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, localId, voters));
+
+        buildClient(voters, stateMachine);
+        assertThrows(IllegalArgumentException.class, () -> stateMachine.append(MemoryRecords.EMPTY));
+    }
+
+    @Test
     public void testAppendToNonLeaderFails() throws IOException {
         int otherNodeId = 1;
         int epoch = 5;

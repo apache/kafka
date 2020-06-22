@@ -847,14 +847,16 @@ public class KafkaRaftClient implements RaftClient {
             } else {
                 ByteBuffer recordsBuffer = response.records();
                 MemoryRecords records = MemoryRecords.readableRecords(recordsBuffer);
-                LogAppendInfo info = log.appendAsFollower(records);
-                OffsetAndEpoch endOffset = endOffset();
-                kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
-                kafkaRaftMetrics.updateLogEnd(endOffset);
+                if (records.sizeInBytes() > 0) {
+                    LogAppendInfo info = log.appendAsFollower(records);
+                    OffsetAndEpoch endOffset = endOffset();
+                    kafkaRaftMetrics.updateFetchedRecords(info.lastOffset - info.firstOffset + 1);
+                    kafkaRaftMetrics.updateLogEnd(endOffset);
+                    logger.trace("Follower end offset updated to {} after append", endOffset);
+                }
                 OptionalLong highWatermark = response.highWatermark() < 0 ?
                     OptionalLong.empty() : OptionalLong.of(response.highWatermark());
                 updateFollowerHighWatermark(state, highWatermark);
-                logger.trace("Follower end offset updated to {} after append", endOffset);
             }
 
             timer.reset(fetchTimeoutMs);
@@ -1399,6 +1401,9 @@ public class KafkaRaftClient implements RaftClient {
      * @return The uncommitted base offset and epoch of the appended records
      */
     private CompletableFuture<OffsetAndEpoch> append(Records records) {
+        if (records.sizeInBytes() == 0)
+            throw new IllegalArgumentException("Attempt to append empty record set");
+
         if (shutdown.get() != null)
             throw new IllegalStateException("Cannot append records while we are shutting down");
 

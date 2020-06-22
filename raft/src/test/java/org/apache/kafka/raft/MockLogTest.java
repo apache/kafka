@@ -260,6 +260,12 @@ public class MockLogTest {
         assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(35L, OptionalLong.of(60L)));
     }
 
+    @Test
+    public void testEmptyAppendNotAllowed() {
+        assertThrows(IllegalArgumentException.class, () -> log.appendAsFollower(MemoryRecords.EMPTY));
+        assertThrows(IllegalArgumentException.class, () -> log.appendAsLeader(MemoryRecords.EMPTY, 1));
+    }
+
     private Optional<OffsetRange> readOffsets(long startOffset, OptionalLong maxOffset) {
         Records records = log.read(startOffset, maxOffset);
         long firstReadOffset = -1L;

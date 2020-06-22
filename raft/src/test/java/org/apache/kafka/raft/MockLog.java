@@ -121,6 +121,9 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public LogAppendInfo appendAsLeader(Records records, int epoch) {
+        if (records.sizeInBytes() == 0)
+            throw new IllegalArgumentException("Attempt to append an empty record set");
+
         long baseOffset = endOffset();
         AtomicLong offsetSupplier = new AtomicLong(baseOffset);
         for (RecordBatch batch : records.batches()) {
@@ -153,6 +156,9 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public LogAppendInfo appendAsFollower(Records records) {
+        if (records.sizeInBytes() == 0)
+            throw new IllegalArgumentException("Attempt to append an empty record set");
+
         long baseOffset = endOffset();
         long lastOffset = baseOffset;
         for (RecordBatch batch : records.batches()) {

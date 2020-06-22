@@ -29,6 +29,7 @@ public interface ReplicatedLog {
      * exception.
      *
      * @return the metadata information of the appended batch
+     * @throws IllegalArgumentException if the record set is empty
      */
     LogAppendInfo appendAsLeader(Records records, int epoch);
 
@@ -38,6 +39,7 @@ public interface ReplicatedLog {
      * or do additional validation.
      *
      * @return the metadata information of the appended batch
+     * @throws IllegalArgumentException if the record set is empty
      */
     LogAppendInfo appendAsFollower(Records records);
 

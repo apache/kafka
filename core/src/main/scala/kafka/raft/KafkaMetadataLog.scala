@@ -44,6 +44,9 @@ class KafkaMetadataLog(time: Time, log: Log, maxFetchSizeInBytes: Int = 1024 * 1
   }
 
   override def appendAsLeader(records: Records, epoch: Int): LogAppendInfo = {
+    if (records.sizeInBytes == 0)
+      throw new IllegalArgumentException("Attempt to append an empty record set")
+
     val appendInfo = log.appendAsLeader(records.asInstanceOf[MemoryRecords],
       leaderEpoch = epoch,
       origin = AppendOrigin.Coordinator)
@@ -53,6 +56,9 @@ class KafkaMetadataLog(time: Time, log: Log, maxFetchSizeInBytes: Int = 1024 * 1
   }
 
   override def appendAsFollower(records: Records): LogAppendInfo = {
+    if (records.sizeInBytes == 0)
+      throw new IllegalArgumentException("Attempt to append an empty record set")
+
     val appendInfo = log.appendAsFollower(records.asInstanceOf[MemoryRecords])
     new LogAppendInfo(appendInfo.firstOffset.getOrElse {
       throw new KafkaException("Append failed unexpectedly")
