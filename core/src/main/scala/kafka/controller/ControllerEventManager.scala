@@ -97,7 +97,7 @@ class ControllerEventManager(controllerId: Int,
     }
   }
 
-  def put(event: ControllerEvent): QueuedEvent = inLock(putLock) {
+  def put(event: ControllerEvent): QueuedEvent = {
     val queuedEvent = new QueuedEvent(event, time.milliseconds())
     queue.put(queuedEvent)
     queuedEvent
