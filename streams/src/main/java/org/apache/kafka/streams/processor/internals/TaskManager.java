@@ -735,29 +735,23 @@ public class TaskManager {
 
         for (final Task task : tasks.values()) {
             if (task.isActive()) {
-                try {
-                    activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-                } catch (final RuntimeException e) {
-                    if (clean) {
-                        firstException.compareAndSet(null, e);
-                    } else {
-                        log.warn("Ignoring an exception while closing task " + task.id() + " producer.", e);
-                    }
-                }
+                executeAndMaybeSwallow(
+                    clean,
+                    () -> activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id()),
+                    e -> firstException.compareAndSet(null, e),
+                    e -> log.warn("Ignoring an exception while closing task " + task.id() + " producer.", e)
+                );
             }
         }
 
         tasks.clear();
 
-        try {
-            activeTaskCreator.closeThreadProducerIfNeeded();
-        } catch (final RuntimeException e) {
-            if (clean) {
-                firstException.compareAndSet(null, e);
-            } else {
-                log.warn("Ignoring an exception while closing thread producer.", e);
-            }
-        }
+        executeAndMaybeSwallow(
+            clean,
+            activeTaskCreator::closeThreadProducerIfNeeded,
+            e -> firstException.compareAndSet(null, e),
+            e -> log.warn("Ignoring an exception while closing thread producer.", e)
+        );
 
         try {
             // this should be called after closing all tasks, to make sure we unlock the task dir for tasks that may
@@ -1041,5 +1035,29 @@ public class TaskManager {
 
     Set<TaskId> lockedTaskDirectories() {
         return Collections.unmodifiableSet(lockedTaskDirectories);
+    }
+
+    public static void executeAndMaybeSwallow(final boolean clean,
+                                              final Runnable runnable,
+                                              final java.util.function.Consumer<RuntimeException> actionIfClean,
+                                              final java.util.function.Consumer<RuntimeException> actionIfNotClean) {
+        try {
+            runnable.run();
+        } catch (final RuntimeException e) {
+            if (clean) {
+                actionIfClean.accept(e);
+            } else {
+                actionIfNotClean.accept(e);
+            }
+        }
+    }
+
+    public static void executeAndMaybeSwallow(final boolean clean,
+                                              final Runnable runnable,
+                                              final String name,
+                                              final Logger log) {
+        executeAndMaybeSwallow(clean, runnable, e -> {
+            throw e; },
+            e -> log.debug("Ignoring error in unclean {}", name));
     }
 }
