@@ -528,7 +528,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case SUSPENDED:
                 // first close state manager (which is idempotent) then close the record collector
                 // if the latter throws and we re-close dirty which would close the state manager again.
-                executeAndMaybeSwallow(
+                TaskManager.executeAndMaybeSwallow(
                     clean,
                     () -> StateManagerUtil.closeStateManager(
                         log,
@@ -542,7 +542,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     "state manager close",
                     log);
 
-                executeAndMaybeSwallow(clean, recordCollector::close, "record collector close", log);
+                TaskManager.executeAndMaybeSwallow(clean, recordCollector::close, "record collector close", log);
 
                 break;
 
