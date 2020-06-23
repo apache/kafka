@@ -303,7 +303,7 @@ public class ClientState {
     public long lagFor(final TaskId task) {
         final Long totalLag = taskLagTotals.get(task);
         if (totalLag == null) {
-            throw new IllegalStateException("Tried to lookup lag for unknown task: " + task);
+            throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
         }
         return totalLag;
     }
