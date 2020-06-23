@@ -120,6 +120,11 @@
         We added a <code>--force</code> option in StreamsResetter to force remove left-over members on broker side when long session time out was configured
         as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-571%3A+Add+option+to+force+remove+members+in+StreamsResetter">KIP-571</a>.
     </p>
+    <p>
+        We added a <code>Suppressed.withLoggingDisabled()</code> and <code>Suppressed.withLoggingEnabled(config)</code>
+        Suppressed API to disables logging and allows for configuration of the changelog topic
+        as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-446%3A+Add+changelog+topic+configuration+to+KTable+suppress"></a>
+    </p>
 
     <h3><a id="streams_api_changes_250" href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
     <p>
