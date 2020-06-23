@@ -448,30 +448,12 @@ public class RecordCollectorTest {
     }
 
     @Test
-    public void shouldThrowTaskMigratedExceptionOnSubsequentCallWhenProducerFencedInCallback() {
+    public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenProducerFencedInCallback() {
         final KafkaException exception = new ProducerFencedException("KABOOM!");
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            new StreamsProducer(
-                eosConfig,
-                "threadId",
-                new MockClientSupplier() {
-                    @Override
-                    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                            @Override
-                            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                                callback.onCompletion(null, exception);
-                                return null;
-                            }
-                        };
-                    }
-                },
-                taskId,
-                null,
-                logContext
-            ),
+            getExceptionalStreamsProducer(exception),
             productionExceptionHandler,
             streamsMetrics
         );
@@ -479,74 +461,84 @@ public class RecordCollectorTest {
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
-        TaskMigratedException thrown = assertThrows(
+        final TaskMigratedException thrown = assertThrows(
             TaskMigratedException.class, () ->
-            collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+                collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
         );
         assertEquals(exception, thrown.getCause());
         assertThat(
             thrown.getMessage(),
             equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
-        );
-
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        thrown = assertThrows(TaskMigratedException.class, collector::flush);
-        assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
-        );
-
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        thrown = assertThrows(TaskMigratedException.class, collector::closeClean);
-        assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
-                "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
-                " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
+                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
+                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
+                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
         );
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnSubsequentCallIfASendFailsWithDefaultExceptionHandler() {
+    public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenProducerFencedInCallback() {
+        final KafkaException exception = new ProducerFencedException("KABOOM!");
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducer(exception),
+            productionExceptionHandler,
+            streamsMetrics
+        );
+        collector.initialize();
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+
+        final TaskMigratedException thrown = assertThrows(TaskMigratedException.class, collector::flush);
+        assertEquals(exception, thrown.getCause());
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
+                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
+                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
+        );
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenProducerFencedInCallback() {
+        final KafkaException exception = new ProducerFencedException("KABOOM!");
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducer(exception),
+            productionExceptionHandler,
+            streamsMetrics
+        );
+        collector.initialize();
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+
+        final TaskMigratedException thrown = assertThrows(TaskMigratedException.class, collector::closeClean);
+        assertEquals(exception, thrown.getCause());
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                        "\norg.apache.kafka.common.errors.ProducerFencedException: KABOOM!" +
+                        "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced," +
+                        " indicating the task may be migrated out; it means all tasks belonging to this thread should be migrated.")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnSubsequentSendIfASendFailsWithDefaultExceptionHandler() {
         final KafkaException exception = new KafkaException("KABOOM!");
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            new StreamsProducer(
-                config,
-                "threadId",
-                new MockClientSupplier() {
-                    @Override
-                    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                            @Override
-                            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                                callback.onCompletion(null, exception);
-                                return null;
-                            }
-                        };
-                    }
-                },
-                null,
-                null,
-                logContext
-            ),
+            getExceptionalStreamsProducer(exception),
             productionExceptionHandler,
             streamsMetrics
         );
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
-        StreamsException thrown = assertThrows(
+        final StreamsException thrown = assertThrows(
             StreamsException.class,
             () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
         );
@@ -557,25 +549,123 @@ public class RecordCollectorTest {
                 "\norg.apache.kafka.common.KafkaException: KABOOM!" +
                 "\nException handler choose to FAIL the processing, no more records would be sent.")
         );
+    }
 
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        thrown = assertThrows(StreamsException.class, collector::flush);
-        assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                "\norg.apache.kafka.common.KafkaException: KABOOM!" +
-                "\nException handler choose to FAIL the processing, no more records would be sent.")
+    @Test
+    public void shouldThrowStreamsExceptionOnSubsequentFlushIfASendFailsWithDefaultExceptionHandler() {
+        final KafkaException exception = new KafkaException("KABOOM!");
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducer(exception),
+            productionExceptionHandler,
+            streamsMetrics
         );
 
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        thrown = assertThrows(StreamsException.class, collector::closeClean);
+
+        final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
         assertEquals(exception, thrown.getCause());
         assertThat(
             thrown.getMessage(),
             equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                "\norg.apache.kafka.common.KafkaException: KABOOM!" +
-                "\nException handler choose to FAIL the processing, no more records would be sent.")
+                        "\norg.apache.kafka.common.KafkaException: KABOOM!" +
+                        "\nException handler choose to FAIL the processing, no more records would be sent.")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnSubsequentCloseIfASendFailsWithDefaultExceptionHandler() {
+        final KafkaException exception = new KafkaException("KABOOM!");
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducer(exception),
+            productionExceptionHandler,
+            streamsMetrics
+        );
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+
+        final StreamsException thrown = assertThrows(StreamsException.class, collector::closeClean);
+        assertEquals(exception, thrown.getCause());
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                        "\norg.apache.kafka.common.KafkaException: KABOOM!" +
+                        "\nException handler choose to FAIL the processing, no more records would be sent.")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnSubsequentSendIfFatalEvenWithContinueExceptionHandler() {
+        final KafkaException exception = new AuthenticationException("KABOOM!");
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducer(exception),
+            new AlwaysContinueProductionExceptionHandler(),
+            streamsMetrics
+        );
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+
+        final StreamsException thrown = assertThrows(
+            StreamsException.class,
+            () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
+        );
+        assertEquals(exception, thrown.getCause());
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                        "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                        "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnSubsequentFlushIfFatalEvenWithContinueExceptionHandler() {
+        final KafkaException exception = new AuthenticationException("KABOOM!");
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducer(exception),
+            new AlwaysContinueProductionExceptionHandler(),
+            streamsMetrics
+        );
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+
+        final StreamsException thrown = assertThrows(StreamsException.class, collector::flush);
+        assertEquals(exception, thrown.getCause());
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                        "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                        "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
+        );
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionOnSubsequentCloseIfFatalEvenWithContinueExceptionHandler() {
+        final KafkaException exception = new AuthenticationException("KABOOM!");
+        final RecordCollector collector = new RecordCollectorImpl(
+            logContext,
+            taskId,
+            getExceptionalStreamsProducer(exception),
+            new AlwaysContinueProductionExceptionHandler(),
+            streamsMetrics
+        );
+
+        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
+
+        final StreamsException thrown = assertThrows(StreamsException.class, collector::closeClean);
+        assertEquals(exception, thrown.getCause());
+        assertThat(
+            thrown.getMessage(),
+            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
+                        "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
+                        "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
         );
     }
 
@@ -584,25 +674,7 @@ public class RecordCollectorTest {
         final RecordCollector collector = new RecordCollectorImpl(
             logContext,
             taskId,
-            new StreamsProducer(
-                config,
-                "threadId",
-                new MockClientSupplier() {
-                    @Override
-                    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                            @Override
-                            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                                callback.onCompletion(null, new Exception());
-                                return null;
-                            }
-                        };
-                    }
-                },
-                null,
-                null,
-                logContext
-            ),
+            getExceptionalStreamsProducer(new Exception()),
             new AlwaysContinueProductionExceptionHandler(),
             streamsMetrics
         );
@@ -639,70 +711,6 @@ public class RecordCollectorTest {
         collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.flush();
         collector.closeClean();
-    }
-
-    @Test
-    public void shouldThrowStreamsExceptionOnSubsequentCallIfFatalEvenWithContinueExceptionHandler() {
-        final KafkaException exception = new AuthenticationException("KABOOM!");
-        final RecordCollector collector = new RecordCollectorImpl(
-            logContext,
-            taskId,
-            new StreamsProducer(
-                config,
-                "threadId",
-                new MockClientSupplier() {
-                    @Override
-                    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
-                        return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
-                            @Override
-                            public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
-                                callback.onCompletion(null, exception);
-                                return null;
-                            }
-                        };
-                    }
-                },
-                null,
-                null,
-                logContext
-            ),
-            new AlwaysContinueProductionExceptionHandler(),
-            streamsMetrics
-        );
-
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-
-        StreamsException thrown = assertThrows(
-            StreamsException.class,
-            () -> collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner)
-        );
-        assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
-                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
-        );
-
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        thrown = assertThrows(StreamsException.class, collector::flush);
-        assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
-                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
-        );
-
-        collector.send(topic, "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
-        thrown = assertThrows(StreamsException.class, collector::closeClean);
-        assertEquals(exception, thrown.getCause());
-        assertThat(
-            thrown.getMessage(),
-            equalTo("Error encountered sending record to topic topic for task 0_0 due to:" +
-                "\norg.apache.kafka.common.errors.AuthenticationException: KABOOM!" +
-                "\nWritten offsets would not be recorded and no more records would be sent since this is a fatal error.")
-        );
     }
 
     @Test
@@ -810,6 +818,28 @@ public class RecordCollectorTest {
 
         // Flush should not throw as producer is still alive.
         streamsProducer.flush();
+    }
+
+    private StreamsProducer getExceptionalStreamsProducer(final Exception exception) {
+        return new StreamsProducer(
+            config,
+            "threadId",
+            new MockClientSupplier() {
+                @Override
+                public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
+                    return new MockProducer<byte[], byte[]>(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                        @Override
+                        public synchronized Future<RecordMetadata> send(final ProducerRecord<byte[], byte[]> record, final Callback callback) {
+                            callback.onCompletion(null, exception);
+                            return null;
+                        }
+                    };
+                }
+            },
+            null,
+            null,
+            logContext
+        );
     }
 
     private static class CustomStringSerializer extends StringSerializer {
