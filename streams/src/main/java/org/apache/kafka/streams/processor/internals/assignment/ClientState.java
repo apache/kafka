@@ -303,7 +303,8 @@ public class ClientState {
     public long lagFor(final TaskId task) {
         final Long totalLag = taskLagTotals.get(task);
         if (totalLag == null) {
-            throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
+            throw new IllegalStateException("Tried to lookup lag for unknown task: " + task
+                + " (This exception may be caused by that you don't call KafkaStreams#cleanUp when topology optimization is enabled)");
         }
         return totalLag;
     }
