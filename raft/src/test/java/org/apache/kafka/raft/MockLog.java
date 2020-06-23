@@ -45,6 +45,11 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public void truncateTo(long offset) {
+        if (offset < highWatermark) {
+            throw new IllegalArgumentException("Illegal attempt to truncate to offset " + offset +
+                " which is below the current high watermark " + highWatermark);
+        }
+
         log.removeIf(entry -> entry.lastOffset() >= offset);
         epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= offset);
     }

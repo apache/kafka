@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
+import org.mockito.Mockito;
 
 import java.io.IOException;
 import java.util.OptionalInt;
@@ -500,18 +501,15 @@ public class QuorumStateTest {
 
     @Test
     public void testInitializeWithCorruptedStore() throws IOException {
-        MockQuorumStateStore stateStore = new MockQuorumStateStore() {
-            @Override
-            public ElectionState readElectionState() throws IOException {
-                throw new IOException("Could not read corrupted state");
-            }
-        };
-
+        QuorumStateStore stateStore = Mockito.mock(QuorumStateStore.class);
+        Mockito.doThrow(IOException.class).when(stateStore).readElectionState();
         QuorumState state = new QuorumState(localId, Utils.mkSet(1), stateStore, new LogContext());
 
         int epoch = 2;
         state.initialize(new OffsetAndEpoch(0L, epoch));
         assertEquals(epoch, state.epoch());
+        assertTrue(state.isFollower());
+        assertFalse(state.hasLeader());
     }
 
     @Test

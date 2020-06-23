@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Random;
@@ -187,9 +188,10 @@ public class RaftEventSimulationTest {
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
 
-            // Start with node 1 as the leader
+            // Start with node 0 as the leader
+            int leaderId = 0;
             Set<Integer> voters = cluster.voters();
-            cluster.initializeElection(ElectionState.withElectedLeader(2, 0, voters));
+            cluster.initializeElection(ElectionState.withElectedLeader(2, leaderId, voters));
             cluster.startAll();
             assertTrue(cluster.hasConsistentLeader());
 
@@ -201,7 +203,7 @@ public class RaftEventSimulationTest {
 
             // Kill the leader and write some more data. We can verify the new leader has been elected
             // by verifying that the high watermark can still advance.
-            cluster.kill(1);
+            cluster.kill(leaderId);
             scheduler.runUntil(() -> cluster.allReachedHighWatermark(20));
         }
     }
@@ -329,7 +331,9 @@ public class RaftEventSimulationTest {
         EventScheduler scheduler = new EventScheduler(cluster.random, cluster.time);
         scheduler.addInvariant(new MonotonicHighWatermark(cluster));
         scheduler.addInvariant(new MonotonicEpoch(cluster));
-        scheduler.addInvariant(new ConsistentCommittedData(cluster));
+        scheduler.addInvariant(new MajorityReachedHighWatermark(cluster));
+        scheduler.addInvariant(new SingleLeader(cluster));
+        scheduler.addValidation(new ConsistentCommittedData(cluster));
         return scheduler;
     }
 
@@ -415,20 +419,31 @@ public class RaftEventSimulationTest {
         void verify();
     }
 
+    private interface Validation {
+        void validate();
+    }
+
     private static class EventScheduler {
         final AtomicInteger eventIdGenerator = new AtomicInteger(0);
         final PriorityQueue<Event> queue = new PriorityQueue<>();
         final Random random;
         final Time time;
         final List<Invariant> invariants = new ArrayList<>();
+        final List<Validation> validations = new ArrayList<>();
 
         private EventScheduler(Random random, Time time) {
             this.random = random;
             this.time = time;
         }
 
+        // Add an invariant, which is checked after every event
         private void addInvariant(Invariant invariant) {
             invariants.add(invariant);
+        }
+
+        // Add a validation, which is checked at the end of the simulation
+        private void addValidation(Validation validation) {
+            validations.add(validation);
         }
 
         void schedule(Action action, int delayMs, int periodMs, int jitterMs) {
@@ -446,9 +461,10 @@ public class RaftEventSimulationTest {
                 long delayMs = Math.max(event.deadlineMs - time.milliseconds(), 0);
                 time.sleep(delayMs);
                 event.execute(this);
-                for (Invariant invariant : invariants)
-                    invariant.verify();
+                invariants.forEach(Invariant::verify);
             }
+
+            validations.forEach(Validation::validate);
         }
     }
 
@@ -502,10 +518,8 @@ public class RaftEventSimulationTest {
             return random.nextInt(nodes.size());
         }
 
-        Set<Integer> observers() {
-            Set<Integer> observers = new HashSet<>(nodes.keySet());
-            observers.removeAll(voters);
-            return observers;
+        int majoritySize() {
+            return voters.size() / 2 + 1;
         }
 
         Set<Integer> voters() {
@@ -778,13 +792,8 @@ public class RaftEventSimulationTest {
                 Integer nodeId = nodeStateEntry.getKey();
                 PersistentState state = nodeStateEntry.getValue();
                 Integer oldEpoch = nodeEpochs.get(nodeId);
-                final Integer newEpoch;
-                try {
-                    newEpoch = state.store.readElectionState().epoch;
-                } catch (IOException e) {
-                    fail("Unexpected IO exception from state store read" + e);
-                    break;
-                }
+                Integer newEpoch = state.store.readElectionState().epoch;
+
                 if (oldEpoch > newEpoch) {
                     fail("Non-monotonic update of high watermark detected: " +
                             oldEpoch + " -> " + newEpoch);
@@ -794,6 +803,54 @@ public class RaftEventSimulationTest {
                 });
                 nodeEpochs.put(nodeId, newEpoch);
             }
+        }
+    }
+
+    private static class MajorityReachedHighWatermark implements Invariant {
+        final Cluster cluster;
+
+        private MajorityReachedHighWatermark(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            cluster.leaderHighWatermark().ifPresent(highWatermark -> {
+                long numReachedHighWatermark = cluster.nodes.entrySet().stream()
+                    .filter(entry -> cluster.voters.contains(entry.getKey()))
+                    .filter(entry -> entry.getValue().log.endOffset() >= highWatermark)
+                    .count();
+                assertTrue("Insufficient nodes have reached current high watermark",
+                    numReachedHighWatermark >= cluster.majoritySize());
+            });
+        }
+    }
+
+    private static class SingleLeader implements Invariant {
+        final Cluster cluster;
+        int epoch = 0;
+        OptionalInt leaderId = OptionalInt.empty();
+
+        private SingleLeader(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
+                PersistentState state = nodeEntry.getValue();
+                ElectionState electionState = state.store.readElectionState();
+
+                if (electionState.epoch >= epoch && electionState.hasLeader()) {
+                    if (epoch == electionState.epoch && leaderId.isPresent()) {
+                        assertEquals(leaderId.getAsInt(), electionState.leaderId());
+                    } else {
+                        epoch = electionState.epoch;
+                        leaderId = OptionalInt.of(electionState.leaderId());
+                    }
+                }
+            }
+
         }
     }
 
@@ -819,7 +876,18 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static class ConsistentCommittedData implements Invariant {
+    /**
+     * Validating the committed data is expensive, so we do this as a {@link Validation}. We depend
+     * on the following external invariants:
+     *
+     * - High watermark increases monotonically
+     * - Truncation below the high watermark is not permitted
+     * - A majority of nodes reach the high watermark
+     *
+     * Under these assumptions, once the simulation finishes, we validate that all nodes have
+     * consistent data below the respective high watermark that has been recorded.
+     */
+    private static class ConsistentCommittedData implements Validation {
         final Cluster cluster;
         final Map<Long, Integer> committedSequenceNumbers = new HashMap<>();
 
@@ -864,7 +932,7 @@ public class RaftEventSimulationTest {
         }
 
         @Override
-        public void verify() {
+        public void validate() {
             cluster.forAllRunning(node -> assertCommittedData(node.nodeId, node.client, node.log));
         }
     }
