@@ -20,7 +20,6 @@ package kafka.admin
 import java.util.concurrent.ExecutionException
 import java.util.{Arrays, Collections}
 
-import com.fasterxml.jackson.core.JsonParseException
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.common.AdminCommandFailedException
 import kafka.utils.Exit
@@ -31,7 +30,7 @@ import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo, TopicP
 import org.junit.Assert.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.function.ThrowingRunnable
 import org.junit.rules.Timeout
-import org.junit.{After, Assert, Before, Rule, Test}
+import org.junit._
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -650,11 +649,8 @@ class ReassignPartitionsUnitTest {
       addTopics(adminClient)
       assertStartsWith("Unexpected character",
         assertThrows(
-          classOf[JsonParseException], new ThrowingRunnable {
-            override def run():Unit =
-              executeAssignment(adminClient, false,
-                "{invalid_json")
-          }).getMessage)
+          classOf[AdminOperationException], () => executeAssignment(adminClient, additional = false,
+            "{invalid_json")).getMessage)
     } finally {
       adminClient.close()
     }

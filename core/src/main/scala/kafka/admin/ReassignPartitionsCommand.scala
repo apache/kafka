@@ -1615,7 +1615,7 @@ object ReassignPartitionsCommand extends Logging {
         }
         parsePartitionReassignmentData(version, js)
       case Left(f) =>
-        throw f
+        throw new AdminOperationException(f)
     }
   }
 

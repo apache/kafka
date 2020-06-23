@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.node._
 import kafka.utils.JsonTest.TestObject
 import kafka.utils.json.JsonValue
 import org.scalatest.Matchers._
-
 import org.junit.Assert._
 import org.junit.Test
 
@@ -44,6 +43,8 @@ class JsonTest {
 
     assertEquals(Json.parseFull("{}"), Some(JsonValue(new ObjectNode(jnf))))
     assertEquals(Json.tryParseFull("{}"), Right(JsonValue(new ObjectNode(jnf))))
+    org.junit.Assert.assertThrows(classOf[IllegalArgumentException], () => Json.tryParseFull(null))
+    org.junit.Assert.assertThrows(classOf[IllegalArgumentException], () => Json.tryParseBytes(null))
 
     assertEquals(Json.parseFull(""), Option(MissingNode.getInstance()).map(JsonValue(_)))
     assertEquals(Json.tryParseFull(""), Right(MissingNode.getInstance()).map(JsonValue(_)))
