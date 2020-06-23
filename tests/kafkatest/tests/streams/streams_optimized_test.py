@@ -33,8 +33,6 @@ class StreamsOptimizedTest(Test):
     join_topic = 'joinTopic'
     operation_pattern = 'AGGREGATED\|REDUCED\|JOINED'
     stopped_message = 'OPTIMIZE_TEST Streams Stopped'
-    # a flag used to make StreamsOptimizedTest call KafkaStreams#cleanUp before KafkaStreams#start
-    streams_cleanup = 'streams.cleanup'
 
     def __init__(self, test_context):
         super(StreamsOptimizedTest, self).__init__(test_context)
@@ -82,8 +80,6 @@ class StreamsOptimizedTest(Test):
         # start again with topology optimized
         for processor in processors:
             processor.OPTIMIZED_CONFIG = 'all'
-            # reset the local environments as topology optimization is enabled
-            processor.STREAMS_CLEANUP = 'true'
             self.verify_running_repartition_topic_count(processor, 1)
 
         self.verify_processing(processors, verify_individual_operations=True)

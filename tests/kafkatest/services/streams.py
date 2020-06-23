@@ -509,7 +509,6 @@ class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
         self.AGGREGATION_TOPIC = None
         self.REDUCE_TOPIC = None
         self.JOIN_TOPIC = None
-        self.STREAMS_CLEANUP = 'false'
 
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
@@ -520,7 +519,6 @@ class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
         properties['aggregation.topic'] = self.AGGREGATION_TOPIC
         properties['reduce.topic'] = self.REDUCE_TOPIC
         properties['join.topic'] = self.JOIN_TOPIC
-        properties['streams.cleanup'] = self.STREAMS_CLEANUP
 
         # Long.MAX_VALUE lets us do the assignment without a warmup
         properties['acceptable.recovery.lag'] = "9223372036854775807"

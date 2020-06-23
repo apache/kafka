@@ -130,8 +130,7 @@ public class StreamsOptimizedTest {
             }
         });
 
-        if (streamsProperties.containsKey("streams.cleanup")
-            && Boolean.parseBoolean(streamsProperties.getProperty("streams.cleanup"))) streams.cleanUp();
+        streams.cleanUp();
         streams.start();
 
         Exit.addShutdownHook("streams-shutdown-hook", () -> {
