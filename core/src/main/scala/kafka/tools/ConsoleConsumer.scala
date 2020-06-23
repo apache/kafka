@@ -569,11 +569,10 @@ class ChecksumMessageFormatter extends MessageFormatter {
   private var topicStr: String = _
 
   override def configure(configs: Map[String, _]): Unit = {
-    topicStr = configs.get("topic").toString
-    if (topicStr != null)
-      topicStr = topicStr + ":"
+    topicStr = if (configs.get("topic") != null)
+      configs.get("topic").toString + ":"
     else
-      topicStr = ""
+      ""
   }
 
   @nowarn("cat=deprecation")

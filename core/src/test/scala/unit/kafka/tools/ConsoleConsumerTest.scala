@@ -533,4 +533,33 @@ class ConsoleConsumerTest {
     formatter.close()
   }
 
+  @Test
+  def testNoOpMessageFormatter(): Unit = {
+    val record = new ConsumerRecord("topic", 0, 123, "key".getBytes, "value".getBytes)
+    val formatter = new NoOpMessageFormatter()
+
+    formatter.configure(new HashMap())
+    val out = new ByteArrayOutputStream()
+    formatter.writeTo(record, new PrintStream(out))
+    assertEquals("", out.toString)
+  }
+
+  @Test
+  def testChecksumMessageFormatter(): Unit = {
+    val record = new ConsumerRecord("topic", 0, 123, "key".getBytes, "value".getBytes)
+    val formatter = new ChecksumMessageFormatter()
+    val configs: JMap[String, String] = new HashMap()
+
+    formatter.configure(configs)
+    var out = new ByteArrayOutputStream()
+    formatter.writeTo(record, new PrintStream(out))
+    assertEquals("checksum:-1\n", out.toString)
+
+    configs.put("topic", "topic1")
+    formatter.configure(configs)
+    out = new ByteArrayOutputStream()
+    formatter.writeTo(record, new PrintStream(out))
+    assertEquals("topic1:checksum:-1\n", out.toString)
+  }
+
 }
