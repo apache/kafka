@@ -34,25 +34,43 @@ import org.powermock.modules.junit4.PowerMockRunner;
 @PrepareForTest({InternalTopologyBuilder.class})
 public class TableSourceNodeTest {
 
+    private static final String STORE_NAME = "store-name";
+    private static final String TOPIC = "input-topic";
+
+    private final InternalTopologyBuilder topologyBuilder = PowerMock.createNiceMock(InternalTopologyBuilder.class);
+
     @Test
     public void shouldConnectStateStoreToInputTopicIfInputTopicIsUsedAsChangelog() {
-        final String storeName = "store-name";
-        final String topic = "input-topic";
-        final InternalTopologyBuilder topologyBuilder = PowerMock.createNiceMock(InternalTopologyBuilder.class);
-        topologyBuilder.connectSourceStoreAndTopic(storeName, topic);
+        final boolean shouldReuseSourceTopicForChangelog = true;
+        topologyBuilder.connectSourceStoreAndTopic(STORE_NAME, TOPIC);
         EasyMock.replay(topologyBuilder);
-        final TableSourceNodeBuilder<String, String> tableSourceNodeBuilder = TableSourceNode.tableSourceNodeBuilder();
-        final TableSourceNode<String, String> tableSourceNode = tableSourceNodeBuilder
-            .withTopic(topic)
-            .withMaterializedInternal(new MaterializedInternal<>(Materialized.as(storeName)))
-            .withConsumedInternal(new ConsumedInternal<>(Consumed.as("node-name")))
-            .withProcessorParameters(
-                new ProcessorParameters<>(new KTableSource<>(storeName, storeName), null))
-            .build();
-        tableSourceNode.reuseSourceTopicForChangeLog(true);
 
-        tableSourceNode.writeToTopology(topologyBuilder);
+        buildTableSourceNode(shouldReuseSourceTopicForChangelog);
 
         EasyMock.verify(topologyBuilder);
+    }
+
+    @Test
+    public void shouldConnectStateStoreToChangelogTopic() {
+        final boolean shouldReuseSourceTopicForChangelog = false;
+        EasyMock.replay(topologyBuilder);
+
+        buildTableSourceNode(shouldReuseSourceTopicForChangelog);
+
+        EasyMock.verify(topologyBuilder);
+    }
+
+    private void buildTableSourceNode(final boolean shouldReuseSourceTopicForChangelog) {
+        final TableSourceNodeBuilder<String, String> tableSourceNodeBuilder = TableSourceNode.tableSourceNodeBuilder();
+        final TableSourceNode<String, String> tableSourceNode = tableSourceNodeBuilder
+            .withTopic(TOPIC)
+            .withMaterializedInternal(new MaterializedInternal<>(Materialized.as(STORE_NAME)))
+            .withConsumedInternal(new ConsumedInternal<>(Consumed.as("node-name")))
+            .withProcessorParameters(
+                new ProcessorParameters<>(new KTableSource<>(STORE_NAME, STORE_NAME), null))
+            .build();
+        tableSourceNode.reuseSourceTopicForChangeLog(shouldReuseSourceTopicForChangelog);
+
+        tableSourceNode.writeToTopology(topologyBuilder);
     }
 }
