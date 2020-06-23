@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -25,7 +27,6 @@ import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
@@ -100,12 +101,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-        super.register(store, stateRestoreCallback);
-    }
-
-    @Override
     public RecordCollector recordCollector() {
         return collector;
     }
@@ -116,16 +111,24 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                           final byte[] value,
                           final long timestamp) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
+
+        final TopicPartition changelogPartition = stateManager().changelogTopicPartitionFor(storeName);
+        if (changelogPartition == null) {
+            throw new IllegalStateException("Sending records to state store " + storeName +
+                " which has not been registered.");
+        }
+
         // Sending null headers to changelog topics (KIP-244)
         collector.send(
-            stateManager.changelogFor(storeName),
+            changelogPartition.topic(),
             key,
             value,
             null,
-            taskId().partition,
+            changelogPartition.partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
-            BYTEARRAY_VALUE_SERIALIZER);
+            BYTEARRAY_VALUE_SERIALIZER
+        );
     }
 
     /**

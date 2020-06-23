@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.time.Duration;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -72,9 +74,15 @@ public class ProcessorContextImplTest {
     private RecordCollector recordCollector = mock(RecordCollector.class);
 
     private static final String KEY = "key";
+    private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
     private static final long VALUE = 42L;
+    private static final byte[] VALUE_BYTES = String.valueOf(VALUE).getBytes();
+    private static final long TIMESTAMP = 21L;
     private static final ValueAndTimestamp<Long> VALUE_AND_TIMESTAMP = ValueAndTimestamp.make(42L, 21L);
     private static final String STORE_NAME = "underlying-store";
+    private static final String REGISTERED_STORE_NAME = "registered-store";
+    private static final String NOT_REGISTERED_STORE_NAME = "not-registered-store";
+    private static final TopicPartition CHANGELOG_PARTITION = new TopicPartition("store-changelog", 1);
 
     private boolean flushExecuted;
     private boolean putExecuted;
@@ -127,7 +135,8 @@ public class ProcessorContextImplTest {
         expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
         expect(stateManager.getStore("LocalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
         expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
-        expect(stateManager.changelogFor(anyString())).andStubReturn(null);
+        expect(stateManager.changelogTopicPartitionFor(NOT_REGISTERED_STORE_NAME)).andStubReturn(null);
+        expect(stateManager.changelogTopicPartitionFor(REGISTERED_STORE_NAME)).andStubReturn(CHANGELOG_PARTITION);
 
         replay(stateManager);
 
@@ -374,18 +383,32 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldNotSendRecordHeadersToChangelogTopic() {
-        final Bytes key = Bytes.wrap("key".getBytes());
-        final byte[] value = "zero".getBytes();
-
-        recordCollector.send(null, key, value, null, 0, 42L, BYTES_KEY_SERIALIZER, BYTEARRAY_VALUE_SERIALIZER);
+        recordCollector.send(
+            CHANGELOG_PARTITION.topic(),
+            KEY_BYTES,
+            VALUE_BYTES,
+            null,
+            CHANGELOG_PARTITION.partition(),
+            TIMESTAMP,
+            BYTES_KEY_SERIALIZER,
+            BYTEARRAY_VALUE_SERIALIZER
+        );
 
         final StreamTask task = EasyMock.createNiceMock(StreamTask.class);
 
         replay(recordCollector, task);
         context.transitionToActive(task, recordCollector, null);
-        context.logChange("Store", key, value, 42L);
+        context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP);
 
         verify(recordCollector);
+    }
+
+    @Test
+    public void shouldThrowExceptionIfStateStoreNotRegistered() {
+        assertThrows(
+            "Sending records to state store " + NOT_REGISTERED_STORE_NAME + " which has not been registered.",
+            IllegalStateException.class,
+            () -> context.logChange(NOT_REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP));
     }
 
     @Test

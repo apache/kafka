@@ -589,4 +589,10 @@ public class ProcessorStateManager extends AbstractProcessorStateManager {
     private Long changelogOffsetFromCheckpointedOffset(final long offset) {
         return offset != OFFSET_UNKNOWN ? offset : null;
     }
+
+    @Override
+    public TopicPartition changelogTopicPartitionFor(final String storeName) {
+        final StateStoreMetadata storeMetadata = stores.get(storeName);
+        return storeMetadata == null ? null : storeMetadata.changelogPartition;
+    }
 }

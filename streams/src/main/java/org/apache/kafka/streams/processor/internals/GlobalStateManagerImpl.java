@@ -402,4 +402,9 @@ public class GlobalStateManagerImpl extends AbstractProcessorStateManager implem
     public Map<TopicPartition, Long> changelogOffsets() {
         return Collections.unmodifiableMap(checkpointFileCache);
     }
+
+    @Override
+    public TopicPartition changelogTopicPartitionFor(final String storeName) {
+        return null;
+    }
 }

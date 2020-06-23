@@ -108,8 +108,9 @@ public class MeteredKeyValueStore<K, V>
         final String storeName = name();
         final String changelogTopic = internalProcessorContext.changelogFor(storeName);
         serdes = new StateSerdes<>(
-            changelogTopic != null
-                ? changelogTopic : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
+            changelogTopic != null ?
+                changelogTopic :
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }

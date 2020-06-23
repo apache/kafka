@@ -69,4 +69,9 @@ public class StateManagerStub implements StateManager {
     public String changelogFor(final String storeName) {
         return null;
     }
+
+    @Override
+    public TopicPartition changelogTopicPartitionFor(final String storeName) {
+        return null;
+    }
 }

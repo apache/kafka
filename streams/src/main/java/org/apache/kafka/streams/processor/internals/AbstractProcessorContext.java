@@ -45,7 +45,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     protected ProcessorNode<?, ?> currentNode;
     private long currentSystemTimeMs;
 
-    final StateManager stateManager;
+    protected final StateManager stateManager;
     protected ThreadCache cache;
 
     public AbstractProcessorContext(final TaskId taskId,
