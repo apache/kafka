@@ -249,6 +249,7 @@ public class Worker {
             TargetState initialState,
             Callback<TargetState> onConnectorStateChange
     ) {
+        final ConnectorStatus.Listener connectorStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
             if (connectors.containsKey(connName)) {
                 onConnectorStateChange.onCompletion(
@@ -276,7 +277,7 @@ public class Worker {
                 final OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(
                         offsetBackingStore, connName, internalKeyConverter, internalValueConverter);
                 workerConnector = new WorkerConnector(
-                        connName, connector, connConfig, ctx, metrics, workerMetricsGroup.wrapConnectorStatusListener(statusListener), offsetReader, connectorLoader);
+                        connName, connector, connConfig, ctx, metrics, connectorStatusListener, offsetReader, connectorLoader);
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
                 workerConnector.transitionTo(initialState, onConnectorStateChange);
                 Plugins.compareAndSwapLoaders(savedLoader);
@@ -285,7 +286,7 @@ public class Worker {
                 // Can't be put in a finally block because it needs to be swapped before the call on
                 // statusListener
                 Plugins.compareAndSwapLoaders(savedLoader);
-                statusListener.onFailure(connName, t);
+                connectorStatusListener.onFailure(connName, t);
                 onConnectorStateChange.onCompletion(t, null);
                 return;
             }
@@ -499,6 +500,7 @@ public class Worker {
             TargetState initialState
     ) {
         final WorkerTask workerTask;
+        final TaskStatus.Listener taskStatusListener = workerMetricsGroup.wrapStatusListener(statusListener);
         try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
             log.info("Creating task {}", id);
 
@@ -546,7 +548,7 @@ public class Worker {
                     log.info("Set up the header converter {} for task {} using the connector config", headerConverter.getClass(), id);
                 }
 
-                workerTask = buildWorkerTask(configState, connConfig, id, task, workerMetricsGroup.wrapTaskStatusListener(statusListener),
+                workerTask = buildWorkerTask(configState, connConfig, id, task, taskStatusListener,
                         initialState, keyConverter, valueConverter, headerConverter, connectorLoader);
                 workerTask.initialize(taskConfig);
                 Plugins.compareAndSwapLoaders(savedLoader);
@@ -556,7 +558,7 @@ public class Worker {
                 // statusListener
                 Plugins.compareAndSwapLoaders(savedLoader);
                 connectorStatusMetricsGroup.recordTaskRemoved(id);
-                statusListener.onFailure(id, t);
+                taskStatusListener.onFailure(id, t);
                 return false;
             }
 

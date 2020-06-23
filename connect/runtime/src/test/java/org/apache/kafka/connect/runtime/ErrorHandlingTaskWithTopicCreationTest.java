@@ -382,9 +382,6 @@ public class ErrorHandlingTaskWithTopicCreationTest {
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
-
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
         expectTopicDoesNotExist(TOPIC);
@@ -393,6 +390,7 @@ public class ErrorHandlingTaskWithTopicCreationTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka
@@ -450,9 +448,6 @@ public class ErrorHandlingTaskWithTopicCreationTest {
         sourceTask.start(EasyMock.anyObject());
         EasyMock.expectLastCall();
 
-        statusListener.onStartup(taskId);
-        EasyMock.expectLastCall();
-
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record1));
         EasyMock.expect(sourceTask.poll()).andReturn(singletonList(record2));
         expectTopicDoesNotExist(TOPIC);
@@ -461,6 +456,7 @@ public class ErrorHandlingTaskWithTopicCreationTest {
         PowerMock.replayAll();
 
         workerSourceTask.initialize(TASK_CONFIG);
+        workerSourceTask.initializeAndStart();
         workerSourceTask.execute();
 
         // two records were consumed from Kafka

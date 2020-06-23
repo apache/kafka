@@ -39,7 +39,7 @@ public class WorkerMetricsGroupTest {
     public void testConnectorStartupRecordedMetrics() {
         final WorkerMetricsGroup mockWorkerMetricsGroup = createStrictMock(WorkerMetricsGroup.class);
         final ConnectorStatus.Listener delegate = createStrictMock(ConnectorStatus.Listener.class);
-        final WorkerMetricsGroup.WorkerMetricsGroupConnectorStatusListener connectorListener = mockWorkerMetricsGroup.new WorkerMetricsGroupConnectorStatusListener(delegate);
+        final WorkerMetricsGroup.ConnectorStatusListener connectorListener = mockWorkerMetricsGroup.new ConnectorStatusListener(delegate);
 
         delegate.onStartup(connector);
         expectLastCall();
@@ -58,7 +58,7 @@ public class WorkerMetricsGroupTest {
     public void testConnectorFailureAfterStartupRecordedMetrics() {
         final WorkerMetricsGroup mockWorkerMetricsGroup = createStrictMock(WorkerMetricsGroup.class);
         final ConnectorStatus.Listener delegate = createStrictMock(ConnectorStatus.Listener.class);
-        final WorkerMetricsGroup.WorkerMetricsGroupConnectorStatusListener connectorListener = mockWorkerMetricsGroup.new WorkerMetricsGroupConnectorStatusListener(delegate);
+        final WorkerMetricsGroup.ConnectorStatusListener connectorListener = mockWorkerMetricsGroup.new ConnectorStatusListener(delegate);
 
         delegate.onStartup(eq(connector));
         expectLastCall();
@@ -83,7 +83,7 @@ public class WorkerMetricsGroupTest {
     public void testConnectorFailureBeforeStartupRecordedMetrics() {
         final WorkerMetricsGroup mockWorkerMetricsGroup = createStrictMock(WorkerMetricsGroup.class);
         final ConnectorStatus.Listener delegate = createStrictMock(ConnectorStatus.Listener.class);
-        final WorkerMetricsGroup.WorkerMetricsGroupConnectorStatusListener connectorListener = mockWorkerMetricsGroup.new WorkerMetricsGroupConnectorStatusListener(delegate);
+        final WorkerMetricsGroup.ConnectorStatusListener connectorListener = mockWorkerMetricsGroup.new ConnectorStatusListener(delegate);
 
         delegate.onFailure(eq(connector), eq(exception));
         expectLastCall();
@@ -102,7 +102,7 @@ public class WorkerMetricsGroupTest {
     public void testTaskStartupRecordedMetrics() {
         final WorkerMetricsGroup mockWorkerMetricsGroup = createStrictMock(WorkerMetricsGroup.class);
         final TaskStatus.Listener delegate = createStrictMock(TaskStatus.Listener.class);
-        final WorkerMetricsGroup.WorkerMetricsGroupTaskStatusListener taskListener = mockWorkerMetricsGroup.new WorkerMetricsGroupTaskStatusListener(delegate);
+        final WorkerMetricsGroup.TaskStatusListener taskListener = mockWorkerMetricsGroup.new TaskStatusListener(delegate);
 
         delegate.onStartup(task);
         expectLastCall();
@@ -121,7 +121,7 @@ public class WorkerMetricsGroupTest {
     public void testTaskFailureAfterStartupRecordedMetrics() {
         final WorkerMetricsGroup mockWorkerMetricsGroup = createStrictMock(WorkerMetricsGroup.class);
         final TaskStatus.Listener delegate = createStrictMock(TaskStatus.Listener.class);
-        final WorkerMetricsGroup.WorkerMetricsGroupTaskStatusListener taskListener = mockWorkerMetricsGroup.new WorkerMetricsGroupTaskStatusListener(delegate);
+        final WorkerMetricsGroup.TaskStatusListener taskListener = mockWorkerMetricsGroup.new TaskStatusListener(delegate);
 
         delegate.onStartup(eq(task));
         expectLastCall();
@@ -146,7 +146,7 @@ public class WorkerMetricsGroupTest {
     public void testTaskFailureBeforeStartupRecordedMetrics() {
         final WorkerMetricsGroup mockWorkerMetricsGroup = createStrictMock(WorkerMetricsGroup.class);
         final TaskStatus.Listener delegate = createStrictMock(TaskStatus.Listener.class);
-        final WorkerMetricsGroup.WorkerMetricsGroupTaskStatusListener taskListener = mockWorkerMetricsGroup.new WorkerMetricsGroupTaskStatusListener(delegate);
+        final WorkerMetricsGroup.TaskStatusListener taskListener = mockWorkerMetricsGroup.new TaskStatusListener(delegate);
 
         delegate.onFailure(eq(task), eq(exception));
         expectLastCall();

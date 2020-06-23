@@ -56,7 +56,7 @@ abstract class WorkerTask implements Runnable {
     private static final String THREAD_NAME_PREFIX = "task-thread-";
 
     protected final ConnectorTaskId id;
-    protected final TaskStatus.Listener statusListener;
+    private final TaskStatus.Listener statusListener;
     protected final ClassLoader loader;
     protected final StatusBackingStore statusBackingStore;
     protected final Time time;
@@ -151,6 +151,8 @@ abstract class WorkerTask implements Runnable {
         taskMetricsGroup.close();
     }
 
+    protected abstract void initializeAndStart();
+
     protected abstract void execute();
 
     protected abstract void close();
@@ -180,6 +182,8 @@ abstract class WorkerTask implements Runnable {
                 }
             }
 
+            initializeAndStart();
+            statusListener.onStartup(id);
             execute();
         } catch (Throwable t) {
             log.error("{} Task threw an uncaught and unrecoverable exception", this, t);

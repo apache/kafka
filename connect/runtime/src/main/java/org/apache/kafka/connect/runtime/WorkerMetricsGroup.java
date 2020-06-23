@@ -105,19 +105,19 @@ class WorkerMetricsGroup {
         return metricGroup;
     }
 
-    ConnectorStatus.Listener wrapConnectorStatusListener(ConnectorStatus.Listener delegateListener) {
-        return new WorkerMetricsGroupConnectorStatusListener(delegateListener);
+    ConnectorStatus.Listener wrapStatusListener(ConnectorStatus.Listener delegateListener) {
+        return new ConnectorStatusListener(delegateListener);
     }
 
-    TaskStatus.Listener wrapTaskStatusListener(TaskStatus.Listener delegateListener) {
-        return new WorkerMetricsGroupTaskStatusListener(delegateListener);
+    TaskStatus.Listener wrapStatusListener(TaskStatus.Listener delegateListener) {
+        return new TaskStatusListener(delegateListener);
     }
 
-    class WorkerMetricsGroupConnectorStatusListener implements ConnectorStatus.Listener {
+    class ConnectorStatusListener implements ConnectorStatus.Listener {
         private final ConnectorStatus.Listener delegateListener;
         private boolean startupSucceeded = false;
 
-        WorkerMetricsGroupConnectorStatusListener(ConnectorStatus.Listener delegateListener) {
+        ConnectorStatusListener(ConnectorStatus.Listener delegateListener) {
             this.delegateListener = delegateListener;
         }
 
@@ -157,11 +157,11 @@ class WorkerMetricsGroup {
         }
     }
 
-    class WorkerMetricsGroupTaskStatusListener implements TaskStatus.Listener {
+    class TaskStatusListener implements TaskStatus.Listener {
         private final TaskStatus.Listener delegatedListener;
         private boolean startupSucceeded = false;
 
-        WorkerMetricsGroupTaskStatusListener(TaskStatus.Listener delegatedListener) {
+        TaskStatusListener(TaskStatus.Listener delegatedListener) {
             this.delegatedListener = delegatedListener;
         }
 

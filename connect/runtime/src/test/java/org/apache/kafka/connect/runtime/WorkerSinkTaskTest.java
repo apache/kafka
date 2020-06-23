@@ -862,8 +862,6 @@ public class WorkerSinkTaskTest {
     public void testSinkTasksHandleCloseErrors() throws Exception {
         createTask(initialState);
         expectInitializeTask();
-        statusListener.onStartup(taskId);
-        PowerMock.expectLastCall();
         expectTaskGetTopic(true);
 
         // Put one message through the task to get some offsets to commit
@@ -894,6 +892,7 @@ public class WorkerSinkTaskTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
         try {
             workerTask.execute();
             fail("workerTask.execute should have thrown an exception");
@@ -907,8 +906,6 @@ public class WorkerSinkTaskTest {
     public void testSuppressCloseErrors() throws Exception {
         createTask(initialState);
         expectInitializeTask();
-        statusListener.onStartup(taskId);
-        PowerMock.expectLastCall();
         expectTaskGetTopic(true);
 
         // Put one message through the task to get some offsets to commit
@@ -935,6 +932,7 @@ public class WorkerSinkTaskTest {
         PowerMock.replayAll();
 
         workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
         try {
             workerTask.execute();
             fail("workerTask.execute should have thrown an exception");

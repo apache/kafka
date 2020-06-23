@@ -226,13 +226,16 @@ class WorkerSourceTask extends WorkerTask {
     }
 
     @Override
+    protected void initializeAndStart() {
+        task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
+        task.start(taskConfig);
+        log.info("{} Source task finished initialization and start", this);
+    }
+
+    @Override
     public void execute() {
         try {
-            task.initialize(new WorkerSourceTaskContext(offsetReader, this, configState));
-            task.start(taskConfig);
-            log.info("{} Source task finished initialization and start", this);
             synchronized (this) {
-                statusListener.onStartup(id);
                 if (startedShutdownBeforeStartCompleted) {
                     tryStop();
                     return;
