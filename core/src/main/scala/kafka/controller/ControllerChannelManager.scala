@@ -460,19 +460,21 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
     leaderAndIsrRequestMap.foreach { case (broker, leaderAndIsrPartitionStates) =>
       if (controllerContext.liveOrShuttingDownBrokerIds.contains(broker)) {
-        val numBecomeLeaders = leaderAndIsrPartitionStates.count { case (topicPartition, state) =>
-          val isBecomeLeader = broker == state.leader
-          val typeOfRequest =
-            if (isBecomeLeader) "become-leader"
-            else "become-follower"
+        val leaderIds = mutable.Set.empty[Int]
+        var numBecomeLeaders = 0
+        leaderAndIsrPartitionStates.foreach { case (topicPartition, state) =>
+          leaderIds += state.leader
+          val typeOfRequest = if (broker == state.leader) {
+            numBecomeLeaders += 1
+            "become-leader"
+          } else {
+            "become-follower"
+          }
           if (stateChangeLog.isTraceEnabled)
             stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
-
-          isBecomeLeader
         }
         stateChangeLog.info(s"Sending LeaderAndIsr request to broker $broker with $numBecomeLeaders become-leader " +
           s"and ${leaderAndIsrPartitionStates.size - numBecomeLeaders} become-follower partitions")
-        val leaderIds = leaderAndIsrPartitionStates.map(_._2.leader).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
           _.node(config.interBrokerListenerName)
         }
