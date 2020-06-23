@@ -214,10 +214,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         return self.nodes[0]
 
     def pids(self, node):
-        try:
-            return [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=int)]
-        except:
-            return []
+        return [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=int)]
 
     def stop_nodes(self, clean_shutdown=True):
         for node in self.nodes:
