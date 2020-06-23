@@ -20,9 +20,11 @@ package org.apache.kafka.common.utils;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * An utility class for exponential backoff, timeout, etc...
- * The formula is Term(n) = random(1 - jitter, 1 + jitter) * scaleFactor * (ratio) ^ n
- * If scaleFactor is greater or equal than termMax, a constant term of will be provided
+ * An utility class for keeping the parameters and providing the value of exponential
+ * retry backoff, exponential reconnect backoff, exponential timeout, etc.
+ * The formula is
+ * Backoff(attempts) = random(1 - jitter, 1 + jitter) * scaleFactor * (ratio) ^ attempts
+ * If scaleFactor is greater or equal than termMax, a constant backoff of will be provided
  * This class is thread-safe
  */
 public class ExponentialBackoff {
@@ -39,11 +41,11 @@ public class ExponentialBackoff {
                 Math.log(termMax / (double) Math.max(scaleFactor, 1)) / Math.log(ratio) : 0;
     }
 
-    public long term(long n) {
+    public long backoff(long attempts) {
         if (expMax == 0) {
             return scaleFactor;
         }
-        double exp = Math.min(n, this.expMax);
+        double exp = Math.min(attempts, this.expMax);
         double term = scaleFactor * Math.pow(ratio, exp);
         double randomFactor = ThreadLocalRandom.current().nextDouble(1 - jitter, 1 + jitter);
         return (long) (randomFactor * term);

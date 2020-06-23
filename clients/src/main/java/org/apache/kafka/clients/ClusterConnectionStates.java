@@ -155,7 +155,7 @@ final class ClusterConnectionStates {
         // Create a new NodeConnectionState if nodeState does not already contain one
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-            reconnectBackoff.term(0), connectionSetupTimeout.term(0), host, clientDnsLookup));
+            reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host, clientDnsLookup));
         connectingNodes.add(id);
     }
 
@@ -176,9 +176,9 @@ final class ClusterConnectionStates {
     public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.lastConnectAttemptMs = now;
-        incrementReconnectBackoff(nodeState);
+        updateReconnectBackoff(nodeState);
         if (nodeState.state == ConnectionState.CONNECTING) {
-            incrementConnectionSetupTimeout(nodeState);
+            updateConnectionSetupTimeout(nodeState);
             connectingNodes.remove(id);
         } else {
             resetConnectionSetupTimeout(nodeState);
@@ -262,7 +262,7 @@ final class ClusterConnectionStates {
         nodeState.authenticationException = exception;
         nodeState.state = ConnectionState.AUTHENTICATION_FAILED;
         nodeState.lastConnectAttemptMs = now;
-        incrementReconnectBackoff(nodeState);
+        updateReconnectBackoff(nodeState);
     }
 
     /**
@@ -325,22 +325,22 @@ final class ClusterConnectionStates {
      * Resets the failure count for a node and sets the reconnect backoff to the base
      * value configured via reconnect.backoff.ms
      *
-     * @param nodeState nodeState The node state object to update
+     * @param nodeState The node state object to update
      */
     private void resetReconnectBackoff(NodeConnectionState nodeState) {
         nodeState.failedAttempts = 0;
-        nodeState.reconnectBackoffMs = reconnectBackoff.term(0);
+        nodeState.reconnectBackoffMs = reconnectBackoff.backoff(0);
     }
 
     /**
      * Resets the failure count for a node and sets the connection setup timeout to the base
      * value configured via socket.connection.setup.timeout.ms
      *
-     * @param nodeState nodeState The node state object to update
+     * @param nodeState The node state object to update
      */
     private void resetConnectionSetupTimeout(NodeConnectionState nodeState) {
         nodeState.failedConnectAttempts = 0;
-        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.term(0);
+        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.backoff(0);
     }
 
     /**
@@ -351,8 +351,8 @@ final class ClusterConnectionStates {
      *
      * @param nodeState The node state object to update
      */
-    private void incrementReconnectBackoff(NodeConnectionState nodeState) {
-        nodeState.reconnectBackoffMs = reconnectBackoff.term(nodeState.failedAttempts);
+    private void updateReconnectBackoff(NodeConnectionState nodeState) {
+        nodeState.reconnectBackoffMs = reconnectBackoff.backoff(nodeState.failedAttempts);
         nodeState.failedAttempts++;
     }
 
@@ -363,9 +363,9 @@ final class ClusterConnectionStates {
      *
      * @param nodeState The node state object to update
      */
-    private void incrementConnectionSetupTimeout(NodeConnectionState nodeState) {
+    private void updateConnectionSetupTimeout(NodeConnectionState nodeState) {
         nodeState.failedConnectAttempts++;
-        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.term(nodeState.failedConnectAttempts);
+        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.backoff(nodeState.failedConnectAttempts);
     }
 
     /**
@@ -415,10 +415,15 @@ final class ClusterConnectionStates {
         return nodeState == null ? 0 : nodeState.lastConnectAttemptMs;
     }
 
+    /**
+     * Get the current socket connection setup timeout of the given node.
+     * The base value is defined via socket.connection.setup.timeout.
+     * @param id the connection to fetch the state for
+     */
     public long connectionSetupTimeoutMs(String id) {
         NodeConnectionState nodeState = this.nodeState.get(id);
         if (nodeState == null)
-            throw new IllegalStateException("No connection state found for node " + id);
+            throw new IllegalStateException("Connection to node " + id + " hasn't been initialized");
         return nodeState.connectionSetupTimeoutMs;
     }
 
@@ -428,6 +433,9 @@ final class ClusterConnectionStates {
      * @param now the current time in ms
      */
     public boolean isConnectionSetupTimeout(String id, long now) {
+        NodeConnectionState nodeState = this.nodeState.get(id);
+        if (nodeState.state != ConnectionState.CONNECTING)
+            throw new IllegalStateException("Node " + id + " is not in connecting state");
         return now - lastConnectAttemptMs(id) > connectionSetupTimeoutMs(id);
     }
 

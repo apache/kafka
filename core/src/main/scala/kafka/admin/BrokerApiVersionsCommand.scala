@@ -245,13 +245,13 @@ object BrokerApiVersionsCommand {
         .define(
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
           ConfigDef.Type.LONG,
-          DefaultSocketConnectionSetupMs,
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DEFAULT,
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
         .define(
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
           ConfigDef.Type.LONG,
-          DefaultSocketConnectionSetupMaxMs,
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT,
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
         .define(
