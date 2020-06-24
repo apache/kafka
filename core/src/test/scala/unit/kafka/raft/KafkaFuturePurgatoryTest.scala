@@ -77,12 +77,12 @@ class KafkaFuturePurgatoryTest {
 
     purgatory.completeAll(null)
     assertTrue(future1.isDone)
-    assertEquals((), future1.get())
+    assertEquals(null, future1.get())
 
     assertTrue(future2.isDone)
-    assertEquals((), future2.get())
+    assertEquals(null, future2.get())
 
     assertTrue(future3.isDone)
-    assertEquals((), future3.get())
+    assertEquals(null, future3.get())
   }
 }

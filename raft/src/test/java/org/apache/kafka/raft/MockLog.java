@@ -59,26 +59,45 @@ public class MockLog implements ReplicatedLog {
 
     @Override
     public void updateHighWatermark(LogOffsetMetadata offsetMetadata) {
-        if (this.highWatermark.offset > offsetMetadata.offset)
+        if (this.highWatermark.offset > offsetMetadata.offset) {
             throw new IllegalArgumentException("Non-monotonic update of current high watermark " +
                 highWatermark + " to new value " + offsetMetadata);
+        } else if (offsetMetadata.offset > endOffset().offset) {
+            throw new IllegalArgumentException("Attempt to update high watermark to " + offsetMetadata +
+                " which is larger than the current end offset " + endOffset());
+        } else if (offsetMetadata.offset < startOffset()) {
+            throw new IllegalArgumentException("Attempt to update high watermark to " + offsetMetadata +
+                " which is smaller than the current start offset " + startOffset());
+        }
 
-        if (offsetMetadata.metadata.isPresent()) {
-            UUID id = ((MockOffsetMetadata) offsetMetadata.metadata.get()).id;
+        assertValidHighWatermarkMetadata(offsetMetadata);
+        this.highWatermark = offsetMetadata;
+    }
 
-            for (LogBatch batch : log) {
-                for (LogEntry entry : batch.entries) {
-                    if (entry.offset == offsetMetadata.offset && entry.id != id) {
-                        throw new IllegalArgumentException("High watermark " + offsetMetadata.offset +
-                                " metadata uuid " + offsetMetadata.metadata.get() + " does not match the " +
-                                " log's record entry maintained uuid " + entry.id);
+    private void assertValidHighWatermarkMetadata(LogOffsetMetadata offsetMetadata) {
+        if (!offsetMetadata.metadata.isPresent()) {
+            return;
+        }
 
+        UUID id = ((MockOffsetMetadata) offsetMetadata.metadata.get()).id;
+        long offset = offsetMetadata.offset;
+
+        for (LogBatch batch : log) {
+            if (batch.lastOffset() < offset)
+                continue;
+
+            for (LogEntry entry : batch.entries) {
+                if (entry.offset == offset) {
+                    if (entry.id != id) {
+                        throw new IllegalArgumentException("High watermark " + offset +
+                            " metadata uuid " + id + " does not match the " +
+                            " log's record entry maintained uuid " + entry.id);
+                    } else {
+                        return;
                     }
                 }
             }
         }
-
-        this.highWatermark = offsetMetadata;
     }
 
     LogOffsetMetadata highWatermark() {

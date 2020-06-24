@@ -18,10 +18,11 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.record.Records;
 
+import java.io.Closeable;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-public interface ReplicatedLog {
+public interface ReplicatedLog extends Closeable {
 
     /**
      * Write a set of records to the local leader log. These messages will either
@@ -120,4 +121,7 @@ public interface ReplicatedLog {
         truncateTo(truncationOffset);
         return OptionalLong.of(truncationOffset);
     }
+
+    default void close() {}
+
 }

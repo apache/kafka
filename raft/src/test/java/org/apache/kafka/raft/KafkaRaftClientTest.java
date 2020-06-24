@@ -65,11 +65,13 @@ import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -567,7 +569,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
 
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        KafkaRaftClient client = initializeAsLeader(voters, epoch, stateMachine);
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         // First poll has no high watermark advance
         client.poll();
@@ -777,7 +779,7 @@ public class KafkaRaftClientTest {
         int epoch = 1;
         Set<Integer> voters = Utils.mkSet(localId, 1, 2, 3, 4);
         quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, localId, voters));
-        KafkaRaftClient client = initializeAsLeader(voters, epoch, stateMachine);
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
         assertNoSentMessages();
 
         time.sleep(1L);
@@ -834,7 +836,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        KafkaRaftClient client = initializeAsLeader(voters, epoch, stateMachine);
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         deliverRequest(fetchQuorumRecordsRequest(
             epoch, otherNodeId, -5L, 0, 0));
@@ -867,7 +869,7 @@ public class KafkaRaftClientTest {
         int otherNodeId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        KafkaRaftClient client = initializeAsLeader(voters, epoch, stateMachine);
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         int nonVoterId = 2;
         deliverRequest(voteRequest(epoch, nonVoterId, 0, 0));
@@ -919,7 +921,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
 
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        KafkaRaftClient client = initializeAsLeader(voters, epoch, stateMachine);
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         // Follower sends a fetch which cannot be satisfied immediately
         int maxWaitTimeMs = 500;
@@ -940,7 +942,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
 
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        KafkaRaftClient client = initializeAsLeader(voters, epoch, stateMachine);
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         // Follower sends a fetch which cannot be satisfied immediately
         deliverRequest(fetchQuorumRecordsRequest(epoch, otherNodeId, 1L, epoch, 500));
@@ -974,7 +976,7 @@ public class KafkaRaftClientTest {
         int epoch = 5;
 
         Set<Integer> voters = Utils.mkSet(voter1, voter2, voter3);
-        KafkaRaftClient client = initializeAsLeader(voters, epoch, stateMachine);
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         // Follower sends a fetch which cannot be satisfied immediately
         deliverRequest(fetchQuorumRecordsRequest(epoch, voter2, 1L, epoch, 500));
@@ -1008,7 +1010,7 @@ public class KafkaRaftClientTest {
             findQuorumResponse(leaderId, epoch, voters));
     }
 
-    private KafkaRaftClient initializeAsLeader(Set<Integer> voters, int epoch, MockStateMachine stateMachine) throws Exception {
+    private KafkaRaftClient initializeAsLeader(Set<Integer> voters, int epoch) throws Exception {
         ElectionState leaderElectionState = ElectionState.withElectedLeader(epoch, localId, voters);
         quorumStateStore.writeElectionState(leaderElectionState);
         KafkaRaftClient client = buildClient(voters, stateMachine);
@@ -1196,41 +1198,40 @@ public class KafkaRaftClientTest {
     public void testLeaderGracefulShutdown() throws Exception {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        KafkaRaftClient client = buildClient(voters);
-
-        // Elect ourselves as the leader
-        assertEquals(ElectionState.withVotedCandidate(1, localId, voters), quorumStateStore.readElectionState());
-
-        pollUntilSend(client);
-
-        initializeVoterConnections(client, voters, 1, OptionalInt.empty());
-
-        pollUntilSend(client);
-
-        int voteCorrelationId = assertSentVoteRequest(1, 0, 0L);
-        VoteResponseData voteResponse = voteResponse(true, Optional.empty(), 1);
-        deliverResponse(voteCorrelationId, otherNodeId, voteResponse);
-        client.poll();
-        assertEquals(ElectionState.withElectedLeader(1, localId, voters), quorumStateStore.readElectionState());
+        int epoch = 1;
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         // Now shutdown
         int shutdownTimeoutMs = 5000;
-        client.shutdown(shutdownTimeoutMs);
+        CompletableFuture<Void> shutdownFuture = client.shutdown(shutdownTimeoutMs);
 
         // We should still be running until we have had a chance to send EndQuorumEpoch
+        assertTrue(client.isShuttingDown());
         assertTrue(client.isRunning());
+        assertFalse(shutdownFuture.isDone());
 
-        // Send EndQuorumEpoch request to the other vote
+        // Send EndQuorumEpoch request to the other voter
         client.poll();
+        assertTrue(client.isShuttingDown());
         assertTrue(client.isRunning());
-
         assertSentEndQuorumEpochRequest(1, OptionalInt.of(localId), otherNodeId);
 
-        // Graceful shutdown completes when the epoch is bumped
-        deliverRequest(voteRequest(2, otherNodeId, 0, 0L));
-
+        // We should still be able to handle vote requests during graceful shutdown
+        // in order to help the new leader get elected
+        deliverRequest(voteRequest(epoch + 1, otherNodeId, epoch, 1L));
         client.poll();
-        assertFalse(client.isRunning());
+        assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+
+        // Graceful shutdown completes when a new leader is elected
+        deliverRequest(beginEpochRequest(2, otherNodeId));
+
+        TestUtils.waitForCondition(() -> {
+            client.poll();
+            return !client.isRunning();
+        }, 5000, "Client failed to shutdown before expiration of timeout");
+        assertFalse(client.isShuttingDown());
+        assertTrue(shutdownFuture.isDone());
+        assertNull(shutdownFuture.get());
     }
 
     @Test
@@ -1239,34 +1240,7 @@ public class KafkaRaftClientTest {
         int laggingFollower = 1;
         int epoch = 1;
         Set<Integer> voters = Utils.mkSet(localId, closeFollower, laggingFollower);
-
-        // Bootstrap as the leader
-        quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, localId, voters));
-
-        KafkaRaftClient client = buildClient(voters);
-
-        pollUntilSend(client);
-
-        int findQuorumCorrelationId = assertSentFindQuorumRequest().correlationId;
-
-        deliverResponse(findQuorumCorrelationId, -1, findQuorumResponse(OptionalInt.of(localId), 1, voters));
-
-        // Accept connection information for followers
-        client.poll();
-
-        assertTrue(channel.drainSendQueue().isEmpty());
-
-        // Send out begin quorum to followers
-        client.poll();
-
-        List<RaftRequest.Outbound> beginEpochRequests = collectBeginEpochRequests(epoch);
-
-        assertEquals(2, beginEpochRequests.size());
-
-        for (RaftMessage message : beginEpochRequests) {
-            deliverResponse(message.correlationId(), ((RaftRequest.Outbound) message).destinationId(),
-                beginQuorumEpochResponse(epoch, localId));
-        }
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         // The lagging follower fetches first
         deliverRequest(fetchQuorumRecordsRequest(1, laggingFollower, 0L, 0, 0));
@@ -1305,42 +1279,34 @@ public class KafkaRaftClientTest {
     public void testLeaderGracefulShutdownTimeout() throws Exception {
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
-        KafkaRaftClient client = buildClient(voters);
-
-        // Elect ourselves as the leader
-        assertEquals(ElectionState.withVotedCandidate(1, localId, voters), quorumStateStore.readElectionState());
-        initializeVoterConnections(client, voters, 1, OptionalInt.empty());
-
-        pollUntilSend(client);
-
-        int voteCorrelationId = assertSentVoteRequest(1, 0, 0L);
-        VoteResponseData voteResponse = voteResponse(true, Optional.empty(), 1);
-        deliverResponse(voteCorrelationId, otherNodeId, voteResponse);
-        client.poll();
-        assertEquals(ElectionState.withElectedLeader(1, localId, voters), quorumStateStore.readElectionState());
+        int epoch = 1;
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
 
         // Now shutdown
         int shutdownTimeoutMs = 5000;
-        client.shutdown(shutdownTimeoutMs);
+        CompletableFuture<Void> shutdownFuture = client.shutdown(shutdownTimeoutMs);
 
         // We should still be running until we have had a chance to send EndQuorumEpoch
         assertTrue(client.isRunning());
+        assertFalse(shutdownFuture.isDone());
 
         // Send EndQuorumEpoch request to the other vote
         client.poll();
         assertTrue(client.isRunning());
 
-        assertSentEndQuorumEpochRequest(1, OptionalInt.of(localId), otherNodeId);
+        assertSentEndQuorumEpochRequest(epoch, OptionalInt.of(localId), otherNodeId);
 
         // The shutdown timeout is hit before we receive any requests or responses indicating an epoch bump
         time.sleep(shutdownTimeoutMs);
 
         client.poll();
         assertFalse(client.isRunning());
+        assertTrue(shutdownFuture.isCompletedExceptionally());
+        TestUtils.assertFutureThrows(shutdownFuture, TimeoutException.class);
     }
 
     @Test
-    public void testFollowerGracefulShutdown() throws IOException {
+    public void testFollowerGracefulShutdown() throws Exception {
         int otherNodeId = 1;
         int epoch = 5;
 
@@ -1355,10 +1321,14 @@ public class KafkaRaftClientTest {
         client.poll();
 
         int shutdownTimeoutMs = 5000;
-        client.shutdown(shutdownTimeoutMs);
+        CompletableFuture<Void> shutdownFuture = client.shutdown(shutdownTimeoutMs);
         assertTrue(client.isRunning());
+        assertFalse(shutdownFuture.isDone());
+
         client.poll();
         assertFalse(client.isRunning());
+        assertTrue(shutdownFuture.isDone());
+        assertNull(shutdownFuture.get());
     }
 
     @Test
@@ -1656,7 +1626,10 @@ public class KafkaRaftClientTest {
         assertEquals((double) 4L, getMetric(metrics, "log-end-offset").metricValue());
         assertEquals((double) epoch, getMetric(metrics, "log-end-epoch").metricValue());
 
-        client.shutdown(100);
+        CompletableFuture<Void> shutdownFuture = client.shutdown(100);
+        client.poll();
+        assertTrue(shutdownFuture.isDone());
+        assertNull(shutdownFuture.get());
 
         // should only have total-metrics-count left
         assertEquals(1, metrics.metrics().size());

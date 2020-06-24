@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.List;
 
@@ -23,7 +24,7 @@ import java.util.List;
  * A simple network interface with few assumptions. We do not assume ordering
  * of requests or even that every request will receive a response.
  */
-public interface NetworkChannel {
+public interface NetworkChannel extends Closeable {
 
     /**
      * Generate a new and unique correlationId for a new request to be sent.
@@ -56,5 +57,7 @@ public interface NetworkChannel {
      * Update connection information for the given id.
      */
     void updateEndpoint(int id, InetSocketAddress address);
+
+    default void close() {}
 
 }

@@ -216,4 +216,8 @@ class KafkaNetworkChannel(time: Time,
     wakeup()
   }
 
+  override def close(): Unit = {
+    client.close()
+  }
+
 }

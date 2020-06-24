@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -117,6 +118,7 @@ public class MockLogTest {
 
     @Test
     public void testUpdateHighWatermark() {
+        appendBatch(5, 1);
         LogOffsetMetadata newOffset = new LogOffsetMetadata(5L);
         log.updateHighWatermark(newOffset);
         assertEquals(newOffset, log.highWatermark());
@@ -124,6 +126,7 @@ public class MockLogTest {
 
     @Test
     public void testDecrementHighWatermark() {
+        appendBatch(5, 1);
         LogOffsetMetadata newOffset = new LogOffsetMetadata(4L);
         log.updateHighWatermark(newOffset);
         assertThrows(IllegalArgumentException.class, () -> log.updateHighWatermark(new LogOffsetMetadata(3L)));
@@ -259,6 +262,28 @@ public class MockLogTest {
         assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(25L, OptionalLong.of(60L)));
         assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(30L, OptionalLong.of(60L)));
         assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(35L, OptionalLong.of(60L)));
+    }
+
+    @Test
+    public void testMetadataValidation() {
+        appendBatch(5, 1);
+        appendBatch(5, 1);
+        appendBatch(5, 1);
+
+        LogFetchInfo readInfo = log.read(5, OptionalLong.empty());
+        assertEquals(5L, readInfo.startOffsetMetadata.offset);
+        assertTrue(readInfo.startOffsetMetadata.metadata.isPresent());
+        MockLog.MockOffsetMetadata offsetMetadata = (MockLog.MockOffsetMetadata)
+            readInfo.startOffsetMetadata.metadata.get();
+
+        // Update to a high watermark with valid offset metadata
+        log.updateHighWatermark(readInfo.startOffsetMetadata);
+        assertEquals(readInfo.startOffsetMetadata, log.highWatermark());
+
+        // Now update to a high watermark with invalid metadata
+        assertThrows(IllegalArgumentException.class, () ->
+            log.updateHighWatermark(new LogOffsetMetadata(10L,
+                Optional.of(new MockLog.MockOffsetMetadata(UUID.randomUUID())))));
     }
 
     @Test

@@ -126,6 +126,10 @@ public class QuorumState {
         return leaderId().isPresent();
     }
 
+    public boolean hasRemoteLeader() {
+        return hasLeader() && leaderIdOrNil() != localId;
+    }
+
     public boolean isLeader() {
         return state instanceof LeaderState;
     }

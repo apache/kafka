@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.record.Records;
 
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 
 public interface RaftClient {
 
@@ -36,6 +37,7 @@ public interface RaftClient {
      * Shutdown the client.
      *
      * @param timeoutMs How long to wait for graceful completion of pending operations.
+     * @return A future which is completed when shutdown completes successfully or the timeout expires.
      */
-    void shutdown(int timeoutMs);
+    CompletableFuture<Void> shutdown(int timeoutMs);
 }

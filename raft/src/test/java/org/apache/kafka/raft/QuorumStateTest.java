@@ -527,4 +527,30 @@ public class QuorumStateTest {
         assertThrows(IllegalStateException.class,
             () -> state.initialize(new OffsetAndEpoch(0L, logEndEpoch)));
     }
+
+    @Test
+    public void testHasRemoteLeader() throws IOException {
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        QuorumState state = initializeEmptyState(voters, store);
+        assertFalse(state.hasRemoteLeader());
+
+        state.becomeCandidate();
+        assertFalse(state.hasRemoteLeader());
+
+        state.candidateStateOrThrow().recordGrantedVote(otherNodeId);
+        state.becomeLeader(0L);
+        assertFalse(state.hasRemoteLeader());
+
+        state.becomeUnattachedFollower(state.epoch() + 1);
+        assertFalse(state.hasRemoteLeader());
+
+        state.becomeVotedFollower(state.epoch() + 1, otherNodeId);
+        assertFalse(state.hasRemoteLeader());
+
+        state.becomeFetchingFollower(state.epoch() + 1, otherNodeId);
+        assertTrue(state.hasRemoteLeader());
+    }
+
 }

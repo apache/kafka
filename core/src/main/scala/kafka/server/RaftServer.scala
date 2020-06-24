@@ -21,7 +21,7 @@ import java.io.File
 import java.net.{InetAddress, InetSocketAddress}
 import java.nio.file.Files
 import java.util.Properties
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import joptsimple.OptionParser
 import kafka.log.{Log, LogConfig, LogManager}
@@ -29,7 +29,7 @@ import kafka.network.SocketServer
 import kafka.raft.{KafkaFuturePurgatory, KafkaMetadataLog, KafkaNetworkChannel}
 import kafka.security.CredentialProvider
 import kafka.utils.timer.SystemTimer
-import kafka.utils.{CommandLineUtils, Exit, KafkaScheduler, Logging}
+import kafka.utils.{CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
@@ -47,6 +47,7 @@ class RaftServer(val config: KafkaConfig) extends Logging {
 
   private val partition = new TopicPartition("__cluster_metadata", 0)
   private val time = Time.SYSTEM
+  private val shutdownLatch = new CountDownLatch(1)
 
   var socketServer: SocketServer = _
   var credentialProvider: CredentialProvider = _
@@ -54,6 +55,10 @@ class RaftServer(val config: KafkaConfig) extends Logging {
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
   var scheduler: KafkaScheduler = _
   var metrics: Metrics = _
+  var raftIoThread: RaftIoThread = _
+  var incrementCounterThread: IncrementCounterThread = _
+  var networkChannel: KafkaNetworkChannel = _
+  var metadataLog: KafkaMetadataLog = _
 
   def startup(): Unit = {
     metrics = new Metrics()
@@ -101,30 +106,39 @@ class RaftServer(val config: KafkaConfig) extends Logging {
 
     socketServer.startProcessingRequests(Map.empty)
 
-    val shutdown = new AtomicBoolean(false)
-    try {
-      val counter = new ReplicatedCounter(config.brokerId, logContext, true)
-      val incrementThread = new Thread() {
-        override def run(): Unit = {
-          while (!shutdown.get()) {
-            if (counter.isLeader) {
-              counter.increment()
-              Thread.sleep(500)
-            }
-          }
-        }
-      }
+    val counter = new ReplicatedCounter(config.brokerId, logContext, true)
+    raftClient.initialize(counter)
 
-      raftClient.initialize(counter)
-      incrementThread.start()
+    raftIoThread = new RaftIoThread(raftClient)
+    raftIoThread.start()
 
-      while (true) {
-        raftClient.poll()
-      }
-    } finally {
-      shutdown.set(true)
-      raftClient.shutdown(5000)
-    }
+    incrementCounterThread = new IncrementCounterThread(counter)
+    incrementCounterThread.start()
+  }
+
+  def shutdown(): Unit = {
+    if (incrementCounterThread != null)
+      CoreUtils.swallow(incrementCounterThread.shutdown(), this)
+    if (raftIoThread != null)
+      CoreUtils.swallow(raftIoThread.shutdown(), this)
+    if (dataPlaneRequestHandlerPool != null)
+      CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
+    if (socketServer != null)
+      CoreUtils.swallow(socketServer.shutdown(), this)
+    if (networkChannel != null)
+      CoreUtils.swallow(networkChannel.close(), this)
+    if (scheduler != null)
+      CoreUtils.swallow(scheduler.shutdown(), this)
+    if (metrics != null)
+      CoreUtils.swallow(metrics.close(), this)
+    if (metadataLog != null)
+      CoreUtils.swallow(metadataLog.close(), this)
+
+    shutdownLatch.countDown()
+  }
+
+  def awaitShutdown(): Unit = {
+    shutdownLatch.await()
   }
 
   private def buildNetworkChannel(raftConfig: RaftConfig,
@@ -156,7 +170,7 @@ class RaftServer(val config: KafkaConfig) extends Logging {
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(5)
     )
-    new KafkaMetadataLog(time, log)
+    new KafkaMetadataLog(log)
   }
 
   private def createLogDirectory(logDir: File, logDirName: String): File = {
@@ -255,6 +269,40 @@ class RaftServer(val config: KafkaConfig) extends Logging {
     new InetSocketAddress(host, port)
   }
 
+  class IncrementCounterThread(counter: ReplicatedCounter) extends ShutdownableThread("counter-incrementer") {
+    override def doWork(): Unit = {
+      if (counter.isLeader) {
+        counter.increment()
+      }
+      pause(500, TimeUnit.MILLISECONDS)
+    }
+  }
+
+  class RaftIoThread(client: KafkaRaftClient) extends ShutdownableThread("raft-io-thread") {
+    override def doWork(): Unit = {
+      client.poll()
+    }
+
+    override def initiateShutdown(): Boolean = {
+      if (super.initiateShutdown()) {
+        client.shutdown(5000).whenComplete { (_, exception) =>
+          if (exception != null) {
+            logger.error("Shutdown of RaftClient failed", exception)
+          } else {
+            logger.info("Completed shutdown of RaftClient")
+          }
+        }
+        true
+      } else {
+        false
+      }
+    }
+
+    override def isRunning: Boolean = {
+      client.isRunning
+    }
+  }
+
 }
 
 object RaftServer extends Logging {
@@ -298,7 +346,11 @@ object RaftServer extends Logging {
       val serverProps = getPropsFromArgs(args)
       val config = KafkaConfig.fromProps(serverProps, false)
       val server = new RaftServer(config)
+
+      Exit.addShutdownHook("raft-shutdown-hook", server.shutdown)
+
       server.startup()
+      server.awaitShutdown()
     }
     catch {
       case e: Throwable =>

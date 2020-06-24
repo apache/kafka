@@ -64,7 +64,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -1031,12 +1030,7 @@ public class KafkaRaftClient implements RaftClient {
         } else if (epoch > quorum.epoch()) {
             // If the request or response indicates a higher epoch, we bump our local
             // epoch and become a follower.
-            GracefulShutdown gracefulShutdown = shutdown.get();
-            if (gracefulShutdown != null) {
-                gracefulShutdown.onEpochUpdate(epoch);
-            } else if (leaderId.isPresent()) {
-                becomeFollower(leaderId, epoch);
-            }
+            becomeFollower(leaderId, epoch);
         } else if (leaderId.isPresent() && !quorum.hasLeader()) {
             // The request or response indicates the leader of the current epoch,
             // which is currently unknown
@@ -1103,9 +1097,6 @@ public class KafkaRaftClient implements RaftClient {
             // expected voters. We generally expect this to be a transient
             // error until all voters have replicated the reassignment record.
             return Optional.of(Errors.INCONSISTENT_VOTER_SET);
-        } else if (shutdown.get() != null) {
-            shutdown.get().onEpochUpdate(requestEpoch);
-            return Optional.of(Errors.BROKER_NOT_AVAILABLE);
         } else {
             return Optional.empty();
         }
@@ -1313,26 +1304,33 @@ public class KafkaRaftClient implements RaftClient {
         return gracefulShutdown == null || !gracefulShutdown.isFinished();
     }
 
+    public boolean isShuttingDown() {
+        GracefulShutdown gracefulShutdown = shutdown.get();
+        return gracefulShutdown != null && !gracefulShutdown.isFinished();
+    }
+
     private void pollShutdown(GracefulShutdown shutdown) throws IOException {
         // Graceful shutdown allows a leader or candidate to resign its leadership without
-        // awaiting expiration of the election timeout. During shutdown, we no longer update
-        // quorum state. All we do is check for epoch updates and try to send EndQuorumEpoch request
-        // to finish our term. We consider the term finished if we are a follower or if one of
-        // the remaining voters bumps the existing epoch.
+        // awaiting expiration of the election timeout. As soon as another leader is elected,
+        // the shutdown is considered complete.
 
         shutdown.update();
-
-        if (quorum.isFollower() || quorum.remoteVoters().isEmpty()) {
-            // Shutdown immediately if we are a follower or we are the only voter
-            shutdown.finished.set(true);
-        } else if (!shutdown.isFinished()) {
-            long currentTimeMs = shutdown.finishTimer.currentTimeMs();
-            maybeSendEndQuorumEpoch(currentTimeMs);
-
-            List<RaftMessage> inboundMessages = channel.receive(shutdown.finishTimer.remainingMs());
-            for (RaftMessage message : inboundMessages)
-                handleInboundMessage(message, currentTimeMs);
+        if (shutdown.isFinished()) {
+            return;
         }
+
+        long currentTimeMs = shutdown.finishTimer.currentTimeMs();
+
+        if (quorum.remoteVoters().isEmpty() || quorum.hasRemoteLeader()) {
+            shutdown.complete();
+            return;
+        } else if (quorum.isLeader()) {
+            maybeSendEndQuorumEpoch(currentTimeMs);
+        }
+
+        List<RaftMessage> inboundMessages = channel.receive(shutdown.finishTimer.remainingMs());
+        for (RaftMessage message : inboundMessages)
+            handleInboundMessage(message, currentTimeMs);
     }
 
     public void poll() throws IOException {
@@ -1438,11 +1436,16 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     @Override
-    public void shutdown(int timeoutMs) {
-        // TODO: Safe to access epoch? Need to reset connections to be able to send EndQuorumEpoch? Block until shutdown completes?
-        kafkaRaftMetrics.close();
-        shutdown.set(new GracefulShutdown(timeoutMs, quorum.epoch()));
+    public CompletableFuture<Void> shutdown(int timeoutMs) {
+        logger.info("Beginning graceful shutdown");
+        CompletableFuture<Void> shutdownComplete = new CompletableFuture<>();
+        shutdown.set(new GracefulShutdown(timeoutMs, shutdownComplete));
         channel.wakeup();
+        return shutdownComplete;
+    }
+
+    private void close() {
+        kafkaRaftMetrics.close();
     }
 
     public OptionalLong highWatermark() {
@@ -1450,39 +1453,41 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     private class GracefulShutdown {
-        final int epoch;
         final Timer finishTimer;
-
-        final AtomicBoolean finished = new AtomicBoolean(false);
+        final CompletableFuture<Void> completeFuture;
 
         public GracefulShutdown(long shutdownTimeoutMs,
-                                int epoch) {
+                                CompletableFuture<Void> completeFuture) {
             this.finishTimer = time.timer(shutdownTimeoutMs);
-            this.epoch = epoch;
-        }
-
-        public void onEpochUpdate(int epoch) {
-            // Shutdown is complete once the epoch has been bumped, which indicates
-            // that a new election has been started.
-
-            if (epoch > this.epoch)
-                finished.set(true);
+            this.completeFuture = completeFuture;
         }
 
         public void update() {
             finishTimer.update();
+            if (finishTimer.isExpired()) {
+                close();
+                logger.warn("Graceful shutdown timed out after {}ms", timer.timeoutMs());
+                completeFuture.completeExceptionally(
+                    new TimeoutException("Timeout expired before shutdown completed"));
+            }
         }
 
         public boolean isFinished() {
-            return succeeded() || failed();
+            return completeFuture.isDone();
         }
 
         public boolean succeeded() {
-            return finished.get();
+            return isFinished() && !failed();
         }
 
         public boolean failed() {
-            return finishTimer.isExpired();
+            return completeFuture.isCompletedExceptionally();
+        }
+
+        public void complete() {
+            close();
+            logger.info("Graceful shutdown completed");
+            completeFuture.complete(null);
         }
     }
 

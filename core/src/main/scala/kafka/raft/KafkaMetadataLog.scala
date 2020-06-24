@@ -22,13 +22,12 @@ import kafka.log.{AppendOrigin, Log}
 import kafka.server.{FetchHighWatermark, FetchLogEnd}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft
 import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, ReplicatedLog}
 
 import scala.compat.java8.OptionConverters._
 
-class KafkaMetadataLog(time: Time, log: Log, maxFetchSizeInBytes: Int = 1024 * 1024) extends ReplicatedLog {
+class KafkaMetadataLog(log: Log, maxFetchSizeInBytes: Int = 1024 * 1024) extends ReplicatedLog {
 
   override def read(startOffset: Long, endOffsetExclusive: OptionalLong): LogFetchInfo = {
     val isolation = if (endOffsetExclusive.isPresent)
@@ -120,4 +119,9 @@ class KafkaMetadataLog(time: Time, log: Log, maxFetchSizeInBytes: Int = 1024 * 1
       case _ => log.updateHighWatermark(offsetMetadata.offset)
     }
   }
+
+  override def close(): Unit = {
+    log.close()
+  }
+
 }
