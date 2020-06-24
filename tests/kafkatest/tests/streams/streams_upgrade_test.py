@@ -189,54 +189,6 @@ class StreamsUpgradeTest(Test):
         processor.stop()
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
-    @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
-    def test_simple_upgrade_downgrade(self, from_version, to_version):
-        """
-        Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
-        """
-
-        if from_version == to_version:
-            return
-
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.zk.start()
-
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, topics=self.topics)
-        self.kafka.start()
-
-        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.driver.disable_auto_terminate()
-        self.processor1 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-        self.processor2 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-        self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-
-        self.driver.start()
-        self.start_all_nodes_with(from_version)
-
-        self.processors = [self.processor1, self.processor2, self.processor3]
-
-        counter = 1
-        random.seed()
-
-        # upgrade one-by-one via rolling bounce
-        random.shuffle(self.processors)
-        for p in self.processors:
-            p.CLEAN_NODE_ENABLED = False
-            self.do_stop_start_bounce(p, None, to_version, counter)
-            counter = counter + 1
-
-        # shutdown
-        self.driver.stop()
-
-        random.shuffle(self.processors)
-        for p in self.processors:
-            node = p.node
-            with node.account.monitor_log(p.STDOUT_FILE) as monitor:
-                p.stop()
-                monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
-                                   timeout_sec=60,
-                                   err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
     @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
     @matrix(from_version=metadata_1_versions, to_version=metadata_3_or_higher_versions)
     @matrix(from_version=metadata_2_versions, to_version=metadata_3_or_higher_versions)
@@ -275,6 +227,70 @@ class StreamsUpgradeTest(Test):
         # second rolling bounce
         random.shuffle(self.processors)
         for p in self.processors:
+            self.do_stop_start_bounce(p, None, to_version, counter)
+            counter = counter + 1
+
+        # shutdown
+        self.driver.stop()
+
+        random.shuffle(self.processors)
+        for p in self.processors:
+            node = p.node
+            with node.account.monitor_log(p.STDOUT_FILE) as monitor:
+                p.stop()
+                monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
+                                   timeout_sec=60,
+                                   err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
+
+    @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
+    @matrix(from_version=metadata_3_or_higher_versions, to_version=metadata_3_or_higher_versions)
+    def test_simple_upgrade_downgrade(self, from_version, to_version):
+        """
+        Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
+        """
+
+        if from_version == to_version:
+            return
+
+        self.zk = ZookeeperService(self.test_context, num_nodes=1)
+        self.zk.start()
+
+        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, topics={
+            'echo' : { 'partitions': 5, 'replication-factor': 1 },
+            'data' : { 'partitions': 5, 'replication-factor': 1 },
+            'min' : { 'partitions': 5, 'replication-factor': 1 },
+            'min-suppressed' : { 'partitions': 5, 'replication-factor': 1 },
+            'min-raw' : { 'partitions': 5, 'replication-factor': 1 },
+            'max' : { 'partitions': 5, 'replication-factor': 1 },
+            'sum' : { 'partitions': 5, 'replication-factor': 1 },
+            'sws-raw' : { 'partitions': 5, 'replication-factor': 1 },
+            'sws-suppressed' : { 'partitions': 5, 'replication-factor': 1 },
+            'dif' : { 'partitions': 5, 'replication-factor': 1 },
+            'cnt' : { 'partitions': 5, 'replication-factor': 1 },
+            'avg' : { 'partitions': 5, 'replication-factor': 1 },
+            'wcnt' : { 'partitions': 5, 'replication-factor': 1 },
+            'tagg' : { 'partitions': 5, 'replication-factor': 1 }
+        })
+        self.kafka.start()
+
+        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
+        self.driver.disable_auto_terminate()
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once")
+        self.processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once")
+        self.processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once")
+
+        self.driver.start()
+        self.start_all_nodes_with(from_version)
+
+        self.processors = [self.processor1, self.processor2, self.processor3]
+
+        counter = 1
+        random.seed()
+
+        # upgrade one-by-one via rolling bounce
+        random.shuffle(self.processors)
+        for p in self.processors:
+            p.CLEAN_NODE_ENABLED = False
             self.do_stop_start_bounce(p, None, to_version, counter)
             counter = counter + 1
 
@@ -349,56 +365,42 @@ class StreamsUpgradeTest(Test):
     def start_all_nodes_with(self, version):
         kafka_version_str = self.get_version_string(version)
 
-        # start first with <version>
         self.prepare_for(self.processor1, version)
-        node1 = self.processor1.node
-        with node1.account.monitor_log(self.processor1.STDOUT_FILE) as monitor:
-            with node1.account.monitor_log(self.processor1.LOG_FILE) as log_monitor:
-                self.processor1.start()
-                log_monitor.wait_until(kafka_version_str,
-                                       timeout_sec=60,
-                                       err_msg="Could not detect Kafka Streams version " + version + " " + str(node1.account))
-                monitor.wait_until(self.processed_msg,
-                                   timeout_sec=60,
-                                   err_msg="Never saw output '%s' on " % self.processed_msg + str(node1.account))
-
-        # start second with <version>
         self.prepare_for(self.processor2, version)
-        node2 = self.processor2.node
-        with node1.account.monitor_log(self.processor1.STDOUT_FILE) as first_monitor:
-            with node2.account.monitor_log(self.processor2.STDOUT_FILE) as second_monitor:
-                with node2.account.monitor_log(self.processor2.LOG_FILE) as log_monitor:
-                    self.processor2.start()
-                    log_monitor.wait_until(kafka_version_str,
-                                           timeout_sec=60,
-                                           err_msg="Could not detect Kafka Streams version " + version + " on " + str(node2.account))
-                    first_monitor.wait_until(self.processed_msg,
-                                             timeout_sec=60,
-                                             err_msg="Never saw output '%s' on " % self.processed_msg + str(node1.account))
-                    second_monitor.wait_until(self.processed_msg,
-                                              timeout_sec=60,
-                                              err_msg="Never saw output '%s' on " % self.processed_msg + str(node2.account))
-
-        # start third with <version>
         self.prepare_for(self.processor3, version)
-        node3 = self.processor3.node
-        with node1.account.monitor_log(self.processor1.STDOUT_FILE) as first_monitor:
-            with node2.account.monitor_log(self.processor2.STDOUT_FILE) as second_monitor:
-                with node3.account.monitor_log(self.processor3.STDOUT_FILE) as third_monitor:
-                    with node3.account.monitor_log(self.processor3.LOG_FILE) as log_monitor:
-                        self.processor3.start()
-                        log_monitor.wait_until(kafka_version_str,
-                                               timeout_sec=60,
-                                               err_msg="Could not detect Kafka Streams version " + version + " on " + str(node3.account))
-                        first_monitor.wait_until(self.processed_msg,
-                                                 timeout_sec=60,
-                                                 err_msg="Never saw output '%s' on " % self.processed_msg + str(node1.account))
-                        second_monitor.wait_until(self.processed_msg,
-                                                  timeout_sec=60,
-                                                  err_msg="Never saw output '%s' on " % self.processed_msg + str(node2.account))
-                        third_monitor.wait_until(self.processed_msg,
-                                                 timeout_sec=60,
-                                                 err_msg="Never saw output '%s' on " % self.processed_msg + str(node3.account))
+
+        self.processor1.start()
+        self.processor2.start()
+        self.processor3.start()
+
+        # double-check the version
+        self.wait_for_verification(self.processor1, kafka_version_str, self.processor1.LOG_FILE)
+        self.wait_for_verification(self.processor2, kafka_version_str, self.processor1.LOG_FILE)
+        self.wait_for_verification(self.processor3, kafka_version_str, self.processor1.LOG_FILE)
+
+        # wait for the members to join
+        self.wait_for_verification(self.processor1, "SMOKE-TEST-CLIENT-STARTED", self.processor1.STDOUT_FILE)
+        self.wait_for_verification(self.processor2, "SMOKE-TEST-CLIENT-STARTED", self.processor1.STDOUT_FILE)
+        self.wait_for_verification(self.processor3, "SMOKE-TEST-CLIENT-STARTED", self.processor1.STDOUT_FILE)
+
+        # make sure they've processed something
+        self.wait_for_verification(self.processor1, self.processed_msg, self.processor1.STDOUT_FILE)
+        self.wait_for_verification(self.processor2, self.processed_msg, self.processor1.STDOUT_FILE)
+        self.wait_for_verification(self.processor3, self.processed_msg, self.processor1.STDOUT_FILE)
+
+    def wait_for_verification(self, processor, message, file, num_lines=1):
+        wait_until(lambda: self.verify_from_file(processor, message, file) >= num_lines,
+                   timeout_sec=60,
+                   err_msg="Did expect to read '%s' from %s" % (message, processor.node.account))
+
+    @staticmethod
+    def verify_from_file(processor, message, file):
+        result = processor.node.account.ssh_output("grep -E '%s' %s | wc -l" % (message, file), allow_fail=False)
+        try:
+            return int(result)
+        except ValueError:
+            self.logger.warn("Command failed with ValueError: " + result)
+            return 0
 
     @staticmethod
     def prepare_for(processor, version):
