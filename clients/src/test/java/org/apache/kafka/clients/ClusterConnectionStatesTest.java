@@ -42,10 +42,10 @@ public class ClusterConnectionStatesTest {
     private final long reconnectBackoffMax = 60 * 1000;
     private final long connectionSetupTimeoutMs = 10 * 1000;
     private final long connectionSetupTimeoutMaxMs = 127 * 1000;
-    private final static int RECONNECT_BACKOFF_EXP_BASE = 2;
-    private final static double RECONNECT_BACKOFF_JITTER = 0.2;
-    private final static int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
-    private final static double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
+    private final int reconnectBackoffExpBase = ClusterConnectionStates.RECONNECT_BACKOFF_EXP_BASE;
+    private final double reconnectBackoffJitter = ClusterConnectionStates.RECONNECT_BACKOFF_JITTER;
+    private final int connectionSetupTimeoutExpBase = ClusterConnectionStates.CONNECTION_SETUP_TIMEOUT_EXP_BASE;
+    private final double connectionSetupTimeoutJitter = ClusterConnectionStates.CONNECTION_SETUP_TIMEOUT_JITTER;
     private final String nodeId1 = "1001";
     private final String nodeId2 = "2002";
     private final String hostTwoIps = "kafka.apache.org";
@@ -94,7 +94,7 @@ public class ClusterConnectionStatesTest {
         assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
         // After disconnecting we expect a backoff value equal to the reconnect.backoff.ms setting (plus minus 20% jitter)
-        double backoffTolerance = reconnectBackoffMs * RECONNECT_BACKOFF_JITTER;
+        double backoffTolerance = reconnectBackoffMs * reconnectBackoffJitter;
         long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
         assertEquals(reconnectBackoffMs, currentBackoff, backoffTolerance);
 
@@ -179,7 +179,7 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testMaxReconnectBackoff() {
-        long effectiveMaxReconnectBackoff = Math.round(reconnectBackoffMax * (1 + RECONNECT_BACKOFF_JITTER));
+        long effectiveMaxReconnectBackoff = Math.round(reconnectBackoffMax * (1 + reconnectBackoffJitter));
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         time.sleep(1000);
         connectionStates.disconnected(nodeId1, time.milliseconds());
@@ -200,17 +200,17 @@ public class ClusterConnectionStatesTest {
     @Test
     public void testExponentialReconnectBackoff() {
         double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
-            / Math.log(RECONNECT_BACKOFF_EXP_BASE);
+            / Math.log(reconnectBackoffExpBase);
 
         // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
         for (int i = 0; i < 10; i++) {
             connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
             connectionStates.disconnected(nodeId1, time.milliseconds());
             // Calculate expected backoff value without jitter
-            long expectedBackoff = Math.round(Math.pow(RECONNECT_BACKOFF_EXP_BASE, Math.min(i, reconnectBackoffMaxExp))
+            long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
                 * reconnectBackoffMs);
             long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
-            assertEquals(expectedBackoff, currentBackoff, RECONNECT_BACKOFF_JITTER * expectedBackoff);
+            assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
             time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
         }
     }
@@ -332,12 +332,12 @@ public class ClusterConnectionStatesTest {
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
         // Check the exponential timeout growth
-        for (int n = 0; n <= Math.log((double) connectionSetupTimeoutMaxMs / connectionSetupTimeoutMs) / Math.log(CONNECTION_SETUP_TIMEOUT_EXP_BASE); n++) {
+        for (int n = 0; n <= Math.log((double) connectionSetupTimeoutMaxMs / connectionSetupTimeoutMs) / Math.log(connectionSetupTimeoutExpBase); n++) {
             connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
             assertTrue(connectionStates.connectingNodes().contains(nodeId1));
-            assertEquals(connectionSetupTimeoutMs * Math.pow(CONNECTION_SETUP_TIMEOUT_EXP_BASE, n),
+            assertEquals(connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n),
                     connectionStates.connectionSetupTimeoutMs(nodeId1),
-                    connectionSetupTimeoutMs * Math.pow(CONNECTION_SETUP_TIMEOUT_EXP_BASE, n) * CONNECTION_SETUP_TIMEOUT_JITTER);
+                    connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n) * connectionSetupTimeoutJitter);
             connectionStates.disconnected(nodeId1, time.milliseconds());
             assertFalse(connectionStates.connectingNodes().contains(nodeId1));
         }
@@ -346,14 +346,14 @@ public class ClusterConnectionStatesTest {
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         assertEquals(connectionSetupTimeoutMaxMs,
                 connectionStates.connectionSetupTimeoutMs(nodeId1),
-                connectionSetupTimeoutMaxMs * CONNECTION_SETUP_TIMEOUT_JITTER);
+                connectionSetupTimeoutMaxMs * connectionSetupTimeoutJitter);
         assertTrue(connectionStates.connectingNodes().contains(nodeId1));
 
         // Should reset the timeout value to the init value
         connectionStates.ready(nodeId1);
         assertEquals(connectionSetupTimeoutMs,
                 connectionStates.connectionSetupTimeoutMs(nodeId1),
-                connectionSetupTimeoutMs * CONNECTION_SETUP_TIMEOUT_JITTER);
+                connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
         assertFalse(connectionStates.connectingNodes().contains(nodeId1));
         connectionStates.disconnected(nodeId1, time.milliseconds());
 
@@ -362,7 +362,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         assertEquals(connectionSetupTimeoutMs,
                 connectionStates.connectionSetupTimeoutMs(nodeId1),
-                connectionSetupTimeoutMs * CONNECTION_SETUP_TIMEOUT_JITTER);
+                connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
         assertTrue(connectionStates.connectingNodes().contains(nodeId1));
     }
 }

@@ -23,30 +23,30 @@ import java.util.concurrent.ThreadLocalRandom;
  * An utility class for keeping the parameters and providing the value of exponential
  * retry backoff, exponential reconnect backoff, exponential timeout, etc.
  * The formula is
- * Backoff(attempts) = random(1 - jitter, 1 + jitter) * scaleFactor * (ratio) ^ attempts
+ * Backoff(attempts) = random(1 - jitter, 1 + jitter) * initialInterval * multiplier ^ attempts
  * If scaleFactor is greater or equal than termMax, a constant backoff of will be provided
  * This class is thread-safe
  */
 public class ExponentialBackoff {
-    private final int ratio;
+    private final int multiplier;
     private final double expMax;
-    private final long scaleFactor;
+    private final long initialInterval;
     private final double jitter;
 
-    public ExponentialBackoff(long scaleFactor, int ratio, long termMax, double jitter) {
-        this.scaleFactor = scaleFactor;
-        this.ratio = ratio;
+    public ExponentialBackoff(long initialInterval, int multiplier, long maxInterval, double jitter) {
+        this.initialInterval = initialInterval;
+        this.multiplier = multiplier;
         this.jitter = jitter;
-        this.expMax = termMax > scaleFactor ?
-                Math.log(termMax / (double) Math.max(scaleFactor, 1)) / Math.log(ratio) : 0;
+        this.expMax = maxInterval > initialInterval ?
+                Math.log(maxInterval / (double) Math.max(initialInterval, 1)) / Math.log(multiplier) : 0;
     }
 
     public long backoff(long attempts) {
         if (expMax == 0) {
-            return scaleFactor;
+            return initialInterval;
         }
         double exp = Math.min(attempts, this.expMax);
-        double term = scaleFactor * Math.pow(ratio, exp);
+        double term = initialInterval * Math.pow(multiplier, exp);
         double randomFactor = ThreadLocalRandom.current().nextDouble(1 - jitter, 1 + jitter);
         return (long) (randomFactor * term);
     }

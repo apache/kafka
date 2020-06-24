@@ -36,10 +36,10 @@ import java.util.Map;
  *
  */
 final class ClusterConnectionStates {
-    private final static int RECONNECT_BACKOFF_EXP_BASE = 2;
-    private final static double RECONNECT_BACKOFF_JITTER = 0.2;
-    private final static int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
-    private final static double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
+    final static int RECONNECT_BACKOFF_EXP_BASE = 2;
+    final static double RECONNECT_BACKOFF_JITTER = 0.2;
+    final static int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
+    final static double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
     private Set<String> connectingNodes;
@@ -236,6 +236,9 @@ final class ClusterConnectionStates {
     public void checkingApiVersions(String id) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.CHECKING_API_VERSIONS;
+        resetReconnectBackoff(nodeState);
+        resetConnectionSetupTimeout(nodeState);
+        connectingNodes.remove(id);
     }
 
     /**
