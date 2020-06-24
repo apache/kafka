@@ -1801,7 +1801,9 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfCleanClosingDirtyTask() {
-        task = createStatefulTask(createConfig(false, "100"), true);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
 
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
         task.process(0L);
@@ -1812,7 +1814,9 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowIfRecyclingDirtyTask() {
-        task = createStatefulTask(createConfig(false, "100"), true);
+        task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
+        task.initializeIfNeeded();
+        task.completeRestoration();
 
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
         task.process(0L);
