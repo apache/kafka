@@ -44,6 +44,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -1752,7 +1753,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldUnregisterMetricsInCloseAndRecycle() {
+    public void shouldUnregisterMetricsInCloseCleanAndRecycleState() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
@@ -1796,6 +1797,28 @@ public class StreamTaskTest {
         );
 
         assertThat(task.inputPartitions(), equalTo(newPartitions));
+    }
+
+    @Test
+    public void shouldThrowIfCleanClosingDirtyTask() {
+        task = createStatefulTask(createConfig(false, "100"), true);
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+        task.process(0L);
+        assertTrue(task.commitNeeded());
+
+        assertThrows(TaskMigratedException.class, () -> task.closeClean());
+    }
+
+    @Test
+    public void shouldThrowIfRecyclingDirtyTask() {
+        task = createStatefulTask(createConfig(false, "100"), true);
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+        task.process(0L);
+        assertTrue(task.commitNeeded());
+
+        assertThrows(TaskMigratedException.class, () -> task.closeCleanAndRecycleState());
     }
 
     @Test
