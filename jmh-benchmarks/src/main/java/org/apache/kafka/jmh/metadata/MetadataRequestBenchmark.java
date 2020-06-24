@@ -65,6 +65,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
 import scala.Option;
+import scala.collection.immutable.List$;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -181,7 +182,8 @@ public class MetadataRequestBenchmark {
             brokerTopicStats,
             "clusterId",
             new SystemTime(),
-            null);
+            null,
+            List$.MODULE$.empty());
     }
 
     @TearDown(Level.Trial)

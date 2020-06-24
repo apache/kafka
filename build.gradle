@@ -737,6 +737,7 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+//    compile libs.atlasHook
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
     compile libs.jacksonDataformatCsv
@@ -756,6 +757,7 @@ project(':core') {
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     compile libs.commonsCli
+    compile libs.caffeine
 
     compileOnly libs.log4j
 
@@ -1027,6 +1029,9 @@ project(':clients') {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
+//    compile libs.log4j
+//    compile libs.slf4jlog4j
+
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes

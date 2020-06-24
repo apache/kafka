@@ -119,7 +119,7 @@
     </module>
     <module name="ClassDataAbstractionCoupling">
       <!-- default is 7 -->
-      <property name="max" value="25"/>
+      <property name="max" value="30"/>
     </module>
     <module name="BooleanExpressionComplexity">
       <!-- default is 3 -->

@@ -200,6 +200,9 @@
     <allow pkg="org.slf4j" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.test" />
+    <subpackage name="auditor">
+      <allow pkg="org.apache.kafka.server" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="tools">
