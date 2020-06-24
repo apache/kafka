@@ -22,8 +22,8 @@ import org.junit.Test;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.OptionalLong;
 import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
@@ -138,7 +138,7 @@ public class QuorumStateTest {
         LeaderState leaderState = state.becomeLeader(0L);
         assertTrue(state.isLeader());
         assertEquals(1, leaderState.epoch());
-        assertEquals(OptionalLong.empty(), leaderState.highWatermark());
+        assertEquals(Optional.empty(), leaderState.highWatermark());
     }
 
     @Test

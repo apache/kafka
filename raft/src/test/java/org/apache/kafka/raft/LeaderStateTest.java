@@ -21,7 +21,7 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.OptionalLong;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
@@ -52,52 +52,52 @@ public class LeaderStateTest {
     @Test
     public void testUpdateHighWatermarkQuorumSizeOne() {
         LeaderState state = new LeaderState(localId, epoch, 15L, Collections.singleton(localId));
-        assertEquals(OptionalLong.empty(), state.highWatermark());
-        state.updateLocalEndOffset(15L);
-        assertEquals(OptionalLong.of(15L), state.highWatermark());
+        assertEquals(Optional.empty(), state.highWatermark());
+        state.updateLocalEndOffset(new LogOffsetMetadata(15L));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
     }
 
     @Test
     public void testNonMonotonicEndOffsetUpdate() {
         LeaderState state = new LeaderState(localId, epoch, 15L, Collections.singleton(localId));
-        assertEquals(OptionalLong.empty(), state.highWatermark());
-        state.updateLocalEndOffset(15L);
-        assertEquals(OptionalLong.of(15L), state.highWatermark());
-        assertThrows(IllegalArgumentException.class, () -> state.updateLocalEndOffset(14L));
+        assertEquals(Optional.empty(), state.highWatermark());
+        state.updateLocalEndOffset(new LogOffsetMetadata(15L));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertThrows(IllegalArgumentException.class, () -> state.updateLocalEndOffset(new LogOffsetMetadata(14L)));
     }
 
     @Test
     public void testIdempotentEndOffsetUpdate() {
         LeaderState state = new LeaderState(localId, epoch, 15L, Collections.singleton(localId));
-        assertEquals(OptionalLong.empty(), state.highWatermark());
-        state.updateLocalEndOffset(15L);
-        state.updateLocalEndOffset(15L);
-        assertEquals(OptionalLong.of(15L), state.highWatermark());
+        assertEquals(Optional.empty(), state.highWatermark());
+        state.updateLocalEndOffset(new LogOffsetMetadata(15L));
+        state.updateLocalEndOffset(new LogOffsetMetadata(15L));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
     }
 
     @Test
     public void testUpdateHighWatermarkQuorumSizeTwo() {
         int otherNodeId = 1;
         LeaderState state = new LeaderState(localId, epoch, 10L, Utils.mkSet(localId, otherNodeId));
-        state.updateLocalEndOffset(15L);
-        assertEquals(OptionalLong.empty(), state.highWatermark());
-        state.updateEndOffset(otherNodeId, 10L);
+        state.updateLocalEndOffset(new LogOffsetMetadata(15L));
+        assertEquals(Optional.empty(), state.highWatermark());
+        state.updateEndOffset(otherNodeId, new LogOffsetMetadata(10L));
         assertEquals(Collections.emptySet(), state.nonEndorsingFollowers());
-        assertEquals(OptionalLong.of(10L), state.highWatermark());
-        state.updateEndOffset(otherNodeId, 15L);
-        assertEquals(OptionalLong.of(15L), state.highWatermark());
+        assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
+        state.updateEndOffset(otherNodeId, new LogOffsetMetadata(15L));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
     }
 
     @Test
     public void testHighWatermarkUnknownUntilStartOfLeaderEpoch() {
         int otherNodeId = 1;
         LeaderState state = new LeaderState(localId, epoch, 15L, Utils.mkSet(localId, otherNodeId));
-        state.updateLocalEndOffset(20L);
-        assertEquals(OptionalLong.empty(), state.highWatermark());
-        state.updateEndOffset(otherNodeId, 10L);
-        assertEquals(OptionalLong.empty(), state.highWatermark());
-        state.updateEndOffset(otherNodeId, 15L);
-        assertEquals(OptionalLong.of(15L), state.highWatermark());
+        state.updateLocalEndOffset(new LogOffsetMetadata(20L));
+        assertEquals(Optional.empty(), state.highWatermark());
+        state.updateEndOffset(otherNodeId, new LogOffsetMetadata(10L));
+        assertEquals(Optional.empty(), state.highWatermark());
+        state.updateEndOffset(otherNodeId, new LogOffsetMetadata(15L));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
     }
 
     @Test
@@ -105,19 +105,19 @@ public class LeaderStateTest {
         int node1 = 1;
         int node2 = 2;
         LeaderState state = new LeaderState(localId, epoch, 10L, Utils.mkSet(localId, node1, node2));
-        state.updateLocalEndOffset(15L);
-        assertEquals(OptionalLong.empty(), state.highWatermark());
-        state.updateEndOffset(node1, 10L);
+        state.updateLocalEndOffset(new LogOffsetMetadata(15L));
+        assertEquals(Optional.empty(), state.highWatermark());
+        state.updateEndOffset(node1, new LogOffsetMetadata(10L));
         assertEquals(Collections.singleton(node2), state.nonEndorsingFollowers());
-        assertEquals(OptionalLong.of(10L), state.highWatermark());
-        state.updateEndOffset(node2, 15L);
-        assertEquals(OptionalLong.of(15L), state.highWatermark());
-        state.updateLocalEndOffset(20L);
-        assertEquals(OptionalLong.of(15L), state.highWatermark());
-        state.updateEndOffset(node2, 20L);
-        assertEquals(OptionalLong.of(20L), state.highWatermark());
-        state.updateEndOffset(node1, 20L);
-        assertEquals(OptionalLong.of(20L), state.highWatermark());
+        assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
+        state.updateEndOffset(node2, new LogOffsetMetadata(15L));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        state.updateLocalEndOffset(new LogOffsetMetadata(20L));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        state.updateEndOffset(node2, new LogOffsetMetadata(20L));
+        assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
+        state.updateEndOffset(node1, new LogOffsetMetadata(20L));
+        assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
     }
 
     @Test
@@ -125,10 +125,10 @@ public class LeaderStateTest {
         int node1 = 1;
         int node2 = 2;
         LeaderState state = new LeaderState(localId, epoch, 10L, Utils.mkSet(localId, node1, node2));
-        state.updateLocalEndOffset(15L);
-        assertEquals(OptionalLong.empty(), state.highWatermark());
-        state.updateEndOffset(node1, 10L);
-        state.updateEndOffset(node2, 15L);
+        state.updateLocalEndOffset(new LogOffsetMetadata(15L));
+        assertEquals(Optional.empty(), state.highWatermark());
+        state.updateEndOffset(node1, new LogOffsetMetadata(10L));
+        state.updateEndOffset(node2, new LogOffsetMetadata(15L));
 
         // Leader should not be included; the follower with larger offset should be prioritized.
         assertEquals(Arrays.asList(node2, node1), state.nonLeaderVotersByDescendingFetchOffset());

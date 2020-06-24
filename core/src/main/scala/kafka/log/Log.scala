@@ -368,6 +368,20 @@ class Log(@volatile private var _dir: File,
     newHighWatermark
   }
 
+  def updateHighWatermarkOffsetMetadata(hw: LogOffsetMetadata): Long = {
+    val newHighWatermark = if (hw.messageOffset < logStartOffset) {
+      updateHighWatermarkMetadata(LogOffsetMetadata(logStartOffset))
+      logStartOffset
+    } else if (hw.messageOffset > logEndOffset) {
+      updateHighWatermarkMetadata(logEndOffsetMetadata)
+      logEndOffset
+    } else {
+      updateHighWatermarkMetadata(hw)
+      hw.messageOffset
+    }
+    newHighWatermark
+  }
+
   /**
    * Update the high watermark to a new value if and only if it is larger than the old value. It is
    * an error to update to a value which is larger than the log end offset.

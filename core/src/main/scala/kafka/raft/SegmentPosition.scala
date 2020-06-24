@@ -14,18 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package kafka.raft
 
-import java.util.Optional;
+import org.apache.kafka.raft.OffsetMetadata
 
-public interface EpochState {
-
-    default Optional<LogOffsetMetadata> highWatermark() {
-        return Optional.empty();
-    }
-
-    ElectionState election();
-
-    int epoch();
-
+case class SegmentPosition(baseOffset: Long, relativePosition: Int) extends OffsetMetadata {
+  override def toString: String = s"(segmentBaseOffset=$baseOffset,relativePositionInSegment=$relativePosition)"
 }

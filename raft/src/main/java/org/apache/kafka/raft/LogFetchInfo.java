@@ -16,16 +16,18 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
+import org.apache.kafka.common.record.Records;
 
-public interface EpochState {
+/**
+ * Metadata for the records fetched from log, including the records itself
+ */
+public class LogFetchInfo {
 
-    default Optional<LogOffsetMetadata> highWatermark() {
-        return Optional.empty();
+    public final Records records;
+    public final LogOffsetMetadata startOffsetMetadata;
+
+    public LogFetchInfo(Records records, LogOffsetMetadata startOffsetMetadata) {
+        this.records = records;
+        this.startOffsetMetadata = startOffsetMetadata;
     }
-
-    ElectionState election();
-
-    int epoch();
-
 }

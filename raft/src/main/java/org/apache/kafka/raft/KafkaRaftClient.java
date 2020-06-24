@@ -219,9 +219,9 @@ public class KafkaRaftClient implements RaftClient {
             logger.debug("Applying committed entries up to high watermark {}. " +
                 "Current position is {}", highWatermark, stateMachine.position());
 
-            while (stateMachine.position().offset < highWatermark && shutdown.get() == null) {
+            while (stateMachine.position().offset < highWatermark.offset && shutdown.get() == null) {
                 OffsetAndEpoch position = stateMachine.position();
-                Records records = readCommitted(position, highWatermark);
+                Records records = readCommitted(position, highWatermark.offset);
                 if (records.sizeInBytes() == 0)
                     break;
 
@@ -232,12 +232,12 @@ public class KafkaRaftClient implements RaftClient {
         });
     }
 
-    private void maybeCommitPendingAppends(long highWatermark, long currentTimeMs) {
+    private void maybeCommitPendingAppends(LogOffsetMetadata highWatermark, long currentTimeMs) {
         Iterator<Map.Entry<OffsetAndEpoch, AppendBatchAndTime>> iter = uncommittedAppends.entrySet().iterator();
         while (iter.hasNext()) {
             Map.Entry<OffsetAndEpoch, AppendBatchAndTime> entry = iter.next();
             OffsetAndEpoch offsetAndEpoch = entry.getKey();
-            if (offsetAndEpoch.offset < highWatermark) {
+            if (offsetAndEpoch.offset < highWatermark.offset) {
                 AppendBatchAndTime appendBatchAndTime = entry.getValue();
                 long elapsedTime = Math.max(0, currentTimeMs - appendBatchAndTime.appendTimeMs);
                 double elapsedTimePerRecord = elapsedTime / (double) appendBatchAndTime.numRecords;
@@ -272,10 +272,10 @@ public class KafkaRaftClient implements RaftClient {
         purgatory.completeAll(null);
     }
 
-    private void updateReplicaEndOffset(LeaderState state, int replicaId, long endOffset) {
-        if (state.updateEndOffset(replicaId, endOffset)) {
+    private void updateReplicaEndOffset(LeaderState state, int replicaId, LogOffsetMetadata endOffsetMetadata) {
+        if (state.updateEndOffset(replicaId, endOffsetMetadata)) {
             logger.debug("Leader high watermark updated to {} after replica {} end offset updated to {}",
-                    state.highWatermark(), replicaId, endOffset);
+                    state.highWatermark(), replicaId, endOffsetMetadata);
             applyCommittedRecordsToStateMachine();
         }
 
@@ -295,7 +295,7 @@ public class KafkaRaftClient implements RaftClient {
     @Override
     public void initialize(ReplicatedStateMachine stateMachine) throws IOException {
         this.stateMachine = stateMachine;
-        quorum.initialize(new OffsetAndEpoch(log.endOffset(), log.lastFetchedEpoch()));
+        quorum.initialize(new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch()));
         stateMachine.initialize(this::append);
 
         if (quorum.isLeader()) {
@@ -316,7 +316,7 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     private OffsetAndEpoch endOffset() {
-        return new OffsetAndEpoch(log.endOffset(), log.lastFetchedEpoch());
+        return new OffsetAndEpoch(log.endOffset().offset, log.lastFetchedEpoch());
     }
 
     private void resetConnections() {
@@ -339,7 +339,7 @@ public class KafkaRaftClient implements RaftClient {
                         follower -> new Voter().setVoterId(follower)).collect(Collectors.toList())))
         );
 
-        log.assignEpochStartOffset(quorum.epoch(), log.endOffset());
+        log.assignEpochStartOffset(quorum.epoch(), log.endOffset().offset);
         resetConnections();
 
         timer.reset(fetchTimeoutMs);
@@ -356,7 +356,7 @@ public class KafkaRaftClient implements RaftClient {
 
     private void maybeBecomeLeader(CandidateState state) throws IOException {
         if (state.isVoteGranted()) {
-            long endOffset = log.endOffset();
+            long endOffset = log.endOffset().offset;
             LeaderState leaderState = quorum.becomeLeader(endOffset);
             onBecomeLeader(leaderState);
         }
@@ -690,7 +690,7 @@ public class KafkaRaftClient implements RaftClient {
     private FetchQuorumRecordsResponseData buildFetchQuorumRecordsResponse(
         Errors error,
         Records records,
-        OptionalLong highWatermark
+        Optional<LogOffsetMetadata> highWatermark
     ) throws IOException {
         return buildEmptyFetchQuorumRecordsResponse(error, highWatermark)
             .setRecords(RaftUtil.serializeRecords(records));
@@ -698,14 +698,14 @@ public class KafkaRaftClient implements RaftClient {
 
     private FetchQuorumRecordsResponseData buildEmptyFetchQuorumRecordsResponse(
         Errors error,
-        OptionalLong highWatermark
+        Optional<LogOffsetMetadata> highWatermark
     ) {
         return new FetchQuorumRecordsResponseData()
             .setErrorCode(error.code())
             .setLeaderEpoch(quorum.epoch())
             .setLeaderId(quorum.leaderIdOrNil())
             .setRecords(ByteBuffer.wrap(new byte[0]))
-            .setHighWatermark(highWatermark.orElse(-1L));
+            .setHighWatermark(highWatermark.map(logOffsetMetadata -> logOffsetMetadata.offset).orElse(-1L));
     }
 
     /**
@@ -730,7 +730,7 @@ public class KafkaRaftClient implements RaftClient {
             || request.lastFetchedEpoch() < 0
             || request.lastFetchedEpoch() > request.leaderEpoch()) {
             return completedFuture(buildEmptyFetchQuorumRecordsResponse(
-                Errors.INVALID_REQUEST, OptionalLong.empty()));
+                Errors.INVALID_REQUEST, Optional.empty()));
         }
 
         FetchQuorumRecordsResponseData response = tryCompleteFetchQuorumRecordsRequest(request);
@@ -753,7 +753,7 @@ public class KafkaRaftClient implements RaftClient {
                 // any other error, we need to return it.
                 Errors error = Errors.forException(cause);
                 if (error != Errors.REQUEST_TIMED_OUT) {
-                    return buildEmptyFetchQuorumRecordsResponse(error, OptionalLong.empty());
+                    return buildEmptyFetchQuorumRecordsResponse(error, Optional.empty());
                 }
             }
 
@@ -761,7 +761,7 @@ public class KafkaRaftClient implements RaftClient {
                 return tryCompleteFetchQuorumRecordsRequest(request);
             } catch (Exception e) {
                 logger.error("Caught unexpected error in fetch completion of request {}", request, e);
-                return buildEmptyFetchQuorumRecordsResponse(Errors.UNKNOWN_SERVER_ERROR, OptionalLong.empty());
+                return buildEmptyFetchQuorumRecordsResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
             }
         });
     }
@@ -774,14 +774,14 @@ public class KafkaRaftClient implements RaftClient {
             return buildFetchQuorumRecordsResponse(
                 errorOpt.get(),
                 MemoryRecords.EMPTY,
-                OptionalLong.empty());
+                Optional.empty());
         }
 
         int replicaId = request.replicaId();
         long fetchOffset = request.fetchOffset();
         int lastFetchedEpoch = request.lastFetchedEpoch();
         LeaderState state = quorum.leaderStateOrThrow();
-        OptionalLong highWatermark = state.highWatermark();
+        Optional<LogOffsetMetadata> highWatermark = state.highWatermark();
         Optional<OffsetAndEpoch> nextOffsetOpt = validateFetchOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
 
         if (nextOffsetOpt.isPresent()) {
@@ -789,15 +789,18 @@ public class KafkaRaftClient implements RaftClient {
             return buildEmptyFetchQuorumRecordsResponse(Errors.NONE, highWatermark)
                 .setNextFetchOffset(nextOffsetAndEpoch.offset)
                 .setNextFetchOffsetEpoch(nextOffsetAndEpoch.epoch);
-        } else if (quorum.isVoter(replicaId)) {
-            updateReplicaEndOffset(state, replicaId, fetchOffset);
-        }
+        } else {
+            LogFetchInfo info = log.read(fetchOffset, OptionalLong.empty());
 
-        Records records = log.read(fetchOffset, OptionalLong.empty());
-        return buildFetchQuorumRecordsResponse(
-            Errors.NONE,
-            records,
-            highWatermark);
+            if (quorum.isVoter(replicaId)) {
+                updateReplicaEndOffset(state, replicaId, info.startOffsetMetadata);
+            }
+
+            return buildFetchQuorumRecordsResponse(
+                    Errors.NONE,
+                    info.records,
+                    highWatermark);
+        }
     }
 
     /**
@@ -1254,7 +1257,7 @@ public class KafkaRaftClient implements RaftClient {
         return new FetchQuorumRecordsRequestData()
             .setLeaderEpoch(quorum.epoch())
             .setReplicaId(quorum.localId)
-            .setFetchOffset(log.endOffset())
+            .setFetchOffset(log.endOffset().offset)
             .setLastFetchedEpoch(log.lastFetchedEpoch())
             .setMaxWaitTimeMs(fetchMaxWaitMs);
     }
@@ -1431,7 +1434,7 @@ public class KafkaRaftClient implements RaftClient {
             throw new LogTruncationException("The requested offset and epoch " + offsetAndEpoch +
                     " are not in range. The closest offset we found is " + endOffset + ".");
         }
-        return log.read(offsetAndEpoch.offset, OptionalLong.of(highWatermark));
+        return log.read(offsetAndEpoch.offset, OptionalLong.of(highWatermark)).records;
     }
 
     @Override
@@ -1443,7 +1446,7 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     public OptionalLong highWatermark() {
-        return quorum.highWatermark();
+        return quorum.highWatermark().isPresent() ? OptionalLong.of(quorum.highWatermark().get().offset) : OptionalLong.empty();
     }
 
     private class GracefulShutdown {

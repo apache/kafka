@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 
@@ -128,7 +129,7 @@ public class FollowerStateTest {
         int leaderId = 2;
         assertTrue(state.acknowledgeLeader(leaderId));
         state.updateHighWatermark(highWatermark);
-        assertEquals(highWatermark, state.highWatermark());
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
     }
 
     @Test
@@ -141,6 +142,6 @@ public class FollowerStateTest {
         assertThrows(IllegalArgumentException.class, () -> state.updateHighWatermark(OptionalLong.empty()));
         assertThrows(IllegalArgumentException.class, () -> state.updateHighWatermark(OptionalLong.of(14L)));
         state.updateHighWatermark(highWatermark);
-        assertEquals(highWatermark, state.highWatermark());
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
     }
 }

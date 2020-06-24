@@ -538,26 +538,26 @@ public class RaftEventSimulationTest {
 
         boolean anyReachedHighWatermark(long offset) {
             return running.values().stream()
-                    .anyMatch(node -> node.quorum.highWatermark().orElse(0) > offset);
+                    .anyMatch(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
         }
 
         long maxHighWatermarkReached(Set<Integer> nodeIds) {
             return running.values().stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
-                .map(node -> node.quorum.highWatermark().orElse(0))
+                .map(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L))
                 .max(Long::compareTo)
                 .orElse(0L);
         }
 
         boolean allReachedHighWatermark(long offset, Set<Integer> nodeIds) {
             return nodeIds.stream()
-                .allMatch(nodeId -> running.get(nodeId).quorum.highWatermark()
-                    .orElse(0) > offset);
+                .allMatch(nodeId -> running.get(nodeId).quorum.highWatermark().map(hw -> hw.offset)
+                    .orElse(0L) > offset);
         }
 
         boolean allReachedHighWatermark(long offset) {
             return running.values().stream()
-                .allMatch(node -> node.quorum.highWatermark().orElse(0) > offset);
+                .allMatch(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
         }
 
         boolean hasConsistentLeader() throws IOException {
@@ -604,7 +604,7 @@ public class RaftEventSimulationTest {
                 if (election.hasLeader()) {
                     Optional<OffsetAndEpoch> endOffset = state.log.endOffsetForEpoch(election.epoch);
                     if (!endOffset.isPresent())
-                        state.log.assignEpochStartOffset(election.epoch, state.log.endOffset());
+                        state.log.assignEpochStartOffset(election.epoch, state.log.endOffset().offset);
                 }
             });
         }
@@ -818,7 +818,7 @@ public class RaftEventSimulationTest {
             cluster.leaderHighWatermark().ifPresent(highWatermark -> {
                 long numReachedHighWatermark = cluster.nodes.entrySet().stream()
                     .filter(entry -> cluster.voters.contains(entry.getKey()))
-                    .filter(entry -> entry.getValue().log.endOffset() >= highWatermark)
+                    .filter(entry -> entry.getValue().log.endOffset().offset >= highWatermark)
                     .count();
                 assertTrue("Insufficient nodes have reached current high watermark",
                     numReachedHighWatermark >= cluster.majoritySize());

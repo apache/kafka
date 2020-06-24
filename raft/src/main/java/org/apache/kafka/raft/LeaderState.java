@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -31,7 +32,7 @@ public class LeaderState implements EpochState {
     private final int localId;
     private final int epoch;
     private final long epochStartOffset;
-    private OptionalLong highWatermark = OptionalLong.empty();
+    private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
     private final Map<Integer, ReplicaState> voterReplicaStates = new HashMap<>();
 
     protected LeaderState(int localId, int epoch, long epochStartOffset, Set<Integer> voters) {
@@ -46,7 +47,7 @@ public class LeaderState implements EpochState {
     }
 
     @Override
-    public OptionalLong highWatermark() {
+    public Optional<LogOffsetMetadata> highWatermark() {
         return highWatermark;
     }
 
@@ -81,15 +82,15 @@ public class LeaderState implements EpochState {
         // Find the largest offset which is replicated to a majority of replicas (the leader counts)
         List<ReplicaState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
         int indexOfHw = voterReplicaStates.size() / 2;
-        OptionalLong highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
+        Optional<LogOffsetMetadata> highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
 
         if (highWatermarkUpdateOpt.isPresent()) {
             // When a leader is first elected, it cannot know the high watermark of the previous
             // leader. In order to avoid exposing a non-monotonically increasing value, we have
             // to wait for followers to catch up to the start of the leader's epoch.
-            long highWatermarkUpdate = highWatermarkUpdateOpt.getAsLong();
+            long highWatermarkUpdate = highWatermarkUpdateOpt.get().offset;
             if (highWatermarkUpdate >= epochStartOffset) {
-                highWatermark = OptionalLong.of(highWatermarkUpdate);
+                highWatermark = highWatermarkUpdateOpt;
                 return true;
             }
         }
@@ -130,14 +131,14 @@ public class LeaderState implements EpochState {
     /**
      * @return true if the high watermark is updated too
      */
-    public boolean updateEndOffset(int remoteNodeId, long endOffset) {
+    public boolean updateEndOffset(int remoteNodeId, LogOffsetMetadata endOffsetMetadata) {
         ReplicaState state = ensureValidVoter(remoteNodeId);
         state.endOffset.ifPresent(currentEndOffset -> {
-            if (currentEndOffset > endOffset)
+            if (currentEndOffset.offset > endOffsetMetadata.offset)
                 throw new IllegalArgumentException("Non-monotonic update to end offset for nodeId " + remoteNodeId);
         });
         state.hasEndorsedLeader = true;
-        state.endOffset = OptionalLong.of(endOffset);
+        state.endOffset = Optional.of(endOffsetMetadata);
         return updateHighWatermark();
     }
 
@@ -157,24 +158,24 @@ public class LeaderState implements EpochState {
      * Update the local end offset after a log append to the leader. Return true if this
      * update results in a bump to the high watermark.
      *
-     * @param endOffset The new log end offset
+     * @param endOffsetMetadata The new log end offset
      * @return true if the high watermark increased, false otherwise
      */
-    public boolean updateLocalEndOffset(long endOffset) {
-        return updateEndOffset(localId, endOffset);
+    public boolean updateLocalEndOffset(LogOffsetMetadata endOffsetMetadata) {
+        return updateEndOffset(localId, endOffsetMetadata);
     }
 
     private static class ReplicaState implements Comparable<ReplicaState> {
         final int nodeId;
         boolean hasEndorsedLeader;
-        OptionalLong endOffset;
+        Optional<LogOffsetMetadata> endOffset;
         OptionalLong lastFetchTimestamp;
 
         public ReplicaState(int nodeId,
                             boolean hasEndorsedLeader) {
             this.nodeId = nodeId;
             this.hasEndorsedLeader = hasEndorsedLeader;
-            this.endOffset = OptionalLong.empty();
+            this.endOffset = Optional.empty();
             this.lastFetchTimestamp = OptionalLong.empty();
         }
 
@@ -187,7 +188,7 @@ public class LeaderState implements EpochState {
             else if (!that.endOffset.isPresent())
                 return -1;
             else
-                return Long.compare(that.endOffset.getAsLong(), this.endOffset.getAsLong());
+                return Long.compare(that.endOffset.get().offset, this.endOffset.get().offset);
         }
     }
 

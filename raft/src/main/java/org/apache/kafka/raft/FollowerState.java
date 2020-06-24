@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -36,8 +37,8 @@ public class FollowerState implements EpochState {
     }
 
     @Override
-    public OptionalLong highWatermark() {
-        return highWatermark;
+    public Optional<LogOffsetMetadata> highWatermark() {
+        return highWatermark.isPresent() ? Optional.of(new LogOffsetMetadata(highWatermark.getAsLong())) : Optional.empty();
     }
 
     @Override

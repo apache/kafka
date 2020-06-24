@@ -16,16 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
-
-public interface EpochState {
-
-    default Optional<LogOffsetMetadata> highWatermark() {
-        return Optional.empty();
-    }
-
-    ElectionState election();
-
-    int epoch();
-
+// Opaque metadata type which should be instantiated by the log implementation
+public interface OffsetMetadata {
 }
