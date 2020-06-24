@@ -126,7 +126,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final long CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT = 1000L;
 
     public static final String CONSUMER_AUTO_OFFSET_RESET = "consumer.auto.offset.reset";
-    private static final String CONSUMER_AUTO_OFFSET_RESET_DOC = "Consumer Auto offset reset, defaults to earliest unless specify.";
+    private static final String CONSUMER_AUTO_OFFSET_RESET_DOC = "Consumer Auto offset reset, default to earliest unless specified.";
     public static final String CONSUMER_AUTO_OFFSET_RESET_DEFAULT = "earliest";
 
     public static final String ADMIN_TASK_TIMEOUT_MILLIS = "admin.timeout.ms";
