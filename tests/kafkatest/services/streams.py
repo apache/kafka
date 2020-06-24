@@ -346,7 +346,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
 
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\";" \
               " INCLUDE_TEST_JARS=true UPGRADE_KAFKA_STREAMS_TEST_VERSION=%(version)s" \
-              " bash -x %(kafka_run_class)s %(streams_class_name)s" \
+              " %(kafka_run_class)s %(streams_class_name)s" \
               " %(config_file)s %(user_test_args1)s" \
               " & echo $! >&3 ) " \
               "1>> %(stdout)s 2>> %(stderr)s 3> %(pidfile)s" % args

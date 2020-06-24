@@ -261,11 +261,15 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         final int sizeOfBufferTime = Long.BYTES;
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
-
+        final byte[] array = buffer.array();
+        System.err.printf("Serializing v2:");
+        System.err.printf("   key: " + BufferValue.bytesToHex(key.get()));
+        System.err.printf(" value: " + value);
+        System.err.printf(" serialized: " + BufferValue.bytesToHex(array));
         ((RecordCollector.Supplier) context).recordCollector().send(
                 changelogTopic,
                 key,
-                buffer.array(),
+                array,
                 V_2_CHANGELOG_HEADERS,
                 partition,
                 null,
@@ -365,6 +369,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     );
                 } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_2_CHANGELOG_HEADER_VALUE)) {
                     // in this case, the changelog value is a serialized BufferValue
+                    System.err.println("Deserializing " + record);
+                    System.err.println("   key: " + BufferValue.bytesToHex(record.key()));
+                    System.err.println(" value: " + BufferValue.bytesToHex(record.value()));
 
                     final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
                     final BufferValue bufferValue = BufferValue.deserialize(valueAndTime);

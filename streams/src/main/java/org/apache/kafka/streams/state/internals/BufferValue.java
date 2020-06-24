@@ -65,7 +65,7 @@ public final class BufferValue {
 
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
 
-    private static String bytesToHex(byte[] bytes) {
+    public static String bytesToHex(byte[] bytes) {
         if (bytes == null) {
             return "null";
         }
@@ -127,8 +127,6 @@ public final class BufferValue {
             oldValue = new byte[oldValueLength];
             buffer.get(oldValue);
         }
-
-        System.out.println("prior value: " + bytesToHex(priorValue));
 
         final byte[] newValue = extractValue(buffer);
 
@@ -221,9 +219,9 @@ public final class BufferValue {
     @Override
     public String toString() {
         return "BufferValue{" +
-            "priorValue=" + Arrays.toString(priorValue) +
-            ", oldValue=" + Arrays.toString(oldValue) +
-            ", newValue=" + Arrays.toString(newValue) +
+            "priorValue=0x" + bytesToHex(priorValue) +
+            ", oldValue=0x" + bytesToHex(oldValue) +
+            ", newValue=0x" + bytesToHex(newValue) +
             ", recordContext=" + recordContext +
             '}';
     }
