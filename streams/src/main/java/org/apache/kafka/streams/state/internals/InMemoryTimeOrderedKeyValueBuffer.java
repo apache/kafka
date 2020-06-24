@@ -60,8 +60,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
     private static final byte[] V_1_CHANGELOG_HEADER_VALUE = {(byte) 1};
-    private static final RecordHeaders V_1_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[] {new RecordHeader("v", V_1_CHANGELOG_HEADER_VALUE)});
     private static final byte[] V_2_CHANGELOG_HEADER_VALUE = {(byte) 2};
     private static final RecordHeaders V_2_CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", V_2_CHANGELOG_HEADER_VALUE)});
