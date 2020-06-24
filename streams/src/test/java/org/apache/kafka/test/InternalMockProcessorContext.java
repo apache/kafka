@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManagerStub;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
@@ -70,7 +71,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private long timestamp = -1L;
-    private Map<String, String> storeToChangelogTopic = new HashMap<>();
+    private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     public InternalMockProcessorContext() {
         this(null,
@@ -183,7 +184,6 @@ public class InternalMockProcessorContext
             new TaskId(0, 0),
             config,
             metrics,
-            null,
             cache
         );
         super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
@@ -192,6 +192,11 @@ public class InternalMockProcessorContext
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
         this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
+    }
+
+    @Override
+    protected StateManagerStub stateManager() {
+        return new StateManagerStub();
     }
 
     @Override

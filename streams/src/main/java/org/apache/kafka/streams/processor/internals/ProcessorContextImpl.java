@@ -50,6 +50,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
+    private final ProcessorStateManager stateManager;
+
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
     public ProcessorContextImpl(final TaskId id,
@@ -57,7 +59,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                 final ProcessorStateManager stateMgr,
                                 final StreamsMetricsImpl metrics,
                                 final ThreadCache cache) {
-        super(id, config, metrics, stateMgr, cache);
+        super(id, config, metrics, cache);
+        stateManager = stateMgr;
     }
 
     @Override
@@ -96,8 +99,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
+    @Override
     public ProcessorStateManager stateManager() {
-        return (ProcessorStateManager) stateManager;
+        return stateManager;
     }
 
     @Override
@@ -112,10 +116,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                           final long timestamp) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
 
-        final TopicPartition changelogPartition = stateManager().changelogTopicPartitionFor(storeName);
+        final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
         if (changelogPartition == null) {
-            throw new IllegalStateException("Sending records to state store " + storeName +
-                " which has not been registered.");
+            throw new IllegalStateException("Sending records to state store " + storeName
+                + " which has not been registered or"
+                + " which does not have a changelog topic because the state store has logging disabled."
+            );
         }
 
         // Sending null headers to changelog topics (KIP-244)

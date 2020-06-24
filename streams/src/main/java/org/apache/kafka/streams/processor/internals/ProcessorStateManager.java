@@ -61,7 +61,7 @@ import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_U
  * The manager is also responsible for restoring state stores via their registered restore callback,
  * which is used for both updating standby tasks as well as restoring active tasks.
  */
-public class ProcessorStateManager extends AbstractProcessorStateManager {
+public class ProcessorStateManager extends AbstractStateManager {
 
     public static class StateStoreMetadata {
         private final StateStore stateStore;
@@ -173,7 +173,6 @@ public class ProcessorStateManager extends AbstractProcessorStateManager {
                                  final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
-
         super(storeToChangelogTopic);
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -590,8 +589,7 @@ public class ProcessorStateManager extends AbstractProcessorStateManager {
         return offset != OFFSET_UNKNOWN ? offset : null;
     }
 
-    @Override
-    public TopicPartition changelogTopicPartitionFor(final String storeName) {
+    public TopicPartition registeredChangelogPartitionFor(final String storeName) {
         final StateStoreMetadata storeMetadata = stores.get(storeName);
         return storeMetadata == null ? null : storeMetadata.changelogPartition;
     }

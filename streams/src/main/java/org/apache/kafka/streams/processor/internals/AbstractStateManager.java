@@ -18,11 +18,11 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.Map;
 
-public abstract class AbstractProcessorStateManager implements StateManager {
+public abstract class AbstractStateManager implements StateManager {
 
     private final Map<String, String> storeToChangelogTopic;
 
-    public AbstractProcessorStateManager(final Map<String, String> storeToChangelogTopic) {
+    public AbstractStateManager(final Map<String, String> storeToChangelogTopic) {
         this.storeToChangelogTopic = storeToChangelogTopic;
     }
 

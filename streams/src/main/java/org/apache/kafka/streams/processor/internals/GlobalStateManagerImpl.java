@@ -57,7 +57,7 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.conv
  * This class is responsible for the initialization, restoration, closing, flushing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
-public class GlobalStateManagerImpl extends AbstractProcessorStateManager implements GlobalStateManager {
+public class GlobalStateManagerImpl extends AbstractStateManager implements GlobalStateManager {
     private final Logger log;
     private final ProcessorTopology topology;
     private final Consumer<byte[], byte[]> globalConsumer;
@@ -401,10 +401,5 @@ public class GlobalStateManagerImpl extends AbstractProcessorStateManager implem
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         return Collections.unmodifiableMap(checkpointFileCache);
-    }
-
-    @Override
-    public TopicPartition changelogTopicPartitionFor(final String storeName) {
-        return null;
     }
 }

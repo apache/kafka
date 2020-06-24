@@ -135,8 +135,8 @@ public class ProcessorContextImplTest {
         expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
         expect(stateManager.getStore("LocalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
         expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
-        expect(stateManager.changelogTopicPartitionFor(NOT_REGISTERED_STORE_NAME)).andStubReturn(null);
-        expect(stateManager.changelogTopicPartitionFor(REGISTERED_STORE_NAME)).andStubReturn(CHANGELOG_PARTITION);
+        expect(stateManager.registeredChangelogPartitionFor(NOT_REGISTERED_STORE_NAME)).andStubReturn(null);
+        expect(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).andStubReturn(CHANGELOG_PARTITION);
 
         replay(stateManager);
 
