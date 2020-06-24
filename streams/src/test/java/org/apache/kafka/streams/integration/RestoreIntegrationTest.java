@@ -359,7 +359,9 @@ public class RestoreIntegrationTest {
         waitForStandbyCompletion(client1, 1, 30 * 1000L);
         waitForStandbyCompletion(client2, 1, 30 * 1000L);
 
-        assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(0));
+        // Sometimes the store happens to have already been closed sometime during startup, so just keep track
+        // of where it started and make sure it doesn't happen more times from there
+        final int initialStoreCloseCount = CloseCountingInMemoryStore.numStoresClosed();
         assertThat(restoreListener.totalNumRestored(), CoreMatchers.equalTo(0L));
 
         client2.close();
@@ -374,12 +376,12 @@ public class RestoreIntegrationTest {
 
         // After stopping instance 2 and letting instance 1 take over its tasks, we should have closed just two stores
         // total: the active and standby tasks on instance 2
-        assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(2));
+        assertThat(CloseCountingInMemoryStore.numStoresClosed(), equalTo(initialStoreCloseCount + 2));
 
         client1.close();
         waitForApplicationState(singletonList(client2), State.NOT_RUNNING, Duration.ofSeconds(60));
 
-        assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(4));
+        assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
     }
 
     private static KeyValueBytesStoreSupplier getCloseCountingStore(final String name) {

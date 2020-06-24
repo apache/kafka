@@ -487,7 +487,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();
-                recordCollector.close();
+                recordCollector.closeClean();
 
                 break;
 
@@ -520,9 +520,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     private void close(final boolean clean) {
         if (clean && commitNeeded) {
+            // It may be that we failed to commit a task during handleRevocation, but "forgot" this and tried to
+            // closeClean in handleAssignment. We should throw if we detect this to force the TaskManager to closeDirty
             log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
                           + " commit and should close as dirty instead");
-            throw new StreamsException("Tried to close dirty task as clean");
+            throw new TaskMigratedException("Tried to close dirty task as clean");
         }
         switch (state()) {
             case SUSPENDED:
@@ -542,7 +544,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     "state manager close",
                     log);
 
-                TaskManager.executeAndMaybeSwallow(clean, recordCollector::close, "record collector close", log);
+                TaskManager.executeAndMaybeSwallow(
+                    clean,
+                    clean ? recordCollector::closeClean : recordCollector::closeDirty,
+                    "record collector close",
+                    log
+                );
 
                 break;
 
