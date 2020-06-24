@@ -463,6 +463,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeClean() {
+        validateClean();
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         close(true);
         log.info("Closed clean");
@@ -482,7 +483,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void closeAndRecycleState() {
+    public void closeCleanAndRecycleState() {
+        validateClean();
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         switch (state()) {
             case SUSPENDED:
@@ -515,17 +517,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         stateMgr.checkpoint(checkpointableOffsets());
     }
 
-    /**
-     * You must commit a task and checkpoint the state manager before closing as this will release the state dir lock
-     */
-    private void close(final boolean clean) {
-        if (clean && commitNeeded) {
-            // It may be that we failed to commit a task during handleRevocation, but "forgot" this and tried to
-            // closeClean in handleAssignment. We should throw if we detect this to force the TaskManager to closeDirty
+    private void validateClean() {
+        // It may be that we failed to commit a task during handleRevocation, but "forgot" this and tried to
+        // closeClean in handleAssignment. We should throw if we detect this to force the TaskManager to closeDirty
+        if (commitNeeded) {
             log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
                           + " commit and should close as dirty instead");
             throw new TaskMigratedException("Tried to close dirty task as clean");
         }
+    }
+
+    /**
+     * You must commit a task and checkpoint the state manager before closing as this will release the state dir lock
+     */
+    private void close(final boolean clean) {
         switch (state()) {
             case SUSPENDED:
                 // first close state manager (which is idempotent) then close the record collector

@@ -108,4 +108,5 @@ public abstract class AbstractTask implements Task {
         this.inputPartitions = topicPartitions;
         topology.updateSourceTopics(nodeToSourceTopics);
     }
+
 }

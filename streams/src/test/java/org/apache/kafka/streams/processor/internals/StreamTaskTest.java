@@ -1761,7 +1761,7 @@ public class StreamTaskTest {
 
         task.suspend();
         assertThat(getTaskMetrics(), not(empty()));
-        task.closeAndRecycleState();
+        task.closeCleanAndRecycleState();
         assertThat(getTaskMetrics(), empty());
     }
 
@@ -1805,16 +1805,16 @@ public class StreamTaskTest {
         EasyMock.replay(stateManager, recordCollector);
 
         task = createStatefulTask(createConfig(false, "100"), true);
-        assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // CREATED
+        assertThrows(IllegalStateException.class, () -> task.closeCleanAndRecycleState()); // CREATED
 
         task.initializeIfNeeded();
-        assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // RESTORING
+        assertThrows(IllegalStateException.class, () -> task.closeCleanAndRecycleState()); // RESTORING
 
         task.completeRestoration();
-        assertThrows(IllegalStateException.class, () -> task.closeAndRecycleState()); // RUNNING
+        assertThrows(IllegalStateException.class, () -> task.closeCleanAndRecycleState()); // RUNNING
 
         task.suspend();
-        task.closeAndRecycleState(); // SUSPENDED
+        task.closeCleanAndRecycleState(); // SUSPENDED
 
         EasyMock.verify(stateManager, recordCollector);
     }

@@ -2723,7 +2723,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void closeAndRecycleState() {
+        public void closeCleanAndRecycleState() {
             transitionTo(State.CLOSED);
         }
 
