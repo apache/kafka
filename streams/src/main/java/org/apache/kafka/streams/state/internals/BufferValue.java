@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Objects;
+
+import static java.util.Objects.requireNonNull;
 
 public final class BufferValue {
     private static final int NULL_VALUE_SENTINEL = -1;
@@ -29,6 +33,50 @@ public final class BufferValue {
     private final byte[] oldValue;
     private final byte[] newValue;
     private final ProcessorRecordContext recordContext;
+
+    public static void main(String[] args) {
+        final String str="00000172D1434655000000000000006F0000000C6C6F67732D696E6772657373000000180000000000000059FFFFFFFF00000051080110AC051A2436346139616437662D313838352D346234342D613163302D633134346565633162636665222436346139616437662D313838352D346234342D613163302D633134346565633162636665FFFFFFFF00000172D1434655";
+        final byte[] arr = hexStringToByteArray(str);
+
+        // in this case, the changelog value is a serialized ContextualRecord
+        final ByteBuffer timeAndValue = ByteBuffer.wrap(arr);
+        final long time = timeAndValue.getLong();
+        final byte[] changelogValue = new byte[arr.length - 8];
+        timeAndValue.get(changelogValue);
+
+        final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(changelogValue));
+        final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));
+
+        System.out.println(change);
+
+        final BufferValue deserialize = deserialize(ByteBuffer.wrap(arr));
+        System.out.println(deserialize);
+    }
+
+    public static byte[] hexStringToByteArray(String s) {
+        int len = s.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4)
+                + Character.digit(s.charAt(i+1), 16));
+        }
+        return data;
+    }
+
+    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+
+    private static String bytesToHex(byte[] bytes) {
+        if (bytes == null) {
+            return "null";
+        }
+        char[] hexChars = new char[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars);
+    }
 
     BufferValue(final byte[] priorValue,
                 final byte[] oldValue,
@@ -80,6 +128,8 @@ public final class BufferValue {
             buffer.get(oldValue);
         }
 
+        System.out.println("prior value: " + bytesToHex(priorValue));
+
         final byte[] newValue = extractValue(buffer);
 
         return new BufferValue(priorValue, oldValue, newValue, context);
@@ -120,7 +170,7 @@ public final class BufferValue {
 
         if (oldValue == null) {
             buffer.putInt(NULL_VALUE_SENTINEL);
-        } else if (priorValue == oldValue) {
+        } else if (Arrays.equals(priorValue, oldValue)) {
             buffer.putInt(OLD_PREV_DUPLICATE_VALUE_SENTINEL);
         } else {
             buffer.putInt(sizeOfOldValue);

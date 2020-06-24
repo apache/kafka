@@ -474,8 +474,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         final BufferValue buffered = getBuffered(serializedKey);
         final byte[] serializedPriorValue;
         if (buffered == null) {
-            final V priorValue = value.oldValue;
-            serializedPriorValue = (priorValue == null) ? null : valueSerde.innerSerde().serializer().serialize(changelogTopic, priorValue);
+            serializedPriorValue = serialChange.oldValue;
         } else {
             serializedPriorValue = buffered.priorValue();
         }
