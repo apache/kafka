@@ -926,6 +926,7 @@ public class SslTransportLayerTest {
             NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
             server.close();
             selector.close();
+            serverChannelBuilder.close();
         }
     }
 
