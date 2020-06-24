@@ -1801,7 +1801,7 @@ public class StreamTaskTest {
     @Test
     public void shouldOnlyRecycleSuspendedTasks() {
         stateManager.recycle();
-        recordCollector.close();
+        recordCollector.closeClean();
         EasyMock.replay(stateManager, recordCollector);
 
         task = createStatefulTask(createConfig(false, "100"), true);
