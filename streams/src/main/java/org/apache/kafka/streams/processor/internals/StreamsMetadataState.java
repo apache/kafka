@@ -141,7 +141,7 @@ public class StreamsMetadataState {
         if (globalStores.contains(storeName)) {
             // global stores are on every node. if we dont' have the host info
             // for this host then just pick the first metadata
-            if (thisHost == UNKNOWN_HOST) {
+            if (thisHost.equals(UNKNOWN_HOST)) {
                 return allMetadata.get(0);
             }
             return myMetadata;
@@ -189,7 +189,7 @@ public class StreamsMetadataState {
         if (globalStores.contains(storeName)) {
             // global stores are on every node. if we dont' have the host info
             // for this host then just pick the first metadata
-            if (thisHost == UNKNOWN_HOST) {
+            if (thisHost.equals(UNKNOWN_HOST)) {
                 return allMetadata.get(0);
             }
             return myMetadata;
