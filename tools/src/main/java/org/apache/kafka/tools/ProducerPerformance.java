@@ -291,6 +291,7 @@ public class ProducerPerformance {
                .setDefault(0L)
                .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
 
+       ToolsUtils.addOptionVersion(parser);
 
         return parser;
     }
