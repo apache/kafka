@@ -31,6 +31,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Utils;
@@ -298,24 +299,31 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldLogWhenTopicLeaderNotAvailableAndThrowException() {
-        mockAdminClient.addTopic(
-            false,
-            MockAdminClient.LEADER_NOT_AVAILABLE_TOPIC,
-            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
-            null);
+        final String leaderNotAvailableTopic = "LeaderNotAvailableTopic";
+        final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
+        final InternalTopicManager topicManager = new InternalTopicManager(admin, new StreamsConfig(config));
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(MockAdminClient.LEADER_NOT_AVAILABLE_TOPIC, Collections.emptyMap());
+        final KafkaFutureImpl<TopicDescription> topicDescriptionFailFuture = new KafkaFutureImpl<>();
+        topicDescriptionFailFuture.completeExceptionally(new LeaderNotAvailableException("Leader Not Available!"));
+
+        // simulate describeTopics got LeaderNotAvailableException
+        EasyMock.expect(admin.describeTopics(Collections.singleton(leaderNotAvailableTopic)))
+                .andReturn(new MockDescribeTopicsResult(
+                        Collections.singletonMap(leaderNotAvailableTopic, topicDescriptionFailFuture)))
+                .times(2);
+
+        EasyMock.replay(admin);
+
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(leaderNotAvailableTopic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
-
         final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
-        topicConfigMap.put(MockAdminClient.LEADER_NOT_AVAILABLE_TOPIC, internalTopicConfig);
+        topicConfigMap.put(leaderNotAvailableTopic, internalTopicConfig);
 
-        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(InternalTopicManager.class)) {
-            final StreamsException exception = assertThrows(
-                StreamsException.class,
-                () -> internalTopicManager.makeReady(topicConfigMap));
-        }
+        final StreamsException exception = assertThrows(
+            StreamsException.class,
+            () -> topicManager.makeReady(topicConfigMap));
+
+        EasyMock.verify(admin);
     }
 
     @Test

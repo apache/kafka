@@ -98,10 +98,10 @@ public class InternalTopicManager {
         int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
         final Set<String> newlyCreatedTopics = new HashSet<>();
-        final HashSet<String> leaderNotAvailableTopics = new HashSet<>();
+        final HashSet<String> tempUnknownTopics = new HashSet<>();
 
-        while (shouldRetry(topicsNotReady, leaderNotAvailableTopics) && remainingRetries >= 0) {
-            topicsNotReady = validateTopics(topicsNotReady, topics, leaderNotAvailableTopics, remainingRetries);
+        while (shouldRetry(topicsNotReady, tempUnknownTopics) && remainingRetries >= 0) {
+            topicsNotReady = validateTopics(topicsNotReady, topics, tempUnknownTopics, remainingRetries);
             newlyCreatedTopics.addAll(topicsNotReady);
 
             if (!topicsNotReady.isEmpty()) {
@@ -153,7 +153,7 @@ public class InternalTopicManager {
             }
 
 
-            if (shouldRetry(topicsNotReady, leaderNotAvailableTopics)) {
+            if (shouldRetry(topicsNotReady, tempUnknownTopics)) {
                 log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, remainingRetries);
 
                 Utils.sleep(retryBackOffMs);
@@ -162,7 +162,7 @@ public class InternalTopicManager {
             }
         }
 
-        if (shouldRetry(topicsNotReady, leaderNotAvailableTopics)) {
+        if (shouldRetry(topicsNotReady, tempUnknownTopics)) {
             final String timeoutAndRetryError = String.format("Could not create topics after %d retries. " +
                 "This can happen if the Kafka cluster is temporary not available. " +
                 "You can increase admin client config `retries` to be resilient against this error.", retries);
@@ -181,11 +181,13 @@ public class InternalTopicManager {
      */
     // visible for testing
     protected Map<String, Integer> getNumPartitions(final Set<String> topics,
-                                                    final HashSet<String> leaderNotAvailableTopics,
+                                                    final HashSet<String> tempUnknownTopics,
                                                     final int remainingRetries) {
-        log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
+        final Set<String> allTopicsToDescribe = new HashSet<>(topics);
+        allTopicsToDescribe.addAll(tempUnknownTopics);
+        log.debug("Trying to check if topics {} have been created with expected number of partitions.", allTopicsToDescribe);
 
-        final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
+        final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(allTopicsToDescribe);
         final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.values();
 
         final Map<String, Integer> existedTopicPartition = new HashMap<>();
@@ -194,7 +196,7 @@ public class InternalTopicManager {
             try {
                 final TopicDescription topicDescription = topicFuture.getValue().get();
                 existedTopicPartition.put(topicName, topicDescription.partitions().size());
-                leaderNotAvailableTopics.remove(topicName);
+                tempUnknownTopics.remove(topicName);
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
@@ -207,7 +209,7 @@ public class InternalTopicManager {
                     log.debug("Topic {} is unknown or not found, hence not existed yet.\n" +
                         "Error message was: {}", topicName, cause.toString());
                 } else if (cause instanceof LeaderNotAvailableException) {
-                    leaderNotAvailableTopics.add(topicName);
+                    tempUnknownTopics.add(topicName);
                     if (remainingRetries > 0) {
                         log.debug("The leader of the Topic {} is not available, with {} retries left.\n" +
                             "Error message was: {}", topicName, remainingRetries, cause.toString());
@@ -231,14 +233,14 @@ public class InternalTopicManager {
      */
     private Set<String> validateTopics(final Set<String> topicsToValidate,
                                        final Map<String, InternalTopicConfig> topicsMap,
-                                       final HashSet<String> leaderNotAvailableTopics,
+                                       final HashSet<String> tempUnknownTopics,
                                        final int remainingRetries) {
         if (!topicsMap.keySet().containsAll(topicsToValidate)) {
             throw new IllegalStateException("The topics map " + topicsMap.keySet() + " does not contain all the topics " +
                 topicsToValidate + " trying to validate.");
         }
 
-        final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate, leaderNotAvailableTopics, remainingRetries);
+        final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate, tempUnknownTopics, remainingRetries);
 
         final Set<String> topicsToCreate = new HashSet<>();
         for (final String topicName : topicsToValidate) {
@@ -256,16 +258,19 @@ public class InternalTopicManager {
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
                 }
-            } else if (!leaderNotAvailableTopics.contains(topicName)) {
-                topicsToCreate.add(topicName);
+            } else {
+                // for the tempUnknownTopics, we'll check again later if retries > 0
+                if (!tempUnknownTopics.contains(topicName)) {
+                    topicsToCreate.add(topicName);
+                }
             }
         }
 
         return topicsToCreate;
     }
 
-    private boolean shouldRetry(final Set<String> topicsNotReady, final HashSet<String> leaderNotAvailableTopics) {
+    private boolean shouldRetry(final Set<String> topicsNotReady, final HashSet<String> tempUnknownTopics) {
         // If there's topic with LeaderNotAvailableException, we still need retry
-        return !topicsNotReady.isEmpty() || leaderNotAvailableTopics.size() > 0;
+        return !topicsNotReady.isEmpty() || !tempUnknownTopics.isEmpty();
     }
 }

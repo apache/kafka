@@ -37,7 +37,6 @@ import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -58,9 +57,6 @@ public class MockAdminClient extends AdminClient {
 
     public static final List<String> DEFAULT_LOG_DIRS =
         Collections.singletonList("/tmp/kafka-logs");
-
-    // constant topic name for simulating the leader not available situation
-    public static final String LEADER_NOT_AVAILABLE_TOPIC = "LeaderNotAvailableTopic";
 
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
@@ -362,12 +358,6 @@ public class MockAdminClient extends AdminClient {
             if (!topicDescriptions.containsKey(requestedTopic)) {
                 KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
                 future.completeExceptionally(new UnknownTopicOrPartitionException("Topic " + requestedTopic + " not found."));
-                topicDescriptions.put(requestedTopic, future);
-            }
-            // try to simulate the leader not available situation
-            if (requestedTopic.equals(LEADER_NOT_AVAILABLE_TOPIC)) {
-                KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new LeaderNotAvailableException("The leader of Topic " + requestedTopic + " is not available."));
                 topicDescriptions.put(requestedTopic, future);
             }
         }
