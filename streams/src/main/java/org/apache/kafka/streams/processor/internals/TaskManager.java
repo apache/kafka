@@ -242,18 +242,22 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                task.suspend(); // Should be a no-op for active tasks since they're suspended in handleRevocation
-                if (task.commitNeeded()) {
-                    if (task.isActive()) {
+                if (task.isActive()) {
+                    // Active tasks should have already been suspended and committed during handleRevocation.
+                    // We are just responsible for closing them now
+                    if (task.commitNeeded()) {
                         log.error("Active task {} was revoked and should have already been committed", task.id());
                         throw new IllegalStateException("Revoked active task was not committed during handleRevocation");
-                    } else {
-                        task.prepareCommit();
-                        task.postCommit();
                     }
+                    cleanUpTaskProducer(task, taskCloseExceptions);
+                } else {
+                    task.suspend();
+                    if (task.commitNeeded()) {
+                        task.prepareCommit();
+                    }
+                    task.postCommit();
                 }
                 completeTaskCloseClean(task);
-                cleanUpTaskProducer(task, taskCloseExceptions);
                 tasks.remove(task.id());
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
@@ -447,6 +451,10 @@ public class TaskManager {
                     task.suspend();
                     if (task.commitNeeded()) {
                         tasksToCommit.add(task);
+                    } else {
+                        // We always need to call postCommit before a clean close, so we can just do that right
+                        // away if there's nothing to commit first
+                        task.postCommit();
                     }
                 } catch (final RuntimeException e) {
                     log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
@@ -735,6 +743,8 @@ public class TaskManager {
                     final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
                     tasksToCommit.add(task);
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                } else {
+                    task.postCommit();
                 }
                 tasksToCloseClean.add(task);
             } catch (final TaskMigratedException e) {
@@ -803,6 +813,8 @@ public class TaskManager {
                 if (task.commitNeeded()) {
                     task.prepareCommit();
                     tasksToCommit.add(task);
+                } else {
+                    task.postCommit();
                 }
                 tasksToCloseClean.add(task);
             } catch (final TaskMigratedException e) {
