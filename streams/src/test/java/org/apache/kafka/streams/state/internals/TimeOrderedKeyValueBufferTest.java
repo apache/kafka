@@ -62,8 +62,8 @@ import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
 public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<String, String>> {
-    private static final RecordHeaders V_2_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
+    private static final RecordHeaders CHANGELOG_HEADERS =
+        new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 3})});
 
     private static final String APP_ID = "test-app";
     private final Function<String, B> bufferSupplier;
@@ -347,14 +347,14 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  null,
                                  "zxcv",
                                  new KeyValue<>(1L, getBufferValue("3gon4i", 1)),
-                                 V_2_CHANGELOG_HEADERS
+                                 CHANGELOG_HEADERS
             ),
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
                                  0,
                                  null,
                                  "asdf",
                                  new KeyValue<>(2L, getBufferValue("2093j", 0)),
-                                 V_2_CHANGELOG_HEADERS
+                                 CHANGELOG_HEADERS
             )
         )));
 
