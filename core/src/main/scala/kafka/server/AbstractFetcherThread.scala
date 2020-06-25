@@ -383,8 +383,9 @@ abstract class AbstractFetcherThread(name: String,
                   partitionsWithError += topicPartition
 
                 case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-                  warn(s"Remote broker does not host the partition $topicPartition, which could indicate " +
-                    "that the partition is being created or deleted.")
+                  warn(s"Receiving ${Errors.UNKNOWN_TOPIC_OR_PARTITION} from the leader for partition $topicPartition. " +
+                       s"This can happen transiently if the partition is being created or deleted. " +
+                       s"However, this is unexpected if it sustains.")
                   partitionsWithError += topicPartition
 
                 case _ =>
