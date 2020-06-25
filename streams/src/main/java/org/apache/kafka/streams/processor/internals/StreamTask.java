@@ -338,14 +338,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+        final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit;
         switch (state()) {
             case RUNNING:
             case RESTORING:
             case SUSPENDED:
-                stateMgr.flush();
-                recordCollector.flush();
+                if (commitNeeded) {
+                    stateMgr.flush();
+                    recordCollector.flush();
 
-                log.debug("Prepared task for committing");
+                    log.debug("Prepared task for committing");
+                    offsetsToCommit = committableOffsetsAndMetadata();
+                } else {
+                    log.debug("Skipping prepareCommit since there is nothing new to commit");
+                    offsetsToCommit = Collections.emptyMap();
+                }
 
                 break;
 
@@ -357,7 +364,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while preparing active task " + id + " for committing");
         }
 
-        return committableOffsetsAndMetadata();
+        return offsetsToCommit;
     }
 
     private Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {

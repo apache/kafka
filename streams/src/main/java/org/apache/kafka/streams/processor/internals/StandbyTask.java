@@ -152,8 +152,12 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
         if (state() == State.RUNNING || state() == State.SUSPENDED) {
-            stateMgr.flush();
-            log.debug("Prepared task for committing");
+            if (commitNeeded()) {
+                stateMgr.flush();
+                log.debug("Prepared task for committing");
+            } else {
+                log.debug("Skipping prepareCommit since there is nothing new to commit");
+            }
         } else {
             throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
