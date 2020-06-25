@@ -144,7 +144,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String REFRESH_GROUPS_INTERVAL_SECONDS_DOC = "Frequency of group refresh.";
     public static final long REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
 
-    public static final boolean SYNC_TOPIC_DEFAULT = offsetSyncsTopic();
+    public static final boolean SYNC_TOPIC_DEFAULT = offsetSyncsTopicDefault();
     private static final String SYNC_TOPIC_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
 
     public static final String SYNC_TOPIC_CONFIGS_ENABLED = SYNC_TOPIC_CONFIGS + ENABLED_SUFFIX;
@@ -297,6 +297,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     String offsetSyncsTopic() {
+        return MirrorClientConfig.SYNC_TOPIC
+    }
+
+    String offsetSyncsTopicDefault() {
         // ".internal" suffix ensures this doesn't get replicated
         return "mm2-offset-syncs." + targetClusterAlias() + ".internal";
     }
