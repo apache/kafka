@@ -81,7 +81,6 @@ public class ProcessorContextImplTest {
     private static final ValueAndTimestamp<Long> VALUE_AND_TIMESTAMP = ValueAndTimestamp.make(42L, 21L);
     private static final String STORE_NAME = "underlying-store";
     private static final String REGISTERED_STORE_NAME = "registered-store";
-    private static final String NOT_REGISTERED_STORE_NAME = "not-registered-store";
     private static final TopicPartition CHANGELOG_PARTITION = new TopicPartition("store-changelog", 1);
 
     private boolean flushExecuted;
@@ -135,7 +134,6 @@ public class ProcessorContextImplTest {
         expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
         expect(stateManager.getStore("LocalTimestampedWindowStore")).andReturn(timestampedWindowStoreMock());
         expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
-        expect(stateManager.registeredChangelogPartitionFor(NOT_REGISTERED_STORE_NAME)).andStubReturn(null);
         expect(stateManager.registeredChangelogPartitionFor(REGISTERED_STORE_NAME)).andStubReturn(CHANGELOG_PARTITION);
 
         replay(stateManager);
@@ -401,14 +399,6 @@ public class ProcessorContextImplTest {
         context.logChange(REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP);
 
         verify(recordCollector);
-    }
-
-    @Test
-    public void shouldThrowExceptionIfStateStoreNotRegistered() {
-        assertThrows(
-            "Sending records to state store " + NOT_REGISTERED_STORE_NAME + " which has not been registered.",
-            IllegalStateException.class,
-            () -> context.logChange(NOT_REGISTERED_STORE_NAME, KEY_BYTES, VALUE_BYTES, TIMESTAMP));
     }
 
     @Test

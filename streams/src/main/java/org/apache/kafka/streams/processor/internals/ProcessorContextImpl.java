@@ -117,12 +117,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         throwUnsupportedOperationExceptionIfStandby("logChange");
 
         final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
-        if (changelogPartition == null) {
-            throw new IllegalStateException("Sending records to state store " + storeName
-                + " which has not been registered or"
-                + " which does not have a changelog topic because the state store has logging disabled."
-            );
-        }
 
         // Sending null headers to changelog topics (KIP-244)
         collector.send(

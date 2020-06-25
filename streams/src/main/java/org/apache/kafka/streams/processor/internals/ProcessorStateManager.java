@@ -591,6 +591,18 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     public TopicPartition registeredChangelogPartitionFor(final String storeName) {
         final StateStoreMetadata storeMetadata = stores.get(storeName);
-        return storeMetadata == null ? null : storeMetadata.changelogPartition;
+        if (storeMetadata == null) {
+            throw new IllegalStateException("State store " + storeName
+                + " for which the registered changelog partition should be"
+                + " retrieved has not been registered"
+            );
+        }
+        if (storeMetadata.changelogPartition == null) {
+            throw new IllegalStateException("Registered state store " + storeName
+                + " does not have a registered changelog partition."
+                + " This may happen if logging is disabled for the state store."
+            );
+        }
+        return storeMetadata.changelogPartition;
     }
 }
