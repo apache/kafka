@@ -189,7 +189,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void closeAndRecycleState() {
+    public void closeCleanAndRecycleState() {
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         if (state() == State.SUSPENDED) {
             stateMgr.recycle();
