@@ -115,7 +115,7 @@ class WorkerMetricsGroup {
 
     class ConnectorStatusListener implements ConnectorStatus.Listener {
         private final ConnectorStatus.Listener delegateListener;
-        private boolean startupSucceeded = false;
+        private volatile boolean startupSucceeded = false;
 
         ConnectorStatusListener(ConnectorStatus.Listener delegateListener) {
             this.delegateListener = delegateListener;
@@ -159,7 +159,7 @@ class WorkerMetricsGroup {
 
     class TaskStatusListener implements TaskStatus.Listener {
         private final TaskStatus.Listener delegatedListener;
-        private boolean startupSucceeded = false;
+        private volatile boolean startupSucceeded = false;
 
         TaskStatusListener(TaskStatus.Listener delegatedListener) {
             this.delegatedListener = delegatedListener;
