@@ -106,6 +106,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
+    private boolean checkpointNeededForSuspended = false;
 
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
@@ -249,8 +250,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void suspend() {
         switch (state()) {
             case CREATED:
+                log.info("Suspended created");
+                checkpointNeededForSuspended = false;
+                transitionTo(State.SUSPENDED);
+
+                break;
+
             case RESTORING:
-                log.info("Suspended {}", state());
+                log.info("Suspended restoring");
+                checkpointNeededForSuspended = true;
                 transitionTo(State.SUSPENDED);
 
                 break;
@@ -259,6 +267,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 try {
                     // use try-catch to ensure state transition to SUSPENDED even if user code throws in `Processor#close()`
                     closeTopology();
+                    checkpointNeededForSuspended = true;
                 } finally {
                     transitionTo(State.SUSPENDED);
                     log.info("Suspended running");
@@ -341,6 +350,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit;
         switch (state()) {
             case CREATED:
+                log.debug("Skipped preparing created task for commit");
+                offsetsToCommit = Collections.emptyMap();
+
+                break;
+
             case RUNNING:
             case RESTORING:
             case SUSPENDED:
@@ -348,15 +362,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     stateMgr.flush();
                     recordCollector.flush();
 
-                    log.debug("Prepared task for committing");
+                    log.debug("Prepared {} task for committing", state());
                     offsetsToCommit = committableOffsetsAndMetadata();
                 } else {
-                    log.debug("Skipping prepareCommit since there is nothing new to commit");
+                    log.debug("Skipped preparing {} task for commit since there is nothing new to commit", state());
                     offsetsToCommit = Collections.emptyMap();
                 }
 
                 break;
-                
+
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while preparing active task " + id + " for committing");
 
@@ -406,7 +420,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case CLOSED:
-                throw new IllegalStateException("Illegal state " + state() + " while getting commitable offsets for active task " + id);
+                throw new IllegalStateException("Illegal state " + state() + " while getting committable offsets for active task " + id);
 
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
@@ -424,8 +438,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         commitNeeded = false;
 
         switch (state()) {
+            case CREATED:
+                // We should never write a checkpoint for a CREATED task as we may overwrite an existing checkpoint
+                // with empty uninitialized offsets
+                log.debug("Skipped writing checkpoint for created task");
+
+                break;
+
             case RESTORING:
                 writeCheckpoint();
+                log.debug("Finalized commit for restoring task");
 
                 break;
 
@@ -433,6 +455,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 if (!eosEnabled) {
                     writeCheckpoint();
                 }
+                log.debug("Finalized commit for running task");
 
                 break;
 
@@ -445,11 +468,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                  */
                 partitionGroup.clear();
 
-                writeCheckpoint();
-
-                break;
-
-            case CREATED:
+                if (checkpointNeededForSuspended) {
+                    // Make sure we don't overwrite the checkpoint if the suspended task was still in CREATED
+                    // and had not yet initialized offsets
+                    writeCheckpoint();
+                    log.debug("Finalized commit for suspended task");
+                    checkpointNeededForSuspended = false;
+                } else {
+                    log.debug("Skipped writing checkpoint for uninitialized suspended task");
+                }
 
                 break;
 
@@ -459,8 +486,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
         }
-
-        log.debug("Finalized commit");
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
