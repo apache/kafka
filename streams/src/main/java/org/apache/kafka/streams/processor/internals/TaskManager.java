@@ -806,44 +806,17 @@ public class TaskManager {
             return standbyTaskIterable();
         }
         final Set<Task> tasksToCloseDirty = new HashSet<>();
-        final Set<Task> tasksToCloseClean = new HashSet<>();
-        final Set<Task> tasksToCommit = new HashSet<>();
 
         for (final Task task : standbyTaskIterable()) {
             try {
                 task.suspend();
-                if (task.commitNeeded()) {
-                    task.prepareCommit();
-                    tasksToCommit.add(task);
-                } else {
-                    task.postCommit();
-                }
-                tasksToCloseClean.add(task);
+                task.prepareCommit();
+                task.postCommit();
+                completeTaskCloseClean(task);
             } catch (final TaskMigratedException e) {
                 // just ignore the exception as it doesn't matter during shutdown
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
-                firstException.compareAndSet(null, e);
-                tasksToCloseDirty.add(task);
-            }
-        }
-
-        for (final Task task : tasksToCommit) {
-            try {
-                task.postCommit();
-            } catch (final RuntimeException e) {
-                log.error("Exception caught while post-committing standby task " + task.id(), e);
-                firstException.compareAndSet(null, e);
-                tasksToCloseDirty.add(task);
-                tasksToCloseClean.remove(task);
-            }
-        }
-
-        for (final Task task : tasksToCloseClean) {
-            try {
-                completeTaskCloseClean(task);
-            } catch (final RuntimeException e) {
-                log.error("Exception caught while clean-closing standby task " + task.id(), e);
                 firstException.compareAndSet(null, e);
                 tasksToCloseDirty.add(task);
             }
