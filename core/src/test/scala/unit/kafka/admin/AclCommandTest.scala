@@ -143,14 +143,16 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       "--command-config", tmp.getAbsolutePath)
   }
 
-  private def callMain(args: Array[String]): Unit = {
+  private def callMain(args: Array[String]): (String, String) = {
     val appender = LogCaptureAppender.createAndRegister()
-    LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
-    AclCommand.main(args)
+    val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
+    val outErr = TestUtils.grabConsoleOutputAndError(AclCommand.main(args))
+    LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
     LogCaptureAppender.unregister(appender)
     Assert.assertEquals("Command should execute without logging errors or warnings",
       "",
       appender.getMessages.map{event => s"${event.getLevel} ${event.getMessage}" }.mkString("\n"))
+    outErr
   }
 
   private def testAclCli(cmdArgs: Array[String]): Unit = {
@@ -159,14 +161,32 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       for (permissionType <- Set(ALLOW, DENY)) {
         val operationToCmd = ResourceToOperations(resources)
         val (acls, cmd) = getAclToCommand(permissionType, operationToCmd._1)
-          callMain(cmdArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
-          for (resource <- resources) {
-            withAuthorizer() { authorizer =>
-              TestUtils.waitAndVerifyAcls(acls, authorizer, resource)
-            }
-          }
+        val (addOut, addErr) = callMain(cmdArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
+        assertOutputContains("Adding ACLs", resources, resourceCmd, addOut)
 
-          testRemove(cmdArgs, resources, resourceCmd)
+        Assert.assertEquals("", addErr)
+        for (resource <- resources) {
+          withAuthorizer() { authorizer =>
+            TestUtils.waitAndVerifyAcls(acls, authorizer, resource)
+          }
+        }
+
+        val (listOut, listErr) = callMain(cmdArgs :+ "--list")
+        assertOutputContains("Current ACLs", resources, resourceCmd, listOut)
+        Assert.assertEquals("", listErr)
+
+        testRemove(cmdArgs, resources, resourceCmd)
+      }
+    }
+  }
+
+  private def assertOutputContains(prefix: String, resources: Set[ResourcePattern], resourceCmd: Array[String], output: String) = {
+    resources.foreach { resource =>
+      val resourceType = resource.resourceType.toString
+      (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filter(!_.startsWith("--"))).foreach { name =>
+        val expected = s"$prefix for resource `ResourcePattern(resourceType=$resourceType, name=$name, patternType=LITERAL)`:"
+        Assert.assertTrue(s"Substring ${expected} not in --list output:\n$output",
+          output.contains(expected))
       }
     }
   }
@@ -269,7 +289,9 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private def testRemove(cmdArgs: Array[String], resources: Set[ResourcePattern], resourceCmd: Array[String]): Unit = {
     for (resource <- resources) {
-      callMain(cmdArgs ++ resourceCmd :+ "--remove" :+ "--force")
+      val (out, err) = callMain(cmdArgs ++ resourceCmd :+ "--remove" :+ "--force")
+      Assert.assertEquals("", out)
+      Assert.assertEquals("", err)
       withAuthorizer() { authorizer =>
         TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource)
       }
