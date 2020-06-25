@@ -302,9 +302,9 @@ class StreamsUpgradeTest(Test):
             node = p.node
             with node.account.monitor_log(p.STDOUT_FILE) as monitor:
                 p.stop()
-                monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
+                monitor.wait_until("SMOKE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
-                                   err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
+                                   err_msg="Never saw output 'SMOKE-TEST-CLIENT-CLOSED' on " + str(node.account))
 
     def test_version_probing_upgrade(self):
         """

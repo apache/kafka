@@ -61,8 +61,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
     private static final byte[] V_1_CHANGELOG_HEADER_VALUE = {(byte) 1};
     private static final byte[] V_2_CHANGELOG_HEADER_VALUE = {(byte) 2};
-    private static final RecordHeaders V_2_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[] {new RecordHeader("v", V_2_CHANGELOG_HEADER_VALUE)});
+    private static final byte[] V_3_CHANGELOG_HEADER_VALUE = {(byte) 3};
+    private static final RecordHeaders CHANGELOG_HEADERS =
+        new RecordHeaders(new Header[] {new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
     private static final String METRIC_SCOPE = "in-memory-suppression";
 
     private final Map<Bytes, BufferKey> index = new HashMap<>();
@@ -260,15 +261,15 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
-        System.err.printf("Serializing v2:");
-        System.err.printf("   key: " + BufferValue.bytesToHex(key.get()));
-        System.err.printf(" value: " + value);
-        System.err.printf(" serialized: " + BufferValue.bytesToHex(array));
+        System.err.println("Serializing v3:");
+        System.err.println("   key: " + BufferValue.bytesToHex(key.get()));
+        System.err.println(" value: " + value);
+        System.err.println(" serialized: " + BufferValue.bytesToHex(array));
         ((RecordCollector.Supplier) context).recordCollector().send(
                 changelogTopic,
                 key,
                 array,
-                V_2_CHANGELOG_HEADERS,
+                CHANGELOG_HEADERS,
                 partition,
                 null,
                 KEY_SERIALIZER,
@@ -367,12 +368,35 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     );
                 } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_2_CHANGELOG_HEADER_VALUE)) {
                     // in this case, the changelog value is a serialized BufferValue
-                    System.err.println("Deserializing " + record);
+                    System.err.println("Deserializing v2 " + record);
+                    System.err.println("   key: " + BufferValue.bytesToHex(record.key()));
+                    System.err.println(" value: " + BufferValue.bytesToHex(record.value()));
+
+                    final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
+                    final ContextualRecord contextualRecord = ContextualRecord.deserialize(valueAndTime);
+                    final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));
+
+                    final int priorValueLength = valueAndTime.getInt();
+                    final byte[] priorValue;
+                    if (priorValueLength == -1) {
+                        priorValue = null;
+                    } else {
+                        priorValue = new byte[priorValueLength];
+                        valueAndTime.get(priorValue);
+                    }
+                    final long time = valueAndTime.getLong();
+                    final BufferValue bufferValue = new BufferValue(priorValue, change.oldValue, change.newValue, contextualRecord.recordContext());
+                    System.err.println("   got: " + bufferValue);
+                    cleanPut(time, key, bufferValue);
+                } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_3_CHANGELOG_HEADER_VALUE)) {
+                    // in this case, the changelog value is a serialized BufferValue
+                    System.err.println("Deserializing v3 " + record);
                     System.err.println("   key: " + BufferValue.bytesToHex(record.key()));
                     System.err.println(" value: " + BufferValue.bytesToHex(record.value()));
 
                     final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
                     final BufferValue bufferValue = BufferValue.deserialize(valueAndTime);
+                    System.err.println("   got: " + bufferValue);
                     final long time = valueAndTime.getLong();
                     cleanPut(time, key, bufferValue);
                 } else {
