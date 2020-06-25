@@ -515,16 +515,33 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final RecordHeaders v1FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
 
         final byte[] todeleteValue = getContextualRecord("doomed", 0).serialize(0).array();
+
         final byte[] asdfValue = getContextualRecord("qwer", 1).serialize(0).array();
+
         final FullChangeSerde<String> fullChangeSerde = FullChangeSerde.wrap(Serdes.String());
+
         final byte[] zxcvValue1 = new ContextualRecord(
             FullChangeSerde.mergeChangeArraysIntoSingleLegacyFormattedArray(fullChangeSerde.serializeParts(null, new Change<>("3o4im", "previous"))),
             getContext(2L)
         ).serialize(0).array();
+
         final byte[] zxcvValue2 = new ContextualRecord(
             FullChangeSerde.mergeChangeArraysIntoSingleLegacyFormattedArray(fullChangeSerde.serializeParts(null, new Change<>("next", "3o4im"))),
             getContext(3L)
         ).serialize(0).array();
+
+        final String toDeleteBinary = "00000000000000000000000000000000000000000000000000000005746F70696300000000FFFFFFFF0000000EFFFFFFFF00000006646F6F6D6564";
+        final byte[] toDeleteArray = hexStringToByteArray(toDeleteBinary);
+
+        final String asdfBinary = "00000000000000020000000000000001000000000000000000000005746F70696300000000FFFFFFFF0000000CFFFFFFFF0000000471776572";
+        final byte[] asdfArray = hexStringToByteArray(asdfBinary);
+
+        final String zxcvBinary1 = "00000000000000010000000000000002000000000000000000000005746F70696300000000FFFFFFFF000000150000000870726576696F757300000005336F34696D";
+        final byte[] zxcvArray1 = hexStringToByteArray(zxcvBinary1);
+
+        final String zxcvBinary2 = "00000000000000010000000000000003000000000000000000000005746F70696300000000FFFFFFFF0000001100000005336F34696D000000046E657874";
+        final byte[] zxcvArray2 = hexStringToByteArray(zxcvBinary2);
+
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
                                  0,
@@ -535,7 +552,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "todelete".getBytes(UTF_8),
-                                 ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
+                                 toDeleteArray,
                                  v1FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
                                  0,
@@ -546,7 +563,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "asdf".getBytes(UTF_8),
-                                 ByteBuffer.allocate(Long.BYTES + asdfValue.length).putLong(2L).put(asdfValue).array(),
+                                 asdfArray,
                                  v1FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
                                  0,
@@ -557,7 +574,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "zxcv".getBytes(UTF_8),
-                                 ByteBuffer.allocate(Long.BYTES + zxcvValue1.length).putLong(1L).put(zxcvValue1).array(),
+                                 zxcvArray1,
                                  v1FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
                                  0,
@@ -568,7 +585,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                                  -1,
                                  -1,
                                  "zxcv".getBytes(UTF_8),
-                                 ByteBuffer.allocate(Long.BYTES + zxcvValue2.length).putLong(1L).put(zxcvValue2).array(),
+                                 zxcvArray2,
                                  v1FlagHeaders)
         ));
 
