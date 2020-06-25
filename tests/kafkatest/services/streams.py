@@ -219,8 +219,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
             pids = [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=str)]
             return [int(pid) for pid in pids]
         except Exception, exception:
-            self.logger.debug("Retrieval of PIDs of Streams clients failed with: "
-                              + str(exception))
+            self.logger.debug(str(exception))
             return []
 
     def stop_nodes(self, clean_shutdown=True):
