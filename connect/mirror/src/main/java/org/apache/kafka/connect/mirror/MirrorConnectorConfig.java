@@ -65,6 +65,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     protected static final String REFRESH_TOPICS = "refresh.topics";
     protected static final String REFRESH_GROUPS = "refresh.groups";
+    protected static final String SYNC_TOPIC = "sync.topic";
     protected static final String SYNC_TOPIC_CONFIGS = "sync.topic.configs";
     protected static final String SYNC_TOPIC_ACLS = "sync.topic.acls";
     protected static final String EMIT_HEARTBEATS = "emit.heartbeats";
@@ -142,6 +143,9 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String REFRESH_GROUPS_INTERVAL_SECONDS = REFRESH_GROUPS + INTERVAL_SECONDS_SUFFIX;
     private static final String REFRESH_GROUPS_INTERVAL_SECONDS_DOC = "Frequency of group refresh.";
     public static final long REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
+
+    public static final boolean SYNC_TOPIC_DEFAULT = offsetSyncsTopic();
+    private static final String SYNC_TOPIC_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
 
     public static final String SYNC_TOPIC_CONFIGS_ENABLED = SYNC_TOPIC_CONFIGS + ENABLED_SUFFIX;
     private static final String SYNC_TOPIC_CONFIGS_ENABLED_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
@@ -414,7 +418,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Type.LIST,
                     TOPICS_DEFAULT,
                     ConfigDef.Importance.HIGH,
-                    TOPICS_DOC) 
+                    TOPICS_DOC)
             .define(
                     TOPICS_BLACKLIST,
                     ConfigDef.Type.LIST,
@@ -426,7 +430,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Type.LIST,
                     GROUPS_DEFAULT,
                     ConfigDef.Importance.HIGH,
-                    GROUPS_DOC) 
+                    GROUPS_DOC)
             .define(
                     GROUPS_BLACKLIST,
                     ConfigDef.Type.LIST,
@@ -504,6 +508,12 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT,
                     ConfigDef.Importance.LOW,
                     REFRESH_GROUPS_INTERVAL_SECONDS_DOC)
+            .define(
+                    SYNC_TOPIC,
+                    ConfigDef.Type.STRING,
+                    SYNC_TOPIC_DEFAULT,
+                    ConfigDef.Importance.HIGH,
+                    SYNC_TOPICS_DOC)
             .define(
                     SYNC_TOPIC_CONFIGS_ENABLED,
                     ConfigDef.Type.BOOLEAN,
