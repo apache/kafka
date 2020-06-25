@@ -473,7 +473,7 @@ private[log] class Cleaner(val id: Int,
 
   protected override def loggerName = classOf[LogCleaner].getName
 
-  this.logIdent = s"Cleaner $id: "
+  this.logIdent = s"[Cleaner $id]: "
 
   /* buffer used for read i/o */
   private var readBuffer = ByteBuffer.allocate(ioBufferSize)
@@ -763,21 +763,20 @@ private[log] class Cleaner(val id: Int,
                                  batch: RecordBatch,
                                  record: Record,
                                  stats: CleanerStats): Boolean = {
+    // keep all records that are beyond the latest offset based on OffsetMap
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true
 
     if (record.hasKey) {
-      val key = record.key
-      val foundOffset = map.get(key)
-      /* First,the message must have the latest offset for the key
+      /* First,the message must have the latest offset or version for the key
        * then there are two cases in which we can retain a message:
        *   1) The message has value
        *   2) The message doesn't has value but it can't be deleted now.
        */
-      val latestOffsetForKey = record.offset() >= foundOffset
+      val isLatestRecordForKey = map.shouldRetainRecord(record)
       val isRetainedValue = record.hasValue || retainDeletes
-      latestOffsetForKey && isRetainedValue
+      isLatestRecordForKey && isRetainedValue
     } else {
       stats.invalidMessage()
       false
@@ -878,7 +877,9 @@ private[log] class Cleaner(val id: Int,
                                   end: Long,
                                   map: OffsetMap,
                                   stats: CleanerStats): Unit = {
-    map.clear()
+    // initialize the map for the topic partition
+    map.reinitialize(log.config.compactionStrategy, log.config.compactionStrategyHeaderKey, this.id, log.topicPartition.toString)
+
     val dirty = log.logSegments(start, end).toBuffer
     val nextSegmentStartOffsets = new ListBuffer[Long]
     if (dirty.nonEmpty) {
@@ -954,7 +955,7 @@ private[log] class Cleaner(val id: Int,
               for (record <- recordsIterator.asScala) {
                 if (record.hasKey && record.offset >= startOffset) {
                   if (map.size < maxDesiredMapSize)
-                    map.put(record.key, record.offset)
+                    map.put(record)
                   else
                     return true
                 }
