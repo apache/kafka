@@ -34,9 +34,8 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.Properties;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 
 public class WindowedWordCountProcessorTest {
     @Test
@@ -69,19 +68,19 @@ public class WindowedWordCountProcessorTest {
         processor.process("key", "gamma delta");
 
         // note that the processor does not forward during process()
-        assertTrue(context.forwarded().isEmpty());
+        assertThat(context.forwarded().isEmpty(), is(true));
 
         // now, we trigger the punctuator, which iterates over the state store and forwards the contents.
         context.scheduledPunctuators().get(0).getPunctuator().punctuate(1_000L);
 
         // finally, we can verify the output.
         final Iterator<MockProcessorContext.CapturedForward> capturedForwards = context.forwarded().iterator();
-        assertEquals(new KeyValue<>("[alpha@100/200]", "2"), capturedForwards.next().keyValue());
-        assertEquals(new KeyValue<>("[beta@100/200]", "1"), capturedForwards.next().keyValue());
-        assertEquals(new KeyValue<>("[gamma@100/200]", "1"), capturedForwards.next().keyValue());
-        assertEquals(new KeyValue<>("[delta@200/300]", "1"), capturedForwards.next().keyValue());
-        assertEquals(new KeyValue<>("[gamma@200/300]", "1"), capturedForwards.next().keyValue());
-        assertFalse(capturedForwards.hasNext());
+        assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[alpha@100/200]", "2")));
+        assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[beta@100/200]", "1")));
+        assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[gamma@100/200]", "1")));
+        assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[delta@200/300]", "1")));
+        assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[gamma@200/300]", "1")));
+        assertThat(capturedForwards.hasNext(), is(false));
     }
 
     @Test
@@ -125,19 +124,19 @@ public class WindowedWordCountProcessorTest {
             processor.process("key", "gamma delta");
 
             // note that the processor does not forward during process()
-            assertTrue(context.forwarded().isEmpty());
+            assertThat(context.forwarded().isEmpty(), is(true));
 
             // now, we trigger the punctuator, which iterates over the state store and forwards the contents.
             context.scheduledPunctuators().get(0).getPunctuator().punctuate(1_000L);
 
             // finally, we can verify the output.
             final Iterator<MockProcessorContext.CapturedForward> capturedForwards = context.forwarded().iterator();
-            assertEquals(new KeyValue<>("[alpha@100/200]", "2"), capturedForwards.next().keyValue());
-            assertEquals(new KeyValue<>("[beta@100/200]", "1"), capturedForwards.next().keyValue());
-            assertEquals(new KeyValue<>("[delta@200/300]", "1"), capturedForwards.next().keyValue());
-            assertEquals(new KeyValue<>("[gamma@100/200]", "1"), capturedForwards.next().keyValue());
-            assertEquals(new KeyValue<>("[gamma@200/300]", "1"), capturedForwards.next().keyValue());
-            assertFalse(capturedForwards.hasNext());
+            assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[alpha@100/200]", "2")));
+            assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[beta@100/200]", "1")));
+            assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[delta@200/300]", "1")));
+            assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[gamma@100/200]", "1")));
+            assertThat(capturedForwards.next().keyValue(), is(new KeyValue<>("[gamma@200/300]", "1")));
+            assertThat(capturedForwards.hasNext(), is(false));
         } finally {
             Utils.delete(stateDir);
         }

@@ -48,25 +48,25 @@ public final class WindowedWordCountProcessorSupplier implements ProcessorSuppli
                         }
                     }
                 });
-                this.windowStore = (WindowStore<String, Integer>) context.getStateStore("WindowedCounts");
+                windowStore = (WindowStore<String, Integer>) context.getStateStore("WindowedCounts");
             }
 
             @Override
-            public void process(final String dummy, final String line) {
-                final String[] words = line.toLowerCase(Locale.getDefault()).split(" ");
-                final long timestamp = this.context.timestamp();
+            public void process(final String key, final String value) {
+                final String[] words = value.toLowerCase(Locale.getDefault()).split(" ");
+                final long timestamp = context.timestamp();
 
                 // calculate the window as every 100 ms
-                // Note this has to be aligned with the configuratoin for the window store you register separately
+                // Note this has to be aligned with the configuration for the window store you register separately
                 final long windowStart = timestamp / 100 * 100;
 
                 for (final String word : words) {
-                    final Integer oldValue = this.windowStore.fetch(word, windowStart);
+                    final Integer oldValue = windowStore.fetch(word, windowStart);
 
                     if (oldValue == null) {
-                        this.windowStore.put(word, 1, windowStart);
+                        windowStore.put(word, 1, windowStart);
                     } else {
-                        this.windowStore.put(word, oldValue + 1, windowStart);
+                        windowStore.put(word, oldValue + 1, windowStart);
                     }
                 }
             }
