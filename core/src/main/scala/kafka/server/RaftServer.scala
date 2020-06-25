@@ -21,7 +21,7 @@ import java.io.File
 import java.net.{InetAddress, InetSocketAddress}
 import java.nio.file.Files
 import java.util.Properties
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.CountDownLatch
 
 import joptsimple.OptionParser
 import kafka.log.{Log, LogConfig, LogManager}
@@ -39,11 +39,12 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, QuorumState, RaftConfig, ReplicatedCounter}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, NoOpStateMachine, QuorumState, RaftConfig}
 
 import scala.jdk.CollectionConverters._
 
-class RaftServer(val config: KafkaConfig) extends Logging {
+class RaftServer(val config: KafkaConfig,
+                 val verbose: Boolean) extends Logging {
 
   private val partition = new TopicPartition("__cluster_metadata", 0)
   private val time = Time.SYSTEM
@@ -56,7 +57,6 @@ class RaftServer(val config: KafkaConfig) extends Logging {
   var scheduler: KafkaScheduler = _
   var metrics: Metrics = _
   var raftIoThread: RaftIoThread = _
-  var incrementCounterThread: IncrementCounterThread = _
   var networkChannel: KafkaNetworkChannel = _
   var metadataLog: KafkaMetadataLog = _
 
@@ -80,12 +80,6 @@ class RaftServer(val config: KafkaConfig) extends Logging {
     val metadataLog = buildMetadataLog(logDir)
     val networkChannel = buildNetworkChannel(raftConfig, logContext)
 
-    val requestHandler = new RaftRequestHandler(
-      networkChannel,
-      socketServer.dataPlaneRequestChannel,
-      time
-    )
-
     val raftClient = buildRaftClient(
       raftConfig,
       metadataLog,
@@ -93,6 +87,17 @@ class RaftServer(val config: KafkaConfig) extends Logging {
       logContext,
       logDir
     )
+
+    val stateMachine = new NoOpStateMachine(config.brokerId, partition, verbose)
+
+    raftClient.initialize(stateMachine)
+
+    val requestHandler = new RaftRequestHandler(
+      networkChannel,
+      socketServer.dataPlaneRequestChannel,
+      time,
+      stateMachine,
+      partition)
 
     dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(
       config.brokerId,
@@ -106,19 +111,14 @@ class RaftServer(val config: KafkaConfig) extends Logging {
 
     socketServer.startProcessingRequests(Map.empty)
 
-    val counter = new ReplicatedCounter(config.brokerId, logContext, true)
-    raftClient.initialize(counter)
+    raftClient.initialize(stateMachine)
 
     raftIoThread = new RaftIoThread(raftClient)
     raftIoThread.start()
 
-    incrementCounterThread = new IncrementCounterThread(counter)
-    incrementCounterThread.start()
   }
 
   def shutdown(): Unit = {
-    if (incrementCounterThread != null)
-      CoreUtils.swallow(incrementCounterThread.shutdown(), this)
     if (raftIoThread != null)
       CoreUtils.swallow(raftIoThread.shutdown(), this)
     if (dataPlaneRequestHandlerPool != null)
@@ -269,15 +269,6 @@ class RaftServer(val config: KafkaConfig) extends Logging {
     new InetSocketAddress(host, port)
   }
 
-  class IncrementCounterThread(counter: ReplicatedCounter) extends ShutdownableThread("counter-incrementer") {
-    override def doWork(): Unit = {
-      if (counter.isLeader) {
-        counter.increment()
-      }
-      pause(500, TimeUnit.MILLISECONDS)
-    }
-  }
-
   class RaftIoThread(client: KafkaRaftClient) extends ShutdownableThread("raft-io-thread") {
     override def doWork(): Unit = {
       client.poll()
@@ -345,7 +336,9 @@ object RaftServer extends Logging {
     try {
       val serverProps = getPropsFromArgs(args)
       val config = KafkaConfig.fromProps(serverProps, false)
-      val server = new RaftServer(config)
+
+      val verbose = serverProps.getProperty("verbose").toBoolean
+      val server = new RaftServer(config, verbose)
 
       Exit.addShutdownHook("raft-shutdown-hook", server.shutdown)
 

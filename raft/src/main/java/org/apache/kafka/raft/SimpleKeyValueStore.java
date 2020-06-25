@@ -94,7 +94,7 @@ public class SimpleKeyValueStore<K, V> implements ReplicatedStateMachine {
     }
 
     @Override
-    public synchronized void becomeFollower(int epoch) {
+    public synchronized void becomeFollower(int epoch, int leaderId) {
         uncommitted.clear();
     }
 

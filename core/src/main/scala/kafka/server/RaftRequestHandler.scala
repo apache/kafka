@@ -17,19 +17,27 @@
 
 package kafka.server
 
+import java.util.Collections
+
 import kafka.network.RequestChannel
 import kafka.raft.KafkaNetworkChannel
 import kafka.utils.Logging
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.message.MetadataResponseData
+import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsResponse, MetadataRequest, MetadataResponse, ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.raft.NoOpStateMachine
 
 import scala.jdk.CollectionConverters._
 
 class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
                          requestChannel: RequestChannel,
-                         time: Time)
+                         time: Time,
+                         counter: NoOpStateMachine,
+                         metadataPartition: TopicPartition)
   extends ApiRequestHandler with Logging {
 
   override def handle(request: RequestChannel.Request): Unit = {
@@ -47,6 +55,61 @@ class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
             request.header,
             requestBody,
             response => sendResponse(request, Some(response)))
+
+        case ApiKeys.API_VERSIONS =>
+          sendResponse(request, Option(ApiVersionsResponse.apiVersionsResponse(0, 2)))
+
+        case ApiKeys.METADATA =>
+          val metadataRequest = request.body[MetadataRequest]
+          if (metadataRequest.data().topics().size() != 1 ||
+            !metadataRequest.data().topics().get(0).name().equals(metadataPartition.topic())) {
+            throw new IllegalArgumentException(s"Should only handle metadata request querying for " +
+              s"cluster metadata, but get ${metadataRequest.data().topics()}")
+          }
+
+          val topics = new MetadataResponseData.MetadataResponseTopicCollection
+          val leaderConnection = networkChannel.getConnectionInfo(counter.leaderId())
+          if (leaderConnection != null) {
+            topics.add(new MetadataResponseTopic()
+              .setErrorCode(Errors.NONE.code)
+              .setName(metadataPartition.topic())
+              .setIsInternal(true)
+              .setPartitions(Collections.singletonList(new MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setPartitionIndex(metadataPartition.partition())
+                .setLeaderId(leaderConnection.id()))))
+          }
+
+          val brokers = new MetadataResponseData.MetadataResponseBrokerCollection
+
+          networkChannel.allConnections().foreach( connection => {
+            brokers.add(new MetadataResponseData.MetadataResponseBroker()
+              .setNodeId(connection.id())
+              .setHost(connection.host())
+              .setPort(connection.port()))
+          })
+
+          sendResponse(request, Option(new MetadataResponse(
+            new MetadataResponseData()
+              .setTopics(topics)
+              .setBrokers(brokers))))
+
+        case ApiKeys.PRODUCE =>
+          val produceRequest = request.body[ProduceRequest]
+
+          counter.appendRecords(produceRequest.partitionRecordsOrFail().get(metadataPartition))
+            .whenComplete { (_, exception) =>
+              val error = if (exception == null)
+                Errors.NONE
+              else
+                Errors.forException(exception)
+
+              if (error != Errors.NONE)
+                warn(s"Encountered error when applying records: $error")
+              sendResponse(request, Option(new ProduceResponse(
+                Collections.singletonMap(metadataPartition,
+                  new ProduceResponse.PartitionResponse(error)))))
+            }
 
         case _ => throw new IllegalArgumentException(s"Unsupported api key: ${request.header.apiKey}")
       }

@@ -49,7 +49,7 @@ public class MockStateMachine implements ReplicatedStateMachine {
     }
 
     @Override
-    public void becomeFollower(int epoch) {
+    public void becomeFollower(int epoch, int leaderId) {
         this.epoch = epoch;
         this.isLeader = false;
     }
@@ -71,7 +71,7 @@ public class MockStateMachine implements ReplicatedStateMachine {
         return true;
     }
 
-    CompletableFuture<OffsetAndEpoch> append(Records records) {
+    public CompletableFuture<OffsetAndEpoch> append(Records records) {
         if (recordAppender == null) {
             throw new IllegalStateException("Record appender is not set");
         }

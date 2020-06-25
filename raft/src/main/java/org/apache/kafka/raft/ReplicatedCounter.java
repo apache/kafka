@@ -41,10 +41,11 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
     private final boolean verbose;
     private OffsetAndEpoch position = new OffsetAndEpoch(0, 0);
     private AtomicInteger uncommitted;
-    private boolean isLeader = false;
-    private RecordAppender appender = null;
+    protected RecordAppender appender = null;
 
-    public ReplicatedCounter(int nodeId, LogContext logContext, boolean verbose) {
+    public ReplicatedCounter(int nodeId,
+                             LogContext logContext,
+                             boolean verbose) {
         this.nodeId = nodeId;
         this.log = logContext.logger(ReplicatedCounter.class);
         this.verbose = verbose;
@@ -58,13 +59,11 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
     @Override
     public synchronized void becomeLeader(int epoch) {
         uncommitted = new AtomicInteger(committed.get());
-        isLeader = true;
     }
 
     @Override
-    public synchronized void becomeFollower(int epoch) {
+    public synchronized void becomeFollower(int epoch, int newLeaderId) {
         uncommitted = null;
-        isLeader = false;
     }
 
     @Override
@@ -87,7 +86,7 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
                     committed.set(value);
 
                     if (verbose) {
-                        System.out.println(Integer.toString(value));
+                        System.out.println(value);
                     }
                 }
             }
@@ -132,11 +131,6 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
         Records records = MemoryRecords.withRecords(CompressionType.NONE, serialize(incremented));
         CompletableFuture<OffsetAndEpoch> future = appender.append(records);
         return future.thenApply(offsetAndEpoch -> incremented);
-
-    }
-
-    public synchronized boolean isLeader() {
-        return isLeader;
     }
 
     private SimpleRecord serialize(int value) {

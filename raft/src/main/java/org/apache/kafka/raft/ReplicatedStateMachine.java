@@ -47,8 +47,9 @@ public interface ReplicatedStateMachine extends AutoCloseable {
      * node was not elected as the leader.
      *
      * @param epoch The latest quorum epoch
+     * @param leaderId The new leaderId, which should never be negative
      */
-    void becomeFollower(int epoch);
+    void becomeFollower(int epoch, int leaderId);
 
     /**
      * The next expected offset that will be appended to the log. This should be

@@ -141,6 +141,17 @@ class KafkaNetworkChannel(time: Time,
     }
   }
 
+  def getConnectionInfo(nodeId: Int): Node = {
+    if (!endpoints.contains(nodeId))
+      null
+    else
+      endpoints(nodeId)
+  }
+
+  def allConnections(): Set[Node] = {
+    endpoints.values.toSet
+  }
+
   private def buildInboundRaftResponse(response: ClientResponse): RaftResponse.Inbound = {
     val header = response.requestHeader()
     val data = if (response.authenticationException != null) {

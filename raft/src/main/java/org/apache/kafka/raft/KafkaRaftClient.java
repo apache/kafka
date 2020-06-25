@@ -307,9 +307,8 @@ public class KafkaRaftClient implements RaftClient {
             if (quorum.isVoter() && quorum.epoch() == 0) {
                 // If we're initializing for the first time, become a candidate immediately
                 becomeCandidate();
-            } else {
-                if (state.hasLeader())
-                    onBecomeFollowerOfElectedLeader(quorum.followerStateOrThrow());
+            } else if (state.hasLeader()) {
+                onBecomeFollowerOfElectedLeader(quorum.followerStateOrThrow(), state.leaderId());
             }
         }
     }
@@ -414,8 +413,8 @@ public class KafkaRaftClient implements RaftClient {
         unwrittenAppends.clear();
     }
 
-    private void onBecomeFollowerOfElectedLeader(FollowerState state) {
-        stateMachine.becomeFollower(state.epoch());
+    private void onBecomeFollowerOfElectedLeader(FollowerState state, int leaderId) {
+        stateMachine.becomeFollower(state.epoch(), leaderId);
 
         timer.reset(fetchTimeoutMs);
 
@@ -426,7 +425,7 @@ public class KafkaRaftClient implements RaftClient {
 
     private void becomeFetchingFollower(int leaderId, int epoch) throws IOException {
         if (quorum.becomeFetchingFollower(epoch, leaderId)) {
-            onBecomeFollowerOfElectedLeader(quorum.followerStateOrThrow());
+            onBecomeFollowerOfElectedLeader(quorum.followerStateOrThrow(), leaderId);
         }
     }
 

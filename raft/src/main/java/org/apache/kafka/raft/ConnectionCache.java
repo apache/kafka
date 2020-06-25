@@ -172,7 +172,11 @@ public class ConnectionCache {
             return state == State.AWAITING_REQUEST && timeMs >= lastSendTimeMs + requestTimeoutMs;
         }
 
-        Optional<HostInfo> hostInfo() {
+        public long id() {
+            return id;
+        }
+
+        public Optional<HostInfo> hostInfo() {
             return Optional.ofNullable(hostInfo);
         }
 
