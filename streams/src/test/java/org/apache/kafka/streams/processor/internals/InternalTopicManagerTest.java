@@ -48,7 +48,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashSet;
 import java.util.Optional;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -112,7 +111,7 @@ public class InternalTopicManagerTest {
             Collections.singletonList(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList())),
             null);
         assertEquals(Collections.singletonMap(topic, 1),
-                internalTopicManager.getNumPartitions(Collections.singleton(topic), new HashSet<String>(), 1));
+            internalTopicManager.getNumPartitions(Collections.singleton(topic), Collections.emptySet(), true));
     }
 
     @Test
@@ -308,9 +307,9 @@ public class InternalTopicManagerTest {
 
         // simulate describeTopics got LeaderNotAvailableException
         EasyMock.expect(admin.describeTopics(Collections.singleton(leaderNotAvailableTopic)))
-                .andReturn(new MockDescribeTopicsResult(
-                        Collections.singletonMap(leaderNotAvailableTopic, topicDescriptionFailFuture)))
-                .times(2);
+            .andReturn(new MockDescribeTopicsResult(
+                Collections.singletonMap(leaderNotAvailableTopic, topicDescriptionFailFuture)))
+            .times(2);
 
         EasyMock.replay(admin);
 

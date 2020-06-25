@@ -98,7 +98,7 @@ public class InternalTopicManager {
         int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
         final Set<String> newlyCreatedTopics = new HashSet<>();
-        final HashSet<String> tempUnknownTopics = new HashSet<>();
+        final Set<String> tempUnknownTopics = new HashSet<>();
 
         while (shouldRetry(topicsNotReady, tempUnknownTopics) && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics, tempUnknownTopics, remainingRetries);
@@ -181,8 +181,8 @@ public class InternalTopicManager {
      */
     // visible for testing
     protected Map<String, Integer> getNumPartitions(final Set<String> topics,
-                                                    final HashSet<String> tempUnknownTopics,
-                                                    final int remainingRetries) {
+                                                    final Set<String> tempUnknownTopics,
+                                                    final boolean hasRemainingRetries) {
         final Set<String> allTopicsToDescribe = new HashSet<>(topics);
         allTopicsToDescribe.addAll(tempUnknownTopics);
         log.debug("Trying to check if topics {} have been created with expected number of partitions.", allTopicsToDescribe);
@@ -210,13 +210,13 @@ public class InternalTopicManager {
                         "Error message was: {}", topicName, cause.toString());
                 } else if (cause instanceof LeaderNotAvailableException) {
                     tempUnknownTopics.add(topicName);
-                    if (remainingRetries > 0) {
-                        log.debug("The leader of the Topic {} is not available, with {} retries left.\n" +
-                            "Error message was: {}", topicName, remainingRetries, cause.toString());
-                    } else { // run out of retries, throw exception directly
+                    if (!hasRemainingRetries) {
+                        // run out of retries, throw exception directly
                         throw new StreamsException(
-                            String.format("The leader of the Topic %s is not available after %d retries.", topicName, retries), cause);
+                            String.format("The leader of the Topic %s is not available.", topicName), cause);
                     }
+                    log.info("The leader of the Topic {} is not available.\n" +
+                        "Error message was: {}", topicName, cause.toString());
                 } else {
                     log.error("Unexpected error during topic description for {}.\n" +
                         "Error message was: {}", topicName, cause.toString());
@@ -233,14 +233,15 @@ public class InternalTopicManager {
      */
     private Set<String> validateTopics(final Set<String> topicsToValidate,
                                        final Map<String, InternalTopicConfig> topicsMap,
-                                       final HashSet<String> tempUnknownTopics,
+                                       final Set<String> tempUnknownTopics,
                                        final int remainingRetries) {
         if (!topicsMap.keySet().containsAll(topicsToValidate)) {
             throw new IllegalStateException("The topics map " + topicsMap.keySet() + " does not contain all the topics " +
                 topicsToValidate + " trying to validate.");
         }
 
-        final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate, tempUnknownTopics, remainingRetries);
+        final Map<String, Integer> existedTopicPartition =
+            getNumPartitions(topicsToValidate, tempUnknownTopics, remainingRetries > 0);
 
         final Set<String> topicsToCreate = new HashSet<>();
         for (final String topicName : topicsToValidate) {
@@ -258,18 +259,16 @@ public class InternalTopicManager {
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
                 }
-            } else {
+            } else if (!tempUnknownTopics.contains(topicName)) {
                 // for the tempUnknownTopics, we'll check again later if retries > 0
-                if (!tempUnknownTopics.contains(topicName)) {
-                    topicsToCreate.add(topicName);
-                }
+                topicsToCreate.add(topicName);
             }
         }
 
         return topicsToCreate;
     }
 
-    private boolean shouldRetry(final Set<String> topicsNotReady, final HashSet<String> tempUnknownTopics) {
+    private boolean shouldRetry(final Set<String> topicsNotReady, final Set<String> tempUnknownTopics) {
         // If there's topic with LeaderNotAvailableException, we still need retry
         return !topicsNotReady.isEmpty() || !tempUnknownTopics.isEmpty();
     }
