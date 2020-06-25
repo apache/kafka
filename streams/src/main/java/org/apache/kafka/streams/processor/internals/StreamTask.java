@@ -340,6 +340,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
         final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit;
         switch (state()) {
+            case CREATED:
             case RUNNING:
             case RESTORING:
             case SUSPENDED:
@@ -355,8 +356,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 }
 
                 break;
-
-            case CREATED:
+                
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while preparing active task " + id + " for committing");
 
@@ -450,6 +450,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case CREATED:
+
+                break;
+
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while post committing active task " + id);
 
