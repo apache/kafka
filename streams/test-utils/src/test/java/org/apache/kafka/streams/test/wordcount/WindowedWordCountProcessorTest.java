@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.examples.wordcount;
+package org.apache.kafka.streams.test.wordcount;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
@@ -38,9 +38,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-/**
- * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Processor} in the {@link WordCountProcessorDemo}.
- */
 public class WindowedWordCountProcessorTest {
     @Test
     public void testWithInMemoryStore() {
@@ -60,7 +57,7 @@ public class WindowedWordCountProcessorTest {
         context.register(store, null);
 
         // Create and initialize the processor under test
-        final Processor<String, String> processor = new WindowedWordCountProcessorDemo.MyProcessorSupplier().get();
+        final Processor<String, String> processor = new WindowedWordCountProcessorSupplier().get();
         processor.init(context);
 
         // send a record to the processor
@@ -116,7 +113,7 @@ public class WindowedWordCountProcessorTest {
             context.register(store, null);
 
             // Create and initialize the processor under test
-            final Processor<String, String> processor = new WindowedWordCountProcessorDemo.MyProcessorSupplier().get();
+            final Processor<String, String> processor = new WindowedWordCountProcessorSupplier().get();
             processor.init(context);
 
             // send a record to the processor
