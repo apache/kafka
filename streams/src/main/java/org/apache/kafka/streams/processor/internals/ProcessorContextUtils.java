@@ -14,31 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
-import java.util.List;
+public final class ProcessorContextUtils {
 
-interface Segments<S extends Segment> {
+    private ProcessorContextUtils() {}
 
-    long segmentId(final long timestamp);
+    /**
+     * Note that KIP-622 would move currentSystemTimeMs to ProcessorContext,
+     * removing the need for this method.
+     */
+    public static long getCurrentSystemTime(final ProcessorContext context) {
+        return context instanceof InternalProcessorContext
+            ? ((InternalProcessorContext) context).currentSystemTimeMs()
+            : System.currentTimeMillis();
+    }
 
-    String segmentName(final long segmentId);
-
-    S getSegmentForTimestamp(final long timestamp);
-
-    S getOrCreateSegmentIfLive(final long segmentId, final ProcessorContext context, final long streamTime);
-
-    S getOrCreateSegment(final long segmentId, final ProcessorContext context);
-
-    void openExisting(final ProcessorContext context, final long streamTime);
-
-    List<S> segments(final long timeFrom, final long timeTo);
-
-    List<S> allSegments();
-
-    void flush();
-
-    void close();
+    public static StreamsMetricsImpl getMetricsImpl(final ProcessorContext context) {
+        return (StreamsMetricsImpl) context.metrics();
+    }
 }
