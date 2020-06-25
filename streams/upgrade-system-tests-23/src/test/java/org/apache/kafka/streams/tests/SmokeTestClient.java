@@ -59,7 +59,9 @@ public class SmokeTestClient extends SmokeTestUtil {
     private volatile boolean closed;
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
-        if (name != null) { Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable)); } else {
+        if (name != null) {
+            Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
+        } else {
             Runtime.getRuntime().addShutdownHook(new Thread(runnable));
         }
     }

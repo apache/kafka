@@ -16,11 +16,8 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -40,7 +37,6 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
 import java.io.IOException;
@@ -63,7 +59,9 @@ public class SmokeTestClient extends SmokeTestUtil {
     private volatile boolean closed;
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
-        if (name != null) { Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable)); } else {
+        if (name != null) {
+            Runtime.getRuntime().addShutdownHook(KafkaThread.nonDaemon(name, runnable));
+        } else {
             Runtime.getRuntime().addShutdownHook(new Thread(runnable));
         }
     }
