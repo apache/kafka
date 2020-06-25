@@ -360,28 +360,6 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         cleanup(context, buffer);
     }
 
-    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
-
-    private static String bytesToHex(final byte[] bytes) {
-        final char[] hexChars = new char[bytes.length * 2];
-        for (int j = 0; j < bytes.length; j++) {
-            final int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
-            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
-        }
-        return new String(hexChars);
-    }
-
-    private static byte[] hexStringToByteArray(final String hexString) {
-        final int len = hexString.length();
-        final byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            data[i / 2] = (byte) ((Character.digit(hexString.charAt(i), 16) << 4)
-                + Character.digit(hexString.charAt(i+1), 16));
-        }
-        return data;
-    }
-
     @Test
     public void shouldRestoreOldUnversionedFormat() {
         final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
@@ -915,5 +893,28 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
     private static ProcessorRecordContext getContext(final long recordTimestamp) {
         return new ProcessorRecordContext(recordTimestamp, 0, 0, "topic", null);
+    }
+
+
+    // to be used to generate future hex-encoded values
+//    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
+//    private static String bytesToHex(final byte[] bytes) {
+//        final char[] hexChars = new char[bytes.length * 2];
+//        for (int j = 0; j < bytes.length; j++) {
+//            final int v = bytes[j] & 0xFF;
+//            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+//            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+//        }
+//        return new String(hexChars);
+//    }
+
+    private static byte[] hexStringToByteArray(final String hexString) {
+        final int len = hexString.length();
+        final byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] = (byte) ((Character.digit(hexString.charAt(i), 16) << 4)
+                + Character.digit(hexString.charAt(i + 1), 16));
+        }
+        return data;
     }
 }

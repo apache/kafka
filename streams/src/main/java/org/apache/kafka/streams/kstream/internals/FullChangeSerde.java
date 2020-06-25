@@ -69,33 +69,6 @@ public final class FullChangeSerde<T> {
     }
 
     /**
-     * We used to serialize a Change into a single byte[]. Now, we don't anymore, but we still keep this logic here
-     * so that we can produce the legacy format to test that we can still deserialize it.
-     */
-    public static byte[] mergeChangeArraysIntoSingleLegacyFormattedArray(final Change<byte[]> serialChange) {
-        if (serialChange == null) {
-            return null;
-        }
-
-        final int oldSize = serialChange.oldValue == null ? -1 : serialChange.oldValue.length;
-        final int newSize = serialChange.newValue == null ? -1 : serialChange.newValue.length;
-
-        final ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES * 2 + Math.max(0, oldSize) + Math.max(0, newSize));
-
-
-        buffer.putInt(oldSize);
-        if (serialChange.oldValue != null) {
-            buffer.put(serialChange.oldValue);
-        }
-
-        buffer.putInt(newSize);
-        if (serialChange.newValue != null) {
-            buffer.put(serialChange.newValue);
-        }
-        return buffer.array();
-    }
-
-    /**
      * We used to serialize a Change into a single byte[]. Now, we don't anymore, but we still
      * need to be able to read it (so that we can load the state store from previously-written changelog records).
      */
