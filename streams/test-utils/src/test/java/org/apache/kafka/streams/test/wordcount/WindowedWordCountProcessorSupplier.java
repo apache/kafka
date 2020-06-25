@@ -42,13 +42,8 @@ public final class WindowedWordCountProcessorSupplier implements ProcessorSuppli
                 this.context = context;
                 this.context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
                     try (final KeyValueIterator<Windowed<String>, Integer> iter = windowStore.all()) {
-                        System.out.println("----------- " + timestamp + " ----------- ");
-
                         while (iter.hasNext()) {
                             final KeyValue<Windowed<String>, Integer> entry = iter.next();
-
-                            System.out.println("[" + entry.key + ", " + entry.value + "]");
-
                             context.forward(entry.key.toString(), entry.value.toString());
                         }
                     }
