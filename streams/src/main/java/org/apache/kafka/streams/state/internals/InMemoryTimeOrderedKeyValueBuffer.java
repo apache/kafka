@@ -261,10 +261,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
-        System.err.println("Serializing v3:");
-        System.err.println("   key: " + BufferValue.bytesToHex(key.get()));
-        System.err.println(" value: " + value);
-        System.err.println(" serialized: " + BufferValue.bytesToHex(array));
         ((RecordCollector.Supplier) context).recordCollector().send(
                 changelogTopic,
                 key,
@@ -367,11 +363,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                         )
                     );
                 } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_2_CHANGELOG_HEADER_VALUE)) {
-                    // in this case, the changelog value is a serialized BufferValue
-                    System.err.println("Deserializing v2 " + record);
-                    System.err.println("   key: " + BufferValue.bytesToHex(record.key()));
-                    System.err.println(" value: " + BufferValue.bytesToHex(record.value()));
-
                     final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
                     final ContextualRecord contextualRecord = ContextualRecord.deserialize(valueAndTime);
                     final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));
@@ -386,17 +377,11 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     }
                     final long time = valueAndTime.getLong();
                     final BufferValue bufferValue = new BufferValue(priorValue, change.oldValue, change.newValue, contextualRecord.recordContext());
-                    System.err.println("   got: " + bufferValue);
                     cleanPut(time, key, bufferValue);
                 } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_3_CHANGELOG_HEADER_VALUE)) {
-                    // in this case, the changelog value is a serialized BufferValue
-                    System.err.println("Deserializing v3 " + record);
-                    System.err.println("   key: " + BufferValue.bytesToHex(record.key()));
-                    System.err.println(" value: " + BufferValue.bytesToHex(record.value()));
 
                     final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
                     final BufferValue bufferValue = BufferValue.deserialize(valueAndTime);
-                    System.err.println("   got: " + bufferValue);
                     final long time = valueAndTime.getLong();
                     cleanPut(time, key, bufferValue);
                 } else {
