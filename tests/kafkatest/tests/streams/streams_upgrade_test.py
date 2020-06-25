@@ -38,6 +38,8 @@ metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0
 backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(LATEST_2_5), str(DEV_VERSION)]
 
+dev_version = [str(DEV_VERSION)]
+
 """
 After each release one should first check that the released version has been uploaded to 
 https://s3-us-west-2.amazonaws.com/kafka-packages/ which is the url used by system test to download jars; 
@@ -242,9 +244,8 @@ class StreamsUpgradeTest(Test):
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
 
-    @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
-    @matrix(from_version=metadata_3_or_higher_versions, to_version=metadata_3_or_higher_versions)
-    def test_simple_upgrade_downgrade(self, from_version, to_version):
+    @matrix(from_version=metadata_3_or_higher_versions, to_version=dev_version)
+    def test_app_upgrade(self, from_version, to_version):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
         """
@@ -255,7 +256,7 @@ class StreamsUpgradeTest(Test):
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
 
-        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, topics={
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, topics={
             'echo' : { 'partitions': 5, 'replication-factor': 1 },
             'data' : { 'partitions': 5, 'replication-factor': 1 },
             'min' : { 'partitions': 5, 'replication-factor': 1 },
@@ -275,9 +276,9 @@ class StreamsUpgradeTest(Test):
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.driver.disable_auto_terminate()
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once")
-        self.processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once")
-        self.processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once")
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
+        self.processor2 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
+        self.processor3 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, processing_guarantee = "at_least_once", replication_factor = 1)
 
         self.driver.start()
         self.start_all_nodes_with(from_version)

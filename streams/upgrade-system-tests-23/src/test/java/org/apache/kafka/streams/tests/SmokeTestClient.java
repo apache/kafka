@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -160,13 +158,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         final Properties fullProps = new Properties(props);
         fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
-        fullProps.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
-        fullProps.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
-        fullProps.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
-        fullProps.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
-        fullProps.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
-        fullProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        fullProps.put(ProducerConfig.ACKS_CONFIG, "all");
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, tempDirectory().getAbsolutePath());
         fullProps.putAll(props);
         return fullProps;

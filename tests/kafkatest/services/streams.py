@@ -305,7 +305,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
 class StreamsSmokeTestBaseService(StreamsTestBaseService):
     """Base class for Streams Smoke Test services providing some common settings and functionality"""
 
-    def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', num_threads = 3):
+    def __init__(self, test_context, kafka, command, processing_guarantee = 'at_least_once', num_threads = 3, replication_factor = 3):
         super(StreamsSmokeTestBaseService, self).__init__(test_context,
                                                           kafka,
                                                           "org.apache.kafka.streams.tests.StreamsSmokeTest",
@@ -314,6 +314,7 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
         self.PROCESSING_GUARANTEE = processing_guarantee
         self.KAFKA_STREAMS_VERSION = ""
         self.UPGRADE_FROM = None
+        self.REPLICATION_FACTOR = replication_factor
 
     def set_version(self, kafka_streams_version):
         self.KAFKA_STREAMS_VERSION = kafka_streams_version
@@ -321,12 +322,17 @@ class StreamsSmokeTestBaseService(StreamsTestBaseService):
     def set_upgrade_from(self, upgrade_from):
         self.UPGRADE_FROM = upgrade_from
 
-
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
                       streams_property.PROCESSING_GUARANTEE: self.PROCESSING_GUARANTEE,
-                      streams_property.NUM_THREADS: self.NUM_THREADS}
+                      streams_property.NUM_THREADS: self.NUM_THREADS,
+                      "replication.factor": self.REPLICATION_FACTOR,
+                      "num.standby.replicas": 2,
+                      "buffered.records.per.partition": 100,
+                      "commit.interval.ms": 1000,
+                      "auto.offset.reset": "earliest",
+                      "acks": "all"}
 
         if self.UPGRADE_FROM is not None:
             properties['upgrade.from'] = self.UPGRADE_FROM
@@ -408,8 +414,8 @@ class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):
         return cmd
 
 class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
-    def __init__(self, test_context, kafka, processing_guarantee, num_threads = 3):
-        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, num_threads)
+    def __init__(self, test_context, kafka, processing_guarantee, num_threads = 3, replication_factor = 3):
+        super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process", processing_guarantee, num_threads, replication_factor)
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
