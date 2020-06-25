@@ -348,14 +348,11 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- TODO: fix this (see KAFKA-4996) -->
-        <Or>
-            <Package name="org.apache.kafka.streams.state.internals"/>
+        <!-- Suppress warning about a value that gets initialized
+             before any other threads are created. -->
             <Package name="org.apache.kafka.streams.processor.internals"/>
-            <Package name="org.apache.kafka.streams.processor"/>
-            <Package name="org.apache.kafka.streams"/>
-        </Or>
-        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+            <Source name="InternalTopologyBuilder.java"/>
+            <Bug pattern="IS2_INCONSISTENT_SYNC"/>
     </Match>
 
     <Match>
