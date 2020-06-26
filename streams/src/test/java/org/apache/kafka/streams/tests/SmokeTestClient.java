@@ -55,7 +55,6 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     private KafkaStreams streams;
     private boolean uncaughtException = false;
-    private boolean started;
     private volatile boolean closed;
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
@@ -92,10 +91,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         this.name = name;
     }
 
-    public boolean started() {
-        return started;
-    }
-
     public boolean closed() {
         return closed;
     }
@@ -108,7 +103,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams.setStateListener((newState, oldState) -> {
             System.out.printf("%s %s: %s -> %s%n", name, Instant.now(), oldState, newState);
             if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
-                started = true;
                 countDownLatch.countDown();
             }
 

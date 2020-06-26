@@ -83,8 +83,8 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
         return deserializationResult;
     }
 
-    static DeserializationResult deserializeV2(final ConsumerRecord<byte[], byte[]> record,
-                                               final Bytes key) {
+    private static DeserializationResult deserializeV2(final ConsumerRecord<byte[], byte[]> record,
+                                                       final Bytes key) {
         final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
         final ContextualRecord contextualRecord = ContextualRecord.deserialize(valueAndTime);
         final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));

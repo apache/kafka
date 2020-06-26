@@ -192,59 +192,6 @@ class StreamsUpgradeTest(Test):
         processor.stop()
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
-    @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
-    @matrix(from_version=metadata_1_versions, to_version=metadata_3_or_higher_versions)
-    @matrix(from_version=metadata_2_versions, to_version=metadata_3_or_higher_versions)
-    def test_metadata_upgrade(self, from_version, to_version):
-        """
-        Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
-        """
-
-        self.zk = ZookeeperService(self.test_context, num_nodes=1)
-        self.zk.start()
-
-        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, topics=self.topics)
-        self.kafka.start()
-
-        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.driver.disable_auto_terminate()
-        self.processor1 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-        self.processor2 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-        self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
-
-        self.driver.start()
-        self.start_all_nodes_with(from_version)
-
-        self.processors = [self.processor1, self.processor2, self.processor3]
-
-        counter = 1
-        random.seed()
-
-        # first rolling bounce
-        random.shuffle(self.processors)
-        for p in self.processors:
-            p.CLEAN_NODE_ENABLED = False
-            self.do_stop_start_bounce(p, from_version[:-2], to_version, counter)
-            counter = counter + 1
-
-        # second rolling bounce
-        random.shuffle(self.processors)
-        for p in self.processors:
-            self.do_stop_start_bounce(p, None, to_version, counter)
-            counter = counter + 1
-
-        # shutdown
-        self.driver.stop()
-
-        random.shuffle(self.processors)
-        for p in self.processors:
-            node = p.node
-            with node.account.monitor_log(p.STDOUT_FILE) as monitor:
-                p.stop()
-                monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
-                                   timeout_sec=60,
-                                   err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
     @matrix(from_version=smoke_test_versions, to_version=dev_version)
     def test_app_upgrade(self, from_version, to_version):
         """
@@ -310,6 +257,59 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("SMOKE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'SMOKE-TEST-CLIENT-CLOSED' on " + str(node.account))
+
+    @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
+    @matrix(from_version=metadata_1_versions, to_version=metadata_3_or_higher_versions)
+    @matrix(from_version=metadata_2_versions, to_version=metadata_3_or_higher_versions)
+    def test_metadata_upgrade(self, from_version, to_version):
+        """
+        Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
+        """
+
+        self.zk = ZookeeperService(self.test_context, num_nodes=1)
+        self.zk.start()
+
+        self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, topics=self.topics)
+        self.kafka.start()
+
+        self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
+        self.driver.disable_auto_terminate()
+        self.processor1 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor2 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+        self.processor3 = StreamsUpgradeTestJobRunnerService(self.test_context, self.kafka)
+
+        self.driver.start()
+        self.start_all_nodes_with(from_version)
+
+        self.processors = [self.processor1, self.processor2, self.processor3]
+
+        counter = 1
+        random.seed()
+
+        # first rolling bounce
+        random.shuffle(self.processors)
+        for p in self.processors:
+            p.CLEAN_NODE_ENABLED = False
+            self.do_stop_start_bounce(p, from_version[:-2], to_version, counter)
+            counter = counter + 1
+
+        # second rolling bounce
+        random.shuffle(self.processors)
+        for p in self.processors:
+            self.do_stop_start_bounce(p, None, to_version, counter)
+            counter = counter + 1
+
+        # shutdown
+        self.driver.stop()
+
+        random.shuffle(self.processors)
+        for p in self.processors:
+            node = p.node
+            with node.account.monitor_log(p.STDOUT_FILE) as monitor:
+                p.stop()
+                monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
+                                   timeout_sec=60,
+                                   err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
 
     def test_version_probing_upgrade(self):
         """
@@ -380,18 +380,18 @@ class StreamsUpgradeTest(Test):
 
         # double-check the version
         self.wait_for_verification(self.processor1, kafka_version_str, self.processor1.LOG_FILE)
-        self.wait_for_verification(self.processor2, kafka_version_str, self.processor1.LOG_FILE)
-        self.wait_for_verification(self.processor3, kafka_version_str, self.processor1.LOG_FILE)
+        self.wait_for_verification(self.processor2, kafka_version_str, self.processor2.LOG_FILE)
+        self.wait_for_verification(self.processor3, kafka_version_str, self.processor3.LOG_FILE)
 
         # wait for the members to join
         self.wait_for_verification(self.processor1, "SMOKE-TEST-CLIENT-STARTED", self.processor1.STDOUT_FILE)
-        self.wait_for_verification(self.processor2, "SMOKE-TEST-CLIENT-STARTED", self.processor1.STDOUT_FILE)
-        self.wait_for_verification(self.processor3, "SMOKE-TEST-CLIENT-STARTED", self.processor1.STDOUT_FILE)
+        self.wait_for_verification(self.processor2, "SMOKE-TEST-CLIENT-STARTED", self.processor2.STDOUT_FILE)
+        self.wait_for_verification(self.processor3, "SMOKE-TEST-CLIENT-STARTED", self.processor3.STDOUT_FILE)
 
         # make sure they've processed something
         self.wait_for_verification(self.processor1, self.processed_msg, self.processor1.STDOUT_FILE)
-        self.wait_for_verification(self.processor2, self.processed_msg, self.processor1.STDOUT_FILE)
-        self.wait_for_verification(self.processor3, self.processed_msg, self.processor1.STDOUT_FILE)
+        self.wait_for_verification(self.processor2, self.processed_msg, self.processor2.STDOUT_FILE)
+        self.wait_for_verification(self.processor3, self.processed_msg, self.processor3.STDOUT_FILE)
 
     def wait_for_verification(self, processor, message, file, num_lines=1):
         wait_until(lambda: self.verify_from_file(processor, message, file) >= num_lines,

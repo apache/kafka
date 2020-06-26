@@ -65,7 +65,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private static final byte[] V_1_CHANGELOG_HEADER_VALUE = {(byte) 1};
     private static final byte[] V_2_CHANGELOG_HEADER_VALUE = {(byte) 2};
     private static final byte[] V_3_CHANGELOG_HEADER_VALUE = {(byte) 3};
-    private static final RecordHeaders CHANGELOG_HEADERS =
+    static final RecordHeaders CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", V_3_CHANGELOG_HEADER_VALUE)});
     private static final String METRIC_SCOPE = "in-memory-suppression";
 
@@ -314,7 +314,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     }
                 }
             } else {
-                if (record.headers().lastHeader("v") == null) {
+                final Header versionHeader = record.headers().lastHeader("v");
+                if (versionHeader == null) {
                     // in this case, the changelog value is just the serialized record value
                     final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
                     final long time = timeAndValue.getLong();
@@ -343,7 +344,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                             recordContext
                         )
                     );
-                } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_1_CHANGELOG_HEADER_VALUE)) {
+                } else if (Arrays.equals(versionHeader.value(), V_1_CHANGELOG_HEADER_VALUE)) {
                     // in this case, the changelog value is a serialized ContextualRecord
                     final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
                     final long time = timeAndValue.getLong();
@@ -365,12 +366,16 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                             contextualRecord.recordContext()
                         )
                     );
-                } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_2_CHANGELOG_HEADER_VALUE)) {
+                } else if (Arrays.equals(versionHeader.value(), V_2_CHANGELOG_HEADER_VALUE)) {
+
                     final DeserializationResult deserializationResult = duckTypeV2(record, key);
                     cleanPut(deserializationResult.time(), deserializationResult.key(), deserializationResult.bufferValue());
-                } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_3_CHANGELOG_HEADER_VALUE)) {
+
+                } else if (Arrays.equals(versionHeader.value(), V_3_CHANGELOG_HEADER_VALUE)) {
+
                     final DeserializationResult deserializationResult = deserializeV3(record, key);
                     cleanPut(deserializationResult.time(), deserializationResult.key(), deserializationResult.bufferValue());
+
                 } else {
                     throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
                 }
