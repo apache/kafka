@@ -504,9 +504,8 @@ class Partition(val topicPartition: TopicPartition,
         this.createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
       } catch {
         case e: ZooKeeperClientException =>
-          stateChangeLogger.info(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
-            s"state change for the partition with leader epoch: $leaderEpoch ", e)
-          error(s"ZooKeeper client error occurred while this partition was becoming the leader for $topicPartition.", e)
+          stateChangeLogger.error(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
+            s"state change for the partition $topicPartition with leader epoch: $leaderEpoch ", e)
 
           return false
       }
@@ -584,9 +583,8 @@ class Partition(val topicPartition: TopicPartition,
         this.createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
       } catch {
         case e: ZooKeeperClientException =>
-          stateChangeLogger.info(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +
+          stateChangeLogger.error(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +
             s"state change for the partition $topicPartition with leader epoch: $leaderEpoch.", e)
-          error(s"ZooKeeper client error occurred while this partition was becoming the follower for $topicPartition.", e)
 
           return false
       }
