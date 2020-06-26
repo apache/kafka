@@ -29,7 +29,9 @@
   // Version 5 is bumped to apply group.instance.id to identify member across restarts.
   //
   // Version 6 is the first flexible version.
-  "validVersions": "0-6",
+  //
+  // Starting from version 7, the broker sends back the Protocol Type to the client (KIP-559).
+  "validVersions": "0-7",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,
@@ -38,7 +40,10 @@
       "about": "The error code, or 0 if there was no error." },
     { "name": "GenerationId", "type": "int32", "versions": "0+", "default": "-1",
       "about": "The generation ID of the group." },
-    { "name": "ProtocolName", "type": "string", "versions": "0+",
+    { "name": "ProtocolType", "type": "string", "versions": "7+",
+      "nullableVersions": "7+", "default": "null", "ignorable": true,
+      "about": "The group protocol name." },
+    { "name": "ProtocolName", "type": "string", "versions": "0+", "nullableVersions": "7+",
       "about": "The group protocol selected by the coordinator." },
     { "name": "Leader", "type": "string", "versions": "0+",
       "about": "The leader of the group." },

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.NoSuchElementException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -28,9 +27,15 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordQueue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.LinkedList;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+
+import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
+import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
 class CachingSessionStore
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
@@ -41,7 +46,6 @@ class CachingSessionStore
     private final SessionKeySchema keySchema;
     private final SegmentedCacheFunction cacheFunction;
     private String cacheName;
-    private ThreadCache cache;
     private InternalProcessorContext context;
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
@@ -67,8 +71,7 @@ class CachingSessionStore
         this.context = context;
 
         cacheName = context.taskId() + "-" + name();
-        cache = context.getCache();
-        cache.addDirtyEntryFlushListener(cacheName, entries -> {
+        context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, context);
             }
@@ -128,7 +131,7 @@ class CachingSessionStore
                 context.timestamp(),
                 context.partition(),
                 context.topic());
-        cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
+        context.cache().put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
 
         maxObservedTimestamp = Math.max(keySchema.segmentTimestamp(binaryKey), maxObservedTimestamp);
     }
@@ -147,7 +150,7 @@ class CachingSessionStore
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime) :
-            cache.range(cacheName,
+            context.cache().range(cacheName,
                         cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
                         cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
             );
@@ -180,7 +183,7 @@ class CachingSessionStore
 
         final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
@@ -198,12 +201,12 @@ class CachingSessionStore
     public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        if (cache == null) {
+        if (context.cache() == null) {
             return wrapped().fetchSession(key, startTime, endTime);
         } else {
             final Bytes bytesKey = SessionKeySchema.toBinary(key, startTime, endTime);
             final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
-            final LRUCacheEntry entry = cache.get(cacheName, cacheKey);
+            final LRUCacheEntry entry = context.cache().get(cacheName, cacheKey);
             if (entry == null) {
                 return wrapped().fetchSession(key, startTime, endTime);
             } else {
@@ -227,14 +230,20 @@ class CachingSessionStore
     }
 
     public void flush() {
-        cache.flush(cacheName);
-        super.flush();
+        context.cache().flush(cacheName);
+        wrapped().flush();
     }
 
     public void close() {
-        flush();
-        cache.close(cacheName);
-        super.close();
+        final LinkedList<RuntimeException> suppressed = executeAll(
+            () -> context.cache().flush(cacheName),
+            () -> context.cache().close(cacheName),
+            wrapped()::close
+        );
+        if (!suppressed.isEmpty()) {
+            throwSuppressed("Caught an exception while closing caching session store for store " + name(),
+                            suppressed);
+        }
     }
 
     private class CacheIteratorWrapper implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
@@ -272,7 +281,7 @@ class CachingSessionStore
 
             setCacheKeyRange(earliestSessionEndTime, currentSegmentLastTime());
 
-            this.current = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
+            this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
         }
 
         @Override
@@ -343,7 +352,7 @@ class CachingSessionStore
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
 
             current.close();
-            current = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
+            current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
         }
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {

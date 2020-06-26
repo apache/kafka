@@ -59,6 +59,11 @@ class ProduceConsumeValidateTest(Test):
                        err_msg="Consumer process took more than %d s to fork" %\
                        self.consumer_init_timeout_sec)
 
+        # If consuming only latest messages, wait for offset reset to ensure all messages are consumed
+        if not self.consumer.from_beginning:
+            self.consumer.wait_for_offset_reset(self.consumer.nodes[0], self.topic, self.num_partitions)
+
+
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5,
                    timeout_sec=self.producer_start_timeout_sec,

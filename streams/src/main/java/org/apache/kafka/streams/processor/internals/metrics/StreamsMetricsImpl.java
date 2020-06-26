@@ -44,9 +44,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import java.util.Optional;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
@@ -121,15 +121,15 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String ROLLUP_VALUE = "all";
 
     public static final String LATENCY_SUFFIX = "-latency";
+    public static final String RECORDS_SUFFIX = "-records";
     public static final String AVG_SUFFIX = "-avg";
     public static final String MAX_SUFFIX = "-max";
     public static final String MIN_SUFFIX = "-min";
     public static final String RATE_SUFFIX = "-rate";
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
-
-    public static final String AVG_VALUE_DOC = "The average value of ";
-    public static final String MAX_VALUE_DOC = "The maximum value of ";
+    public static final String P99_SUFFIX = "-p99";
+    public static final String P90_SUFFIX = "-p90";
 
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
@@ -405,11 +405,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final String key = storeSensorPrefix(threadId, taskId, storeName);
         synchronized (storeLevelSensors) {
             final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
+            final Sensor sensor = metrics.getSensor(fullSensorName);
+            if (sensor == null) {
+                storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            } else {
+                return sensor;
+            }
         }
     }
 
@@ -632,6 +634,31 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 tags),
             new Avg()
         );
+        sensor.add(
+            new MetricName(
+                operation + MAX_SUFFIX,
+                group,
+                descriptionOfMax,
+                tags),
+            new Max()
+        );
+    }
+
+    public static void addMinAndMaxToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation,
+                                            final String descriptionOfMin,
+                                            final String descriptionOfMax) {
+        sensor.add(
+            new MetricName(
+                operation + MIN_SUFFIX,
+                group,
+                descriptionOfMin,
+                tags),
+            new Min()
+        );
+
         sensor.add(
             new MetricName(
                 operation + MAX_SUFFIX,

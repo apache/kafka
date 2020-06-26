@@ -69,7 +69,7 @@ public class OffsetForLeaderEpochClientTest {
     public void testUnexpectedEmptyResponse() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Node.noNode(), Optional.of(1))));
+                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
@@ -88,7 +88,7 @@ public class OffsetForLeaderEpochClientTest {
     public void testOkResponse() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Node.noNode(), Optional.of(1))));
+                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
@@ -111,7 +111,7 @@ public class OffsetForLeaderEpochClientTest {
     public void testUnauthorizedTopic() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Node.noNode(), Optional.of(1))));
+                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
@@ -131,7 +131,7 @@ public class OffsetForLeaderEpochClientTest {
     public void testRetriableError() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Node.noNode(), Optional.of(1))));
+                new Metadata.LeaderAndEpoch(Optional.empty(), Optional.of(1))));
 
         OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
         RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =

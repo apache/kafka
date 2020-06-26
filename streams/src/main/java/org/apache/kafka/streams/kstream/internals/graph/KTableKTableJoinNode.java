@@ -82,7 +82,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     }
 
     public String queryableStoreName() {
-        return ((KTableKTableJoinMerger) mergeProcessorParameters().processorSupplier()).getQueryableName();
+        return ((KTableKTableJoinMerger<K, VR>) mergeProcessorParameters().processorSupplier()).getQueryableName();
     }
 
     /**
@@ -212,8 +212,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                 joinOtherProcessorParameters,
                 new ProcessorParameters<>(
                     KTableKTableJoinMerger.of(
-                        (KTableProcessorSupplier<K, V1, VR>) (joinThisProcessorParameters.processorSupplier()),
-                        (KTableProcessorSupplier<K, V2, VR>) (joinOtherProcessorParameters.processorSupplier()),
+                        (KTableProcessorSupplier<K, V1, VR>) joinThisProcessorParameters.processorSupplier(),
+                        (KTableProcessorSupplier<K, V2, VR>) joinOtherProcessorParameters.processorSupplier(),
                         queryableStoreName),
                     nodeName),
                 thisJoinSide,

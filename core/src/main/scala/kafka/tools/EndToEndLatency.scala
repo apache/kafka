@@ -29,7 +29,7 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.Random
 
 
@@ -109,7 +109,7 @@ object EndToEndLatency {
       .map(p => new TopicPartition(p.topic(), p.partition())).asJava
     consumer.assign(topicPartitions)
     consumer.seekToEnd(topicPartitions)
-    consumer.assignment().asScala.foreach(consumer.position)
+    consumer.assignment.forEach(consumer.position(_))
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
@@ -147,7 +147,7 @@ object EndToEndLatency {
 
       //Report progress
       if (i % 1000 == 0)
-        println(i + "\t" + elapsed / 1000.0 / 1000.0)
+        println(i.toString + "\t" + elapsed / 1000.0 / 1000.0)
       totalTime += elapsed
       latencies(i) = elapsed / 1000 / 1000
     }

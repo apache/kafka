@@ -68,6 +68,8 @@ public class SubscriptionStoreReceiveProcessorSupplier<K, KO>
                     internalProcessorContext.metrics()
                 );
                 store = internalProcessorContext.getStateStore(storeBuilder);
+
+                keySchema.init(context);
             }
 
             @Override

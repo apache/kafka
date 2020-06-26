@@ -20,7 +20,7 @@ package org.apache.kafka.message;
 import java.util.Optional;
 
 public interface FieldType {
-    String STRUCT_PREFIX = "[]";
+    String ARRAY_PREFIX = "[]";
 
     final class BoolFieldType implements FieldType {
         static final BoolFieldType INSTANCE = new BoolFieldType();
@@ -104,6 +104,26 @@ public interface FieldType {
         @Override
         public Optional<Integer> fixedLength() {
             return Optional.of(16);
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
+    final class Float64FieldType implements FieldType {
+        static final Float64FieldType INSTANCE = new Float64FieldType();
+        private static final String NAME = "float64";
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.of(8);
+        }
+
+        @Override
+        public boolean isFloat() {
+            return true;
         }
 
         @Override
@@ -241,13 +261,15 @@ public interface FieldType {
                 return Int64FieldType.INSTANCE;
             case UUIDFieldType.NAME:
                 return UUIDFieldType.INSTANCE;
+            case Float64FieldType.NAME:
+                return Float64FieldType.INSTANCE;
             case StringFieldType.NAME:
                 return StringFieldType.INSTANCE;
             case BytesFieldType.NAME:
                 return BytesFieldType.INSTANCE;
             default:
-                if (string.startsWith(STRUCT_PREFIX)) {
-                    String elementTypeString = string.substring(STRUCT_PREFIX.length());
+                if (string.startsWith(ARRAY_PREFIX)) {
+                    String elementTypeString = string.substring(ARRAY_PREFIX.length());
                     if (elementTypeString.length() == 0) {
                         throw new RuntimeException("Can't parse array type " + string +
                             ".  No element type found.");
@@ -298,6 +320,13 @@ public interface FieldType {
      * Returns true if this is a bytes type.
      */
     default boolean isBytes() {
+        return false;
+    }
+
+    /**
+     * Returns true if this is a floating point type.
+     */
+    default boolean isFloat() {
         return false;
     }
 

@@ -37,7 +37,7 @@ import org.easymock.{Capture, CaptureType}
 import org.junit.Assert._
 import org.junit.{After, Test}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
 
 class ReplicaFetcherThreadTest {

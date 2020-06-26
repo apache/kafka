@@ -97,6 +97,10 @@ public class Struct {
         return getShort(field.name);
     }
 
+    public Double get(Field.Float64 field) {
+        return getDouble(field.name);
+    }
+
     public String get(Field.Str field) {
         return getString(field.name);
     }
@@ -144,6 +148,12 @@ public class Struct {
     public Integer getOrElse(Field.Int32 field, int alternative) {
         if (hasField(field.name))
             return getInt(field.name);
+        return alternative;
+    }
+
+    public Double getOrElse(Field.Float64 field, double alternative) {
+        if (hasField(field.name))
+            return getDouble(field.name);
         return alternative;
     }
 
@@ -264,6 +274,14 @@ public class Struct {
         return (UUID) get(name);
     }
 
+    public Double getDouble(BoundField field) {
+        return (Double) get(field);
+    }
+
+    public Double getDouble(String name) {
+        return (Double) get(name);
+    }
+
     public Object[] getArray(BoundField field) {
         return (Object[]) get(field);
     }
@@ -366,6 +384,10 @@ public class Struct {
     }
 
     public Struct set(Field.Int16 def, short value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Float64 def, double value) {
         return set(def.name, value);
     }
 

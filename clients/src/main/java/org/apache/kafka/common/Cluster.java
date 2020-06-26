@@ -122,18 +122,15 @@ public final class Cluster {
         Map<String, List<PartitionInfo>> tmpPartitionsByTopic = new HashMap<>();
         for (PartitionInfo p : partitions) {
             tmpPartitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
-            List<PartitionInfo> partitionsForTopic = tmpPartitionsByTopic.get(p.topic());
-            if (partitionsForTopic == null) {
-                partitionsForTopic = new ArrayList<>();
-                tmpPartitionsByTopic.put(p.topic(), partitionsForTopic);
-            }
-            partitionsForTopic.add(p);
-            if (p.leader() != null) {
-                // The broker guarantees that if a partition has a non-null leader, it is one of the brokers returned
-                // in the metadata response
-                List<PartitionInfo> partitionsForNode = Objects.requireNonNull(tmpPartitionsByNode.get(p.leader().id()));
-                partitionsForNode.add(p);
-            }
+            tmpPartitionsByTopic.computeIfAbsent(p.topic(), topic -> new ArrayList<>()).add(p);
+
+            // The leader may not be known
+            if (p.leader() == null || p.leader().isEmpty())
+                continue;
+
+            // If it is known, its node information should be available
+            List<PartitionInfo> partitionsForNode = Objects.requireNonNull(tmpPartitionsByNode.get(p.leader().id()));
+            partitionsForNode.add(p);
         }
 
         // Update the values of `tmpPartitionsByNode` to contain unmodifiable lists

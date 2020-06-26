@@ -39,7 +39,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
@@ -100,9 +100,11 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     quotaLimitCalls.values.foreach(_.set(0))
     user.produceConsume(expectProduceThrottle = false, expectConsumeThrottle = false)
 
-    // ClientQuotaCallback#quotaLimit is invoked by each quota manager once for each new client
+    // ClientQuotaCallback#quotaLimit is invoked by each quota manager once per throttled produce request for each client
     assertEquals(1, quotaLimitCalls(ClientQuotaType.PRODUCE).get)
-    assertEquals(1, quotaLimitCalls(ClientQuotaType.FETCH).get)
+    // ClientQuotaCallback#quotaLimit is invoked once per each unthrottled and two for each throttled request
+    // since we don't know the total number of requests, we verify it was called at least twice (at least one throttled request)
+    assertTrue("quotaLimit must be called at least twice", quotaLimitCalls(ClientQuotaType.FETCH).get > 2)
     assertTrue(s"Too many quotaLimit calls $quotaLimitCalls", quotaLimitCalls(ClientQuotaType.REQUEST).get <= 10) // sanity check
     // Large quota updated to small quota, should throttle
     user.configureAndWaitForQuota(9000, 3000)
@@ -157,7 +159,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     val newProps = new Properties
     newProps.put(GroupedUserQuotaCallback.DefaultProduceQuotaProp, "8000")
     newProps.put(GroupedUserQuotaCallback.DefaultFetchQuotaProp, "2500")
-    TestUtils.alterConfigs(servers, adminClient, newProps, perBrokerConfig = false)
+    TestUtils.incrementalAlterConfigs(servers, adminClient, newProps, perBrokerConfig = false)
     user.waitForQuotaUpdate(8000, 2500, defaultRequestQuota)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
 
@@ -185,7 +187,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
       TestUtils.bootstrapServers(servers, new ListenerName("BROKER")))
-    clientSecurityProps("admin-client").asInstanceOf[util.Map[Object, Object]].asScala.foreach { case (key, value) =>
+    clientSecurityProps("admin-client").asInstanceOf[util.Map[Object, Object]].forEach { (key, value) =>
       config.put(key.toString, value)
     }
     config.put(SaslConfigs.SASL_JAAS_CONFIG,
@@ -262,11 +264,16 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     def produceConsume(expectProduceThrottle: Boolean, expectConsumeThrottle: Boolean): Unit = {
       val numRecords = 1000
       val produced = produceUntilThrottled(numRecords, waitForRequestCompletion = false)
-      verifyProduceThrottle(expectProduceThrottle, verifyClientMetric = false)
+      // don't verify request channel metrics as it's difficult to write non flaky assertions
+      // given the specifics of this test (throttle metric removal followed by produce/consume
+      // until throttled)
+      verifyProduceThrottle(expectProduceThrottle, verifyClientMetric = false,
+        verifyRequestChannelMetric = false)
       // make sure there are enough records on the topic to test consumer throttling
       produceWithoutThrottle(topic, numRecords - produced)
       consumeUntilThrottled(numRecords, waitForRequestCompletion = false)
-      verifyConsumeThrottle(expectConsumeThrottle, verifyClientMetric = false)
+      verifyConsumeThrottle(expectConsumeThrottle, verifyClientMetric = false,
+        verifyRequestChannelMetric = false)
     }
 
     def removeThrottleMetrics(): Unit = {
@@ -359,12 +366,12 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
-    reconfigurableConfigs.asScala.foreach(configValue(configs, _))
+    reconfigurableConfigs.forEach(configValue(configs, _))
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    configValue(configs, DefaultProduceQuotaProp).foreach(value => quotas(ClientQuotaType.PRODUCE).put("", value))
-    configValue(configs, DefaultFetchQuotaProp).foreach(value => quotas(ClientQuotaType.FETCH).put("", value))
+    configValue(configs, DefaultProduceQuotaProp).foreach(value => quotas(ClientQuotaType.PRODUCE).put("", value.toDouble))
+    configValue(configs, DefaultFetchQuotaProp).foreach(value => quotas(ClientQuotaType.FETCH).put("", value.toDouble))
     customQuotasUpdated.values.foreach(_.set(true))
   }
 

@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.{File, RandomAccessFile}
 import java.nio._
+import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
 import java.util.Properties
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -34,8 +35,8 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
-import scala.collection.JavaConverters._
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 /**
  * Unit tests for the log cleaning logic
@@ -127,7 +128,7 @@ class LogCleanerTest {
       override def run(): Unit = {
         deleteStartLatch.await(5000, TimeUnit.MILLISECONDS)
         log.updateHighWatermark(log.activeSegment.baseOffset)
-        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset)
+        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset, LeaderOffsetIncremented)
         log.updateHighWatermark(log.activeSegment.baseOffset)
         log.deleteOldSegments()
         deleteCompleteLatch.countDown()
@@ -1516,8 +1517,6 @@ class LogCleanerTest {
    */
   @Test
   def testClientHandlingOfCorruptMessageSet(): Unit = {
-    import JavaConverters._
-
     val keys = 1 until 10
     val offset = 50
     val set = keys zip (offset until offset + keys.size)
@@ -1603,6 +1602,28 @@ class LogCleanerTest {
       assertEquals("Cleaning point should pass offset gap in multiple segments", log.activeSegment.baseOffset, nextDirtyOffset)
     }
   }
+
+  @Test
+  def testMaxCleanTimeSecs(): Unit = {
+    val logCleaner = new LogCleaner(new CleanerConfig,
+      logDirs = Array(TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, Log](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time)
+
+    def checkGauge(name: String): Unit = {
+      val gauge = logCleaner.newGauge(name, () => 999)
+      // if there is no cleaners, 0 is default value
+      assertEquals(0, gauge.value())
+    }
+
+    try {
+      checkGauge("max-buffer-utilization-percent")
+      checkGauge("max-clean-time-secs")
+      checkGauge("max-compaction-delay-secs")
+    } finally logCleaner.shutdown()
+  }
+
 
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))
@@ -1730,7 +1751,7 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   var lastOffset = -1L
 
   private def keyFor(key: ByteBuffer) =
-    new String(Utils.readBytes(key.duplicate), "UTF-8")
+    new String(Utils.readBytes(key.duplicate), StandardCharsets.UTF_8)
 
   override def put(key: ByteBuffer, offset: Long): Unit = {
     lastOffset = offset

@@ -151,6 +151,14 @@ public class MockProducerTest {
     }
 
     @Test(expected = IllegalStateException.class)
+    public void shouldThrowOnBeginTransactionsIfTransactionInflight() {
+        buildMockProducer(true);
+        producer.initTransactions();
+        producer.beginTransaction();
+        producer.beginTransaction();
+    }
+
+    @Test(expected = IllegalStateException.class)
     public void shouldThrowOnSendOffsetsToTransactionIfTransactionsNotInitialized() {
         buildMockProducer(true);
         producer.sendOffsetsToTransaction(null, groupId);

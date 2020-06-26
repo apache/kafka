@@ -280,8 +280,6 @@ public class SessionWindowedCogroupedKStreamImplTest {
 
     }
 
-
-
     @Test
     public void sessionWindowMixAggregatorsManyWindowsTest() {
         final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(

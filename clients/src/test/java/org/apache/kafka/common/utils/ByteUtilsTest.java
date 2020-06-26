@@ -221,6 +221,23 @@ public class ByteUtilsTest {
         ByteUtils.readVarlong(buf);
     }
 
+    @Test
+    public void testDouble() throws IOException {
+        assertDoubleSerde(0.0, 0x0L);
+        assertDoubleSerde(-0.0, 0x8000000000000000L);
+        assertDoubleSerde(1.0, 0x3FF0000000000000L);
+        assertDoubleSerde(-1.0, 0xBFF0000000000000L);
+        assertDoubleSerde(123e45, 0x49B58B82C0E0BB00L);
+        assertDoubleSerde(-123e45, 0xC9B58B82C0E0BB00L);
+        assertDoubleSerde(Double.MIN_VALUE, 0x1L);
+        assertDoubleSerde(-Double.MIN_VALUE, 0x8000000000000001L);
+        assertDoubleSerde(Double.MAX_VALUE, 0x7FEFFFFFFFFFFFFFL);
+        assertDoubleSerde(-Double.MAX_VALUE, 0xFFEFFFFFFFFFFFFFL);
+        assertDoubleSerde(Double.NaN, 0x7FF8000000000000L);
+        assertDoubleSerde(Double.POSITIVE_INFINITY, 0x7FF0000000000000L);
+        assertDoubleSerde(Double.NEGATIVE_INFINITY, 0xFFF0000000000000L);
+    }
+
     private void assertUnsignedVarintSerde(int value, byte[] expectedEncoding) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(32);
         ByteUtils.writeUnsignedVarint(value, buf);
@@ -269,4 +286,25 @@ public class ByteUtilsTest {
         assertEquals(value, ByteUtils.readVarlong(in));
     }
 
+    private void assertDoubleSerde(double value, long expectedLongValue) throws IOException {
+        byte[] expectedEncoding = new byte[8];
+        for (int i = 0; i < 8; i++) {
+            expectedEncoding[7 - i] = (byte) (expectedLongValue & 0xFF);
+            expectedLongValue >>= 8;
+        }
+
+        ByteBuffer buf = ByteBuffer.allocate(8);
+        ByteUtils.writeDouble(value, buf);
+        buf.flip();
+        assertEquals(value, ByteUtils.readDouble(buf.duplicate()), 0.0);
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+
+        buf.rewind();
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buf));
+        ByteUtils.writeDouble(value, out);
+        buf.flip();
+        assertArrayEquals(expectedEncoding, Utils.toArray(buf));
+        DataInputStream in = new DataInputStream(new ByteBufferInputStream(buf));
+        assertEquals(value, ByteUtils.readDouble(in), 0.0);
+    }
 }

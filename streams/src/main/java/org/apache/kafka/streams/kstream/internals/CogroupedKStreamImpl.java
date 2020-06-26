@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
@@ -36,6 +32,11 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> implements CogroupedKStream<K, VOut> {
 
     static final String AGGREGATE_NAME = "COGROUPKSTREAM-AGGREGATE-";
@@ -45,10 +46,10 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     final private CogroupedStreamAggregateBuilder<K, VOut> aggregateBuilder;
 
     CogroupedKStreamImpl(final String name,
-                         final Set<String> sourceNodes,
+                         final Set<String> subTopologySourceNodes,
                          final StreamsGraphNode streamsGraphNode,
                          final InternalStreamsBuilder builder) {
-        super(name, null, null, sourceNodes, streamsGraphNode, builder);
+        super(name, null, null, subTopologySourceNodes, streamsGraphNode, builder);
         groupPatterns = new LinkedHashMap<>();
         aggregateBuilder = new CogroupedStreamAggregateBuilder<>(builder);
     }
@@ -97,13 +98,13 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     public <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows) {
         Objects.requireNonNull(windows, "windows can't be null");
         return new TimeWindowedCogroupedKStreamImpl<>(
-                windows,
-                builder,
-                sourceNodes,
-                name,
-                aggregateBuilder,
-                streamsGraphNode,
-                groupPatterns);
+            windows,
+            builder,
+            subTopologySourceNodes,
+            name,
+            aggregateBuilder,
+            streamsGraphNode,
+            groupPatterns);
     }
 
     @Override
@@ -111,7 +112,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
         Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
         return new SessionWindowedCogroupedKStreamImpl<>(sessionWindows,
             builder,
-            sourceNodes,
+            subTopologySourceNodes,
             name,
             aggregateBuilder,
             streamsGraphNode,

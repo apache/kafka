@@ -29,6 +29,7 @@ import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.distributed.RequestTargetException;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
@@ -57,12 +58,16 @@ import javax.ws.rs.core.UriBuilder;
 import javax.ws.rs.core.UriInfo;
 
 import java.net.URI;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ALLOW_RESET_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
@@ -77,15 +82,31 @@ public class ConnectorsResource {
     // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
     // but currently a worker simply leaving the group can take this long as well.
     public static final long REQUEST_TIMEOUT_MS = 90 * 1000;
+    // Mutable for integration testing; otherwise, some tests would take at least REQUEST_TIMEOUT_MS
+    // to run
+    private static long requestTimeoutMs = REQUEST_TIMEOUT_MS;
 
     private final Herder herder;
     private final WorkerConfig config;
     @javax.ws.rs.core.Context
     private ServletContext context;
+    private final boolean isTopicTrackingDisabled;
+    private final boolean isTopicTrackingResetDisabled;
 
     public ConnectorsResource(Herder herder, WorkerConfig config) {
         this.herder = herder;
         this.config = config;
+        isTopicTrackingDisabled = !config.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
+        isTopicTrackingResetDisabled = !config.getBoolean(TOPIC_TRACKING_ALLOW_RESET_CONFIG);
+    }
+
+    // For testing purposes only
+    public static void setRequestTimeout(long requestTimeoutMs) {
+        ConnectorsResource.requestTimeoutMs = requestTimeoutMs;
+    }
+
+    public static void resetRequestTimeout() {
+        ConnectorsResource.requestTimeoutMs = REQUEST_TIMEOUT_MS;
     }
 
     @GET
@@ -93,7 +114,7 @@ public class ConnectorsResource {
     public Response listConnectors(
         final @Context UriInfo uriInfo,
         final @Context HttpHeaders headers
-    ) throws Throwable {
+    ) {
         if (uriInfo.getQueryParameters().containsKey("expand")) {
             Map<String, Map<String, Object>> out = new HashMap<>();
             for (String connector : herder.connectors()) {
@@ -108,7 +129,7 @@ public class ConnectorsResource {
                                 connectorExpansions.put("info", herder.connectorInfo(connector));
                                 break;
                             default:
-                                log.info("Ignoring unknown expanion type {}", expansion);
+                                log.info("Ignoring unknown expansion type {}", expansion);
                         }
                     }
                     out.put(connector, connectorExpansions);
@@ -169,8 +190,34 @@ public class ConnectorsResource {
 
     @GET
     @Path("/{connector}/status")
-    public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) throws Throwable {
+    public ConnectorStateInfo getConnectorStatus(final @PathParam("connector") String connector) {
         return herder.connectorStatus(connector);
+    }
+
+    @GET
+    @Path("/{connector}/topics")
+    public Response getConnectorActiveTopics(final @PathParam("connector") String connector) {
+        if (isTopicTrackingDisabled) {
+            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
+                    "Topic tracking is disabled.");
+        }
+        ActiveTopicsInfo info = herder.connectorActiveTopics(connector);
+        return Response.ok(Collections.singletonMap(info.connector(), info)).build();
+    }
+
+    @PUT
+    @Path("/{connector}/topics/reset")
+    public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) {
+        if (isTopicTrackingDisabled) {
+            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
+                    "Topic tracking is disabled.");
+        }
+        if (isTopicTrackingResetDisabled) {
+            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
+                    "Topic tracking reset is disabled.");
+        }
+        herder.resetConnectorActiveTopics(connector);
+        return Response.accepted().build();
     }
 
     @PUT
@@ -246,7 +293,7 @@ public class ConnectorsResource {
     @Path("/{connector}/tasks/{task}/status")
     public ConnectorStateInfo.TaskState getTaskStatus(final @PathParam("connector") String connector,
                                                       final @Context HttpHeaders headers,
-                                                      final @PathParam("task") Integer task) throws Throwable {
+                                                      final @PathParam("task") Integer task) {
         return herder.taskStatus(new ConnectorTaskId(connector, task));
     }
 
@@ -272,8 +319,8 @@ public class ConnectorsResource {
         completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
     }
 
-    // Check whether the connector name from the url matches the one (if there is one) provided in the connectorconfig
-    // object. Throw BadRequestException on mismatch, otherwise put connectorname in config
+    // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig
+    // object. Throw BadRequestException on mismatch, otherwise put connectorName in config
     private void checkAndPutConnectorConfigName(String connectorName, Map<String, String> connectorConfig) {
         String includedName = connectorConfig.get(ConnectorConfig.NAME_CONFIG);
         if (includedName != null) {
@@ -295,7 +342,7 @@ public class ConnectorsResource {
                                               Translator<T, U> translator,
                                               Boolean forward) throws Throwable {
         try {
-            return cb.get(REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            return cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
 
@@ -306,7 +353,14 @@ public class ConnectorsResource {
                     // this gives two total hops to resolve the request before giving up.
                     boolean recursiveForward = forward == null;
                     RequestTargetException targetException = (RequestTargetException) cause;
-                    String forwardUrl = UriBuilder.fromUri(targetException.forwardUrl())
+                    String forwardedUrl = targetException.forwardUrl();
+                    if (forwardedUrl == null) {
+                        // the target didn't know of the leader at this moment.
+                        throw new ConnectRestException(Response.Status.CONFLICT.getStatusCode(),
+                                "Cannot complete request momentarily due to no known leader URL, "
+                                + "likely because a rebalance was underway.");
+                    }
+                    String forwardUrl = UriBuilder.fromUri(forwardedUrl)
                             .path(path)
                             .queryParam("forward", recursiveForward)
                             .build()

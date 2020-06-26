@@ -52,7 +52,7 @@ public class IsNullConditionalTest {
             ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(() -> {
+            ifShouldNotBeNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
@@ -71,7 +71,7 @@ public class IsNullConditionalTest {
             forName("foobar").
             nullableVersions(Versions.parse("0+", null)).
             possibleVersions(Versions.parse("2+", null)).
-            ifNotNull(() -> {
+            ifShouldNotBeNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
@@ -91,7 +91,7 @@ public class IsNullConditionalTest {
             ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(() -> {
+            ifShouldNotBeNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             generate(buffer);
@@ -109,7 +109,7 @@ public class IsNullConditionalTest {
             ifNull(() -> {
                 buffer.printf("System.out.println(\"null\");%n");
             }).
-            ifNotNull(() -> {
+            ifShouldNotBeNull(() -> {
                 buffer.printf("System.out.println(\"not null\");%n");
             }).
             alwaysEmitBlockScope(true).

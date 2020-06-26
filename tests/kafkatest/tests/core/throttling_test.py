@@ -53,7 +53,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         # ensure that the consumer is fully started before the producer starts
         # so that we don't miss any messages. This timeout ensures the sufficient
         # condition.
-        self.consumer_init_timeout_sec =  20
+        self.consumer_init_timeout_sec =  60
         self.num_brokers = 6
         self.num_partitions = 3
         self.kafka = KafkaService(test_context,
@@ -165,7 +165,8 @@ class ThrottlingTest(ProduceConsumeValidateTest):
                                         self.topic,
                                         consumer_timeout_ms=60000,
                                         message_validator=is_int,
-                                        from_beginning=False)
+                                        from_beginning=False,
+                                        wait_until_partitions_assigned=True)
 
         self.kafka.start()
         bulk_producer.run()

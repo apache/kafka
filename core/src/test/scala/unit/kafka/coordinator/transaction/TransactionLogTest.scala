@@ -24,7 +24,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class TransactionLogTest {
 

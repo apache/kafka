@@ -192,6 +192,11 @@ class TransactionMarkerRequestCompletionHandlerTest {
   }
 
   @Test
+  def shouldRetryPartitionWhenKafkaStorageError(): Unit = {
+    verifyRetriesPartitionOnError(Errors.KAFKA_STORAGE_ERROR)
+  }
+
+  @Test
   def shouldRemoveTopicPartitionFromWaitingSetOnUnsupportedForMessageFormat(): Unit = {
     mockCache()
     verifyCompleteDelayedOperationOnError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT)
@@ -228,7 +233,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private def verifyCompleteDelayedOperationOnError(error: Errors): Unit = {
 
     var completed = false
-    EasyMock.expect(markerChannelManager.completeSendMarkersForTxnId(transactionalId))
+    EasyMock.expect(markerChannelManager.maybeWriteTxnCompletion(transactionalId))
       .andAnswer(() => completed = true)
       .once()
     EasyMock.replay(markerChannelManager)

@@ -101,7 +101,6 @@ public class PartitionAssignorAdapterTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testOnAssignment() {
         OldPartitionAssignor oldAssignor = new OldPartitionAssignor();
         ConsumerPartitionAssignor adaptedAssignor = new PartitionAssignorAdapter(oldAssignor);

@@ -27,6 +27,8 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
@@ -57,6 +59,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return Collections.singletonMap(error, 1);
     }
 
+    protected Map<Errors, Integer> errorCounts(Stream<Errors> errors) {
+        return errors.collect(Collectors.groupingBy(e -> e, Collectors.summingInt(e -> 1)));
+    }
+
     protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         for (Errors error : errors)
@@ -72,8 +78,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
-        Integer count = errorCounts.get(error);
-        errorCounts.put(error, count == null ? 1 : count + 1);
+        Integer count = errorCounts.getOrDefault(error, 0);
+        errorCounts.put(error, count + 1);
     }
 
     protected abstract Struct toStruct(short version);
@@ -123,35 +129,35 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case DELETE_TOPICS:
                 return new DeleteTopicsResponse(struct, version);
             case DELETE_RECORDS:
-                return new DeleteRecordsResponse(struct);
+                return new DeleteRecordsResponse(struct, version);
             case INIT_PRODUCER_ID:
                 return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:
-                return new AddPartitionsToTxnResponse(struct);
+                return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:
-                return new AddOffsetsToTxnResponse(struct);
+                return new AddOffsetsToTxnResponse(struct, version);
             case END_TXN:
                 return new EndTxnResponse(struct, version);
             case WRITE_TXN_MARKERS:
-                return new WriteTxnMarkersResponse(struct);
+                return new WriteTxnMarkersResponse(struct, version);
             case TXN_OFFSET_COMMIT:
                 return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
-                return new DescribeAclsResponse(struct);
+                return new DescribeAclsResponse(struct, version);
             case CREATE_ACLS:
-                return new CreateAclsResponse(struct);
+                return new CreateAclsResponse(struct, version);
             case DELETE_ACLS:
-                return new DeleteAclsResponse(struct);
+                return new DeleteAclsResponse(struct, version);
             case DESCRIBE_CONFIGS:
-                return new DescribeConfigsResponse(struct);
+                return new DescribeConfigsResponse(struct, version);
             case ALTER_CONFIGS:
-                return new AlterConfigsResponse(struct);
+                return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:
                 return new AlterReplicaLogDirsResponse(struct);
             case DESCRIBE_LOG_DIRS:
-                return new DescribeLogDirsResponse(struct);
+                return new DescribeLogDirsResponse(struct, version);
             case SASL_AUTHENTICATE:
                 return new SaslAuthenticateResponse(struct, version);
             case CREATE_PARTITIONS:
@@ -176,6 +182,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new ListPartitionReassignmentsResponse(struct, version);
             case OFFSET_DELETE:
                 return new OffsetDeleteResponse(struct, version);
+            case DESCRIBE_CLIENT_QUOTAS:
+                return new DescribeClientQuotasResponse(struct, version);
+            case ALTER_CLIENT_QUOTAS:
+                return new AlterClientQuotasResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

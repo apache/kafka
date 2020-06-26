@@ -67,7 +67,8 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
         return name;
     }
 
-    BufferConfigInternal bufferConfig() {
+    @SuppressWarnings("unchecked")
+    public <BC extends Suppressed.BufferConfig<BC>> BufferConfigInternal<BC> bufferConfig() {
         return bufferConfig;
     }
 

@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.Collections
 import scala.collection._
 import kafka.message.{CompressionCodec, NoCompressionCodec}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 
 class VerifiableProperties(val props: Properties) extends Logging {

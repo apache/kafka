@@ -78,7 +78,7 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
     }, "Timed out waiting to consume")
 
     // MetadataRequest is guaranteed to create the topic znode if creation was required
-    val topicCreated = zkClient.getAllTopicsInCluster.contains(topic_2)
+    val topicCreated = zkClient.getAllTopicsInCluster().contains(topic_2)
     if (brokerAutoTopicCreationEnable && consumerAllowAutoCreateTopics)
       assertTrue(topicCreated)
     else

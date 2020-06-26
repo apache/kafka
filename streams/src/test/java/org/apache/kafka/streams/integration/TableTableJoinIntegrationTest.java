@@ -174,8 +174,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         if (cacheEnabled) {
             runTestWithDriver(expectedFinalMultiJoinResult, storeName);
         } else {
-            // FIXME: the duplicate below for all the multi-joins
-            //        are due to KAFKA-6443, should be updated once it is fixed.
+            // TODO K6443: the duplicate below for all the multi-joins are due to
+            //             KAFKA-6443, should be updated once it is fixed.
             final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,

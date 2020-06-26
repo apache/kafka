@@ -16,16 +16,20 @@
  */
 package org.apache.kafka.connect.util.clusters;
 
+import kafka.server.BrokerState;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaConfig$;
 import kafka.server.KafkaServer;
+import kafka.server.RunningAsBroker;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
 import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -33,10 +37,12 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -52,12 +58,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
@@ -97,7 +107,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     @Override
-    protected void before() throws IOException {
+    protected void before() {
         start();
     }
 
@@ -106,11 +116,17 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         stop();
     }
 
-    public void startOnlyKafkaOnSamePorts() throws IOException {
+    /**
+     * Starts the Kafka cluster alone using the ports that were assigned during initialization of
+     * the harness.
+     *
+     * @throws ConnectException if a directory to store the data cannot be created
+     */
+    public void startOnlyKafkaOnSamePorts() {
         start(currentBrokerPorts, currentBrokerLogDirs);
     }
 
-    private void start() throws IOException {
+    private void start() {
         // pick a random port
         zookeeper = new EmbeddedZookeeper();
         Arrays.fill(currentBrokerPorts, 0);
@@ -118,7 +134,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         start(currentBrokerPorts, currentBrokerLogDirs);
     }
 
-    private void start(int[] brokerPorts, String[] logDirs) throws IOException {
+    private void start(int[] brokerPorts, String[] logDirs) {
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
 
         putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.HostNameProp(), "localhost");
@@ -158,7 +174,9 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     private void stop(boolean deleteLogDirs, boolean stopZK) {
         try {
-            producer.close();
+            if (producer != null) {
+                producer.close();
+            }
         } catch (Exception e) {
             log.error("Could not shutdown producer ", e);
             throw new RuntimeException("Could not shutdown producer", e);
@@ -205,10 +223,15 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         }
     }
 
-    private String createLogDir() throws IOException {
+    private String createLogDir() {
         TemporaryFolder tmpFolder = new TemporaryFolder();
-        tmpFolder.create();
-        return tmpFolder.newFolder().getAbsolutePath();
+        try {
+            tmpFolder.create();
+            return tmpFolder.newFolder().getAbsolutePath();
+        } catch (IOException e) {
+            log.error("Unable to create temporary log directory", e);
+            throw new ConnectException("Unable to create temporary log directory", e);
+        }
     }
 
     public String bootstrapServers() {
@@ -223,6 +246,84 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     public String zKConnectString() {
         return "127.0.0.1:" + zookeeper.port();
+    }
+
+    /**
+     * Get the brokers that have a {@link RunningAsBroker} state.
+     *
+     * @return the list of {@link KafkaServer} instances that are running;
+     *         never null but  possibly empty
+     */
+    public Set<KafkaServer> runningBrokers() {
+        return brokersInState(state -> state.currentState() == RunningAsBroker.state());
+    }
+
+    /**
+     * Get the brokers whose state match the given predicate.
+     *
+     * @return the list of {@link KafkaServer} instances with states that match the predicate;
+     *         never null but  possibly empty
+     */
+    public Set<KafkaServer> brokersInState(Predicate<BrokerState> desiredState) {
+        return Arrays.stream(brokers)
+                     .filter(b -> hasState(b, desiredState))
+                     .collect(Collectors.toSet());
+    }
+
+    protected boolean hasState(KafkaServer server, Predicate<BrokerState> desiredState) {
+        try {
+            return desiredState.test(server.brokerState());
+        } catch (Throwable e) {
+            // Broker failed to respond.
+            return false;
+        }
+    }
+
+    /**
+     * Get the topic descriptions of the named topics. The value of the map entry will be empty
+     * if the topic does not exist.
+     *
+     * @param topicNames the names of the topics to describe
+     * @return the map of optional {@link TopicDescription} keyed by the topic name
+     */
+    public Map<String, Optional<TopicDescription>> describeTopics(String... topicNames) {
+        return describeTopics(new HashSet<>(Arrays.asList(topicNames)));
+    }
+
+    /**
+     * Get the topic descriptions of the named topics. The value of the map entry will be empty
+     * if the topic does not exist.
+     *
+     * @param topicNames the names of the topics to describe
+     * @return the map of optional {@link TopicDescription} keyed by the topic name
+     */
+    public Map<String, Optional<TopicDescription>> describeTopics(Set<String> topicNames) {
+        Map<String, Optional<TopicDescription>> results = new HashMap<>();
+        log.info("Describing topics {}", topicNames);
+        try (Admin admin = createAdminClient()) {
+            DescribeTopicsResult result = admin.describeTopics(topicNames);
+            Map<String, KafkaFuture<TopicDescription>> byName = result.values();
+            for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : byName.entrySet()) {
+                String topicName = entry.getKey();
+                try {
+                    TopicDescription desc = entry.getValue().get();
+                    results.put(topicName, Optional.of(desc));
+                    log.info("Found topic {} : {}", topicName, desc);
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    if (cause instanceof UnknownTopicOrPartitionException) {
+                        results.put(topicName, Optional.empty());
+                        log.info("Found non-existant topic {}", topicName);
+                        continue;
+                    }
+                    throw new AssertionError("Could not describe topic(s)" + topicNames, e);
+                }
+            }
+        } catch (Exception e) {
+            throw new AssertionError("Could not describe topic(s) " + topicNames, e);
+        }
+        log.info("Found topics {}", results);
+        return results;
     }
 
     /**

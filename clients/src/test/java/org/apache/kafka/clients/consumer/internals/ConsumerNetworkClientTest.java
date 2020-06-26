@@ -249,7 +249,7 @@ public class ConsumerNetworkClientTest {
     public void testInvalidTopicExceptionPropagatedFromMetadata() {
         MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("clusterId", 1,
                 Collections.singletonMap("topic", Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
-        metadata.update(metadataResponse, time.milliseconds());
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
         consumerClient.poll(time.timer(Duration.ZERO));
     }
 
@@ -257,7 +257,7 @@ public class ConsumerNetworkClientTest {
     public void testTopicAuthorizationExceptionPropagatedFromMetadata() {
         MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("clusterId", 1,
                 Collections.singletonMap("topic", Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
-        metadata.update(metadataResponse, time.milliseconds());
+        metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
         consumerClient.poll(time.timer(Duration.ZERO));
     }
 

@@ -30,6 +30,15 @@ import java.util.Collections;
 public class MirrorHeartbeatConnector extends SourceConnector {
     private MirrorConnectorConfig config;
     private Scheduler scheduler;
+    
+    public MirrorHeartbeatConnector() {
+        // nop
+    }
+
+    // visible for testing
+    MirrorHeartbeatConnector(MirrorConnectorConfig config) {
+        this.config = config;
+    }
 
     @Override
     public void start(Map<String, String> props) {
@@ -50,6 +59,11 @@ public class MirrorHeartbeatConnector extends SourceConnector {
 
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
+        // if the heartbeats emission is disabled by setting `emit.heartbeats.enabled` to `false`,
+        // the interval heartbeat emission will be negative and no `MirrorHeartbeatTask` will be created
+        if (config.emitHeartbeatsInterval().isNegative()) {
+            return Collections.emptyList();
+        }
         // just need a single task
         return Collections.singletonList(config.originalsStrings());
     }

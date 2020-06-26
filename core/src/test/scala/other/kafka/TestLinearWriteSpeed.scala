@@ -168,7 +168,7 @@ object TestLinearWriteSpeed {
       }
     }
     val elapsedSecs = (System.nanoTime - beginTest) / (1000.0*1000.0*1000.0)
-    println(bytesToWrite / (1024.0 * 1024.0 * elapsedSecs) + " MB per sec")
+    println((bytesToWrite / (1024.0 * 1024.0 * elapsedSecs)).toString + " MB per sec")
     scheduler.shutdown()
   }
 

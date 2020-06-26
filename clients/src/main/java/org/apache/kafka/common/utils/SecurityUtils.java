@@ -82,7 +82,8 @@ public class SecurityUtils {
         try {
             String[] securityProviderClasses = securityProviderClassesStr.replaceAll("\\s+", "").split(",");
             for (int index = 0; index < securityProviderClasses.length; index++) {
-                SecurityProviderCreator securityProviderCreator = (SecurityProviderCreator) Class.forName(securityProviderClasses[index]).newInstance();
+                SecurityProviderCreator securityProviderCreator =
+                    (SecurityProviderCreator) Class.forName(securityProviderClasses[index]).getConstructor().newInstance();
                 securityProviderCreator.configure(configs);
                 Security.insertProviderAt(securityProviderCreator.getProvider(), index + 1);
             }
@@ -91,7 +92,7 @@ public class SecurityUtils {
                     " are expected to be sub-classes of SecurityProviderCreator");
         } catch (ClassNotFoundException cnfe) {
             LOGGER.error("Unrecognized security provider creator class", cnfe);
-        } catch (IllegalAccessException | InstantiationException e) {
+        } catch (ReflectiveOperationException e) {
             LOGGER.error("Unexpected implementation of security provider creator class", e);
         }
     }

@@ -25,6 +25,7 @@ public interface Writable {
     void writeShort(short val);
     void writeInt(int val);
     void writeLong(long val);
+    void writeDouble(double val);
     void writeByteArray(byte[] arr);
     void writeUnsignedVarint(int i);
     void writeByteBuffer(ByteBuffer buf);

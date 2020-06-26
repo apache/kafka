@@ -16,22 +16,23 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.nio.ByteBuffer;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.integration.MonitorableSourceConnector;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.WorkerSourceTask.SourceTaskMetricsGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
@@ -45,10 +46,12 @@ import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ThreadedTest;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -63,6 +66,7 @@ import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -78,14 +82,19 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
+import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @PowerMockIgnore({"javax.management.*",
-                  "org.apache.log4j.*",
-                  "org.apache.kafka.connect.runtime.isolation.*"})
+                  "org.apache.log4j.*"})
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
     private static final String TOPIC = "topic";
@@ -106,6 +115,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
     private ConnectorTaskId taskId1 = new ConnectorTaskId("job", 1);
     private WorkerConfig config;
+    private SourceConnectorConfig sourceConfig;
     private Plugins plugins;
     private MockConnectMetrics metrics;
     @Mock private SourceTask sourceTask;
@@ -114,12 +124,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     @Mock private HeaderConverter headerConverter;
     @Mock private TransformationChain<SourceRecord> transformationChain;
     @Mock private KafkaProducer<byte[], byte[]> producer;
+    @Mock private TopicAdmin admin;
     @Mock private CloseableOffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;
     @Mock private ClusterConfigState clusterConfigState;
     private WorkerSourceTask workerTask;
     @Mock private Future<RecordMetadata> sendFuture;
     @MockStrict private TaskStatus.Listener statusListener;
+    @Mock private StatusBackingStore statusBackingStore;
 
     private Capture<org.apache.kafka.clients.producer.Callback> producerCallbacks;
 
@@ -133,6 +145,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
 
+    // when this test becomes parameterized, this variable will be a test parameter
+    public boolean enableTopicCreation = false;
+
     @Override
     public void setup() {
         super.setup();
@@ -144,10 +159,24 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerProps.put("internal.key.converter.schemas.enable", "false");
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         plugins = new Plugins(workerProps);
         config = new StandaloneConfig(workerProps);
+        sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(TOPIC), true);
         producerCallbacks = EasyMock.newCapture();
         metrics = new MockConnectMetrics();
+    }
+
+    private Map<String, String> sourceConnectorProps(String topic) {
+        // setup up props for the source connector
+        Map<String, String> props = new HashMap<>();
+        props.put("name", "foo-connector");
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(1));
+        props.put(TOPIC_CONFIG, topic);
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        return props;
     }
 
     @After
@@ -165,8 +194,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private void createWorkerTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, headerConverter,
-                transformationChain, producer, offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+                transformationChain, producer, admin, null,
+                offsetReader, offsetWriter, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
+                RetryWithToleranceOperatorTest.NOOP_OPERATOR, statusBackingStore);
     }
 
     @Test
@@ -184,11 +214,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             }
         });
 
-        producer.close(EasyMock.anyObject(Duration.class));
-        EasyMock.expectLastCall();
-
-        transformationChain.close();
-        EasyMock.expectLastCall();
+        expectClose();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -222,6 +248,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         CountDownLatch pollLatch = expectPolls(10, count);
         // In this test, we don't flush, so nothing goes any further than the offset writer
 
+        expectTopicCreation(TOPIC);
+
         statusListener.onPause(taskId);
         EasyMock.expectLastCall();
 
@@ -232,11 +260,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
-        producer.close(EasyMock.anyObject(Duration.class));
-        EasyMock.expectLastCall();
-
-        transformationChain.close();
-        EasyMock.expectLastCall();
+        expectClose();
 
         PowerMock.replayAll();
 
@@ -274,6 +298,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(10);
         // In this test, we don't flush, so nothing goes any further than the offset writer
 
+        expectTopicCreation(TOPIC);
+
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -281,11 +307,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
-        producer.close(EasyMock.anyObject(Duration.class));
-        EasyMock.expectLastCall();
-
-        transformationChain.close();
-        EasyMock.expectLastCall();
+        expectClose();
 
         PowerMock.replayAll();
 
@@ -330,11 +352,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
 
-        producer.close(EasyMock.anyObject(Duration.class));
-        EasyMock.expectLastCall();
-
-        transformationChain.close();
-        EasyMock.expectLastCall();
+        expectClose();
 
         PowerMock.replayAll();
 
@@ -374,11 +392,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
-        producer.close(EasyMock.anyObject(Duration.class));
-        EasyMock.expectLastCall();
-
-        transformationChain.close();
-        EasyMock.expectLastCall();
+        expectClose();
 
         PowerMock.replayAll();
 
@@ -412,6 +426,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
 
+        expectTopicCreation(TOPIC);
+
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
@@ -419,11 +435,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
-        producer.close(EasyMock.anyObject(Duration.class));
-        EasyMock.expectLastCall();
-
-        transformationChain.close();
-        EasyMock.expectLastCall();
+        expectClose();
 
         PowerMock.replayAll();
 
@@ -457,6 +469,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final CountDownLatch pollLatch = expectPolls(1);
         expectOffsetFlush(true);
 
+        expectTopicCreation(TOPIC);
+
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(false);
@@ -464,11 +478,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
-        producer.close(EasyMock.anyObject(Duration.class));
-        EasyMock.expectLastCall();
-
-        transformationChain.close();
-        EasyMock.expectLastCall();
+        expectClose();
 
         PowerMock.replayAll();
 
@@ -496,6 +506,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
 
+        expectTopicCreation(TOPIC);
+
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", records);
@@ -517,6 +529,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         );
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
+
+        expectTopicCreation(TOPIC);
 
         PowerMock.replayAll();
 
@@ -558,6 +572,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecordAnyTimes();
 
+        expectTopicCreation(TOPIC);
+
         PowerMock.replayAll();
 
         Whitebox.setInternalState(workerTask, "toSend", records);
@@ -575,6 +591,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectTopicCreation(TOPIC);
 
         // First round
         expectSendRecordOnce(false);
@@ -608,6 +626,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
+        expectTopicCreation(TOPIC);
+
         expectSendRecordProducerCallbackFail();
 
         PowerMock.replayAll();
@@ -624,6 +644,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         SourceRecord record1 = new SourceRecord(PARTITION, OFFSET, "topic", 1, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
+
+        expectTopicCreation(TOPIC);
 
         // Source task commit record failure will not cause the task to abort
         expectSendRecordOnce(false);
@@ -669,11 +691,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
-        producer.close(EasyMock.anyObject(Duration.class));
-        EasyMock.expectLastCall();
-
-        transformationChain.close();
-        EasyMock.expectLastCall();
+        expectClose();
 
         PowerMock.replayAll();
 
@@ -766,6 +784,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         List<SourceRecord> records = new ArrayList<>();
         records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD, null, connectHeaders));
 
+        expectTopicCreation(TOPIC);
+
         Capture<ProducerRecord<byte[], byte[]>> sent = expectSendRecord(true, false, true, true, true, headers);
 
         PowerMock.replayAll();
@@ -801,6 +821,8 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         headersB.addString("encoding", encodingB);
 
         records.add(new SourceRecord(PARTITION, OFFSET, "topic", null, Schema.STRING_SCHEMA, "b", Schema.STRING_SCHEMA, stringB, null, headersB));
+
+        expectTopicCreation(TOPIC);
 
         Capture<ProducerRecord<byte[], byte[]>> sentRecordA = expectSendRecord(false, false, true, true, false, null);
         Capture<ProducerRecord<byte[], byte[]>> sentRecordB = expectSendRecord(false, false, true, true, false, null);
@@ -907,7 +929,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return expectSendRecord(anyTimes, isRetry, succeed, true, true, emptyHeaders());
     }
 
-    @SuppressWarnings("unchecked")
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(
         boolean anyTimes,
         boolean isRetry,
@@ -962,6 +983,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         if (sendSuccess) {
             // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
             expectTaskCommitRecordWithOffset(anyTimes, commitSuccess);
+            expectTaskGetTopic(anyTimes);
         }
 
         return sent;
@@ -1018,6 +1040,29 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         }
         if (anyTimes) {
             expect.anyTimes();
+        }
+    }
+
+    private void expectTaskGetTopic(boolean anyTimes) {
+        final Capture<String> connectorCapture = EasyMock.newCapture();
+        final Capture<String> topicCapture = EasyMock.newCapture();
+        IExpectationSetters<TopicStatus> expect = EasyMock.expect(statusBackingStore.getTopic(
+                EasyMock.capture(connectorCapture),
+                EasyMock.capture(topicCapture)));
+        if (anyTimes) {
+            expect.andStubAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        } else {
+            expect.andAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        }
+        if (connectorCapture.hasCaptured() && topicCapture.hasCaptured()) {
+            assertEquals("job", connectorCapture.getValue());
+            assertEquals(TOPIC, topicCapture.getValue());
         }
     }
 
@@ -1093,4 +1138,23 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private abstract static class TestSourceTask extends SourceTask {
     }
 
+    private void expectClose() {
+        producer.close(EasyMock.anyObject(Duration.class));
+        EasyMock.expectLastCall();
+
+        admin.close(EasyMock.anyObject(Duration.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
+        EasyMock.expectLastCall();
+    }
+
+    private void expectTopicCreation(String topic) {
+        if (config.topicCreationEnable()) {
+            EasyMock.expect(admin.describeTopics(topic)).andReturn(Collections.emptyMap());
+
+            Capture<NewTopic> newTopicCapture = EasyMock.newCapture();
+            EasyMock.expect(admin.createTopic(EasyMock.capture(newTopicCapture))).andReturn(true);
+        }
+    }
 }

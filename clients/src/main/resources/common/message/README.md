@@ -79,6 +79,8 @@ There are several primitive field types available.
 
 * "int64": a 64-bit integer.
 
+* "float64": is a double-precision floating point number (IEEE 754).
+
 * "string": a UTF-8 string.
 
 * "bytes": binary data.
@@ -93,8 +95,8 @@ Guide](https://kafka.apache.org/protocol.html).
 
 Nullable Fields
 ---------------
-Booleans and ints can never be null.  However, fields that are strings, bytes,
-or arrays may optionally be "nullable."  When a field is "nullable," that
+Booleans, ints, and floats can never be null.  However, fields that are strings,
+bytes, or arrays may optionally be "nullable."  When a field is "nullable," that
 simply means that we are prepared to serialize and deserialize null entries for
 that field.
 
@@ -172,6 +174,8 @@ been set:
 
 * Integer fields default to 0.
 
+* Floats default to 0.
+
 * Booleans default to false.
 
 * Strings default to the empty string.
@@ -186,20 +190,20 @@ versions of the field are nullable.
 
 Custom Default Values
 ---------------------
-You may set a custom default for fields that are integers, booleans, or strings.
-Just add a "default" entry in the JSON object.  The custom default overrides the
-normal default for the type.  So for example, you could make a boolean field
-default to true rather than false, and so forth.
+You may set a custom default for fields that are integers, booleans, floats, or
+strings.  Just add a "default" entry in the JSON object.  The custom default
+overrides the normal default for the type.  So for example, you could make a
+boolean field default to true rather than false, and so forth.
 
 Note that the default must be valid for the field type.  So the default for an
-int16 field must by an integer that fits in 16 bits, and so forth.  You may
+int16 field must be an integer that fits in 16 bits, and so forth.  You may
 specify hex or octal values, as long as they are prefixed with 0x or 0.  It is
 currently not possible to specify a custom default for bytes or array fields.
 
 Custom defaults are useful when an older message version lacked some
 information.  For example, if an older request lacked a timeout field, you may
 want to specify that the server should assume that the timeout for such a
-request is 5000 ms (or some other arbitrary value.) 
+request is 5000 ms (or some other arbitrary value).
 
 Ignorable Fields
 ----------------
@@ -223,7 +227,7 @@ Hash Sets
 ---------
 One very common pattern in Kafka is to load array elements from a message into
 a Map or Set for easier access.  The message protocol makes this easier with
-the "mapKey" concept.  
+the "mapKey" concept.
 
 If some of the elements of an array are annotated with "mapKey": true, the
 entire array will be treated as a linked hash set rather than a list.  Elements

@@ -17,10 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import java.time.Duration;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -39,6 +35,11 @@ import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 
+import java.time.Duration;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+
 public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V>
         implements TimeWindowedCogroupedKStream<K, V> {
 
@@ -48,12 +49,12 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
 
     TimeWindowedCogroupedKStreamImpl(final Windows<W> windows,
                                      final InternalStreamsBuilder builder,
-                                     final Set<String> sourceNodes,
+                                     final Set<String> subTopologySourceNodes,
                                      final String name,
                                      final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                      final StreamsGraphNode streamsGraphNode,
                                      final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
-        super(name, null, null, sourceNodes, streamsGraphNode, builder);
+        super(name, null, null, subTopologySourceNodes, streamsGraphNode, builder);
         //keySerde and valueSerde are null because there are many different groupStreams that they could be from
         this.windows = windows;
         this.aggregateBuilder = aggregateBuilder;

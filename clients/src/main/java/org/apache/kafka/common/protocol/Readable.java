@@ -30,6 +30,7 @@ public interface Readable {
     short readShort();
     int readInt();
     long readLong();
+    double readDouble();
     void readArray(byte[] arr);
     int readUnsignedVarint();
     ByteBuffer readByteBuffer(int length);

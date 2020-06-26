@@ -379,7 +379,7 @@ public class CogroupedKStreamImplTest {
     @Test
     public void shouldInsertRepartitionsTopicForUpstreamKeyModificationWithGroupedReusedInSameCogroupsWithOptimization() {
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
@@ -528,7 +528,7 @@ public class CogroupedKStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -653,7 +653,7 @@ public class CogroupedKStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);
@@ -707,7 +707,7 @@ public class CogroupedKStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        properties.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         final KStream<String, String> stream1 = builder.stream("one", stringConsumed);
         final KStream<String, String> stream2 = builder.stream("two", stringConsumed);

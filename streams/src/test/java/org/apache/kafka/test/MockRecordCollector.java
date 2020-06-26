@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
@@ -74,7 +73,7 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
-    public void init(final Producer<byte[], byte[]> producer) {}
+    public void initialize() {}
 
     @Override
     public void flush() {
@@ -82,7 +81,10 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
-    public void close() {}
+    public void closeClean() {}
+
+    @Override
+    public void closeDirty() {}
 
     @Override
     public Map<TopicPartition, Long> offsets() {

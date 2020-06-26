@@ -49,6 +49,11 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
+    public double readDouble() {
+        return ByteUtils.readDouble(buf);
+    }
+
+    @Override
     public void readArray(byte[] arr) {
         buf.get(arr);
     }
@@ -86,6 +91,11 @@ public class ByteBufferAccessor implements Readable, Writable {
     @Override
     public void writeLong(long val) {
         buf.putLong(val);
+    }
+
+    @Override
+    public void writeDouble(double val) {
+        ByteUtils.writeDouble(val, buf);
     }
 
     @Override

@@ -92,7 +92,7 @@ public class MirrorMaker {
     private static final ConnectorClientConfigOverridePolicy CLIENT_CONFIG_OVERRIDE_POLICY =
             new AllConnectorClientConfigOverridePolicy();
 
-    private static final List<Class> CONNECTOR_CLASSES = Arrays.asList(
+    private static final List<Class<?>> CONNECTOR_CLASSES = Arrays.asList(
         MirrorSourceConnector.class,
         MirrorHeartbeatConnector.class,
         MirrorCheckpointConnector.class);
@@ -200,7 +200,7 @@ public class MirrorMaker {
         }
     }
 
-    private void configureConnector(SourceAndTarget sourceAndTarget, Class connectorClass) {
+    private void configureConnector(SourceAndTarget sourceAndTarget, Class<?> connectorClass) {
         checkHerder(sourceAndTarget);
         Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
         herders.get(sourceAndTarget)
@@ -278,7 +278,7 @@ public class MirrorMaker {
             ns = parser.parseArgs(args);
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            System.exit(-1);
+            Exit.exit(-1);
             return;
         }
         File configFile = (File) ns.get("config");

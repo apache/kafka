@@ -30,7 +30,7 @@ import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 private[group] sealed trait GroupState {
   val validPreviousStates: Set[GroupState]
@@ -123,13 +123,13 @@ private[group] case object Empty extends GroupState {
 }
 
 
-private object GroupMetadata {
+private object GroupMetadata extends Logging {
 
   def loadGroup(groupId: String,
                 initialState: GroupState,
                 generationId: Int,
                 protocolType: String,
-                protocol: String,
+                protocolName: String,
                 leaderId: String,
                 currentStateTimestamp: Option[Long],
                 members: Iterable[MemberMetadata],
@@ -137,12 +137,14 @@ private object GroupMetadata {
     val group = new GroupMetadata(groupId, initialState, time)
     group.generationId = generationId
     group.protocolType = if (protocolType == null || protocolType.isEmpty) None else Some(protocolType)
-    group.protocol = Option(protocol)
+    group.protocolName = Option(protocolName)
     group.leaderId = Option(leaderId)
     group.currentStateTimestamp = currentStateTimestamp
     members.foreach(member => {
       group.add(member, null)
       if (member.isStaticMember) {
+        info(s"Static member $member.groupInstanceId of group $groupId loaded " +
+          s"with member id ${member.memberId} at generation ${group.generationId}.")
         group.addStaticMember(member.groupInstanceId, member.memberId)
       }
     })
@@ -157,7 +159,8 @@ private object GroupMetadata {
  * Case class used to represent group metadata for the ListGroups API
  */
 case class GroupOverview(groupId: String,
-                         protocolType: String)
+                         protocolType: String,
+                         state: String)
 
 /**
  * Case class used to represent group metadata for the DescribeGroup API
@@ -199,9 +202,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var state: GroupState = initialState
   var currentStateTimestamp: Option[Long] = Some(time.milliseconds())
   var protocolType: Option[String] = None
+  var protocolName: Option[String] = None
   var generationId = 0
   private var leaderId: Option[String] = None
-  private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
   // Static membership mapping [key: group.instance.id, value: member.id]
@@ -231,7 +234,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def isLeader(memberId: String): Boolean = leaderId.contains(memberId)
   def leaderOrNull: String = leaderId.orNull
-  def protocolOrNull: String = protocol.orNull
   def currentStateTimestampOrDefault: Long = currentStateTimestamp.getOrElse(-1)
 
   def isConsumerGroup: Boolean = protocolType.contains(ConsumerProtocol.PROTOCOL_TYPE)
@@ -309,17 +311,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
 
     // Fence potential duplicate member immediately if someone awaits join/sync callback.
-    maybeInvokeJoinCallback(oldMember, JoinGroupResult(
-      members = List.empty,
-      memberId = oldMemberId,
-      generationId = GroupCoordinator.NoGeneration,
-      subProtocol = GroupCoordinator.NoProtocol,
-      leaderId = GroupCoordinator.NoLeader,
-      error = Errors.FENCED_INSTANCE_ID))
+    maybeInvokeJoinCallback(oldMember, JoinGroupResult(oldMemberId, Errors.FENCED_INSTANCE_ID))
 
-    maybeInvokeSyncCallback(oldMember, SyncGroupResult(
-      Array.empty, Errors.FENCED_INSTANCE_ID
-    ))
+    maybeInvokeSyncCallback(oldMember, SyncGroupResult(Errors.FENCED_INSTANCE_ID))
 
     oldMember.memberId = newMemberId
     members.put(newMemberId, oldMember)
@@ -360,7 +354,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState = state
 
-  def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
+  def notYetRejoinedMembers = members.filter(!_._2.isAwaitingJoin).toMap
 
   def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
@@ -368,7 +362,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def allStaticMembers = staticMembers.keySet
 
+  // For testing only.
+  def allDynamicMembers = {
+    val dynamicMemberSet = new mutable.HashSet[String]
+    allMembers.foreach(memberId => dynamicMemberSet.add(memberId))
+    staticMembers.values.foreach(memberId => dynamicMemberSet.remove(memberId))
+    dynamicMemberSet.toSet
+  }
+
   def numPending = pendingMembers.size
+
+  def numAwaiting: Int = numMembersAwaitingJoin
 
   def allMemberMetadata = members.values.toList
 
@@ -392,12 +396,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     *   2. group stored member.id doesn't match with given member.id
     */
   def isStaticMemberFenced(memberId: String,
-                           groupInstanceId: Option[String]): Boolean = {
+                           groupInstanceId: Option[String],
+                           operation: String): Boolean = {
     if (hasStaticMember(groupInstanceId)
       && getStaticMemberId(groupInstanceId) != memberId) {
-        error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}," +
-          s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)}")
-        true
+      error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}, " +
+        s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)} during $operation, will " +
+        s"respond with instance fenced error")
+      true
     } else
       false
   }
@@ -418,22 +424,21 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val candidates = candidateProtocols
 
     // let each member vote for one of the protocols and choose the one with the most votes
-    val votes: List[(String, Int)] = allMemberMetadata
+    val (protocol, _) = allMemberMetadata
       .map(_.vote(candidates))
       .groupBy(identity)
-      .mapValues(_.size)
-      .toList
+      .maxBy { case (_, votes) => votes.size }
 
-    votes.maxBy(_._2)._1
+    protocol
   }
 
-  private def candidateProtocols = {
+  private def candidateProtocols: Set[String] = {
     // get the set of protocols that are commonly supported by all members
     val numMembers = members.size
     supportedProtocols.filter(_._2 == numMembers).map(_._1).toSet
   }
 
-  def supportsProtocols(memberProtocolType: String, memberProtocols: Set[String]) = {
+  def supportsProtocols(memberProtocolType: String, memberProtocols: Set[String]): Boolean = {
     if (is(Empty))
       !memberProtocolType.isEmpty && memberProtocols.nonEmpty
     else
@@ -461,24 +466,23 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
    */
   private[group] def computeSubscribedTopics(): Option[Set[String]] = {
     protocolType match {
-      case Some(ConsumerProtocol.PROTOCOL_TYPE) if members.nonEmpty && protocol.isDefined =>
+      case Some(ConsumerProtocol.PROTOCOL_TYPE) if members.nonEmpty && protocolName.isDefined =>
         try {
           Some(
             members.map { case (_, member) =>
               // The consumer protocol is parsed with V0 which is the based prefix of all versions.
               // This way the consumer group manager does not depend on any specific existing or
               // future versions of the consumer protocol. VO must prefix all new versions.
-              val buffer = ByteBuffer.wrap(member.metadata(protocol.get))
+              val buffer = ByteBuffer.wrap(member.metadata(protocolName.get))
               ConsumerProtocol.deserializeVersion(buffer)
               ConsumerProtocol.deserializeSubscriptionV0(buffer).topics.asScala.toSet
             }.reduceLeft(_ ++ _)
           )
         } catch {
-          case e: SchemaException => {
-            warn(s"Failed to parse Consumer Protocol ${ConsumerProtocol.PROTOCOL_TYPE}:${protocol.get} " +
+          case e: SchemaException =>
+            warn(s"Failed to parse Consumer Protocol ${ConsumerProtocol.PROTOCOL_TYPE}:${protocolName.get} " +
               s"of group $groupId. Consumer group coordinator is not aware of the subscribed topics.", e)
             None
-          }
         }
 
       case Some(ConsumerProtocol.PROTOCOL_TYPE) if members.isEmpty =>
@@ -490,7 +494,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def updateMember(member: MemberMetadata,
                    protocols: List[(String, Array[Byte])],
-                   callback: JoinCallback) = {
+                   callback: JoinCallback): Unit = {
     member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
     protocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
     member.supportedProtocols = protocols
@@ -526,15 +530,15 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def initNextGeneration() = {
+  def initNextGeneration(): Unit = {
     if (members.nonEmpty) {
       generationId += 1
-      protocol = Some(selectProtocol)
+      protocolName = Some(selectProtocol)
       subscribedTopics = computeSubscribedTopics()
       transitionTo(CompletingRebalance)
     } else {
       generationId += 1
-      protocol = None
+      protocolName = None
       subscribedTopics = computeSubscribedTopics()
       transitionTo(Empty)
     }
@@ -548,13 +552,13 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     members.map{ case (memberId, memberMetadata) => new JoinGroupResponseMember()
         .setMemberId(memberId)
         .setGroupInstanceId(memberMetadata.groupInstanceId.orNull)
-        .setMetadata(memberMetadata.metadata(protocol.get))
+        .setMetadata(memberMetadata.metadata(protocolName.get))
     }.toList
   }
 
   def summary: GroupSummary = {
     if (is(Stable)) {
-      val protocol = protocolOrNull
+      val protocol = protocolName.orNull
       if (protocol == null)
         throw new IllegalStateException("Invalid null group protocol for stable group")
 
@@ -567,7 +571,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def overview: GroupOverview = {
-    GroupOverview(groupId, protocolType.getOrElse(""))
+    GroupOverview(groupId, protocolType.getOrElse(""), state.toString)
   }
 
   def initializeOffsets(offsets: collection.Map[TopicPartition, CommitRecordMetadataAndOffset],

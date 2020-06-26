@@ -24,15 +24,19 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
@@ -103,7 +107,18 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>partition.assignment.strategy</code>
      */
     public static final String PARTITION_ASSIGNMENT_STRATEGY_CONFIG = "partition.assignment.strategy";
-    private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = "A list of class names or class types, ordered by preference, of supported assignors responsible for the partition assignment strategy that the client will use to distribute partition ownership amongst consumer instances when group management is used. Implementing the <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> interface allows you to plug in a custom assignment strategy.";
+    private static final String PARTITION_ASSIGNMENT_STRATEGY_DOC = "A list of class names or class types, " +
+            "ordered by preference, of supported partition assignment " +
+            "strategies that the client will use to distribute partition " +
+            "ownership amongst consumer instances when group management is " +
+            "used.<p>In addition to the default class specified below, " +
+            "you can use the " +
+            "<code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>" +
+            "class for round robin assignments of partitions to consumers. " +
+            "</p><p>Implementing the " +
+            "<code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor" +
+            "</code> interface allows you to plug in a custom assignment" +
+            "strategy.";
 
     /**
      * <code>auto.offset.reset</code>
@@ -222,8 +237,7 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
     /** <code>default.api.timeout.ms</code> */
-    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
-    public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for consumer APIs that could block. This configuration is used as the default timeout for all consumer operations that do not explicitly accept a <code>timeout</code> parameter.";
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -248,6 +262,20 @@ public class ConsumerConfig extends AbstractConfig {
      *
      */
     static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
+
+    /**
+     * <code>internal.throw.on.fetch.stable.offset.unsupported</code>
+     * Whether or not the consumer should throw when the new stable offset feature is supported.
+     * If set to <code>true</code> then the client shall crash upon hitting it.
+     * The purpose of this flag is to prevent unexpected broker downgrade which makes
+     * the offset fetch protection against pending commit invalid. The safest approach
+     * is to fail fast to avoid introducing correctness issue.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
 
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
@@ -275,6 +303,8 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -284,7 +314,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                                         Type.STRING,
-                                        ClientDnsLookup.DEFAULT.toString(),
+                                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                                         in(ClientDnsLookup.DEFAULT.toString(),
                                            ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
@@ -447,7 +477,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         60 * 1000,
                                         atLeast(0),
                                         Importance.MEDIUM,
-                                        DEFAULT_API_TIMEOUT_MS_DOC)
+                                        CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC)
                                 /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         Type.LONG,
@@ -481,6 +511,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW)
+                                .defineInternal(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,
@@ -509,7 +543,24 @@ public class ConsumerConfig extends AbstractConfig {
 
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
-        return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        CommonClientConfigs.warnIfDeprecatedDnsLookupValue(this);
+        Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
+        maybeOverrideClientId(refinedConfigs);
+        return refinedConfigs;
+    }
+
+    private void maybeOverrideClientId(Map<String, Object> configs) {
+        final String clientId = this.getString(CLIENT_ID_CONFIG);
+        if (clientId == null || clientId.isEmpty()) {
+            final String groupId = this.getString(GROUP_ID_CONFIG);
+            String groupInstanceId = this.getString(GROUP_INSTANCE_ID_CONFIG);
+            if (groupInstanceId != null)
+                JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
+
+            String groupInstanceIdPart = groupInstanceId != null ? groupInstanceId : CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement() + "";
+            String generatedClientId = String.format("consumer-%s-%s", groupId, groupInstanceIdPart);
+            configs.put(CLIENT_ID_CONFIG, generatedClientId);
+        }
     }
 
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
@@ -535,6 +586,19 @@ public class ConsumerConfig extends AbstractConfig {
         return newProperties;
     }
 
+    boolean maybeOverrideEnableAutoCommit() {
+        Optional<String> groupId = Optional.ofNullable(getString(CommonClientConfigs.GROUP_ID_CONFIG));
+        boolean enableAutoCommit = getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+        if (!groupId.isPresent()) { // overwrite in case of default group id where the config is not explicitly provided
+            if (!originals().containsKey(ENABLE_AUTO_COMMIT_CONFIG)) {
+                enableAutoCommit = false;
+            } else if (enableAutoCommit) {
+                throw new InvalidConfigurationException(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG + " cannot be set to true when default group id (null) is used.");
+            }
+        }
+        return enableAutoCommit;
+    }
+
     public ConsumerConfig(Properties props) {
         super(CONFIG, props);
     }
@@ -552,7 +616,7 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     public static ConfigDef configDef() {
-        return  new ConfigDef(CONFIG);
+        return new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {

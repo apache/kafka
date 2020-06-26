@@ -19,7 +19,9 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -48,6 +50,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -62,8 +65,11 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
@@ -141,7 +147,10 @@ public class MeteredKeyValueStoreTest {
     @Test
     public void testMetrics() {
         init();
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        final JmxReporter reporter = new JmxReporter();
+        final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
+        reporter.contextChange(metricsContext);
+
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format(
             "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",
@@ -200,10 +209,6 @@ public class MeteredKeyValueStoreTest {
         final KafkaMetric metric = metric("put-if-absent-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
-    }
-
-    private KafkaMetric metric(final String name) {
-        return this.metrics.metric(new MetricName(name, storeLevelGroup, "", this.tags));
     }
 
     @SuppressWarnings("unchecked")
@@ -311,8 +316,44 @@ public class MeteredKeyValueStoreTest {
         assertFalse(metered.setFlushListener(null, false));
     }
 
+    @Test
+    public void shouldRemoveMetricsOnClose() {
+        inner.close();
+        expectLastCall();
+        init(); // replays "inner"
+
+        // There's always a "count" metric registered
+        assertThat(storeMetrics(), not(empty()));
+        metered.close();
+        assertThat(storeMetrics(), empty());
+        verify(inner);
+    }
+
+    @Test
+    public void shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose() {
+        inner.close();
+        expectLastCall().andThrow(new RuntimeException("Oops!"));
+        init(); // replays "inner"
+
+        assertThat(storeMetrics(), not(empty()));
+        assertThrows(RuntimeException.class, metered::close);
+        assertThat(storeMetrics(), empty());
+        verify(inner);
+    }
+
     private KafkaMetric metric(final MetricName metricName) {
         return this.metrics.metric(metricName);
     }
 
+    private KafkaMetric metric(final String name) {
+        return metrics.metric(new MetricName(name, storeLevelGroup, "", tags));
+    }
+
+    private List<MetricName> storeMetrics() {
+        return metrics.metrics()
+                      .keySet()
+                      .stream()
+                      .filter(name -> name.group().equals(storeLevelGroup) && name.tags().equals(tags))
+                      .collect(Collectors.toList());
+    }
 }

@@ -48,12 +48,11 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
     @Test
     public void shouldOpenNewStoreInRegularMode() {
-        LogCaptureAppender.setClassLoggerToDebug(RocksDBTimestampedStore.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
+            rocksDBStore.init(context, rocksDBStore);
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        rocksDBStore.init(context, rocksDBStore);
-        assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
-        LogCaptureAppender.unregister(appender);
+            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+        }
 
         try (final KeyValueIterator<Bytes, byte[]> iterator = rocksDBStore.all()) {
             assertThat(iterator.hasNext(), is(false));
@@ -62,21 +61,19 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
     @Test
     public void shouldOpenExistingStoreInRegularMode() throws Exception {
-        LogCaptureAppender.setClassLoggerToDebug(RocksDBTimestampedStore.class);
-
         // prepare store
         rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.put(new Bytes("key".getBytes()), "timestamped".getBytes());
         rocksDBStore.close();
 
         // re-open store
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        rocksDBStore = getRocksDBStore();
-        rocksDBStore.init(context, rocksDBStore);
-        assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
-        LogCaptureAppender.unregister(appender);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
+            rocksDBStore.init(context, rocksDBStore);
 
-        rocksDBStore.close();
+            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+        } finally {
+            rocksDBStore.close();
+        }
 
         // verify store
         final DBOptions dbOptions = new DBOptions();
@@ -123,12 +120,11 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     public void shouldMigrateDataFromDefaultToTimestampColumnFamily() throws Exception {
         prepareOldStore();
 
-        LogCaptureAppender.setClassLoggerToDebug(RocksDBTimestampedStore.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
+            rocksDBStore.init(context, rocksDBStore);
 
-        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        rocksDBStore.init(context, rocksDBStore);
-        assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
-        LogCaptureAppender.unregister(appender);
+            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
+        }
 
         // approx: 7 entries on old CF, 0 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(7L));
@@ -200,7 +196,6 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         // two delete operation, however, only one is counted because old CF count was zero before already
         // approx: 0 entries on old CF, 3 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(3L));
-
 
         iteratorsShouldNotMigrateData();
         assertThat(rocksDBStore.approximateNumEntries(), is(3L));
@@ -343,11 +338,13 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         }
 
         // check that still in upgrade mode
-        LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        rocksDBStore.init(context, rocksDBStore);
-        assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
-        LogCaptureAppender.unregister(appender);
-        rocksDBStore.close();
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
+            rocksDBStore.init(context, rocksDBStore);
+
+            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
+        } finally {
+            rocksDBStore.close();
+        }
 
         // clear old CF
         columnFamilies.clear();
@@ -375,10 +372,11 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         }
 
         // check that still in regular mode
-        appender = LogCaptureAppender.createAndRegister();
-        rocksDBStore.init(context, rocksDBStore);
-        assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
-        LogCaptureAppender.unregister(appender);
+        try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
+            rocksDBStore.init(context, rocksDBStore);
+
+            assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
+        }
     }
 
     private void prepareOldStore() {

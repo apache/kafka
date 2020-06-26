@@ -17,7 +17,9 @@
 
 package unit.kafka.controller
 
+import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.controller.{ControllerContext, ReplicaAssignment}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
@@ -46,18 +48,16 @@ class ControllerContextTest {
       Broker(brokerId, Seq(endpoint), rack = None) -> 1L
     }.toMap
 
-    context.setLiveBrokerAndEpochs(brokerEpochs)
+    context.setLiveBrokers(brokerEpochs)
 
     // Simple round-robin replica assignment
     var leaderIndex = 0
-    Seq(tp1, tp2, tp3).foreach {
-      partition =>
-        val replicas = brokers.indices.map { i =>
-          val replica = brokers((i + leaderIndex) % brokers.size)
-          replica
-        }
-        context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
-        leaderIndex += 1
+    Seq(tp1, tp2, tp3).foreach { partition =>
+      val replicas = brokers.indices.map { i =>
+        brokers((i + leaderIndex) % brokers.size)
+      }
+      context.updatePartitionFullReplicaAssignment(partition, ReplicaAssignment(replicas))
+      leaderIndex += 1
     }
   }
 
@@ -162,4 +162,35 @@ class ControllerContextTest {
     assertEquals(assignment, firstReassign.reassignTo(Seq(1,2,3)))
   }
 
+  @Test
+  def testPreferredReplicaImbalanceMetric(): Unit = {
+    context.updatePartitionFullReplicaAssignment(tp1, ReplicaAssignment(Seq(1, 2, 3)))
+    context.updatePartitionFullReplicaAssignment(tp2, ReplicaAssignment(Seq(1, 2, 3)))
+    context.updatePartitionFullReplicaAssignment(tp3, ReplicaAssignment(Seq(1, 2, 3)))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+
+    context.putPartitionLeadershipInfo(tp1, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(1, 2, 3)), 0))
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+
+    context.putPartitionLeadershipInfo(tp2, LeaderIsrAndControllerEpoch(LeaderAndIsr(2, List(2, 3, 1)), 0))
+    assertEquals(1, context.preferredReplicaImbalanceCount)
+
+    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(3, List(3, 1, 2)), 0))
+    assertEquals(2, context.preferredReplicaImbalanceCount)
+
+    context.updatePartitionFullReplicaAssignment(tp1, ReplicaAssignment(Seq(2, 3, 1)))
+    context.updatePartitionFullReplicaAssignment(tp2, ReplicaAssignment(Seq(2, 3, 1)))
+    assertEquals(2, context.preferredReplicaImbalanceCount)
+
+    context.queueTopicDeletion(Set(tp3.topic))
+    assertEquals(1, context.preferredReplicaImbalanceCount)
+
+    context.putPartitionLeadershipInfo(tp3, LeaderIsrAndControllerEpoch(LeaderAndIsr(1, List(3, 1, 2)), 0))
+    assertEquals(1, context.preferredReplicaImbalanceCount)
+
+    context.removeTopic(tp1.topic)
+    context.removeTopic(tp2.topic)
+    context.removeTopic(tp3.topic)
+    assertEquals(0, context.preferredReplicaImbalanceCount)
+  }
 }

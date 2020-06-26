@@ -216,7 +216,7 @@ public class WorkerCoordinatorIncrementalTest {
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
-        // Using onJoinComplete to register the protocol selection decided by the the broker
+        // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
         coordinator.onJoinComplete(generationId, memberId, compatibility.protocol(), buf);
@@ -247,7 +247,7 @@ public class WorkerCoordinatorIncrementalTest {
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
-        // Using onJoinComplete to register the protocol selection decided by the the broker
+        // Using onJoinComplete to register the protocol selection decided by the broker
         // coordinator as well as an existing previous assignment that the call to metadata will
         // include with v1 but not with v0
         coordinator.onJoinComplete(generationId, memberId, EAGER.protocol(), buf);
@@ -511,7 +511,7 @@ public class WorkerCoordinatorIncrementalTest {
 
         result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
 
-        // A rebalance after the delay expires re-assigns the lost tasks the the returning member
+        // A rebalance after the delay expires re-assigns the lost tasks to the returning member
         leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 0,

@@ -72,4 +72,21 @@ public class ConsumerGroupMetadata {
             memberId,
             groupInstanceId.orElse(""));
     }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final ConsumerGroupMetadata that = (ConsumerGroupMetadata) o;
+        return generationId == that.generationId &&
+            Objects.equals(groupId, that.groupId) &&
+            Objects.equals(memberId, that.memberId) &&
+            Objects.equals(groupInstanceId, that.groupInstanceId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(groupId, generationId, memberId, groupInstanceId);
+    }
+
 }

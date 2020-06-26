@@ -81,6 +81,17 @@ public class SyncGroupRequest extends AbstractRequest {
         return groupAssignments;
     }
 
+    /**
+     * ProtocolType and ProtocolName are mandatory since version 5. This methods verifies that
+     * they are defined for version 5 or higher, or returns true otherwise for older versions.
+     */
+    public boolean areMandatoryProtocolTypeAndNamePresent() {
+        if (version() >= 5)
+            return data.protocolType() != null && data.protocolName() != null;
+        else
+            return true;
+    }
+
     public static SyncGroupRequest parse(ByteBuffer buffer, short version) {
         return new SyncGroupRequest(ApiKeys.SYNC_GROUP.parseRequest(version, buffer), version);
     }

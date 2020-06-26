@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.common.config.types.Password;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -667,4 +668,43 @@ public class ConfigDefTest {
 
     private class NestedClass {
     }
+
+    @Test
+    public void testNiceMemoryUnits() {
+        assertEquals("", ConfigDef.niceMemoryUnits(0L));
+        assertEquals("", ConfigDef.niceMemoryUnits(1023));
+        assertEquals(" (1 kibibyte)", ConfigDef.niceMemoryUnits(1024));
+        assertEquals("", ConfigDef.niceMemoryUnits(1025));
+        assertEquals(" (2 kibibytes)", ConfigDef.niceMemoryUnits(2 * 1024));
+        assertEquals(" (1 mebibyte)", ConfigDef.niceMemoryUnits(1024 * 1024));
+        assertEquals(" (2 mebibytes)", ConfigDef.niceMemoryUnits(2 * 1024 * 1024));
+        assertEquals(" (1 gibibyte)", ConfigDef.niceMemoryUnits(1024 * 1024 * 1024));
+        assertEquals(" (2 gibibytes)", ConfigDef.niceMemoryUnits(2L * 1024 * 1024 * 1024));
+        assertEquals(" (1 tebibyte)", ConfigDef.niceMemoryUnits(1024L * 1024 * 1024 * 1024));
+        assertEquals(" (2 tebibytes)", ConfigDef.niceMemoryUnits(2L * 1024 * 1024 * 1024 * 1024));
+        assertEquals(" (1024 tebibytes)", ConfigDef.niceMemoryUnits(1024L * 1024 * 1024 * 1024 * 1024));
+        assertEquals(" (2048 tebibytes)", ConfigDef.niceMemoryUnits(2L * 1024 * 1024 * 1024 * 1024 * 1024));
+    }
+
+    @Test
+    public void testNiceTimeUnits() {
+        assertEquals("", ConfigDef.niceTimeUnits(0));
+        assertEquals("", ConfigDef.niceTimeUnits(Duration.ofSeconds(1).toMillis() - 1));
+        assertEquals(" (1 second)", ConfigDef.niceTimeUnits(Duration.ofSeconds(1).toMillis()));
+        assertEquals("", ConfigDef.niceTimeUnits(Duration.ofSeconds(1).toMillis() + 1));
+        assertEquals(" (2 seconds)", ConfigDef.niceTimeUnits(Duration.ofSeconds(2).toMillis()));
+
+        assertEquals(" (1 minute)", ConfigDef.niceTimeUnits(Duration.ofMinutes(1).toMillis()));
+        assertEquals(" (2 minutes)", ConfigDef.niceTimeUnits(Duration.ofMinutes(2).toMillis()));
+
+        assertEquals(" (1 hour)", ConfigDef.niceTimeUnits(Duration.ofHours(1).toMillis()));
+        assertEquals(" (2 hours)", ConfigDef.niceTimeUnits(Duration.ofHours(2).toMillis()));
+
+        assertEquals(" (1 day)", ConfigDef.niceTimeUnits(Duration.ofDays(1).toMillis()));
+        assertEquals(" (2 days)", ConfigDef.niceTimeUnits(Duration.ofDays(2).toMillis()));
+
+        assertEquals(" (7 days)", ConfigDef.niceTimeUnits(Duration.ofDays(7).toMillis()));
+        assertEquals(" (365 days)", ConfigDef.niceTimeUnits(Duration.ofDays(365).toMillis()));
+    }
+
 }
