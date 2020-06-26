@@ -260,7 +260,7 @@ class KafkaController(val config: KafkaConfig,
       info("starting the token expiry check scheduler")
       tokenCleanScheduler.startup()
       tokenCleanScheduler.schedule(name = "delete-expired-tokens",
-        fun = () => tokenManager.expireTokens,
+        fun = () => tokenManager.expireTokens(),
         period = config.delegationTokenExpiryCheckIntervalMs,
         unit = TimeUnit.MILLISECONDS)
     }
@@ -439,7 +439,7 @@ class KafkaController(val config: KafkaConfig,
     val (newOfflineReplicasForDeletion, newOfflineReplicasNotForDeletion) =
       newOfflineReplicas.partition(p => topicDeletionManager.isTopicQueuedUpForDeletion(p.topic))
 
-    val partitionsWithOfflineLeader = controllerContext.partitionsWithOfflineLeader()
+    val partitionsWithOfflineLeader = controllerContext.partitionsWithOfflineLeader
 
     // trigger OfflinePartition state for all partitions whose current leader is one amongst the newOfflineReplicas
     partitionStateMachine.handleStateChanges(partitionsWithOfflineLeader.toSeq, OfflinePartition)
@@ -934,7 +934,7 @@ class KafkaController(val config: KafkaConfig,
     if (!zkClient.reassignPartitionsInProgress())
       return
 
-    val reassigningPartitions = zkClient.getPartitionReassignment()
+    val reassigningPartitions = zkClient.getPartitionReassignment
     val (removingPartitions, updatedPartitionsBeingReassigned) = reassigningPartitions.partition { case (tp, replicas) =>
       shouldRemoveReassignment(tp, replicas)
     }
@@ -1516,7 +1516,7 @@ class KafkaController(val config: KafkaConfig,
       val reassignmentResults = mutable.Map.empty[TopicPartition, ApiError]
       val partitionsToReassign = mutable.Map.empty[TopicPartition, ReplicaAssignment]
 
-      zkClient.getPartitionReassignment().foreach { case (tp, targetReplicas) =>
+      zkClient.getPartitionReassignment.foreach { case (tp, targetReplicas) =>
         maybeBuildReassignment(tp, Some(targetReplicas)) match {
           case Some(context) => partitionsToReassign.put(tp, context)
           case None => reassignmentResults.put(tp, new ApiError(Errors.NO_REASSIGNMENT_IN_PROGRESS))
