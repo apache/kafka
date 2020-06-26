@@ -262,27 +262,27 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         buffer.putLong(bufferKey.time());
         final byte[] array = buffer.array();
         ((RecordCollector.Supplier) context).recordCollector().send(
-                changelogTopic,
-                key,
-                array,
-                CHANGELOG_HEADERS,
-                partition,
-                null,
-                KEY_SERIALIZER,
-                VALUE_SERIALIZER
+            changelogTopic,
+            key,
+            array,
+            CHANGELOG_HEADERS,
+            partition,
+            null,
+            KEY_SERIALIZER,
+            VALUE_SERIALIZER
         );
     }
 
     private void logTombstone(final Bytes key) {
         ((RecordCollector.Supplier) context).recordCollector().send(
-                changelogTopic,
-                key,
-                null,
-                null,
-                partition,
-                null,
-                KEY_SERIALIZER,
-                VALUE_SERIALIZER
+            changelogTopic,
+            key,
+            null,
+            null,
+            partition,
+            null,
+            KEY_SERIALIZER,
+            VALUE_SERIALIZER
         );
     }
 
@@ -402,14 +402,16 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         updateBufferMetrics();
     }
 
-    private InMemoryTimeOrderedKeyValueBuffer.DeserializationResult getDeserializationResultV3(final ConsumerRecord<byte[], byte[]> record, final Bytes key) {
+    private static InMemoryTimeOrderedKeyValueBuffer.DeserializationResult getDeserializationResultV3(final ConsumerRecord<byte[], byte[]> record,
+                                                                                                      final Bytes key) {
         final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
         final BufferValue bufferValue = BufferValue.deserialize(valueAndTime);
         final long time = valueAndTime.getLong();
         return new DeserializationResult(time, key, bufferValue);
     }
 
-    private InMemoryTimeOrderedKeyValueBuffer.DeserializationResult getDeserializationResultV2(final ConsumerRecord<byte[], byte[]> record, final Bytes key) {
+    private static InMemoryTimeOrderedKeyValueBuffer.DeserializationResult getDeserializationResultV2(final ConsumerRecord<byte[], byte[]> record,
+                                                                                                      final Bytes key) {
         final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
         final ContextualRecord contextualRecord = ContextualRecord.deserialize(valueAndTime);
         final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));

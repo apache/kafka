@@ -37,7 +37,7 @@ metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0
 # can be replaced with metadata_2_versions
 backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(LATEST_2_5), str(DEV_VERSION)]
-smoke_test_versions = [str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(LATEST_2_5), str(DEV_VERSION)]
+smoke_test_versions = [str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(LATEST_2_5)]
 
 dev_version = [str(DEV_VERSION)]
 
@@ -299,7 +299,8 @@ class StreamsUpgradeTest(Test):
         # shutdown
         self.driver.stop()
 
-        # ideally, we would actually verify the expected results, but it
+        # Ideally, we would actually verify the expected results.
+        # See KAFKA-10202
 
         random.shuffle(self.processors)
         for p in self.processors:
