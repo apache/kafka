@@ -951,7 +951,7 @@ public class StreamThreadTest {
 
         final ChangelogReader changelogReader = new MockChangelogReader() {
             @Override
-            public void restore() {
+            public int restore() {
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
                 consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
 

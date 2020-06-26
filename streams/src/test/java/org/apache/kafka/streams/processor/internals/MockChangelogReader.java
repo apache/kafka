@@ -38,8 +38,8 @@ public class MockChangelogReader implements ChangelogReader {
     }
 
     @Override
-    public void restore() {
-        // do nothing
+    public int restore() {
+        return 0;
     }
 
     @Override

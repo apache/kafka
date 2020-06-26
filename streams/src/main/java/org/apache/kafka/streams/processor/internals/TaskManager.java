@@ -411,7 +411,10 @@ public class TaskManager {
                 } else {
                     // we found a restoring task that isn't done restoring, which is evidence that
                     // not all tasks are running
+                    log.debug("Task {} has not completed restoration, will check next time", task.id());
+
                     allRunning = false;
+                    break;
                 }
             }
         }

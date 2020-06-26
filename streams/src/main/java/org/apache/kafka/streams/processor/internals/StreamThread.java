@@ -273,6 +273,7 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
 
+    private final StateRestoreThread restoreThread;
     private final ChangelogReader changelogReader;
     private final ConsumerRebalanceListener rebalanceListener;
     private final Consumer<byte[], byte[]> mainConsumer;
@@ -481,6 +482,8 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
+
+        this.restoreThread = new StateRestoreThread(time, config, threadId, changelogReader);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -502,6 +505,9 @@ public class StreamThread extends Thread {
             log.info("StreamThread already shutdown. Not running");
             return;
         }
+
+        restoreThread.start();
+
         boolean cleanRun = false;
         try {
             runLoop();
@@ -659,13 +665,12 @@ public class StreamThread extends Thread {
             }
         }
 
-        // we can always let changelog reader try restoring in order to initialize the changelogs;
-        // if there's no active restoring or standby updating it would not try to fetch any data
-        changelogReader.restore();
-
-        // TODO: we should record the restore latency and its relative time spent ratio after
-        //       we figure out how to move this method out of the stream thread
-        advanceNowAndComputeLatency();
+        // check if restore thread has encountered TaskCorrupted exception; if yes
+        // rethrow it to trigger the handling logic
+        final TaskCorruptedException e = restoreThread.nextCorruptedException();
+        if (e != null) {
+            throw e;
+        }
 
         int totalProcessed = 0;
         long totalCommitLatency = 0L;
@@ -886,6 +891,11 @@ public class StreamThread extends Thread {
 
         log.info("Shutting down");
 
+        try {
+            restoreThread.shutdown(10_000L);
+        } catch (final Throwable e) {
+            log.error("Failed to close restore thread due to the following error:", e);
+        }
         try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {

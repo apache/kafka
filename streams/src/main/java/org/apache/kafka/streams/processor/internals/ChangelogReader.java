@@ -26,8 +26,10 @@ import java.util.Set;
 public interface ChangelogReader extends ChangelogRegister {
     /**
      * Restore all registered state stores by reading from their changelogs
+     *
+     * @return number of records restored in this call
      */
-    void restore();
+    int restore();
 
     /**
      * Transit to restore active changelogs mode
