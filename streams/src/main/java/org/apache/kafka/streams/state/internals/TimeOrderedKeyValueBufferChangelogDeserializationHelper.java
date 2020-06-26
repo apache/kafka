@@ -18,8 +18,10 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
 import java.nio.ByteBuffer;
 
@@ -52,6 +54,59 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
         }
     }
 
+    static DeserializationResult deserializeV0(final ConsumerRecord<byte[], byte[]> record,
+                                               final Bytes key,
+                                               final byte[] previousBufferedValue) {
+
+        final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
+        final long time = timeAndValue.getLong();
+        final byte[] changelogValue = new byte[record.value().length - 8];
+        timeAndValue.get(changelogValue);
+
+        final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(changelogValue));
+
+        final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+            record.timestamp(),
+            record.offset(),
+            record.partition(),
+            record.topic(),
+            record.headers()
+        );
+
+        return new DeserializationResult(
+            time,
+            key,
+            new BufferValue(
+                previousBufferedValue == null ? change.oldValue : previousBufferedValue,
+                change.oldValue,
+                change.newValue,
+                recordContext
+            )
+        );
+    }
+
+    static DeserializationResult deserializeV1(final ConsumerRecord<byte[], byte[]> record,
+                                               final Bytes key,
+                                               final byte[] previousBufferedValue) {
+        final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
+        final long time = timeAndValue.getLong();
+        final byte[] changelogValue = new byte[record.value().length - 8];
+        timeAndValue.get(changelogValue);
+
+        final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(changelogValue));
+        final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));
+
+        return new DeserializationResult(
+            time,
+            key,
+            new BufferValue(
+                previousBufferedValue == null ? change.oldValue : previousBufferedValue,
+                change.oldValue,
+                change.newValue,
+                contextualRecord.recordContext()
+            )
+        );
+    }
 
     static DeserializationResult duckTypeV2(final ConsumerRecord<byte[], byte[]> record, final Bytes key) {
         DeserializationResult deserializationResult = null;
@@ -88,15 +143,7 @@ final class TimeOrderedKeyValueBufferChangelogDeserializationHelper {
         final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
         final ContextualRecord contextualRecord = ContextualRecord.deserialize(valueAndTime);
         final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));
-
-        final int priorValueLength = valueAndTime.getInt();
-        final byte[] priorValue;
-        if (priorValueLength == -1) {
-            priorValue = null;
-        } else {
-            priorValue = new byte[priorValueLength];
-            valueAndTime.get(priorValue);
-        }
+        final byte[] priorValue = Utils.getNullableSizePrefixedArray(valueAndTime);
         final long time = valueAndTime.getLong();
         final BufferValue bufferValue = new BufferValue(priorValue, change.oldValue, change.newValue, contextualRecord.recordContext());
         return new DeserializationResult(time, key, bufferValue);

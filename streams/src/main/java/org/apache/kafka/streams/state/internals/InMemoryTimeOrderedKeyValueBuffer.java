@@ -56,6 +56,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.deserializeV0;
+import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.deserializeV1;
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.deserializeV3;
 import static org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferChangelogDeserializationHelper.duckTypeV2;
 
@@ -316,66 +318,51 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             } else {
                 final Header versionHeader = record.headers().lastHeader("v");
                 if (versionHeader == null) {
-                    // in this case, the changelog value is just the serialized record value
-                    final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
-                    final long time = timeAndValue.getLong();
-                    final byte[] changelogValue = new byte[record.value().length - 8];
-                    timeAndValue.get(changelogValue);
-
-                    final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(changelogValue));
-
-                    final ProcessorRecordContext recordContext = new ProcessorRecordContext(
-                        record.timestamp(),
-                        record.offset(),
-                        record.partition(),
-                        record.topic(),
-                        record.headers()
-                    );
-
-                    cleanPut(
-                        time,
-                        key,
-                        new BufferValue(
-                            index.containsKey(key)
-                                ? internalPriorValueForBuffered(key)
-                                : change.oldValue,
-                            change.oldValue,
-                            change.newValue,
-                            recordContext
-                        )
-                    );
-                } else if (Arrays.equals(versionHeader.value(), V_1_CHANGELOG_HEADER_VALUE)) {
-                    // in this case, the changelog value is a serialized ContextualRecord
-                    final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
-                    final long time = timeAndValue.getLong();
-                    final byte[] changelogValue = new byte[record.value().length - 8];
-                    timeAndValue.get(changelogValue);
-
-                    final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(changelogValue));
-                    final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));
-
-                    cleanPut(
-                        time,
-                        key,
-                        new BufferValue(
-                            index.containsKey(key)
-                                ? internalPriorValueForBuffered(key)
-                                : change.oldValue,
-                            change.oldValue,
-                            change.newValue,
-                            contextualRecord.recordContext()
-                        )
-                    );
-                } else if (Arrays.equals(versionHeader.value(), V_2_CHANGELOG_HEADER_VALUE)) {
-
-                    final DeserializationResult deserializationResult = duckTypeV2(record, key);
+                    // Version 0:
+                    // value:
+                    //  - buffer time
+                    //  - old value
+                    //  - new value
+                    final byte[] previousBufferedValue = index.containsKey(key)
+                        ? internalPriorValueForBuffered(key)
+                        : null;
+                    final DeserializationResult deserializationResult = deserializeV0(record, key, previousBufferedValue);
                     cleanPut(deserializationResult.time(), deserializationResult.key(), deserializationResult.bufferValue());
-
                 } else if (Arrays.equals(versionHeader.value(), V_3_CHANGELOG_HEADER_VALUE)) {
-
+                    // Version 3:
+                    // value:
+                    //  - record context
+                    //  - prior value
+                    //  - old value
+                    //  - new value
+                    //  - buffer time
                     final DeserializationResult deserializationResult = deserializeV3(record, key);
                     cleanPut(deserializationResult.time(), deserializationResult.key(), deserializationResult.bufferValue());
 
+                } else if (Arrays.equals(versionHeader.value(), V_2_CHANGELOG_HEADER_VALUE)) {
+                    // Version 2:
+                    // value:
+                    //  - record context
+                    //  - old value
+                    //  - new value
+                    //  - prior value
+                    //  - buffer time
+                    // NOTE: 2.4.0, 2.4.1, and 2.5.0 actually encode Version 3 formatted data,
+                    // but still set the Version 2 flag, so to deserialize, we have to duck type.
+                    final DeserializationResult deserializationResult = duckTypeV2(record, key);
+                    cleanPut(deserializationResult.time(), deserializationResult.key(), deserializationResult.bufferValue());
+                } else if (Arrays.equals(versionHeader.value(), V_1_CHANGELOG_HEADER_VALUE)) {
+                    // Version 1:
+                    // value:
+                    //  - buffer time
+                    //  - record context
+                    //  - old value
+                    //  - new value
+                    final byte[] previousBufferedValue = index.containsKey(key)
+                        ? internalPriorValueForBuffered(key)
+                        : null;
+                    final DeserializationResult deserializationResult = deserializeV1(record, key, previousBufferedValue);
+                    cleanPut(deserializationResult.time(), deserializationResult.key(), deserializationResult.bufferValue());
                 } else {
                     throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
                 }
@@ -383,6 +370,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         }
         updateBufferMetrics();
     }
+
 
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,

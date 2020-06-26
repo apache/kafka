@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import java.nio.ByteBuffer;
 
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
 
 public final class FullChangeSerde<T> {
     private final Serde<T> inner;
@@ -77,19 +78,8 @@ public final class FullChangeSerde<T> {
             return null;
         }
         final ByteBuffer buffer = ByteBuffer.wrap(data);
-
-        final int oldSize = buffer.getInt();
-        final byte[] oldBytes = oldSize == -1 ? null : new byte[oldSize];
-        if (oldBytes != null) {
-            buffer.get(oldBytes);
-        }
-
-        final int newSize = buffer.getInt();
-        final byte[] newBytes = newSize == -1 ? null : new byte[newSize];
-        if (newBytes != null) {
-            buffer.get(newBytes);
-        }
-
+        final byte[] oldBytes = getNullableSizePrefixedArray(buffer);
+        final byte[] newBytes = getNullableSizePrefixedArray(buffer);
         return new Change<>(newBytes, oldBytes);
     }
 
