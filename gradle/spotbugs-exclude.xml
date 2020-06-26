@@ -348,8 +348,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Suppress warning about a value that gets initialized
-             before any other threads are created. -->
+        <!-- Suppress warning about applicationID that gets initialized before
+        any other threads are created, but is used in synchronized and
+        unsynchronized methods because it comes from the configs,
+        passed through rewriteTopology. -->
             <Package name="org.apache.kafka.streams.processor.internals"/>
             <Source name="InternalTopologyBuilder.java"/>
             <Bug pattern="IS2_INCONSISTENT_SYNC"/>
