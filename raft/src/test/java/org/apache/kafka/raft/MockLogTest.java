@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordUtils;
@@ -204,7 +205,7 @@ public class MockLogTest {
         assertEquals(6L, log.endOffset().offset);
         assertEquals(3, log.lastFetchedEpoch());
 
-        Records records = log.read(0, OptionalLong.empty()).records;
+        Records records = log.read(5L, OptionalLong.empty()).records;
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
             extractRecords.add(record.value());
@@ -284,12 +285,51 @@ public class MockLogTest {
         assertThrows(IllegalArgumentException.class, () ->
             log.updateHighWatermark(new LogOffsetMetadata(10L,
                 Optional.of(new MockLog.MockOffsetMetadata(UUID.randomUUID())))));
+
+        // Ensure we can update the high watermark to the end offset
+        LogFetchInfo readFromEndInfo = log.read(15L, OptionalLong.empty());
+        assertEquals(15, readFromEndInfo.startOffsetMetadata.offset);
+        assertTrue(readFromEndInfo.startOffsetMetadata.metadata.isPresent());
+        log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
+
+        // Ensure that the end offset metadata is valid after new entries are appended
+        appendBatch(5, 1);
+        log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
+
+        // Check handling of a fetch from the middle of a batch
+        LogFetchInfo readFromMiddleInfo = log.read(16L, OptionalLong.of(18L));
+        assertEquals(readFromEndInfo.startOffsetMetadata, readFromMiddleInfo.startOffsetMetadata);
+    }
+
+    @Test
+    public void testEndOffsetForEpoch() {
+        appendBatch(5, 1);
+        appendBatch(10, 1);
+        appendBatch(5, 3);
+        appendBatch(10, 4);
+
+        assertEquals(Optional.of(new OffsetAndEpoch(0, 0)), log.endOffsetForEpoch(0));
+        assertEquals(Optional.of(new OffsetAndEpoch(15L, 1)), log.endOffsetForEpoch(1));
+        assertEquals(Optional.of(new OffsetAndEpoch(15L, 1)), log.endOffsetForEpoch(2));
+        assertEquals(Optional.of(new OffsetAndEpoch(20L, 3)), log.endOffsetForEpoch(3));
+        assertEquals(Optional.of(new OffsetAndEpoch(30L, 4)), log.endOffsetForEpoch(4));
+        assertEquals(Optional.empty(), log.endOffsetForEpoch(5));
     }
 
     @Test
     public void testEmptyAppendNotAllowed() {
         assertThrows(IllegalArgumentException.class, () -> log.appendAsFollower(MemoryRecords.EMPTY));
         assertThrows(IllegalArgumentException.class, () -> log.appendAsLeader(MemoryRecords.EMPTY, 1));
+    }
+
+    @Test
+    public void testReadOutOfRangeOffset() {
+        final long initialOffset = 5L;
+        final int epoch = 3;
+        SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
+        log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.startOffset() - 1, OptionalLong.empty()));
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset + 1, OptionalLong.empty()));
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, OptionalLong maxOffset) {

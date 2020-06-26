@@ -74,6 +74,24 @@ public class MockLog implements ReplicatedLog {
         this.highWatermark = offsetMetadata;
     }
 
+    private Optional<OffsetMetadata> metadataForOffset(long offset) {
+        if (offset == endOffset().offset) {
+            return endOffset().metadata;
+        }
+
+        for (LogBatch batch : log) {
+            if (batch.lastOffset() < offset)
+                continue;
+
+            for (LogEntry entry : batch.entries) {
+                if (entry.offset == offset) {
+                    return Optional.of(entry.metadata);
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     private void assertValidHighWatermarkMetadata(LogOffsetMetadata offsetMetadata) {
         if (!offsetMetadata.metadata.isPresent()) {
             return;
@@ -82,22 +100,14 @@ public class MockLog implements ReplicatedLog {
         UUID id = ((MockOffsetMetadata) offsetMetadata.metadata.get()).id;
         long offset = offsetMetadata.offset;
 
-        for (LogBatch batch : log) {
-            if (batch.lastOffset() < offset)
-                continue;
-
-            for (LogEntry entry : batch.entries) {
-                if (entry.offset == offset) {
-                    if (entry.id != id) {
-                        throw new IllegalArgumentException("High watermark " + offset +
-                            " metadata uuid " + id + " does not match the " +
-                            " log's record entry maintained uuid " + entry.id);
-                    } else {
-                        return;
-                    }
-                }
+        metadataForOffset(offset).ifPresent(metadata -> {
+            UUID entryId = ((MockOffsetMetadata) metadata).id;
+            if (entryId != id) {
+                throw new IllegalArgumentException("High watermark " + offset +
+                    " metadata uuid " + id + " does not match the " +
+                    " log's record entry maintained uuid " + entryId);
             }
-        }
+        });
     }
 
     LogOffsetMetadata highWatermark() {
@@ -166,7 +176,7 @@ public class MockLog implements ReplicatedLog {
     private LogEntry buildEntry(Long offset, SimpleRecord record) {
         UUID id = nextId;
         nextId = UUID.randomUUID();
-        return new LogEntry(id, offset, record);
+        return new LogEntry(new MockOffsetMetadata(id), offset, record);
     }
 
     @Override
@@ -220,37 +230,55 @@ public class MockLog implements ReplicatedLog {
     }
 
     public List<LogBatch> readBatches(long startOffset, OptionalLong maxOffsetOpt) {
-        long maxOffset = maxOffsetOpt.orElse(endOffset().offset);
-        if (startOffset > maxOffset) {
-            throw new OffsetOutOfRangeException("Requested offset " + startOffset + " is larger than " +
-                "the provided end offset " + maxOffsetOpt);
-        }
+        verifyOffsetInRange(startOffset);
 
+        long maxOffset = maxOffsetOpt.orElse(endOffset().offset);
         if (startOffset == maxOffset) {
             return Collections.emptyList();
         }
 
         return log.stream()
-            .filter(batch -> batch.firstOffset() >= startOffset && batch.lastOffset() < maxOffset)
+            .filter(batch -> batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset)
             .collect(Collectors.toList());
+    }
+
+    private void verifyOffsetInRange(long offset) {
+        if (offset > endOffset().offset) {
+            throw new OffsetOutOfRangeException("Requested offset " + offset + " is larger than " +
+                "then log end offset " + endOffset().offset);
+        }
+
+        if (offset < this.startOffset()) {
+            throw new OffsetOutOfRangeException("Requested offset " + offset + " is smaller than " +
+                "then log start offset " + this.startOffset());
+        }
     }
 
     @Override
     public LogFetchInfo read(long startOffset, OptionalLong maxOffsetOpt) {
-        ByteBuffer buffer = ByteBuffer.allocate(512);
+        verifyOffsetInRange(startOffset);
 
         long maxOffset = maxOffsetOpt.orElse(endOffset().offset);
-        UUID startId = null;
+        if (startOffset == maxOffset) {
+            return new LogFetchInfo(MemoryRecords.EMPTY, new LogOffsetMetadata(
+                startOffset, metadataForOffset(startOffset)));
+        }
+
+        ByteBuffer buffer = ByteBuffer.allocate(512);
+        LogEntry firstEntry = null;
+
         for (LogBatch batch : log) {
             // Note that start offset is inclusive while max offset is exclusive. We only return
             // complete batches, so batches which end at an offset larger than the max offset are
             // filtered, which is effectively the same as having the consumer drop an incomplete
             // batch returned in a fetch response.
-            if (batch.lastOffset() >= startOffset && batch.lastOffset() < maxOffset) {
-                buffer = batch.writeTo(buffer);
+            if (batch.lastOffset() >= startOffset) {
+                if (batch.lastOffset() < maxOffset) {
+                    buffer = batch.writeTo(buffer);
+                }
 
-                if (startId == null && !batch.entries.isEmpty()) {
-                    startId = batch.entries.iterator().next().id;
+                if (firstEntry == null && !batch.entries.isEmpty()) {
+                    firstEntry = batch.entries.get(0);
                 }
             }
         }
@@ -258,8 +286,12 @@ public class MockLog implements ReplicatedLog {
         buffer.flip();
         Records records = MemoryRecords.readableRecords(buffer);
 
-        return new LogFetchInfo(records,
-                new LogOffsetMetadata(startOffset, Optional.of(new MockOffsetMetadata(startId != null ? startId : nextId))));
+        if (firstEntry == null) {
+            throw new RuntimeException("Expected to find at least one entry starting from offset " +
+                startOffset + " but found none");
+        }
+
+        return new LogFetchInfo(records, firstEntry.logOffsetMetadata());
     }
 
     @Override
@@ -281,17 +313,34 @@ public class MockLog implements ReplicatedLog {
         public String toString() {
             return id.toString();
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            MockOffsetMetadata that = (MockOffsetMetadata) o;
+            return Objects.equals(id, that.id);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id);
+        }
     }
 
     static class LogEntry {
-        final UUID id;
+        final MockOffsetMetadata metadata;
         final long offset;
         final SimpleRecord record;
 
-        LogEntry(UUID id, long offset, SimpleRecord record) {
-            this.id = id;
+        LogEntry(MockOffsetMetadata metadata, long offset, SimpleRecord record) {
+            this.metadata = metadata;
             this.offset = offset;
             this.record = record;
+        }
+
+        LogOffsetMetadata logOffsetMetadata() {
+            return new LogOffsetMetadata(offset, Optional.of(metadata));
         }
 
         @Override
@@ -300,12 +349,13 @@ public class MockLog implements ReplicatedLog {
             if (o == null || getClass() != o.getClass()) return false;
             LogEntry logEntry = (LogEntry) o;
             return offset == logEntry.offset &&
+                Objects.equals(metadata, logEntry.metadata) &&
                 Objects.equals(record, logEntry.record);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(offset, record);
+            return Objects.hash(metadata, offset, record);
         }
     }
 
