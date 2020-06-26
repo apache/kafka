@@ -931,7 +931,7 @@ class KafkaController(val config: KafkaConfig,
    * @param shouldRemoveReassignment Predicate indicating which partition reassignments should be removed
    */
   private def maybeRemoveFromZkReassignment(shouldRemoveReassignment: (TopicPartition, Seq[Int]) => Boolean): Unit = {
-    if (!zkClient.reassignPartitionsInProgress())
+    if (!zkClient.reassignPartitionsInProgress)
       return
 
     val reassigningPartitions = zkClient.getPartitionReassignment
