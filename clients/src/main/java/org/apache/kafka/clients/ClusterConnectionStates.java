@@ -424,9 +424,7 @@ final class ClusterConnectionStates {
      * @param id the connection to fetch the state for
      */
     public long connectionSetupTimeoutMs(String id) {
-        NodeConnectionState nodeState = this.nodeState.get(id);
-        if (nodeState == null)
-            throw new IllegalStateException("Connection to node " + id + " hasn't been initialized");
+        NodeConnectionState nodeState = this.nodeState(id);
         return nodeState.connectionSetupTimeoutMs;
     }
 
@@ -436,7 +434,7 @@ final class ClusterConnectionStates {
      * @param now the current time in ms
      */
     public boolean isConnectionSetupTimeout(String id, long now) {
-        NodeConnectionState nodeState = this.nodeState.get(id);
+        NodeConnectionState nodeState = this.nodeState(id);
         if (nodeState.state != ConnectionState.CONNECTING)
             throw new IllegalStateException("Node " + id + " is not in connecting state");
         return now - lastConnectAttemptMs(id) > connectionSetupTimeoutMs(id);

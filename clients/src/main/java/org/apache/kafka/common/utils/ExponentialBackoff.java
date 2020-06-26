@@ -22,9 +22,9 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * An utility class for keeping the parameters and providing the value of exponential
  * retry backoff, exponential reconnect backoff, exponential timeout, etc.
- * The formula is
+ * The formula is:
  * Backoff(attempts) = random(1 - jitter, 1 + jitter) * initialInterval * multiplier ^ attempts
- * If scaleFactor is greater or equal than termMax, a constant backoff of will be provided
+ * If initialInterval is greater or equal than maxInterval, a constant backoff of will be provided
  * This class is thread-safe
  */
 public class ExponentialBackoff {
