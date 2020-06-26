@@ -58,6 +58,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -350,22 +351,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit;
         switch (state()) {
             case CREATED:
-                log.debug("Skipped preparing created task for commit");
-                offsetsToCommit = Collections.emptyMap();
-
-                break;
-
-            case RUNNING:
             case RESTORING:
+            case RUNNING:
             case SUSPENDED:
+                stateMgr.flush();
+                // the commitNeeded flag just indicates whether we have reached RUNNING and processed any new data,
+                // so it only indicates whether the record collector should be flushed or not, whereas the state
+                // manager should always be flushed; either there is newly restored data or the flush will be a no-op
                 if (commitNeeded) {
-                    stateMgr.flush();
                     recordCollector.flush();
 
                     log.debug("Prepared {} task for committing", state());
                     offsetsToCommit = committableOffsetsAndMetadata();
                 } else {
-                    log.debug("Skipped preparing {} task for commit since there is nothing new to commit", state());
+                    log.debug("Skipped preparing {} task for commit since there is nothing to commit", state());
                     offsetsToCommit = Collections.emptyMap();
                 }
 
@@ -435,7 +434,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void postCommit() {
         commitRequested = false;
-        commitNeeded = false;
 
         switch (state()) {
             case CREATED:
@@ -546,10 +544,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void writeCheckpoint() {
         if (commitNeeded) {
-            log.error("Tried to write a checkpoint with pending uncommitted data, should complete the commit first.");
-            throw new IllegalStateException("A checkpoint should only be written if no commit is needed.");
+            stateMgr.checkpoint(checkpointableOffsets());
+        } else {
+            stateMgr.checkpoint(emptyMap());
         }
-        stateMgr.checkpoint(checkpointableOffsets());
+        commitNeeded = false;
     }
 
     private void validateClean() {

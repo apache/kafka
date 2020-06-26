@@ -437,6 +437,7 @@ public class TaskManager {
 
         final Set<Task> revokedTasks = new HashSet<>();
         final Set<Task> additionalTasksForCommitting = new HashSet<>();
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (final Task task : activeTaskIterable()) {
@@ -465,12 +466,14 @@ public class TaskManager {
             throw suspendException;
         }
 
-        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
         prepareCommitAndAddOffsetsToMap(revokedTasks, consumedOffsetsAndMetadataPerTask);
 
         // If using eos-beta, if we must commit any task then we must commit all of them
         // TODO: when KAFKA-9450 is done this will be less expensive, and we can simplify by always committing everything
-        if (processingMode ==  EXACTLY_ONCE_BETA && !consumedOffsetsAndMetadataPerTask.isEmpty()) {
+        final boolean shouldCommitAdditionalTasks =
+            processingMode == EXACTLY_ONCE_BETA && !consumedOffsetsAndMetadataPerTask.isEmpty();
+
+        if (shouldCommitAdditionalTasks) {
             prepareCommitAndAddOffsetsToMap(additionalTasksForCommitting, consumedOffsetsAndMetadataPerTask);
         }
 
@@ -485,18 +488,20 @@ public class TaskManager {
             }
         }
 
-        for (final Task task : additionalTasksForCommitting) {
-            try {
-                task.postCommit();
-            } catch (final RuntimeException e) {
-                log.error("Exception caught while post-committing task " + task.id(), e);
-                firstException.compareAndSet(null, e);
+        if (shouldCommitAdditionalTasks) {
+            for (final Task task : additionalTasksForCommitting) {
+                try {
+                    task.postCommit();
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while post-committing task " + task.id(), e);
+                    firstException.compareAndSet(null, e);
+                }
             }
         }
 
-        final RuntimeException commitException = firstException.get();
-        if (commitException != null) {
-            throw commitException;
+        final RuntimeException postCommitException = firstException.get();
+        if (postCommitException != null) {
+            throw postCommitException;
         }
     }
 

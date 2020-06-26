@@ -164,12 +164,8 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                if (commitNeeded()) {
-                    stateMgr.flush();
-                    log.debug("Prepared {} task for committing", state());
-                } else {
-                    log.debug("Skipped preparing {} task for commit since there is nothing new to commit", state());
-                }
+                stateMgr.flush();
+                log.debug("Prepared {} task for committing", state());
 
                 break;
 
