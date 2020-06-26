@@ -75,7 +75,7 @@ public class SmokeTestUtil {
 
                     @Override
                     public void close() {
-                        System.out.printf("Close processor for task %s%n", context().taskId());
+                        System.out.printf("Close processor for task %s", context().taskId());
                         System.out.println("processed " + numRecordsProcessed + " records");
                         final long processed;
                         if (largestOffset >= smallestOffset) {
