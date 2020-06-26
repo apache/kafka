@@ -591,7 +591,9 @@ public class UtilsTest {
         @Override
         public void close() throws IOException {
             closed = true;
-            if (closeException != null) { throw closeException; }
+            if (closeException != null) {
+                throw closeException;
+            }
         }
 
         static TestCloseable[] createCloseables(boolean... exceptionOnClose) {
