@@ -29,12 +29,10 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
-import org.apache.kafka.streams.processor.internals.CompositeRestoreListener;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
@@ -70,7 +68,7 @@ public class InternalMockProcessorContext
 
     private TaskType taskType = TaskType.ACTIVE;
     private Serde<?> keySerde;
-    private Serde<?> valSerde;
+    private Serde<?> valueSerde;
     private long timestamp = -1L;
 
     public InternalMockProcessorContext() {
@@ -125,12 +123,12 @@ public class InternalMockProcessorContext
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
-                                        final Serde<?> valSerde,
+                                        final Serde<?> valueSerde,
                                         final StreamsConfig config) {
         this(
             stateDir,
             keySerde,
-            valSerde,
+            valueSerde,
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
             config,
             null,
@@ -159,13 +157,13 @@ public class InternalMockProcessorContext
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
-                                        final Serde<?> valSerde,
+                                        final Serde<?> valueSerde,
                                         final RecordCollector collector,
                                         final ThreadCache cache) {
         this(
             stateDir,
             keySerde,
-            valSerde,
+            valueSerde,
             new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
@@ -175,7 +173,7 @@ public class InternalMockProcessorContext
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
-                                        final Serde<?> valSerde,
+                                        final Serde<?> valueSerde,
                                         final StreamsMetricsImpl metrics,
                                         final StreamsConfig config,
                                         final RecordCollector.Supplier collectorSupplier,
@@ -190,7 +188,7 @@ public class InternalMockProcessorContext
         super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
         this.stateDir = stateDir;
         this.keySerde = keySerde;
-        this.valSerde = valSerde;
+        this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
         this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
     }
@@ -209,8 +207,8 @@ public class InternalMockProcessorContext
         this.keySerde = keySerde;
     }
 
-    public void setValueSerde(final Serde<?> valSerde) {
-        this.valSerde = valSerde;
+    public void setValueSerde(final Serde<?> valueSerde) {
+        this.valueSerde = valueSerde;
     }
 
     @Override
@@ -220,7 +218,7 @@ public class InternalMockProcessorContext
 
     @Override
     public Serde<?> valueSerde() {
-        return valSerde;
+        return valueSerde;
     }
 
     // state mgr will be overridden by the state dir and store maps
@@ -393,31 +391,13 @@ public class InternalMockProcessorContext
         cache().addDirtyEntryFlushListener(namespace, listener);
     }
 
-    public StateRestoreListener getRestoreListener(final String storeName) {
-        return getStateRestoreListener(restoreFuncs.get(storeName));
-    }
-
     public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
         final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreFuncs.get(storeName));
-        final StateRestoreListener restoreListener = getRestoreListener(storeName);
-
-        restoreListener.onRestoreStart(null, storeName, 0L, 0L);
 
         final List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
         for (final KeyValue<byte[], byte[]> keyValue : changeLog) {
             records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
         }
-
         restoreCallback.restoreBatch(records);
-
-        restoreListener.onRestoreEnd(null, storeName, 0L);
-    }
-
-    private StateRestoreListener getStateRestoreListener(final StateRestoreCallback restoreCallback) {
-        if (restoreCallback instanceof StateRestoreListener) {
-            return (StateRestoreListener) restoreCallback;
-        }
-
-        return CompositeRestoreListener.NO_OP_STATE_RESTORE_LISTENER;
     }
 }

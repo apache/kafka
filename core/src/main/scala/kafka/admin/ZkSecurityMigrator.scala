@@ -176,7 +176,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   }
 
   private def setAclIndividually(path: String): Unit = {
-    val setPromise = Promise[String]
+    val setPromise = Promise[String]()
     futures.synchronized {
       futures += setPromise.future
     }
@@ -184,8 +184,8 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   }
 
   private def setAclsRecursively(path: String): Unit = {
-    val setPromise = Promise[String]
-    val childrenPromise = Promise[String]
+    val setPromise = Promise[String]()
+    val childrenPromise = Promise[String]()
     futures.synchronized {
       futures += setPromise.future
       futures += childrenPromise.future
@@ -279,15 +279,15 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
         future match {
           case Some(a) =>
             Await.result(a, 6000 millis)
-            futures.synchronized { futures.dequeue }
-            recurse
+            futures.synchronized { futures.dequeue() }
+            recurse()
           case None =>
         }
       }
       recurse()
 
     } finally {
-      zkClient.close
+      zkClient.close()
     }
   }
 

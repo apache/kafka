@@ -67,7 +67,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer) {
-        return reduce(reducer, Materialized.with(keySerde, valSerde));
+        return reduce(reducer, Materialized.with(keySerde, valueSerde));
     }
 
     @Override
@@ -91,7 +91,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             materializedInternal.withKeySerde(keySerde);
         }
         if (materializedInternal.valueSerde() == null) {
-            materializedInternal.withValueSerde(valSerde);
+            materializedInternal.withValueSerde(valueSerde);
         }
 
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
@@ -196,7 +196,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             subTopologySourceNodes,
             name,
             keySerde,
-            valSerde,
+            valueSerde,
             aggregateBuilder,
             streamsGraphNode
         );
@@ -211,7 +211,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             subTopologySourceNodes,
             name,
             keySerde,
-            valSerde,
+            valueSerde,
             aggregateBuilder,
             streamsGraphNode
         );

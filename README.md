@@ -60,11 +60,11 @@ See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugi
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
 
-    ./gradlew reportCoverage
+    ./gradlew reportCoverage -PenableTestCoverage=true
 
 Generate coverage for a single module, i.e.: 
 
-    ./gradlew clients:reportCoverage
+    ./gradlew clients:reportCoverage -PenableTestCoverage=true
     
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean releaseTarGz
@@ -208,6 +208,9 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
 * `maxTestRetries`: the maximum number of retries for a failing test case.
 * `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
+* `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
+coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
+varies, but 15-20% is a reasonable estimate).
 
 ### Dependency Analysis ###
 

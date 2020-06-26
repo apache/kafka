@@ -53,7 +53,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                        final NamedInternal named,
                                                        final StoreBuilder<?> storeBuilder,
                                                        final Serde<KR> keySerde,
-                                                       final Serde<VOut> valSerde,
+                                                       final Serde<VOut> valueSerde,
                                                        final String queryableName,
                                                        final Windows<W> windows,
                                                        final SessionWindows sessionWindows,
@@ -68,7 +68,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 final String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
                         repartitionReqs.userProvidedRepartitionTopicName : storeBuilder.name();
 
-                createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valSerde);
+                createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valueSerde);
 
                 if (!parentNodes.containsKey(repartitionReqs)) {
                     final StreamsGraphNode repartitionNode = repartitionNodeBuilder.build();
@@ -118,7 +118,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         return new KTableImpl<KR, VIn, VOut>(
             mergeProcessorName,
             keySerde,
-            valSerde,
+            valueSerde,
             Collections.singleton(mergeNode.nodeName()),
             queryableName,
             passThrough,

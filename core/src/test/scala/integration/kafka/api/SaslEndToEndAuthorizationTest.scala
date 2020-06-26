@@ -76,6 +76,6 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
       case e: TopicAuthorizationException => assertTrue(e.unauthorizedTopics.contains(topic))
       case e: GroupAuthorizationException => assertEquals(group, e.groupId)
     }
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 }

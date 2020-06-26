@@ -99,7 +99,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   def testCreateToken(): Unit = {
     val config = KafkaConfig.fromProps(props)
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
-    tokenManager.startup
+    tokenManager.startup()
 
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
@@ -116,7 +116,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   def testRenewToken(): Unit = {
     val config = KafkaConfig.fromProps(props)
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
-    tokenManager.startup
+    tokenManager.startup()
 
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
@@ -164,7 +164,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   def testExpireToken(): Unit = {
     val config = KafkaConfig.fromProps(props)
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
-    tokenManager.startup
+    tokenManager.startup()
 
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
@@ -199,7 +199,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   def testRemoveTokenHmac():Unit = {
     val config = KafkaConfig.fromProps(props)
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
-    tokenManager.startup
+    tokenManager.startup()
 
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
     val issueTime = time.milliseconds
@@ -240,7 +240,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     var hostSession = new Session(owner1, InetAddress.getByName("192.168.1.1"))
 
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
-    tokenManager.startup
+    tokenManager.startup()
 
     //create tokens
     tokenManager.createToken(owner1, List(renewer1, renewer2), 1 * 60 * 60 * 1000L, createTokenResultCallBack)
@@ -253,7 +253,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
 
     tokenManager.createToken(owner4, List(owner1, renewer4), 2 * 60 * 60 * 1000L, createTokenResultCallBack)
 
-    assert(tokenManager.getAllTokenInformation().size == 4 )
+    assert(tokenManager.getAllTokenInformation.size == 4 )
 
     //get tokens non-exiting owner
     var  tokens = getTokens(tokenManager, aclAuthorizer, hostSession, owner1, List(SecurityUtils.parseKafkaPrincipal("User:unknown")))
@@ -330,18 +330,18 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
   def testPeriodicTokenExpiry(): Unit = {
     val config = KafkaConfig.fromProps(props)
     val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
-    tokenManager.startup
+    tokenManager.startup()
 
     //create tokens
     tokenManager.createToken(owner, renewer, 1 * 60 * 60 * 1000L, createTokenResultCallBack)
     tokenManager.createToken(owner, renewer, 1 * 60 * 60 * 1000L, createTokenResultCallBack)
     tokenManager.createToken(owner, renewer, 2 * 60 * 60 * 1000L, createTokenResultCallBack)
     tokenManager.createToken(owner, renewer, 2 * 60 * 60 * 1000L, createTokenResultCallBack)
-    assert(tokenManager.getAllTokenInformation().size == 4 )
+    assert(tokenManager.getAllTokenInformation.size == 4 )
 
     time.sleep(2 * 60 * 60 * 1000L)
     tokenManager.expireTokens()
-    assert(tokenManager.getAllTokenInformation().size == 2 )
+    assert(tokenManager.getAllTokenInformation.size == 2 )
 
   }
 

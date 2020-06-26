@@ -136,6 +136,8 @@ ext {
 
   userTestLoggingEvents = project.hasProperty("testLoggingEvents") ? Arrays.asList(testLoggingEvents.split(",")) : null
 
+  userEnableTestCoverage = project.hasProperty("enableTestCoverage") ? enableTestCoverage : false
+
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 
   commitId = project.hasProperty('commitId') ? commitId : null
@@ -487,7 +489,6 @@ subprojects {
       "-Xlint:delayedinit-select",
       "-Xlint:doc-detached",
       "-Xlint:missing-interpolator",
-      "-Xlint:nullary-override",
       "-Xlint:nullary-unit",
       "-Xlint:option-implicit",
       "-Xlint:package-object-classes",
@@ -525,6 +526,7 @@ subprojects {
     if (versions.baseScala == '2.12') {
       scalaCompileOptions.additionalParameters += [
         "-Xlint:by-name-right-associative",
+        "-Xlint:nullary-override",
         "-Xlint:unsound-match"
       ]
     }
@@ -576,28 +578,33 @@ subprojects {
 
   // Ignore core since its a scala project
   if (it.path != ':core') {
-    apply plugin: "jacoco"
+    if (userEnableTestCoverage) {
+      apply plugin: "jacoco"
 
-    jacoco {
-      toolVersion = versions.jacoco
-    }
-
-    // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
-    // may report 0 coverage, since the source was modified after initial instrumentation.
-    // See https://github.com/jacoco/jacoco/issues/51
-    jacocoTestReport {
-      dependsOn tasks.test
-      sourceSets sourceSets.main
-      reports {
-        html.enabled = true
-        xml.enabled = true
-        csv.enabled = false
+      jacoco {
+        toolVersion = versions.jacoco
       }
+
+      // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
+      // may report 0 coverage, since the source was modified after initial instrumentation.
+      // See https://github.com/jacoco/jacoco/issues/51
+      jacocoTestReport {
+        dependsOn tasks.test
+        sourceSets sourceSets.main
+        reports {
+          html.enabled = true
+          xml.enabled = true
+          csv.enabled = false
+        }
+      }
+
     }
   }
 
-  def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
-  task reportCoverage(dependsOn: [coverageGen])
+  if (userEnableTestCoverage) {
+    def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+    task reportCoverage(dependsOn: [coverageGen])
+  }
 
   task determineCommitId {
     def takeFromHash = 16
@@ -664,30 +671,34 @@ def checkstyleConfigProperties(configFileName) {
 }
 
 // Aggregates all jacoco results into the root project directory
-task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
-  def javaProjects = subprojects.findAll { it.path != ':core' }
+if (userEnableTestCoverage) {
+  task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
+    def javaProjects = subprojects.findAll { it.path != ':core' }
 
-  description = 'Generates an aggregate report from all subprojects'
-  dependsOn(javaProjects.test)
+    description = 'Generates an aggregate report from all subprojects'
+    dependsOn(javaProjects.test)
 
-  additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
-  sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
-  classDirectories.from = javaProjects.sourceSets.main.output
-  executionData.from = javaProjects.jacocoTestReport.executionData
+    additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
+    sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
+    classDirectories.from = javaProjects.sourceSets.main.output
+    executionData.from = javaProjects.jacocoTestReport.executionData
 
-  reports {
-    html.enabled = true
-    xml.enabled = true
-  }
+    reports {
+      html.enabled = true
+      xml.enabled = true
+    }
 
-  // workaround to ignore projects that don't have any tests at all
-  onlyIf = { true }
-  doFirst {
-    executionData = files(executionData.findAll { it.exists() })
+    // workaround to ignore projects that don't have any tests at all
+    onlyIf = { true }
+    doFirst {
+      executionData = files(executionData.findAll { it.exists() })
+    }
   }
 }
 
-task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
+if (userEnableTestCoverage) {
+  task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
+}
 
 def connectPkgs = [
     'connect:api',
@@ -708,7 +719,8 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
-  apply plugin: "org.scoverage"
+  if (userEnableTestCoverage)
+    apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
@@ -760,11 +772,13 @@ project(':core') {
     testCompile libs.jfreechart
   }
 
-  scoverage {
-    scoverageVersion = versions.scoverage
-    reportDir = file("${rootProject.buildDir}/scoverage")
-    highlighting = false
-    minimumRate = 0.0
+  if (userEnableTestCoverage) {
+    scoverage {
+      scoverageVersion = versions.scoverage
+      reportDir = file("${rootProject.buildDir}/scoverage")
+      highlighting = false
+      minimumRate = 0.0
+    }
   }
 
   configurations {
@@ -873,6 +887,7 @@ project(':core') {
                                'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
                                'genKafkaConfigDocs', 'genTopicConfigDocs',
                                ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
+                               ':connect:runtime:genConnectPredicateDocs',
                                ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
                                ':connect:runtime:genConnectMetricsDocs'], type: Tar) {
@@ -1791,6 +1806,13 @@ project(':connect:runtime') {
     main = 'org.apache.kafka.connect.tools.TransformationDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
+  }
+
+  task genConnectPredicateDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.connect.tools.PredicateDoc'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_predicates.html").newOutputStream()
   }
 
   task genConnectMetricsDocs(type: JavaExec) {

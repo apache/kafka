@@ -54,10 +54,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                             final Set<String> subTopologySourceNodes,
                             final String name,
                             final Serde<K> keySerde,
-                            final Serde<V> valSerde,
+                            final Serde<V> valueSerde,
                             final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                             final StreamsGraphNode streamsGraphNode) {
-        super(name, keySerde, valSerde, subTopologySourceNodes, streamsGraphNode, builder);
+        super(name, keySerde, valueSerde, subTopologySourceNodes, streamsGraphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = aggregateBuilder;
     }
@@ -165,7 +165,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer, final Named named) {
-        return reduce(reducer, named, Materialized.with(keySerde, valSerde));
+        return reduce(reducer, named, Materialized.with(keySerde, valueSerde));
     }
 
     @Override
@@ -189,7 +189,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             materializedInternal.withKeySerde(keySerde);
         }
         if (materializedInternal.valueSerde() == null) {
-            materializedInternal.withValueSerde(valSerde);
+            materializedInternal.withValueSerde(valueSerde);
         }
 
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
