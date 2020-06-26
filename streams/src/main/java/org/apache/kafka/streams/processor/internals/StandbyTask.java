@@ -94,6 +94,9 @@ public class StandbyTask extends AbstractTask implements Task {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
+            // initialize the snapshot with the current offsets as we don't need to commit then until they change
+            offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
             transitionTo(State.RESTORING);
@@ -161,6 +164,8 @@ public class StandbyTask extends AbstractTask implements Task {
         switch (state()) {
             case CREATED:
                 log.debug("Skipped preparing created task for commit");
+
+                break;
 
             case RUNNING:
             case SUSPENDED:
