@@ -396,7 +396,7 @@ class ReplicaManager(val config: KafkaConfig,
                     maybeRemoveTopicMetrics(topicPartition.topic)
                     // Logs are not deleted here. They are deleted in a single batch later on.
                     // This is done to avoid having to checkpoint for every deletions.
-                    partition.delete(deleteLogs = false)
+                    partition.delete()
                     deletedPartitions += topicPartition
                   }
                 }
@@ -449,7 +449,8 @@ class ReplicaManager(val config: KafkaConfig,
             case e =>
               stateChangeLogger.error(s"Ignoring StopReplica request (delete=true) from " +
                 s"controller $controllerId with correlation id $correlationId " +
-                s"epoch $controllerEpoch for partition $topicPartition due to ${e.getMessage}")
+                s"epoch $controllerEpoch for partition $topicPartition due to an unexpected " +
+                s"${e.getClass.getName} exception: ${e.getMessage}")
               responseMap.put(topicPartition, Errors.forException(e))
           }
         })

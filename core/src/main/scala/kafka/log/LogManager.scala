@@ -447,9 +447,9 @@ class LogManager(logDirs: Seq[File],
       val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
       threadPools.append(pool)
 
-      val logsInDir = logsByDir(localLogsByDir, dir).values
+      val logs = logsInDir(localLogsByDir, dir).values
 
-      val jobsForDir = logsInDir.map { log =>
+      val jobsForDir = logs.map { log =>
         val runnable: Runnable = () => {
           // flush the log to ensure latest possible recovery point
           log.flush()
@@ -465,14 +465,14 @@ class LogManager(logDirs: Seq[File],
       for ((dir, dirJobs) <- jobs) {
         dirJobs.foreach(_.get)
 
-        val logsInDir = logsByDir(localLogsByDir, dir)
+        val logs = logsInDir(localLogsByDir, dir)
 
         // update the last flush point
         debug(s"Updating recovery points at $dir")
-        checkpointRecoveryOffsetsAndCleanSnapshotsInDir(dir, logsInDir, logsInDir.values.toSeq)
+        checkpointRecoveryOffsetsAndCleanSnapshotsInDir(dir, logs, logs.values.toSeq)
 
         debug(s"Updating log start offsets at $dir")
-        checkpointLogStartOffsetsInDir(dir, logsInDir)
+        checkpointLogStartOffsetsInDir(dir, logs)
 
         // mark that the shutdown was clean by creating marker file
         debug(s"Writing clean shutdown marker at $dir")
@@ -567,7 +567,7 @@ class LogManager(logDirs: Seq[File],
   def checkpointLogRecoveryOffsets(): Unit = {
     val logsByDirCached = logsByDir
     liveLogDirs.foreach { logDir =>
-      val logsToCheckpoint = logsByDir(logsByDirCached, logDir)
+      val logsToCheckpoint = logsInDir(logsByDirCached, logDir)
       checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, logsToCheckpoint.values.toSeq)
     }
   }
@@ -579,7 +579,7 @@ class LogManager(logDirs: Seq[File],
   def checkpointLogStartOffsets(): Unit = {
     val logsByDirCached = logsByDir
     liveLogDirs.foreach { logDir =>
-      checkpointLogStartOffsetsInDir(logDir, logsByDir(logsByDirCached, logDir))
+      checkpointLogStartOffsetsInDir(logDir, logsInDir(logsByDirCached, logDir))
     }
   }
 
@@ -592,7 +592,7 @@ class LogManager(logDirs: Seq[File],
    */
   // Only for testing
   private[log] def checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir: File, logsToCleanSnapshot: Seq[Log]): Unit = {
-    checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsByDir(logDir), logsToCleanSnapshot)
+    checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsInDir(logDir), logsToCleanSnapshot)
   }
 
   /**
@@ -912,7 +912,7 @@ class LogManager(logDirs: Seq[File],
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         sourceLog.close()
         val logDir = sourceLog.parentDirFile
-        val logsToCheckpoint = logsByDir(logDir)
+        val logsToCheckpoint = logsInDir(logDir)
         checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
         checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
         addLogToBeDeleted(sourceLog)
@@ -957,7 +957,7 @@ class LogManager(logDirs: Seq[File],
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       if (checkpoint) {
         val logDir = removedLog.parentDirFile
-        val logsToCheckpoint = logsByDir(logDir)
+        val logsToCheckpoint = logsInDir(logDir)
         checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
         checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
       }
@@ -999,7 +999,7 @@ class LogManager(logDirs: Seq[File],
     val logsByDirCached = logsByDir
     logDirs.foreach { logDir =>
       if (cleaner != null) cleaner.updateCheckpoints(logDir)
-      val logsToCheckpoint = logsByDir(logsByDirCached, logDir)
+      val logsToCheckpoint = logsInDir(logsByDirCached, logDir)
       checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
       checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
     }
@@ -1097,11 +1097,11 @@ class LogManager(logDirs: Seq[File],
     byDir
   }
 
-  private def logsByDir(dir: File): Map[TopicPartition, Log] = {
+  private def logsInDir(dir: File): Map[TopicPartition, Log] = {
     logsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
   }
 
-  private def logsByDir(cachedLogsByDir: Map[String, Map[TopicPartition, Log]],
+  private def logsInDir(cachedLogsByDir: Map[String, Map[TopicPartition, Log]],
                         dir: File): Map[TopicPartition, Log] = {
     cachedLogsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
   }
