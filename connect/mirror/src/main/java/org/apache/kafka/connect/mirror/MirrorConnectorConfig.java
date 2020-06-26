@@ -65,7 +65,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     protected static final String REFRESH_TOPICS = "refresh.topics";
     protected static final String REFRESH_GROUPS = "refresh.groups";
-    protected static final String SYNC_TOPIC = "sync.topic";
     protected static final String SYNC_TOPIC_CONFIGS = "sync.topic.configs";
     protected static final String SYNC_TOPIC_ACLS = "sync.topic.acls";
     protected static final String EMIT_HEARTBEATS = "emit.heartbeats";
@@ -115,6 +114,9 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for checkpoints topic.";
     public static final short CHECKPOINTS_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
 
+    private static final String OFFSET_SYNCS_TOPIC_OVERRIDE = "offset-syncs.topic.override";
+    private static final String OFFSET_SYNCS_TOPIC_OVERRIDE_DOC = "Overrides the offset-syncs topic.";
+
     public static final String OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR = "offset-syncs.topic.replication.factor";
     public static final String OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR_DOC = "Replication factor for offset-syncs topic.";
     public static final short OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR_DEFAULT = 3;
@@ -143,9 +145,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String REFRESH_GROUPS_INTERVAL_SECONDS = REFRESH_GROUPS + INTERVAL_SECONDS_SUFFIX;
     private static final String REFRESH_GROUPS_INTERVAL_SECONDS_DOC = "Frequency of group refresh.";
     public static final long REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
-
-    public static final boolean SYNC_TOPIC_DEFAULT = offsetSyncsTopicDefault();
-    private static final String SYNC_TOPIC_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
 
     public static final String SYNC_TOPIC_CONFIGS_ENABLED = SYNC_TOPIC_CONFIGS + ENABLED_SUFFIX;
     private static final String SYNC_TOPIC_CONFIGS_ENABLED_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
@@ -297,7 +296,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     String offsetSyncsTopic() {
-        return MirrorClientConfig.SYNC_TOPIC
+        if (getString(OFFSET_SYNCS_TOPIC_OVERRIDE) == null) {
+          return offsetSyncsTopicDefault();
+        }
+        return getString(OFFSET_SYNCS_TOPIC_OVERRIDE);
     }
 
     String offsetSyncsTopicDefault() {
@@ -513,11 +515,11 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.LOW,
                     REFRESH_GROUPS_INTERVAL_SECONDS_DOC)
             .define(
-                    SYNC_TOPIC,
+                    OFFSET_SYNCS_TOPIC_OVERRIDE,
                     ConfigDef.Type.STRING,
-                    SYNC_TOPIC_DEFAULT,
-                    ConfigDef.Importance.HIGH,
-                    SYNC_TOPICS_DOC)
+                    null,
+                    ConfigDef.Importance.LOW,
+                    OFFSET_SYNCS_TOPIC_OVERRIDE_DOC)
             .define(
                     SYNC_TOPIC_CONFIGS_ENABLED,
                     ConfigDef.Type.BOOLEAN,
