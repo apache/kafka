@@ -79,6 +79,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.common.utils.Utils.union;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.eq;
@@ -414,11 +415,10 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseDirtyActiveUnassignedTasksWhenErrorSuspendingTask() {
+    public void shouldCloseDirtyActiveUnassignedTasksWhenErrorCleanClosingTask() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void suspend() {
-                super.suspend();
+            public void closeClean() {
                 throw new RuntimeException("KABOOM!");
             }
         };
@@ -436,6 +436,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        taskManager.handleRevocation(taskId00Partitions);
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -535,6 +536,8 @@ public class TaskManagerTest {
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
+
+        taskManager.handleRevocation(taskId00Partitions);
 
         final RuntimeException thrown = assertThrows(
             RuntimeException.class,
@@ -1399,7 +1402,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksDirtyAndPropagateSuspendException() {
+    public void shouldSuspendAllRevokedActiveTasksAndPropagateSuspendException() {
         setUpTaskManager(StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA);
 
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
@@ -1418,21 +1421,15 @@ public class TaskManagerTest {
         taskManager.tasks().put(taskId01, task01);
         taskManager.tasks().put(taskId02, task02);
 
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId02);
-        activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(taskId01);
-
         replay(activeTaskCreator);
 
         final RuntimeException thrown = assertThrows(RuntimeException.class,
-            () -> taskManager.handleAssignment(mkMap(mkEntry(taskId00, taskId00Partitions)), Collections.emptyMap()));
+            () -> taskManager.handleRevocation(union(HashSet::new, taskId01Partitions, taskId02Partitions)));
         assertThat(thrown.getCause().getMessage(), is("task 0_1 suspend boom!"));
 
         assertThat(task00.state(), is(Task.State.CREATED));
-        assertThat(task01.state(), is(Task.State.CLOSED));
-        assertThat(task02.state(), is(Task.State.CLOSED));
-
-        // All the tasks involving in the commit should already be removed.
-        assertThat(taskManager.tasks(), is(Collections.singletonMap(taskId00, task00)));
+        assertThat(task01.state(), is(Task.State.SUSPENDED));
+        assertThat(task02.state(), is(Task.State.SUSPENDED));
 
         verify(activeTaskCreator);
     }
