@@ -81,7 +81,7 @@ public class QuorumState {
         } else if (election.isLeader(localId)) {
             state = new LeaderState(localId, election.epoch, logEndOffsetAndEpoch.offset, voters);
         } else if (election.isCandidate(localId)) {
-            state = new CandidateState(localId, election.epoch, voters);
+            state = new CandidateState(localId, election.epoch, voters, 1);
         } else {
             state = new FollowerState(election.epoch, voters);
             if (election.hasLeader()) {
@@ -229,9 +229,11 @@ public class QuorumState {
         if (isLeader())
             throw new IllegalStateException("Cannot become candidate after being leader");
 
+        int retries = isCandidate() ? candidateStateOrThrow().retries() + 1 : 1;
+
         int newEpoch = epoch() + 1;
-        log.info("Become candidate in epoch {}", newEpoch);
-        CandidateState state = new CandidateState(localId, newEpoch, voters);
+        log.info("Become candidate in epoch {} to election for the {}th time ", newEpoch, retries + 1);
+        CandidateState state = new CandidateState(localId, newEpoch, voters, retries);
         store.writeElectionState(state.election());
         this.state = state;
         return state;

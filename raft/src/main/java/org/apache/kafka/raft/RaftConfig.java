@@ -55,9 +55,9 @@ public class RaftConfig extends AbstractConfig {
         "the current leader before becoming a candidate and triggering a election for voters; Maximum time without " +
         "receiving fetch from a majority of the quorum before asking around to see if there's a new epoch for leader";
 
-    public static final String QUORUM_ELECTION_JITTER_MAX_MS_CONFIG = QUORUM_PREFIX + "election.jitter.max.ms";
-    private static final String QUORUM_ELECTION_JITTER_MAX_MS_DOC = "Maximum jitter to delay new elections. " +
-        "This helps prevent gridlocked elections";
+    public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG = QUORUM_PREFIX + "election.backoff.max.ms";
+    private static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
+            "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
 
     static {
         CONFIG = new ConfigDef()
@@ -103,12 +103,12 @@ public class RaftConfig extends AbstractConfig {
                 atLeast(0L),
                 ConfigDef.Importance.HIGH,
                 QUORUM_ELECTION_TIMEOUT_MS_DOC)
-            .define(QUORUM_ELECTION_JITTER_MAX_MS_CONFIG,
+            .define(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG,
                 ConfigDef.Type.INT,
                 5000,
                 atLeast(0),
                 ConfigDef.Importance.HIGH,
-                QUORUM_ELECTION_JITTER_MAX_MS_DOC)
+                QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
             .define(QUORUM_FETCH_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
                 15000,
@@ -154,8 +154,8 @@ public class RaftConfig extends AbstractConfig {
         return getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG);
     }
 
-    public int electionJitterMaxMs() {
-        return getInt(QUORUM_ELECTION_JITTER_MAX_MS_CONFIG);
+    public int electionBackoffMaxMs() {
+        return getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
     }
 
     public int fetchTimeoutMs() {

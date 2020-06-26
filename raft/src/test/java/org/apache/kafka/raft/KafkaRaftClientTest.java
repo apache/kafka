@@ -630,8 +630,8 @@ public class KafkaRaftClientTest {
         int otherNodeId = 1;
         int epoch = 1;
 
-        int jitterMs = 85;
-        Mockito.doReturn(jitterMs).when(random).nextInt(Mockito.anyInt());
+        int exponentialFactor = 85;  // set it large enough so that we will bound on jitter
+        Mockito.doReturn(exponentialFactor).when(random).nextInt(Mockito.anyInt());
 
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
@@ -654,9 +654,9 @@ public class KafkaRaftClientTest {
         assertTrue(latest.hasVoted());
         assertEquals(localId, latest.votedId());
 
-        // Even though our candidacy was rejected, we need to await the expiration of the election
-        // timeout (plus jitter) before we bump the epoch and start a new election.
-        time.sleep(electionTimeoutMs + jitterMs - 1);
+        // Even though our candidacy was rejected, we will backoff for jitter period
+        // before we bump the epoch and start a new election.
+        time.sleep(electionJitterMs - 1);
         client.poll();
         assertEquals(epoch, quorumStateStore.readElectionState().epoch);
 

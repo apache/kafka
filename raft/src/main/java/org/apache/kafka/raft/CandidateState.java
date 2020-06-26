@@ -24,11 +24,24 @@ import java.util.stream.Collectors;
 public class CandidateState implements EpochState {
     private final int localId;
     private final int epoch;
+    private final int retries;
     private final Map<Integer, VoteState> voteStates = new HashMap<>();
 
-    protected CandidateState(int localId, int epoch, Set<Integer> voters) {
+    /**
+     * The life time of a candidate state is the following:
+     *
+     *  1. Once started, it would keep record of the received votes.
+     *  2. If majority votes granted, it can then end its life and will be replaced by a leader state;
+     *  3. If majority votes rejected or election timed out, it would transit into a backing off phase;
+     *     after the backoff phase completes, it would end its left and be replaced by a new candidate state with bumped retry.
+     */
+    private boolean isBackingOff;
+
+    protected CandidateState(int localId, int epoch, Set<Integer> voters, int retries) {
         this.localId = localId;
         this.epoch = epoch;
+        this.retries = retries;
+        this.isBackingOff = false;
 
         for (Integer voterId : voters) {
             voteStates.put(voterId, VoteState.UNRECORDED);
@@ -50,6 +63,17 @@ public class CandidateState implements EpochState {
 
     private long numUnrecorded() {
         return voteStates.values().stream().filter(state -> state == VoteState.UNRECORDED).count();
+    }
+
+    /**
+     * Check if the candidate is backing off for the next election
+     */
+    public boolean isBackingOff() {
+        return isBackingOff;
+    }
+
+    public int retries() {
+        return retries;
     }
 
     /**
@@ -106,7 +130,15 @@ public class CandidateState implements EpochState {
             throw new IllegalArgumentException("Attempt to reject vote from node " + remoteNodeId +
                 " which previously granted our request");
         }
+
         return voteStates.put(remoteNodeId, VoteState.REJECTED) == VoteState.UNRECORDED;
+    }
+
+    /**
+     * Record the current election has failed since we've either received sufficient rejecting voters or election timed out
+     */
+    public void startBackingOff() {
+        isBackingOff = true;
     }
 
     /**
