@@ -242,16 +242,15 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                if (task.isActive()) {
-                    // Active tasks should have already been suspended and committed during handleRevocation.
-                    // We are just responsible for closing them now
-                    cleanUpTaskProducer(task, taskCloseExceptions);
-                } else {
+                if (!task.isActive()) {
+                    // Active tasks should have already been suspended and committed during handleRevocation, but
+                    // standbys must be suspended/committed/closed all here
                     task.suspend();
                     task.prepareCommit();
                     task.postCommit();
                 }
                 completeTaskCloseClean(task);
+                cleanUpTaskProducer(task, taskCloseExceptions);
                 tasks.remove(task.id());
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
