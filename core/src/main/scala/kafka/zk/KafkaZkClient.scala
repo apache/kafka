@@ -666,7 +666,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Gets all partitions in the cluster
    * @return all partitions in the cluster
    */
-  def getAllPartitions(): Set[TopicPartition] = {
+  def getAllPartitions: Set[TopicPartition] = {
     val topics = getChildren(TopicsZNode.path)
     if (topics == null) Set.empty
     else {
@@ -881,7 +881,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Checks if reassign partitions is in progress.
    * @return true if reassign partitions is in progress, else false.
    */
-  def reassignPartitionsInProgress(): Boolean = {
+  def reassignPartitionsInProgress: Boolean = {
     pathExists(ReassignPartitionsZNode.path)
   }
 
