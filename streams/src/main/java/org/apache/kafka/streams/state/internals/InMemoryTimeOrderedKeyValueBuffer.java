@@ -363,33 +363,82 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                         )
                     );
                 } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_2_CHANGELOG_HEADER_VALUE)) {
-                    final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
-                    final ContextualRecord contextualRecord = ContextualRecord.deserialize(valueAndTime);
-                    final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));
-
-                    final int priorValueLength = valueAndTime.getInt();
-                    final byte[] priorValue;
-                    if (priorValueLength == -1) {
-                        priorValue = null;
-                    } else {
-                        priorValue = new byte[priorValueLength];
-                        valueAndTime.get(priorValue);
+                    DeserializationResult deserializationResult = null;
+                    RuntimeException v2DeserializationException = null;
+                    RuntimeException v3DeserializationException = null;
+                    try {
+                        deserializationResult = getDeserializationResultV2(record, key);
+                    } catch (final RuntimeException e) {
+                        v2DeserializationException = e;
                     }
-                    final long time = valueAndTime.getLong();
-                    final BufferValue bufferValue = new BufferValue(priorValue, change.oldValue, change.newValue, contextualRecord.recordContext());
-                    cleanPut(time, key, bufferValue);
-                } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_3_CHANGELOG_HEADER_VALUE)) {
+                    // versions 2.4.0, 2.4.1, and 2.5.0 would have erroneously encoded a V3 record with the
+                    // V2 header, so we'll try duck-typing to see if this is decodable as V3
+                    if (deserializationResult == null) {
+                        try {
+                            deserializationResult = getDeserializationResultV3(record, key);
+                        } catch (final RuntimeException e) {
+                            v3DeserializationException = e;
+                        }
+                    }
 
-                    final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
-                    final BufferValue bufferValue = BufferValue.deserialize(valueAndTime);
-                    final long time = valueAndTime.getLong();
-                    cleanPut(time, key, bufferValue);
+                    if (deserializationResult == null) {
+                        // ok, it wasn't V3 either. Throw both exceptions:
+                        final RuntimeException exception =
+                            new RuntimeException("Couldn't deserialize record as v2 or v3: " + record,
+                                                 v2DeserializationException);
+                        exception.addSuppressed(v3DeserializationException);
+                        throw exception;
+                    } else {
+                        cleanPut(deserializationResult.time, deserializationResult.key, deserializationResult.bufferValue);
+                    }
+                } else if (Arrays.equals(record.headers().lastHeader("v").value(), V_3_CHANGELOG_HEADER_VALUE)) {
+                    final DeserializationResult deserializationResult = getDeserializationResultV3(record, key);
+                    cleanPut(deserializationResult.time, deserializationResult.key, deserializationResult.bufferValue);
                 } else {
                     throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
                 }
             }
         }
         updateBufferMetrics();
+    }
+
+    private InMemoryTimeOrderedKeyValueBuffer.DeserializationResult getDeserializationResultV3(final ConsumerRecord<byte[], byte[]> record, final Bytes key) {
+        final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
+        final BufferValue bufferValue = BufferValue.deserialize(valueAndTime);
+        final long time = valueAndTime.getLong();
+        return new DeserializationResult(time, key, bufferValue);
+    }
+
+    private InMemoryTimeOrderedKeyValueBuffer.DeserializationResult getDeserializationResultV2(final ConsumerRecord<byte[], byte[]> record, final Bytes key) {
+        final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
+        final ContextualRecord contextualRecord = ContextualRecord.deserialize(valueAndTime);
+        final Change<byte[]> change = requireNonNull(FullChangeSerde.decomposeLegacyFormattedArrayIntoChangeArrays(contextualRecord.value()));
+
+        final int priorValueLength = valueAndTime.getInt();
+        final byte[] priorValue;
+        if (priorValueLength == -1) {
+            priorValue = null;
+        } else {
+            priorValue = new byte[priorValueLength];
+            valueAndTime.get(priorValue);
+        }
+        final long time = valueAndTime.getLong();
+        final BufferValue bufferValue = new BufferValue(priorValue, change.oldValue, change.newValue, contextualRecord.recordContext());
+        return new DeserializationResult(time, key, bufferValue);
+    }
+
+    private static final class DeserializationResult {
+
+        private final long time;
+        private final Bytes key;
+        private final BufferValue bufferValue;
+
+        public DeserializationResult(final long time, final Bytes key, final BufferValue bufferValue) {
+
+            this.time = time;
+            this.key = key;
+            this.bufferValue = bufferValue;
+        }
     }
 
     @Override

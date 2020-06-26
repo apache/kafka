@@ -275,6 +275,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
     public static class NumberDeserializer implements Deserializer<Number> {
         @Override
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+
+        }
+
+        @Override
         public Number deserialize(final String topic, final byte[] data) {
             final Number value;
             switch (topic) {
@@ -301,6 +306,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     throw new RuntimeException("unknown topic: " + topic);
             }
             return value;
+        }
+
+        @Override
+        public void close() {
+
         }
     }
 

@@ -37,6 +37,7 @@ metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0
 # can be replaced with metadata_2_versions
 backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(LATEST_2_5), str(DEV_VERSION)]
+smoke_test_versions = [str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(LATEST_2_5), str(DEV_VERSION)]
 
 dev_version = [str(DEV_VERSION)]
 
@@ -244,7 +245,7 @@ class StreamsUpgradeTest(Test):
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
 
-    @matrix(from_version=metadata_3_or_higher_versions, to_version=dev_version)
+    @matrix(from_version=smoke_test_versions, to_version=dev_version)
     def test_app_upgrade(self, from_version, to_version):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
@@ -297,6 +298,8 @@ class StreamsUpgradeTest(Test):
 
         # shutdown
         self.driver.stop()
+
+        # ideally, we would actually verify the expected results, but it
 
         random.shuffle(self.processors)
         for p in self.processors:
