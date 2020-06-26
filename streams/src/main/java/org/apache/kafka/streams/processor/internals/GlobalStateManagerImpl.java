@@ -57,7 +57,7 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.conv
  * This class is responsible for the initialization, restoration, closing, flushing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
-public class GlobalStateManagerImpl extends AbstractStateManager implements GlobalStateManager {
+public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Logger log;
     private final ProcessorTopology topology;
     private final Consumer<byte[], byte[]> globalConsumer;
@@ -73,6 +73,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final OffsetCheckpoint checkpointFile;
     private final Map<TopicPartition, Long> checkpointFileCache;
+    private final Map<String, String> storeToChangelogTopic;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
@@ -80,7 +81,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
-        super(topology.storeToChangelogTopic());
+        storeToChangelogTopic = topology.storeToChangelogTopic();
         baseDir = stateDirectory.globalStateDir();
         checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointFileCache = new HashMap<>();
@@ -401,5 +402,9 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         return Collections.unmodifiableMap(checkpointFileCache);
+    }
+
+    public String changelogFor(final String storeName) {
+        return storeToChangelogTopic.get(storeName);
     }
 }

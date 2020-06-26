@@ -68,6 +68,7 @@ import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -110,16 +111,6 @@ public class MeteredSessionStoreTest {
     private SessionStore<Bytes, byte[]> innerStore;
     @Mock(type = MockType.NICE)
     private InternalProcessorContext context;
-    @Mock(type = MockType.NICE)
-    private Serde<String> keySerde;
-    @Mock(type = MockType.DEFAULT)
-    private Serializer<String> keySerializer;
-    @Mock(type = MockType.NICE)
-    private Serde<String> valueSerde;
-    @Mock(type = MockType.DEFAULT)
-    private Deserializer<String> valueDeserializer;
-    @Mock(type = MockType.DEFAULT)
-    private Serializer<String> valueSerializer;
 
     private String storeLevelGroup;
     private String threadIdTagKey;
@@ -181,6 +172,11 @@ public class MeteredSessionStoreTest {
     }
 
     private void doShouldPassChangelogTopicNameToStateStoreSerde(final String topic) {
+        final Serde<String> keySerde = niceMock(Serde.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<String> valueSerde = niceMock(Serde.class);
+        final Deserializer<String> valueDeserializer = mock(Deserializer.class);
+        final Serializer<String> valueSerializer = mock(Serializer.class);
         expect(keySerde.serializer()).andStubReturn(keySerializer);
         expect(keySerializer.serialize(topic, KEY)).andStubReturn(KEY.getBytes());
         expect(valueSerde.deserializer()).andStubReturn(valueDeserializer);

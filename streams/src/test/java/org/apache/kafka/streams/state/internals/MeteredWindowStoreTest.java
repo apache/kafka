@@ -96,11 +96,6 @@ public class MeteredWindowStoreTest {
 
     private final String threadId = Thread.currentThread().getName();
     private InternalMockProcessorContext context;
-    private final Serde<String> keySerde = niceMock(Serde.class);
-    private final Serializer<String> keySerializer = mock(Serializer.class);
-    private final Serde<String> valueSerde = niceMock(Serde.class);
-    private final Deserializer<String> valueDeserializer = mock(Deserializer.class);
-    private final Serializer<String> valueSerializer = mock(Serializer.class);
     private final WindowStore<Bytes, byte[]> innerStoreMock = createNiceMock(WindowStore.class);
     private MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
@@ -167,6 +162,11 @@ public class MeteredWindowStoreTest {
     }
 
     private void doShouldPassChangelogTopicNameToStateStoreSerde(final String topic) {
+        final Serde<String> keySerde = niceMock(Serde.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<String> valueSerde = niceMock(Serde.class);
+        final Deserializer<String> valueDeserializer = mock(Deserializer.class);
+        final Serializer<String> valueSerializer = mock(Serializer.class);
         expect(keySerde.serializer()).andStubReturn(keySerializer);
         expect(keySerializer.serialize(topic, KEY)).andStubReturn(KEY.getBytes());
         expect(valueSerde.deserializer()).andStubReturn(valueDeserializer);

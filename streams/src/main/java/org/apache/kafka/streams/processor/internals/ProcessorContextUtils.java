@@ -46,4 +46,10 @@ public final class ProcessorContextUtils {
     public static StreamsMetricsImpl getMetricsImpl(final ProcessorContext context) {
         return (StreamsMetricsImpl) context.metrics();
     }
+
+    public static String changelogFor(final ProcessorContext context, final String storeName) {
+        return context instanceof InternalProcessorContext
+            ? ((InternalProcessorContext) context).changelogFor(storeName)
+            : ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
+    }
 }

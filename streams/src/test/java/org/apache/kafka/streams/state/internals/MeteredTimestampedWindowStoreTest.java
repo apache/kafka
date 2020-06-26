@@ -63,11 +63,6 @@ public class MeteredTimestampedWindowStoreTest {
     private static final int WINDOW_SIZE_MS = 10;
 
     private InternalMockProcessorContext context;
-    private final Serde<String> keySerde = niceMock(Serde.class);
-    private final Serializer<String> keySerializer = mock(Serializer.class);
-    private final Serde<ValueAndTimestamp<String>> valueSerde = niceMock(Serde.class);
-    private final Deserializer<ValueAndTimestamp<String>> valueDeserializer = mock(Deserializer.class);
-    private final Serializer<ValueAndTimestamp<String>> valueSerializer = mock(Serializer.class);
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
     private MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
@@ -113,6 +108,11 @@ public class MeteredTimestampedWindowStoreTest {
     }
 
     private void doShouldPassChangelogTopicNameToStateStoreSerde(final String topic) {
+        final Serde<String> keySerde = niceMock(Serde.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<ValueAndTimestamp<String>> valueSerde = niceMock(Serde.class);
+        final Deserializer<ValueAndTimestamp<String>> valueDeserializer = mock(Deserializer.class);
+        final Serializer<ValueAndTimestamp<String>> valueSerializer = mock(Serializer.class);
         expect(keySerde.serializer()).andStubReturn(keySerializer);
         expect(keySerializer.serialize(topic, KEY)).andStubReturn(KEY.getBytes());
         expect(valueSerde.deserializer()).andStubReturn(valueDeserializer);

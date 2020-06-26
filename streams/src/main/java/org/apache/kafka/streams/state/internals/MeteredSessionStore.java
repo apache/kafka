@@ -24,7 +24,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -86,9 +86,8 @@ public class MeteredSessionStore<K, V>
 
     @SuppressWarnings("unchecked")
     private void initStoreSerde(final ProcessorContext context) {
-        final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
         final String storeName = name();
-        final String changelogTopic = internalProcessorContext.changelogFor(storeName);
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :

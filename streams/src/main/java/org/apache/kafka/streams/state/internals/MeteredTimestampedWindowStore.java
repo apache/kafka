@@ -20,7 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -51,9 +51,8 @@ class MeteredTimestampedWindowStore<K, V>
     @SuppressWarnings("unchecked")
     @Override
     void initStoreSerde(final ProcessorContext context) {
-        final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
         final String storeName = name();
-        final String changelogTopic = internalProcessorContext.changelogFor(storeName);
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
             changelogTopic != null ?
                 changelogTopic :
