@@ -1175,6 +1175,8 @@ public class TopologyTestDriver implements Closeable {
     public void close() {
         if (task != null) {
             task.suspend();
+            task.prepareCommit();
+            task.postCommit();
             task.closeClean();
         }
         if (globalStateTask != null) {
