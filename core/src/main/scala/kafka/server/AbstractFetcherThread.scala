@@ -383,9 +383,9 @@ abstract class AbstractFetcherThread(name: String,
                   partitionsWithError += topicPartition
 
                 case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-                  warn(s"Receiving ${Errors.UNKNOWN_TOPIC_OR_PARTITION} from the leader for partition $topicPartition. " +
-                       s"This can happen transiently if the partition is being created or deleted. " +
-                       s"However, this is unexpected if it sustains.")
+                  warn(s"Received ${Errors.UNKNOWN_TOPIC_OR_PARTITION} from the leader for partition $topicPartition. " +
+                       "This error may be returned transiently when the partition is being created or deleted, but it is not " +
+                       "expected to persist.")
                   partitionsWithError += topicPartition
 
                 case _ =>
