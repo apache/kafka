@@ -627,7 +627,7 @@ object ConfigCommand extends Config {
       }
     }
 
-    val entities = entityTypes.map(t => Entity(t, if (sortedNames.hasNext) Some(sanitizeName(t, sortedNames.next)) else None))
+    val entities = entityTypes.map(t => Entity(t, if (sortedNames.hasNext) Some(sanitizeName(t, sortedNames.next())) else None))
     ConfigEntity(entities.head, if (entities.size > 1) Some(entities(1)) else None)
   }
 
@@ -711,12 +711,12 @@ object ConfigCommand extends Config {
       (userDefaults, ConfigType.User),
       (brokerDefaults, ConfigType.Broker))
 
-    private[admin] def entityTypes(): List[String] = {
+    private[admin] def entityTypes: List[String] = {
       options.valuesOf(entityType).asScala.toList ++
         (entityFlags ++ entityDefaultsFlags).filter(entity => options.has(entity._1)).map(_._2)
     }
 
-    private[admin] def entityNames(): List[String] = {
+    private[admin] def entityNames: List[String] = {
       val namesIterator = options.valuesOf(entityName).iterator
       options.specs.asScala
         .filter(spec => spec.options.contains("entity-name") || spec.options.contains("entity-default"))

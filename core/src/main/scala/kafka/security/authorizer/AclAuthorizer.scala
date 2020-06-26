@@ -68,7 +68,7 @@ object AclAuthorizer {
     def find(p: AclEntry => Boolean): Option[AclEntry] = {
       // Lazily iterate through the inner `Seq` elements and stop as soon as we find a match
       val it = seqs.iterator.flatMap(_.find(p))
-      if (it.hasNext) Some(it.next)
+      if (it.hasNext) Some(it.next())
       else None
     }
 
@@ -367,7 +367,8 @@ class AclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  @nowarn("cat=deprecation&cat=optimizer")
+  @nowarn("cat=deprecation")
+  @nowarn("cat=optimizer")
   private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSeqs = {
     // this code is performance sensitive, make sure to run AclAuthorizerBenchmark after any changes
 
@@ -523,7 +524,7 @@ class AclAuthorizer extends Authorizer with Logging {
       }
     }
 
-    if(!writeComplete)
+    if (!writeComplete)
       throw new IllegalStateException(s"Failed to update ACLs for $resource after trying a maximum of $maxUpdateRetries times")
 
     if (newVersionedAcls.acls != currentVersionedAcls.acls) {
@@ -538,6 +539,7 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
+  @nowarn("cat=optimizer")
   private def getAclsFromCache(resource: ResourcePattern): VersionedAcls = {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }
@@ -548,9 +550,9 @@ class AclAuthorizer extends Authorizer with Logging {
 
   private def updateCache(resource: ResourcePattern, versionedAcls: VersionedAcls): Unit = {
     if (versionedAcls.acls.nonEmpty) {
-      aclCache = aclCache + (resource -> versionedAcls)
+      aclCache = aclCache.updated(resource, versionedAcls)
     } else {
-      aclCache = aclCache - resource
+      aclCache -= resource
     }
   }
 

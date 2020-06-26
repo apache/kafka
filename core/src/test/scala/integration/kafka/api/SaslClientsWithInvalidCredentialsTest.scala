@@ -163,7 +163,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
 
-    verifyAuthenticationException(consumerGroupService.listGroups)
+    verifyAuthenticationException(consumerGroupService.listGroups())
     consumerGroupService.close()
   }
 
@@ -176,7 +176,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     consumer.subscribe(List(topic).asJava)
 
     verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))
-    assertEquals(1, consumerGroupService.listConsumerGroups.size)
+    assertEquals(1, consumerGroupService.listConsumerGroups().size)
     consumerGroupService.close()
   }
 
