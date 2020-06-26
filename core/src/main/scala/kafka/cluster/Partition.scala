@@ -29,6 +29,7 @@ import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
@@ -499,7 +500,16 @@ class Partition(val topicPartition: TopicPartition,
         addingReplicas = addingReplicas,
         removingReplicas = removingReplicas
       )
-      createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+      try {
+        this.createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+      } catch {
+        case e: ZooKeeperClientException =>
+          stateChangeLogger.info(s"Because a ZooKeeper client exception has occurred, completed become leader " +
+            s"state change from epoch $leaderEpoch only for those updated partitions with before " +
+            s"ZooKeeper disconnect occurred.", e)
+          error(s"ZooKeeper client occurred while rendering a $topicPartition's leader through zkClient.'", e)
+          return false
+      }
 
       val leaderLog = localLogOrException
       val leaderEpochStartOffset = leaderLog.logEndOffset
@@ -570,7 +580,16 @@ class Partition(val topicPartition: TopicPartition,
         addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt),
         removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       )
-      createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+      try {
+        this.createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+      } catch {
+        case e: ZooKeeperClientException =>
+          stateChangeLogger.info(s"Because a ZooKeeper client exception has occurred, completed become follower " +
+            s"state change from epoch $leaderEpoch only for those leaderEpoch-updated " +
+            s"partitions with leader $newLeaderBrokerId before ZooKeeper disconnect occurred.", e)
+          error(s"ZooKeeper client occurred while rendering a $topicPartition's follower through zkClient.'", e)
+          return false
+      }
 
       val followerLog = localLogOrException
       val leaderEpochEndOffset = followerLog.logEndOffset
