@@ -98,9 +98,9 @@ public class InternalTopicManager {
         int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
         final Set<String> newlyCreatedTopics = new HashSet<>();
-        final Set<String> tempUnknownTopics = new HashSet<>();
 
-        while (shouldRetry(topicsNotReady, tempUnknownTopics) && remainingRetries >= 0) {
+        while (!topicsNotReady.isEmpty() && remainingRetries >= 0) {
+            final Set<String> tempUnknownTopics = new HashSet<>();
             topicsNotReady = validateTopics(topicsNotReady, topics, tempUnknownTopics, remainingRetries);
             newlyCreatedTopics.addAll(topicsNotReady);
 
@@ -108,6 +108,11 @@ public class InternalTopicManager {
                 final Set<NewTopic> newTopics = new HashSet<>();
 
                 for (final String topicName : topicsNotReady) {
+                    if (tempUnknownTopics.contains(topicName)) {
+                        // for the tempUnknownTopics, don't create topic for them
+                        // we'll check again later if remaining retries > 0
+                        continue;
+                    }
                     final InternalTopicConfig internalTopicConfig = Objects.requireNonNull(topics.get(topicName));
                     final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
 
@@ -153,7 +158,7 @@ public class InternalTopicManager {
             }
 
 
-            if (shouldRetry(topicsNotReady, tempUnknownTopics)) {
+            if (!topicsNotReady.isEmpty()) {
                 log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, remainingRetries);
 
                 Utils.sleep(retryBackOffMs);
@@ -162,7 +167,7 @@ public class InternalTopicManager {
             }
         }
 
-        if (shouldRetry(topicsNotReady, tempUnknownTopics)) {
+        if (!topicsNotReady.isEmpty()) {
             final String timeoutAndRetryError = String.format("Could not create topics after %d retries. " +
                 "This can happen if the Kafka cluster is temporary not available. " +
                 "You can increase admin client config `retries` to be resilient against this error.", retries);
@@ -183,11 +188,9 @@ public class InternalTopicManager {
     protected Map<String, Integer> getNumPartitions(final Set<String> topics,
                                                     final Set<String> tempUnknownTopics,
                                                     final boolean hasRemainingRetries) {
-        final Set<String> allTopicsToDescribe = new HashSet<>(topics);
-        allTopicsToDescribe.addAll(tempUnknownTopics);
-        log.debug("Trying to check if topics {} have been created with expected number of partitions.", allTopicsToDescribe);
+        log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
 
-        final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(allTopicsToDescribe);
+        final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
         final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.values();
 
         final Map<String, Integer> existedTopicPartition = new HashMap<>();
@@ -196,7 +199,6 @@ public class InternalTopicManager {
             try {
                 final TopicDescription topicDescription = topicFuture.getValue().get();
                 existedTopicPartition.put(topicName, topicDescription.partitions().size());
-                tempUnknownTopics.remove(topicName);
             } catch (final InterruptedException fatalException) {
                 // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
@@ -259,17 +261,11 @@ public class InternalTopicManager {
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
                 }
-            } else if (!tempUnknownTopics.contains(topicName)) {
-                // for the tempUnknownTopics, we'll check again later if retries > 0
+            } else {
                 topicsToCreate.add(topicName);
             }
         }
 
         return topicsToCreate;
-    }
-
-    private boolean shouldRetry(final Set<String> topicsNotReady, final Set<String> tempUnknownTopics) {
-        // If there's topic with LeaderNotAvailableException, we still need retry
-        return !topicsNotReady.isEmpty() || !tempUnknownTopics.isEmpty();
     }
 }
