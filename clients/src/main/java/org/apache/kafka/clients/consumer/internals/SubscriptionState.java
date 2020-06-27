@@ -421,7 +421,7 @@ public class SubscriptionState {
         return this.assignment.size();
     }
 
-    synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+    public synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
         return assignment.stream()
                 .filter(tpState -> isAvailable.test(tpState.topicPartition()) && tpState.value().isFetchable())
                 .map(PartitionStates.PartitionState::topicPartition)

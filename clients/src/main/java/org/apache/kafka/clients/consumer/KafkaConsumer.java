@@ -1221,12 +1221,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 client.maybeTriggerWakeup();
 
                 if (includeMetadataInTimeout) {
-                    // try to update assignment metadata BUT do not need to block on the timer,
-                    // since even if we are 1) in the middle of a rebalance or 2) have partitions
-                    // with unknown starting positions we may still want to return some data
+                    // try to update assignment metadata BUT do not need to block on the timer if we still have
+                    // some assigned partitions, since even if we are 1) in the middle of a rebalance
+                    // or 2) have partitions with unknown starting positions we may still want to return some data
                     // as long as there are some partitions fetchable; NOTE we always use a timer with 0ms
                     // to never block on completing the rebalance procedure if there's any
-                    updateAssignmentMetadataIfNeeded(time.timer(0L));
+                    if (subscriptions.fetchablePartitions(tp -> true).isEmpty()) {
+                        updateAssignmentMetadataIfNeeded(timer);
+                    } else {
+                        final Timer updateMetadataTimer = time.timer(0L);
+                        updateAssignmentMetadataIfNeeded(updateMetadataTimer);
+                        timer.update(updateMetadataTimer.currentTimeMs());
+                    }
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
                         log.warn("Still waiting for metadata");
