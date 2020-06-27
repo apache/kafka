@@ -18,7 +18,7 @@
 package kafka.controller
 
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
+import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
@@ -69,7 +69,8 @@ class QueuedEvent(val event: ControllerEvent,
 class ControllerEventManager(controllerId: Int,
                              processor: ControllerEventProcessor,
                              time: Time,
-                             rateAndTimeMetrics: Map[ControllerState, KafkaTimer]) extends KafkaMetricsGroup {
+                             rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
+                             eventQueueTimeTimeoutMs: Long = 1000) extends KafkaMetricsGroup {
   import ControllerEventManager._
 
   @volatile private var _state: ControllerState = ControllerState.Idle
@@ -77,6 +78,7 @@ class ControllerEventManager(controllerId: Int,
   private val queue = new LinkedBlockingQueue[QueuedEvent]
   // Visible for test
   private[controller] val thread = new ControllerEventThread(ControllerEventThreadName)
+  val eventQueueTimeMetricTimeoutMs = eventQueueTimeTimeoutMs
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
@@ -115,7 +117,17 @@ class ControllerEventManager(controllerId: Int,
     logIdent = s"[ControllerEventThread controllerId=$controllerId] "
 
     override def doWork(): Unit = {
-      val dequeued = queue.take()
+      val count = eventQueueTimeHist.count()
+      var dequeued: QueuedEvent = null
+      if (count != 0) {
+        dequeued = queue.poll(eventQueueTimeMetricTimeoutMs, TimeUnit.MILLISECONDS)
+        if (dequeued == null) {
+          eventQueueTimeHist.clear()
+          return
+        }
+      } else {
+        dequeued = queue.take()
+      }
       dequeued.event match {
         case ShutdownEventThread => // The shutting down of the thread has been initiated at this point. Ignore this event.
         case controllerEvent =>
