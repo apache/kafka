@@ -102,14 +102,20 @@ public class StateRestoreThread extends Thread {
         return corruptedExceptions.poll();
     }
 
-    public void shutdown(final long timeoutMs) throws InterruptedException {
+    public boolean shutdown(final long timeoutMs) throws InterruptedException {
         log.info("Shutting down");
 
         isRunning.set(false);
         interrupt();
 
-        shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
+        final boolean ret = shutdownLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
 
-        log.info("Shutdown complete");
+        if (ret) {
+            log.info("Shutdown complete");
+        } else {
+            log.warn("Shutdown timed out after {}", timeoutMs);
+        }
+
+        return ret;
     }
 }
