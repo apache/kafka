@@ -181,6 +181,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.interbroker_listener = None
         self.setup_interbroker_listener(interbroker_security_protocol, self.listener_security_config.use_separate_interbroker_listener)
         self.interbroker_sasl_mechanism = interbroker_sasl_mechanism
+        self._security_config = None
 
         for node in self.nodes:
             node.version = version
@@ -214,16 +215,17 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     @property
     def security_config(self):
-        config = SecurityConfig(self.context, self.security_protocol, self.interbroker_listener.security_protocol,
-                                zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
-                                client_sasl_mechanism=self.client_sasl_mechanism,
-                                interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
-                                listener_security_config=self.listener_security_config,
-                                tls_version=self.tls_version)
-        for port in self.port_mappings.values():
-            if port.open:
-                config.enable_security_protocol(port.security_protocol)
-        return config
+        if not self._security_config:
+            self._security_config = SecurityConfig(self.context, self.security_protocol, self.interbroker_listener.security_protocol,
+                                    zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
+                                    client_sasl_mechanism=self.client_sasl_mechanism,
+                                    interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
+                                    listener_security_config=self.listener_security_config,
+                                    tls_version=self.tls_version)
+            for port in self.port_mappings.values():
+                if port.open:
+                    self._security_config.enable_security_protocol(port.security_protocol)
+        return self._security_config
 
     def open_port(self, listener_name):
         self.port_mappings[listener_name].open = True
