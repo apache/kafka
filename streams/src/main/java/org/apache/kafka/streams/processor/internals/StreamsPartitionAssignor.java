@@ -202,7 +202,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
 
             public void setNumOfRepartitions(final int numOfRepartitions) {
-                if ( numOfRepartitions < 0) throw new IllegalArgumentException("numOfRepartitions of a TopicsInfoNode should be non-negative");
+                if (numOfRepartitions < 0) throw new IllegalArgumentException("numOfRepartitions of a TopicsInfoNode should be non-negative");
                 this.numOfRepartitions = Optional.of(numOfRepartitions);
             }
 
