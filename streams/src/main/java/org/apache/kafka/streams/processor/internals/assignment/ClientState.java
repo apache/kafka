@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -48,6 +49,7 @@ public class ClientState {
     private final Set<TaskId> prevActiveTasks;
     private final Set<TaskId> prevStandbyTasks;
 
+    private final Map<String, Set<TaskId>> consumerToPreviousStatefulTaskIds;
     private final Map<TopicPartition, String> ownedPartitions;
     private final Map<TaskId, Long> taskOffsetSums; // contains only stateful tasks we previously owned
     private final Map<TaskId, Long> taskLagTotals;  // contains lag for all stateful tasks in the app topology
@@ -63,6 +65,7 @@ public class ClientState {
         standbyTasks = new TreeSet<>();
         prevActiveTasks = new TreeSet<>();
         prevStandbyTasks = new TreeSet<>();
+        consumerToPreviousStatefulTaskIds = new TreeMap<>();
         ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
@@ -73,6 +76,7 @@ public class ClientState {
                         final Set<TaskId> standbyTasks,
                         final Set<TaskId> prevActiveTasks,
                         final Set<TaskId> prevStandbyTasks,
+                        final Map<String, Set<TaskId>> consumerToPreviousStatefulTaskIds,
                         final SortedMap<TopicPartition, String> ownedPartitions,
                         final Map<TaskId, Long> taskOffsetSums,
                         final Map<TaskId, Long> taskLagTotals,
@@ -81,6 +85,7 @@ public class ClientState {
         this.standbyTasks = standbyTasks;
         this.prevActiveTasks = prevActiveTasks;
         this.prevStandbyTasks = prevStandbyTasks;
+        this.consumerToPreviousStatefulTaskIds = consumerToPreviousStatefulTaskIds;
         this.ownedPartitions = ownedPartitions;
         this.taskOffsetSums = taskOffsetSums;
         this.taskLagTotals = taskLagTotals;
@@ -95,6 +100,7 @@ public class ClientState {
         standbyTasks = new TreeSet<>();
         prevActiveTasks = unmodifiableSet(new TreeSet<>(previousActiveTasks));
         prevStandbyTasks = unmodifiableSet(new TreeSet<>(previousStandbyTasks));
+        consumerToPreviousStatefulTaskIds = new TreeMap<>();
         ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
@@ -109,6 +115,7 @@ public class ClientState {
             new TreeSet<>(standbyTasks),
             new TreeSet<>(prevActiveTasks),
             new TreeSet<>(prevStandbyTasks),
+            new TreeMap<>(consumerToPreviousStatefulTaskIds),
             newOwnedPartitions,
             new TreeMap<>(taskOffsetSums),
             new TreeMap<>(taskLagTotals),
@@ -143,7 +150,7 @@ public class ClientState {
         activeTasks.addAll(tasks);
     }
 
-    void assignActive(final TaskId task) {
+    public void assignActive(final TaskId task) {
         assertNotAssigned(task);
         activeTasks.add(task);
     }
@@ -167,7 +174,7 @@ public class ClientState {
         return standbyTasks.size();
     }
 
-    void assignStandby(final TaskId task) {
+    public void assignStandby(final TaskId task) {
         assertNotAssigned(task);
         standbyTasks.add(task);
     }
@@ -232,8 +239,9 @@ public class ClientState {
         return union(() -> new HashSet<>(prevActiveTasks.size() + prevStandbyTasks.size()), prevActiveTasks, prevStandbyTasks);
     }
 
-    public Map<TopicPartition, String> ownedPartitions() {
-        return unmodifiableMap(ownedPartitions);
+    // May return null
+    public String previousOwnerForPartition(final TopicPartition partition) {
+        return ownedPartitions.get(partition);
     }
 
     public void addOwnedPartitions(final Collection<TopicPartition> ownedPartitions, final String consumer) {
@@ -242,8 +250,9 @@ public class ClientState {
         }
     }
 
-    public void addPreviousTasksAndOffsetSums(final Map<TaskId, Long> taskOffsetSums) {
+    public void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, Long> taskOffsetSums) {
         this.taskOffsetSums.putAll(taskOffsetSums);
+        consumerToPreviousStatefulTaskIds.put(consumerId, taskOffsetSums.keySet());
     }
 
     public void initializePrevTasks(final Map<TopicPartition, TaskId> taskForPartitionMap) {
@@ -291,14 +300,24 @@ public class ClientState {
      * @return end offset sum - offset sum
      *          Task.LATEST_OFFSET if this was previously an active running task on this client
      */
-    long lagFor(final TaskId task) {
+    public long lagFor(final TaskId task) {
         final Long totalLag = taskLagTotals.get(task);
-
         if (totalLag == null) {
             throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
-        } else {
-            return totalLag;
         }
+        return totalLag;
+    }
+
+    public Set<TaskId> statefulActiveTasks() {
+        return activeTasks.stream().filter(this::isStateful).collect(Collectors.toSet());
+    }
+
+    public Set<TaskId> statelessActiveTasks() {
+        return activeTasks.stream().filter(task -> !isStateful(task)).collect(Collectors.toSet());
+    }
+
+    public Set<TaskId> previousTasksForConsumer(final String memberId) {
+        return consumerToPreviousStatefulTaskIds.get(memberId);
     }
 
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
@@ -340,12 +359,16 @@ public class ClientState {
             "]";
     }
 
+    private boolean isStateful(final TaskId task) {
+        return taskLagTotals.containsKey(task);
+    }
+
     private void initializePrevActiveTasksFromOwnedPartitions(final Map<TopicPartition, TaskId> taskForPartitionMap) {
         // there are three cases where we need to construct some or all of the prevTasks from the ownedPartitions:
         // 1) COOPERATIVE clients on version 2.4-2.5 do not encode active tasks at all and rely on ownedPartitions
         // 2) future client during version probing, when we can't decode the future subscription info's prev tasks
         // 3) stateless tasks are not encoded in the task lags, and must be figured out from the ownedPartitions
-        for (final Map.Entry<TopicPartition, String> partitionEntry : ownedPartitions().entrySet()) {
+        for (final Map.Entry<TopicPartition, String> partitionEntry : ownedPartitions.entrySet()) {
             final TopicPartition tp = partitionEntry.getKey();
             final TaskId task = taskForPartitionMap.get(tp);
             if (task != null) {

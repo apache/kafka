@@ -66,10 +66,13 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
             valSerializer = (Serializer<V>) context.valueSerde().serializer();
         }
 
-        // if value serializers are internal wrapping serializers that may need to be given the default serializer
+        // if serializers are internal wrapping serializers that may need to be given the default serializer
         // then pass it the default one from the context
         if (valSerializer instanceof WrappingNullableSerializer) {
-            ((WrappingNullableSerializer) valSerializer).setIfUnset(context.valueSerde().serializer());
+            ((WrappingNullableSerializer) valSerializer).setIfUnset(
+                context.keySerde().serializer(),
+                context.valueSerde().serializer()
+            );
         }
     }
 

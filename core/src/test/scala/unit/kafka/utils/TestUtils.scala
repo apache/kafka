@@ -467,14 +467,14 @@ object TestUtils extends Logging {
     var length = 0
     while(expected.hasNext && actual.hasNext) {
       length += 1
-      assertEquals(expected.next, actual.next)
+      assertEquals(expected.next(), actual.next())
     }
 
     // check if the expected iterator is longer
     if (expected.hasNext) {
       var length1 = length
       while (expected.hasNext) {
-        expected.next
+        expected.next()
         length1 += 1
       }
       assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true)
@@ -484,7 +484,7 @@ object TestUtils extends Logging {
     if (actual.hasNext) {
       var length2 = length
       while (actual.hasNext) {
-        actual.next
+        actual.next()
         length2 += 1
       }
       assertFalse("Iterators have uneven length-- second has more: "+length2 + " > " + length, true)
@@ -498,8 +498,8 @@ object TestUtils extends Logging {
   def checkLength[T](s1: Iterator[T], expectedLength:Int): Unit = {
     var n = 0
     while (s1.hasNext) {
-      n+=1
-      s1.next
+      n += 1
+      s1.next()
     }
     assertEquals(expectedLength, n)
   }
@@ -524,7 +524,7 @@ object TestUtils extends Logging {
         while (true) {
           if (cur == null) {
             if (topIterator.hasNext)
-              cur = topIterator.next
+              cur = topIterator.next()
             else
               return false
           }
@@ -536,7 +536,7 @@ object TestUtils extends Logging {
         throw new RuntimeException("should not reach here")
       }
 
-      def next() : T = cur.next
+      def next() : T = cur.next()
     }
   }
 

@@ -25,6 +25,8 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -69,6 +71,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     protected static final String SYNC_TOPIC_ACLS = "sync.topic.acls";
     protected static final String EMIT_HEARTBEATS = "emit.heartbeats";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
+    protected static final String SYNC_GROUP_OFFSETS = "sync.group.offsets";
 
     public static final String ENABLED = "enabled";
     private static final String ENABLED_DOC = "Whether to replicate source->target.";
@@ -171,6 +174,14 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC = "Frequency of checkpoints.";
     public static final long EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT = 60;
 
+
+    public static final String SYNC_GROUP_OFFSETS_ENABLED = SYNC_GROUP_OFFSETS + ENABLED_SUFFIX;
+    private static final String SYNC_GROUP_OFFSETS_ENABLED_DOC = "Whether to periodically write the translated offsets to __consumer_offsets topic in target cluster, as long as no active consumers in that group are connected to the target cluster";
+    public static final boolean SYNC_GROUP_OFFSETS_ENABLED_DEFAULT = false;
+    public static final String SYNC_GROUP_OFFSETS_INTERVAL_SECONDS = SYNC_GROUP_OFFSETS + INTERVAL_SECONDS_SUFFIX;
+    private static final String SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DOC = "Frequency of consumer group offset sync.";
+    public static final long SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DEFAULT = 60;
+
     public static final String TOPIC_FILTER_CLASS = "topic.filter.class";
     private static final String TOPIC_FILTER_CLASS_DOC = "TopicFilter to use. Selects topics to replicate.";
     public static final Class<?> TOPIC_FILTER_CLASS_DEFAULT = DefaultTopicFilter.class;
@@ -231,8 +242,8 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
-        props.put("enable.auto.commit", "false");
-        props.put("auto.offset.reset", "earliest");
+        props.put(ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
 
@@ -402,6 +413,15 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return getConfiguredInstance(CONFIG_PROPERTY_FILTER_CLASS, ConfigPropertyFilter.class);
     }
 
+    Duration syncGroupOffsetsInterval() {
+        if (getBoolean(SYNC_GROUP_OFFSETS_ENABLED)) {
+            return Duration.ofSeconds(getLong(SYNC_GROUP_OFFSETS_INTERVAL_SECONDS));
+        } else {
+            // negative interval to disable
+            return Duration.ofMillis(-1);
+        }
+    }
+
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
             .define(
                     ENABLED,
@@ -552,6 +572,18 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT,
                     ConfigDef.Importance.LOW,
                     EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC)
+            .define(
+                    SYNC_GROUP_OFFSETS_ENABLED,
+                    ConfigDef.Type.BOOLEAN,
+                    SYNC_GROUP_OFFSETS_ENABLED_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    SYNC_GROUP_OFFSETS_ENABLED_DOC)
+            .define(
+                    SYNC_GROUP_OFFSETS_INTERVAL_SECONDS,
+                    ConfigDef.Type.LONG,
+                    SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DEFAULT,
+                    ConfigDef.Importance.LOW,
+                    SYNC_GROUP_OFFSETS_INTERVAL_SECONDS_DOC)
             .define(
                     REPLICATION_POLICY_CLASS,
                     ConfigDef.Type.CLASS,

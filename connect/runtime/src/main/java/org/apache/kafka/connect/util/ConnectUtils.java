@@ -21,9 +21,12 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,5 +81,13 @@ public final class ConnectUtils {
         if (groupId != null) {
             prop.put(CommonClientConfigs.METRICS_CONTEXT_PREFIX + WorkerConfig.CONNECT_GROUP_ID, groupId);
         }
+    }
+
+    public static boolean isSinkConnector(Connector connector) {
+        return SinkConnector.class.isAssignableFrom(connector.getClass());
+    }
+
+    public static boolean isSourceConnector(Connector connector) {
+        return SourceConnector.class.isAssignableFrom(connector.getClass());
     }
 }

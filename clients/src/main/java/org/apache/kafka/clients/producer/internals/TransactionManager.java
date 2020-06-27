@@ -478,10 +478,12 @@ public class TransactionManager {
             return;
         }
 
+        log.info("Transiting to abortable error state due to {}", exception.toString());
         transitionTo(State.ABORTABLE_ERROR, exception);
     }
 
     synchronized void transitionToFatalError(RuntimeException exception) {
+        log.info("Transiting to fatal error state due to {}", exception.toString());
         transitionTo(State.FATAL_ERROR, exception);
 
         if (pendingResult != null) {

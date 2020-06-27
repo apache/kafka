@@ -243,7 +243,7 @@ public class KafkaConsumerTest {
         assertEquals(singleton(topic), consumer.subscription());
         assertTrue(consumer.assignment().isEmpty());
 
-        consumer.subscribe(Collections.<String>emptyList());
+        consumer.subscribe(Collections.emptyList());
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
 
@@ -323,7 +323,7 @@ public class KafkaConsumerTest {
     @Test
     public void testAssignOnEmptyTopicPartition() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId)) {
-            consumer.assign(Collections.<TopicPartition>emptyList());
+            consumer.assign(Collections.emptyList());
             assertTrue(consumer.subscription().isEmpty());
             assertTrue(consumer.assignment().isEmpty());
         }
@@ -344,7 +344,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testInterceptorConstructorClose() throws Exception {
+    public void testInterceptorConstructorClose() {
         try {
             Properties props = new Properties();
             // test with client ID assigned by KafkaConsumer
@@ -416,8 +416,8 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         if (groupId != null)
             props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        if (enableAutoCommit.isPresent())
-            props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit.get().toString());
+        enableAutoCommit.ifPresent(
+            autoCommit -> props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommit.toString()));
         return newConsumer(props);
     }
 
@@ -585,26 +585,20 @@ public class KafkaConsumerTest {
         consumer.seekToBeginning(singleton(tp1));
 
         client.prepareResponse(
-                new MockClient.RequestMatcher() {
-                    @Override
-                    public boolean matches(AbstractRequest body) {
-                        ListOffsetRequest request = (ListOffsetRequest) body;
-                        Map<TopicPartition, ListOffsetRequest.PartitionData> timestamps = request.partitionTimestamps();
-                        return timestamps.get(tp0).timestamp == ListOffsetRequest.LATEST_TIMESTAMP &&
-                                timestamps.get(tp1).timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP;
-                    }
-                }, listOffsetsResponse(Collections.singletonMap(tp0, 50L),
+            body -> {
+                ListOffsetRequest request = (ListOffsetRequest) body;
+                Map<TopicPartition, ListOffsetRequest.PartitionData> timestamps = request.partitionTimestamps();
+                return timestamps.get(tp0).timestamp == ListOffsetRequest.LATEST_TIMESTAMP &&
+                        timestamps.get(tp1).timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP;
+            }, listOffsetsResponse(Collections.singletonMap(tp0, 50L),
                         Collections.singletonMap(tp1, Errors.NOT_LEADER_FOR_PARTITION)));
         client.prepareResponse(
-                new MockClient.RequestMatcher() {
-                    @Override
-                    public boolean matches(AbstractRequest body) {
-                        FetchRequest request = (FetchRequest) body;
-                        return request.fetchData().keySet().equals(singleton(tp0)) &&
-                                request.fetchData().get(tp0).fetchOffset == 50L;
+            body -> {
+                FetchRequest request = (FetchRequest) body;
+                return request.fetchData().keySet().equals(singleton(tp0)) &&
+                        request.fetchData().get(tp0).fetchOffset == 50L;
 
-                    }
-                }, fetchResponse(tp0, 50L, 5));
+            }, fetchResponse(tp0, 50L, 5));
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
@@ -613,6 +607,7 @@ public class KafkaConsumerTest {
 
     private void initMetadata(MockClient mockClient, Map<String, Integer> partitionCounts) {
         MetadataResponse initialMetadata = TestUtils.metadataUpdateWith(1, partitionCounts);
+
         mockClient.updateMetadata(initialMetadata);
     }
 
@@ -954,11 +949,7 @@ public class KafkaConsumerTest {
 
         consumer.wakeup();
 
-        try {
-            consumer.poll(Duration.ZERO);
-            fail();
-        } catch (WakeupException e) {
-        }
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
 
         // make sure the position hasn't been updated
         assertEquals(0, consumer.position(tp0));
@@ -1062,7 +1053,7 @@ public class KafkaConsumerTest {
         consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
 
         // verify that subscription has changed but assignment is still unchanged
-        assertTrue(consumer.subscription().size() == 2);
+        assertEquals(2, consumer.subscription().size());
         assertTrue(consumer.subscription().contains(topic) && consumer.subscription().contains(topic2));
         assertTrue(consumer.assignment().isEmpty());
 
@@ -1102,9 +1093,9 @@ public class KafkaConsumerTest {
         consumer.subscribe(Arrays.asList(topic, topic3), getConsumerRebalanceListener(consumer));
 
         // verify that subscription has changed but assignment is still unchanged
-        assertTrue(consumer.subscription().size() == 2);
+        assertEquals(2, consumer.subscription().size());
         assertTrue(consumer.subscription().contains(topic) && consumer.subscription().contains(topic3));
-        assertTrue(consumer.assignment().size() == 2);
+        assertEquals(2, consumer.assignment().size());
         assertTrue(consumer.assignment().contains(tp0) && consumer.assignment().contains(t2p0));
 
         // mock the offset commit response for to be revoked partitions
@@ -1133,9 +1124,9 @@ public class KafkaConsumerTest {
         assertTrue(commitReceived.get());
 
         // verify that subscription is still the same, and now assignment has caught up
-        assertTrue(consumer.subscription().size() == 2);
+        assertEquals(2, consumer.subscription().size());
         assertTrue(consumer.subscription().contains(topic) && consumer.subscription().contains(topic3));
-        assertTrue(consumer.assignment().size() == 2);
+        assertEquals(2, consumer.assignment().size());
         assertTrue(consumer.assignment().contains(tp0) && consumer.assignment().contains(t3p0));
 
         consumer.unsubscribe();
@@ -1307,7 +1298,7 @@ public class KafkaConsumerTest {
         assertEquals(0, consumer.committed(Collections.singleton(tp0)).get(tp0).offset());
 
         // verify that assignment immediately changes
-        assertTrue(consumer.assignment().equals(singleton(tp0)));
+        assertEquals(consumer.assignment(), singleton(tp0));
 
         // there shouldn't be any need to lookup the coordinator or fetch committed offsets.
         // we just lookup the starting position and send the record fetch.
@@ -1315,6 +1306,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(fetchResponse(tp0, 10L, 1));
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+
         assertEquals(1, records.count());
         assertEquals(11L, consumer.position(tp0));
 
@@ -1325,7 +1317,7 @@ public class KafkaConsumerTest {
         consumer.assign(singleton(t2p0));
 
         // verify that assignment immediately changes
-        assertTrue(consumer.assignment().equals(singleton(t2p0)));
+        assertEquals(consumer.assignment(), singleton(t2p0));
         // verify that the offset commits occurred as expected
         assertTrue(commitReceived.get());
 
@@ -1365,7 +1357,7 @@ public class KafkaConsumerTest {
         assertEquals(0, consumer.committed(Collections.singleton(tp0)).get(tp0).offset());
 
         // verify that assignment immediately changes
-        assertTrue(consumer.assignment().equals(singleton(tp0)));
+        assertEquals(consumer.assignment(), singleton(tp0));
 
         // there shouldn't be any need to lookup the coordinator or fetch committed offsets.
         // we just lookup the starting position and send the record fetch.
@@ -1380,11 +1372,11 @@ public class KafkaConsumerTest {
         consumer.assign(singleton(t2p0));
 
         // verify that assignment immediately changes
-        assertTrue(consumer.assignment().equals(singleton(t2p0)));
+        assertEquals(consumer.assignment(), singleton(t2p0));
 
         // the auto commit is disabled, so no offset commit request should be sent
         for (ClientRequest req : client.requests())
-            assertTrue(req.requestBuilder().apiKey() != ApiKeys.OFFSET_COMMIT);
+            assertNotSame(req.requestBuilder().apiKey(), ApiKeys.OFFSET_COMMIT);
 
         client.requests().clear();
         consumer.close();
@@ -1453,7 +1445,7 @@ public class KafkaConsumerTest {
     @Test(expected = IllegalStateException.class)
     public void testPollWithEmptySubscription() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId)) {
-            consumer.subscribe(Collections.<String>emptyList());
+            consumer.subscribe(Collections.emptyList());
             consumer.poll(Duration.ZERO);
         }
     }
@@ -1461,7 +1453,7 @@ public class KafkaConsumerTest {
     @Test(expected = IllegalStateException.class)
     public void testPollWithEmptyUserAssignment() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId)) {
-            consumer.assign(Collections.<TopicPartition>emptySet());
+            consumer.assign(Collections.emptySet());
             consumer.poll(Duration.ZERO);
         }
     }
@@ -1477,7 +1469,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testCloseTimeout() throws Exception {
-        consumerCloseTest(5000, Collections.<AbstractResponse>emptyList(), 5000, false);
+        consumerCloseTest(5000, Collections.emptyList(), 5000, false);
     }
 
     @Test
@@ -1490,7 +1482,7 @@ public class KafkaConsumerTest {
 
     @Test
     public void testCloseNoWait() throws Exception {
-        consumerCloseTest(0, Collections.<AbstractResponse>emptyList(), 0, false);
+        consumerCloseTest(0, Collections.emptyList(), 0, false);
     }
 
     @Test
@@ -1688,15 +1680,12 @@ public class KafkaConsumerTest {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         final AtomicReference<Exception> closeException = new AtomicReference<>();
         try {
-            Future<?> future = executor.submit(new Runnable() {
-                @Override
-                public void run() {
-                    consumer.commitAsync();
-                    try {
-                        consumer.close(Duration.ofMillis(closeTimeoutMs));
-                    } catch (Exception e) {
-                        closeException.set(e);
-                    }
+            Future<?> future = executor.submit(() -> {
+                consumer.commitAsync();
+                try {
+                    consumer.close(Duration.ofMillis(closeTimeoutMs));
+                } catch (Exception e) {
+                    closeException.set(e);
                 }
             });
 
@@ -2095,21 +2084,18 @@ public class KafkaConsumerTest {
         for (TopicPartition partition : partitionOffsets.keySet())
             response.put(partition, Errors.NONE);
 
-        client.prepareResponseFrom(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-                Map<TopicPartition, Long> commitErrors = commitRequest.offsets();
+        client.prepareResponseFrom(body -> {
+            OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
+            Map<TopicPartition, Long> commitErrors = commitRequest.offsets();
 
-                for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
-                    // verify that the expected offset has been committed
-                    if (!commitErrors.get(partitionOffset.getKey()).equals(partitionOffset.getValue())) {
-                        commitReceived.set(false);
-                        return false;
-                    }
+            for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
+                // verify that the expected offset has been committed
+                if (!commitErrors.get(partitionOffset.getKey()).equals(partitionOffset.getValue())) {
+                    commitReceived.set(false);
+                    return false;
                 }
-                return true;
             }
+            return true;
         }, offsetCommitResponse(response), coordinator);
         return commitReceived;
     }

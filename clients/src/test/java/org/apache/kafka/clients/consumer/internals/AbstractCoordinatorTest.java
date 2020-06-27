@@ -611,7 +611,7 @@ public class AbstractCoordinatorTest {
 
         final AbstractCoordinator.Generation currGen = coordinator.generation();
 
-        // let the heartbeat request to send out a request
+        // let the heartbeat thread send out a request
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
 
         TestUtils.waitForCondition(() -> !mockClient.requests().isEmpty(), 2000,

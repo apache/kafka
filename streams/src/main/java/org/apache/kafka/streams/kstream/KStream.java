@@ -933,7 +933,7 @@ public interface KStream<K, V> {
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KTable} is partitioned
      * correctly on its key.
-     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION} config for this case, because
+     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG} config for this case, because
      * repartition topics are considered transient and don't allow to recover the result {@link KTable} in cause of
      * a failure; hence, a dedicated changelog topic is required to guarantee fault-tolerance.
      * <p>
@@ -959,7 +959,7 @@ public interface KStream<K, V> {
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KTable} is partitioned
      * correctly on its key.
-     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION} config for this case, because
+     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG} config for this case, because
      * repartition topics are considered transient and don't allow to recover the result {@link KTable} in cause of
      * a failure; hence, a dedicated changelog topic is required to guarantee fault-tolerance.
      * <p>
@@ -986,7 +986,7 @@ public interface KStream<K, V> {
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KTable} is partitioned
      * correctly on its key.
-     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION} config for this case, because
+     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG} config for this case, because
      * repartition topics are considered transient and don't allow to recover the result {@link KTable} in cause of
      * a failure; hence, a dedicated changelog topic is required to guarantee fault-tolerance.
      * <p>
@@ -1014,7 +1014,7 @@ public interface KStream<K, V> {
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KTable} is partitioned
      * correctly on its key.
-     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION} config for this case, because
+     * Note that you cannot enable {@link StreamsConfig#TOPOLOGY_OPTIMIZATION_CONFIG} config for this case, because
      * repartition topics are considered transient and don't allow to recover the result {@link KTable} in cause of
      * a failure; hence, a dedicated changelog topic is required to guarantee fault-tolerance.
      * <p>

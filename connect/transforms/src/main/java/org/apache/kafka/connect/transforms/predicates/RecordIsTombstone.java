@@ -27,7 +27,8 @@ import org.apache.kafka.connect.connector.ConnectRecord;
  */
 public class RecordIsTombstone<R extends ConnectRecord<R>> implements Predicate<R> {
 
-    private static final ConfigDef CONFIG_DEF = new ConfigDef();
+    public static final String OVERVIEW_DOC = "A predicate which is true for records which are tombstones (i.e. have null value).";
+    public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
     @Override
     public ConfigDef config() {

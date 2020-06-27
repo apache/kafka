@@ -135,8 +135,8 @@ public class StreamThreadStateStoreProviderTest {
 
         final StreamsConfig streamsConfig = new StreamsConfig(properties);
         final MockClientSupplier clientSupplier = new MockClientSupplier();
-        configureRestoreConsumer(clientSupplier, "applicationId-kv-store-changelog");
-        configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
+        configureClients(clientSupplier, "applicationId-kv-store-changelog");
+        configureClients(clientSupplier, "applicationId-window-store-changelog");
 
         final InternalTopologyBuilder internalTopologyBuilder = topology.getInternalBuilder(applicationId);
         final ProcessorTopology processorTopology = internalTopologyBuilder.buildTopology();
@@ -364,6 +364,7 @@ public class StreamThreadStateStoreProviderTest {
                 new MockTime(),
                 streamsConfig,
                 logContext,
+                clientSupplier.adminClient,
                 clientSupplier.restoreConsumer,
                 new MockStateRestoreListener()),
             topology.storeToChangelogTopic(), partitions);
@@ -414,8 +415,7 @@ public class StreamThreadStateStoreProviderTest {
         EasyMock.replay(threadMock);
     }
 
-    private void configureRestoreConsumer(final MockClientSupplier clientSupplier,
-                                          final String topic) {
+    private void configureClients(final MockClientSupplier clientSupplier, final String topic) {
         final List<PartitionInfo> partitions = Arrays.asList(
             new PartitionInfo(topic, 0, null, null, null),
             new PartitionInfo(topic, 1, null, null, null)
@@ -432,5 +432,8 @@ public class StreamThreadStateStoreProviderTest {
 
         clientSupplier.restoreConsumer.updateBeginningOffsets(offsets);
         clientSupplier.restoreConsumer.updateEndOffsets(offsets);
+
+        clientSupplier.adminClient.updateBeginningOffsets(offsets);
+        clientSupplier.adminClient.updateEndOffsets(offsets);
     }
 }

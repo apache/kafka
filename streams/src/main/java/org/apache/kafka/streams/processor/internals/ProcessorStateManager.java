@@ -25,6 +25,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -129,10 +130,6 @@ public class ProcessorStateManager implements StateManager {
 
         StateStore store() {
             return this.stateStore;
-        }
-
-        StateRestoreCallback restoreCallback() {
-            return this.restoreCallback;
         }
 
         @Override
@@ -250,6 +247,7 @@ public class ProcessorStateManager implements StateManager {
                         }
                     }
                 }  else {
+                    loadedCheckpoints.remove(store.changelogPartition);
                     log.debug("Skipping re-initialization of offset from checkpoint for recycled store {}",
                               store.stateStore.name());
                 }
@@ -301,6 +299,11 @@ public class ProcessorStateManager implements StateManager {
 
         if (stores.containsKey(storeName)) {
             throw new IllegalArgumentException(format("%sStore %s has already been registered.", logPrefix, storeName));
+        }
+
+        if (stateRestoreCallback instanceof StateRestoreListener) {
+            log.warn("The registered state restore callback is also implementing the state restore listener interface, " +
+                    "which is not expected and would be ignored");
         }
 
         final StateStoreMetadata storeMetadata = isLoggingEnabled(storeName) ?
@@ -459,7 +462,7 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        changelogReader.unregister(getAllChangelogTopicPartitions(), false);
+        changelogReader.unregister(getAllChangelogTopicPartitions());
 
         RuntimeException firstException = null;
         // attempting to close the stores, just in case they
@@ -499,11 +502,7 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
         final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
-        if (taskType.equals(TaskType.ACTIVE)) {
-            changelogReader.unregister(allChangelogs, true);
-        } else {
-            changelogReader.unregister(allChangelogs, false);
-        }
+        changelogReader.unregister(allChangelogs);
     }
 
     void transitionTaskType(final TaskType newType, final LogContext logContext) {
@@ -511,11 +510,12 @@ public class ProcessorStateManager implements StateManager {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");
         }
 
+        final TaskType oldType = taskType;
         taskType = newType;
         log = logContext.logger(ProcessorStateManager.class);
         logPrefix = logContext.logPrefix();
 
-        log.debug("Transitioning state manager for {} task {} to {}", taskType, taskId, newType);
+        log.debug("Transitioning state manager for {} task {} to {}", oldType, taskId, newType);
     }
 
     @Override

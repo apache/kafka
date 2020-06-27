@@ -207,12 +207,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
 
     /**
-     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION "topology.optimization"} for disabling topology optimization
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for disabling topology optimization
      */
     public static final String NO_OPTIMIZATION = "none";
 
     /**
-     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION "topology.optimization"} for enabling topology optimization
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for enabling topology optimization
      */
     public static final String OPTIMIZE = "all";
 
@@ -524,7 +524,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String STATE_DIR_DOC = "Directory location for state store. This path must be unique for each streams instance sharing the same underlying filesystem.";
 
     /** {@code topology.optimization} */
-    public static final String TOPOLOGY_OPTIMIZATION = "topology.optimization";
+    public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
 
     /** {@code upgrade.from} */
@@ -551,6 +551,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface." +
         " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
+
+    /**
+     * {@code topology.optimization}
+     * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
+     */
+    @Deprecated
+    public static final String TOPOLOGY_OPTIMIZATION = TOPOLOGY_OPTIMIZATION_CONFIG;
 
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
@@ -664,7 +671,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .define(TOPOLOGY_OPTIMIZATION,
+            .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
                     in(NO_OPTIMIZATION, OPTIMIZE),

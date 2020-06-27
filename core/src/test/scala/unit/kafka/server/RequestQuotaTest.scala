@@ -458,7 +458,10 @@ class RequestQuotaTest extends BaseRequestTest {
               .setOperation(AclOperation.ANY.code)
               .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DESCRIBE_CONFIGS =>
-          new DescribeConfigsRequest.Builder(Collections.singleton(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)))
+          new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+            .setResources(Collections.singletonList(new DescribeConfigsRequestData.DescribeConfigsResource()
+              .setResourceType(ConfigResource.Type.TOPIC.id)
+              .setResourceName(tp.topic))))
 
         case ApiKeys.ALTER_CONFIGS =>
           new AlterConfigsRequest.Builder(
