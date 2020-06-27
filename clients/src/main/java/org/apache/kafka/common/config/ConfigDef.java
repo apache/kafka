@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config;
 
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
@@ -1489,7 +1490,16 @@ public class ConfigDef {
     }
 
     public String toHtml() {
-        return toHtml(Collections.<String, String>emptyMap());
+        return toHtml(Collections.emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * @param headerDepth The top level header depth in the generated HTML.
+     * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
+     */
+    public String toHtml(int headerDepth, Function<String, String> idGenerator) {
+        return toHtml(headerDepth, idGenerator, Collections.emptyMap());
     }
 
     /**
@@ -1497,9 +1507,23 @@ public class ConfigDef {
      * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
      * will be included in the config details with the value of the update mode. Default
      * mode is "read-only".
-     * @param dynamicUpdateModes Config name -&gt; update mode mapping
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping.
      */
     public String toHtml(Map<String, String> dynamicUpdateModes) {
+        return toHtml(4, Function.identity(), dynamicUpdateModes);
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param headerDepth The top level header depth in the generated HTML.
+     * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping.
+     */
+    public String toHtml(int headerDepth, Function<String, String> idGenerator,
+                         Map<String, String> dynamicUpdateModes) {
         boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
@@ -1509,9 +1533,9 @@ public class ConfigDef {
                 continue;
             }
             b.append("<li>\n");
-            b.append(String.format("<h4>" +
-                    "<a id=\"%1$s\" href=\"#%1$s\">%1$s</a>" +
-                    "</h4>%n", key.name));
+            b.append(String.format("<h%1$d>" +
+                    "<a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
+                    "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
             b.append("<p>");
             b.append(key.documentation.replaceAll("\n", "<br>"));
             b.append("</p>\n");

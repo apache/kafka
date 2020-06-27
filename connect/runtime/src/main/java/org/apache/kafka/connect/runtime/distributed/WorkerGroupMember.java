@@ -224,6 +224,10 @@ public class WorkerGroupMember {
         return coordinator.currentProtocolVersion();
     }
 
+    public void revokeAssignment(ExtendedAssignment assignment) {
+        coordinator.revokeAssignment(assignment);
+    }
+
     private void stop(boolean swallowException) {
         log.trace("Stopping the Connect group member.");
         AtomicReference<Throwable> firstException = new AtomicReference<>();

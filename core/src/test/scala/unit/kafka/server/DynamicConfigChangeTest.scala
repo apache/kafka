@@ -195,7 +195,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @Test
   def testConfigChangeOnNonExistingTopic(): Unit = {
-    val topic = TestUtils.tempTopic
+    val topic = TestUtils.tempTopic()
     try {
       val logProps = new Properties()
       logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
@@ -208,7 +208,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @Test
   def testConfigChangeOnNonExistingTopicWithAdminClient(): Unit = {
-    val topic = TestUtils.tempTopic
+    val topic = TestUtils.tempTopic()
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)

@@ -100,6 +100,16 @@ public class RetryWithToleranceOperatorTest {
     @Test
     public void testExecuteFailed() {
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
+            ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM);
+        retryWithToleranceOperator.metrics(errorHandlingMetrics);
+
+        retryWithToleranceOperator.executeFailed(Stage.TASK_PUT,
+            SinkTask.class, consumerRecord, new Throwable());
+    }
+
+    @Test(expected = ConnectException.class)
+    public void testExecuteFailedNoTolerance() {
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
             ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
 

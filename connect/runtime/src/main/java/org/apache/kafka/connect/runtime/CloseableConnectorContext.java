@@ -14,15 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.streams.KeyValue;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteBatch;
+import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.errors.ConnectException;
 
-public interface BulkLoadingStore {
-    void toggleDbForBulkLoading(final boolean prepareForBulkload);
-    void addToBatch(final KeyValue<byte[], byte[]> record,
-                    final WriteBatch batch) throws RocksDBException;
-    void write(final WriteBatch batch) throws RocksDBException;
+import java.io.Closeable;
+
+public interface CloseableConnectorContext extends ConnectorContext, Closeable {
+
+    /**
+     * Close this connector context, causing all future calls to it to throw {@link ConnectException}.
+     * This is useful to prevent zombie connector threads from making such calls after their connector
+     * instance should be shut down.
+     */
+    void close();
 }

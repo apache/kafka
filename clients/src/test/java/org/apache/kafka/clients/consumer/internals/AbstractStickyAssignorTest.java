@@ -244,7 +244,6 @@ public abstract class AbstractStickyAssignorTest {
         assertEquals(partitions(tp(topic, 0), tp(topic, 1)), assignment.get(consumer1));
         assertEquals(partitions(tp(topic, 2)), assignment.get(consumer2));
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
 
         subscriptions.remove(consumer1);
         subscriptions.put(consumer2, buildSubscription(topics(topic), assignment.get(consumer2)));
@@ -254,7 +253,6 @@ public abstract class AbstractStickyAssignorTest {
 
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(assignor.isSticky());
     }
 
     /**
@@ -330,7 +328,6 @@ public abstract class AbstractStickyAssignorTest {
         assertTrue(consumer1assignment.size() == 3 && consumer2assignment.size() == 3);
         assertTrue(consumer1assignment.containsAll(consumer1Assignment1));
         assertTrue(consumer2assignment.containsAll(consumer2Assignment1));
-        assertTrue(assignor.isSticky());
 
         partitionsPerTopic.remove(topic);
         subscriptions.put(consumer1, buildSubscription(topics(topic2), assignment.get(consumer1)));
@@ -347,7 +344,6 @@ public abstract class AbstractStickyAssignorTest {
             (consumer1Assignment3.size() == 2 && consumer2Assignment3.size() == 1));
         assertTrue(consumer1assignment.containsAll(consumer1Assignment3));
         assertTrue(consumer2assignment.containsAll(consumer2Assignment3));
-        assertTrue(assignor.isSticky());
     }
 
 
@@ -397,7 +393,6 @@ public abstract class AbstractStickyAssignorTest {
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -425,7 +420,6 @@ public abstract class AbstractStickyAssignorTest {
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertTrue(assignor.isSticky());
     }
 
     @Test(timeout = 30 * 1000)
@@ -575,7 +569,6 @@ public abstract class AbstractStickyAssignorTest {
 
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment, partitionsPerTopic);
-        assertTrue(assignor.isSticky());
 
         assignments = assignment.entrySet();
         for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
@@ -767,32 +760,18 @@ public abstract class AbstractStickyAssignorTest {
                 Map<String, List<Integer>> map = CollectionUtils.groupPartitionsByTopic(partitions);
                 Map<String, List<Integer>> otherMap = CollectionUtils.groupPartitionsByTopic(otherPartitions);
 
-                if (len > otherLen) {
-                    for (String topic: map.keySet())
-                        if (otherMap.containsKey(topic))
-                            //assertTrue(true);
-                        assertFalse("Error: Some partitions can be moved from c" + i + " to c" + j
-                                + " to achieve a better balance"
-                                + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
-                                + " partitions."
-                                + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments
-                                .toString(),
-                            otherMap.containsKey(topic));
+                int moreLoaded = len > otherLen ? i : j;
+                int lessLoaded = len > otherLen ? j : i;
 
-
-
-                }
-
-                if (otherLen > len) {
-                    for (String topic: otherMap.keySet())
-                        if (otherMap.containsKey(topic))
-                            //assertTrue(true);
-                        assertFalse("Error: Some partitions can be moved from c" + j + " to c" + i + " to achieve a better balance"
-                                + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen + " partitions."
-                                + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments.toString(),
-                            map.containsKey(topic));
-
-
+                // If there's any overlap in the subscribed topics, we should have been able to balance partitions
+                for (String topic: map.keySet()) {
+                    assertFalse("Error: Some partitions can be moved from c" + moreLoaded + " to c" + lessLoaded
+                            + " to achieve a better balance"
+                            + "\nc" + i + " has " + len + " partitions, and c" + j + " has " + otherLen
+                            + " partitions."
+                            + "\nSubscriptions: " + subscriptions.toString() + "\nAssignments: " + assignments
+                            .toString(),
+                        otherMap.containsKey(topic));
                 }
             }
         }

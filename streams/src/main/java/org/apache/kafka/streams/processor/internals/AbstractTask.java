@@ -16,13 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
+import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.Set;
-import org.slf4j.Logger;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
@@ -102,24 +103,9 @@ public abstract class AbstractTask implements Task {
         }
     }
 
-    static void executeAndMaybeSwallow(final boolean clean,
-                                       final Runnable runnable,
-                                       final String name,
-                                       final Logger log) {
-        try {
-            runnable.run();
-        } catch (final RuntimeException e) {
-            if (clean) {
-                throw e;
-            } else {
-                log.debug("Ignoring error in unclean {}", name);
-            }
-        }
-    }
-
     @Override
-    public void update(final Set<TopicPartition> topicPartitions, final ProcessorTopology processorTopology) {
+    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
         this.inputPartitions = topicPartitions;
-        this.topology = processorTopology;
+        topology.updateSourceTopics(nodeToSourceTopics);
     }
 }

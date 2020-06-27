@@ -95,7 +95,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "asdf:0000"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimization)
+            mkEntry(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimization)
         ));
     }
 

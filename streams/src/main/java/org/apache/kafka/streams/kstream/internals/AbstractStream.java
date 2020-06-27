@@ -46,7 +46,7 @@ public abstract class AbstractStream<K, V> {
 
     protected final String name;
     protected final Serde<K> keySerde;
-    protected final Serde<V> valSerde;
+    protected final Serde<V> valueSerde;
     protected final Set<String> subTopologySourceNodes;
     protected final StreamsGraphNode streamsGraphNode;
     protected final InternalStreamsBuilder builder;
@@ -57,14 +57,14 @@ public abstract class AbstractStream<K, V> {
         this.name = stream.name;
         this.builder = stream.builder;
         this.keySerde = stream.keySerde;
-        this.valSerde = stream.valSerde;
+        this.valueSerde = stream.valueSerde;
         this.subTopologySourceNodes = stream.subTopologySourceNodes;
         this.streamsGraphNode = stream.streamsGraphNode;
     }
 
     AbstractStream(final String name,
                    final Serde<K> keySerde,
-                   final Serde<V> valSerde,
+                   final Serde<V> valueSerde,
                    final Set<String> subTopologySourceNodes,
                    final StreamsGraphNode streamsGraphNode,
                    final InternalStreamsBuilder builder) {
@@ -75,7 +75,7 @@ public abstract class AbstractStream<K, V> {
         this.name = name;
         this.builder = builder;
         this.keySerde = keySerde;
-        this.valSerde = valSerde;
+        this.valueSerde = valueSerde;
         this.subTopologySourceNodes = subTopologySourceNodes;
         this.streamsGraphNode = streamsGraphNode;
     }
@@ -143,6 +143,6 @@ public abstract class AbstractStream<K, V> {
     }
 
     public Serde<V> valueSerde() {
-        return valSerde;
+        return valueSerde;
     }
 }
