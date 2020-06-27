@@ -1703,7 +1703,7 @@ public class StreamsPartitionAssignorTest {
         //         topicsInfo3
         // t1, t2... are topics are the sourceTopics/sinkTopics of these sub-topologies, numberOfPartitions of a given
         // topic should be the maximum of its upstream topics' numberOfPartitions.
-        // For example(use NoP instead of numberOfPartitions for simplicity):
+        // For example(use NoP = numberOfPartitions):
         // NoP(t2_1) = max(NoP(t2))
         // NoP(t2) = max(NoP(input-t1), NoP(input-t2))
         final String repartitionTopic1 = "Repartition-Topic1";
