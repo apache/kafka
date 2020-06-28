@@ -352,6 +352,7 @@ class AdminManager(val config: KafkaConfig,
       def allConfigs(config: AbstractConfig) = {
         config.originals.asScala.filter(_._2 != null) ++ config.values.asScala
       }
+
       def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
         val filteredConfigPairs = configs.filter { case (configName, _) =>
@@ -382,10 +383,10 @@ class AdminManager(val config: KafkaConfig,
           case ConfigResource.Type.BROKER =>
             if (resource.resourceName == null || resource.resourceName.isEmpty)
               createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs,
-                  createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
+                createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms, includeDocumentation))
             else if (resourceNameToBrokerId(resource.resourceName) == config.brokerId)
               createResponseConfig(allConfigs(config),
-                  createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation))
+                createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms, includeDocumentation))
             else
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.resourceName}")
 
@@ -412,18 +413,17 @@ class AdminManager(val config: KafkaConfig,
             error(message, e)
           val err = ApiError.fromThrowable(e)
           new DescribeConfigsResponseData.DescribeConfigsResult()
-              .setResourceName(resource.resourceName)
-              .setResourceType(resource.resourceType)
-              .setErrorMessage(err.message)
-              .setErrorCode(err.error.code)
-              .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+            .setResourceName(resource.resourceName)
+            .setResourceType(resource.resourceType)
+            .setErrorMessage(err.message)
+            .setErrorCode(err.error.code)
+            .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
       }
-    }.toList
+    }
   }
 
   def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, config) =>
-
       try {
         val nullUpdates = config.entries.asScala.filter(_.value == null).map(_.name)
         if (nullUpdates.nonEmpty)

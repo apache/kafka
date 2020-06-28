@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 
 public class AlterConfigsResponse extends AbstractResponse {
 
-    private final AlterConfigsResponseData data;
+    public final AlterConfigsResponseData data;
 
     public AlterConfigsResponse(AlterConfigsResponseData data) {
         this.data = data;

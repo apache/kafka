@@ -2438,7 +2438,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val (controllerRequiredResources, remainingAuthorizedResources) =
-      filterControllerOnlyResources(alterConfigsRequest.version(), authorizedResources)
+      filterControllerOnlyTopicResources(alterConfigsRequest.version(), authorizedResources)
 
     val authorizedResult = adminManager.alterConfigs(
       remainingAuthorizedResources, alterConfigsRequest.validateOnly)
@@ -2559,9 +2559,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleIncrementalAlterConfigsRequest(request: RequestChannel.Request): Unit = {
-    val alterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
+    val incrementalAlterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
 
-    val configs = alterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
+    val configs = incrementalAlterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
       val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
         alterConfigResource.resourceName)
       configResource -> alterConfigResource.configs.iterator.asScala.map {
@@ -2581,10 +2581,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val (controllerRequiredResources, remainingAuthorizedResources) =
-      filterControllerOnlyResources(alterConfigsRequest.version(), authorizedResources)
+      filterControllerOnlyTopicResources(incrementalAlterConfigsRequest.version(), authorizedResources)
 
     val authorizedResult = adminManager.incrementalAlterConfigs(
-      remainingAuthorizedResources, alterConfigsRequest.data.validateOnly)
+      remainingAuthorizedResources, incrementalAlterConfigsRequest.data.validateOnly)
     val unauthorizedResult = unauthorizedResources.keys.map { resource =>
       resource -> configsAuthorizationApiError(resource)
     }
@@ -2598,7 +2598,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         (authorizedResult ++ unauthorizedResult ++ requireControllerResult).asJava)))
   }
 
-  private def filterControllerOnlyResources[O](requestVersion: Short, authorizedResources: Map[ConfigResource, O]): (
+  private def filterControllerOnlyTopicResources[O](requestVersion: Short, authorizedResources: Map[ConfigResource, O]): (
     Map[ConfigResource, O], Map[ConfigResource, O]
     ) = {
     val requireController = requestVersion >= 2 && !controller.isActive

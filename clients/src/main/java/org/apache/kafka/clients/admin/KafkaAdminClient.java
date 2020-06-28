@@ -1459,9 +1459,7 @@ public class KafkaAdminClient extends AdminClient {
                 // Check for controller change
                 for (Errors error : response.errorCounts().keySet()) {
                     if (error == Errors.NOT_CONTROLLER) {
-                        metadataManager.clearController();
-                        metadataManager.requestUpdate();
-                        throw error.exception();
+                        handleNotControllerError(true);
                     }
                 }
                 // Handle server responses for particular topics.
@@ -2099,7 +2097,7 @@ public class KafkaAdminClient extends AdminClient {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // We must make a separate AlterConfigs request for every BROKER resource we want to alter
         // and send the request to that specific broker. Other resources are grouped together into
-        // a single request that may be sent to any broker.
+        // a single request that must be sent to the controller.
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
@@ -2107,8 +2105,9 @@ public class KafkaAdminClient extends AdminClient {
             if (node != null) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(node);
                 allFutures.putAll(incrementalAlterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
-            } else
+            } else {
                 unifiedRequestResources.add(resource);
+            }
         }
         if (!unifiedRequestResources.isEmpty())
             allFutures.putAll(incrementalAlterConfigs(configs, options, unifiedRequestResources, new ControllerNodeProvider()));
@@ -2154,8 +2153,8 @@ public class KafkaAdminClient extends AdminClient {
             KafkaFutureImpl<Void> future = entry.getValue();
             ApiException exception = errors.get(entry.getKey()).exception();
             if (exception != null) {
-                if (exception == Errors.NOT_CONTROLLER.exception()) {
-                    handleNotControllerError();
+                if (Errors.forException(exception) == Errors.NOT_CONTROLLER) {
+                    handleNotControllerError(false);
                 }
                 future.completeExceptionally(exception);
             } else {
@@ -2441,9 +2440,7 @@ public class KafkaAdminClient extends AdminClient {
                 for (CreatePartitionsTopicResult topicResult: response.data().results()) {
                     Errors error = Errors.forCode(topicResult.errorCode());
                     if (error == Errors.NOT_CONTROLLER) {
-                        metadataManager.clearController();
-                        metadataManager.requestUpdate();
-                        throw error.exception();
+                        handleNotControllerError(true);
                     }
                 }
                 for (CreatePartitionsTopicResult topicResult: response.data().results()) {
@@ -3452,7 +3449,7 @@ public class KafkaAdminClient extends AdminClient {
                         receivedResponsesCount += validateTopicResponses(response.data().responses(), errors);
                         break;
                     case NOT_CONTROLLER:
-                        handleNotControllerError();
+                        handleNotControllerError(true);
                         break;
                     default:
                         for (ReassignableTopicResponse topicResponse : response.data().responses()) {
@@ -3573,7 +3570,7 @@ public class KafkaAdminClient extends AdminClient {
                     case NONE:
                         break;
                     case NOT_CONTROLLER:
-                        handleNotControllerError();
+                        handleNotControllerError(true);
                         break;
                     default:
                         partitionReassignmentsFuture.completeExceptionally(new ApiError(error, response.data().errorMessage()).exception());
@@ -3607,10 +3604,12 @@ public class KafkaAdminClient extends AdminClient {
         return time.milliseconds() + retryBackoffMs;
     }
 
-    private void handleNotControllerError() throws ApiException {
+    private void handleNotControllerError(final boolean shouldThrow) throws ApiException {
         metadataManager.clearController();
         metadataManager.requestUpdate();
-        throw Errors.NOT_CONTROLLER.exception();
+        if (shouldThrow) {
+            throw Errors.NOT_CONTROLLER.exception();
+        }
     }
 
     /**
