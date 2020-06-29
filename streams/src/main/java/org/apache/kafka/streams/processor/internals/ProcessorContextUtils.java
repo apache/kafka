@@ -19,6 +19,13 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
+/**
+ * This class bridges the gap for components that _should_ be compatible with
+ * the public ProcessorContext interface, but have come to depend on features
+ * in InternalProcessorContext. In theory, all the features adapted here could
+ * migrate to the public interface, so each method in this class should reference
+ * the ticket that would ultimately obviate it.
+ */
 public final class ProcessorContextUtils {
 
     private ProcessorContextUtils() {}
@@ -33,6 +40,9 @@ public final class ProcessorContextUtils {
             : System.currentTimeMillis();
     }
 
+    /**
+     * Should be removed as part of KAFKA-10217
+     */
     public static StreamsMetricsImpl getMetricsImpl(final ProcessorContext context) {
         return (StreamsMetricsImpl) context.metrics();
     }
