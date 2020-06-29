@@ -51,7 +51,7 @@ public class StreamsMetadataState {
     private final HostInfo thisHost;
     private List<StreamsMetadata> allMetadata = Collections.emptyList();
     private Cluster clusterMetadata;
-    private AtomicReference<StreamsMetadata> localMetadata = new AtomicReference<>(null);
+    private final AtomicReference<StreamsMetadata> localMetadata = new AtomicReference<>(null);
 
     public StreamsMetadataState(final InternalTopologyBuilder builder, final HostInfo thisHost) {
         this.builder = builder;
@@ -319,6 +319,12 @@ public class StreamsMetadataState {
                                  final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
         if (activePartitionHostMap.isEmpty() && standbyPartitionHostMap.isEmpty()) {
             allMetadata = Collections.emptyList();
+            localMetadata.set(new StreamsMetadata(thisHost,
+                                                  Collections.emptySet(),
+                                                  Collections.emptySet(),
+                                                  Collections.emptySet(),
+                                                  Collections.emptySet()
+            ));
             return;
         }
 
@@ -422,7 +428,8 @@ public class StreamsMetadataState {
     }
 
     private boolean isInitialized() {
-        return clusterMetadata != null && !clusterMetadata.topics().isEmpty();
+
+        return clusterMetadata != null && !clusterMetadata.topics().isEmpty() && localMetadata.get() != null;
     }
 
     public String getStoreForChangelogTopic(final String topicName) {
