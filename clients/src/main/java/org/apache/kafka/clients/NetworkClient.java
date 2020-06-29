@@ -61,7 +61,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -85,8 +85,6 @@ public class NetworkClient implements KafkaClient {
     private final Selectable selector;
 
     private final MetadataUpdater metadataUpdater;
-
-    private final Random randOffset;
 
     /* the state of each node's connection */
     private final ClusterConnectionStates connectionStates;
@@ -262,7 +260,6 @@ public class NetworkClient implements KafkaClient {
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
-        this.randOffset = new Random();
         this.defaultRequestTimeoutMs = defaultRequestTimeoutMs;
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
@@ -660,7 +657,7 @@ public class NetworkClient implements KafkaClient {
         Node foundCanConnect = null;
         Node foundReady = null;
 
-        int offset = this.randOffset.nextInt(nodes.size());
+        int offset = ThreadLocalRandom.current().nextInt(nodes.size());
         for (int i = 0; i < nodes.size(); i++) {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);

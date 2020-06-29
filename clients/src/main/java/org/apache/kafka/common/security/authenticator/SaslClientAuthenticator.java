@@ -69,8 +69,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class SaslClientAuthenticator implements Authenticator {
     /**
@@ -103,7 +103,6 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private static final short DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER = -1;
-    private static final Random RNG = new Random();
 
     /**
      * the reserved range of correlation id for Sasl requests.
@@ -670,8 +669,9 @@ public class SaslClientAuthenticator implements Authenticator {
                 // pick a random percentage between 85% and 95% for session re-authentication
                 double pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount = 0.85;
                 double pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously = 0.10;
-                double pctToUse = pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount + RNG.nextDouble()
-                        * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
+                double pctToUse = pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount
+                        + ThreadLocalRandom.current().nextDouble()
+                                * pctWindowJitterToAvoidReauthenticationStormAcrossManyChannelsSimultaneously;
                 sessionLifetimeMsToUse = (long) (positiveSessionLifetimeMs.longValue() * pctToUse);
                 clientSessionReauthenticationTimeNanos = authenticationEndNanos + 1000 * 1000 * sessionLifetimeMsToUse;
                 log.debug(
