@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -52,6 +53,7 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
@@ -73,6 +75,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final OffsetCheckpoint checkpointFile;
     private final Map<TopicPartition, Long> checkpointFileCache;
+    private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
+    private final LogContext logContext;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
@@ -100,6 +105,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
         retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
         pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        this.deserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
+        this.logContext = logContext;
     }
 
     @Override
@@ -135,6 +142,26 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             globalStoreNames.add(stateStore.name());
             final String sourceTopic = storeNameToChangelog.get(stateStore.name());
             changelogTopics.add(sourceTopic);
+
+            final SourceNode source = topology.source(sourceTopic);
+            if (source != null && !ProcessorStateManager
+                .storeChangelogTopic(globalProcessorContext.applicationId(), stateStore.name()).equals(sourceTopic)) {
+                log.info("Found sourceNode {} for topic {}", source.toString(), sourceTopic);
+                deserializers.put(
+                    sourceTopic,
+                    new RecordDeserializer(
+                        source,
+                        deserializationExceptionHandler,
+                        logContext,
+                        droppedRecordsSensorOrSkippedRecordsSensor(
+                            Thread.currentThread().getName(),
+                            globalProcessorContext.taskId().toString(),
+                            globalProcessorContext.metrics()
+                        )
+                    )
+                );
+            }
+
             stateStore.init(globalProcessorContext, stateStore);
         }
 
@@ -290,12 +317,18 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
             long restoreCount = 0L;
 
+            final RecordDeserializer recordDeserializer = deserializers.get(topicPartition.topic());
+
             while (offset < highWatermark) {
                 try {
                     final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
                     final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
                     for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
                         if (record.key() != null) {
+                            if (recordDeserializer != null && recordDeserializer.deserialize(globalProcessorContext, record) == null) {
+                                continue;
+                            }
+
                             restoreRecords.add(recordConverter.convert(record));
                         }
                     }

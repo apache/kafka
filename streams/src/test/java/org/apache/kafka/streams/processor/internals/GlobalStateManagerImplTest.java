@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -37,6 +39,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
@@ -47,6 +50,8 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,6 +64,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
@@ -73,35 +80,41 @@ import static org.junit.Assert.fail;
 public class GlobalStateManagerImplTest {
 
 
-    private final MockTime time = new MockTime();
-    private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
-    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final String storeName1 = "t1-store";
-    private final String storeName2 = "t2-store";
-    private final String storeName3 = "t3-store";
-    private final String storeName4 = "t4-store";
-    private final TopicPartition t1 = new TopicPartition("t1", 1);
-    private final TopicPartition t2 = new TopicPartition("t2", 1);
-    private final TopicPartition t3 = new TopicPartition("t3", 1);
-    private final TopicPartition t4 = new TopicPartition("t4", 1);
-    private GlobalStateManagerImpl stateManager;
-    private StateDirectory stateDirectory;
-    private StreamsConfig streamsConfig;
-    private NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
-    private MockConsumer<byte[], byte[]> consumer;
-    private File checkpointFile;
-    private ProcessorTopology topology;
-    private InternalMockProcessorContext processorContext;
+    protected final MockTime time = new MockTime();
+    protected final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+    protected final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
+    protected final String storeName1 = "t1-store";
+    protected final String storeName2 = "t2-store";
+    protected final String storeName3 = "t3-store";
+    protected final String storeName4 = "t4-store";
+    protected final String storeName5 = "t5-store";
+    protected final String storeName6 = "t6-store";
+    protected final TopicPartition t1 = new TopicPartition("t1", 1);
+    protected final TopicPartition t2 = new TopicPartition("t2", 1);
+    protected final TopicPartition t3 = new TopicPartition("t3", 1);
+    protected final TopicPartition t4 = new TopicPartition("t4", 1);
+    protected final TopicPartition t5 = new TopicPartition("t5", 1);
+    protected final TopicPartition t6 = new TopicPartition(ProcessorStateManager.storeChangelogTopic("appId", storeName6), 1);
+    protected GlobalStateManagerImpl stateManager;
+    protected StateDirectory stateDirectory;
+    protected StreamsConfig streamsConfig;
+    protected NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
+    protected NoOpReadOnlyStore<Long, Long> store5, store6;
+    protected MockConsumer<byte[], byte[]> consumer;
+    protected File checkpointFile;
+    protected ProcessorTopology topology;
+    protected InternalMockProcessorContext processorContext;
 
-    static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
+    static ProcessorTopology withGlobalStores(final Map<String, SourceNode> sourcesByTopic,
+                                              final List<StateStore> stateStores,
                                               final Map<String, String> storeToChangelogTopic) {
         return new ProcessorTopology(Collections.emptyList(),
-                                     Collections.emptyMap(),
-                                     Collections.emptyMap(),
-                                     Collections.emptyList(),
-                                     stateStores,
-                                     storeToChangelogTopic,
-                                     Collections.emptySet());
+            sourcesByTopic,
+            Collections.emptyMap(),
+            Collections.emptyList(),
+            stateStores,
+            storeToChangelogTopic,
+            Collections.emptySet());
     }
 
     @Before
@@ -112,13 +125,25 @@ public class GlobalStateManagerImplTest {
         storeToTopic.put(storeName2, t2.topic());
         storeToTopic.put(storeName3, t3.topic());
         storeToTopic.put(storeName4, t4.topic());
+        storeToTopic.put(storeName5, t5.topic());
+        storeToTopic.put(storeName6, t6.topic());
 
         store1 = new NoOpReadOnlyStore<>(storeName1, true);
         store2 = new ConverterStore<>(storeName2, true);
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
+        store5 = new NoOpReadOnlyStore<>(storeName5, true);
+        store6 = new NoOpReadOnlyStore<>(storeName6, true);
 
-        topology = withGlobalStores(asList(store1, store2, store3, store4), storeToTopic);
+        final Deserializer<Long> longDeserializer = Serdes.Long().deserializer();
+        final MockSourceNode<Long, Long> source1 = new MockSourceNode<>(new String[]{t5.topic()}, longDeserializer,
+            longDeserializer);
+        final MockSourceNode<Long, Long> source2 = new MockSourceNode<>(new String[]{t6.topic()}, longDeserializer,
+            longDeserializer);
+
+        topology = withGlobalStores(mkMap(mkEntry(t5.topic(), source1), mkEntry(t6.topic(), source2)),
+            asList(store1, store2, store3, store4, store5, store6),
+            storeToTopic);
 
         streamsConfig = new StreamsConfig(new Properties() {
             {
@@ -144,6 +169,64 @@ public class GlobalStateManagerImplTest {
     @After
     public void after() throws IOException {
         stateDirectory.unlockGlobalState();
+    }
+
+    public byte[] longToBytes(final long x) {
+        final ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+        buffer.putLong(x);
+        return buffer.array();
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionWhenRestoringWithLogAndFailExceptionHandler() {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t5, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t5, 3L);
+        consumer.updatePartitions(t5.topic(), Collections.singletonList(new PartitionInfo(t5.topic(), t5.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t5));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        final byte[] specialString = "specialKey".getBytes(StandardCharsets.UTF_8);
+        final byte[] longValue = longToBytes(1);
+
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 1, longValue, longValue));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 2, specialString, specialString));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 3, longValue, longValue));
+
+        stateManager.initialize();
+
+        try {
+            stateManager.register(store5, stateRestoreCallback);
+            fail("Should not get here as LogAndFailExceptionHandler used");
+        } catch (final StreamsException e) {
+            //expected ok to ignore
+        }
+
+    }
+
+    @Test
+    public void shouldRestoreForChangelogTopics() {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t6, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t6, 3L);
+        consumer.updatePartitions(t6.topic(),
+            Collections.singletonList(new PartitionInfo(t6.topic(), t6.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t6));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        final byte[] specialString = "specialKey".getBytes(StandardCharsets.UTF_8);
+        final byte[] longValue = longToBytes(1);
+
+        consumer.addRecord(new ConsumerRecord<>(t6.topic(), t6.partition(), 1, longValue, longValue));
+        consumer.addRecord(new ConsumerRecord<>(t6.topic(), t6.partition(), 2, specialString, specialString));
+        consumer.addRecord(new ConsumerRecord<>(t6.topic(), t6.partition(), 3, longValue, longValue));
+
+        stateManager.initialize();
+        stateManager.register(store6, stateRestoreCallback);
+        assertEquals(3, stateRestoreCallback.restored.size());
+
     }
 
     @Test
@@ -218,7 +301,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldReturnInitializedStoreNames() {
         final Set<String> storeNames = stateManager.initialize();
-        assertEquals(Utils.mkSet(storeName1, storeName2, storeName3, storeName4), storeNames);
+        assertEquals(Utils.mkSet(storeName1, storeName2, storeName3, storeName4, storeName5, storeName6), storeNames);
     }
 
     @Test
@@ -707,8 +790,8 @@ public class GlobalStateManagerImplTest {
         return expected;
     }
 
-    private static class TheStateRestoreCallback implements StateRestoreCallback {
-        private final List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
+    static class TheStateRestoreCallback implements StateRestoreCallback {
+        final List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
 
         @Override
         public void restore(final byte[] key, final byte[] value) {
@@ -716,7 +799,7 @@ public class GlobalStateManagerImplTest {
         }
     }
 
-    private class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
+    protected class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
         ConverterStore(final String name,
                        final boolean rocksdbStore) {
             super(name, rocksdbStore);
