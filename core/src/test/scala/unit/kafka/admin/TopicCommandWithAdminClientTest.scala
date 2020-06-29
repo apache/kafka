@@ -812,7 +812,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val result = AdminClientTestUtils.listPartitionReassignmentsResult(
       new ClusterAuthorizationException("Unauthorized"))
 
-    Mockito.doReturn(result).when(adminClient).listPartitionReassignments(
+    // Passing `null` here to help the compiler disambiguate the `doReturn` methods,
+    // compilation for scala 2.12 fails otherwise.
+    Mockito.doReturn(result, null).when(adminClient).listPartitionReassignments(
       Set(new TopicPartition(testTopicName, 0)).asJava
     )
 
