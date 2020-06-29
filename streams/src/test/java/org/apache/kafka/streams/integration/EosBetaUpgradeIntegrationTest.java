@@ -55,7 +55,6 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
@@ -165,7 +164,6 @@ public class EosBetaUpgradeIntegrationTest {
         CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
     }
 
-    @Ignore
     @Test
     public void shouldUpgradeFromEosAlphaToEosBeta() throws Exception {
         // We use two KafkaStreams clients that we upgrade from eos-alpha to eos-beta. During the upgrade,
