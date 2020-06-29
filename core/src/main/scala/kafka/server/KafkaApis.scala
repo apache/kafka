@@ -2425,43 +2425,54 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val alterConfigsRequest = request.body[AlterConfigsRequest]
-    val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.toMap.partition { case (resource, _) =>
-      resource.`type` match {
-        case ConfigResource.Type.BROKER_LOGGER =>
-          throw new InvalidRequestException(s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
-        case ConfigResource.Type.BROKER =>
-          authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-        case ConfigResource.Type.TOPIC =>
-          authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+    val requestResources = alterConfigsRequest.configs.asScala
+
+    def sendResponseCallback(results: Map[ConfigResource, ApiError]): Unit = {
+      def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
+        val data = new AlterConfigsResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+        results.foreach{ case (resource, error) =>
+          data.responses().add(new AlterConfigsResourceResponse()
+            .setErrorCode(error.error.code)
+            .setErrorMessage(error.message)
+            .setResourceName(resource.name)
+            .setResourceType(resource.`type`.id))
+        }
+        new AlterConfigsResponse(data)
       }
+      sendResponseMaybeThrottle(request, responseCallback)
     }
 
-    val (controllerRequiredResources, remainingAuthorizedResources) =
-      filterControllerOnlyTopicResources(alterConfigsRequest.version(), authorizedResources)
+    if (alterConfigsRequest.version() >= 2
+      && !alterConfigsRequest.validateOnly()
+      && !controller.isActive) {
+      val requireControllerResult = requestResources.keys.map {
+        resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
+      }.toMap
 
-    val authorizedResult = adminManager.alterConfigs(
-      remainingAuthorizedResources, alterConfigsRequest.validateOnly)
-    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-      resource -> configsAuthorizationApiError(resource)
-    }
-    val requireControllerResult = controllerRequiredResources.keys.map {
-      resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
-    }
-
-    def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
-      val data = new AlterConfigsResponseData()
-        .setThrottleTimeMs(requestThrottleMs)
-      (authorizedResult ++ unauthorizedResult ++ requireControllerResult).foreach{ case (resource, error) =>
-        data.responses().add(new AlterConfigsResourceResponse()
-          .setErrorCode(error.error.code)
-          .setErrorMessage(error.message)
-          .setResourceName(resource.name)
-          .setResourceType(resource.`type`.id))
+      sendResponseCallback(requireControllerResult)
+    } else {
+      val (authorizedResources, unauthorizedResources) = requestResources.partition { case (resource, _) =>
+        resource.`type` match {
+          case ConfigResource.Type.BROKER_LOGGER =>
+            throw new InvalidRequestException(
+              s"AlterConfigs is deprecated and does not support the resource type ${ConfigResource.Type.BROKER_LOGGER}")
+          case ConfigResource.Type.BROKER =>
+            authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+          case ConfigResource.Type.TOPIC =>
+            authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
+          case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+        }
       }
-      new AlterConfigsResponse(data)
+
+      val authorizedResult = adminManager.alterConfigs(
+        authorizedResources, alterConfigsRequest.validateOnly)
+      val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+        resource -> configsAuthorizationApiError(resource)
+      }
+
+      sendResponseCallback(authorizedResult ++ unauthorizedResult)
     }
-    sendResponseMaybeThrottle(request, responseCallback)
   }
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
@@ -2560,7 +2571,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleIncrementalAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val incrementalAlterConfigsRequest = request.body[IncrementalAlterConfigsRequest]
-
     val configs = incrementalAlterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
       val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
         alterConfigResource.resourceName)
@@ -2570,41 +2580,40 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toBuffer
     }.toMap
 
-    val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
-      resource.`type` match {
-        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
-          authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
-        case ConfigResource.Type.TOPIC =>
-          authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+    def sendResponseCallback(results: Map[ConfigResource, ApiError]): Unit = {
+      def responseCallback(requestThrottleMs: Int): IncrementalAlterConfigsResponse = {
+        new IncrementalAlterConfigsResponse(IncrementalAlterConfigsResponse.toResponseData(requestThrottleMs, results.asJava))
       }
+      sendResponseMaybeThrottle(request, responseCallback)
     }
 
-    val (controllerRequiredResources, remainingAuthorizedResources) =
-      filterControllerOnlyTopicResources(incrementalAlterConfigsRequest.version(), authorizedResources)
+    if (incrementalAlterConfigsRequest.version() >= 2
+      && !incrementalAlterConfigsRequest.data.validateOnly()
+      && !controller.isActive) {
+      val requireControllerResult = configs.map {
+        resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
+      }
 
-    val authorizedResult = adminManager.incrementalAlterConfigs(
-      remainingAuthorizedResources, incrementalAlterConfigsRequest.data.validateOnly)
-    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
-      resource -> configsAuthorizationApiError(resource)
-    }
+      sendResponseCallback(requireControllerResult)
+    } else {
 
-    val requireControllerResult = controllerRequiredResources.keys.map {
-      resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
-    }
+      val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
+        resource.`type` match {
+          case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
+            authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
+          case ConfigResource.Type.TOPIC =>
+            authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
+          case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+        }
+      }
 
-    sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new IncrementalAlterConfigsResponse(IncrementalAlterConfigsResponse.toResponseData(requestThrottleMs,
-        (authorizedResult ++ unauthorizedResult ++ requireControllerResult).asJava)))
-  }
+      val authorizedResult = adminManager.incrementalAlterConfigs(
+        authorizedResources, incrementalAlterConfigsRequest.data.validateOnly)
+      val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+        resource -> configsAuthorizationApiError(resource)
+      }
 
-  private def filterControllerOnlyTopicResources[O](requestVersion: Short, authorizedResources: Map[ConfigResource, O]): (
-    Map[ConfigResource, O], Map[ConfigResource, O]
-    ) = {
-    val requireController = requestVersion >= 2 && !controller.isActive
-    authorizedResources.partition {
-      case (resource, _) =>
-        requireController && resource.`type`() == ConfigResource.Type.TOPIC
+      sendResponseCallback(authorizedResult ++ unauthorizedResult)
     }
   }
 

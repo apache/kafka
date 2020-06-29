@@ -2044,14 +2044,18 @@ public class KafkaAdminClient extends AdminClient {
 
         for (ConfigResource resource : configs.keySet()) {
             Integer node = nodeFor(resource);
-            if (node != null) {
+            if (node != null && options.shouldValidateOnly()) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(node);
                 allFutures.putAll(alterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
             } else
                 unifiedRequestResources.add(resource);
         }
-        if (!unifiedRequestResources.isEmpty())
-          allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources, new ControllerNodeProvider()));
+
+        if (!unifiedRequestResources.isEmpty()) {
+            allFutures.putAll(alterConfigs(configs, options, unifiedRequestResources,
+                options.shouldValidateOnly() ? new LeastLoadedNodeProvider() : new ControllerNodeProvider()));
+        }
+
         return new AlterConfigsResult(new HashMap<>(allFutures));
     }
 
@@ -2095,22 +2099,26 @@ public class KafkaAdminClient extends AdminClient {
     public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
                                                       final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
-        // We must make a separate AlterConfigs request for every BROKER resource we want to alter
-        // and send the request to that specific broker. Other resources are grouped together into
-        // a single request that must be sent to the controller.
+
+        // For all the actual alter config requests (validateOnly = false), we should group the resources together
+        // a single request to be sent to the controller. If we are only doing validation, we could make a separate
+        // AlterConfigs request for every BROKER resource and a random node for topic resources.
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
             Integer node = nodeFor(resource);
-            if (node != null) {
+            if (node != null && options.shouldValidateOnly()) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(node);
                 allFutures.putAll(incrementalAlterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
             } else {
                 unifiedRequestResources.add(resource);
             }
         }
-        if (!unifiedRequestResources.isEmpty())
-            allFutures.putAll(incrementalAlterConfigs(configs, options, unifiedRequestResources, new ControllerNodeProvider()));
+
+        if (!unifiedRequestResources.isEmpty()) {
+            allFutures.putAll(incrementalAlterConfigs(configs, options, unifiedRequestResources,
+                options.shouldValidateOnly() ? new LeastLoadedNodeProvider() : new ControllerNodeProvider()));
+        }
 
         return new AlterConfigsResult(new HashMap<>(allFutures));
     }
