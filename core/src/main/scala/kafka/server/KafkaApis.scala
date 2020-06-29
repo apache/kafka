@@ -2425,7 +2425,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val alterConfigsRequest = request.body[AlterConfigsRequest]
-    val requestResources = alterConfigsRequest.configs.asScala
+    val requestResources = alterConfigsRequest.configs.asScala.toMap
 
     def sendResponseCallback(results: Map[ConfigResource, ApiError]): Unit = {
       def responseCallback(requestThrottleMs: Int): AlterConfigsResponse = {
@@ -2590,9 +2590,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (incrementalAlterConfigsRequest.version() >= 2
       && !incrementalAlterConfigsRequest.data.validateOnly()
       && !controller.isActive) {
-      val requireControllerResult = configs.map {
+      val requireControllerResult = configs.keys.map {
         resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
-      }
+      }.toMap
 
       sendResponseCallback(requireControllerResult)
     } else {
@@ -2993,7 +2993,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizer.forall { authZ =>
       val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
       val actions = Collections.singletonList(new Action(operation, resource, refCount, logIfAllowed, logIfDenied))
-      authZ.authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED
+      val result = authZ.authorize(requestContext, actions).get(0)
+      result == AuthorizationResult.ALLOWED
     }
   }
 
