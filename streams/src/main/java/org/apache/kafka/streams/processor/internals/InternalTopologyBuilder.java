@@ -270,16 +270,7 @@ public class InternalTopologyBuilder {
 
         @Override
         public ProcessorNode<K, V> build() {
-            final List<String> sourceTopics = nodeToSourceTopics.get(name);
-
-            // if it is subscribed via patterns, it is possible that the topic metadata has not been updated
-            // yet and hence the map from source node to topics is stale, in this case we put the pattern as a place holder;
-            // this should only happen for debugging since during runtime this function should always be called after the metadata has updated.
-            if (sourceTopics == null) {
-                return new SourceNode<>(name, Collections.singletonList(String.valueOf(pattern)), timestampExtractor, keyDeserializer, valDeserializer);
-            } else {
-                return new SourceNode<>(name, maybeDecorateInternalSourceTopics(sourceTopics), timestampExtractor, keyDeserializer, valDeserializer);
-            }
+            return new SourceNode<>(name, timestampExtractor, keyDeserializer, valDeserializer);
         }
 
         private boolean isMatch(final String topic) {
@@ -522,8 +513,12 @@ public class InternalTopologyBuilder {
                                     final boolean allowOverride,
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
-        if (!allowOverride && stateFactories.containsKey(storeBuilder.name())) {
-            throw new TopologyException("StateStore " + storeBuilder.name() + " is already added.");
+        final StateStoreFactory<?> stateFactory = stateFactories.get(storeBuilder.name());
+        if (!allowOverride && stateFactory != null && stateFactory.builder != storeBuilder) {
+            throw new TopologyException("A different StateStore has already been added with the name " + storeBuilder.name());
+        }
+        if (globalStateBuilders.containsKey(storeBuilder.name())) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeBuilder.name());
         }
 
         stateFactories.put(storeBuilder.name(), new StateStoreFactory<>(storeBuilder));
@@ -685,8 +680,11 @@ public class InternalTopologyBuilder {
         if (nodeFactories.containsKey(processorName)) {
             throw new TopologyException("Processor " + processorName + " is already added.");
         }
-        if (stateFactories.containsKey(storeName) || globalStateBuilders.containsKey(storeName)) {
-            throw new TopologyException("StateStore " + storeName + " is already added.");
+        if (stateFactories.containsKey(storeName)) {
+            throw new TopologyException("A different StateStore has already been added with the name " + storeName);
+        }
+        if (globalStateBuilders.containsKey(storeName)) {
+            throw new TopologyException("A different GlobalStateStore has already been added with the name " + storeName);
         }
         if (loggingEnabled) {
             throw new TopologyException("StateStore " + storeName + " for global table must not have logging enabled.");
@@ -1102,6 +1100,10 @@ public class InternalTopologyBuilder {
         }
 
         return Collections.unmodifiableMap(topicGroups);
+    }
+
+    public Map<String, List<String>> nodeToSourceTopics() {
+        return Collections.unmodifiableMap(nodeToSourceTopics);
     }
 
     private RepartitionTopicConfig buildRepartitionTopicConfig(final String internalTopic,
@@ -1791,6 +1793,13 @@ public class InternalTopologyBuilder {
                 }
             }
             return topicConfigs;
+        }
+
+        /**
+         * Returns the topic names for any optimized source changelogs
+         */
+        public Set<String> sourceTopicChangelogs() {
+            return sourceTopics.stream().filter(stateChangelogTopics::containsKey).collect(Collectors.toSet());
         }
 
         @Override

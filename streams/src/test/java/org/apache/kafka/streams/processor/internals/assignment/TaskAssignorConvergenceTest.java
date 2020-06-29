@@ -185,7 +185,7 @@ public class TaskAssignorConvergenceTest {
                 }
                 newClientState.addPreviousActiveTasks(clientState.activeTasks());
                 newClientState.addPreviousStandbyTasks(clientState.standbyTasks());
-                newClientState.addPreviousTasksAndOffsetSums(taskOffsetSums);
+                newClientState.addPreviousTasksAndOffsetSums("consumer", taskOffsetSums);
                 newClientState.computeTaskLags(uuid, statefulTaskEndOffsetSums);
                 newClientStates.put(uuid, newClientState);
             }
@@ -231,7 +231,7 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 2,
                                                                 0,
-                                                                1000L);
+                                                                60_000L);
 
         final Harness harness = Harness.initializeCluster(1, 1, 1, () -> 1);
 
@@ -250,7 +250,7 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
-                                                                1000L);
+                                                                60_000L);
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 1, () -> 5);
         testForConvergence(harness, configs, 1);
@@ -272,7 +272,7 @@ public class TaskAssignorConvergenceTest {
         final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                 maxWarmupReplicas,
                                                                 numStandbyReplicas,
-                                                                1000L);
+                                                                60_000L);
 
         final Harness harness = Harness.initializeCluster(numStatelessTasks, numStatefulTasks, 7, () -> 5);
         testForConvergence(harness, configs, 1);
@@ -313,7 +313,7 @@ public class TaskAssignorConvergenceTest {
             final AssignmentConfigs configs = new AssignmentConfigs(100L,
                                                                     maxWarmupReplicas,
                                                                     numStandbyReplicas,
-                                                                    1000L);
+                                                                    60_000L);
 
             harness = Harness.initializeCluster(
                 numStatelessTasks,

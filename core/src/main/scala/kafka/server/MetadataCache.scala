@@ -214,7 +214,7 @@ class MetadataCache(brokerId: Int) extends Logging {
                                        topic: String,
                                        partitionId: Int,
                                        stateInfo: UpdateMetadataPartitionState): Unit = {
-    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap())
+    val infos = partitionStates.getOrElseUpdate(topic, mutable.LongMap.empty)
     infos(partitionId) = stateInfo
   }
 
@@ -319,7 +319,7 @@ class MetadataCache(brokerId: Int) extends Logging {
         metadataSnapshot.partitionStates.foreach { case (topic, oldPartitionStates) =>
           val copy = new mutable.LongMap[UpdateMetadataPartitionState](oldPartitionStates.size)
           copy ++= oldPartitionStates
-          partitionStates += (topic -> copy)
+          partitionStates(topic) = copy
         }
 
         val traceEnabled = stateChangeLogger.isTraceEnabled

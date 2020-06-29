@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.isEmptyConsumerGroup;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -259,6 +260,41 @@ public abstract class AbstractResetIntegrationTest {
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(1, exitCode);
+    }
+
+    public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
+        appID = testId + "-with-force-option";
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT * 100);
+
+        // Run
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        streams.start();
+        final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+
+        streams.close();
+
+        // RESET
+        streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
+        streams.cleanUp();
+
+        // Reset would fail since long session timeout has been configured
+        final boolean cleanResult = tryCleanGlobal(false, null, null);
+        Assert.assertEquals(false, cleanResult);
+
+        // Reset will success with --force, it will force delete active members on broker side
+        cleanGlobal(false, "--force", null);
+        assertThat("Group is not empty after cleanGlobal", isEmptyConsumerGroup(adminClient, appID));
+
+        assertInternalTopicsGotDeleted(null);
+
+        // RE-RUN
+        streams.start();
+        final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(resultConsumerConfig, OUTPUT_TOPIC, 10);
+        streams.close();
+
+        assertThat(resultRerun, equalTo(result));
+        cleanGlobal(false, "--force", null);
     }
 
     void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
@@ -522,9 +558,9 @@ public abstract class AbstractResetIntegrationTest {
         return builder.build();
     }
 
-    private void cleanGlobal(final boolean withIntermediateTopics,
-                             final String resetScenario,
-                             final String resetScenarioArg) throws Exception {
+    private boolean tryCleanGlobal(final boolean withIntermediateTopics,
+                                   final String resetScenario,
+                                   final String resetScenarioArg) throws Exception {
         // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
@@ -561,8 +597,14 @@ public abstract class AbstractResetIntegrationTest {
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
 
-        final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
-        Assert.assertEquals(0, exitCode);
+        return new StreamsResetter().run(parameters, cleanUpConfig) == 0;
+    }
+
+    private void cleanGlobal(final boolean withIntermediateTopics,
+                             final String resetScenario,
+                             final String resetScenarioArg) throws Exception {
+        final boolean cleanResult = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg);
+        Assert.assertEquals(true, cleanResult);
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {

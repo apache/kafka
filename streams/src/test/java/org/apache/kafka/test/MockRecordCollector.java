@@ -81,7 +81,10 @@ public class MockRecordCollector implements RecordCollector {
     }
 
     @Override
-    public void close() {}
+    public void closeClean() {}
+
+    @Override
+    public void closeDirty() {}
 
     @Override
     public Map<TopicPartition, Long> offsets() {

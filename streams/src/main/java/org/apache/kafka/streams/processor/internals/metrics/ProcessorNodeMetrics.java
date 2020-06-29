@@ -307,7 +307,7 @@ public class ProcessorNodeMetrics {
             descriptionOfCount,
             descriptionOfAvgLatency,
             descriptionOfMaxLatency,
-            RecordingLevel.DEBUG,
+            recordingLevel,
             streamsMetrics
         );
         return throughputAndLatencySensor(
@@ -319,7 +319,7 @@ public class ProcessorNodeMetrics {
             descriptionOfCount,
             descriptionOfAvgLatency,
             descriptionOfMaxLatency,
-            RecordingLevel.DEBUG,
+            recordingLevel,
             streamsMetrics,
             parentSensor
         );

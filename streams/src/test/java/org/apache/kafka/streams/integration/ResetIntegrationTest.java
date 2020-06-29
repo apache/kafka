@@ -73,6 +73,11 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
+    public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
+        super.testResetWhenLongSessionTimeoutConfiguredWithForceOption();
+    }
+
+    @Test
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
         super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
     }

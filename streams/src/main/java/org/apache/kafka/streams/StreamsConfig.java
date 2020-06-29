@@ -200,19 +200,19 @@ public class StreamsConfig extends AbstractConfig {
 
     /**
      * Prefix used to isolate {@link Admin admin} configs from other client configs.
-     * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link ProducerConfig producer
-     * properties}.
+     * It is recommended to use {@link #adminClientPrefix(String)} to add this prefix to {@link AdminClientConfig admin
+     * client properties}.
      */
     @SuppressWarnings("WeakerAccess")
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
 
     /**
-     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION "topology.optimization"} for disabling topology optimization
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for disabling topology optimization
      */
     public static final String NO_OPTIMIZATION = "none";
 
     /**
-     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION "topology.optimization"} for enabling topology optimization
+     * Config value for parameter {@link #TOPOLOGY_OPTIMIZATION_CONFIG "topology.optimization"} for enabling topology optimization
      */
     public static final String OPTIMIZE = "all";
 
@@ -524,7 +524,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final String STATE_DIR_DOC = "Directory location for state store. This path must be unique for each streams instance sharing the same underlying filesystem.";
 
     /** {@code topology.optimization} */
-    public static final String TOPOLOGY_OPTIMIZATION = "topology.optimization";
+    public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka Streams if it should optimize the topology, disabled by default";
 
     /** {@code upgrade.from} */
@@ -551,6 +551,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface." +
         " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
+
+    /**
+     * {@code topology.optimization}
+     * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
+     */
+    @Deprecated
+    public static final String TOPOLOGY_OPTIMIZATION = TOPOLOGY_OPTIMIZATION_CONFIG;
 
 
     private static final String[] NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS =
@@ -664,7 +671,7 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-            .define(TOPOLOGY_OPTIMIZATION,
+            .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
                     in(NO_OPTIMIZATION, OPTIMIZE),
@@ -874,7 +881,7 @@ public class StreamsConfig extends AbstractConfig {
         public static final String TIME = "__time__";
 
         // This is settable in the main Streams config, but it's a private API for testing
-        public static final String ASSIGNMENT_LISTENER = "__asignment.listener__";
+        public static final String ASSIGNMENT_LISTENER = "__assignment.listener__";
     }
 
     /**
@@ -1148,6 +1155,9 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
+        consumerProps.put(ACCEPTABLE_RECOVERY_LAG_CONFIG, getLong(ACCEPTABLE_RECOVERY_LAG_CONFIG));
+        consumerProps.put(MAX_WARMUP_REPLICAS_CONFIG, getInt(MAX_WARMUP_REPLICAS_CONFIG));
+        consumerProps.put(PROBING_REBALANCE_INTERVAL_MS_CONFIG, getLong(PROBING_REBALANCE_INTERVAL_MS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName());
         consumerProps.put(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, getLong(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
 

@@ -69,9 +69,9 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
       var result = true
       for (topic <- List(topic1, topic2)) {
         val tp = new TopicPartition(topic, partition)
-        val expectedOffset = brokers.head.getLogManager().getLog(tp).get.logEndOffset
+        val expectedOffset = brokers.head.getLogManager.getLog(tp).get.logEndOffset
         result = result && expectedOffset > 0 && brokers.forall { item =>
-          expectedOffset == item.getLogManager().getLog(tp).get.logEndOffset
+          expectedOffset == item.getLogManager.getLog(tp).get.logEndOffset
         }
       }
       result

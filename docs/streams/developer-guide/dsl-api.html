@@ -2543,7 +2543,7 @@
                             <td>
                               <p class="first"><strong>Left Join</strong></p>
                               <ul class="last simple">
-                                <li>(KTable, KTable) → KTable</li>
+                                <li>(KTable, KTable) &rarr; KTable</li>
                               </ul>
                             </td>
                             <td>
@@ -3533,10 +3533,17 @@ grouped
                 <div class="admonition tip">
                     <p><b>Tip</b></p>
                     <p class="last">Even though we do not demonstrate it in this example, a stream processor can access any available state stores by
-                        calling <code class="docutils literal"><span class="pre">ProcessorContext#getStateStore()</span></code>.  Only such state stores are available that (1) have been named in the
-                        corresponding <code class="docutils literal"><span class="pre">KStream#process()</span></code> method call (note that this is a different method than <code class="docutils literal"><span class="pre">Processor#process()</span></code>),
-                        plus (2) all global stores.  Note that global stores do not need to be attached explicitly;  however, they only
-                        allow for read-only access.</p>
+                        calling <code class="docutils literal"><span class="pre">ProcessorContext#getStateStore()</span></code>.
+                        State stores are only available if they have been connected to the processor, or if they are global stores.  While global stores do not need to be connected explicitly, they only allow for read-only access.
+                        There are two ways to connect state stores to a processor:
+                    <ul class="simple">
+                        <li>By passing the name of a store that has already been added via <code class="docutils literal"><span class="pre">Topology#addStateStore()</span></code> to the corresponding <code class="docutils literal"><span class="pre">KStream#process()</span></code> method call.</li>
+                        <li>Implementing <code class="docutils literal"><span class="pre">ConnectedStoreProvider#stores()</span></code> on the <code class="docutils literal"><span class="pre">ProcessorSupplier</span></code>
+                            passed to <code class="docutils literal"><span class="pre">KStream#process()</span></code>.  In this case there is no need to call <code class="docutils literal"><span class="pre">StreamsBuilder#addStateStore()</span></code>
+                            beforehand, the store will be automatically added for you. You can also implement <code class="docutils literal"><span class="pre">ConnectedStoreProvider#stores()</span></code> on the
+                            <code class="docutils literal"><span class="pre">Value*</span></code> or <code class="docutils literal"><span class="pre">*WithKey</span></code> supplier variants, or <code class="docutils literal"><span class="pre">TransformerSupplier</span></code> or any of its variants.
+                        </li>
+                    </ul>
                 </div>
                 <p>Then we can leverage the <code class="docutils literal"><span class="pre">PopularPageEmailAlert</span></code> processor in the DSL via <code class="docutils literal"><span class="pre">KStream#process</span></code>.</p>
                 <p>In Java 8+, using lambda expressions:</p>

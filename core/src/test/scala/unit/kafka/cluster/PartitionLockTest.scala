@@ -284,8 +284,7 @@ class PartitionLockTest extends Logging {
         followerFetchOffsetMetadata = LogOffsetMetadata(recordBatch.lastOffset + 1),
         followerStartOffset = 0L,
         followerFetchTimeMs = mockTime.milliseconds(),
-        leaderEndOffset = partition.localLogOrException.logEndOffset,
-        lastSentHighwatermark = partition.localLogOrException.highWatermark)
+        leaderEndOffset = partition.localLogOrException.logEndOffset)
     }
   }
 

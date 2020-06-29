@@ -38,12 +38,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Pattern;
 
 import org.eclipse.jetty.util.StringUtil;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.connect.runtime.SourceConnectorConfig.TOPIC_CREATION_PREFIX;
 
 /**
  * Common base class providing configuration for Kafka Connect workers, whether standalone or distributed.
@@ -211,7 +213,10 @@ public class WorkerConfig extends AbstractConfig {
             + "plugins and their dependencies\n"
             + "Note: symlinks will be followed to discover dependencies or plugins.\n"
             + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
-            + "/opt/connectors";
+            + "/opt/connectors\n" 
+            + "Do not use config provider variables in this property, since the raw path is used "
+            + "by the worker's scanner before config providers are initialized and used to "
+            + "replace variables.";
 
     public static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
     protected static final String CONFIG_PROVIDERS_DOC =
@@ -250,9 +255,20 @@ public class WorkerConfig extends AbstractConfig {
             + "user requests to reset the set of active topics per connector.";
     protected static final boolean TOPIC_TRACKING_ALLOW_RESET_DEFAULT = true;
 
+    public static final String CONNECT_KAFKA_CLUSTER_ID = "connect.kafka.cluster.id";
+    public static final String CONNECT_GROUP_ID = "connect.group.id";
+
+    public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
+    protected static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow "
+            + "automatic creation of topics used by source connectors, when source connectors "
+            + "are configured with `" + TOPIC_CREATION_PREFIX + "` properties. Each task will use an "
+            + "admin client to create its topics and will not depend on the Kafka brokers "
+            + "to create topics automatically.";
+    protected static final boolean TOPIC_CREATION_ENABLE_DEFAULT = true;
+
     public static final String RESPONSE_HTTP_HEADERS_CONFIG = "response.http.headers.config";
-    public static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
-    public static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
+    protected static final String RESPONSE_HTTP_HEADERS_DOC = "Rules for REST API HTTP response headers";
+    protected static final String RESPONSE_HTTP_HEADERS_DEFAULT = "";
 
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
@@ -265,7 +281,7 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.HIGH, BOOTSTRAP_SERVERS_DOC)
                 .define(CLIENT_DNS_LOOKUP_CONFIG,
                         Type.STRING,
-                        ClientDnsLookup.DEFAULT.toString(),
+                        ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                         in(ClientDnsLookup.DEFAULT.toString(),
                            ClientDnsLookup.USE_ALL_DNS_IPS.toString(),
                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
@@ -335,8 +351,12 @@ public class WorkerConfig extends AbstractConfig {
                         Importance.LOW, TOPIC_TRACKING_ENABLE_DOC)
                 .define(TOPIC_TRACKING_ALLOW_RESET_CONFIG, Type.BOOLEAN, TOPIC_TRACKING_ALLOW_RESET_DEFAULT,
                         Importance.LOW, TOPIC_TRACKING_ALLOW_RESET_DOC)
+                .define(TOPIC_CREATION_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_CREATION_ENABLE_DEFAULT, Importance.LOW,
+                        TOPIC_CREATION_ENABLE_DOC)
                 .define(RESPONSE_HTTP_HEADERS_CONFIG, Type.STRING, RESPONSE_HTTP_HEADERS_DEFAULT,
-                        new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC);
+                        new ResponseHttpHeadersValidator(), Importance.LOW, RESPONSE_HTTP_HEADERS_DOC)
+                // security support
+                .withClientSslSupport();
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {
@@ -391,8 +411,29 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    private void logPluginPathConfigProviderWarning(Map<String, String> rawOriginals) {
+        String rawPluginPath = rawOriginals.get(PLUGIN_PATH_CONFIG);
+        // Can't use AbstractConfig::originalsStrings here since some values may be null, which
+        // causes that method to fail
+        String transformedPluginPath = Objects.toString(originals().get(PLUGIN_PATH_CONFIG));
+        if (!Objects.equals(rawPluginPath, transformedPluginPath)) {
+            log.warn(
+                "Variables cannot be used in the 'plugin.path' property, since the property is "
+                + "used by plugin scanning before the config providers that replace the " 
+                + "variables are initialized. The raw value '{}' was used for plugin scanning, as " 
+                + "opposed to the transformed value '{}', and this may cause unexpected results.",
+                rawPluginPath,
+                transformedPluginPath
+            );
+        }
+    }
+
     public Integer getRebalanceTimeout() {
         return null;
+    }
+
+    public boolean topicCreationEnable() {
+        return getBoolean(TOPIC_CREATION_ENABLE_CONFIG);
     }
 
     @Override
@@ -410,6 +451,7 @@ public class WorkerConfig extends AbstractConfig {
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
         super(definition, props);
         logInternalConverterDeprecationWarnings(props);
+        logPluginPathConfigProviderWarning(props);
     }
 
     // Visible for testing

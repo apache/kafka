@@ -134,7 +134,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
     //Check that throttled config correctly migrated to the new brokers
     (106 to 107).foreach { brokerId =>
-      assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound())
+      assertEquals(throttle, brokerFor(brokerId).quotaManagers.follower.upperBound)
     }
     if (!leaderThrottle) {
       (0 to 2).foreach { partition => assertTrue(brokerFor(106).quotaManagers.follower.isThrottled(tp(partition))) }

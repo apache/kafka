@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.ClientUtils.QuietAdminClientConfig;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
@@ -43,12 +44,6 @@ import java.util.concurrent.ExecutionException;
 public class InternalTopicManager {
     private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA or dev-mailing list (https://kafka.apache.org/contact).";
-
-    private static final class InternalAdminClientConfig extends AdminClientConfig {
-        private InternalAdminClientConfig(final Map<?, ?> props) {
-            super(props, false);
-        }
-    }
 
     private final Logger log;
     private final long windowChangeLogAdditionalRetention;
@@ -68,9 +63,9 @@ public class InternalTopicManager {
 
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
-        final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
-        retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);
-        retryBackOffMs = dummyAdmin.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        final QuietAdminClientConfig adminConfigs = new QuietAdminClientConfig(streamsConfig);
+        retries = adminConfigs.getInt(AdminClientConfig.RETRIES_CONFIG);
+        retryBackOffMs = adminConfigs.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
 
         log.debug("Configs:" + Utils.NL +
             "\t{} = {}" + Utils.NL +

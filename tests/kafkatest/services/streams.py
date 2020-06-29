@@ -44,6 +44,9 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     CLEAN_NODE_ENABLED = True
 
     logs = {
+        "streams_config": {
+            "path": CONFIG_FILE,
+            "collect_default": True},
         "streams_log": {
             "path": LOG_FILE,
             "collect_default": True},
@@ -464,6 +467,9 @@ class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
         properties['aggregation.topic'] = self.AGGREGATION_TOPIC
         properties['reduce.topic'] = self.REDUCE_TOPIC
         properties['join.topic'] = self.JOIN_TOPIC
+
+        # Long.MAX_VALUE lets us do the assignment without a warmup
+        properties['acceptable.recovery.lag'] = "9223372036854775807"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()

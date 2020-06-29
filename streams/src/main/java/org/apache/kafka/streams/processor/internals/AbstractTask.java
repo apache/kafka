@@ -16,35 +16,36 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.List;
+import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.Set;
-import org.slf4j.Logger;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 
 public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
+    protected Set<TopicPartition> inputPartitions;
+    protected ProcessorTopology topology;
 
     protected final TaskId id;
-    protected final ProcessorTopology topology;
     protected final StateDirectory stateDirectory;
-    protected final Set<TopicPartition> partitions;
     protected final ProcessorStateManager stateMgr;
 
     AbstractTask(final TaskId id,
                  final ProcessorTopology topology,
                  final StateDirectory stateDirectory,
                  final ProcessorStateManager stateMgr,
-                 final Set<TopicPartition> partitions) {
+                 final Set<TopicPartition> inputPartitions) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
-        this.partitions = partitions;
+        this.inputPartitions = inputPartitions;
         this.stateDirectory = stateDirectory;
     }
 
@@ -55,7 +56,7 @@ public abstract class AbstractTask implements Task {
 
     @Override
     public Set<TopicPartition> inputPartitions() {
-        return partitions;
+        return inputPartitions;
     }
 
     @Override
@@ -102,18 +103,9 @@ public abstract class AbstractTask implements Task {
         }
     }
 
-    static void executeAndMaybeSwallow(final boolean clean,
-                                       final Runnable runnable,
-                                       final String name,
-                                       final Logger log) {
-        try {
-            runnable.run();
-        } catch (final RuntimeException e) {
-            if (clean) {
-                throw e;
-            } else {
-                log.debug("Ignoring error in unclean {}", name);
-            }
-        }
+    @Override
+    public void update(final Set<TopicPartition> topicPartitions, final Map<String, List<String>> nodeToSourceTopics) {
+        this.inputPartitions = topicPartitions;
+        topology.updateSourceTopics(nodeToSourceTopics);
     }
 }

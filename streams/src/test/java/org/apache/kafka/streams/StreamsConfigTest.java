@@ -47,7 +47,7 @@ import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_BETA;
-import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION;
+import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
@@ -163,6 +163,9 @@ public class StreamsConfigTest {
     public void consumerConfigMustContainStreamPartitionAssignorConfig() {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 42);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        props.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 99L);
+        props.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, 9);
+        props.put(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, 99_999L);
         props.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, 7L);
         props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:host");
         props.put(StreamsConfig.RETRIES_CONFIG, 10);
@@ -173,6 +176,9 @@ public class StreamsConfigTest {
 
         assertEquals(42, returnedProps.get(StreamsConfig.REPLICATION_FACTOR_CONFIG));
         assertEquals(1, returnedProps.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
+        assertEquals(99L, returnedProps.get(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG));
+        assertEquals(9, returnedProps.get(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG));
+        assertEquals(99_999L, returnedProps.get(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG));
         assertEquals(
             StreamsPartitionAssignor.class.getName(),
             returnedProps.get(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG)
@@ -889,22 +895,22 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
-        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION);
+        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
         assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
     @Test
     public void shouldSpecifyOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "all";
-        props.put(TOPOLOGY_OPTIMIZATION, "all");
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION);
+        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
         assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
     @Test(expected = ConfigException.class)
     public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
-        props.put(TOPOLOGY_OPTIMIZATION, "maybe");
+        props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "maybe");
         new StreamsConfig(props);
     }
 

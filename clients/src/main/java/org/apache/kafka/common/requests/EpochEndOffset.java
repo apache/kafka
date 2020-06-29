@@ -40,9 +40,7 @@ public class EpochEndOffset {
     }
 
     public EpochEndOffset(int leaderEpoch, long endOffset) {
-        this.error = Errors.NONE;
-        this.leaderEpoch = leaderEpoch;
-        this.endOffset = endOffset;
+        this(Errors.NONE, leaderEpoch, endOffset);
     }
 
     public Errors error() {
@@ -85,5 +83,10 @@ public class EpochEndOffset {
     @Override
     public int hashCode() {
         return Objects.hash(error, leaderEpoch, endOffset);
+    }
+
+    public boolean hasUndefinedEpochOrOffset() {
+        return this.endOffset == UNDEFINED_EPOCH_OFFSET ||
+            this.leaderEpoch == UNDEFINED_EPOCH;
     }
 }

@@ -62,7 +62,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
         metricName.foreach(KafkaYammerMetrics.defaultRegistry.removeMetric)
     }
 
-    super.setUp
+    super.setUp()
   }
 
   /*
