@@ -2993,8 +2993,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizer.forall { authZ =>
       val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
       val actions = Collections.singletonList(new Action(operation, resource, refCount, logIfAllowed, logIfDenied))
-      val result = authZ.authorize(requestContext, actions).get(0)
-      result == AuthorizationResult.ALLOWED
+      authZ.authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED
     }
   }
 

@@ -2038,7 +2038,7 @@ public class KafkaAdminClient extends AdminClient {
     public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // For all the actual alter config requests (validateOnly = false), we should group the resources together
-        // a single request to be sent to the controller. If we are only doing validation, we could make a separate
+        // as a single request to be sent to the controller. If we are only doing validation, we could make a separate
         // AlterConfigs request for every BROKER resource and a random node for topic resources.
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
@@ -2101,8 +2101,8 @@ public class KafkaAdminClient extends AdminClient {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
 
         // For all the actual alter config requests (validateOnly = false), we should group the resources together
-        // a single request to be sent to the controller. If we are only doing validation, we could make a separate
-        // AlterConfigs request for every BROKER resource and a random node for topic resources.
+        // as a single request to be sent to the controller. If we are only doing validation, we could make a separate
+        // IncrementalAlterConfigs request for every BROKER resource and a random node for topic resources.
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
         for (ConfigResource resource : configs.keySet()) {
