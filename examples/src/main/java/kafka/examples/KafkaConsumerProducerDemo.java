@@ -33,7 +33,7 @@ public class KafkaConsumerProducerDemo {
         consumerThread.start();
 
         try {
-            if (!latch.await(1, TimeUnit.MINUTES)) {
+            if (!latch.await(5, TimeUnit.MINUTES)) {
                 throw new TimeoutException("Timeout after 5 minutes waiting for demo producer and consumer to finish");
             }
         } catch (InterruptedException e) {
