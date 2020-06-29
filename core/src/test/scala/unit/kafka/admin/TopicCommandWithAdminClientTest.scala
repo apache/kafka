@@ -823,7 +823,6 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
-    println(output)
     val rows = output.split("\n")
     assertEquals(2, rows.size)
     rows(0).startsWith(s"Topic:$testTopicName\tPartitionCount:1")
