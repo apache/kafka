@@ -289,7 +289,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       while(!isCleaningInStatePaused(topicPartition))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
     }
-    info(s"The cleaning for partition $topicPartition is aborted and paused")
+    info(s"The cleaning for partition $topicPartition is paused")
   }
 
   /**
