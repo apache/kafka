@@ -38,7 +38,7 @@ public class KafkaConsumerProducerDemo {
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
-        }finally {
+        } finally {
             consumerThread.shutdown();
         }
 
