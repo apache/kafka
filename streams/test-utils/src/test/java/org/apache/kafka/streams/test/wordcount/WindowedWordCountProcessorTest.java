@@ -25,21 +25,23 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Properties;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertThrows;
 
 public class WindowedWordCountProcessorTest {
     @Test
-    public void testWithInMemoryStore() {
+    public void shouldWorkWithInMemoryStore() {
         final MockProcessorContext context = new MockProcessorContext();
 
         // Create, initialize, and register the state store.
@@ -51,6 +53,7 @@ public class WindowedWordCountProcessorTest {
                                       Serdes.String(),
                                       Serdes.Integer())
                   .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                  .withCachingDisabled() // Caching is not supported by MockProcessorContext.
                   .build();
         store.init(context, store);
         context.register(store, null);
@@ -84,12 +87,12 @@ public class WindowedWordCountProcessorTest {
     }
 
     @Test
-    public void testWithPersistentStore() throws IOException {
+    public void shouldWorkWithPersistentStore() throws IOException {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "");
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
 
-        final File stateDir = Files.createTempDirectory("kafka-test-").toFile();
+        final File stateDir = TestUtils.tempDirectory();
 
         try {
             final MockProcessorContext context = new MockProcessorContext(
@@ -107,6 +110,7 @@ public class WindowedWordCountProcessorTest {
                                           Serdes.String(),
                                           Serdes.Integer())
                       .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                      .withCachingDisabled() // Caching is not supported by MockProcessorContext.
                       .build();
             store.init(context, store);
             context.register(store, null);
@@ -140,5 +144,42 @@ public class WindowedWordCountProcessorTest {
         } finally {
             Utils.delete(stateDir);
         }
+    }
+
+    @Test
+    public void shouldFailWithLogging() {
+        final MockProcessorContext context = new MockProcessorContext();
+
+        // Create, initialize, and register the state store.
+        final WindowStore<String, Integer> store =
+            Stores.windowStoreBuilder(Stores.inMemoryWindowStore("WindowedCounts",
+                                                                 Duration.ofDays(24),
+                                                                 Duration.ofMillis(100),
+                                                                 false),
+                                      Serdes.String(),
+                                      Serdes.Integer())
+                  .withLoggingEnabled(new HashMap<>()) // Changelog is not supported by MockProcessorContext.
+                  .withCachingDisabled() // Caching is not supported by MockProcessorContext.
+                  .build();
+        assertThrows(IllegalArgumentException.class, () -> store.init(context, store));
+    }
+
+    @Test
+    public void shouldFailWithCaching() {
+        final MockProcessorContext context = new MockProcessorContext();
+
+        // Create, initialize, and register the state store.
+        final WindowStore<String, Integer> store =
+            Stores.windowStoreBuilder(Stores.inMemoryWindowStore("WindowedCounts",
+                                                                 Duration.ofDays(24),
+                                                                 Duration.ofMillis(100),
+                                                                 false),
+                                      Serdes.String(),
+                                      Serdes.Integer())
+                  .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                  .withCachingEnabled() // Caching is not supported by MockProcessorContext.
+                  .build();
+
+        assertThrows(IllegalArgumentException.class, () -> store.init(context, store));
     }
 }
