@@ -19,6 +19,7 @@ package kafka.admin
 import java.io.{File, PrintWriter}
 import java.util.Properties
 
+import javax.management.InstanceAlreadyExistsException
 import kafka.admin.AclCommand.AclCommandOptions
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -35,6 +36,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{AppInfoParser, SecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.log4j.Level
+import org.junit.Assert.assertFalse
 import org.junit.{After, Assert, Before, Test}
 import org.scalatest.Assertions.intercept
 
@@ -129,40 +131,29 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     testAclCli(adminArgs)
   }
 
-  private def createServer(): Unit = {
+  private def createServer(commandConfig: File = null): Unit = {
     servers = Seq(TestUtils.createServer(KafkaConfig.fromProps(brokerProps)))
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
-    val tmp = File.createTempFile(classOf[AclCommandTest].getName, "createServer")
-    tmp.deleteOnExit()
-    val pw = new PrintWriter(tmp)
-    pw.println("client.id=my-client")
-    pw.close()
-
-    adminArgs = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, listenerName),
-      "--command-config", tmp.getAbsolutePath)
+    var adminArgs = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, listenerName))
+    if (commandConfig != null) {
+      adminArgs ++= Array("--command-config", commandConfig.getAbsolutePath)
+    }
+    this.adminArgs = adminArgs
   }
 
   private def callMain(args: Array[String]): (String, String) = {
-    val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
-    val outErr = TestUtils.grabConsoleOutputAndError(AclCommand.main(args))
-    LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
-    LogCaptureAppender.unregister(appender)
-    Assert.assertEquals("Command should execute without logging errors or warnings",
-      "",
-      appender.getMessages.map{event => s"${event.getLevel} ${event.getMessage}" }.mkString("\n"))
-    outErr
+    TestUtils.grabConsoleOutputAndError(AclCommand.main(args))
   }
 
   private def testAclCli(cmdArgs: Array[String]): Unit = {
-
     for ((resources, resourceCmd) <- ResourceToCommand) {
       for (permissionType <- Set(ALLOW, DENY)) {
         val operationToCmd = ResourceToOperations(resources)
         val (acls, cmd) = getAclToCommand(permissionType, operationToCmd._1)
         val (addOut, addErr) = callMain(cmdArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
         assertOutputContains("Adding ACLs", resources, resourceCmd, addOut)
+        assertOutputContains("Current ACLs", resources, resourceCmd, addOut)
 
         Assert.assertEquals("", addErr)
         for (resource <- resources) {
@@ -200,6 +191,30 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   def testProducerConsumerCliWithAdminAPI(): Unit = {
     createServer()
     testProducerConsumerCli(adminArgs)
+  }
+
+  @Test
+  def testAclCliWithClientId(): Unit = {
+    val adminClientConfig = File.createTempFile(classOf[AclCommandTest].getName, "createServer")
+    adminClientConfig.deleteOnExit()
+    val pw = new PrintWriter(adminClientConfig)
+    pw.println("client.id=my-client")
+    pw.close()
+
+    createServer(adminClientConfig)
+
+    val appender = LogCaptureAppender.createAndRegister()
+    val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
+
+    testAclCli(adminArgs)
+
+    LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
+    LogCaptureAppender.unregister(appender)
+    val warning = appender.getMessages.find(e => e.getLevel == Level.WARN &&
+      e.getThrowableInformation != null &&
+      e.getThrowableInformation.getThrowable.getClass.getName == classOf[InstanceAlreadyExistsException].getName)
+    assertFalse("There should be no warnings about multiple registration of mbeans", warning.isDefined)
+
   }
 
   private def testProducerConsumerCli(cmdArgs: Array[String]): Unit = {
@@ -288,10 +303,10 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   private def testRemove(cmdArgs: Array[String], resources: Set[ResourcePattern], resourceCmd: Array[String]): Unit = {
+    val (out, err) = callMain(cmdArgs ++ resourceCmd :+ "--remove" :+ "--force")
+    Assert.assertEquals("", out)
+    Assert.assertEquals("", err)
     for (resource <- resources) {
-      val (out, err) = callMain(cmdArgs ++ resourceCmd :+ "--remove" :+ "--force")
-      Assert.assertEquals("", out)
-      Assert.assertEquals("", err)
       withAuthorizer() { authorizer =>
         TestUtils.waitAndVerifyAcls(Set.empty[AccessControlEntry], authorizer, resource)
       }
