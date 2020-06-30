@@ -430,13 +430,13 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
-                                        100L,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
                                 .define(RETRY_BACKOFF_MAX_MS_CONFIG,
                                         Type.LONG,
-                                        1000L,
+                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
