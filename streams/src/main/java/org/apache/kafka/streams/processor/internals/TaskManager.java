@@ -242,7 +242,9 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                if (!task.isActive()) {
+                if (task.isActive()) {
+                    cleanUpTaskProducer(task, taskCloseExceptions);
+                } else {
                     // Active tasks should have already been suspended and committed during handleRevocation, but
                     // standbys must be suspended/committed/closed all here
                     task.suspend();
@@ -250,7 +252,6 @@ public class TaskManager {
                     task.postCommit();
                 }
                 completeTaskCloseClean(task);
-                cleanUpTaskProducer(task, taskCloseExceptions);
                 tasks.remove(task.id());
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
@@ -268,10 +269,13 @@ public class TaskManager {
             final Task newTask;
             try {
                 if (oldTask.isActive()) {
+                    cleanUpTaskProducer(oldTask, taskCloseExceptions);
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
                 } else {
                     oldTask.suspend(); // Only need to suspend transitioning standbys, actives should be suspended already
+                    oldTask.prepareCommit();
+                    oldTask.postCommit();
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
