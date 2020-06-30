@@ -67,8 +67,8 @@ public class MetadataTest {
     private long metadataExpireMs = 1000;
     private Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, new LogContext(),
             new ClusterResourceListeners());
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    private final double retryBackoffJitter = Metadata.RETRY_BACKOFF_JITTER;
+    private final int retryBackoffExpBase = Metadata.RETRY_BACKOFF_EXP_BASE;
 
     private static MetadataResponse emptyMetadataResponse() {
         return MetadataResponse.prepareResponse(
@@ -152,14 +152,14 @@ public class MetadataTest {
         metadata.failedUpdate(now);
 
         // Backing off. Remaining time until next try should be returned.
-        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), refreshBackoffMs * RETRY_BACKOFF_JITTER);
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), refreshBackoffMs * retryBackoffJitter);
 
         // Even though metadata update requested explicitly, still respects backoff.
         metadata.requestUpdate();
-        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), refreshBackoffMs * RETRY_BACKOFF_JITTER);
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now), refreshBackoffMs * retryBackoffJitter);
 
         // refreshBackoffMs elapsed.
-        now += refreshBackoffMs * (1 + RETRY_BACKOFF_JITTER) + 1;
+        now += refreshBackoffMs * (1 + retryBackoffJitter) + 1;
         // It should return 0 to let next try.
         assertEquals(0, metadata.timeToNextUpdate(now));
         assertEquals(0, metadata.timeToNextUpdate(now + 1));
@@ -170,15 +170,15 @@ public class MetadataTest {
         long now = 10000;
         long currentRefreshBackoffMs = metadata.timeToNextUpdate(now);
         
-        for (int i = 0; currentRefreshBackoffMs < refreshBackoffMaxMs * (1 - RETRY_BACKOFF_JITTER); i++) {
+        for (int i = 0; currentRefreshBackoffMs < refreshBackoffMaxMs * (1 - retryBackoffJitter); i++) {
             metadata.failedUpdate(now);
             currentRefreshBackoffMs = metadata.timeToNextUpdate(now);
-            long expected = (long) Math.min(refreshBackoffMaxMs, refreshBackoffMs * Math.pow(RETRY_BACKOFF_EXP_BASE, i));
-            assertEquals(expected, currentRefreshBackoffMs, expected * RETRY_BACKOFF_JITTER);
+            long expected = (long) Math.min(refreshBackoffMaxMs, refreshBackoffMs * Math.pow(retryBackoffExpBase, i));
+            assertEquals(expected, currentRefreshBackoffMs, expected * retryBackoffJitter);
         }
 
         // Test the upper bound
-        assertEquals(refreshBackoffMaxMs, currentRefreshBackoffMs, refreshBackoffMaxMs * RETRY_BACKOFF_JITTER);
+        assertEquals(refreshBackoffMaxMs, currentRefreshBackoffMs, refreshBackoffMaxMs * retryBackoffJitter);
 
         // Test if the timeout gets reset
         now += 10000;
@@ -186,7 +186,7 @@ public class MetadataTest {
         metadata.update(versionAndBuilder.requestVersion,
                 TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), true, now);
         currentRefreshBackoffMs = metadata.timeToNextUpdate(now);
-        assertEquals(refreshBackoffMs, currentRefreshBackoffMs, refreshBackoffMs * RETRY_BACKOFF_JITTER);
+        assertEquals(refreshBackoffMs, currentRefreshBackoffMs, refreshBackoffMs * retryBackoffJitter);
     }
 
     /**
@@ -305,7 +305,7 @@ public class MetadataTest {
         metadata.failedUpdate(nowMs);
 
         // Should apply retry backoff
-        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(nowMs), refreshBackoffMs * RETRY_BACKOFF_JITTER);
+        assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(nowMs), refreshBackoffMs * retryBackoffJitter);
         assertEquals(lastRefreshMs, metadata.lastSuccessfulUpdate());
 
         // Should not apply retry backoff after successful attempts

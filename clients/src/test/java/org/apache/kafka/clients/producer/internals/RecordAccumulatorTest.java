@@ -89,8 +89,8 @@ public class RecordAccumulatorTest {
     private Metrics metrics = new Metrics(time);
     private final long maxBlockTimeMs = 1000;
     private final LogContext logContext = new LogContext();
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    private final double retryBackoffJitter = RecordAccumulator.RETRY_BACKOFF_JITTER;
+    private final int retryBackoffExpBase = RecordAccumulator.RETRY_BACKOFF_EXP_BASE;
 
     @After
     public void teardown() {
@@ -368,9 +368,9 @@ public class RecordAccumulatorTest {
         assertEquals("Node1 should only have one batch for partition 2.", tp2, batches.get(0).get(0).topicPartition);
 
         // Partition 0 can be drained after retry backoff
-        result = accum.ready(cluster, now + (long) (retryBackoffMs * (1 + RETRY_BACKOFF_JITTER)) + 1);
+        result = accum.ready(cluster, now + (long) (retryBackoffMs * (1 + retryBackoffJitter)) + 1);
         assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
-        batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, now + (long) (retryBackoffMs * (1 + RETRY_BACKOFF_JITTER)) + 1);
+        batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, now + (long) (retryBackoffMs * (1 + retryBackoffJitter)) + 1);
         assertEquals("Node1 should be the only ready node.", 1, batches.size());
         assertEquals("Node1 should only have one batch drained.", 1, batches.get(0).size());
         assertEquals("Node1 should only have one batch for partition 0.", tp1, batches.get(0).get(0).topicPartition);
@@ -415,16 +415,16 @@ public class RecordAccumulatorTest {
         ProducerBatch batch = batches.get(0).get(0);
         long currentRetryBackoffMs = 0;
 
-        for (int i = 0; currentRetryBackoffMs < retryBackoffMaxMs * (1 - RETRY_BACKOFF_JITTER); i++) {
+        for (int i = 0; currentRetryBackoffMs < retryBackoffMaxMs * (1 - retryBackoffJitter); i++) {
             // Re-enqueue the batch
             now = time.milliseconds();
             accum.reenqueue(batch, now + lingerMs + 1);
-            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffInitMs * Math.pow(RETRY_BACKOFF_EXP_BASE, i));
+            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffInitMs * Math.pow(retryBackoffExpBase, i));
 
             assertEquals("Backoff value should fall in the range",
                     expected,
                     batch.retryBackoffMs(),
-                    expected * RETRY_BACKOFF_JITTER);
+                    expected * retryBackoffJitter);
             // Get the new backoff
             currentRetryBackoffMs = batch.retryBackoffMs();
             // Should backoff
@@ -681,7 +681,7 @@ public class RecordAccumulatorTest {
         accum.reenqueue(drained.get(node1.id()).get(0), time.milliseconds());
 
         // test expiration.
-        time.sleep(requestTimeout + (long) (retryBackoffMs * (1 + RETRY_BACKOFF_JITTER)) + 1);
+        time.sleep(requestTimeout + (long) (retryBackoffMs * (1 + retryBackoffJitter)) + 1);
         expiredBatches = accum.expiredBatches(time.milliseconds());
         assertEquals("The batch should not be expired.", 0, expiredBatches.size());
         time.sleep(1L);
@@ -799,7 +799,7 @@ public class RecordAccumulatorTest {
         batch.close();
         // Enqueue the batch to the accumulator as if the batch was created by the accumulator.
         accum.reenqueue(batch, now);
-        time.sleep(101L * ((long) (1 + RETRY_BACKOFF_JITTER)));
+        time.sleep(101L * ((long) (1 + retryBackoffJitter)));
         // Drain the batch.
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertTrue("The batch should be ready", result.readyNodes.size() > 0);

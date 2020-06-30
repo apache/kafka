@@ -77,8 +77,8 @@ public class Metadata implements Closeable {
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
     private final ExponentialBackoff refreshBackoff;
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    final static double RETRY_BACKOFF_JITTER = 0.2;
+    final static int RETRY_BACKOFF_EXP_BASE = 2;
 
     /**
      * Create a new Metadata instance

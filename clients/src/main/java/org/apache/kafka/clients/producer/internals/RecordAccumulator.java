@@ -85,8 +85,8 @@ public final class RecordAccumulator {
     private int drainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    final static double RETRY_BACKOFF_JITTER = 0.2;
+    final static int RETRY_BACKOFF_EXP_BASE = 2;
 
     /**
      * Create a new record accumulator

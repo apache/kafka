@@ -139,8 +139,8 @@ public class TransactionManagerTest {
     private Sender sender = null;
     private TransactionManager transactionManager = null;
     private Node brokerNode = null;
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    private final double retryBackoffJitter = TransactionManager.RETRY_BACKOFF_JITTER;
+    private final int retryBackoffExpBase = TransactionManager.RETRY_BACKOFF_EXP_BASE;
 
     @Before
     public void setup() {
@@ -415,7 +415,7 @@ public class TransactionManagerTest {
 
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
         assertNotNull(handler);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * RETRY_BACKOFF_JITTER);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * retryBackoffJitter);
     }
 
     @Test
@@ -440,7 +440,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(otherPartition, Errors.CONCURRENT_TRANSACTIONS);
         TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
         assertNotNull(handler);
-        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * RETRY_BACKOFF_JITTER);
+        assertEquals(DEFAULT_RETRY_BACKOFF_MS, handler.retryBackoffMs(), DEFAULT_RETRY_BACKOFF_MS * retryBackoffJitter);
     }
 
     @Test
@@ -465,14 +465,14 @@ public class TransactionManagerTest {
         assertNotNull(partitionHandler);
 
         for (int i = 0; partitionHandler.retryBackoffMs() < RETRY_BACKOFF_MAX_MS; i++) {
-            long expected = (long) Math.min(RETRY_BACKOFF_MAX_MS, DEFAULT_RETRY_BACKOFF_MS * Math.pow(RETRY_BACKOFF_EXP_BASE, i));
-            assertEquals(expected, partitionHandler.retryBackoffMs(), expected * RETRY_BACKOFF_JITTER);
+            long expected = (long) Math.min(RETRY_BACKOFF_MAX_MS, DEFAULT_RETRY_BACKOFF_MS * Math.pow(retryBackoffExpBase, i));
+            assertEquals(expected, partitionHandler.retryBackoffMs(), expected * retryBackoffJitter);
 
             prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
             prepareAddPartitionsToTxn(partition, Errors.COORDINATOR_NOT_AVAILABLE);
             runUntil(() -> !client.hasPendingResponses());
         }
-        assertEquals(RETRY_BACKOFF_MAX_MS, partitionHandler.retryBackoffMs(), RETRY_BACKOFF_MAX_MS * RETRY_BACKOFF_JITTER);
+        assertEquals(RETRY_BACKOFF_MAX_MS, partitionHandler.retryBackoffMs(), RETRY_BACKOFF_MAX_MS * retryBackoffJitter);
     }
 
     @Test(expected = IllegalStateException.class)

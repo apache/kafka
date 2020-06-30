@@ -156,8 +156,8 @@ public class Fetcher<K, V> implements Closeable {
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
     private final ExponentialBackoff retryBackoff;
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    final static double RETRY_BACKOFF_JITTER = 0.2;
+    final static int RETRY_BACKOFF_EXP_BASE = 2;
 
     private CompletedFetch nextInLineFetch = null;
 

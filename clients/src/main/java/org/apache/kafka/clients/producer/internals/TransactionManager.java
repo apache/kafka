@@ -98,8 +98,8 @@ public class TransactionManager {
     private final int transactionTimeoutMs;
     private final ApiVersions apiVersions;
     private final boolean autoDowngradeTxnCommit;
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    final static double RETRY_BACKOFF_JITTER = 0.2;
+    final static int RETRY_BACKOFF_EXP_BASE = 2;
 
     private static class TopicPartitionBookkeeper {
 
@@ -1484,7 +1484,7 @@ public class TransactionManager {
             // CONCURRENT_TRANSACTIONS error since this means that the previous transaction is still completing and
             // we don't want to wait too long before trying to start the new one.
             //
-            // This is only a temporary fix, the long backoff solution is being tracked in
+            // This is only a temporary fix, the long term solution is being tracked in
             // https://issues.apache.org/jira/browse/KAFKA-5482
             if (partitionsInTransaction.isEmpty())
                 this.retryBackoffMs = ADD_PARTITIONS_RETRY_BACKOFF_MS;

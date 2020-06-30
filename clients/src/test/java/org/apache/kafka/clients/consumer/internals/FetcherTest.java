@@ -176,8 +176,8 @@ public class FetcherTest {
     private MemoryRecords emptyRecords;
     private MemoryRecords partialRecords;
     private ExecutorService executorService;
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    private final double retryBackoffJitter = Fetcher.RETRY_BACKOFF_JITTER;
+    private final int retryBackoffExpBase = Fetcher.RETRY_BACKOFF_EXP_BASE;
 
     @Before
     public void setup() {
@@ -1529,12 +1529,12 @@ public class FetcherTest {
         subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
 
         // Test exponential retry backoff functionality on tp0
-        for (int i = 0; tp0RetryBackoffMs < retryBackoffMaxMs * (1 - RETRY_BACKOFF_JITTER); i++) {
+        for (int i = 0; tp0RetryBackoffMs < retryBackoffMaxMs * (1 - retryBackoffJitter); i++) {
             resetOffset(singleton(tp0), false);
             tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
-            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffMs * Math.pow(RETRY_BACKOFF_EXP_BASE, i));
+            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffMs * Math.pow(retryBackoffExpBase, i));
             // Adjust the expected value since the mock time will auto-tick
-            assertEquals(expected, tp0RetryBackoffMs, expected * RETRY_BACKOFF_JITTER + time.autoTickedMs());
+            assertEquals(expected, tp0RetryBackoffMs, expected * retryBackoffJitter + time.autoTickedMs());
             // TODO: Remove the line below before merging
             System.out.println(tp0RetryBackoffMs + " " + time.milliseconds());
             time.sleep(tp0RetryBackoffMs);
@@ -1545,8 +1545,8 @@ public class FetcherTest {
         resetOffset(Utils.mkSet(tp0, tp1), false);
         tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
         tp1RetryBackoffMs = subscriptions.nextAllowedRetry(tp1) - time.milliseconds();
-        assertEquals(retryBackoffMaxMs, tp0RetryBackoffMs, retryBackoffMaxMs * RETRY_BACKOFF_JITTER + time.autoTickedMs());
-        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * RETRY_BACKOFF_JITTER + time.autoTickedMs());
+        assertEquals(retryBackoffMaxMs, tp0RetryBackoffMs, retryBackoffMaxMs * retryBackoffJitter + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * retryBackoffJitter + time.autoTickedMs());
         time.sleep(Math.max(tp0RetryBackoffMs, tp1RetryBackoffMs));
 
         // Should reset retry backoff upon a success
@@ -1557,8 +1557,8 @@ public class FetcherTest {
         resetOffset(Utils.mkSet(tp0, tp1), false);
         tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
         tp1RetryBackoffMs = subscriptions.nextAllowedRetry(tp1) - time.milliseconds();
-        assertEquals(retryBackoffMs, tp0RetryBackoffMs, retryBackoffMaxMs * RETRY_BACKOFF_JITTER + time.autoTickedMs());
-        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * RETRY_BACKOFF_JITTER + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp0RetryBackoffMs, retryBackoffMaxMs * retryBackoffJitter + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * retryBackoffJitter + time.autoTickedMs());
     }
 
     private void validateOffsets(Set<TopicPartition> tps, int leaderEpoch, Node node, boolean successful) {
@@ -1600,14 +1600,14 @@ public class FetcherTest {
         long tp1RetryBackoffMs = 0;
 
         // Test exponential retry backoff functionality on tp0
-        for (int i = 0; tp0RetryBackoffMs < retryBackoffMaxMs * (1 - RETRY_BACKOFF_JITTER); i++) {
+        for (int i = 0; tp0RetryBackoffMs < retryBackoffMaxMs * (1 - retryBackoffJitter); i++) {
             metadata.updateWithCurrentRequestVersion(TestUtils.metadataUpdateWith("dummy", 1,
                     Collections.emptyMap(), partitionCounts, tp -> leaderEpoch), false, 0L);
             validateOffsets(singleton(tp0), leaderEpoch, node, false);
             tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
-            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffMs * Math.pow(RETRY_BACKOFF_EXP_BASE, i));
+            long expected = (long) Math.min(retryBackoffMaxMs, retryBackoffMs * Math.pow(retryBackoffExpBase, i));
             // Adjust the expected value since the mock time will auto-tick
-            assertEquals(expected, tp0RetryBackoffMs, expected * RETRY_BACKOFF_JITTER + time.autoTickedMs());
+            assertEquals(expected, tp0RetryBackoffMs, expected * retryBackoffJitter + time.autoTickedMs());
             // TODO: Remove the line below before merging
             System.out.println(tp0RetryBackoffMs + " " + time.milliseconds());
             time.sleep(tp0RetryBackoffMs);
@@ -1618,8 +1618,8 @@ public class FetcherTest {
         validateOffsets(Utils.mkSet(tp0, tp1), leaderEpoch, node, false);
         tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
         tp1RetryBackoffMs = subscriptions.nextAllowedRetry(tp1) - time.milliseconds();
-        assertEquals(retryBackoffMaxMs, tp0RetryBackoffMs, retryBackoffMaxMs * RETRY_BACKOFF_JITTER + time.autoTickedMs());
-        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * RETRY_BACKOFF_JITTER + time.autoTickedMs());
+        assertEquals(retryBackoffMaxMs, tp0RetryBackoffMs, retryBackoffMaxMs * retryBackoffJitter + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * retryBackoffJitter + time.autoTickedMs());
         time.sleep(Math.max(tp0RetryBackoffMs, tp1RetryBackoffMs));
 
         // Should reset retry backoff upon success
@@ -1629,8 +1629,8 @@ public class FetcherTest {
         validateOffsets(Utils.mkSet(tp0, tp1), leaderEpoch, node, false);
         tp0RetryBackoffMs = subscriptions.nextAllowedRetry(tp0) - time.milliseconds();
         tp1RetryBackoffMs = subscriptions.nextAllowedRetry(tp1) - time.milliseconds();
-        assertEquals(retryBackoffMs, tp0RetryBackoffMs, retryBackoffMaxMs * RETRY_BACKOFF_JITTER + time.autoTickedMs());
-        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * RETRY_BACKOFF_JITTER + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp0RetryBackoffMs, retryBackoffMaxMs * retryBackoffJitter + time.autoTickedMs());
+        assertEquals(retryBackoffMs, tp1RetryBackoffMs, retryBackoffMs * retryBackoffJitter + time.autoTickedMs());
     }
 
     @Test

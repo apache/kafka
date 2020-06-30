@@ -591,7 +591,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // own metadata with the newly added topics so that it will not trigger a subsequent rebalance
         // when these topics gets updated from metadata refresh.
         //
-        // TODO: this is a hack and not something we want to support long-backoff unless we push regex into the protocol
+        // TODO: this is a hack and not something we want to support long-term unless we push regex into the protocol
         //       we may need to modify the ConsumerPartitionAssignor API to better support this case.
         Set<String> assignedTopics = new HashSet<>();
         for (Assignment assigned : assignments.values()) {
