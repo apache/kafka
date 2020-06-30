@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.Set;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -139,12 +143,41 @@ public class StateDirectory {
         // if the task is stateless, storeDirs would be null
         if (storeDirs == null || storeDirs.length == 0) {
             return true;
-        } else if (storeDirs.length == 1 && storeDirs[0].getName().equals(ROCKSDB_DIRECTORY_NAME)) {
-            final String[] rocksdbFiles = storeDirs[0].list();
-            return rocksdbFiles == null || rocksdbFiles.length == 0;
         } else {
-            return false;
+            return taskSubDirectoriesEmpty(storeDirs);
         }
+    }
+
+    // BFS through the task directory to look for any files that are not more subdirectories
+    private boolean taskSubDirectoriesEmpty(final File[] storeDirs) {
+        final Queue<File> subDirectories = new LinkedList<>();
+        for (final File file : storeDirs) {
+            if (file.isDirectory()) {
+                subDirectories.add(file);
+            } else {
+                return false;
+            }
+        }
+
+        final Set<File> visited = new HashSet<>();
+        while (!subDirectories.isEmpty()) {
+            final File dir = subDirectories.poll();
+            if (!visited.contains(dir)) {
+                final  File[] files = dir.listFiles();
+                if (files == null) {
+                    return true;
+                }
+                for (final File file : files) {
+                    if (file.isDirectory()) {
+                        subDirectories.offer(file);
+                    } else {
+                        return false;
+                    }
+                }
+                visited.add(dir);
+            }
+        }
+        return true;
     }
 
     /**
