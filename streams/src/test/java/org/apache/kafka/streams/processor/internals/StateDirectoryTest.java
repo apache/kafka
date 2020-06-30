@@ -177,12 +177,9 @@ public class StateDirectoryTest {
     @Test
     public void shouldReportDirectoryEmptyUnlessNonDirectoryFileIsFound() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
-
-        // when task dir first created, it should be empty
         assertTrue(directory.directoryForTaskIsEmpty(taskId));
 
-
-        final File baseDir = new File(directory.directoryForTask(taskId), "rocksdb");
+        final File baseDir = new File(directory.directoryForTask(taskId), "not-rocksdb");
         Files.createDirectories(baseDir.getAbsoluteFile().toPath());
 
         assertTrue(directory.directoryForTaskIsEmpty(taskId));
@@ -194,6 +191,32 @@ public class StateDirectoryTest {
 
         final File store = new File(dbDir, "data");
         Files.createFile(store.getAbsoluteFile().toPath());
+
+        assertFalse(directory.directoryForTaskIsEmpty(taskId));
+    }
+
+    @Test
+    public void shouldReportDirectoryEmptyUnlessSSTFileIsFoundInRocksDB() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        final File baseDir = new File(directory.directoryForTask(taskId), "rocksdb");
+        Files.createDirectories(baseDir.getAbsoluteFile().toPath());
+
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        final File dbDir = new File(baseDir, "store");
+        Files.createDirectories(dbDir.getAbsoluteFile().toPath());
+
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        final File storeFile = new File(dbDir, "data");
+        Files.createFile(storeFile.getAbsoluteFile().toPath());
+
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        final File data = new File(dbDir, "data.sst");
+        Files.createFile(data.getAbsoluteFile().toPath());
 
         assertFalse(directory.directoryForTaskIsEmpty(taskId));
     }

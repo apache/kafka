@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Queue;
 import java.util.Set;
 import org.apache.kafka.common.utils.Time;
@@ -54,6 +55,7 @@ public class StateDirectory {
 
     static final String LOCK_FILE_NAME = ".lock";
     private static final String ROCKSDB_DIRECTORY_NAME = "rocksdb";
+    private static final String ROCKSDB_SST_SUFFIX = ".sst";
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
 
     private final Time time;
@@ -143,21 +145,35 @@ public class StateDirectory {
         // if the task is stateless, storeDirs would be null
         if (storeDirs == null || storeDirs.length == 0) {
             return true;
-        } else {
-            return taskSubDirectoriesEmpty(storeDirs);
         }
-    }
 
-    // BFS through the task directory to look for any files that are not more subdirectories
-    private boolean taskSubDirectoriesEmpty(final File[] storeDirs) {
-        final Queue<File> subDirectories = new LinkedList<>();
+        final List<File> baseSubDirectories = new LinkedList<>();
         for (final File file : storeDirs) {
             if (file.isDirectory()) {
-                subDirectories.add(file);
+                baseSubDirectories.add(file);
             } else {
                 return false;
             }
         }
+
+        for (final File dir : baseSubDirectories) {
+            final boolean isEmpty;
+            if (dir.getName().equals(ROCKSDB_DIRECTORY_NAME)) {
+                isEmpty = taskSubDirectoriesEmpty(dir, true);
+            } else {
+                isEmpty =  taskSubDirectoriesEmpty(dir, false);
+            }
+            if (!isEmpty) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    // BFS through the task directory to look for any files that are not more subdirectories
+    private boolean taskSubDirectoriesEmpty(final File baseDir, final boolean sstOnly) {
+        final Queue<File> subDirectories = new LinkedList<>();
+        subDirectories.offer(baseDir);
 
         final Set<File> visited = new HashSet<>();
         while (!subDirectories.isEmpty()) {
@@ -165,12 +181,14 @@ public class StateDirectory {
             if (!visited.contains(dir)) {
                 final  File[] files = dir.listFiles();
                 if (files == null) {
-                    return true;
+                    continue;
                 }
                 for (final File file : files) {
                     if (file.isDirectory()) {
                         subDirectories.offer(file);
-                    } else {
+                    } else if (sstOnly && file.getName().endsWith(ROCKSDB_SST_SUFFIX)) {
+                        return false;
+                    } else if (!sstOnly) {
                         return false;
                     }
                 }
