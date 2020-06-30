@@ -72,7 +72,6 @@ public class AdminClientConfig extends AbstractConfig {
     /**
      * <code>retry.backoff.max.ms</code>
      */
-    // TODO: Add validator rules and force backoff_max_ms > backoff_ms if possible (I guess it's impossible)
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG;
     private static final String RETRY_BACKOFF_MAX_MS_DOC = CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC;
 
