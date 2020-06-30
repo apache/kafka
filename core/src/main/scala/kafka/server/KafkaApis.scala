@@ -2443,8 +2443,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, responseCallback)
     }
 
-    if (alterConfigsRequest.version() >= 2
-      && !alterConfigsRequest.validateOnly()
+    if (alterConfigsRequest.version >= 2
+      && !alterConfigsRequest.validateOnly
       && !controller.isActive) {
       val requireControllerResult = requestResources.keys.map {
         resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
@@ -2587,8 +2587,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, responseCallback)
     }
 
-    if (incrementalAlterConfigsRequest.version() >= 2
-      && !incrementalAlterConfigsRequest.data.validateOnly()
+    if (incrementalAlterConfigsRequest.version >= 2
+      && !incrementalAlterConfigsRequest.data.validateOnly
       && !controller.isActive) {
       val requireControllerResult = configs.keys.map {
         resource => resource -> new ApiError(Errors.NOT_CONTROLLER, null)
