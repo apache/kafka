@@ -117,17 +117,7 @@ class ControllerEventManager(controllerId: Int,
     logIdent = s"[ControllerEventThread controllerId=$controllerId] "
 
     override def doWork(): Unit = {
-      val count = eventQueueTimeHist.count()
-      var dequeued: QueuedEvent = null
-      if (count != 0) {
-        dequeued = queue.poll(eventQueueTimeMetricTimeoutMs, TimeUnit.MILLISECONDS)
-        if (dequeued == null) {
-          eventQueueTimeHist.clear()
-          return
-        }
-      } else {
-        dequeued = queue.take()
-      }
+      val dequeued = pollFromEventQueue()
       dequeued.event match {
         case ShutdownEventThread => // The shutting down of the thread has been initiated at this point. Ignore this event.
         case controllerEvent =>
@@ -148,6 +138,21 @@ class ControllerEventManager(controllerId: Int,
 
           _state = ControllerState.Idle
       }
+    }
+  }
+
+  private def pollFromEventQueue(): QueuedEvent = {
+    val count = eventQueueTimeHist.count()
+    if (count != 0) {
+      val event  = queue.poll(eventQueueTimeMetricTimeoutMs, TimeUnit.MILLISECONDS)
+      if (event == null) {
+        eventQueueTimeHist.clear()
+        queue.take()
+      } else {
+        event
+      }
+    } else {
+      queue.take()
     }
   }
 

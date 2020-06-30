@@ -146,7 +146,6 @@ class ControllerEventManagerTest {
     val eventProcessor = new ControllerEventProcessor {
       override def process(event: ControllerEvent): Unit = {
         latch.await()
-        time.sleep(500)
         processedEvents.incrementAndGet()
       }
       override def preempt(event: ControllerEvent): Unit = {}
