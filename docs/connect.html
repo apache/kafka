@@ -264,7 +264,7 @@
 
     <p>To report errors within a connector's converter, transforms, or within the sink connector itself to the log, set <code>errors.log.enable=true</code> in the connector configuration to log details of each error and problem record's topic, partition, and offset. For additional debugging purposes, set <code>errors.log.include.messages=true</code> to also log the problem record key, value, and headers to the log (note this may log sensitive information).
 
-    <p>To report errors within a connector's converter, transforms, or in specifically the sink connector itself to a dead letter queue topic, set <code>errors.deadletterqueue.topic.name</code>, and optionally  <code>errors.deadletterqueue.context.headers.enable=true</code>.</p>
+    <p>To report errors within a connector's converter, transforms, or within the sink connector itself to a dead letter queue topic, set <code>errors.deadletterqueue.topic.name</code>, and optionally  <code>errors.deadletterqueue.context.headers.enable=true</code>.</p>
 
     <p>For example, below shows a configuration that will cause a connector will fail immediately upon an error or exception. Although it is not necessary to add extra configuration properties for this behavior, adding the following properties to a sink connector configuration would achieve this "fail fast" behavior:</p>
 
