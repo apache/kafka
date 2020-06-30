@@ -28,6 +28,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
+import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -35,6 +36,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
+import org.mockito.Mockito
 import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
@@ -785,4 +787,27 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
 
+  @Test
+  def testDescribeDoesNotFailWhenListingReassignmentIsUnauthorized(): Unit = {
+    adminClient = Mockito.spy(adminClient)
+    topicService = AdminClientTopicService(adminClient)
+
+    val result = AdminClientTestUtils.listPartitionReassignmentsResult(
+      new ClusterAuthorizationException("Unauthorized"))
+
+    // Passing `null` here to help the compiler disambiguate the `doReturn` methods,
+    // compilation fails otherwise.
+    Mockito.doReturn(result, null).when(adminClient).listPartitionReassignments()
+
+    adminClient.createTopics(
+      Collections.singletonList(new NewTopic(testTopicName, 1, 1.toShort))
+    ).all().get()
+    waitForTopicCreated(testTopicName)
+
+    val output = TestUtils.grabConsoleOutput(
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
+    val rows = output.split("\n")
+    assertEquals(2, rows.size)
+    rows(0).startsWith(s"Topic:$testTopicName\tPartitionCount:1")
+  }
 }
