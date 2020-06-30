@@ -69,6 +69,11 @@ class CachingWindowStore
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
+        if (!(context instanceof InternalProcessorContext)) {
+            throw new IllegalArgumentException(
+                "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
+            );
+        }
         initInternal((InternalProcessorContext) context);
         super.init(context, root);
     }
