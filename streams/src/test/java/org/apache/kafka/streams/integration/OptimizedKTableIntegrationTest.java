@@ -21,7 +21,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.st
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.notNullValue;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -119,16 +118,14 @@ public class OptimizedKTableIntegrationTest {
         final boolean kafkaStreams1WasFirstActive;
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
 
+        // Assert that the current value in store reflects all messages being processed
         if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
+            assertThat(store1.get(key), is(equalTo(batch1NumMessages - 1)));
             kafkaStreams1WasFirstActive = true;
         } else {
-            // Assert that data from the job was sent to the store
-            assertThat(store2.get(key), is(notNullValue()));
+            assertThat(store2.get(key), is(equalTo(batch1NumMessages - 1)));
             kafkaStreams1WasFirstActive = false;
         }
-
-        // Assert that the current value in store reflects all messages being processed
-        assertThat(kafkaStreams1WasFirstActive ? store1.get(key) : store2.get(key), is(equalTo(batch1NumMessages - 1)));
 
         if (kafkaStreams1WasFirstActive) {
             kafkaStreams1.close();
@@ -155,7 +152,7 @@ public class OptimizedKTableIntegrationTest {
         });
     }
 
-    private void produceValueRange(final int key, final int start, final int endExclusive) throws Exception {
+    private void produceValueRange(final int key, final int start, final int endExclusive) {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
@@ -175,7 +172,6 @@ public class OptimizedKTableIntegrationTest {
         streamsToCleanup.add(streams);
         return streams;
     }
-
 
     private Properties streamsConfiguration() {
         final String safeTestName = safeUniqueTestName(getClass(), testName);
