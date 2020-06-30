@@ -175,6 +175,25 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldIgnoreEmptyRocksDBBaseDirAndReportDirectoryEmpty() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        // when task dir first created, it should be empty
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+
+        final File baseDir = new File(directory.directoryForTask(taskId), "rocksdb");
+        Files.createDirectories(baseDir.getAbsoluteFile().toPath());
+
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        final File dbDir = new File(baseDir, "store1");
+        Files.createDirectories(dbDir.getAbsoluteFile().toPath());
+
+        assertFalse(directory.directoryForTaskIsEmpty(taskId));
+    }
+
+    @Test
     public void shouldThrowProcessorStateException() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
 
