@@ -473,7 +473,7 @@
 
     <h5><a id="connect_errantrecordreporter" href="connect_errantrecordreporter">Errant Record Reporter</a></h5>
 
-    <p>The <code>ErrantRecordReporter</code> can be used to report errors encountered after records have been sent to a sink connector. The following is an example implementation and use case of the <code>ErrantRecordReporter</code> in the <code>SinkTask</code> class:</p>
+    <p>When <a href="#connect_errorreporting">error reporting</a> is enabled for a connector, the connector can use an <code>ErrantRecordReporter</code> to report problems with individual records sent to a sink connector. The following example shows how to obtain and use the <code>ErrantRecordReporter</code> in a <code>SinkTask</code> subclass, while safely handling the case when the connector is installed in an older Connect runtime that doesn't have this reporter feature:</p>
 
     <pre class="brush: java;">
         private ErrantRecordReporter reporter;
