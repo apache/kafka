@@ -584,6 +584,14 @@ class KafkaApisTest {
   }
 
   @Test
+  def testGetTopicMetadataMethodParameters(): Unit = {
+    val value = true
+    val (plaintextListener, _) = updateMetadataCacheWithInconsistentListeners()
+    val response = sendMetadataRequestWithInconsistentListeners(plaintextListener)
+    assertEquals(true, value)
+  }
+
+  @Test
   def testReadCommittedConsumerListOffsetLatest(): Unit = {
     testConsumerListOffsetLatest(IsolationLevel.READ_COMMITTED)
   }
