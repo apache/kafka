@@ -282,7 +282,7 @@
         errors.tolerance=none
     </pre>
 
-    <p>The following configuration shows how to setup error handling with multiple retries, logging both to the application logs and a Kafka topic with infinite tolerance:</p>
+    <p>The following configuration properties can be added to a connector configuration to setup error handling with multiple retries, logging to the application logs and the <code>my-connector-errors</code> Kafka topic, and tolerating all errors rather than failing the connector or task:</p>
 
     <pre class="brush: text;">
         # retry for at most 10 minutes times waiting up to 30 seconds between consecutive failures
