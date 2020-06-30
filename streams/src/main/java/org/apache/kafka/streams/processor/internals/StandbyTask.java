@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -46,8 +47,8 @@ public class StandbyTask extends AbstractTask implements Task {
     private final InternalProcessorContext processorContext;
     private final StreamsMetricsImpl streamsMetrics;
 
-    private boolean checkpointNeededForSuspended = false;
-    private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit = new HashMap<>();
+    private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit = null;
+    private Map<TopicPartition, Long> offsetSnapshotSinceLastFlush = null;
 
     /**
      * @param id             the ID of this task
@@ -95,7 +96,9 @@ public class StandbyTask extends AbstractTask implements Task {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
             // initialize the snapshot with the current offsets as we don't need to commit then until they change
-            offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+            final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
+            offsetSnapshotSinceLastCommit = new HashMap<>(offsetSnapshot);
+            offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
 
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
@@ -120,14 +123,12 @@ public class StandbyTask extends AbstractTask implements Task {
         switch (state()) {
             case CREATED:
                 log.info("Suspended created");
-                checkpointNeededForSuspended = false;
                 transitionTo(State.SUSPENDED);
 
                 break;
 
             case RUNNING:
                 log.info("Suspended running");
-                checkpointNeededForSuspended = true;
                 transitionTo(State.SUSPENDED);
 
                 break;
@@ -156,8 +157,6 @@ public class StandbyTask extends AbstractTask implements Task {
 
     /**
      * Flush stores before a commit
-     *
-     * @throws StreamsException fatal error, should close the thread
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
@@ -169,7 +168,6 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                stateMgr.flush();
                 log.debug("Prepared {} task for committing", state());
 
                 break;
@@ -181,6 +179,13 @@ public class StandbyTask extends AbstractTask implements Task {
         return Collections.emptyMap();
     }
 
+    /**
+     * The following exceptions maybe thrown from the state manager flushing call
+     *
+     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
+     *                          or flushing state store get IO errors; such error should cause the thread to die
+     */
     @Override
     public void postCommit() {
         switch (state()) {
@@ -192,22 +197,12 @@ public class StandbyTask extends AbstractTask implements Task {
                 break;
 
             case RUNNING:
-                if (commitNeeded()) {
-                    writeCheckpoint();
-                }
-                log.debug("Finalized commit for running task");
-
-                break;
-
             case SUSPENDED:
-                // don't overwrite the existing checkpoint file if we haven't actually initialized the offsets yet
-                if (checkpointNeededForSuspended) {
-                    writeCheckpoint();
-                    log.debug("Finalized commit for suspended task");
-                    checkpointNeededForSuspended = false;
-                } else {
-                    log.debug("Skipped writing checkpoint for uninitialized suspended task");
-                }
+                final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
+                offsetSnapshotSinceLastCommit = new HashMap<>(offsetSnapshot);
+                maybeWriteCheckpoint(offsetSnapshot);
+
+                log.debug("Finalized commit for {} task", state());
 
                 break;
 
@@ -245,11 +240,21 @@ public class StandbyTask extends AbstractTask implements Task {
         log.info("Closed clean and recycled state");
     }
 
-    private void writeCheckpoint() {
-        // since there's no written offsets we can checkpoint with empty map,
-        // and the state's current offset would be used to checkpoint
-        stateMgr.checkpoint(Collections.emptyMap());
-        offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+    /**
+     * The following exceptions maybe thrown from the state manager flushing call
+     *
+     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
+     *                          or flushing state store get IO errors; such error should cause the thread to die
+     */
+    private void maybeWriteCheckpoint(final Map<TopicPartition, Long> offsetSnapshot) {
+        if (StateManagerUtil.checkpointNeeded(offsetSnapshotSinceLastFlush, offsetSnapshot)) {
+            stateMgr.flush();
+            // since there's no written offsets we can checkpoint with empty map,
+            // and the state's current offset would be used to checkpoint
+            stateMgr.checkpoint(Collections.emptyMap());
+            offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
+        }
     }
 
     private void close(final boolean clean) {
@@ -292,7 +297,8 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public boolean commitNeeded() {
         // we can commit if the store's offset has changed since last commit
-        return !offsetSnapshotSinceLastCommit.equals(stateMgr.changelogOffsets());
+        return offsetSnapshotSinceLastCommit != null &&
+                !offsetSnapshotSinceLastCommit.equals(stateMgr.changelogOffsets());
     }
 
     @Override
