@@ -348,14 +348,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- TODO: fix this (see KAFKA-4996) -->
-        <Or>
-            <Package name="org.apache.kafka.streams.state.internals"/>
+        <!-- Suppress warning about applicationID that gets initialized before
+        any other threads are created, but is used in synchronized and
+        unsynchronized methods because it comes from the configs,
+        passed through rewriteTopology. -->
             <Package name="org.apache.kafka.streams.processor.internals"/>
-            <Package name="org.apache.kafka.streams.processor"/>
-            <Package name="org.apache.kafka.streams"/>
-        </Or>
-        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+            <Source name="InternalTopologyBuilder.java"/>
+            <Bug pattern="IS2_INCONSISTENT_SYNC"/>
     </Match>
 
     <Match>

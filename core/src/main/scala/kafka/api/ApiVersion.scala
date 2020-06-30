@@ -98,7 +98,9 @@ object ApiVersion {
     // No new APIs, equivalent to 2.4-IV1
     KAFKA_2_5_IV0,
     // Introduced StopReplicaRequest V3 containing the leader epoch for each partition (KIP-570)
-    KAFKA_2_6_IV0
+    KAFKA_2_6_IV0,
+    // Introduced feature versioning support (KIP-584)
+    KAFKA_2_7_IV0
   )
 
   // Map keys are the union of the short and full versions
@@ -350,6 +352,13 @@ case object KAFKA_2_6_IV0 extends DefaultApiVersion {
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
   val id: Int = 27
+}
+
+case object KAFKA_2_7_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "2.7"
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 28
 }
 
 object ApiVersionValidator extends Validator {

@@ -51,6 +51,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.ChangelogRegister;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
@@ -64,7 +65,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
-import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -90,7 +90,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -474,12 +473,7 @@ public class TopologyTestDriver implements Closeable {
                 StreamsConfig.EXACTLY_ONCE.equals(streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG)),
                 logContext,
                 stateDirectory,
-                new StoreChangelogReader(
-                    mockWallClockTime,
-                    streamsConfig,
-                    logContext,
-                    createRestoreConsumer(processorTopology.storeToChangelogTopic()),
-                    stateRestoreListener),
+                new MockChangelogRegister(),
                 processorTopology.storeToChangelogTopic(),
                 new HashSet<>(partitionsByInputTopic.values())
             );
@@ -613,8 +607,8 @@ public class TopologyTestDriver implements Closeable {
                 // Process the record ...
                 task.process(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
-                task.prepareCommit();
-                commit(task.committableOffsetsAndMetadata());
+                commit(task.prepareCommit());
+                task.postCommit();
                 captureOutputsAndReEnqueueInternalResults();
             }
             if (task.hasRecordsQueued()) {
@@ -759,8 +753,8 @@ public class TopologyTestDriver implements Closeable {
         mockWallClockTime.sleep(advance.toMillis());
         if (task != null) {
             task.maybePunctuateSystemTime();
-            task.prepareCommit();
-            commit(task.committableOffsetsAndMetadata());
+            commit(task.prepareCommit());
+            task.postCommit();
         }
         completeAllProcessableWork();
     }
@@ -1180,7 +1174,9 @@ public class TopologyTestDriver implements Closeable {
      */
     public void close() {
         if (task != null) {
-            task.prepareCloseClean();
+            task.suspend();
+            task.prepareCommit();
+            task.postCommit();
             task.closeClean();
         }
         if (globalStateTask != null) {
@@ -1200,6 +1196,20 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
+    }
+
+    static class MockChangelogRegister implements ChangelogRegister {
+        private final Set<TopicPartition> restoringPartitions = new HashSet<>();
+
+        @Override
+        public void register(final TopicPartition partition, final ProcessorStateManager stateManager) {
+            restoringPartitions.add(partition);
+        }
+
+        @Override
+        public void unregister(final Collection<TopicPartition> partitions) {
+            restoringPartitions.removeAll(partitions);
+        }
     }
 
     static class MockTime implements Time {
@@ -1239,34 +1249,5 @@ public class TopologyTestDriver implements Closeable {
         public void waitObject(final Object obj, final Supplier<Boolean> condition, final long timeoutMs) {
             throw new UnsupportedOperationException();
         }
-
-    }
-
-    private MockConsumer<byte[], byte[]> createRestoreConsumer(final Map<String, String> storeToChangelogTopic) {
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.LATEST) {
-            @Override
-            public synchronized void seekToEnd(final Collection<TopicPartition> partitions) {}
-
-            @Override
-            public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {}
-
-            @Override
-            public synchronized long position(final TopicPartition partition) {
-                return 0L;
-            }
-        };
-
-        // for each store
-        for (final Map.Entry<String, String> storeAndTopic : storeToChangelogTopic.entrySet()) {
-            final String topicName = storeAndTopic.getValue();
-            // Set up the restore-state topic ...
-            // consumer.subscribe(new TopicPartition(topicName, 0));
-            // Set up the partition that matches the ID (which is what ProcessorStateManager expects) ...
-            final List<PartitionInfo> partitionInfos = new ArrayList<>();
-            partitionInfos.add(new PartitionInfo(topicName, PARTITION_ID, null, null, null));
-            consumer.updatePartitions(topicName, partitionInfos);
-            consumer.updateEndOffsets(Collections.singletonMap(new TopicPartition(topicName, PARTITION_ID), 0L));
-        }
-        return consumer;
     }
 }

@@ -239,9 +239,9 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     var result = true
     for (topic <- List(topic1, topic2)) {
       val tp = new TopicPartition(topic, 0)
-      val leo = broker.getLogManager().getLog(tp).get.logEndOffset
+      val leo = broker.getLogManager.getLog(tp).get.logEndOffset
       result = result && leo > 0 && brokers.forall { broker =>
-        broker.getLogManager().getLog(tp).get.logSegments.iterator.forall { segment =>
+        broker.getLogManager.getLog(tp).get.logSegments.iterator.forall { segment =>
           if (segment.read(minOffset, Integer.MAX_VALUE) == null) {
             false
           } else {

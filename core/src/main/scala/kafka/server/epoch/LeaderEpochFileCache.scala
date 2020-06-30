@@ -227,9 +227,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   }
 
   // Visible for testing
-  def epochEntries: Seq[EpochEntry] = {
-    epochs
-  }
+  def epochEntries: Seq[EpochEntry] = epochs
 
   private def latestEntry: Option[EpochEntry] = epochs.lastOption
 

@@ -415,7 +415,7 @@ public class RecordAccumulatorTest {
         ProducerBatch batch = batches.get(0).get(0);
         long currentRetryBackoffMs = 0;
 
-        for (int i = 0; currentRetryBackoffMs < retryBackoffMaxMs * (1 - RETRY_BACKOFF_JITTER); i++){
+        for (int i = 0; currentRetryBackoffMs < retryBackoffMaxMs * (1 - RETRY_BACKOFF_JITTER); i++) {
             // Re-enqueue the batch
             now = time.milliseconds();
             accum.reenqueue(batch, now + lingerMs + 1);

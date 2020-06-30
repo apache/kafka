@@ -3745,35 +3745,35 @@ class GroupCoordinatorTest {
   }
 
   private def setupJoinGroupCallback: (Future[JoinGroupResult], JoinGroupCallback) = {
-    val responsePromise = Promise[JoinGroupResult]
+    val responsePromise = Promise[JoinGroupResult]()
     val responseFuture = responsePromise.future
     val responseCallback: JoinGroupCallback = responsePromise.success
     (responseFuture, responseCallback)
   }
 
   private def setupSyncGroupCallback: (Future[SyncGroupResult], SyncGroupCallback) = {
-    val responsePromise = Promise[SyncGroupResult]
+    val responsePromise = Promise[SyncGroupResult]()
     val responseFuture = responsePromise.future
     val responseCallback: SyncGroupCallback = responsePromise.success
     (responseFuture, responseCallback)
   }
 
   private def setupHeartbeatCallback: (Future[HeartbeatCallbackParams], HeartbeatCallback) = {
-    val responsePromise = Promise[HeartbeatCallbackParams]
+    val responsePromise = Promise[HeartbeatCallbackParams]()
     val responseFuture = responsePromise.future
     val responseCallback: HeartbeatCallback = error => responsePromise.success(error)
     (responseFuture, responseCallback)
   }
 
   private def setupCommitOffsetsCallback: (Future[CommitOffsetCallbackParams], CommitOffsetCallback) = {
-    val responsePromise = Promise[CommitOffsetCallbackParams]
+    val responsePromise = Promise[CommitOffsetCallbackParams]()
     val responseFuture = responsePromise.future
     val responseCallback: CommitOffsetCallback = offsets => responsePromise.success(offsets)
     (responseFuture, responseCallback)
   }
 
   private def setupLeaveGroupCallback: (Future[LeaveGroupResult], LeaveGroupCallback) = {
-    val responsePromise = Promise[LeaveGroupResult]
+    val responsePromise = Promise[LeaveGroupResult]()
     val responseFuture = responsePromise.future
     val responseCallback: LeaveGroupCallback = result => responsePromise.success(result)
     (responseFuture, responseCallback)

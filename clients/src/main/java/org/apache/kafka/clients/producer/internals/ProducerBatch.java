@@ -477,5 +477,7 @@ public final class ProducerBatch {
         return reopened;
     }
 
-    public long retryBackoffMs() { return retryBackoffMs; }
+    public long retryBackoffMs() {
+        return retryBackoffMs;
+    }
 }

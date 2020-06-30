@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Collection;
 import java.util.Set;
-import org.slf4j.Logger;
 
 import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
@@ -101,21 +100,6 @@ public abstract class AbstractTask implements Task {
             state = newState;
         } else {
             throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
-        }
-    }
-
-    static void executeAndMaybeSwallow(final boolean clean,
-                                       final Runnable runnable,
-                                       final String name,
-                                       final Logger log) {
-        try {
-            runnable.run();
-        } catch (final RuntimeException e) {
-            if (clean) {
-                throw e;
-            } else {
-                log.debug("Ignoring error in unclean {}", name);
-            }
         }
     }
 

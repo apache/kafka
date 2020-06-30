@@ -24,22 +24,25 @@ import static org.junit.Assert.assertTrue;
 
 public class ExponentialBackoffTest {
     @Test
-    public void testGeometricProgression() {
+    public void testExponentialBackoff() {
         long scaleFactor = 100;
         int ratio = 2;
-        long termMax = 2000;
+        long backoffMax = 2000;
         double jitter = 0.2;
         ExponentialBackoff exponentialBackoff = new ExponentialBackoff(
-                scaleFactor, ratio, termMax, jitter
+                scaleFactor, ratio, backoffMax, jitter
         );
 
         for (int i = 0; i <= 100; i++) {
-            for (int n = 0; n <= 4; n++) {
-                assertEquals(scaleFactor * Math.pow(ratio, n), exponentialBackoff.backoff(n),
-                        scaleFactor * Math.pow(ratio, n) * jitter);
+            for (int attempts = 0; attempts <= 10; attempts++) {
+                if (attempts <= 4) {
+                    assertEquals(scaleFactor * Math.pow(ratio, attempts),
+                            exponentialBackoff.backoff(attempts),
+                            scaleFactor * Math.pow(ratio, attempts) * jitter);
+                } else {
+                    assertTrue(exponentialBackoff.backoff(attempts) <= backoffMax * (1 + jitter));
+                }
             }
-            System.out.println(exponentialBackoff.backoff(5));
-            assertTrue(exponentialBackoff.backoff(1000) <= termMax * (1 + jitter));
         }
     }
 }
