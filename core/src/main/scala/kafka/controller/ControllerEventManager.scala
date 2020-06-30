@@ -78,7 +78,6 @@ class ControllerEventManager(controllerId: Int,
   private val queue = new LinkedBlockingQueue[QueuedEvent]
   // Visible for test
   private[controller] val thread = new ControllerEventThread(ControllerEventThreadName)
-  val eventQueueTimeMetricTimeoutMs = eventQueueTimeTimeoutMs
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
@@ -144,7 +143,7 @@ class ControllerEventManager(controllerId: Int,
   private def pollFromEventQueue(): QueuedEvent = {
     val count = eventQueueTimeHist.count()
     if (count != 0) {
-      val event  = queue.poll(eventQueueTimeMetricTimeoutMs, TimeUnit.MILLISECONDS)
+      val event  = queue.poll(eventQueueTimeTimeoutMs, TimeUnit.MILLISECONDS)
       if (event == null) {
         eventQueueTimeHist.clear()
         queue.take()
