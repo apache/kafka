@@ -303,10 +303,6 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         cfg = KafkaConfig(**{streams_property.STATE_DIR: self.PERSISTENT_ROOT, streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()})
         return cfg.render()
 
-    def checkPids(self, node):
-        if len(self.pids(node)) == 0:
-            raise RuntimeError("No process ids recorded")
-
     def start_node(self, node):
         node.account.mkdirs(self.PERSISTENT_ROOT)
         prop_file = self.prop_file()
@@ -511,10 +507,6 @@ class StreamsResetter(StreamsTestBaseService):
                                               kafka,
                                               "kafka.tools.StreamsResetter",
                                               "")
-
-    def checkPids(self, node):
-        # resetter doesn't need to check pids
-        pass
 
     @property
     def expectedMessage(self):
