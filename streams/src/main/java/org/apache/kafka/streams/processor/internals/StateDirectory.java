@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Arrays;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
@@ -49,6 +50,7 @@ public class StateDirectory {
     private static final Pattern PATH_NAME = Pattern.compile("\\d+_\\d+");
 
     static final String LOCK_FILE_NAME = ".lock";
+    private static final String ROCKSDB_DIRECTORY_NAME = "rocksdb";
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
 
     private final Time time;
@@ -136,7 +138,14 @@ public class StateDirectory {
                 !pathname.getName().equals(CHECKPOINT_FILE_NAME));
 
         // if the task is stateless, storeDirs would be null
-        return storeDirs == null || storeDirs.length == 0;
+        if (storeDirs == null || storeDirs.length == 0) {
+            return true;
+        } else if (storeDirs.length == 1 && storeDirs[0].getName().equals(ROCKSDB_DIRECTORY_NAME)) {
+            final String[] rocksdbFiles = storeDirs[0].list();
+            return rocksdbFiles == null || rocksdbFiles.length == 0;
+        } else {
+            return false;
+        }
     }
 
     /**
