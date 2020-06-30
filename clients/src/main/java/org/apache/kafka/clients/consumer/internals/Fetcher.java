@@ -30,31 +30,12 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.errors.InvalidTopicException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.SerializationException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.*;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Meter;
-import org.apache.kafka.common.metrics.stats.Min;
-import org.apache.kafka.common.metrics.stats.Value;
-import org.apache.kafka.common.metrics.stats.WindowedCount;
+import org.apache.kafka.common.metrics.*;
+import org.apache.kafka.common.metrics.stats.*;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
@@ -97,6 +78,7 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -153,8 +135,8 @@ public class Fetcher<K, V> implements Closeable {
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
-
     private CompletedFetch nextInLineFetch = null;
+
 
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
@@ -315,7 +297,7 @@ public class Fetcher<K, V> implements Closeable {
                                             metricAggregator, batches, fetchOffset, responseVersion));
                                 }
                             }
-
+                            sensors.recordsFetchStatus.record(1.0);
                             sensors.fetchLatency.record(resp.requestLatencyMs());
                         } finally {
                             nodesWithPendingFetchRequests.remove(fetchTarget.id());
@@ -325,11 +307,15 @@ public class Fetcher<K, V> implements Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
+
                     synchronized (Fetcher.this) {
                         try {
                             FetchSessionHandler handler = sessionHandler(fetchTarget.id());
                             if (handler != null) {
                                 handler.handleError(e);
+                            }
+                            if(e instanceof DisconnectException){
+                                sensors.recordsFetchStatus.record(0.0);
                             }
                         } finally {
                             nodesWithPendingFetchRequests.remove(fetchTarget.id());
@@ -1682,6 +1668,7 @@ public class Fetcher<K, V> implements Closeable {
         private final Sensor fetchLatency;
         private final Sensor recordsFetchLag;
         private final Sensor recordsFetchLead;
+        private final Sensor recordsFetchStatus;
 
         private int assignmentId = 0;
         private Set<TopicPartition> assignedPartitions = Collections.emptySet();
@@ -1712,6 +1699,10 @@ public class Fetcher<K, V> implements Closeable {
 
             this.recordsFetchLead = metrics.sensor("records-lead");
             this.recordsFetchLead.add(metrics.metricInstance(metricsRegistry.recordsLeadMin), new Min());
+
+            this.recordsFetchStatus = metrics.sensor("records-fetch-status",new MetricConfig());
+            this.recordsFetchStatus.add(Frequencies.forBooleanValues(metrics.metricInstance(metricsRegistry.fetchRequestFailurePercent),
+                    metrics.metricInstance(metricsRegistry.fetchRequestSuccessPercent)));
         }
 
         private void recordTopicFetchMetrics(String topic, int bytes, int records) {

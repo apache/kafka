@@ -203,12 +203,13 @@ public class KafkaStreams implements AutoCloseable {
      *   the instance will be in the ERROR state. The user will need to close it.
      */
     public enum State {
-        CREATED(1, 3),          // 0
-        REBALANCING(2, 3, 5),   // 1
-        RUNNING(1, 2, 3, 5),    // 2
-        PENDING_SHUTDOWN(4),    // 3
-        NOT_RUNNING,            // 4
-        ERROR(3);               // 5
+        CREATED(1, 3),             // 0
+        REBALANCING(2, 3, 5, 6),   // 1
+        RUNNING(1, 2, 3, 5, 6),    // 2
+        PENDING_SHUTDOWN(4),       // 3
+        NOT_RUNNING,                              // 4
+        DISCONNECTED(1,2,3),       // 5
+        ERROR(3);                  // 6
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -445,9 +446,9 @@ public class KafkaStreams implements AutoCloseable {
          * If all threads are up, including the global thread, set to RUNNING
          */
         private void maybeSetRunning() {
-            // state can be transferred to RUNNING if all threads are either RUNNING or DEAD
+            // state can be transferred to RUNNING if all threads are either RUNNING or DEAD or DISCONNECTED
             for (final StreamThread.State state : threadState.values()) {
-                if (state != StreamThread.State.RUNNING && state != StreamThread.State.DEAD) {
+                if (state != StreamThread.State.RUNNING && state != StreamThread.State.DEAD && state != StreamThread.State.DISCONNECTED) {
                     return;
                 }
             }
@@ -459,6 +460,16 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             setState(State.RUNNING);
+        }
+
+        private void maybeSetDisconnected(){
+            // state can be transferred to DISCONNECTED if all threads are either DISCONNECTED or DEAD
+            for(final StreamThread.State state: threadState.values()){
+                if(state != StreamThread.State.DISCONNECTED && state != StreamThread.State.DEAD ){
+                    return;
+                }
+            }
+            setState(State.DISCONNECTED);
         }
 
 
@@ -478,6 +489,8 @@ public class KafkaStreams implements AutoCloseable {
                         maybeSetRunning();
                     } else if (newState == StreamThread.State.DEAD) {
                         maybeSetError();
+                    } else if (newState == StreamThread.State.DISCONNECTED){
+                        maybeSetDisconnected();
                     }
                 } else if (thread instanceof GlobalStreamThread) {
                     // global stream thread has different invariants

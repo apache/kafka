@@ -37,6 +37,8 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate fetchLatencyMax;
     public MetricNameTemplate fetchRequestRate;
     public MetricNameTemplate fetchRequestTotal;
+    public MetricNameTemplate fetchRequestSuccessPercent;
+    public MetricNameTemplate fetchRequestFailurePercent;
     public MetricNameTemplate recordsLagMax;
     public MetricNameTemplate recordsLeadMin;
     public MetricNameTemplate fetchThrottleTimeAvg;
@@ -74,6 +76,12 @@ public class FetcherMetricsRegistry {
 
         this.fetchSizeMax = new MetricNameTemplate("fetch-size-max", groupName,
                 "The maximum number of bytes fetched per request", tags);
+
+        this.fetchRequestSuccessPercent = new MetricNameTemplate("fetch-success-percent",groupName,
+                "percentage of fetch request succeeded",tags);
+        this.fetchRequestFailurePercent = new MetricNameTemplate("fetch-failure-percent",groupName,
+                "percentage of fetch requests failed",tags);
+
         this.bytesConsumedRate = new MetricNameTemplate("bytes-consumed-rate", groupName,
                 "The average number of bytes consumed per second", tags);
         this.bytesConsumedTotal = new MetricNameTemplate("bytes-consumed-total", groupName,

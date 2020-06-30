@@ -27,6 +27,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.metrics.QuotaViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -134,13 +135,15 @@ public class StreamThread extends Thread {
      */
     public enum State implements ThreadStateTransitionValidator {
 
-        CREATED(1, 5),                    // 0
-        STARTING(2, 3, 5),                // 1
-        PARTITIONS_REVOKED(2, 3, 5),      // 2
-        PARTITIONS_ASSIGNED(2, 3, 4, 5),  // 3
-        RUNNING(2, 3, 5),                 // 4
-        PENDING_SHUTDOWN(6),              // 5
-        DEAD;                             // 6
+        CREATED(1, 5),                      // 0
+        STARTING(2, 3, 5),                  // 1
+        PARTITIONS_REVOKED(2, 3, 5,6),      // 2
+        PARTITIONS_ASSIGNED(2, 3, 4, 5,6),  // 3
+        RUNNING(2, 3, 5,6),                 // 4
+        PENDING_SHUTDOWN(7),                // 5
+        DISCONNECTED(2,3,4,5),              // 6
+        DEAD;                                              // 7
+
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -149,7 +152,7 @@ public class StreamThread extends Thread {
         }
 
         public boolean isAlive() {
-            return equals(RUNNING) || equals(STARTING) || equals(PARTITIONS_REVOKED) || equals(PARTITIONS_ASSIGNED);
+            return equals(RUNNING) || equals(STARTING) || equals(PARTITIONS_REVOKED) || equals(PARTITIONS_ASSIGNED) || equals(DISCONNECTED);
         }
 
         @Override
@@ -196,7 +199,7 @@ public class StreamThread extends Thread {
      * @param newState New state
      * @return The state prior to the call to setState, or null if the transition is invalid
      */
-    State setState(final State newState) {
+    State  setState(final State newState) {
         final State oldState;
 
         synchronized (stateLock) {
@@ -276,6 +279,7 @@ public class StreamThread extends Thread {
     private long lastPollMs;
     private long lastCommitMs;
     private int numIterations;
+    private State restoreState = null;
     private volatile State state = State.CREATED;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
@@ -288,6 +292,8 @@ public class StreamThread extends Thread {
     final Consumer<byte[], byte[]> mainConsumer;
     final Consumer<byte[], byte[]> restoreConsumer;
     final InternalTopologyBuilder builder;
+
+    private MetricName fetchFailureMetric;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -491,6 +497,11 @@ public class StreamThread extends Thread {
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
+        for (MetricName metric :mainConsumer.metrics().keySet()) {
+            if(metric.name().equals("fetch-failure-percent")){
+                this.fetchFailureMetric = metric;
+            }
+        }
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
@@ -631,7 +642,7 @@ public class StreamThread extends Thread {
             // try to fetch som records with zero poll millis to unblock
             // other useful work while waiting for the join response
             records = pollRequests(Duration.ZERO);
-        } else if (state == State.RUNNING || state == State.STARTING) {
+        } else if (state == State.RUNNING || state == State.STARTING || state == State.DISCONNECTED) {
             // try to fetch some records with normal poll time
             // in order to get long polling
             records = pollRequests(pollTime);
@@ -772,6 +783,7 @@ public class StreamThread extends Thread {
         ConsumerRecords<byte[], byte[]> records = null;
 
         lastPollMs = now;
+        checkDisconnects();
 
         try {
             records = mainConsumer.poll(pollTime);
@@ -780,6 +792,14 @@ public class StreamThread extends Thread {
         }
 
         return records;
+    }
+    private void checkDisconnects(){
+        double disconnects = (double) mainConsumer.metrics().get(this.fetchFailureMetric).metricValue();
+        if(disconnects >= 0.9 && state != State.DISCONNECTED) {
+            restoreState = setState(State.DISCONNECTED);
+        }else if(disconnects <= 0.1 && state == State.DISCONNECTED){
+            setState(restoreState);
+        }
     }
 
     private void resetInvalidOffsets(final InvalidOffsetException e) {
