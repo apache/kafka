@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.common.utils.GeometricProgression;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -73,7 +73,7 @@ public final class RecordAccumulator {
     private final int batchSize;
     private final CompressionType compression;
     private final int lingerMs;
-    private final GeometricProgression retryBackoff;
+    private final ExponentialBackoff retryBackoff;
     private final int deliveryTimeoutMs;
     private final BufferPool free;
     private final Time time;
@@ -127,7 +127,7 @@ public final class RecordAccumulator {
         this.batchSize = batchSize;
         this.compression = compression;
         this.lingerMs = lingerMs;
-        this.retryBackoff = new GeometricProgression(
+        this.retryBackoff = new ExponentialBackoff(
                 retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.deliveryTimeoutMs = deliveryTimeoutMs;
         this.batches = new CopyOnWriteMap<>();
@@ -333,7 +333,7 @@ public final class RecordAccumulator {
      * whether the batch has reached deliveryTimeoutMs or not. Hence we do not do the delivery timeout check here.
      */
     public void reenqueue(ProducerBatch batch, long now) {
-        long newRetryBackoffMs = retryBackoff.term(batch.attempts());
+        long newRetryBackoffMs = retryBackoff.backoff(batch.attempts());
         batch.reenqueued(newRetryBackoffMs, now);
         Deque<ProducerBatch> deque = getOrCreateDeque(batch.topicPartition);
         synchronized (deque) {

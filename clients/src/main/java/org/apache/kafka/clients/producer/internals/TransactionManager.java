@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.utils.GeometricProgression;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -217,7 +217,7 @@ public class TransactionManager {
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
     // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
     // error for the first AddPartitionsRequest in a transaction.
-    private final GeometricProgression retryBackoff;
+    private final ExponentialBackoff retryBackoff;
 
     // The retryBackoff is overridden to the following value if the first AddPartitions receives a
     // CONCURRENT_TRANSACTIONS error.
@@ -308,7 +308,7 @@ public class TransactionManager {
         this.pendingTxnOffsetCommits = new HashMap<>();
         this.partitionsWithUnresolvedSequences = new HashMap<>();
         this.partitionsToRewriteSequences = new HashSet<>();
-        this.retryBackoff = new GeometricProgression(
+        this.retryBackoff = new ExponentialBackoff(
                 retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.topicPartitionBookkeeper = new TopicPartitionBookkeeper();
         this.apiVersions = apiVersions;
@@ -1219,7 +1219,7 @@ public class TransactionManager {
         protected final TransactionalRequestResult result;
         private boolean isRetry = false;
         private int attempts = 0;
-        private long retryBackoffMs = retryBackoff.term(0);
+        private long retryBackoffMs = retryBackoff.backoff(0);
 
         TxnRequestHandler(TransactionalRequestResult result) {
             this.result = result;
@@ -1255,7 +1255,7 @@ public class TransactionManager {
         void reenqueue() {
             synchronized (TransactionManager.this) {
                 this.isRetry = true;
-                this.retryBackoffMs = retryBackoff.term(this.attempts++);
+                this.retryBackoffMs = retryBackoff.backoff(this.attempts++);
                 enqueueRequest(this);
             }
         }
@@ -1389,7 +1389,7 @@ public class TransactionManager {
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
             super("AddPartitionsToTxn");
             this.builder = builder;
-            this.retryBackoffMs = TransactionManager.this.retryBackoff.term(0);
+            this.retryBackoffMs = TransactionManager.this.retryBackoff.backoff(0);
         }
 
         @Override
@@ -1408,7 +1408,7 @@ public class TransactionManager {
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
-            retryBackoffMs = TransactionManager.this.retryBackoff.term(this.Attempts());
+            retryBackoffMs = TransactionManager.this.retryBackoff.backoff(this.Attempts());
 
             for (Map.Entry<TopicPartition, Errors> topicPartitionErrorEntry : errors.entrySet()) {
                 TopicPartition topicPartition = topicPartitionErrorEntry.getKey();
@@ -1482,7 +1482,7 @@ public class TransactionManager {
             // CONCURRENT_TRANSACTIONS error since this means that the previous transaction is still completing and
             // we don't want to wait too long before trying to start the new one.
             //
-            // This is only a temporary fix, the long term solution is being tracked in
+            // This is only a temporary fix, the long backoff solution is being tracked in
             // https://issues.apache.org/jira/browse/KAFKA-5482
             if (partitionsInTransaction.isEmpty())
                 this.retryBackoffMs = ADD_PARTITIONS_RETRY_BACKOFF_MS;

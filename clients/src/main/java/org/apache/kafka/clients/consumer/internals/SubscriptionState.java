@@ -27,7 +27,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.EpochEndOffset;
-import org.apache.kafka.common.utils.GeometricProgression;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -103,7 +103,7 @@ public class SubscriptionState {
 
     private int assignmentId = 0;
 
-    private final GeometricProgression retryBackoff;
+    private final ExponentialBackoff retryBackoff;
 
     private final static double RETRY_BACKOFF_JITTER = 0.2;
 
@@ -144,7 +144,7 @@ public class SubscriptionState {
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
-        this.retryBackoff = new GeometricProgression(
+        this.retryBackoff = new ExponentialBackoff(
                 retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
     }
 
@@ -726,7 +726,7 @@ public class SubscriptionState {
 
     private void incrementRetryBackoff(TopicPartitionState state, long now) {
         int attempts = state.getAndIncrementAttempts();
-        long retryBackoffMs = retryBackoff.term(attempts);
+        long retryBackoffMs = retryBackoff.backoff(attempts);
         // TODO: Remove the line below before merging
         System.out.println("retryBackoffMs = " + retryBackoffMs + " now = " + now);
         long nextRetryTimeMs = now + retryBackoffMs;

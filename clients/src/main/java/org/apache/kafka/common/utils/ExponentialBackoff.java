@@ -22,16 +22,16 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * An util class for exponential backoff, backoff, etc...
  * The formula is Term(n) = random(1 - jitter, 1 + jitter) * scaleFactor * (ratio) ^ n
- * If scaleFactor is greater or equal than termMax, a constant term of will be provided
+ * If scaleFactor is greater or equal than termMax, a constant backoff of will be provided
  * This class is thread-safe
  */
-public class GeometricProgression {
+public class ExponentialBackoff {
     private final int ratio;
     private final double expMax;
     private final long scaleFactor;
     private final double jitter;
 
-    public GeometricProgression(long scaleFactor, int ratio, long termMax, double jitter) {
+    public ExponentialBackoff(long scaleFactor, int ratio, long termMax, double jitter) {
         this.scaleFactor = scaleFactor;
         this.ratio = ratio;
         this.jitter = jitter;
@@ -39,7 +39,7 @@ public class GeometricProgression {
                 Math.log(termMax / (double) Math.max(scaleFactor, 1)) / Math.log(ratio) : 0;
     }
 
-    public long term(long n) {
+    public long backoff(long n) {
         if (expMax == 0) {
             return scaleFactor;
         }

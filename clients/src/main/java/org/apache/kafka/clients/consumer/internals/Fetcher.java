@@ -74,7 +74,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.GeometricProgression;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -155,7 +155,7 @@ public class Fetcher<K, V> implements Closeable {
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
-    private final GeometricProgression retryBackoff;
+    private final ExponentialBackoff retryBackoff;
     private final static double RETRY_BACKOFF_JITTER = 0.2;
     private final static int RETRY_BACKOFF_EXP_BASE = 2;
 
@@ -202,7 +202,7 @@ public class Fetcher<K, V> implements Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.apiVersions = apiVersions;
-        this.retryBackoff = new GeometricProgression(
+        this.retryBackoff = new ExponentialBackoff(
                 retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.sessionHandlers = new HashMap<>();
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
@@ -420,7 +420,7 @@ public class Fetcher<K, V> implements Closeable {
                 }
             }
 
-            timer.sleep(retryBackoff.term(attempts++));
+            timer.sleep(retryBackoff.backoff(attempts++));
         } while (timer.notExpired());
 
         throw new TimeoutException("Timeout expired while fetching topic metadata");

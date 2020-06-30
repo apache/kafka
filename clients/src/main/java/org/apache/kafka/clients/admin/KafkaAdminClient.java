@@ -213,7 +213,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.GeometricProgression;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -346,7 +346,7 @@ public class KafkaAdminClient extends AdminClient {
 
     private final int maxRetries;
 
-    private GeometricProgression retryBackoff;
+    private ExponentialBackoff retryBackoff;
 
     private final static double RETRY_BACKOFF_JITTER = 0.2;
 
@@ -555,7 +555,7 @@ public class KafkaAdminClient extends AdminClient {
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
-        this.retryBackoff = new GeometricProgression(
+        this.retryBackoff = new ExponentialBackoff(
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 RETRY_BACKOFF_EXP_BASE,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
@@ -728,7 +728,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         final void incrementRetryBackoff(Call failedCall, long now) {
-            this.nextAllowedTryMs = now + retryBackoff.term(tries);
+            this.nextAllowedTryMs = now + retryBackoff.backoff(tries);
             this.tries = failedCall.tries + 1;
         }
 
@@ -1306,7 +1306,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Ensure that we use a small poll timeout if there are pending calls which need to be sent
                 if (!pendingCalls.isEmpty())
-                    pollTimeout = Math.min(pollTimeout, retryBackoff.term(0));
+                    pollTimeout = Math.min(pollTimeout, retryBackoff.backoff(0));
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);

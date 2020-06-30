@@ -27,7 +27,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.utils.GeometricProgression;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
@@ -76,7 +76,7 @@ public class Metadata implements Closeable {
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
-    private final GeometricProgression refreshBackoff;
+    private final ExponentialBackoff refreshBackoff;
     private final static double RETRY_BACKOFF_JITTER = 0.2;
     private final static int RETRY_BACKOFF_EXP_BASE = 2;
 
@@ -110,7 +110,7 @@ public class Metadata implements Closeable {
         this.lastSeenLeaderEpochs = new HashMap<>();
         this.invalidTopics = Collections.emptySet();
         this.unauthorizedTopics = Collections.emptySet();
-        this.refreshBackoff = new GeometricProgression(
+        this.refreshBackoff = new ExponentialBackoff(
                 refreshBackoffMs, RETRY_BACKOFF_EXP_BASE, refreshBackoffMaxMs, RETRY_BACKOFF_JITTER);
     }
 
@@ -471,14 +471,14 @@ public class Metadata implements Closeable {
     }
 
     private void incrementRefreshBackoff(long now) {
-        this.refreshBackoffMs = this.refreshBackoff.term(this.attempts);
+        this.refreshBackoffMs = this.refreshBackoff.backoff(this.attempts);
         this.attempts++;
         this.lastRefreshMs = now;
     }
 
     private void resetRefreshBackoff(long now) {
         this.attempts = 0;
-        this.refreshBackoffMs = this.refreshBackoff.term(0);
+        this.refreshBackoffMs = this.refreshBackoff.backoff(0);
         this.lastRefreshMs = now;
     }
 
