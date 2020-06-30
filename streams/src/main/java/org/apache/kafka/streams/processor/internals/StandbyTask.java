@@ -48,7 +48,6 @@ public class StandbyTask extends AbstractTask implements Task {
     private final StreamsMetricsImpl streamsMetrics;
 
     private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit = null;
-    private Map<TopicPartition, Long> offsetSnapshotSinceLastFlush = null;
 
     /**
      * @param id             the ID of this task
@@ -94,11 +93,9 @@ public class StandbyTask extends AbstractTask implements Task {
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
-
             // initialize the snapshot with the current offsets as we don't need to commit then until they change
-            final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
-            offsetSnapshotSinceLastCommit = new HashMap<>(offsetSnapshot);
-            offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
+            initializeCheckpoint();
+            offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
 
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
@@ -156,7 +153,11 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     /**
-     * Flush stores before a commit
+     * Flush stores before a commit; the following exceptions maybe thrown from the state manager flushing call
+     *
+     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
+     *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
@@ -168,6 +169,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
+                stateMgr.flush();
                 log.debug("Prepared {} task for committing", state());
 
                 break;
@@ -179,15 +181,8 @@ public class StandbyTask extends AbstractTask implements Task {
         return Collections.emptyMap();
     }
 
-    /**
-     * The following exceptions maybe thrown from the state manager flushing call
-     *
-     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
-     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
-     *                          or flushing state store get IO errors; such error should cause the thread to die
-     */
     @Override
-    public void postCommit() {
+    public void postCommit(final boolean enforceCheckpoint) {
         switch (state()) {
             case CREATED:
                 // We should never write a checkpoint for a CREATED task as we may overwrite an existing checkpoint
@@ -198,9 +193,8 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
-                offsetSnapshotSinceLastCommit = new HashMap<>(offsetSnapshot);
-                maybeWriteCheckpoint(offsetSnapshot);
+                offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
+                maybeWriteCheckpoint(enforceCheckpoint);
 
                 log.debug("Finalized commit for {} task", state());
 
@@ -238,23 +232,6 @@ public class StandbyTask extends AbstractTask implements Task {
         transitionTo(State.CLOSED);
 
         log.info("Closed clean and recycled state");
-    }
-
-    /**
-     * The following exceptions maybe thrown from the state manager flushing call
-     *
-     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
-     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
-     *                          or flushing state store get IO errors; such error should cause the thread to die
-     */
-    private void maybeWriteCheckpoint(final Map<TopicPartition, Long> offsetSnapshot) {
-        if (StateManagerUtil.checkpointNeeded(offsetSnapshotSinceLastFlush, offsetSnapshot)) {
-            stateMgr.flush();
-            // since there's no written offsets we can checkpoint with empty map,
-            // and the state's current offset would be used to checkpoint
-            stateMgr.checkpoint(Collections.emptyMap());
-            offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
-        }
     }
 
     private void close(final boolean clean) {

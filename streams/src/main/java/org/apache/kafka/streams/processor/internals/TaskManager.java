@@ -247,7 +247,8 @@ public class TaskManager {
                     // standbys must be suspended/committed/closed all here
                     task.suspend();
                     task.prepareCommit();
-                    task.postCommit();
+                    // Upon close we should enforce a checkpoint post commit
+                    task.postCommit(true);
                 }
                 completeTaskCloseClean(task);
                 cleanUpTaskProducer(task, taskCloseExceptions);
@@ -478,9 +479,11 @@ public class TaskManager {
 
         commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
+        // We do not need to enforce checkpointing upon suspending a task: if it is resumed later we just
+        // proceed normally; if it is closed we would checkpoint then
         for (final Task task : revokedTasks) {
             try {
-                task.postCommit();
+                task.postCommit(false);
             } catch (final RuntimeException e) {
                 log.error("Exception caught while post-committing task " + task.id(), e);
                 firstException.compareAndSet(null, e);
@@ -490,7 +493,7 @@ public class TaskManager {
         if (shouldCommitAdditionalTasks) {
             for (final Task task : additionalTasksForCommitting) {
                 try {
-                    task.postCommit();
+                    task.postCommit(false);
                 } catch (final RuntimeException e) {
                     log.error("Exception caught while post-committing task " + task.id(), e);
                     firstException.compareAndSet(null, e);
@@ -772,7 +775,7 @@ public class TaskManager {
 
                 for (final Task task : activeTaskIterable()) {
                     try {
-                        task.postCommit();
+                        task.postCommit(true);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
                         firstException.compareAndSet(null, e);
@@ -815,7 +818,7 @@ public class TaskManager {
             try {
                 task.suspend();
                 task.prepareCommit();
-                task.postCommit();
+                task.postCommit(true);
                 completeTaskCloseClean(task);
             } catch (final TaskMigratedException e) {
                 // just ignore the exception as it doesn't matter during shutdown
@@ -919,7 +922,7 @@ public class TaskManager {
             for (final Task task : tasksToCommit) {
                 if (task.commitNeeded()) {
                     ++committed;
-                    task.postCommit();
+                    task.postCommit(false);
                 }
             }
 

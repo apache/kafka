@@ -49,10 +49,19 @@ final class StateManagerUtil {
         return isTimestamped(store) ? rawValueToTimestampedValue() : identity();
     }
 
-    static boolean checkpointNeeded(final Map<TopicPartition, Long> oldOffsetSnapshot,
+    static boolean checkpointNeeded(final boolean enforceCheckpoint,
+                                    final Map<TopicPartition, Long> oldOffsetSnapshot,
                                     final Map<TopicPartition, Long> newOffsetSnapshot) {
+        // we should always have the old snapshot post completing the register state stores;
+        // if it is null it means the registration is not done and hence we should not overwrite the checkpoint
         if (oldOffsetSnapshot == null)
             return false;
+
+        // if the previous snapshot is empty while the current snapshot is not then we should always checkpoint;
+        // note if the task is stateless or stateful but no stores logged, the snapshot would also be empty
+        // and hence it's okay to not checkpoint
+        if (oldOffsetSnapshot.isEmpty() && !newOffsetSnapshot.isEmpty())
+            return true;
 
         // we can checkpoint if the the difference between the current and the previous snapshot is large enough
         long totalOffsetDelta = 0L;
@@ -60,7 +69,9 @@ final class StateManagerUtil {
             totalOffsetDelta += Math.abs(oldOffsetSnapshot.getOrDefault(entry.getKey(), 0L) - entry.getValue());
         }
 
-        return totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
+        // when enforcing checkpoint is required, we should overwrite the checkpoint if it is different from the old one;
+        // otherwise, we only overwrite the checkpoint if it is largely different from the old one
+        return enforceCheckpoint ? totalOffsetDelta > 0 : totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
     }
 
     /**

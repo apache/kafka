@@ -2687,7 +2687,7 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void postCommit() {
+        public void postCommit(final boolean enforceCheckpoint) {
             commitNeeded = false;
         }
 

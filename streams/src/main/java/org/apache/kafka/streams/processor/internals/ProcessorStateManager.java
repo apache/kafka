@@ -518,10 +518,7 @@ public class ProcessorStateManager implements StateManager {
         log.debug("Transitioning state manager for {} task {} to {}", oldType, taskId, newType);
     }
 
-    @Override
-    public void checkpoint(final Map<TopicPartition, Long> writtenOffsets) {
-        // first update each state store's current offset, then checkpoint
-        // those stores that are only logged and persistent to the checkpoint file
+    void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets) {
         for (final Map.Entry<TopicPartition, Long> entry : writtenOffsets.entrySet()) {
             final StateStoreMetadata store = findStore(entry.getKey());
 
@@ -529,9 +526,19 @@ public class ProcessorStateManager implements StateManager {
                 store.setOffset(entry.getValue());
 
                 log.debug("State store {} updated to written offset {} at changelog {}",
-                    store.stateStore.name(), store.offset, store.changelogPartition);
+                        store.stateStore.name(), store.offset, store.changelogPartition);
             }
         }
+    }
+
+    @Override
+    public void checkpoint(final Map<TopicPartition, Long> writtenOffsets) {
+        // first update each state store's current offset, then checkpoint
+        // those stores that are only logged and persistent to the checkpoint file
+        // TODO: we still need to keep it as part of the checkpoint for global tasks; this could be
+        //       removed though when we consolidate global tasks / state managers into this one
+        if (!writtenOffsets.isEmpty())
+            updateChangelogOffsets(writtenOffsets);
 
         final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {

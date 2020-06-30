@@ -125,7 +125,7 @@ public interface Task {
      */
     Map<TopicPartition, OffsetAndMetadata> prepareCommit();
 
-    void postCommit();
+    void postCommit(boolean enforceCheckpoint);
 
     void suspend();
 

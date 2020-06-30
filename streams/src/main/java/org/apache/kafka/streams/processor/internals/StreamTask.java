@@ -107,8 +107,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
 
-    private Map<TopicPartition, Long> offsetSnapshotSinceLastFlush = null;
-
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
                       final ProcessorTopology topology,
@@ -210,9 +208,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
-            // we will delete the local checkpoint file after registering the state stores and loading them into the
-            // state manager, therefore we would need to write it when needed
-            offsetSnapshotSinceLastFlush = new HashMap<>(stateMgr.changelogOffsets());
+            initializeCheckpoint();
 
             transitionTo(State.RESTORING);
 
@@ -356,6 +352,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case RESTORING:
             case RUNNING:
             case SUSPENDED:
+                // we need to flush the state store before committing since it may cause some cached records to be processed
+                // and hence generate more records to be sent out
+                stateMgr.flush();
                 // the commitNeeded flag just indicates whether we have reached RUNNING and processed any new data,
                 // so it only indicates whether the record collector should be flushed or not, whereas the state
                 // manager should always be flushed; either there is newly restored data or the flush will be a no-op
@@ -425,15 +424,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return committableOffsets;
     }
 
-    /**
-     * This should only be called if the attempted commit succeeded for this task
-     *
-     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
-     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
-     *                          or flushing state store get IO errors; such error should cause the thread to die
-     */
     @Override
-    public void postCommit() {
+    public void postCommit(final boolean enforceCheckpoint) {
         switch (state()) {
             case CREATED:
                 // We should never write a checkpoint for a CREATED task as we may overwrite an existing checkpoint
@@ -443,14 +435,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case RESTORING:
-                maybeWriteCheckpoint();
+                maybeWriteCheckpoint(enforceCheckpoint);
                 log.debug("Finalized commit for restoring task");
 
                 break;
 
             case RUNNING:
                 if (!eosEnabled) {
-                    maybeWriteCheckpoint();
+                    maybeWriteCheckpoint(enforceCheckpoint);
                 }
                 log.debug("Finalized commit for running task");
 
@@ -465,7 +457,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                  */
                 partitionGroup.clear();
 
-                maybeWriteCheckpoint();
+                maybeWriteCheckpoint(enforceCheckpoint);
                 log.debug("Finalized commit for suspended task");
 
                 break;
@@ -544,21 +536,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
-    private void maybeWriteCheckpoint() {
-        final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
-        if (StateManagerUtil.checkpointNeeded(offsetSnapshotSinceLastFlush, offsetSnapshot)) {
-            stateMgr.flush();
-
-            // if commitNeeded is false, then it indicates we have not processed any records since last commit;
-            // in this case we do not need to refresh checkpointable offsets
-            if (commitNeeded) {
-                stateMgr.checkpoint(checkpointableOffsets());
-            } else {
-                stateMgr.checkpoint(emptyMap());
-            }
-
-            offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
+    @Override
+    protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
+        // commitNeeded indicates we may have processed some records since last commit
+        // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
+        if (commitNeeded) {
+            stateMgr.updateChangelogOffsets(checkpointableOffsets());
         }
+
+        super.maybeWriteCheckpoint(enforceCheckpoint);
     }
 
     private void validateClean() {
