@@ -96,6 +96,7 @@ class StreamsOptimizedTest(Test):
     def reset_application(self):
         resetter = StreamsResetter(self.test_context, self.kafka)
         resetter.start()
+        # resetter is not long-tern running but it would be better to check the pid by stopping it
         resetter.stop()
 
     @staticmethod
