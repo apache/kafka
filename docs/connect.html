@@ -266,7 +266,7 @@
 
     <p>To report errors within a connector's converter, transforms, or within the sink connector itself to a dead letter queue topic, set <code>errors.deadletterqueue.topic.name</code>, and optionally  <code>errors.deadletterqueue.context.headers.enable=true</code>.</p>
 
-    <p>For example, below shows a configuration that will cause a connector will fail immediately upon an error or exception. Although it is not necessary to add extra configuration properties for this behavior, adding the following properties to a sink connector configuration would achieve this "fail fast" behavior:</p>
+    <p>For example, the following configuration properties can be added to a connector configuration to cause the connector to fail immediately upon an error or exception. Although it is not necessary to add extra configuration properties for this behavior, adding the following properties to a sink connector configuration would achieve this "fail fast" behavior:</p>
 
     <pre class="brush: text;">
         # disable retries on failure
