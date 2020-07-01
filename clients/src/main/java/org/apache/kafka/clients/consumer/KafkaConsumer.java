@@ -1270,14 +1270,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    private int binaryExponentialElectionBackoffMs(int retries) {
-        if (retries <= 0) {
-            throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
-        }
-
-        return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << (retries - 1)), electionBackoffMaxMs);
-    }
-
     /**
      * Visible for testing
      */
