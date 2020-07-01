@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -34,6 +35,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -43,6 +45,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreKeyBytes;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
 
@@ -163,7 +166,17 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Deprecated
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
+        return fetch(key, timeFrom, timeTo, false);
+    }
 
+    @Override
+    public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant from, final Instant to) {
+        final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
+        final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
+        return fetch(key, timeFrom, timeTo, true);
+    }
+
+    WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo, final boolean backward) {
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -175,7 +188,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return WrappedInMemoryWindowStoreIterator.emptyIterator();
         }
 
-        return registerNewWindowStoreIterator(
+        if (backward) return registerNewWindowStoreIterator(
+            key, segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator());
+        else return registerNewWindowStoreIterator(
             key, segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator());
     }
 
@@ -185,6 +200,24 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                            final Bytes to,
                                                            final long timeFrom,
                                                            final long timeTo) {
+        return fetch(from, to, timeFrom, timeTo, false);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
+                                                           final Bytes to,
+                                                           final Instant fromTime,
+                                                           final Instant toTime) {
+        final long timeFrom = ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
+        final long timeTo = ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
+        return fetch(from, to, timeFrom, timeTo, false);
+    }
+
+    KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
+                                                    final Bytes to,
+                                                    final long timeFrom,
+                                                    final long timeTo,
+                                                    final boolean backward) {
         Objects.requireNonNull(from, "from key cannot be null");
         Objects.requireNonNull(to, "to key cannot be null");
 
@@ -204,13 +237,26 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        return registerNewWindowedKeyValueIterator(
+        if (backward) return registerNewWindowedKeyValueIterator(
+            from, to, segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator());
+        else return registerNewWindowedKeyValueIterator(
             from, to, segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator());
     }
 
     @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
+        return fetchAll(timeFrom, timeTo, false);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant from, final Instant to) {
+        final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
+        final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
+        return fetchAll(timeFrom, timeTo, false);
+    }
+
+    KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo, final boolean backward) {
         removeExpiredSegments();
 
         // add one b/c records expire exactly retentionPeriod ms after created
@@ -220,7 +266,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        return registerNewWindowedKeyValueIterator(
+        if (backward) return registerNewWindowedKeyValueIterator(
+            null, null, segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator());
+        else return registerNewWindowedKeyValueIterator(
             null, null, segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator());
     }
 
@@ -232,6 +280,16 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         return registerNewWindowedKeyValueIterator(
             null, null, segmentMap.tailMap(minTime, false).entrySet().iterator());
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+        removeExpiredSegments();
+
+        final long minTime = observedStreamTime - retentionPeriod;
+
+        return registerNewWindowedKeyValueIterator(
+            null, null, segmentMap.tailMap(minTime, false).descendingMap().entrySet().iterator());
     }
 
     @Override
@@ -285,7 +343,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     private static Bytes getKey(final Bytes keyBytes) {
-        final byte[] bytes = new byte[keyBytes.get().length  - SEQNUM_SIZE];
+        final byte[] bytes = new byte[keyBytes.get().length - SEQNUM_SIZE];
         System.arraycopy(keyBytes.get(), 0, bytes, 0, bytes.length);
         return Bytes.wrap(bytes);
     }
@@ -310,11 +368,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         final WrappedWindowedKeyValueIterator iterator =
             new WrappedWindowedKeyValueIterator(from,
-                                                to,
-                                                segmentIterator,
-                                                openIterators::remove,
-                                                retainDuplicates,
-                                                windowSize);
+                to,
+                segmentIterator,
+                openIterators::remove,
+                retainDuplicates,
+                windowSize);
         openIterators.add(iterator);
         return iterator;
     }
@@ -419,13 +477,13 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
     }
 
-    private static class WrappedInMemoryWindowStoreIterator extends InMemoryWindowStoreIteratorWrapper implements WindowStoreIterator<byte[]>  {
+    private static class WrappedInMemoryWindowStoreIterator extends InMemoryWindowStoreIteratorWrapper implements WindowStoreIterator<byte[]> {
 
         WrappedInMemoryWindowStoreIterator(final Bytes keyFrom,
                                            final Bytes keyTo,
                                            final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator,
                                            final ClosingCallback callback,
-                                           final boolean retainDuplicates)  {
+                                           final boolean retainDuplicates) {
             super(keyFrom, keyTo, segmentIterator, callback, retainDuplicates);
         }
 
@@ -449,7 +507,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
 
         public static WrappedInMemoryWindowStoreIterator emptyIterator() {
-            return new WrappedInMemoryWindowStoreIterator(null, null, null, it -> { }, false);
+            return new WrappedInMemoryWindowStoreIterator(null, null, null, it -> {
+            }, false);
         }
     }
 

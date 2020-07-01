@@ -40,6 +40,8 @@ public interface SegmentedBytesStore extends StateStore {
      */
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to);
 
+    KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key, final long from, final long to);
+
     /**
      * Fetch all records from the segmented store in the provided key range and time range
      * from all existing segments
@@ -50,7 +52,9 @@ public interface SegmentedBytesStore extends StateStore {
      * @return  an iterator over key-value pairs
      */
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to);
-    
+
+    KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to);
+
     /**
      * Gets all the key-value pairs in the existing windows.
      *
@@ -58,7 +62,9 @@ public interface SegmentedBytesStore extends StateStore {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<Bytes, byte[]> all();
-    
+
+    KeyValueIterator<Bytes, byte[]> backwardAll();
+
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
@@ -69,6 +75,8 @@ public interface SegmentedBytesStore extends StateStore {
      * @throws NullPointerException if null is used for any key
      */
     KeyValueIterator<Bytes, byte[]> fetchAll(final long from, final long to);
+
+    KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long from, final long to);
 
     /**
      * Remove the record with the provided key. The key
@@ -171,6 +179,6 @@ public interface SegmentedBytesStore extends StateStore {
          * @param to
          * @return  List of segments to search
          */
-        <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to);
+        <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to, boolean backward);
     }
 }

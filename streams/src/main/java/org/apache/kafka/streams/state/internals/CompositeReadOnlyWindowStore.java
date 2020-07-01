@@ -60,8 +60,8 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                 }
             } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException(
-                        "State store is not available anymore and may have been migrated to another instance; " +
-                                "please re-discover its location from the state metadata.");
+                    "State store is not available anymore and may have been migrated to another instance; " +
+                        "please re-discover its location from the state metadata.");
             }
         }
         return null;
@@ -84,8 +84,31 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
                 }
             } catch (final InvalidStateStoreException e) {
                 throw new InvalidStateStoreException(
-                        "State store is not available anymore and may have been migrated to another instance; " +
-                                "please re-discover its location from the state metadata.");
+                    "State store is not available anymore and may have been migrated to another instance; " +
+                        "please re-discover its location from the state metadata.");
+            }
+        }
+        return KeyValueIterators.emptyWindowStoreIterator();
+    }
+
+    @Override
+    public WindowStoreIterator<V> backwardFetch(final K key,
+                                                final Instant timeFrom,
+                                                final Instant timeTo) {
+        Objects.requireNonNull(key, "key can't be null");
+        final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
+        for (final ReadOnlyWindowStore<K, V> windowStore : stores) {
+            try {
+                final WindowStoreIterator<V> result = windowStore.backwardFetch(key, timeFrom, timeTo);
+                if (!result.hasNext()) {
+                    result.close();
+                } else {
+                    return result;
+                }
+            } catch (final InvalidStateStoreException e) {
+                throw new InvalidStateStoreException(
+                    "State store is not available anymore and may have been migrated to another instance; " +
+                        "please re-discover its location from the state metadata.");
             }
         }
         return KeyValueIterators.emptyWindowStoreIterator();
@@ -120,6 +143,22 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
+                                                          final K to,
+                                                          final Instant timeFrom,
+                                                          final Instant timeTo) {
+        Objects.requireNonNull(from, "from can't be null");
+        Objects.requireNonNull(to, "to can't be null");
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
+            store -> store.backwardFetch(from, to, timeFrom, timeTo);
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new CompositeKeyValueIterator<>(
+                provider.stores(storeName, windowStoreType).iterator(),
+                nextIteratorFunction));
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                   final K to,
                                                   final Instant fromTime,
@@ -143,11 +182,34 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> backwardAll() {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
+            ReadOnlyWindowStore::backwardAll;
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new CompositeKeyValueIterator<>(
+                provider.stores(storeName, windowStoreType).iterator(),
+                nextIteratorFunction));
+    }
+
+    @Override
     @Deprecated
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                      final long timeTo) {
         final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
             store -> store.fetchAll(timeFrom, timeTo);
+        return new DelegatingPeekingKeyValueIterator<>(
+            storeName,
+            new CompositeKeyValueIterator<>(
+                provider.stores(storeName, windowStoreType).iterator(),
+                nextIteratorFunction));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom,
+                                                             final Instant timeTo) {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction =
+            store -> store.backwardFetchAll(timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(
             storeName,
             new CompositeKeyValueIterator<>(

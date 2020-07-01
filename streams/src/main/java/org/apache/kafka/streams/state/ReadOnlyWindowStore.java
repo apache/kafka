@@ -114,6 +114,10 @@ public interface ReadOnlyWindowStore<K, V> {
      */
     WindowStoreIterator<V> fetch(K key, Instant from, Instant to) throws IllegalArgumentException;
 
+    default WindowStoreIterator<V> backwardFetch(K key, Instant from, Instant to) throws IllegalArgumentException {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Get all the key-value pairs in the given key range and time range from all the existing windows.
      * <p>
@@ -148,6 +152,11 @@ public interface ReadOnlyWindowStore<K, V> {
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Instant toTime)
         throws IllegalArgumentException;
 
+    default KeyValueIterator<Windowed<K>, V> backwardFetch(K from, K to, Instant fromTime, Instant toTime)
+            throws IllegalArgumentException {
+        throw new UnsupportedOperationException();
+    }
+
     /**
     * Gets all the key-value pairs in the existing windows.
     *
@@ -155,7 +164,11 @@ public interface ReadOnlyWindowStore<K, V> {
     * @throws InvalidStateStoreException if the store is not initialized
     */
     KeyValueIterator<Windowed<K>, V> all();
-    
+
+    default KeyValueIterator<Windowed<K>, V> backwardAll() {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
@@ -180,4 +193,8 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws IllegalArgumentException if duration is negative or can't be represented as {@code long milliseconds}
      */
     KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Instant to) throws IllegalArgumentException;
+
+    default KeyValueIterator<Windowed<K>, V> backwardFetchAll(Instant from, Instant to) throws IllegalArgumentException {
+        throw new UnsupportedOperationException();
+    }
 }

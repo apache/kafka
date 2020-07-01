@@ -63,7 +63,19 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                                  final long from,
                                                  final long to) {
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        return fetch(key, from, to, false);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> backwardFetch(Bytes key, long from, long to) {
+        return fetch(key, from, to, true);
+    }
+
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
+                                          final long from,
+                                          final long to,
+                                          final boolean backward) {
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, backward);
 
         final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
         final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
@@ -80,6 +92,19 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                                  final Bytes keyTo,
                                                  final long from,
                                                  final long to) {
+        return fetch(keyFrom, keyTo, from, to, false);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> backwardFetch(Bytes keyFrom, Bytes keyTo, long from, long to) {
+        return fetch(keyFrom, keyTo, from, to, true);
+    }
+
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
+                                          final Bytes keyTo,
+                                          final long from,
+                                          final long to,
+                                          final boolean backward) {
         if (keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -87,7 +112,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, backward);
 
         final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
         final Bytes binaryTo = keySchema.upperRange(keyTo, to);
@@ -101,7 +126,18 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        final List<S> searchSpace = segments.allSegments();
+        final List<S> searchSpace = segments.allSegments(false);
+
+        return new SegmentIterator<>(
+            searchSpace.iterator(),
+            keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+            null,
+            null);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> backwardAll() {
+        final List<S> searchSpace = segments.allSegments(true);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),
@@ -113,7 +149,19 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {
-        final List<S> searchSpace = segments.segments(timeFrom, timeTo);
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, false);
+
+        return new SegmentIterator<>(
+            searchSpace.iterator(),
+            keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+            null,
+            null);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
+                                                            final long timeTo) {
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, true);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),
@@ -210,7 +258,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     // Visible for testing
     List<S> getSegments() {
-        return segments.allSegments();
+        return segments.allSegments(false);
     }
 
     // Visible for testing

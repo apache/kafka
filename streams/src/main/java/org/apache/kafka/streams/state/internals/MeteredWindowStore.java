@@ -33,6 +33,8 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import java.time.Instant;
+
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 public class MeteredWindowStore<K, V>
@@ -169,6 +171,19 @@ public class MeteredWindowStore<K, V>
         );
     }
 
+    @Override
+    public WindowStoreIterator<V> backwardFetch(final K key,
+                                                final Instant timeFrom,
+                                                final Instant timeTo) {
+        return new MeteredWindowStoreIterator<>(
+            wrapped().backwardFetch(keyBytes(key), timeFrom, timeTo),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time
+        );
+    }
+
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from,
@@ -177,6 +192,19 @@ public class MeteredWindowStore<K, V>
                                                   final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
+                                                          final K to,
+                                                          final Instant timeFrom,
+                                                          final Instant timeTo) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
             fetchSensor,
             streamsMetrics,
             serdes,
@@ -196,8 +224,24 @@ public class MeteredWindowStore<K, V>
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom,
+                                                             final Instant timeTo) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFetchAll(timeFrom, timeTo),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time);
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> all() {
         return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchSensor, streamsMetrics, serdes, time);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardAll() {
+        return new MeteredWindowedKeyValueIterator<>(wrapped().backwardAll(), fetchSensor, streamsMetrics, serdes, time);
     }
 
     @Override

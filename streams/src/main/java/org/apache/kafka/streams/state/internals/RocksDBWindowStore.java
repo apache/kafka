@@ -17,12 +17,17 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
+import java.time.Instant;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 public class RocksDBWindowStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>
@@ -76,6 +81,14 @@ public class RocksDBWindowStore
         return new WindowStoreIteratorWrapper(bytesIterator, windowSize).valuesIterator();
     }
 
+    @Override
+    public WindowStoreIterator<byte[]> backwardFetch(Bytes key, Instant from, Instant to) throws IllegalArgumentException {
+        final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
+        final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(key, timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper(bytesIterator, windowSize).valuesIterator();
+    }
+
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
@@ -87,8 +100,22 @@ public class RocksDBWindowStore
     }
 
     @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(Bytes from, Bytes to, Instant fromTime, Instant toTime) {
+        final long timeFrom = ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "from"));
+        final long timeTo = ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "to"));
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(from, to, timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().all();
+        return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardAll();
         return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
     }
 
@@ -96,6 +123,14 @@ public class RocksDBWindowStore
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetchAll(timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant from, final Instant to) {
+        final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
+        final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetchAll(timeFrom, timeTo);
         return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
     }
 
