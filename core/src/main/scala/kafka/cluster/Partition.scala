@@ -501,7 +501,7 @@ class Partition(val topicPartition: TopicPartition,
         removingReplicas = removingReplicas
       )
       try {
-        this.createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
       } catch {
         case e: ZooKeeperClientException =>
           stateChangeLogger.error(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
@@ -580,7 +580,7 @@ class Partition(val topicPartition: TopicPartition,
         removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
       )
       try {
-        this.createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints)
       } catch {
         case e: ZooKeeperClientException =>
           stateChangeLogger.error(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +
