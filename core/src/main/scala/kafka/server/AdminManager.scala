@@ -354,10 +354,13 @@ class AdminManager(val config: KafkaConfig,
       }
       def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val filteredConfigPairs = configs.filter { case (configName, _) =>
-          /* Always returns true if configurationKeys is null */
-          if (resource.configurationKeys != null) resource.configurationKeys.asScala.forall(_.contains(configName)) else true
-        }.toBuffer
+        val filteredConfigPairs = if (resource.configurationKeys == null)
+          configs.toBuffer
+        else
+          configs.filter { case (configName, _) =>
+            /* Always returns true if configurationKeys is null */
+            resource.configurationKeys.asScala.forall(_.contains(configName))
+          }.toBuffer
 
         val configEntries = filteredConfigPairs.map { case (name, value) => createConfigEntry(name, value) }
         new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.NONE.code)

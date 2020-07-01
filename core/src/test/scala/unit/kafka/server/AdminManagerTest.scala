@@ -48,7 +48,7 @@ class AdminManagerTest {
   }
 
   @Test
-  def shouldDescribeConfigsWithoutErrorWhenConfigurationkeysNull(): Unit = {
+  def testDescribeConfigsWithNullConfigurationKeys(): Unit = {
     EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
     EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
 
