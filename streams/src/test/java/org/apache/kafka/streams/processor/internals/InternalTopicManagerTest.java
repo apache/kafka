@@ -59,7 +59,6 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class InternalTopicManagerTest {
-    private final String leaderNotAvailableTopic = "LeaderNotAvailableTopic";
     private final Node broker1 = new Node(0, "dummyHost-1", 1234);
     private final Node broker2 = new Node(1, "dummyHost-2", 1234);
     private final List<Node> cluster = new ArrayList<Node>(2) {
@@ -72,6 +71,7 @@ public class InternalTopicManagerTest {
     private final String topic2 = "test_topic_2";
     private final String topic3 = "test_topic_3";
     private final List<Node> singleReplica = Collections.singletonList(broker1);
+    private final int numRetries = 1;
 
     private String threadName;
 
@@ -85,6 +85,7 @@ public class InternalTopicManagerTest {
             put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 1);
             put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 1);
             put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 16384);
+            put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), numRetries);
         }
     };
 
@@ -308,33 +309,30 @@ public class InternalTopicManagerTest {
         final KafkaFutureImpl<CreateTopicsResult.TopicMetadataAndConfig> topicCreationFuture = new KafkaFutureImpl<>();
         topicCreationFuture.complete(EasyMock.createNiceMock(CreateTopicsResult.TopicMetadataAndConfig.class));
 
-        EasyMock.expect(admin.describeTopics(Collections.singleton(leaderNotAvailableTopic)))
+        EasyMock.expect(admin.describeTopics(Collections.singleton(topic)))
             .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(leaderNotAvailableTopic, topicDescriptionLeaderNotAvailableFuture)))
+                Collections.singletonMap(topic, topicDescriptionLeaderNotAvailableFuture)))
             .once();
         // return empty set for 1st time
         EasyMock.expect(admin.createTopics(Collections.emptySet()))
             .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).once();
-
-        EasyMock.expect(admin.describeTopics(Collections.singleton(leaderNotAvailableTopic)))
+        EasyMock.expect(admin.describeTopics(Collections.singleton(topic)))
             .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(leaderNotAvailableTopic, topicDescriptionUnknownTopicFuture)))
+                Collections.singletonMap(topic, topicDescriptionUnknownTopicFuture)))
             .once();
         EasyMock.expect(admin.createTopics(Collections.singleton(
-                new NewTopic(leaderNotAvailableTopic, Optional.of(1), Optional.of((short) 1))
+                new NewTopic(topic, Optional.of(1), Optional.of((short) 1))
             .configs(Utils.mkMap(Utils.mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
                 Utils.mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"),
                 Utils.mkEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800"),
                 Utils.mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"))))))
-            .andReturn(new MockCreateTopicsResult(Collections.singletonMap(leaderNotAvailableTopic, topicCreationFuture))).once();
+            .andReturn(new MockCreateTopicsResult(Collections.singletonMap(topic, topicCreationFuture))).once();
 
         EasyMock.replay(admin);
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(leaderNotAvailableTopic, Collections.emptyMap());
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
-        final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
-        topicConfigMap.put(leaderNotAvailableTopic, internalTopicConfig);
-        topicManager.makeReady(topicConfigMap);
+        topicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
 
         EasyMock.verify(admin);
     }
@@ -353,32 +351,28 @@ public class InternalTopicManagerTest {
             new TopicDescription(topic, false, Collections.singletonList(partitionInfo), Collections.emptySet())
         );
 
-        EasyMock.expect(admin.describeTopics(Collections.singleton(leaderNotAvailableTopic)))
+        EasyMock.expect(admin.describeTopics(Collections.singleton(topic)))
             .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(leaderNotAvailableTopic, topicDescriptionFailFuture)))
+                Collections.singletonMap(topic, topicDescriptionFailFuture)))
             .once();
         EasyMock.expect(admin.createTopics(Collections.emptySet()))
             .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).once();
-
-        EasyMock.expect(admin.describeTopics(Collections.singleton(leaderNotAvailableTopic)))
+        EasyMock.expect(admin.describeTopics(Collections.singleton(topic)))
             .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(leaderNotAvailableTopic, topicDescriptionSuccessFuture)))
+                Collections.singletonMap(topic, topicDescriptionSuccessFuture)))
             .once();
 
         EasyMock.replay(admin);
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(leaderNotAvailableTopic, Collections.emptyMap());
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
-        final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
-        topicConfigMap.put(leaderNotAvailableTopic, internalTopicConfig);
-        topicManager.makeReady(topicConfigMap);
+        topicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
 
         EasyMock.verify(admin);
     }
 
     @Test
     public void shouldThrowExceptionWhenKeepsTopicLeaderNotAvailable() {
-        final String leaderNotAvailableTopic = "LeaderNotAvailableTopic";
         final AdminClient admin = EasyMock.createNiceMock(AdminClient.class);
         final InternalTopicManager topicManager = new InternalTopicManager(admin, new StreamsConfig(config));
 
@@ -386,24 +380,21 @@ public class InternalTopicManagerTest {
         topicDescriptionFailFuture.completeExceptionally(new LeaderNotAvailableException("Leader Not Available!"));
 
         // simulate describeTopics got LeaderNotAvailableException
-        EasyMock.expect(admin.describeTopics(Collections.singleton(leaderNotAvailableTopic)))
+        EasyMock.expect(admin.describeTopics(Collections.singleton(topic)))
             .andReturn(new MockDescribeTopicsResult(
-                Collections.singletonMap(leaderNotAvailableTopic, topicDescriptionFailFuture)))
-            .times(2);
-
+                Collections.singletonMap(topic, topicDescriptionFailFuture)))
+            .times(numRetries + 1);
         EasyMock.expect(admin.createTopics(Collections.emptySet()))
             .andReturn(new MockCreateTopicsResult(Collections.emptyMap())).once();
 
         EasyMock.replay(admin);
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(leaderNotAvailableTopic, Collections.emptyMap());
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
-        final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
-        topicConfigMap.put(leaderNotAvailableTopic, internalTopicConfig);
 
-        final StreamsException exception = assertThrows(
+        assertThrows(
             StreamsException.class,
-            () -> topicManager.makeReady(topicConfigMap));
+            () -> topicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig)));
 
         EasyMock.verify(admin);
     }
