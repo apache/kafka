@@ -211,6 +211,12 @@ class SecurityConfig(TemplateRenderer):
                               listener_security_config=self.listener_security_config,
                               tls_version=self.tls_version)
 
+    def enable_sasl(self):
+        self.has_sasl = True
+
+    def enable_ssl(self):
+        self.has_ssl = True
+
     def enable_security_protocol(self, security_protocol):
         self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)
         self.has_ssl = self.has_ssl or self.is_ssl(security_protocol)
