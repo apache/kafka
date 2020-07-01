@@ -74,6 +74,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1219,6 +1220,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
 
             // poll for new data until the timeout expires
+            Random random = new Random(timer.currentTimeMs());
+            int retries = 0;
             do {
                 client.maybeTriggerWakeup();
 
@@ -1231,7 +1234,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     if (subscriptions.fetchablePartitions(tp -> true).isEmpty()) {
                         updateAssignmentMetadataIfNeeded(timer);
                     } else {
-                        final Timer updateMetadataTimer = time.timer(0L);
+                        final long updateMetadataTimeout = Math.min(10L * random.nextInt(2 << retries), timer.remainingMs());
+                        final Timer updateMetadataTimer = time.timer(updateMetadataTimeout);
                         updateAssignmentMetadataIfNeeded(updateMetadataTimer);
                         timer.update(updateMetadataTimer.currentTimeMs());
                     }
@@ -1255,6 +1259,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
+
+                retries++;
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
@@ -1262,6 +1268,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             release();
             this.kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
         }
+    }
+
+    private int binaryExponentialElectionBackoffMs(int retries) {
+        if (retries <= 0) {
+            throw new IllegalArgumentException("Retries " + retries + " should be larger than zero");
+        }
+
+        return Math.min(RETRY_BACKOFF_BASE_MS * random.nextInt(2 << (retries - 1)), electionBackoffMaxMs);
     }
 
     /**
