@@ -1104,10 +1104,6 @@ class KafkaController(val config: KafkaConfig,
     partitionStateMachine.triggerOnlinePartitionStateChange(topic)
   }
 
-  private def preemptControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
-    controlledShutdownCallback(Failure(new ControllerMovedException("Controller moved to another broker")))
-  }
-
   private def processControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
     val controlledShutdownResult = Try { doControlledShutdown(id, brokerEpoch) }
     controlledShutdownCallback(controlledShutdownResult)
@@ -1686,17 +1682,6 @@ class KafkaController(val config: KafkaConfig,
     eventManager.put(ApiPartitionReassignment(partitions, callback))
   }
 
-  private def preemptReplicaLeaderElection(
-    partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
-    callback: ElectLeadersCallback
-  ): Unit = {
-    callback(
-      partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
-        partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).toMap
-      }
-    )
-  }
-
   private def processReplicaLeaderElection(
     partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
     electionType: ElectionType,
@@ -1860,13 +1845,7 @@ class KafkaController(val config: KafkaConfig,
   }
 
   override def preempt(event: ControllerEvent): Unit = {
-    event match {
-      case ReplicaLeaderElection(partitions, _, _, callback) =>
-        preemptReplicaLeaderElection(partitions, callback)
-      case ControlledShutdown(id, brokerEpoch, callback) =>
-        preemptControlledShutdown(id, brokerEpoch, callback)
-      case _ =>
-    }
+    event.preempt()
   }
 }
 
@@ -1986,101 +1965,125 @@ private[controller] class ControllerStats extends KafkaMetricsGroup {
 
 sealed trait ControllerEvent {
   def state: ControllerState
+  def preempt(): Unit
 }
 
 case object ControllerChange extends ControllerEvent {
   override def state = ControllerState.ControllerChange
+  override def preempt() = {}
 }
 
 case object Reelect extends ControllerEvent {
   override def state = ControllerState.ControllerChange
+  override def preempt() = {}
 }
 
 case object RegisterBrokerAndReelect extends ControllerEvent {
   override def state: ControllerState = ControllerState.ControllerChange
+  override def preempt() = {}
 }
 
 case object Expire extends ControllerEvent {
   override def state = ControllerState.ControllerChange
+  override def preempt() = {}
 }
 
 case object ShutdownEventThread extends ControllerEvent {
   def state = ControllerState.ControllerShutdown
+  def preempt() = {}
 }
 
 case object AutoPreferredReplicaLeaderElection extends ControllerEvent {
   def state = ControllerState.AutoLeaderBalance
+  def preempt() = {}
 }
 
 case object UncleanLeaderElectionEnable extends ControllerEvent {
   def state = ControllerState.UncleanLeaderElectionEnable
+  def preempt() = {}
 }
 
 case class TopicUncleanLeaderElectionEnable(topic: String) extends ControllerEvent {
   def state = ControllerState.TopicUncleanLeaderElectionEnable
+  def preempt() = {}
 }
 
 case class ControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit) extends ControllerEvent {
   def state = ControllerState.ControlledShutdown
+  def preempt() = controlledShutdownCallback(Failure(new ControllerMovedException("Controller moved to another broker")))
 }
 
 case class LeaderAndIsrResponseReceived(leaderAndIsrResponse: LeaderAndIsrResponse, brokerId: Int) extends ControllerEvent {
   def state = ControllerState.LeaderAndIsrResponseReceived
+  def preempt() = {}
 }
 
 case class UpdateMetadataResponseReceived(updateMetadataResponse: UpdateMetadataResponse, brokerId: Int) extends ControllerEvent {
   def state = ControllerState.UpdateMetadataResponseReceived
+  def preempt() = {}
 }
 
 case class TopicDeletionStopReplicaResponseReceived(replicaId: Int,
                                                     requestError: Errors,
                                                     partitionErrors: Map[TopicPartition, Errors]) extends ControllerEvent {
   def state = ControllerState.TopicDeletion
+  def preempt() = {}
 }
 
 case object Startup extends ControllerEvent {
   def state = ControllerState.ControllerChange
+  def preempt() = {}
 }
 
 case object BrokerChange extends ControllerEvent {
   override def state: ControllerState = ControllerState.BrokerChange
+  override def preempt() = {}
 }
 
 case class BrokerModifications(brokerId: Int) extends ControllerEvent {
   override def state: ControllerState = ControllerState.BrokerChange
+  override def preempt() = {}
 }
 
 case object TopicChange extends ControllerEvent {
   override def state: ControllerState = ControllerState.TopicChange
+  override def preempt() = {}
 }
 
 case object LogDirEventNotification extends ControllerEvent {
   override def state: ControllerState = ControllerState.LogDirChange
+  override def preempt() = {}
 }
 
 case class PartitionModifications(topic: String) extends ControllerEvent {
   override def state: ControllerState = ControllerState.TopicChange
+  override def preempt() = {}
 }
 
 case object TopicDeletion extends ControllerEvent {
   override def state: ControllerState = ControllerState.TopicDeletion
+  override def preempt() = {}
 }
 
 case object ZkPartitionReassignment extends ControllerEvent {
   override def state: ControllerState = ControllerState.AlterPartitionReassignment
+  override def preempt() = {}
 }
 
 case class ApiPartitionReassignment(reassignments: Map[TopicPartition, Option[Seq[Int]]],
                                     callback: AlterReassignmentsCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.AlterPartitionReassignment
+  override def preempt() = callback(Right(new ApiError(Errors.NOT_CONTROLLER)))
 }
 
 case class PartitionReassignmentIsrChange(partition: TopicPartition) extends ControllerEvent {
   override def state: ControllerState = ControllerState.AlterPartitionReassignment
+  override def preempt() = {}
 }
 
 case object IsrChangeNotification extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
+  override def preempt() = {}
 }
 
 case class ReplicaLeaderElection(
@@ -2090,6 +2093,12 @@ case class ReplicaLeaderElection(
   callback: ElectLeadersCallback = _ => {}
 ) extends ControllerEvent {
   override def state: ControllerState = ControllerState.ManualLeaderBalance
+
+  override def preempt() = callback(
+    partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
+      partitions.iterator.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null))).toMap
+    }
+  )
 }
 
 /**
@@ -2098,10 +2107,12 @@ case class ReplicaLeaderElection(
 case class ListPartitionReassignments(partitionsOpt: Option[Set[TopicPartition]],
                                       callback: ListReassignmentsCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.ListPartitionReassignment
+  override def preempt() = callback(Right(new ApiError(Errors.NOT_CONTROLLER, null)))
 }
 
 
 // Used only in test cases
 abstract class MockEvent(val state: ControllerState) extends ControllerEvent {
   def process(): Unit
+  def preempt(): Unit
 }

@@ -582,6 +582,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
       override def process(): Unit = latch.await()
+      override def preempt(): Unit = {}
     })
 
     otherBroker.shutdown()
@@ -614,6 +615,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       // This is used to make sure that when the event thread resumes and starts processing events, the controller has already moved.
       controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
         override def process(): Unit = latch.await()
+        override def preempt(): Unit = {}
       })
 
       // Execute pre-defined logic. This can be topic creation/deletion, preferred leader election, etc.
