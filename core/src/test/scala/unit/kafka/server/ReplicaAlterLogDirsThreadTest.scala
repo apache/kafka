@@ -72,7 +72,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     val addedPartitions = thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L)))
     assertEquals(Set.empty, addedPartitions)
-    assertEquals(0, thread.partitionCount())
+    assertEquals(0, thread.partitionCount)
     assertEquals(None, thread.fetchState(t1p0))
   }
 
@@ -132,18 +132,18 @@ class ReplicaAlterLogDirsThreadTest {
     // Initially we add the partition with an older epoch which results in an error
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(fetchOffset = 0L, leaderEpoch - 1)))
     assertTrue(thread.fetchState(t1p0).isDefined)
-    assertEquals(1, thread.partitionCount())
+    assertEquals(1, thread.partitionCount)
 
     thread.doWork()
 
     assertTrue(failedPartitions.contains(t1p0))
     assertEquals(None, thread.fetchState(t1p0))
-    assertEquals(0, thread.partitionCount())
+    assertEquals(0, thread.partitionCount)
 
     // Next we update the epoch and assert that we can continue
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(fetchOffset = 0L, leaderEpoch)))
     assertEquals(Some(leaderEpoch), thread.fetchState(t1p0).map(_.currentLeaderEpoch))
-    assertEquals(1, thread.partitionCount())
+    assertEquals(1, thread.partitionCount)
 
     val requestData = new FetchRequest.PartitionData(0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
@@ -162,7 +162,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     assertFalse(failedPartitions.contains(t1p0))
     assertEquals(None, thread.fetchState(t1p0))
-    assertEquals(0, thread.partitionCount())
+    assertEquals(0, thread.partitionCount)
   }
 
   @Test
@@ -220,12 +220,12 @@ class ReplicaAlterLogDirsThreadTest {
 
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(fetchOffset = 0L, leaderEpoch)))
     assertTrue(thread.fetchState(t1p0).isDefined)
-    assertEquals(1, thread.partitionCount())
+    assertEquals(1, thread.partitionCount)
 
     thread.doWork()
 
     assertEquals(None, thread.fetchState(t1p0))
-    assertEquals(0, thread.partitionCount())
+    assertEquals(0, thread.partitionCount)
   }
 
   private def mockFetchFromCurrentLog(topicPartition: TopicPartition,

@@ -80,7 +80,7 @@ object ReplicationQuotasTestRig {
   def run(config: ExperimentDef, journal: Journal, displayChartsOnScreen: Boolean): Unit = {
     val experiment = new Experiment()
     try {
-      experiment.setUp
+      experiment.setUp()
       experiment.run(config, journal, displayChartsOnScreen)
       journal.footer()
     }
@@ -88,7 +88,7 @@ object ReplicationQuotasTestRig {
       case e: Exception => e.printStackTrace()
     }
     finally {
-      experiment.tearDown
+      experiment.tearDown()
     }
   }
 

@@ -58,6 +58,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -106,6 +107,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
+    private boolean checkpointNeededForSuspended = false;
 
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
@@ -249,8 +251,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     public void suspend() {
         switch (state()) {
             case CREATED:
+                log.info("Suspended created");
+                checkpointNeededForSuspended = false;
+                transitionTo(State.SUSPENDED);
+
+                break;
+
             case RESTORING:
-                log.info("Suspended {}", state());
+                log.info("Suspended restoring");
+                checkpointNeededForSuspended = true;
                 transitionTo(State.SUSPENDED);
 
                 break;
@@ -259,6 +268,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 try {
                     // use try-catch to ensure state transition to SUSPENDED even if user code throws in `Processor#close()`
                     closeTopology();
+                    checkpointNeededForSuspended = true;
                 } finally {
                     transitionTo(State.SUSPENDED);
                     log.info("Suspended running");
@@ -338,18 +348,28 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+        final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit;
         switch (state()) {
-            case RUNNING:
+            case CREATED:
             case RESTORING:
+            case RUNNING:
             case SUSPENDED:
                 stateMgr.flush();
-                recordCollector.flush();
+                // the commitNeeded flag just indicates whether we have reached RUNNING and processed any new data,
+                // so it only indicates whether the record collector should be flushed or not, whereas the state
+                // manager should always be flushed; either there is newly restored data or the flush will be a no-op
+                if (commitNeeded) {
+                    recordCollector.flush();
 
-                log.debug("Prepared task for committing");
+                    log.debug("Prepared {} task for committing", state());
+                    offsetsToCommit = committableOffsetsAndMetadata();
+                } else {
+                    log.debug("Skipped preparing {} task for commit since there is nothing to commit", state());
+                    offsetsToCommit = Collections.emptyMap();
+                }
 
                 break;
 
-            case CREATED:
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while preparing active task " + id + " for committing");
 
@@ -357,7 +377,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 throw new IllegalStateException("Unknown state " + state() + " while preparing active task " + id + " for committing");
         }
 
-        return committableOffsetsAndMetadata();
+        return offsetsToCommit;
     }
 
     private Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
@@ -399,7 +419,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case CLOSED:
-                throw new IllegalStateException("Illegal state " + state() + " while getting commitable offsets for active task " + id);
+                throw new IllegalStateException("Illegal state " + state() + " while getting committable offsets for active task " + id);
 
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
@@ -414,11 +434,18 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void postCommit() {
         commitRequested = false;
-        commitNeeded = false;
 
         switch (state()) {
+            case CREATED:
+                // We should never write a checkpoint for a CREATED task as we may overwrite an existing checkpoint
+                // with empty uninitialized offsets
+                log.debug("Skipped writing checkpoint for created task");
+
+                break;
+
             case RESTORING:
                 writeCheckpoint();
+                log.debug("Finalized commit for restoring task");
 
                 break;
 
@@ -426,6 +453,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 if (!eosEnabled) {
                     writeCheckpoint();
                 }
+                log.debug("Finalized commit for running task");
 
                 break;
 
@@ -438,19 +466,24 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                  */
                 partitionGroup.clear();
 
-                writeCheckpoint();
+                if (checkpointNeededForSuspended) {
+                    // Make sure we don't overwrite the checkpoint if the suspended task was still in CREATED
+                    // and had not yet initialized offsets
+                    writeCheckpoint();
+                    log.debug("Finalized commit for suspended task");
+                    checkpointNeededForSuspended = false;
+                } else {
+                    log.debug("Skipped writing checkpoint for uninitialized suspended task");
+                }
 
                 break;
 
-            case CREATED:
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while post committing active task " + id);
 
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
         }
-
-        log.debug("Finalized commit");
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
@@ -463,6 +496,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     @Override
     public void closeClean() {
+        validateClean();
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         close(true);
         log.info("Closed clean");
@@ -482,12 +516,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public void closeAndRecycleState() {
+    public void closeCleanAndRecycleState() {
+        validateClean();
         streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();
-                recordCollector.close();
+                recordCollector.closeClean();
 
                 break;
 
@@ -509,26 +544,32 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
     private void writeCheckpoint() {
         if (commitNeeded) {
-            log.error("Tried to write a checkpoint with pending uncommitted data, should complete the commit first.");
-            throw new IllegalStateException("A checkpoint should only be written if no commit is needed.");
+            stateMgr.checkpoint(checkpointableOffsets());
+        } else {
+            stateMgr.checkpoint(emptyMap());
         }
-        stateMgr.checkpoint(checkpointableOffsets());
+        commitNeeded = false;
+    }
+
+    private void validateClean() {
+        // It may be that we failed to commit a task during handleRevocation, but "forgot" this and tried to
+        // closeClean in handleAssignment. We should throw if we detect this to force the TaskManager to closeDirty
+        if (commitNeeded) {
+            log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
+                          + " commit and should close as dirty instead");
+            throw new TaskMigratedException("Tried to close dirty task as clean");
+        }
     }
 
     /**
      * You must commit a task and checkpoint the state manager before closing as this will release the state dir lock
      */
     private void close(final boolean clean) {
-        if (clean && commitNeeded) {
-            log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
-                          + " commit and should close as dirty instead");
-            throw new StreamsException("Tried to close dirty task as clean");
-        }
         switch (state()) {
             case SUSPENDED:
                 // first close state manager (which is idempotent) then close the record collector
                 // if the latter throws and we re-close dirty which would close the state manager again.
-                executeAndMaybeSwallow(
+                TaskManager.executeAndMaybeSwallow(
                     clean,
                     () -> StateManagerUtil.closeStateManager(
                         log,
@@ -542,7 +583,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     "state manager close",
                     log);
 
-                executeAndMaybeSwallow(clean, recordCollector::close, "record collector close", log);
+                TaskManager.executeAndMaybeSwallow(
+                    clean,
+                    clean ? recordCollector::closeClean : recordCollector::closeDirty,
+                    "record collector close",
+                    log
+                );
 
                 break;
 

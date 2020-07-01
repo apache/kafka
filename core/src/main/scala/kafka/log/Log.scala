@@ -785,7 +785,7 @@ class Log(@volatile private var _dir: File,
       var truncated = false
 
       while (unflushed.hasNext && !truncated) {
-        val segment = unflushed.next
+        val segment = unflushed.next()
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
           try {
@@ -2270,7 +2270,7 @@ class Log(@volatile private var _dir: File,
 
     if (asyncDelete) {
       info(s"Scheduling segments for deletion ${segments.mkString(",")}")
-      scheduler.schedule("delete-file", () => deleteSegments, delay = config.fileDeleteDelayMs)
+      scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
     } else {
       deleteSegments()
     }

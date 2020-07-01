@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.nio.BufferUnderflowException;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -282,6 +283,37 @@ public final class Utils {
             buffer.position(pos);
         }
         return dest;
+    }
+
+    /**
+     * Starting from the current position, read an integer indicating the size of the byte array to read,
+     * then read the array. Consumes the buffer: upon returning, the buffer's position is after the array
+     * that is returned.
+     * @param buffer The buffer to read a size-prefixed array from
+     * @return The array
+     */
+    public static byte[] getNullableSizePrefixedArray(final ByteBuffer buffer) {
+        final int size = buffer.getInt();
+        return getNullableArray(buffer, size);
+    }
+
+    /**
+     * Read a byte array of the given size. Consumes the buffer: upon returning, the buffer's position
+     * is after the array that is returned.
+     * @param buffer The buffer to read a size-prefixed array from
+     * @param size The number of bytes to read out of the buffer
+     * @return The array
+     */
+    public static byte[] getNullableArray(final ByteBuffer buffer, final int size) {
+        if (size > buffer.remaining()) {
+            // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
+            throw new BufferUnderflowException();
+        }
+        final byte[] oldBytes = size == -1 ? null : new byte[size];
+        if (oldBytes != null) {
+            buffer.get(oldBytes);
+        }
+        return oldBytes;
     }
 
     /**

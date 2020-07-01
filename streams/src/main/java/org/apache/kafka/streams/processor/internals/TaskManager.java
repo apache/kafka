@@ -35,7 +35,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
@@ -69,7 +68,6 @@ public class TaskManager {
     private final ChangelogReader changelogReader;
     private final UUID processId;
     private final String logPrefix;
-    private final StreamsMetricsImpl streamsMetrics;
     private final ActiveTaskCreator activeTaskCreator;
     private final StandbyTaskCreator standbyTaskCreator;
     private final InternalTopologyBuilder builder;
@@ -93,7 +91,6 @@ public class TaskManager {
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
                 final String logPrefix,
-                final StreamsMetricsImpl streamsMetrics,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
                 final InternalTopologyBuilder builder,
@@ -103,7 +100,6 @@ public class TaskManager {
         this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
-        this.streamsMetrics = streamsMetrics;
         this.activeTaskCreator = activeTaskCreator;
         this.standbyTaskCreator = standbyTaskCreator;
         this.builder = builder;
@@ -246,15 +242,12 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                task.suspend(); // Should be a no-op for active tasks since they're suspended in handleRevocation
-                if (task.commitNeeded()) {
-                    if (task.isActive()) {
-                        log.error("Active task {} was revoked and should have already been committed", task.id());
-                        throw new IllegalStateException("Revoked active task was not committed during handleRevocation");
-                    } else {
-                        task.prepareCommit();
-                        task.postCommit();
-                    }
+                if (!task.isActive()) {
+                    // Active tasks should have already been suspended and committed during handleRevocation, but
+                    // standbys must be suspended/committed/closed all here
+                    task.suspend();
+                    task.prepareCommit();
+                    task.postCommit();
                 }
                 completeTaskCloseClean(task);
                 cleanUpTaskProducer(task, taskCloseExceptions);
@@ -441,17 +434,16 @@ public class TaskManager {
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
         final Set<TopicPartition> remainingRevokedPartitions = new HashSet<>(revokedPartitions);
 
-        final Set<Task> tasksToCommit = new HashSet<>();
+        final Set<Task> revokedTasks = new HashSet<>();
         final Set<Task> additionalTasksForCommitting = new HashSet<>();
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (final Task task : activeTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
                 try {
                     task.suspend();
-                    if (task.commitNeeded()) {
-                        tasksToCommit.add(task);
-                    }
+                    revokedTasks.add(task);
                 } catch (final RuntimeException e) {
                     log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
                     firstException.compareAndSet(null, new StreamsException("Failed to suspend " + task.id(), e));
@@ -473,21 +465,20 @@ public class TaskManager {
             throw suspendException;
         }
 
+        prepareCommitAndAddOffsetsToMap(revokedTasks, consumedOffsetsAndMetadataPerTask);
+
         // If using eos-beta, if we must commit any task then we must commit all of them
         // TODO: when KAFKA-9450 is done this will be less expensive, and we can simplify by always committing everything
-        if (processingMode ==  EXACTLY_ONCE_BETA && !tasksToCommit.isEmpty()) {
-            tasksToCommit.addAll(additionalTasksForCommitting);
-        }
+        final boolean shouldCommitAdditionalTasks =
+            processingMode == EXACTLY_ONCE_BETA && !consumedOffsetsAndMetadataPerTask.isEmpty();
 
-        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        for (final Task task : tasksToCommit) {
-            final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+        if (shouldCommitAdditionalTasks) {
+            prepareCommitAndAddOffsetsToMap(additionalTasksForCommitting, consumedOffsetsAndMetadataPerTask);
         }
 
         commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-        for (final Task task : tasksToCommit) {
+        for (final Task task : revokedTasks) {
             try {
                 task.postCommit();
             } catch (final RuntimeException e) {
@@ -496,9 +487,30 @@ public class TaskManager {
             }
         }
 
-        final RuntimeException commitException = firstException.get();
-        if (commitException != null) {
-            throw commitException;
+        if (shouldCommitAdditionalTasks) {
+            for (final Task task : additionalTasksForCommitting) {
+                try {
+                    task.postCommit();
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while post-committing task " + task.id(), e);
+                    firstException.compareAndSet(null, e);
+                }
+            }
+        }
+
+        final RuntimeException postCommitException = firstException.get();
+        if (postCommitException != null) {
+            throw postCommitException;
+        }
+    }
+
+    private void prepareCommitAndAddOffsetsToMap(final Set<Task> tasksToPrepare,
+                                                 final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask) {
+        for (final Task task : tasksToPrepare) {
+            final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+            if (!committableOffsets.isEmpty()) {
+                consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+            }
         }
     }
 
@@ -679,98 +691,141 @@ public class TaskManager {
     void shutdown(final boolean clean) {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
-        final Set<Task> tasksToClose = new HashSet<>();
-        final Set<Task> tasksToCommit = new HashSet<>();
-        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+        final Set<Task> tasksToCloseDirty = new HashSet<>();
+        tasksToCloseDirty.addAll(tryCloseCleanAllActiveTasks(clean, firstException));
+        tasksToCloseDirty.addAll(tryCloseCleanAllStandbyTasks(clean, firstException));
 
-        for (final Task task : tasks.values()) {
-            if (clean) {
-                try {
-                    task.suspend();
-                    if (task.commitNeeded()) {
-                        tasksToCommit.add(task);
-                        final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                        if (task.isActive()) {
-                            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
-                        }
-                    }
-                    tasksToClose.add(task);
-                } catch (final TaskMigratedException e) {
-                    // just ignore the exception as it doesn't matter during shutdown
-                    closeTaskDirty(task);
-                } catch (final RuntimeException e) {
-                    firstException.compareAndSet(null, e);
-                    closeTaskDirty(task);
-                }
-            } else {
-                closeTaskDirty(task);
-            }
+        for (final Task task : tasksToCloseDirty) {
+            closeTaskDirty(task);
         }
 
-        try {
-            if (clean) {
-                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
-                for (final Task task : tasksToCommit) {
-                    try {
-                        task.postCommit();
-                    } catch (final RuntimeException e) {
-                        log.error("Exception caught while post-committing task " + task.id(), e);
-                        firstException.compareAndSet(null, e);
-                    }
-                }
-            }
-        } catch (final RuntimeException e) {
-            log.error("Exception caught while committing tasks during shutdown", e);
-            firstException.compareAndSet(null, e);
+        for (final Task task : activeTaskIterable()) {
+            executeAndMaybeSwallow(
+                clean,
+                () -> activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id()),
+                e -> firstException.compareAndSet(null, e),
+                e -> log.warn("Ignoring an exception while closing task " + task.id() + " producer.", e)
+            );
         }
 
-        for (final Task task : tasksToClose) {
-            try {
-                completeTaskCloseClean(task);
-            } catch (final RuntimeException e) {
-                firstException.compareAndSet(null, e);
-                closeTaskDirty(task);
-            }
-        }
-
-        for (final Task task : tasks.values()) {
-            if (task.isActive()) {
-                try {
-                    activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-                } catch (final RuntimeException e) {
-                    if (clean) {
-                        firstException.compareAndSet(null, e);
-                    } else {
-                        log.warn("Ignoring an exception while closing task " + task.id() + " producer.", e);
-                    }
-                }
-            }
-        }
+        executeAndMaybeSwallow(
+            clean,
+            activeTaskCreator::closeThreadProducerIfNeeded,
+            e -> firstException.compareAndSet(null, e),
+            e -> log.warn("Ignoring an exception while closing thread producer.", e)
+        );
 
         tasks.clear();
 
-        try {
-            activeTaskCreator.closeThreadProducerIfNeeded();
-        } catch (final RuntimeException e) {
-            if (clean) {
-                firstException.compareAndSet(null, e);
-            } else {
-                log.warn("Ignoring an exception while closing thread producer.", e);
-            }
-        }
 
-        try {
-            // this should be called after closing all tasks, to make sure we unlock the task dir for tasks that may
-            // have still been in CREATED at the time of shutdown, since Task#close will not do so
-            releaseLockedUnassignedTaskDirectories();
-        } catch (final RuntimeException e) {
-            firstException.compareAndSet(null, e);
-        }
+        // this should be called after closing all tasks, to make sure we unlock the task dir for tasks that may
+        // have still been in CREATED at the time of shutdown, since Task#close will not do so
+        executeAndMaybeSwallow(
+            clean,
+            this::releaseLockedUnassignedTaskDirectories,
+            e -> firstException.compareAndSet(null, e),
+            e -> log.warn("Ignoring an exception while unlocking remaining task directories.", e)
+        );
 
         final RuntimeException fatalException = firstException.get();
         if (fatalException != null) {
             throw new RuntimeException("Unexpected exception while closing task", fatalException);
         }
+    }
+
+    // Returns the set of active tasks that must be closed dirty
+    private Collection<Task> tryCloseCleanAllActiveTasks(final boolean clean,
+                                                         final AtomicReference<RuntimeException> firstException) {
+        if (!clean) {
+            return activeTaskIterable();
+        }
+        final Set<Task> tasksToCommit = new HashSet<>();
+        final Set<Task> tasksToCloseDirty = new HashSet<>();
+        final Set<Task> tasksToCloseClean = new HashSet<>();
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
+
+        for (final Task task : activeTaskIterable()) {
+            try {
+                task.suspend();
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                tasksToCommit.add(task);
+                if (!committableOffsets.isEmpty()) {
+                    consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+                }
+                tasksToCloseClean.add(task);
+            } catch (final TaskMigratedException e) {
+                // just ignore the exception as it doesn't matter during shutdown
+                tasksToCloseDirty.add(task);
+            } catch (final RuntimeException e) {
+                firstException.compareAndSet(null, e);
+                tasksToCloseDirty.add(task);
+            }
+        }
+
+        // If any active tasks can't be committed, none of them can be, and all that need a commit must be closed dirty
+        if (!tasksToCloseDirty.isEmpty()) {
+            tasksToCloseClean.removeAll(tasksToCommit);
+            tasksToCloseDirty.addAll(tasksToCommit);
+        } else {
+            try {
+                commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
+
+                for (final Task task : activeTaskIterable()) {
+                    try {
+                        task.postCommit();
+                    } catch (final RuntimeException e) {
+                        log.error("Exception caught while post-committing task " + task.id(), e);
+                        firstException.compareAndSet(null, e);
+                        tasksToCloseDirty.add(task);
+                        tasksToCloseClean.remove(task);
+                    }
+                }
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while committing tasks during shutdown", e);
+                firstException.compareAndSet(null, e);
+
+                // If the commit fails, everyone who participated in it must be closed dirty
+                tasksToCloseClean.removeAll(tasksToCommit);
+                tasksToCloseDirty.addAll(tasksToCommit);
+            }
+        }
+
+        for (final Task task : tasksToCloseClean) {
+            try {
+                completeTaskCloseClean(task);
+            } catch (final RuntimeException e) {
+                log.error("Exception caught while clean-closing task " + task.id(), e);
+                firstException.compareAndSet(null, e);
+                tasksToCloseDirty.add(task);
+            }
+        }
+
+        return tasksToCloseDirty;
+    }
+
+    // Returns the set of standby tasks that must be closed dirty
+    private Collection<Task> tryCloseCleanAllStandbyTasks(final boolean clean,
+                                                          final AtomicReference<RuntimeException> firstException) {
+        if (!clean) {
+            return standbyTaskIterable();
+        }
+        final Set<Task> tasksToCloseDirty = new HashSet<>();
+
+        for (final Task task : standbyTaskIterable()) {
+            try {
+                task.suspend();
+                task.prepareCommit();
+                task.postCommit();
+                completeTaskCloseClean(task);
+            } catch (final TaskMigratedException e) {
+                // just ignore the exception as it doesn't matter during shutdown
+                tasksToCloseDirty.add(task);
+            } catch (final RuntimeException e) {
+                firstException.compareAndSet(null, e);
+                tasksToCloseDirty.add(task);
+            }
+        }
+        return tasksToCloseDirty;
     }
 
     Set<TaskId> activeTaskIds() {
@@ -805,6 +860,10 @@ public class TaskManager {
 
     Map<TaskId, Task> standbyTaskMap() {
         return standbyTaskStream().collect(Collectors.toMap(Task::id, t -> t));
+    }
+
+    private List<Task> standbyTaskIterable() {
+        return standbyTaskStream().collect(Collectors.toList());
     }
 
     private Stream<Task> standbyTaskStream() {
@@ -1041,5 +1100,29 @@ public class TaskManager {
 
     Set<TaskId> lockedTaskDirectories() {
         return Collections.unmodifiableSet(lockedTaskDirectories);
+    }
+
+    public static void executeAndMaybeSwallow(final boolean clean,
+                                              final Runnable runnable,
+                                              final java.util.function.Consumer<RuntimeException> actionIfClean,
+                                              final java.util.function.Consumer<RuntimeException> actionIfNotClean) {
+        try {
+            runnable.run();
+        } catch (final RuntimeException e) {
+            if (clean) {
+                actionIfClean.accept(e);
+            } else {
+                actionIfNotClean.accept(e);
+            }
+        }
+    }
+
+    public static void executeAndMaybeSwallow(final boolean clean,
+                                              final Runnable runnable,
+                                              final String name,
+                                              final Logger log) {
+        executeAndMaybeSwallow(clean, runnable, e -> {
+            throw e; },
+            e -> log.debug("Ignoring error in unclean {}", name));
     }
 }

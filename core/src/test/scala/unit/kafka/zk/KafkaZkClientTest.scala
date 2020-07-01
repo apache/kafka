@@ -550,7 +550,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     })
 
     // create acl paths
-    zkClient.createAclPaths
+    zkClient.createAclPaths()
 
     ZkAclStore.stores.foreach(store => {
       assertTrue(zkClient.pathExists(store.aclPath))
@@ -1184,7 +1184,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testClusterIdMethods(): Unit = {
-    val clusterId = CoreUtils.generateUuidAsBase64
+    val clusterId = CoreUtils.generateUuidAsBase64()
 
     zkClient.createOrGetClusterId(clusterId)
     assertEquals(clusterId, zkClient.getClusterId.getOrElse(fail("No cluster id found")))
@@ -1193,7 +1193,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   @Test
   def testBrokerSequenceIdMethods(): Unit = {
     val sequenceId = zkClient.generateBrokerSequenceId()
-    assertEquals(sequenceId + 1, zkClient.generateBrokerSequenceId)
+    assertEquals(sequenceId + 1, zkClient.generateBrokerSequenceId())
   }
 
   @Test
@@ -1235,7 +1235,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertFalse(zkClient.pathExists(DelegationTokensZNode.path))
     assertFalse(zkClient.pathExists(DelegationTokenChangeNotificationZNode.path))
 
-    zkClient.createDelegationTokenPaths
+    zkClient.createDelegationTokenPaths()
     assertTrue(zkClient.pathExists(DelegationTokensZNode.path))
     assertTrue(zkClient.pathExists(DelegationTokenChangeNotificationZNode.path))
 

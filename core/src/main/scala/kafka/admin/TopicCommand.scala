@@ -28,11 +28,11 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListPartitionReassignmentsOptions, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, ConfigEntry, ListTopicsOptions, NewPartitions, NewTopic, PartitionReassignment, Config => JConfig}
 import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidTopicException, TopicExistsException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -284,13 +284,12 @@ object TopicCommand extends Logging {
 
     private def listAllReassignments(topicPartitions: util.Set[TopicPartition]): Map[TopicPartition, PartitionReassignment] = {
       try {
-        adminClient.listPartitionReassignments(topicPartitions, new ListPartitionReassignmentsOptions)
-          .reassignments().get().asScala
+        adminClient.listPartitionReassignments(topicPartitions).reassignments().get().asScala
       } catch {
         case e: ExecutionException =>
           e.getCause match {
-            case ex: UnsupportedVersionException =>
-              logger.debug("Couldn't query reassignments through the AdminClient API", ex)
+            case ex @ (_: UnsupportedVersionException | _: ClusterAuthorizationException) =>
+              logger.debug(s"Couldn't query reassignments through the AdminClient API: ${ex.getMessage}", ex)
               Map()
             case t => throw t
           }

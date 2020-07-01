@@ -174,6 +174,8 @@ public class ConnectionStressWorker implements TaskWorker {
                             4096,
                             4096,
                             1000,
+                            10 * 1000,
+                            127 * 1000,
                             ClientDnsLookup.forConfig(conf.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                             TIME,
                             false,

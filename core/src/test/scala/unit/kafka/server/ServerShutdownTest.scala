@@ -118,7 +118,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     producer.close()
     server.shutdown()
     CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus
+    verifyNonDaemonThreadsStatus()
   }
 
   @Test
@@ -131,7 +131,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.shutdown()
     server.awaitShutdown()
     CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus
+    verifyNonDaemonThreadsStatus()
   }
 
   @Test
@@ -177,7 +177,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       server.awaitShutdown()
     }
     CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus
+    verifyNonDaemonThreadsStatus()
   }
 
   private[this] def isNonDaemonKafkaThread(t: Thread): Boolean = {

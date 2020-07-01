@@ -465,7 +465,6 @@ subprojects {
       "-Xlint:delayedinit-select",
       "-Xlint:doc-detached",
       "-Xlint:missing-interpolator",
-      "-Xlint:nullary-override",
       "-Xlint:nullary-unit",
       "-Xlint:option-implicit",
       "-Xlint:package-object-classes",
@@ -503,6 +502,7 @@ subprojects {
     if (versions.baseScala == '2.12') {
       scalaCompileOptions.additionalParameters += [
         "-Xlint:by-name-right-associative",
+        "-Xlint:nullary-override",
         "-Xlint:unsound-match"
       ]
     }

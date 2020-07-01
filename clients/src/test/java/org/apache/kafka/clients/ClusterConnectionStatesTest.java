@@ -40,7 +40,12 @@ public class ClusterConnectionStatesTest {
     private final MockTime time = new MockTime();
     private final long reconnectBackoffMs = 10 * 1000;
     private final long reconnectBackoffMax = 60 * 1000;
-    private final double reconnectBackoffJitter = 0.2;
+    private final long connectionSetupTimeoutMs = 10 * 1000;
+    private final long connectionSetupTimeoutMaxMs = 127 * 1000;
+    private final int reconnectBackoffExpBase = ClusterConnectionStates.RECONNECT_BACKOFF_EXP_BASE;
+    private final double reconnectBackoffJitter = ClusterConnectionStates.RECONNECT_BACKOFF_JITTER;
+    private final int connectionSetupTimeoutExpBase = ClusterConnectionStates.CONNECTION_SETUP_TIMEOUT_EXP_BASE;
+    private final double connectionSetupTimeoutJitter = ClusterConnectionStates.CONNECTION_SETUP_TIMEOUT_JITTER;
     private final String nodeId1 = "1001";
     private final String nodeId2 = "2002";
     private final String hostTwoIps = "kafka.apache.org";
@@ -49,7 +54,9 @@ public class ClusterConnectionStatesTest {
 
     @Before
     public void setup() {
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, new LogContext());
+        this.connectionStates = new ClusterConnectionStates(
+                reconnectBackoffMs, reconnectBackoffMax,
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext());
     }
 
     @Test
@@ -192,8 +199,6 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testExponentialReconnectBackoff() {
-        // Calculate fixed components for backoff process
-        final int reconnectBackoffExpBase = 2;
         double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
             / Math.log(reconnectBackoffExpBase);
 
@@ -320,5 +325,44 @@ public class ClusterConnectionStatesTest {
         assertTrue(connectionStates.isPreparingConnection(nodeId1));
         connectionStates.disconnected(nodeId1, time.milliseconds());
         assertFalse(connectionStates.isPreparingConnection(nodeId1));
+    }
+
+    @Test
+    public void testExponentialConnectionSetupTimeout() {
+        assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
+
+        // Check the exponential timeout growth
+        for (int n = 0; n <= Math.log((double) connectionSetupTimeoutMaxMs / connectionSetupTimeoutMs) / Math.log(connectionSetupTimeoutExpBase); n++) {
+            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+            assertTrue(connectionStates.connectingNodes().contains(nodeId1));
+            assertEquals(connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n),
+                    connectionStates.connectionSetupTimeoutMs(nodeId1),
+                    connectionSetupTimeoutMs * Math.pow(connectionSetupTimeoutExpBase, n) * connectionSetupTimeoutJitter);
+            connectionStates.disconnected(nodeId1, time.milliseconds());
+            assertFalse(connectionStates.connectingNodes().contains(nodeId1));
+        }
+
+        // Check the timeout value upper bound
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        assertEquals(connectionSetupTimeoutMaxMs,
+                connectionStates.connectionSetupTimeoutMs(nodeId1),
+                connectionSetupTimeoutMaxMs * connectionSetupTimeoutJitter);
+        assertTrue(connectionStates.connectingNodes().contains(nodeId1));
+
+        // Should reset the timeout value to the init value
+        connectionStates.ready(nodeId1);
+        assertEquals(connectionSetupTimeoutMs,
+                connectionStates.connectionSetupTimeoutMs(nodeId1),
+                connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
+        assertFalse(connectionStates.connectingNodes().contains(nodeId1));
+        connectionStates.disconnected(nodeId1, time.milliseconds());
+
+        // Check if the connection state transition from ready to disconnected
+        // won't increase the timeout value
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        assertEquals(connectionSetupTimeoutMs,
+                connectionStates.connectionSetupTimeoutMs(nodeId1),
+                connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
+        assertTrue(connectionStates.connectingNodes().contains(nodeId1));
     }
 }
