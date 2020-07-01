@@ -3366,7 +3366,7 @@ KGroupedStream&lt;UserId, Event&gt; grouped = ...;
 grouped
     .windowedBy(TimeWindows.of(Duration.ofHours(1)).grace(ofMinutes(10)))
     .count()
-    .suppress(Suppressed.untilWindowCloses(unbounded()))
+    .suppress(Suppressed.untilWindowCloses(unbounded().withLoggingDisabled()))
     .filter((windowedUserId, count) -&gt; count &lt; 3)
     .toStream()
     .foreach((windowedUserId, count) -&gt; sendAlert(windowedUserId.window(), windowedUserId.key(), count));
@@ -3393,6 +3393,10 @@ grouped
 				      but this simple example creates a buffer with no
 				      upper bound.
 				    </dd>
+                    <dt><code>withLoggingDisabled()</code></dt>
+                    <dd>
+                      This configures the suppression operator to disable logging for changelog entries.
+                    </dd>
 			    </dl>
 			    </p>
 			    <p>
