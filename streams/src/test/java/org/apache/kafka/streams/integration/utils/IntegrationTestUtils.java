@@ -255,6 +255,8 @@ public class IntegrationTestUtils {
             }
             if (enableTransactions) {
                 producer.commitTransaction();
+            } else {
+                producer.flush();
             }
         }
     }

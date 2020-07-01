@@ -42,6 +42,7 @@ public class WordCountProcessorTest {
         final KeyValueStore<String, Integer> store =
             Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("Counts"), Serdes.String(), Serdes.Integer())
                 .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                // Caching is disabled by default, but FYI: caching is also not supported by MockProcessorContext.
                 .build();
         store.init(context, store);
         context.register(store, null);
