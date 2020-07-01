@@ -262,11 +262,11 @@
 
     <p>Kafka Connect provides error reporting to handle errors encountered along various stages of processing. By default, any error encountered during conversion or within transformations will cause the connector to fail. Each connector configuration can also enable tolerating such errors by skipping them, optionally writing each error and the details of the failed operation and problematic record (with various levels of detail) to the Connect application log. These mechanisms also capture errors when a sink connector is processing the messages consumed from its Kafka topics, and all of the errors can be written to a configurable "dead letter queue" (DLQ) Kafka topic.</p>
 
-    <p>To report errors within a connector's converter, transforms, or within the sink connector itself to the log, set <code>errors.log.enable=true</code> in the connector configuration to log details of each error and problem record's topic, partition, and offset. For additional debugging purposes, set <code>errors.log.include.messages=true</code> to also log the problem record key, value, and headers to the log (note this may log sensitive information).
+    <p>To report errors within a connector's converter, transforms, or within the sink connector itself to the log, set <code>errors.log.enable=true</code> in the connector configuration to log details of each error and problem record's topic, partition, and offset. For additional debugging purposes, set <code>errors.log.include.messages=true</code> to also log the problem record key, value, and headers to the log (note this may log sensitive information).</p>
 
-    <p>To report errors within a connector's converter, transforms, or within the sink connector itself to a dead letter queue topic, set <code>errors.deadletterqueue.topic.name</code>, and optionally  <code>errors.deadletterqueue.context.headers.enable=true</code>.</p>
+    <p>To report errors within a connector's converter, transforms, or within the sink connector itself to a dead letter queue topic, set <code>errors.deadletterqueue.topic.name</code>, and optionally <code>errors.deadletterqueue.context.headers.enable=true</code>.</p>
 
-    <p>For example, the following configuration properties can be added to a connector configuration to cause the connector to fail immediately upon an error or exception. Although it is not necessary to add extra configuration properties for this behavior, adding the following properties to a sink connector configuration would achieve this "fail fast" behavior:</p>
+    <p>By default connectors exhibit "fail fast" behavior immediately upon an error or exception. This is equivalent to adding the following configuration properties with their defaults to a connector configuration:</p>
 
     <pre class="brush: text;">
         # disable retries on failure
@@ -276,13 +276,13 @@
         errors.log.enable=false
 
         # do not record errors in a dead letter queue topic
-        # errors.deadletterqueue.topic.name=
+        errors.deadletterqueue.topic.name=
 
         # Fail on first error
         errors.tolerance=none
     </pre>
 
-    <p>The following configuration properties can be added to a connector configuration to setup error handling with multiple retries, logging to the application logs and the <code>my-connector-errors</code> Kafka topic, and tolerating all errors rather than failing the connector or task:</p>
+    <p>These and other related connector configuration properties can be changed to provide different behavior. For example, the following configuration properties can be added to a connector configuration to setup error handling with multiple retries, logging to the application logs and the <code>my-connector-errors</code> Kafka topic, and tolerating all errors by reporting them rather than failing the connector task:</p>
 
     <pre class="brush: text;">
         # retry for at most 10 minutes times waiting up to 30 seconds between consecutive failures
@@ -473,7 +473,7 @@
 
     <h5><a id="connect_errantrecordreporter" href="connect_errantrecordreporter">Errant Record Reporter</a></h5>
 
-    <p>When <a href="#connect_errorreporting">error reporting</a> is enabled for a connector, the connector can use an <code>ErrantRecordReporter</code> to report problems with individual records sent to a sink connector. The following example shows how to obtain and use the <code>ErrantRecordReporter</code> in a <code>SinkTask</code> subclass, while safely handling the case when the connector is installed in an older Connect runtime that doesn't have this reporter feature:</p>
+    <p>When <a href="#connect_errorreporting">error reporting</a> is enabled for a connector, the connector can use an <code>ErrantRecordReporter</code> to report problems with individual records sent to a sink connector. The following example shows how a connector's <code>SinkTask</code> subclass might obtain and use the <code>ErrantRecordReporter</code>, safely handling a null reporter when the DLQ is not enabled or when the connector is installed in an older Connect runtime that doesn't have this reporter feature:</p>
 
     <pre class="brush: java;">
         private ErrantRecordReporter reporter;
@@ -493,7 +493,7 @@
         public void put(Collection&lt;SinkRecord&gt; records) {
             for (SinkRecord record: records) {
                 try {
-                    // attempt to send record to data sink
+                    // attempt to process and send record to data sink
                     process(record);
                 } catch(Exception e) {
                     if (reporter != null) {
