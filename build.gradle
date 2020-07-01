@@ -77,7 +77,15 @@ allprojects {
     configurations {
       runtime {
         resolutionStrategy {
-          force "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson"
+          force(
+            // ensures we have a single version of jackson-annotations in the classpath even if
+            // some modules only have a transitive reference to an older version
+            libs.jacksonAnnotations,
+            // be explicit about the Netty dependency version instead of relying on the version
+            // set by ZooKeeper (potentially older and containing CVEs)
+            libs.nettyHandler,
+            libs.nettyTransportNativeEpoll
+          )
         }
       }
     }
@@ -717,7 +725,6 @@ project(':core') {
     compile(libs.zookeeper) {
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
-      exclude module: 'netty'
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     compile libs.commonsCli
