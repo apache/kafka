@@ -957,7 +957,6 @@ class Log(@volatile private var _dir: File,
 
   /**
    * Close this log.
-   * The memory mapped buffer for index files of this log will be left open until the log is deleted.
    */
   def close(): Unit = {
     debug("Closing log")
@@ -970,6 +969,7 @@ class Log(@volatile private var _dir: File,
         // (the clean shutdown file is written after the logs are all closed).
         producerStateManager.takeSnapshot()
         logSegments.foreach(_.close())
+        isMemoryMappedBufferClosed = true
       }
     }
   }
@@ -2055,7 +2055,6 @@ class Log(@volatile private var _dir: File,
   private[log] def delete(): Unit = {
     maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
-        checkIfMemoryMappedBufferClosed()
         removeLogMetrics()
         producerExpireCheck.cancel(true)
         removeAndDeleteSegments(logSegments, asyncDelete = false)
