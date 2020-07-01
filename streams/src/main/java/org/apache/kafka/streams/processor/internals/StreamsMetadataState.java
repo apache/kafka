@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
@@ -50,7 +51,7 @@ public class StreamsMetadataState {
     private final HostInfo thisHost;
     private List<StreamsMetadata> allMetadata = Collections.emptyList();
     private Cluster clusterMetadata;
-    private StreamsMetadata localMetadata;
+    private final AtomicReference<StreamsMetadata> localMetadata = new AtomicReference<>(null);
 
     public StreamsMetadataState(final InternalTopologyBuilder builder, final HostInfo thisHost) {
         this.builder = builder;
@@ -79,7 +80,7 @@ public class StreamsMetadataState {
      * @return the {@link StreamsMetadata}s for the local instance in a {@link KafkaStreams} application
      */
     public StreamsMetadata getLocalMetadata() {
-        return localMetadata;
+        return localMetadata.get();
     }
 
     /**
@@ -157,7 +158,7 @@ public class StreamsMetadataState {
             if (thisHost.equals(UNKNOWN_HOST)) {
                 return allMetadata.get(0);
             }
-            return localMetadata;
+            return localMetadata.get();
         }
 
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
@@ -226,7 +227,7 @@ public class StreamsMetadataState {
             if (thisHost.equals(UNKNOWN_HOST)) {
                 return new KeyQueryMetadata(allMetadata.get(0).hostInfo(), Collections.emptySet(), -1);
             }
-            return new KeyQueryMetadata(localMetadata.hostInfo(), Collections.emptySet(), -1);
+            return new KeyQueryMetadata(localMetadata.get().hostInfo(), Collections.emptySet(), -1);
         }
 
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
@@ -268,7 +269,7 @@ public class StreamsMetadataState {
             if (thisHost.equals(UNKNOWN_HOST)) {
                 return allMetadata.get(0);
             }
-            return localMetadata;
+            return localMetadata.get();
         }
 
         final SourceTopicsInfo sourceTopicsInfo = getSourceTopicsInfo(storeName);
@@ -318,6 +319,12 @@ public class StreamsMetadataState {
                                  final Map<HostInfo, Set<TopicPartition>> standbyPartitionHostMap) {
         if (activePartitionHostMap.isEmpty() && standbyPartitionHostMap.isEmpty()) {
             allMetadata = Collections.emptyList();
+            localMetadata.set(new StreamsMetadata(thisHost,
+                                                  Collections.emptySet(),
+                                                  Collections.emptySet(),
+                                                  Collections.emptySet(),
+                                                  Collections.emptySet()
+            ));
             return;
         }
 
@@ -348,7 +355,7 @@ public class StreamsMetadataState {
                                                                      standbyPartitionsOnHost);
                 rebuiltMetadata.add(metadata);
                 if (hostInfo.equals(thisHost)) {
-                    localMetadata = metadata;
+                    localMetadata.set(metadata);
                 }
             });
 
@@ -421,7 +428,8 @@ public class StreamsMetadataState {
     }
 
     private boolean isInitialized() {
-        return clusterMetadata != null && !clusterMetadata.topics().isEmpty();
+
+        return clusterMetadata != null && !clusterMetadata.topics().isEmpty() && localMetadata.get() != null;
     }
 
     public String getStoreForChangelogTopic(final String topicName) {

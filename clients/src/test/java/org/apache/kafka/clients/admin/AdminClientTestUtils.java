@@ -14,31 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
+import java.util.Map;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 
-import java.util.List;
+public class AdminClientTestUtils {
 
-interface Segments<S extends Segment> {
-
-    long segmentId(final long timestamp);
-
-    String segmentName(final long segmentId);
-
-    S getSegmentForTimestamp(final long timestamp);
-
-    S getOrCreateSegmentIfLive(final long segmentId, final ProcessorContext context, final long streamTime);
-
-    S getOrCreateSegment(final long segmentId, final ProcessorContext context);
-
-    void openExisting(final ProcessorContext context, final long streamTime);
-
-    List<S> segments(final long timeFrom, final long timeTo);
-
-    List<S> allSegments();
-
-    void flush();
-
-    void close();
+    /**
+     * Helper to create a ListPartitionReassignmentsResult instance for a given Throwable.
+     * ListPartitionReassignmentsResult's constructor is only accessible from within the
+     * admin package.
+     */
+    public static ListPartitionReassignmentsResult listPartitionReassignmentsResult(Throwable t) {
+        KafkaFutureImpl<Map<TopicPartition, PartitionReassignment>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(t);
+        return new ListPartitionReassignmentsResult(future);
+    }
 }
