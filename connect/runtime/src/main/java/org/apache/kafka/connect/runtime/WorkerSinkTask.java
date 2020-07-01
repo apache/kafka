@@ -528,8 +528,8 @@ class WorkerSinkTask extends WorkerTask {
         try {
             return keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key());
         } catch (Exception e) {
-            log.error("{} Error converting message key in topic '{}' partition {} at offset {} and timestamp {}",
-                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e);
+            log.error("{} Error converting message key in topic '{}' partition {} at offset {} and timestamp {}: {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage(), e);
             throw e;
         }
     }
@@ -538,8 +538,8 @@ class WorkerSinkTask extends WorkerTask {
         try {
             return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
         } catch (Exception e) {
-            log.error("{} Error converting message value in topic '{}' partition {} at offset {} and timestamp {}",
-                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e);
+            log.error("{} Error converting message value in topic '{}' partition {} at offset {} and timestamp {}: {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage(), e);
             throw e;
         }
     }
