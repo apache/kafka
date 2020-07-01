@@ -358,7 +358,6 @@ class AdminManager(val config: KafkaConfig,
           configs.toBuffer
         else
           configs.filter { case (configName, _) =>
-            /* Always returns true if configurationKeys is null */
             resource.configurationKeys.asScala.forall(_.contains(configName))
           }.toBuffer
 
