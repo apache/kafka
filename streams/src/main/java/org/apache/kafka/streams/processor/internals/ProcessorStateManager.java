@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -461,21 +462,24 @@ public class ProcessorStateManager implements StateManager {
             for (final StateStoreMetadata metadata : stores.values()) {
                 final StateStore store = metadata.stateStore;
 
-                if (store instanceof CachedStateStore) {
-                    log.trace("Flushing store cache {}", store.name());
-                    try {
+                try {
+                    // buffer should be flushed to send all records to changelog
+                    if (store instanceof TimeOrderedKeyValueBuffer) {
+                        store.flush();
+                    } else if (store instanceof CachedStateStore) {
                         ((CachedStateStore) store).flushCache();
-                    } catch (final RuntimeException exception) {
-                        if (firstException == null) {
-                            // do NOT wrap the error if it is actually caused by Streams itself
-                            if (exception instanceof StreamsException)
-                                firstException = exception;
-                            else
-                                firstException = new ProcessorStateException(
-                                        format("%sFailed to flush cache of store %s", logPrefix, store.name()), exception);
-                        }
-                        log.error("Failed to flush cache of store {}: ", store.name(), exception);
                     }
+                    log.trace("Flushed cache or buffer {}", store.name());
+                } catch (final RuntimeException exception) {
+                    if (firstException == null) {
+                        // do NOT wrap the error if it is actually caused by Streams itself
+                        if (exception instanceof StreamsException)
+                            firstException = exception;
+                        else
+                            firstException = new ProcessorStateException(
+                                    format("%sFailed to flush cache of store %s", logPrefix, store.name()), exception);
+                    }
+                    log.error("Failed to flush cache of store {}: ", store.name(), exception);
                 }
             }
         }
