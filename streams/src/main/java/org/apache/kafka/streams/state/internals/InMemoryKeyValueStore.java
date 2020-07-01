@@ -110,7 +110,15 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        return range(from, to, false);
+    }
 
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseRange(Bytes from, Bytes to) {
+        return range(from, to, true);
+    }
+
+    KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean reverse) {
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -118,7 +126,10 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        return new DelegatingPeekingKeyValueIterator<>(
+        if (reverse) return new DelegatingPeekingKeyValueIterator<>(
+            name,
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).descendingKeySet()));
+        else return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
     }
@@ -128,6 +139,13 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator(map.keySet()));
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+        return new DelegatingPeekingKeyValueIterator<>(
+            name,
+            new InMemoryKeyValueIterator(map.descendingKeySet()));
     }
 
     @Override

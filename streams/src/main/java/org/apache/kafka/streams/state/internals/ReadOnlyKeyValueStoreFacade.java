@@ -41,8 +41,18 @@ public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<
     }
 
     @Override
+    public KeyValueIterator<K, V> reverseRange(K from, K to) {
+        return new KeyValueIteratorFacade<>(inner.reverseRange(from, to));
+    }
+
+    @Override
     public KeyValueIterator<K, V> all() {
         return new KeyValueIteratorFacade<>(inner.all());
+    }
+
+    @Override
+    public KeyValueIterator<K, V> reverseAll() {
+        return new KeyValueIteratorFacade<>(inner.reverseAll());
     }
 
     @Override

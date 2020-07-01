@@ -35,10 +35,17 @@ class RocksDBRangeIterator extends RocksDbIterator {
                          final RocksIterator iter,
                          final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
                          final Bytes from,
-                         final Bytes to) {
-        super(storeName, iter, openIterators);
-        iter.seek(from.get());
-        rawToKey = to.get();
+                         final Bytes to,
+                         final boolean reverse) {
+        super(storeName, iter, openIterators, reverse);
+        if (reverse) {
+            iter.seek(to.get());
+            rawToKey = from.get();
+        }
+        else {
+            iter.seek(from.get());
+            rawToKey = to.get();
+        }
         if (rawToKey == null) {
             throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
         }

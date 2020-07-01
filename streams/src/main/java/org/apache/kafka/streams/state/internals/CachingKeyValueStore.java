@@ -253,11 +253,36 @@ public class CachingKeyValueStore
     }
 
     @Override
+    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
+                                                        final Bytes to) {
+        if (from.compareTo(to) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
+
+        validateStoreOpen();
+        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().reverseRange(from, to);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseRange(cacheName, from, to);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+    }
+
+    @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().all(cacheName);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+        validateStoreOpen();
+        final KeyValueIterator<Bytes, byte[]> storeIterator =
+            new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().reverseAll());
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseAll(cacheName);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
 
@@ -297,7 +322,7 @@ public class CachingKeyValueStore
             );
             if (!suppressed.isEmpty()) {
                 throwSuppressed("Caught an exception while closing caching key value store for store " + name(),
-                                suppressed);
+                    suppressed);
             }
         } finally {
             lock.writeLock().unlock();

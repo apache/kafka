@@ -185,12 +185,28 @@ public class ThreadCache {
         return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
     }
 
+    public MemoryLRUCacheBytesIterator reverseRange(final String namespace, final Bytes from, final Bytes to) {
+        final NamedCache cache = getCache(namespace);
+        if (cache == null) {
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
+        }
+        return new MemoryLRUCacheBytesIterator(cache.reverseKeyRange(from, to), cache);
+    }
+
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
             return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
+    }
+
+    public MemoryLRUCacheBytesIterator reverseAll(final String namespace) {
+        final NamedCache cache = getCache(namespace);
+        if (cache == null) {
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
+        }
+        return new MemoryLRUCacheBytesIterator(cache.reverseAllKeys(), cache);
     }
 
     public long size() {
