@@ -50,7 +50,7 @@ class StreamsUpgradeTest(Test):
             node.version = KafkaVersion(to_version)
             self.kafka.start_node(node)
 
-    @matrix(from_version=smoke_test_versions, to_version=dev_version, bounce_type=["full", "rolling"])
+    @matrix(from_version=smoke_test_versions, to_version=dev_version, bounce_type=["full"])
     def test_app_upgrade(self, from_version, to_version, bounce_type):
         """
         Starts 3 KafkaStreams instances with <old_version>, and upgrades one-by-one to <new_version>
