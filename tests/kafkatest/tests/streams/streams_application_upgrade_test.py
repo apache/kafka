@@ -152,9 +152,9 @@ class StreamsUpgradeTest(Test):
         self.wait_for_verification(self.processor3, self.processed_msg, self.processor3.STDOUT_FILE)
 
     def restart_all_nodes_with(self, version):
-        self.processor1.stop()
-        self.processor2.stop()
-        self.processor3.stop()
+        self.processor1.stop_node(self.processor1.node)
+        self.processor2.stop_node(self.processor2.node)
+        self.processor3.stop_node(self.processor3.node)
 
         # make sure the members have stopped
         self.wait_for_verification(self.processor1, "SMOKE-TEST-CLIENT-CLOSED", self.processor1.STDOUT_FILE)
@@ -169,9 +169,9 @@ class StreamsUpgradeTest(Test):
         self.set_version(self.processor2, version)
         self.set_version(self.processor3, version)
 
-        self.processor1.start()
-        self.processor2.start()
-        self.processor3.start()
+        self.processor1.start_node(self.processor1.node)
+        self.processor2.start_node(self.processor2.node)
+        self.processor3.start_node(self.processor3.node)
 
         # double-check the version
         kafka_version_str = self.get_version_string(version)
@@ -239,7 +239,7 @@ class StreamsUpgradeTest(Test):
         # stop processor and wait for rebalance of others
         with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
             with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
-                processor.stop()
+                processor.stop_node(processor.node)
                 first_other_monitor.wait_until(self.processed_msg,
                                                timeout_sec=60,
                                                err_msg="Never saw output '%s' on " % self.processed_msg + str(first_other_node.account))
@@ -263,7 +263,7 @@ class StreamsUpgradeTest(Test):
             with node.account.monitor_log(processor.LOG_FILE) as log_monitor:
                 with first_other_node.account.monitor_log(first_other_processor.STDOUT_FILE) as first_other_monitor:
                     with second_other_node.account.monitor_log(second_other_processor.STDOUT_FILE) as second_other_monitor:
-                        processor.start()
+                        processor.start_node(processor.node)
 
                         log_monitor.wait_until(kafka_version_str,
                                                timeout_sec=60,
@@ -293,5 +293,5 @@ class StreamsUpgradeTest(Test):
                                    allow_fail=False)
         processor.node.account.ssh("mv " + processor.LOG_FILE + " " + processor.LOG_FILE + roll_suffix,
                                    allow_fail=False)
-        processor.node.account.ssh("mv " + processor.CONFIG_FILE + " " + processor.LOG_FILE + roll_suffix,
+        processor.node.account.ssh("mv " + processor.CONFIG_FILE + " " + processor.CONFIG_FILE + roll_suffix,
                                    allow_fail=False)
