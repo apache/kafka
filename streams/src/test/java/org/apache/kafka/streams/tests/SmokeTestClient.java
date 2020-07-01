@@ -146,7 +146,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         } else if (wasClosed) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
         } else {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close");
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close in time.");
         }
     }
 
