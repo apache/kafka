@@ -48,6 +48,15 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         "streams_config": {
             "path": CONFIG_FILE,
             "collect_default": True},
+        "streams_config.1": {
+            "path": CONFIG_FILE,
+            "collect_default": True},
+        "streams_config.0-1": {
+            "path": CONFIG_FILE,
+            "collect_default": True},
+        "streams_config.1-1": {
+            "path": CONFIG_FILE,
+            "collect_default": True},
         "streams_log": {
             "path": LOG_FILE,
             "collect_default": True},
