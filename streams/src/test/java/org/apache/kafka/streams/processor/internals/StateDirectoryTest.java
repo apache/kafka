@@ -17,12 +17,19 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.internals.RocksDBStore;
+import org.apache.kafka.streams.state.internals.RocksDBStoreTest.MockRocksDbConfigSetter;
+import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
+import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -219,6 +226,35 @@ public class StateDirectoryTest {
         Files.createFile(data.getAbsoluteFile().toPath());
 
         assertFalse(directory.directoryForTaskIsEmpty(taskId));
+    }
+
+    @Test
+    public void shouldReportRocksDBStoreEmptyUntilDataIsEntered() {
+        final TaskId taskId = new TaskId(0, 0);
+        final File rocksDBDir = new File(directory.directoryForTask(taskId), "rocksdb");
+        assertTrue(rocksDBDir.mkdir());
+        assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+            rocksDBDir,
+            Serdes.String(),
+            Serdes.String(),
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
+
+        final RocksDBStore rocksDBStore = (RocksDBStore) new RocksDbKeyValueBytesStoreSupplier("db-name", false).get();
+
+        try {
+            // Just opening the store should not be enough to consider it non-empty
+            rocksDBStore.init(context, rocksDBStore);
+            assertTrue(directory.directoryForTaskIsEmpty(taskId));
+
+            //  After flushing data to the store, the task directory should no longer be considered empty
+            rocksDBStore.put(new Bytes("key".getBytes()), "value".getBytes());
+            rocksDBStore.flush();
+            assertFalse(directory.directoryForTaskIsEmpty(taskId));
+        } finally {
+            rocksDBStore.close();
+        }
     }
 
     @Test
