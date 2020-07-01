@@ -169,7 +169,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                stateMgr.flush();
+                stateMgr.flushCache();
                 log.debug("Prepared {} task for committing", state());
 
                 break;

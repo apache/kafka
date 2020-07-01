@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -65,11 +67,19 @@ public abstract class AbstractTask implements Task {
         offsetSnapshotSinceLastFlush = Collections.emptyMap();
     }
 
+    /**
+     * The following exceptions maybe thrown from the state manager flushing call
+     *
+     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
+     *                          or flushing state store get IO errors; such error should cause the thread to die
+     */
     protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
         final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
         if (StateManagerUtil.checkpointNeeded(enforceCheckpoint, offsetSnapshotSinceLastFlush, offsetSnapshot)) {
             // since there's no written offsets we can checkpoint with empty map,
             // and the state's current offset would be used to checkpoint
+            stateMgr.flush();
             stateMgr.checkpoint(Collections.emptyMap());
             offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
         }

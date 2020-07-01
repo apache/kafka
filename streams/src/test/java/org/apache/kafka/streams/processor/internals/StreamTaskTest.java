@@ -1649,7 +1649,7 @@ public class StreamTaskTest {
     @Test
     public void shouldNotCheckpointOnCloseRestoringIfNoProgress() {
         stateManager.flush();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
@@ -1745,8 +1745,10 @@ public class StreamTaskTest {
         final long offset = 543L;
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
-        stateManager.flush();
+        stateManager.flushCache();
         EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
+        stateManager.flush();
+        EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
         stateManager.checkpoint(EasyMock.anyObject());
         EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
         stateManager.close();

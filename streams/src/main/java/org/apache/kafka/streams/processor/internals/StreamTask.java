@@ -58,7 +58,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -352,9 +351,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case RESTORING:
             case RUNNING:
             case SUSPENDED:
-                // we need to flush the state store before committing since it may cause some cached records to be processed
+                // we need to flush the store caches before committing since it may cause some cached records to be processed
                 // and hence generate more records to be sent out
-                stateMgr.flush();
+                //
+                // TODO: this should be removed after we decouple caching with emitting
+                stateMgr.flushCache();
                 // the commitNeeded flag just indicates whether we have reached RUNNING and processed any new data,
                 // so it only indicates whether the record collector should be flushed or not, whereas the state
                 // manager should always be flushed; either there is newly restored data or the flush will be a no-op

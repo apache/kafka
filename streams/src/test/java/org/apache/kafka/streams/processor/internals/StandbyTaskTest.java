@@ -206,9 +206,9 @@ public class StandbyTaskTest {
     public void shouldFlushAndCheckpointStateManagerOnCommit() {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
         stateManager.flush();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().once();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().once();
         EasyMock.expect(stateManager.changelogOffsets())
                 .andReturn(Collections.singletonMap(partition, 50L))
                 .andReturn(Collections.singletonMap(partition, 11000L))
@@ -237,7 +237,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldNotCommitAndThrowOnCloseDirty() {
+    public void shouldNotFlushAndThrowOnCloseDirty() {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
         stateManager.close();
         EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();

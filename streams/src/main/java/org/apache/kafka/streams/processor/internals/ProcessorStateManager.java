@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
@@ -443,6 +444,38 @@ public class ProcessorStateManager implements StateManager {
                                 format("%sFailed to flush state store %s", logPrefix, store.name()), exception);
                     }
                     log.error("Failed to flush state store {}: ", store.name(), exception);
+                }
+            }
+        }
+
+        if (firstException != null) {
+            throw firstException;
+        }
+    }
+
+    public void flushCache() {
+        RuntimeException firstException = null;
+        // attempting to flush the stores
+        if (!stores.isEmpty()) {
+            log.debug("Flushing all store caches registered in the state manager: {}", stores);
+            for (final StateStoreMetadata metadata : stores.values()) {
+                final StateStore store = metadata.stateStore;
+
+                if (store instanceof CachedStateStore) {
+                    log.trace("Flushing store cache {}", store.name());
+                    try {
+                        ((CachedStateStore) store).flushCache();
+                    } catch (final RuntimeException exception) {
+                        if (firstException == null) {
+                            // do NOT wrap the error if it is actually caused by Streams itself
+                            if (exception instanceof StreamsException)
+                                firstException = exception;
+                            else
+                                firstException = new ProcessorStateException(
+                                        format("%sFailed to flush cache of store %s", logPrefix, store.name()), exception);
+                        }
+                        log.error("Failed to flush cache of store {}: ", store.name(), exception);
+                    }
                 }
             }
         }
