@@ -158,11 +158,11 @@ public class StateDirectoryTest {
         checkpointFile.write(Collections.singletonMap(new TopicPartition("topic", 0), 0L));
         assertTrue(directory.directoryForTaskIsEmpty(taskId));
 
-        // if some store dir is created, it should not be empty
+        // if some store file is created, it should not be empty
         final File dbDir = new File(new File(directory.directoryForTask(taskId), "db"), "store1");
 
         Files.createDirectories(dbDir.getParentFile().toPath());
-        Files.createDirectories(dbDir.getAbsoluteFile().toPath());
+        Files.createFile(dbDir.getAbsoluteFile().toPath());
 
         assertFalse(directory.directoryForTaskIsEmpty(taskId));
 
@@ -290,9 +290,9 @@ public class StateDirectoryTest {
         final TaskId task1 = new TaskId(1, 0);
         final TaskId task2 = new TaskId(2, 0);
         try {
-            assertTrue(new File(directory.directoryForTask(task0), "store").mkdir());
-            assertTrue(new File(directory.directoryForTask(task1), "store").mkdir());
-            assertTrue(new File(directory.directoryForTask(task2), "store").mkdir());
+            assertTrue(new File(directory.directoryForTask(task0), "store").createNewFile());
+            assertTrue(new File(directory.directoryForTask(task1), "store").createNewFile());
+            assertTrue(new File(directory.directoryForTask(task2), "store").createNewFile());
 
             directory.lock(task0);
             directory.lock(task1);
@@ -326,9 +326,9 @@ public class StateDirectoryTest {
     }
 
     @Test
-    public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() {
+    public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() throws IOException {
         final File dir = directory.directoryForTask(new TaskId(2, 0));
-        assertTrue(new File(dir, "store").mkdir());
+        assertTrue(new File(dir, "store").createNewFile());
 
         final int cleanupDelayMs = 60000;
         directory.cleanRemovedTasks(cleanupDelayMs);
@@ -392,7 +392,7 @@ public class StateDirectoryTest {
         final File taskDir2 = directory.directoryForTask(new TaskId(0, 1));
 
         final File storeDir = new File(taskDir1, "store");
-        assertTrue(storeDir.mkdir());
+        assertTrue(storeDir.createNewFile());
 
         assertEquals(mkSet(taskDir1, taskDir2), Arrays.stream(
             directory.listAllTaskDirectories()).collect(Collectors.toSet()));
