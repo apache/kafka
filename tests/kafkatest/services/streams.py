@@ -510,7 +510,7 @@ class StreamsResetter(StreamsTestBaseService):
 
     @property
     def expectedMessage(self):
-        return 'succeed to reset stream application'
+        return 'Done.'
 
     def start_cmd(self, node):
         args = self.args.copy()
@@ -526,6 +526,7 @@ class StreamsResetter(StreamsTestBaseService):
               "--bootstrap-servers %(bootstrap.servers)s " \
               "--force " \
               "--application-id StreamsOptimizedTest " \
+              "--input-topics input.topic " \
               "& echo $! >&3 ) " \
               "1>> %(stdout)s " \
               "2>> %(stderr)s " \

@@ -168,7 +168,6 @@ public class StreamsResetter {
             consumerConfig.putAll(properties);
             exitCode = maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, dryRun);
             maybeDeleteInternalTopics(adminClient, dryRun);
-            System.out.println("succeed to reset stream application: " + groupId);
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
             System.err.println("ERROR: " + e);
