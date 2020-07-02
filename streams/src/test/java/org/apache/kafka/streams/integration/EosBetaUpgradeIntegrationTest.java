@@ -152,6 +152,8 @@ public class EosBetaUpgradeIntegrationTest {
     private final AtomicInteger commitCounterClient2 = new AtomicInteger(-1);
     private final AtomicInteger commitRequested = new AtomicInteger(0);
 
+    // Note: this pattern only works when we just have a single instance running with a single thread
+    // If we want to extend the test or reuse this CommitPunctuator we should tighten it up
     private final AtomicBoolean requestCommit = new AtomicBoolean(false);
     private static class CommitPunctuator implements Punctuator {
         final ProcessorContext context;
@@ -867,7 +869,7 @@ public class EosBetaUpgradeIntegrationTest {
                             sharedCommit = commitCounterClient2;
                         }
                         punctuator = context.schedule(
-                            Duration.ofSeconds(5),
+                            Duration.ofMillis(100),
                             PunctuationType.WALL_CLOCK_TIME,
                             new CommitPunctuator(context, requestCommit)
                         );
