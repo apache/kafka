@@ -104,10 +104,6 @@ public class SmokeTestDriverIntegrationTest {
             clients.add(smokeTestClient);
             smokeTestClient.start(props);
 
-            while (!clients.get(clients.size() - 1).started()) {
-                Thread.sleep(100);
-            }
-
             // let the oldest client die of "natural causes"
             if (clients.size() >= 3) {
                 final SmokeTestClient client = clients.remove(0);
