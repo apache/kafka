@@ -55,7 +55,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private final long retentionPeriod;
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap = new ConcurrentSkipListMap<>();
-    private final Set<InMemorySessionStoreIterator> openIterators  = ConcurrentHashMap.newKeySet();
+    private final Set<InMemorySessionStoreIterator> openIterators = ConcurrentHashMap.newKeySet();
 
     private volatile boolean open = false;
 
@@ -165,9 +165,24 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         removeExpiredSegments();
 
         return registerNewIterator(key,
-                                   key,
-                                   latestSessionStartTime,
-                                   endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
+            key,
+            latestSessionStartTime,
+            endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
+    }
+
+    @Deprecated
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
+                                                                          final long earliestSessionEndTime,
+                                                                          final long latestSessionStartTime) {
+        Objects.requireNonNull(key, "key cannot be null");
+
+        removeExpiredSegments();
+
+        return registerNewIterator(key,
+            key,
+            earliestSessionEndTime,
+            endTimeMap.headMap(latestSessionStartTime, true).descendingMap().entrySet().iterator());
     }
 
     @Override
@@ -188,9 +203,33 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         }
 
         return registerNewIterator(keyFrom,
-                                   keyTo,
-                                   latestSessionStartTime,
-                                   endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
+            keyTo,
+            latestSessionStartTime,
+            endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
+    }
+
+    @Deprecated
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
+                                                                          final Bytes keyTo,
+                                                                          final long earliestSessionEndTime,
+                                                                          final long latestSessionStartTime) {
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
+
+        removeExpiredSegments();
+
+        if (keyFrom.compareTo(keyTo) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
+
+        return registerNewIterator(keyFrom,
+            keyTo,
+            earliestSessionEndTime,
+            endTimeMap.headMap(latestSessionStartTime, true).entrySet().iterator());
     }
 
     @Override
@@ -204,6 +243,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes key) {
+
+        Objects.requireNonNull(key, "key cannot be null");
+
+        removeExpiredSegments();
+
+        return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator());
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
 
         Objects.requireNonNull(from, "from key cannot be null");
@@ -211,8 +260,17 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-
         return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from, final Bytes to) {
+        Objects.requireNonNull(from, "from key cannot be null");
+        Objects.requireNonNull(to, "to key cannot be null");
+
+        removeExpiredSegments();
+
+        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator());
     }
 
     @Override

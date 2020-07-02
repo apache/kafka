@@ -48,6 +48,10 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime);
 
+    default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Fetch any sessions in the given range of keys and the sessions end is &ge; earliestSessionEndTime and the sessions
      * start is &le; latestSessionStartTime
@@ -62,6 +66,10 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @throws NullPointerException If null is used for any key.
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime);
+
+    default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        throw new UnsupportedOperationException();
+    }
 
     /**
      * Get the value of key from a single session.

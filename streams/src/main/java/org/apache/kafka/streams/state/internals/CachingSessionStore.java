@@ -151,17 +151,42 @@ class CachingSessionStore
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime) :
             context.cache().range(cacheName,
-                        cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
-                        cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
+                cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
+                cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
             );
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
-                                                                                               earliestSessionEndTime,
-                                                                                               latestSessionStartTime);
+            earliestSessionEndTime,
+            latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
-                                                                             key,
-                                                                             earliestSessionEndTime,
-                                                                             latestSessionStartTime);
+            key,
+            earliestSessionEndTime,
+            latestSessionStartTime);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
+            new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
+        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes key,
+                                                                          final long earliestSessionEndTime,
+                                                                          final long latestSessionStartTime) {
+        validateStoreOpen();
+
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
+            new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime) :
+            context.cache().reverseRange(cacheName,
+                cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
+                cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
+            );
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().backwardFindSessions(key,
+            earliestSessionEndTime,
+            latestSessionStartTime);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
+            key,
+            earliestSessionEndTime,
+            latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction);
@@ -189,9 +214,39 @@ class CachingSessionStore
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
         );
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
-                                                                             keyTo,
-                                                                             earliestSessionEndTime,
-                                                                             latestSessionStartTime);
+            keyTo,
+            earliestSessionEndTime,
+            latestSessionStartTime);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
+            new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
+        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
+                                                                          final Bytes keyTo,
+                                                                          final long earliestSessionEndTime,
+                                                                          final long latestSessionStartTime) {
+        if (keyFrom.compareTo(keyTo) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
+
+        validateStoreOpen();
+
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().backwardFindSessions(
+            keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
+        );
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
+            keyTo,
+            earliestSessionEndTime,
+            latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction);
@@ -222,11 +277,25 @@ class CachingSessionStore
     }
 
     @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
+        return backwardFindSessions(key, 0, Long.MAX_VALUE);
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
                                                            final Bytes to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
         return findSessions(from, to, 0, Long.MAX_VALUE);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
+                                                                   final Bytes to) {
+        Objects.requireNonNull(from, "from cannot be null");
+        Objects.requireNonNull(to, "to cannot be null");
+        return backwardFindSessions(from, to, 0, Long.MAX_VALUE);
     }
 
     public void flush() {
@@ -242,7 +311,7 @@ class CachingSessionStore
         );
         if (!suppressed.isEmpty()) {
             throwSuppressed("Caught an exception while closing caching session store for store " + name(),
-                            suppressed);
+                suppressed);
         }
     }
 

@@ -42,6 +42,10 @@ public interface ReadOnlySessionStore<K, AGG> {
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K key);
 
+    default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K key) {
+        throw new UnsupportedOperationException();
+    }
+
     /**
      * Retrieve all aggregated sessions for the given range of keys.
      * This iterator must be closed after use.
@@ -55,4 +59,8 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @throws   NullPointerException If null is used for any of the keys.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K from, final K to);
+
+    default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K from, final K to) {
+        throw new UnsupportedOperationException();
+    }
 }
