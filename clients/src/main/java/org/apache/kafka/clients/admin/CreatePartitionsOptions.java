@@ -30,6 +30,7 @@ import java.util.Map;
 public class CreatePartitionsOptions extends AbstractOptions<CreatePartitionsOptions> {
 
     private boolean validateOnly = false;
+    private boolean retryQuotaViolatedException = true;
 
     public CreatePartitionsOptions() {
     }
@@ -47,5 +48,22 @@ public class CreatePartitionsOptions extends AbstractOptions<CreatePartitionsOpt
     public CreatePartitionsOptions validateOnly(boolean validateOnly) {
         this.validateOnly = validateOnly;
         return this;
+    }
+
+    /**
+     * Set the retry QuotaViolatedException to indicate whether QuotaViolatedException
+     * should be automatically retried or not.
+     */
+    public CreatePartitionsOptions retryQuotaViolatedException(boolean retryQuotaViolatedException) {
+        this.retryQuotaViolatedException = retryQuotaViolatedException;
+        return this;
+    }
+
+    /**
+     * Returns true if the QuotaViolatedException should be automatically retried
+     * by the AdminClient.
+     */
+    public boolean shouldRetryQuotaViolatedException() {
+        return retryQuotaViolatedException;
     }
 }

@@ -28,7 +28,7 @@
   "fields": [
     { "name": "Topics", "type": "[]CreatePartitionsTopic", "versions": "0+",
       "about": "Each topic that we want to create new partitions inside.",  "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Count", "type": "int32", "versions": "0+",
         "about": "The new partition count." },

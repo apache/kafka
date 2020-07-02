@@ -485,7 +485,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val data = new CreatePartitionsRequestData()
             .setTimeoutMs(0)
             .setValidateOnly(false)
-            .setTopics(Collections.singletonList(new CreatePartitionsTopic().setName("topic-2").setCount(1)))
+          data.topics().add(new CreatePartitionsTopic().setName("topic-2").setCount(1))
           new CreatePartitionsRequest.Builder(data)
 
         case ApiKeys.CREATE_DELEGATION_TOKEN =>

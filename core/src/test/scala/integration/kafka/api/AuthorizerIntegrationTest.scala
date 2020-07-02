@@ -410,7 +410,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val data = new CreatePartitionsRequestData()
       .setTimeoutMs(10000)
       .setValidateOnly(true)
-      .setTopics(Collections.singletonList(partitionTopic))
+    data.topics().add(partitionTopic)
     new CreatePartitionsRequest.Builder(data).build(0.toShort)
   }
 

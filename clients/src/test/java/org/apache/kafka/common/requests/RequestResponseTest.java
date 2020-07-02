@@ -58,6 +58,7 @@ import org.apache.kafka.common.message.CreateDelegationTokenResponseData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopicCollection;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -2013,7 +2014,7 @@ public class RequestResponseTest {
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequest(int version) {
-        List<CreatePartitionsTopic> topics = new LinkedList<>();
+        CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection();
         topics.add(new CreatePartitionsTopic()
                 .setName("my_topic")
                 .setCount(3)
@@ -2032,7 +2033,7 @@ public class RequestResponseTest {
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments(int version) {
-        List<CreatePartitionsTopic> topics = new LinkedList<>();
+        CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection();
         CreatePartitionsAssignment myTopicAssignment = new CreatePartitionsAssignment()
                 .setBrokerIds(Collections.singletonList(2));
         topics.add(new CreatePartitionsTopic()
