@@ -25,7 +25,7 @@ class KafkaConfig(dict):
         config_property.PORT: 9092,
         config_property.SOCKET_RECEIVE_BUFFER_BYTES: 65536,
         config_property.LOG_DIRS: "/mnt/kafka/kafka-data-logs-1,/mnt/kafka/kafka-data-logs-2",
-        config_property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: 2000
+        config_property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: 18000
     }
 
     def __init__(self, **kwargs):
