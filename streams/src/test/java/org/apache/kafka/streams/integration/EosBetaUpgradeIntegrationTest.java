@@ -83,6 +83,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.getStore;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -1071,9 +1072,12 @@ public class EosBetaUpgradeIntegrationTest {
         return expectedResult;
     }
 
-    private Set<Long> keysFromInstance(final KafkaStreams streams) {
-        final ReadOnlyKeyValueStore<Long, Long> store =
-            streams.store(StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore()));
+    private Set<Long> keysFromInstance(final KafkaStreams streams) throws Exception {
+        final ReadOnlyKeyValueStore<Long, Long> store = getStore(
+            MAX_WAIT_TIME_MS,
+            streams,
+            StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())
+        );
         final Set<Long> keys = new HashSet<>();
         try (final KeyValueIterator<Long, Long> it = store.all()) {
             while (it.hasNext()) {
