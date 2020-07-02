@@ -1,0 +1,14 @@
+# JMH version: 1.23
+# VM version: JDK 1.8.0_222, OpenJDK 64-Bit Server VM, 25.222-b10
+# VM invoker: /Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home/jre/bin/java
+# VM options: <none>
+# Warmup: 5 iterations, 10 s each
+# Measurement: 10 iterations, 10 s each
+# Timeout: 10 min per iteration
+# Threads: 1 thread, will synchronize iterations
+# Benchmark mode: Average time, time/op
+# Benchmark: kafka.coordinator.group.LoadGroupsAndOffsetsBenchmark.loadGroupsAndOffsets
+
+# Run progress: 0.00% complete, ETA 00:02:30
+# Fork: 1 of 1
+# Warmup Iteration   1: <failure: VM prematurely exited before JMH had finished with it, explicit System.exit was called?>

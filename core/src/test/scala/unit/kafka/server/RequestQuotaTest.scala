@@ -177,22 +177,16 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def throttleTimeMetricValueForQuotaType(clientId: String, quotaType: QuotaType): Double = {
-    val metricName = leaderNode.metrics.metricName("throttle-time",
-                                  quotaType.toString,
-                                  "",
-                                  "user", "",
-                                  "client-id", clientId)
+    val metricName = leaderNode.metrics.metricName("throttle-time", quotaType.toString,
+      "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).throttleTimeSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
 
   private def requestTimeMetricValue(clientId: String): Double = {
-    val metricName = leaderNode.metrics.metricName("request-time",
-                                  QuotaType.Request.toString,
-                                  "",
-                                  "user", "",
-                                  "client-id", clientId)
+    val metricName = leaderNode.metrics.metricName("request-time", QuotaType.Request.toString,
+      "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).quotaSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)

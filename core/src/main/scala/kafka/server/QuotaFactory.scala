@@ -20,17 +20,31 @@ import kafka.server.QuotaType._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.Sensor.QuotaEnforcementType
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.quota.ClientQuotaType
 
 object QuotaType  {
   case object Fetch extends QuotaType
   case object Produce extends QuotaType
   case object Request extends QuotaType
+  case object ControllerMutation extends QuotaType
   case object LeaderReplication extends QuotaType
   case object FollowerReplication extends QuotaType
   case object AlterLogDirsReplication extends QuotaType
+
+  def toClientQuotaType(quotaType: QuotaType): ClientQuotaType = {
+    quotaType match {
+      case QuotaType.Fetch => ClientQuotaType.FETCH
+      case QuotaType.Produce => ClientQuotaType.PRODUCE
+      case QuotaType.Request => ClientQuotaType.REQUEST
+      case QuotaType.ControllerMutation => ClientQuotaType.CONTROLLER_MUTATION
+      case _ => throw new IllegalArgumentException(s"Not a client quota type: $quotaType")
+    }
+  }
 }
+
 sealed trait QuotaType
 
 object QuotaFactory extends Logging {
@@ -44,6 +58,7 @@ object QuotaFactory extends Logging {
   case class QuotaManagers(fetch: ClientQuotaManager,
                            produce: ClientQuotaManager,
                            request: ClientRequestQuotaManager,
+                           controllerMutation: ControllerMutationQuotaManager,
                            leader: ReplicationQuotaManager,
                            follower: ReplicationQuotaManager,
                            alterLogDirs: ReplicationQuotaManager,
@@ -52,6 +67,7 @@ object QuotaFactory extends Logging {
       fetch.shutdown()
       produce.shutdown()
       request.shutdown()
+      controllerMutation.shutdown()
       clientQuotaCallback.foreach(_.close())
     }
   }
@@ -61,9 +77,13 @@ object QuotaFactory extends Logging {
     val clientQuotaCallback = Option(cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp,
       classOf[ClientQuotaCallback]))
     QuotaManagers(
-      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, threadNamePrefix, clientQuotaCallback),
-      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, threadNamePrefix, clientQuotaCallback),
+      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, QuotaEnforcementType.PERMISSIVE, time,
+        threadNamePrefix, clientQuotaCallback),
+      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, QuotaEnforcementType.PERMISSIVE, time,
+        threadNamePrefix, clientQuotaCallback),
       new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallback),
+      new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time,
+        threadNamePrefix, clientQuotaCallback),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, LeaderReplication, time),
       new ReplicationQuotaManager(replicationConfig(cfg), metrics, FollowerReplication, time),
       new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, AlterLogDirsReplication, time),
@@ -75,7 +95,7 @@ object QuotaFactory extends Logging {
     if (cfg.producerQuotaBytesPerSecondDefault != Long.MaxValue)
       warn(s"${KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
     ClientQuotaManagerConfig(
-      quotaBytesPerSecondDefault = cfg.producerQuotaBytesPerSecondDefault,
+      quotaDefault = cfg.producerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
@@ -85,7 +105,7 @@ object QuotaFactory extends Logging {
     if (cfg.consumerQuotaBytesPerSecondDefault != Long.MaxValue)
       warn(s"${KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp} has been deprecated in 0.11.0.0 and will be removed in a future release. Use dynamic quota defaults instead.")
     ClientQuotaManagerConfig(
-      quotaBytesPerSecondDefault = cfg.consumerQuotaBytesPerSecondDefault,
+      quotaDefault = cfg.consumerQuotaBytesPerSecondDefault,
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
     )
@@ -95,6 +115,13 @@ object QuotaFactory extends Logging {
     ClientQuotaManagerConfig(
       numQuotaSamples = cfg.numQuotaSamples,
       quotaWindowSizeSeconds = cfg.quotaWindowSizeSeconds
+    )
+  }
+
+  def clientControllerMutationConfig(cfg: KafkaConfig): ClientQuotaManagerConfig = {
+    ClientQuotaManagerConfig(
+      numQuotaSamples = cfg.numControllerQuotaSamples,
+      quotaWindowSizeSeconds = cfg.controllerQuotaWindowSizeSeconds
     )
   }
 
