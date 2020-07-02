@@ -63,7 +63,9 @@ public class MockInternalTopicManager extends InternalTopicManager {
     }
 
     @Override
-    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
+    protected Map<String, Integer> getNumPartitions(final Set<String> topics,
+                                                    final Set<String> tempUnknownTopics,
+                                                    final boolean hasRemainingRetries) {
         final Map<String, Integer> partitions = new HashMap<>();
         for (final String topic : topics) {
             partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());
