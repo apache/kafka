@@ -131,13 +131,13 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     testAclCli(adminArgs)
   }
 
-  private def createServer(commandConfig: File = null): Unit = {
+  private def createServer(commandConfig: Option[File] = None): Unit = {
     servers = Seq(TestUtils.createServer(KafkaConfig.fromProps(brokerProps)))
     val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
 
     var adminArgs = Array("--bootstrap-server", TestUtils.bootstrapServers(servers, listenerName))
-    if (commandConfig != null) {
-      adminArgs ++= Array("--command-config", commandConfig.getAbsolutePath)
+    if (commandConfig.isDefined) {
+      adminArgs ++= Array("--command-config", commandConfig.get.getAbsolutePath)
     }
     this.adminArgs = adminArgs
   }
@@ -154,8 +154,8 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
         val (addOut, addErr) = callMain(cmdArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
         assertOutputContains("Adding ACLs", resources, resourceCmd, addOut)
         assertOutputContains("Current ACLs", resources, resourceCmd, addOut)
-
         Assert.assertEquals("", addErr)
+
         for (resource <- resources) {
           withAuthorizer() { authorizer =>
             TestUtils.waitAndVerifyAcls(acls, authorizer, resource)
@@ -176,7 +176,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
       val resourceType = resource.resourceType.toString
       (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filter(!_.startsWith("--"))).foreach { name =>
         val expected = s"$prefix for resource `ResourcePattern(resourceType=$resourceType, name=$name, patternType=LITERAL)`:"
-        Assert.assertTrue(s"Substring ${expected} not in --list output:\n$output",
+        Assert.assertTrue(s"Substring ${expected} not in output:\n$output",
           output.contains(expected))
       }
     }
@@ -201,7 +201,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     pw.println("client.id=my-client")
     pw.close()
 
-    createServer(adminClientConfig)
+    createServer(Some(adminClientConfig))
 
     val appender = LogCaptureAppender.createAndRegister()
     val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
