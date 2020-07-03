@@ -174,6 +174,7 @@ public class StandbyTaskEOSIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void shouldWipeOutStandbyStateDirectoryIfCheckpointIsMissing() throws Exception {
         final String base = TestUtils.tempDirectory(appId).getPath();
 

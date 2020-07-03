@@ -372,7 +372,6 @@ public class StreamsUpgradeTest {
                 } catch (final BufferUnderflowException expectedWhenAllDataCopied) { }
 
                 out.flush();
-                out.close();
 
                 return ByteBuffer.wrap(baos.toByteArray());
             } catch (final IOException ex) {

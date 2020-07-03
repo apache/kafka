@@ -555,6 +555,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testInitializesAndDestroysMetricsReporters() {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
 

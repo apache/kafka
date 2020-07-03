@@ -356,7 +356,7 @@ public class AgentTest {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() throws IOException {
             Utils.delete(tempDir);
         }
     }
