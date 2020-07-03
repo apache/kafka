@@ -26,17 +26,16 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class MockDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
     public static AtomicInteger initCount = new AtomicInteger(0);
-    public static AtomicInteger closeCount = new AtomicInteger(0);
     public static AtomicReference<ClusterResource> clusterMeta = new AtomicReference<>();
     public static ClusterResource noClusterId = new ClusterResource("no_cluster_id");
     public static AtomicReference<ClusterResource> clusterIdBeforeDeserialize = new AtomicReference<>(noClusterId);
 
     public boolean isKey;
     public Map<String, ?> configs;
+    public boolean isClosed = false;
 
     public static void resetStaticVariables() {
         initCount = new AtomicInteger(0);
-        closeCount = new AtomicInteger(0);
         clusterMeta = new AtomicReference<>();
         clusterIdBeforeDeserialize = new AtomicReference<>(noClusterId);
     }
@@ -61,7 +60,7 @@ public class MockDeserializer implements ClusterResourceListener, Deserializer<b
 
     @Override
     public void close() {
-        closeCount.incrementAndGet();
+        isClosed = true;
     }
 
     @Override

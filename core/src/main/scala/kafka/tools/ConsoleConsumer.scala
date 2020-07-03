@@ -21,6 +21,7 @@ import java.io.PrintStream
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicReference
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Map, Properties, Random}
 
@@ -594,10 +595,20 @@ class DefaultMessageFormatter extends MessageFormatter {
     else
       None
   }
+
+  override def close(): Unit = {
+    val firstException = new AtomicReference[Throwable]()
+    Utils.closeAllQuietly(firstException, "close key/value deserializer",
+      () => keyDeserializer.foreach(_.close()),
+      () => valueDeserializer.foreach(_.close()),
+      () => headersDeserializer.foreach(_.close()))
+    if (firstException.get() != null) throw firstException.get()
+  }
 }
 
 class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
-  private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
+  // visible for testing
+  private[tools] val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
 
   override def configure(configs: Map[String, _]): Unit = defaultWriter.configure(configs)
 
@@ -608,6 +619,8 @@ class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
                   s"key:${if (key == null) "null" else new String(key, StandardCharsets.UTF_8)}, " +
                   s"value:${if (value == null) "null" else new String(value, StandardCharsets.UTF_8)}")
   }
+
+  override def close(): Unit = defaultWriter.close()
 }
 
 class NoOpMessageFormatter extends MessageFormatter {
