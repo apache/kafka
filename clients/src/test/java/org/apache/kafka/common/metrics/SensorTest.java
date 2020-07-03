@@ -22,6 +22,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.TokenBucket;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
@@ -275,6 +276,74 @@ public class SensorTest {
         assertThrows(QuotaViolationException.class,
             () -> sensor.record(90, time.milliseconds(), QuotaEnforcementType.PERMISSIVE));
         assertEquals(27, rateMetric.measurableValue(time.milliseconds()), 0.1);
+
+        metrics.close();
+    }
+
+    @Test
+    public void testStrictQuotaEnforcementWithDefaultRate() {
+        final Time time = new MockTime(0, 0, 0);
+        final Metrics metrics = new Metrics(time);
+        final Sensor sensor = metrics.sensor("sensor", new MetricConfig()
+            .quota(Quota.upperBound(2))
+            .timeWindow(1, TimeUnit.SECONDS)
+            .samples(11));
+        final MetricName metricName = metrics.metricName("rate", "test-group");
+        assertTrue(sensor.add(metricName, new Rate()));
+        final KafkaMetric rateMetric = metrics.metric(metricName);
+
+        // Recording a first value at T+0 to bring the avg rate to 3 which is already
+        // above the quota.
+        sensor.record(30, time.milliseconds(), QuotaEnforcementType.STRICT);
+        assertEquals(3, rateMetric.measurableValue(time.milliseconds()), 0.1);
+
+        // Theoretically, we should wait 5s to bring back the avg rate to the define quota:
+        // ((30 / 10) - 2) / 2 * 10 = 5s
+        time.sleep(5000);
+
+        // But, recording a second value is rejected because the avr rate is still equal
+        // to 3 after 5s.
+        assertThrows(QuotaViolationException.class,
+            () -> sensor.record(30, time.milliseconds(), QuotaEnforcementType.STRICT));
+        assertEquals(3, rateMetric.measurableValue(time.milliseconds()), 0.1);
+
+        metrics.close();
+    }
+
+    @Test
+    public void testStrictQuotaEnforcementWithTokenBucketBasedRate() {
+        final Time time = new MockTime(0, 0, 0);
+        final Metrics metrics = new Metrics(time);
+        final Sensor sensor = metrics.sensor("sensor", new MetricConfig()
+            .quota(Quota.upperBound(2))
+            .timeWindow(1, TimeUnit.SECONDS)
+            .samples(11));
+        final MetricName metricName = metrics.metricName("rate", "test-group");
+        assertTrue(sensor.add(metricName, new Rate(new TokenBucket())));
+        final KafkaMetric rateMetric = metrics.metric(metricName);
+
+        // Recording a first value at T+0 to bring the avg rate to 3 which is already
+        // above the quota.
+        sensor.record(30, time.milliseconds(), QuotaEnforcementType.STRICT);
+        assertEquals(3, rateMetric.measurableValue(time.milliseconds()), 0.1);
+
+        // Theoretically, we should wait 5s to bring back the avg rate to the define quota:
+        // (3 - 2) / 2 * 10 = 5s
+        time.sleep(5000);
+
+        // Unlike the default rate based on a windowed sum, it works as expected.
+        sensor.record(30, time.milliseconds(), QuotaEnforcementType.STRICT);
+        assertEquals(5, rateMetric.measurableValue(time.milliseconds()), 0.1);
+
+        // Theoretically, we should wait 5s to bring back the avg rate to the define quota:
+        // (5 - 2) / 2 * 10 = 15s. In practice, the first sample will be dropped once we
+        // pass nb samples * time window.
+        time.sleep(6000);
+        assertEquals(1.8, rateMetric.measurableValue(time.milliseconds()), 0.1);
+
+        // The rate drops to zero after 9s.
+        time.sleep(9000);
+        assertEquals(0, rateMetric.measurableValue(time.milliseconds()), 0.1);
 
         metrics.close();
     }
