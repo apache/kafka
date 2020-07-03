@@ -159,9 +159,9 @@ public class ProducerConfig extends AbstractConfig {
     private static final String MAX_BLOCK_MS_DOC = "The configuration controls how long the <code>KafkaProducer</code>'s <code>send()</code>, <code>partitionsFor()</code>, "
                                                     + "<code>initTransactions()</code>, <code>commitTransaction()</code> "
                                                     + "and <code>abortTransaction()</code> methods will block. "
-                                                    + "<code>send()</code> can be blocked either because the buffer is full or metadata is unavailable. "
-                                                    + "Blocking in the user-supplied serializers or partitioner will not be counted against this timeout. "
-                                                    + "<code>partitionsFor()</code> can be blocked because metadata is unavailable. "
+                                                    + "For <code>send()</code> this timeout bounds the total time waiting for both metadata fetch and buffer allocation "
+                                                    + "(blocking in the user-supplied serializers or partitioner is not counted against this timeout). "
+                                                    + "For <code>partitionsFor()</code> this timeout bounds the time spent waiting for metadata if it is unavailable. "
                                                     + "The transaction-related methods always block, but may timeout if "
                                                     + "the transaction coordinator could not be discovered or did not respond within the timeout.";
 
