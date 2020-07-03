@@ -43,6 +43,31 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(K key, long earliestSessionEndTime, long latestSessionStartTime) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFindSessions(K key, long earliestSessionEndTime, long latestSessionStartTime) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(K keyFrom, K keyTo, long earliestSessionEndTime, long latestSessionStartTime) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFindSessions(K keyFrom, K keyTo, long earliestSessionEndTime, long latestSessionStartTime) {
+        return null;
+    }
+
+    @Override
+    public V fetchSession(K key, long startTime, long endTime) {
+        return null;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         if (!open) {
             throw new InvalidStateStoreException("not open");
@@ -51,6 +76,17 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
             return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
         }
         return new KeyValueIteratorStub<>(sessions.get(key).iterator());
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(K key) {
+        if (!open) {
+            throw new InvalidStateStoreException("not open");
+        }
+        if (!sessions.containsKey(key)) {
+            return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
+        }
+        return new KeyValueIteratorStub<>(sessions.descendingMap().get(key).iterator());
     }
 
     @Override
@@ -82,9 +118,13 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
                 public KeyValue<Windowed<K>, V> next() {
                     return it.next();
                 }
-
             }
         );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(K from, K to) {
+        return null;
     }
 
     @Override
