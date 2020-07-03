@@ -24,7 +24,7 @@ import kafka.common.MessageFormatter
 import kafka.tools.ConsoleConsumer.ConsumerWrapper
 import kafka.utils.{Exit, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Node, PartitionInfo, TopicPartition}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.test.MockDeserializer
 import org.mockito.Mockito._
@@ -145,7 +145,7 @@ class ConsoleConsumerTest {
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(0, config.partitionArg.get)
-    assertEquals(3, config.offsetArg)
+    assertEquals("3", config.offsetArg)
     assertEquals(false, config.fromBeginning)
 
   }
@@ -186,7 +186,7 @@ class ConsoleConsumerTest {
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
     assertEquals(0, config.partitionArg.get)
-    assertEquals(-1, config.offsetArg)
+    assertEquals("latest", config.offsetArg)
     assertEquals(false, config.fromBeginning)
     assertEquals(false, config.formatter.asInstanceOf[DefaultMessageFormatter].printValue)
   }
@@ -444,7 +444,7 @@ class ConsoleConsumerTest {
     var config = new ConsoleConsumer.ConsumerConfig(args)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
-    assertEquals(-2, config.offsetArg)
+    assertEquals("earliest", config.offsetArg)
     assertEquals(true, config.fromBeginning)
 
     // Start from latest
@@ -457,7 +457,7 @@ class ConsoleConsumerTest {
     config = new ConsoleConsumer.ConsumerConfig(args)
     assertEquals("localhost:9092", config.bootstrapServer)
     assertEquals("test", config.topicArg)
-    assertEquals(-1, config.offsetArg)
+    assertEquals("latest", config.offsetArg)
     assertEquals(false, config.fromBeginning)
   }
 
@@ -494,5 +494,57 @@ class ConsoleConsumerTest {
     } finally {
       Exit.resetExitProcedure()
     }
+  }
+
+  @Test
+  def testReadLastNMessages(): Unit = {
+    val topic = "test"
+    val tp1 = new TopicPartition(topic, 0)
+    val startOffset: java.lang.Long = 0L
+    val totalMessages: java.lang.Long = 10L
+    val lastN = -3
+
+    val mockConsumer = new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.EARLIEST)
+    val partitionInfo = new PartitionInfo(topic, 0, null, new Array[Node](0), new Array[Node](0))
+
+    mockConsumer.updatePartitions(topic, List(partitionInfo).asJava)
+    mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset).asJava)
+    mockConsumer.updateEndOffsets(Map(tp1 -> totalMessages).asJava)
+
+    val consumer = new ConsumerWrapper(Some(topic), Some(0), Some(lastN.toString), None, mockConsumer)
+
+    0 until totalMessages.intValue foreach { i =>
+      mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, 0, i, "key".getBytes, "value".getBytes))
+    }
+
+    val formatter = mock(classOf[MessageFormatter])
+    ConsoleConsumer.process(-1, formatter, consumer, System.out, skipMessageOnError = false)
+    verify(formatter, times(Math.abs(lastN))).writeTo(any(), any())
+  }
+
+  @Test
+  def testLastNExceedingTotalMessageCount(): Unit = {
+    val topic = "test"
+    val tp1 = new TopicPartition(topic, 0)
+    val startOffset: java.lang.Long = 0L
+    val totalMessages: java.lang.Long = 10L
+    val lastN = Long.MinValue
+
+    val mockConsumer = new MockConsumer[Array[Byte], Array[Byte]](OffsetResetStrategy.EARLIEST)
+    val partitionInfo = new PartitionInfo(topic, 0, null, new Array[Node](0), new Array[Node](0))
+
+    mockConsumer.updatePartitions(topic, List(partitionInfo).asJava)
+    mockConsumer.updateBeginningOffsets(Map(tp1 -> startOffset).asJava)
+    mockConsumer.updateEndOffsets(Map(tp1 -> totalMessages).asJava)
+
+    val consumer = new ConsumerWrapper(Some(topic), Some(0), Some(lastN.toString), None, mockConsumer)
+
+    0 until totalMessages.intValue foreach { i =>
+      mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, 0, i, "key".getBytes, "value".getBytes))
+    }
+
+    val formatter = mock(classOf[MessageFormatter])
+    ConsoleConsumer.process(-1, formatter, consumer, System.out, skipMessageOnError = false)
+    verify(formatter, times(totalMessages.toInt)).writeTo(any(), any())
   }
 }
