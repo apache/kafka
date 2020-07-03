@@ -48,6 +48,7 @@
   <allow pkg="org.apache.kafka.common.memory" />
 
   <subpackage name="common">
+    <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
     <allow pkg="org.apache.kafka.common.annotation" />
