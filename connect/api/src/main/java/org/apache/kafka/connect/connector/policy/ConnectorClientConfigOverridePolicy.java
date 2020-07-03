@@ -28,6 +28,7 @@ import java.util.List;
  * <p>Common use cases are ability to provide principal per connector, <code>sasl.jaas.config</code>
  * and/or enforcing that the producer/consumer configurations for optimizations are within acceptable ranges.
  */
+@SuppressWarnings("try")
 public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoCloseable {
 
 

@@ -27,6 +27,7 @@ import java.util.Map;
  * Disallow any client configuration to be overridden via the connector configs by setting {@code connector.client.config.override.policy} to {@code None}.
  * This is the default behavior.
  */
+@SuppressWarnings("try")
 public class NoneConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
     private static final Logger log = LoggerFactory.getLogger(NoneConnectorClientConfigOverridePolicy.class);
 

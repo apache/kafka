@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@SuppressWarnings("try")
 public abstract class AbstractConnectorClientConfigOverridePolicy implements ConnectorClientConfigOverridePolicy {
 
     @Override

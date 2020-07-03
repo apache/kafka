@@ -253,7 +253,8 @@ public class Worker {
             TargetState initialState,
             Callback<TargetState> onConnectorStateChange
     ) {
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             if (connectors.containsKey(connName)) {
                 onConnectorStateChange.onCompletion(
                         new ConnectException("Connector with name " + connName + " already exists"),
@@ -309,6 +310,8 @@ public class Worker {
 
             log.info("Finished creating connector {}", connName);
             workerMetricsGroup.recordConnectorStartupSuccess();
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -385,7 +388,8 @@ public class Worker {
      * @param connName the connector name.
      */
     private void stopConnector(String connName) {
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             WorkerConnector workerConnector = connectors.get(connName);
             log.info("Stopping connector {}", connName);
 
@@ -401,6 +405,8 @@ public class Worker {
             } finally {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -412,7 +418,8 @@ public class Worker {
     }
 
     private void awaitStopConnector(String connName, long timeout) {
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             WorkerConnector connector = connectors.remove(connName);
             if (connector == null) {
                 log.warn("Ignoring await stop request for non-present connector {}", connName);
@@ -429,6 +436,8 @@ public class Worker {
             } else {
                 log.debug("Graceful stop of connector {} succeeded.", connName);
             }
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -865,8 +874,8 @@ public class Worker {
     }
 
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
-
-        try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
+        LoggingContext loggingContext = LoggingContext.forTask(taskId);
+        try {
             WorkerTask task = tasks.remove(taskId);
             if (task == null) {
                 log.warn("Ignoring await stop request for non-present task {}", taskId);
@@ -885,6 +894,8 @@ public class Worker {
             } finally {
                 connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             }
+        } finally {
+            loggingContext.close();
         }
     }
 

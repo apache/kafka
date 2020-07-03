@@ -193,9 +193,12 @@ class WorkerSinkTask extends WorkerTask {
         initializeAndStart();
         // Make sure any uncommitted data has been committed and the task has
         // a chance to clean up its state
-        try (UncheckedCloseable suppressible = this::closePartitions) {
+        UncheckedCloseable suppressible = this::closePartitions;
+        try {
             while (!isStopping())
                 iteration();
+        } finally {
+            suppressible.close();
         }
     }
 
