@@ -396,7 +396,7 @@ class LogManager(logDirs: Seq[File],
       threadPools.foreach(_.shutdown())
     }
 
-    info(s"Loaded $numTotalLogs in ${time.hiResClockMs() - startMs}ms.")
+    info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
   }
 
   /**
