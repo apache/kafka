@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -67,8 +68,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
     protected static final String SYNC_TOPIC_ACLS = "sync.topic.acls";
     protected static final String EMIT_HEARTBEATS = "emit.heartbeats";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
-    protected static final String AUTH_OFFSET_RESET = "auto.offset.reset";
-    protected static final String ENABLE_AUTO_COMMIT = "enable.auto.commit";
 
     public static final String ENABLED = "enabled";
     private static final String ENABLED_DOC = "Whether to replicate source->target.";
@@ -124,10 +123,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String CONSUMER_POLL_TIMEOUT_MILLIS = "consumer.poll.timeout.ms";
     private static final String CONSUMER_POLL_TIMEOUT_MILLIS_DOC = "Timeout when polling source cluster.";
     public static final long CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT = 1000L;
-
-    public static final String CONSUMER_AUTO_OFFSET_RESET = "consumer.auto.offset.reset";
-    private static final String CONSUMER_AUTO_OFFSET_RESET_DOC = "Consumer Auto offset reset, default to earliest unless specified.";
-    public static final String CONSUMER_AUTO_OFFSET_RESET_DEFAULT = "earliest";
 
     public static final String ADMIN_TASK_TIMEOUT_MILLIS = "admin.timeout.ms";
     private static final String ADMIN_TASK_TIMEOUT_MILLIS_DOC = "Timeout for administrative tasks, e.g. detecting new topics.";
@@ -235,8 +230,8 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
-        props.put(ENABLE_AUTO_COMMIT, "false");
-        props.put(AUTH_OFFSET_RESET, CONSUMER_AUTO_OFFSET_RESET);
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
 
@@ -470,12 +465,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
                     CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT,
                     ConfigDef.Importance.LOW,
                     CONSUMER_POLL_TIMEOUT_MILLIS_DOC)
-            .define(
-                    CONSUMER_AUTO_OFFSET_RESET,
-                    ConfigDef.Type.STRING,
-                    CONSUMER_AUTO_OFFSET_RESET_DEFAULT,
-                    ConfigDef.Importance.LOW,
-                    CONSUMER_AUTO_OFFSET_RESET_DOC)
             .define(
                     ADMIN_TASK_TIMEOUT_MILLIS,
                     ConfigDef.Type.LONG,
