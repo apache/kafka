@@ -433,11 +433,10 @@ class ConsoleConsumerTest {
     assertEquals("abc", formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].configs.get("my-props"))
     assertTrue(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isKey)
 
-    assertFalse(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isClosed)
-    assertFalse(formatter.valueDeserializer.get.asInstanceOf[MockDeserializer].isClosed)
+    val initialCount = MockDeserializer.closeCount.get()
     formatter.close()
-    assertTrue(formatter.keyDeserializer.get.asInstanceOf[MockDeserializer].isClosed)
-    assertTrue(formatter.valueDeserializer.get.asInstanceOf[MockDeserializer].isClosed)
+    // 1 (key deserializer) + 1 (value deserializer)
+    assertEquals(2 + initialCount, MockDeserializer.closeCount.get())
   }
 
   @Test
@@ -455,11 +454,10 @@ class ConsoleConsumerTest {
     assertTrue(config.formatter.isInstanceOf[LoggingMessageFormatter])
     val formatter = config.formatter.asInstanceOf[LoggingMessageFormatter]
 
-    assertFalse(formatter.defaultWriter.keyDeserializer.get.asInstanceOf[MockDeserializer].isClosed)
-    assertFalse(formatter.defaultWriter.valueDeserializer.get.asInstanceOf[MockDeserializer].isClosed)
+    val initialCount = MockDeserializer.closeCount.get()
     formatter.close()
-    assertTrue(formatter.defaultWriter.keyDeserializer.get.asInstanceOf[MockDeserializer].isClosed)
-    assertTrue(formatter.defaultWriter.valueDeserializer.get.asInstanceOf[MockDeserializer].isClosed)
+    // 1 (key deserializer) + 1 (value deserializer)
+    assertEquals(2 + initialCount, MockDeserializer.closeCount.get())
   }
 
   @Test

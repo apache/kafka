@@ -607,8 +607,7 @@ class DefaultMessageFormatter extends MessageFormatter {
 }
 
 class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
-  // visible for testing
-  private[tools] val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
+  private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
 
   override def configure(configs: Map[String, _]): Unit = defaultWriter.configure(configs)
 
