@@ -71,7 +71,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  *    StreamsConfig config = new StreamsConfig(props);
  *
  *    KStreamBuilder builder = new KStreamBuilder();
- *    builder.from("my-input-topic").mapValue(value -&gt; value.length().toString()).to("my-output-topic");
+ *    builder.stream("my-input-topic").mapValues(value -&gt; value.length().toString()).to("my-output-topic");
  *
  *    KafkaStreams streams = new KafkaStreams(builder, config);
  *    streams.start();
