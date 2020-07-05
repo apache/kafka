@@ -74,7 +74,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1219,9 +1218,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
-            // poll for new data until the timeout expires
-            Random random = new Random(timer.currentTimeMs());
-            int retries = 0;
             do {
                 client.maybeTriggerWakeup();
 
@@ -1229,15 +1225,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // try to update assignment metadata BUT do not need to block on the timer if we still have
                     // some assigned partitions, since even if we are 1) in the middle of a rebalance
                     // or 2) have partitions with unknown starting positions we may still want to return some data
-                    // as long as there are some partitions fetchable; NOTE we always use a timer with 0ms
-                    // to never block on completing the rebalance procedure if there's any
+                    // as long as there are some partitions fetchable; NOTE we do not block on rebalancing to complete
+                    // if there's one pending if we still have some fetchable partitions
                     if (subscriptions.fetchablePartitions(tp -> true).isEmpty()) {
                         updateAssignmentMetadataIfNeeded(timer);
                     } else {
-                        final long updateMetadataTimeout = Math.min(10L * random.nextInt(2 << retries), timer.remainingMs());
-                        final Timer updateMetadataTimer = time.timer(updateMetadataTimeout);
-                        updateAssignmentMetadataIfNeeded(updateMetadataTimer);
-                        timer.update(updateMetadataTimer.currentTimeMs());
+                        updateAssignmentMetadataIfNeeded(timer, false);
                     }
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
@@ -1259,8 +1252,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
-
-                retries++;
             } while (timer.notExpired());
 
             return ConsumerRecords.empty();
@@ -1270,11 +1261,19 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    private boolean coordinatorNeededForAssignment() {
+        return coordinator != null && coordinator.coordinatorUnknown();
+    }
+
     /**
      * Visible for testing
      */
     boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
-        if (coordinator != null && !coordinator.poll(timer)) {
+        return updateAssignmentMetadataIfNeeded(timer, true);
+    }
+
+    boolean updateAssignmentMetadataIfNeeded(final Timer timer, final boolean waitForJoinGroup) {
+        if (coordinator != null && !coordinator.poll(timer, waitForJoinGroup)) {
             return false;
         }
 

@@ -341,14 +341,20 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+    boolean ensureActiveGroup(final Timer timer) {
+        return ensureActiveGroup(timer, true);
+    }
+
     /**
      * Ensure the group is active (i.e., joined and synced)
      *
      * @param timer Timer bounding how long this method can block
+     * @param waitUntilComplete Flag indicating if we should wait until complete or timer expired;
+     *                          otherwise it is tried with best-effort only
      * @throws KafkaException if the callback throws exception
      * @return true iff the group is active
      */
-    boolean ensureActiveGroup(final Timer timer) {
+    boolean ensureActiveGroup(final Timer timer, final boolean waitUntilComplete) {
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
         if (!ensureCoordinatorReady(timer)) {
@@ -356,7 +362,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         startHeartbeatThreadIfNeeded();
-        return joinGroupIfNeeded(timer);
+        return joinGroupIfNeeded(timer, waitUntilComplete);
     }
 
     private synchronized void startHeartbeatThreadIfNeeded() {
@@ -388,16 +394,22 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
+    boolean joinGroupIfNeeded(final Timer timer) {
+        return joinGroupIfNeeded(timer, true);
+    }
+
     /**
      * Joins the group without starting the heartbeat thread.
      *
      * Visible for testing.
      *
      * @param timer Timer bounding how long this method can block
+     * @param waitUntilComplete Flag indicating if we should wait until complete or timer expired;
+     *                          otherwise it is tried with best-effort only
      * @throws KafkaException if the callback throws exception
      * @return true iff the operation succeeded
      */
-    boolean joinGroupIfNeeded(final Timer timer) {
+    boolean joinGroupIfNeeded(final Timer timer, boolean waitUntilComplete) {
         while (rejoinNeededOrPending()) {
             if (!ensureCoordinatorReady(timer)) {
                 return false;
@@ -416,7 +428,13 @@ public abstract class AbstractCoordinator implements Closeable {
             }
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
-            client.poll(future, timer);
+
+            // if the flat is not set to true; we only try once and not block on the join result
+            if (waitUntilComplete)
+                client.poll(future, timer);
+            else
+                client.poll(timer);
+
             if (!future.isDone()) {
                 // we ran out of time
                 return false;
