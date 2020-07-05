@@ -101,7 +101,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  jmx_attributes=None, zk_connect_timeout=18000, zk_session_timeout=18000, server_prop_overides=None, zk_chroot=None,
                  zk_client_secure=False,
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
-                 extra_kafka_opts="", tls_version=None):
+                 extra_kafka_opts="", tls_version=None, transaction_timeout=10000):
         """
         :param context: test context
         :param ZookeeperService zk:

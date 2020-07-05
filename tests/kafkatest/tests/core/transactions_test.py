@@ -53,7 +53,11 @@ class TransactionsTest(Test):
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context,
                                   num_nodes=self.num_brokers,
-                                  zk=self.zk)
+                                  zk=self.zk,
+                                  # Reducing timeout of transaction can quickly cleanup the unstable offsets.
+                                  # IN hard_bounce mode, transaction is broke ungracefully. Hence, it produces unstable
+                                  # offsets which obstructs TransactionalMessageCopier from receiving position of group.
+                                  transaction_timeout=2000)
 
     def setUp(self):
         self.zk.start()
