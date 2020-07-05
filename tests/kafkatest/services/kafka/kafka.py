@@ -185,7 +185,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         for node in self.nodes:
             node.version = version
-            node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
+            node.config = KafkaConfig(**{
+                config_property.BROKER_ID: self.idx(node),
+                config_property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: zk_connect_timeout,
+                config_property.ZOOKEEPER_SESSION_TIMEOUT_MS: zk_session_timeout
+            })
 
     def set_version(self, version):
         for node in self.nodes:
