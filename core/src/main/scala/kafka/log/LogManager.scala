@@ -124,6 +124,7 @@ class LogManager(logDirs: Seq[File],
       null
 
   newGauge("OfflineLogDirectoryCount", () => offlineLogDirs.size)
+  newGauge("ProducersCount", () => currentLogs.map(_._2.producersCount).sum)
 
   for (dir <- logDirs) {
     newGauge("LogDirectoryOffline",
