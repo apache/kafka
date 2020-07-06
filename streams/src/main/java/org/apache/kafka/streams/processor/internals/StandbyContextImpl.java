@@ -29,7 +29,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
 
-class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
