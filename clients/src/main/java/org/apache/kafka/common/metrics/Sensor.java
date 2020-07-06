@@ -206,6 +206,7 @@ public final class Sensor {
      * @param checkQuotas Indicate if quota must be enforced or not
      * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum
      *         bound
+     * @deprecated Since 2.7. Use {@link #record(double, long, QuotaEnforcementType)}.
      */
     @Deprecated
     public void record(double value, long timeMs, boolean checkQuotas) {

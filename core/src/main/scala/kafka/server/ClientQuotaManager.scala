@@ -27,6 +27,7 @@ import kafka.utils.{Logging, ShutdownableThread}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.Sensor.QuotaEnforcementType
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
@@ -273,7 +274,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     */
   def unrecordQuotaSensor(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
     val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
-    clientSensors.quotaSensor.record(value * (-1), timeMs, false)
+    clientSensors.quotaSensor.record(value * (-1), timeMs, QuotaEnforcementType.NONE)
   }
 
   /**
@@ -300,7 +301,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * next request is processed.
    */
   def recordNoThrottle(clientSensors: ClientSensors, value: Double): Unit = {
-    clientSensors.quotaSensor.record(value, time.milliseconds(), false)
+    clientSensors.quotaSensor.record(value, time.milliseconds(), QuotaEnforcementType.NONE)
   }
 
   /**
