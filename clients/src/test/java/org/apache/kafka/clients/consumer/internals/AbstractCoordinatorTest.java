@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -257,6 +258,22 @@ public class AbstractCoordinatorTest {
         long endTime = mockTime.milliseconds();
 
         assertTrue(endTime - initialTime >= RETRY_BACKOFF_MS);
+    }
+
+    @Test
+    public void testGroupAuthorizationFailure() {
+        setupCoordinator();
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.GROUP_AUTHORIZATION_FAILED));
+
+        long initialTimeMs = mockTime.milliseconds();
+        assertThrows(GroupAuthorizationException.class, () ->
+                coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE)));
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
+        long timeTakenMs = mockTime.milliseconds() - initialTimeMs;
+        assertTrue("Back off not applied: " + timeTakenMs, timeTakenMs >= RETRY_BACKOFF_MS);
     }
 
     @Test

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -252,8 +253,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 if (future.isRetriable()) {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
                     client.awaitMetadataUpdate(timer);
-                } else
-                    throw future.exception();
+                } else {
+                    findCoordinatorException = null;
+                    handleFailure(future, timer);
+                }
             } else if (coordinator != null && client.isUnavailable(coordinator)) {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
@@ -472,14 +475,20 @@ public abstract class AbstractCoordinator implements Closeable {
                     exception instanceof IllegalGenerationException ||
                     exception instanceof MemberIdRequiredException)
                     continue;
-                else if (!future.isRetriable())
-                    throw exception;
+                else
+                    handleFailure(future, timer);
 
                 resetStateAndRejoin();
-                timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
         return true;
+    }
+
+    protected void handleFailure(RequestFuture<?> future, Timer timer) {
+        if (future.isRetriable() || future.exception() instanceof AuthorizationException)
+            timer.sleep(rebalanceConfig.retryBackoffMs);
+        if (!future.isRetriable())
+            throw future.exception();
     }
 
     private synchronized void resetJoinGroupFuture() {
