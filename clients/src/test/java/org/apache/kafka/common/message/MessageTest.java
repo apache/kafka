@@ -238,7 +238,7 @@ public final class MessageTest {
                                        .setMembers(Collections.singletonList(baseMember))
                                        .setProtocolType("consumer");
         DescribeGroupsResponseData baseResponse = new DescribeGroupsResponseData()
-                                                  .setGroups(Collections.singletonList(baseGroup));
+                                                      .setGroups(Collections.singletonList(baseGroup));
         testAllMessageRoundTrips(baseResponse);
 
         testAllMessageRoundTripsFromVersion((short) 1, baseResponse.setThrottleTimeMs(10));
@@ -271,6 +271,29 @@ public final class MessageTest {
         expectedResponse.groups().get(0).members().get(0).setGroupInstanceId(null);
 
         testAllMessageRoundTripsBeforeVersion((short) 4, responseWithGroupInstanceId, expectedResponse);
+    }
+
+    @Test
+    public void testThrottleTimeIgnorableInDescribeGroupsResponse() throws Exception {
+        DescribeGroupsResponseData responseWithGroupInstanceId =
+            new DescribeGroupsResponseData()
+                .setGroups(Collections.singletonList(
+                    new DescribedGroup()
+                        .setGroupId("group")
+                        .setGroupState("Stable")
+                        .setErrorCode(Errors.NONE.code())
+                        .setMembers(Collections.singletonList(
+                            new DescribedGroupMember()
+                                .setMemberId(memberId)))
+                        .setProtocolType("consumer")
+                ))
+                .setThrottleTimeMs(10);
+
+        DescribeGroupsResponseData expectedResponse = responseWithGroupInstanceId.duplicate();
+        // Unset throttle time
+        expectedResponse.setThrottleTimeMs(0);
+
+        testAllMessageRoundTripsBeforeVersion((short) 1, responseWithGroupInstanceId, expectedResponse);
     }
 
     @Test
@@ -983,7 +1006,7 @@ public final class MessageTest {
 
     private void verifyWriteRaisesUve(short version,
                                       String problemText,
-                                     Message message) {
+                                      Message message) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         UnsupportedVersionException e =
             assertThrows(UnsupportedVersionException.class, () -> {
