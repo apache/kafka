@@ -23,7 +23,7 @@
   //
   // Starting in version 3, brokers can send authorized operations.
   //
-  // Starting in version 4, the response will include group.instance.id info for members.
+  // Starting in version 4, the response will optionally include group.instance.id info for members.
   //
   // Version 5 is the first flexible version.
   "validVersions": "0-5",
