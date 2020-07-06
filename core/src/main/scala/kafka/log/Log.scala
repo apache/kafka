@@ -279,8 +279,6 @@ class Log(@volatile private var _dir: File,
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
   locally {
-    val startMs = time.milliseconds
-
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
 
@@ -303,9 +301,6 @@ class Log(@volatile private var _dir: File,
     if (!producerStateManager.isEmpty)
       throw new IllegalStateException("Producer state must be empty during log initialization")
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
-
-    info(s"Completed load of log with ${segments.size} segments, log start offset $logStartOffset and " +
-      s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
   }
 
   def dir: File = _dir
