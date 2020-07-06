@@ -271,6 +271,17 @@ object ConfigCommand extends Config {
       println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
         s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
     }
+    props.forEach((config, value) => {
+      if (value.toString.contains(",")) {
+        val values = value.toString.split(",")
+        if (values.distinct.size != values.size) {
+          println(s"WARNING: The configuration $config=${value.toString} which contains duplicate items is specified. " +
+            "The value with duplicates removed will be applied.")
+          // Remove duplicates from the value
+          props.put(config, values.distinct.mkString(","))
+        }
+      }
+    })
     props
   }
 

@@ -548,8 +548,8 @@ object TopicCommand extends Logging {
     allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
   }
 
-
-  def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
+  // package level visibility for testing only
+  private[admin] def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
     val configsToBeAdded = opts.topicConfig.getOrElse(Collections.emptyList()).asScala.map(_.split("""\s*=\s*"""))
     require(configsToBeAdded.forall(config => config.length == 2),
       "Invalid topic config: all configs to be added must be in the format \"key=val\".")
@@ -560,6 +560,17 @@ object TopicCommand extends Logging {
       println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
         s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
     }
+    props.forEach((config, value) => {
+      if (value.toString.contains(",")) {
+        val values = value.toString.split(",")
+        if (values.distinct.size != values.size) {
+          println(s"WARNING: The configuration $config=${value.toString} which contains duplicate items is specified. " +
+            "The value with duplicates removed will be applied.")
+          // Remove duplicates from the value
+          props.put(config, values.distinct.mkString(","))
+        }
+      }
+    })
     props
   }
 
