@@ -95,8 +95,8 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.leaderStateOrThrow().updateLocalEndOffset(new LogOffsetMetadata(5L));
-        state.leaderStateOrThrow().updateEndOffset(1, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateLocalState(0, lastFetchTime -> { }, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateReplicaState(1, 0, lastFetchTime -> { }, new LogOffsetMetadata(5L));
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
         state.becomeFetchingFollower(2, 1);

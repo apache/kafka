@@ -20,14 +20,16 @@ import java.util.{Optional, OptionalLong}
 
 import kafka.log.{AppendOrigin, Log}
 import kafka.server.{FetchHighWatermark, FetchLogEnd}
-import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.raft
 import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, ReplicatedLog}
 
 import scala.compat.java8.OptionConverters._
 
-class KafkaMetadataLog(log: Log, maxFetchSizeInBytes: Int = 1024 * 1024) extends ReplicatedLog {
+class KafkaMetadataLog(log: Log,
+                       topicPartition: TopicPartition,
+                       maxFetchSizeInBytes: Int = 1024 * 1024) extends ReplicatedLog {
 
   override def read(startOffset: Long, endOffsetExclusive: OptionalLong): LogFetchInfo = {
     val isolation = if (endOffsetExclusive.isPresent)
@@ -120,8 +122,14 @@ class KafkaMetadataLog(log: Log, maxFetchSizeInBytes: Int = 1024 * 1024) extends
     }
   }
 
+  /**
+   * Return the topic partition associated with the log.
+   */
+  override def topicPartition(): TopicPartition = {
+    topicPartition
+  }
+
   override def close(): Unit = {
     log.close()
   }
-
 }

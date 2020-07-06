@@ -17,7 +17,6 @@
 package org.apache.kafka.raft;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,14 +25,18 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class LeaderState implements EpochState {
     private final int localId;
     private final int epoch;
     private final long epochStartOffset;
+
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
-    private final Map<Integer, ReplicaState> voterReplicaStates = new HashMap<>();
+    private final Map<Integer, VoterState> voterReplicaStates = new HashMap<>();
+    private final Map<Integer, ReplicaState> observerReplicaStates = new HashMap<>();
+    private static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
 
     protected LeaderState(int localId, int epoch, long epochStartOffset, Set<Integer> voters) {
         this.localId = localId;
@@ -42,7 +45,7 @@ public class LeaderState implements EpochState {
 
         for (int voterId : voters) {
             boolean hasEndorsedLeader = voterId == localId;
-            this.voterReplicaStates.put(voterId, new ReplicaState(voterId, hasEndorsedLeader));
+            this.voterReplicaStates.put(voterId, new VoterState(voterId, hasEndorsedLeader));
         }
     }
 
@@ -71,7 +74,7 @@ public class LeaderState implements EpochState {
 
     public Set<Integer> nonEndorsingFollowers() {
         Set<Integer> nonEndorsing = new HashSet<>();
-        for (ReplicaState state : voterReplicaStates.values()) {
+        for (VoterState state : voterReplicaStates.values()) {
             if (!state.hasEndorsedLeader)
                 nonEndorsing.add(state.nodeId);
         }
@@ -80,7 +83,8 @@ public class LeaderState implements EpochState {
 
     private boolean updateHighWatermark() {
         // Find the largest offset which is replicated to a majority of replicas (the leader counts)
-        List<ReplicaState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
+        List<VoterState> followersByDescendingFetchOffset = followersByDescendingFetchOffset();
+
         int indexOfHw = voterReplicaStates.size() / 2;
         Optional<LogOffsetMetadata> highWatermarkUpdateOpt = followersByDescendingFetchOffset.get(indexOfHw).endOffset;
 
@@ -106,77 +110,140 @@ public class LeaderState implements EpochState {
     }
 
     /**
-     * @return The updated lower bound of fetch timestamps for a majority of quorum; -1 indicating that we have
-     *         not received fetch from the majority yet
+     * Update the local replica state.
+     *
+     * See {@link #updateReplicaState(int, long, Consumer, LogOffsetMetadata)}
      */
-    public OptionalLong updateFetchTimestamp(int nodeId, long timestamp) {
-        ReplicaState state = ensureValidVoter(nodeId);
-        // To be resilient to system time shifts we do not strictly require the timestamp be monotonically increasing
-        state.lastFetchTimestamp = OptionalLong.of(Math.max(state.lastFetchTimestamp.orElse(-1L), timestamp));
-        return quorumMajorityFetchTimestamp();
+    public boolean updateLocalState(long fetchTimestamp,
+                                    java.util.function.Consumer<Long> onMajorityFetchTimeUpdated,
+                                    LogOffsetMetadata logOffsetMetadata) {
+        return updateReplicaState(localId, fetchTimestamp, onMajorityFetchTimeUpdated, logOffsetMetadata);
+    }
+
+    /**
+     * Update the replica state in terms of fetch time and log end offsets.
+     *
+     * @param replicaId replica id
+     * @param fetchTimestamp fetch timestamp
+     * @param logOffsetMetadata new log offset and metadata
+     * @param onMajorityFetchTimeUpdated callback for majority fetch time update
+     * @return true if the high watermark is updated too
+     */
+    public boolean updateReplicaState(int replicaId,
+                                      long fetchTimestamp,
+                                      java.util.function.Consumer<Long> onMajorityFetchTimeUpdated,
+                                      LogOffsetMetadata logOffsetMetadata) {
+        // Ignore fetches from negative replica id, as it indicates
+        // the fetch is from non-replica. For example, a consumer.
+        if (replicaId < 0) {
+            return false;
+        }
+
+        ReplicaState state = getReplicaState(replicaId);
+
+        state.updateFetchTimestamp(fetchTimestamp);
+
+        if (isVoter(replicaId)) {
+            quorumMajorityFetchTimestamp().ifPresent(onMajorityFetchTimeUpdated::accept);
+        }
+
+        return updateEndOffset(state, logOffsetMetadata);
     }
 
     public List<Integer> nonLeaderVotersByDescendingFetchOffset() {
         return followersByDescendingFetchOffset().stream()
                    .filter(state -> state.nodeId != localId)
-                   .map(state -> state.nodeId).collect(Collectors.toList());
+                   .map(state -> state.nodeId)
+                   .collect(Collectors.toList());
     }
 
-    private List<ReplicaState> followersByDescendingFetchOffset() {
-        List<ReplicaState> followersByDescendingFetchOffset = new ArrayList<>(this.voterReplicaStates.values());
-        Collections.sort(followersByDescendingFetchOffset);
-        return followersByDescendingFetchOffset;
+    private List<VoterState> followersByDescendingFetchOffset() {
+        return new ArrayList<>(this.voterReplicaStates.values())
+            .stream().sorted().collect(Collectors.toList());
     }
 
-    /**
-     * @return true if the high watermark is updated too
-     */
-    public boolean updateEndOffset(int remoteNodeId, LogOffsetMetadata endOffsetMetadata) {
-        ReplicaState state = ensureValidVoter(remoteNodeId);
+    private boolean updateEndOffset(ReplicaState state,
+                                    LogOffsetMetadata endOffsetMetadata) {
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset.offset > endOffsetMetadata.offset)
-                throw new IllegalArgumentException("Non-monotonic update to end offset for nodeId " + remoteNodeId);
+                throw new IllegalArgumentException("Non-monotonic update to end offset for nodeId " + state.nodeId);
         });
-        state.hasEndorsedLeader = true;
+
         state.endOffset = Optional.of(endOffsetMetadata);
-        return updateHighWatermark();
+
+        if (isVoter(state.nodeId)) {
+            ((VoterState) state).hasEndorsedLeader = true;
+            addEndorsementFrom(state.nodeId);
+            return updateHighWatermark();
+        }
+        return false;
     }
 
     public void addEndorsementFrom(int remoteNodeId) {
-        ReplicaState replicaState = ensureValidVoter(remoteNodeId);
-        replicaState.hasEndorsedLeader = true;
+        VoterState voterState = ensureValidVoter(remoteNodeId);
+        voterState.hasEndorsedLeader = true;
     }
 
-    private ReplicaState ensureValidVoter(int remoteNodeId) {
-        ReplicaState state = voterReplicaStates.get(remoteNodeId);
+    private VoterState ensureValidVoter(int remoteNodeId) {
+        VoterState state = voterReplicaStates.get(remoteNodeId);
         if (state == null)
             throw new IllegalArgumentException("Unexpected endorsement from non-voter " + remoteNodeId);
         return state;
     }
 
-    /**
-     * Update the local end offset after a log append to the leader. Return true if this
-     * update results in a bump to the high watermark.
-     *
-     * @param endOffsetMetadata The new log end offset
-     * @return true if the high watermark increased, false otherwise
-     */
-    public boolean updateLocalEndOffset(LogOffsetMetadata endOffsetMetadata) {
-        return updateEndOffset(localId, endOffsetMetadata);
+    ReplicaState getReplicaState(int remoteNodeId) {
+        ReplicaState state = voterReplicaStates.get(remoteNodeId);
+        if (state == null) {
+            observerReplicaStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId));
+            return observerReplicaStates.get(remoteNodeId);
+        }
+        return state;
+    }
+
+    Map<Integer, Long> getVoterEndOffsets() {
+        return getReplicaEndOffsets(voterReplicaStates);
+    }
+
+    Map<Integer, Long> getObserverStates(final long currentTimeMs) {
+        clearInactiveObservers(currentTimeMs);
+        return getReplicaEndOffsets(observerReplicaStates);
+    }
+
+    private static <R extends ReplicaState> Map<Integer, Long> getReplicaEndOffsets(
+        Map<Integer, R> replicaStates) {
+        return replicaStates.entrySet().stream()
+                   .collect(Collectors.toMap(Map.Entry::getKey,
+                       e -> e.getValue().endOffset.map(
+                           logOffsetMetadata -> logOffsetMetadata.offset).orElse(-1L))
+                   );
+    }
+
+    private void clearInactiveObservers(final long currentTimeMs) {
+        observerReplicaStates.entrySet().removeIf(
+            integerReplicaStateEntry ->
+                currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp.orElse(-1)
+                    >= OBSERVER_SESSION_TIMEOUT_MS);
+    }
+
+    private boolean isVoter(int remoteNodeId) {
+        return voterReplicaStates.containsKey(remoteNodeId);
     }
 
     private static class ReplicaState implements Comparable<ReplicaState> {
         final int nodeId;
-        boolean hasEndorsedLeader;
         Optional<LogOffsetMetadata> endOffset;
         OptionalLong lastFetchTimestamp;
 
-        public ReplicaState(int nodeId,
-                            boolean hasEndorsedLeader) {
+        public ReplicaState(int nodeId) {
             this.nodeId = nodeId;
-            this.hasEndorsedLeader = hasEndorsedLeader;
             this.endOffset = Optional.empty();
             this.lastFetchTimestamp = OptionalLong.empty();
+        }
+
+        void updateFetchTimestamp(long currentFetchTimeMs) {
+            // To be resilient to system time shifts we do not strictly
+            // require the timestamp be monotonically increasing.
+            lastFetchTimestamp = OptionalLong.of(Math.max(lastFetchTimestamp.orElse(-1L), currentFetchTimeMs));
         }
 
         @Override
@@ -189,6 +256,16 @@ public class LeaderState implements EpochState {
                 return -1;
             else
                 return Long.compare(that.endOffset.get().offset, this.endOffset.get().offset);
+        }
+    }
+
+    private static class VoterState extends ReplicaState {
+        boolean hasEndorsedLeader;
+
+        public VoterState(int nodeId,
+                          boolean hasEndorsedLeader) {
+            super(nodeId);
+            this.hasEndorsedLeader = hasEndorsedLeader;
         }
     }
 

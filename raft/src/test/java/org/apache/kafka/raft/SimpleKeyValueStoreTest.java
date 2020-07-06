@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.raft.KafkaRaftClientTest.METADATA_PARTITION;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -54,7 +55,7 @@ public class SimpleKeyValueStoreTest {
 
         store.writeElectionState(ElectionState.withElectedLeader(epoch, localId, Collections.singleton(localId)));
 
-        ReplicatedLog log = new MockLog();
+        ReplicatedLog log = new MockLog(METADATA_PARTITION);
         NetworkChannel channel = new MockNetworkChannel();
         LogContext logContext = new LogContext();
         QuorumState quorum = new QuorumState(localId, voters, store, logContext);

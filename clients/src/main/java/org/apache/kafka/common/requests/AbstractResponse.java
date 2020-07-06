@@ -201,6 +201,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new FetchQuorumRecordsResponse(struct, version);
             case FIND_QUORUM:
                 return new FindQuorumResponse(struct, version);
+            case DESCRIBE_QUORUM:
+                return new DescribeQuorumResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

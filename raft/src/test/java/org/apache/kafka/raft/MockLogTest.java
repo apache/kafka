@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.record.CompressionType;
@@ -46,10 +47,16 @@ import static org.junit.Assert.assertTrue;
 public class MockLogTest {
 
     private MockLog log;
+    private final TopicPartition topicPartition = new TopicPartition("mock-topic", 0);
 
     @Before
     public void setup() {
-        log = new MockLog();
+        log = new MockLog(topicPartition);
+    }
+
+    @Test
+    public void testTopicPartition() {
+        assertEquals(topicPartition, log.topicPartition());
     }
 
     @Test

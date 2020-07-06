@@ -21,6 +21,11 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
+import org.apache.kafka.common.message.DescribeQuorumRequestData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.DescribeQuorumPartitionResponse;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.DescribeQuorumTopicResponse;
+import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchQuorumRecordsRequestData;
@@ -37,6 +42,8 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.requests.DescribeQuorumRequest;
+import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -49,6 +56,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -279,13 +287,13 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     private void updateLeaderEndOffsetAndTimestamp(LeaderState state) {
-        if (state.updateLocalEndOffset(log.endOffset())) {
+        if (state.updateLocalState(time.milliseconds(),
+            this::resetFetchTimeout,
+            log.endOffset())) {
             logger.debug("Leader high watermark updated to {} after end offset updated to {}",
                     state.highWatermark(), log.endOffset());
             applyCommittedRecordsToStateMachine();
         }
-
-        maybeUpdateFetchTimerWithRemoteFetchTimestamp(state, state.localId());
 
         // We may have pending fetches that can be completed by the advancement
         // of the log end offset
@@ -293,23 +301,18 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     private void updateReplicaEndOffset(LeaderState state, int replicaId, LogOffsetMetadata endOffsetMetadata) {
-        if (state.updateEndOffset(replicaId, endOffsetMetadata)) {
+        if (state.updateReplicaState(replicaId,
+            time.milliseconds(),
+            this::resetFetchTimeout,
+            endOffsetMetadata)) {
             logger.debug("Leader high watermark updated to {} after replica {} end offset updated to {}",
                     state.highWatermark(), replicaId, endOffsetMetadata);
             applyCommittedRecordsToStateMachine();
         }
-
-        // maybe extend the fetch timer with the majority of voter-fetching timestamps
-        maybeUpdateFetchTimerWithRemoteFetchTimestamp(state, replicaId);
     }
 
-    private void maybeUpdateFetchTimerWithRemoteFetchTimestamp(LeaderState state, int replicaId) {
-        final long timestamp = time.milliseconds();
-        final OptionalLong lastFetchTimestamp = state.updateFetchTimestamp(replicaId, timestamp);
-
-        if (lastFetchTimestamp.isPresent()) {
-            timer.resetDeadline(lastFetchTimestamp.getAsLong() + fetchTimeoutMs);
-        }
+    private void resetFetchTimeout(long updatedFetchTimestamp) {
+        timer.resetDeadline(updatedFetchTimestamp + fetchTimeoutMs);
     }
 
     @Override
@@ -851,10 +854,7 @@ public class KafkaRaftClient implements RaftClient {
                 .setNextFetchOffsetEpoch(nextOffsetAndEpoch.epoch);
         } else {
             LogFetchInfo info = log.read(fetchOffset, OptionalLong.empty());
-
-            if (quorum.isVoter(replicaId)) {
-                updateReplicaEndOffset(state, replicaId, info.startOffsetMetadata);
-            }
+            updateReplicaEndOffset(state, replicaId, info.startOffsetMetadata);
 
             return buildFetchQuorumRecordsResponse(
                     Errors.NONE,
@@ -1003,6 +1003,52 @@ public class KafkaRaftClient implements RaftClient {
         } else {
             return handleUnexpectedError(error, responseMetadata);
         }
+    }
+
+    private DescribeQuorumResponseData handleDescribeQuorumRequest(
+        RaftRequest.Inbound requestMetadata
+    ) {
+        DescribeQuorumRequestData describeQuorumRequestData = (DescribeQuorumRequestData) requestMetadata.data;
+        if (validateRequestTopicPartition(describeQuorumRequestData)) {
+            return DescribeQuorumRequest.getErrorResponse(
+                describeQuorumRequestData, Errors.UNKNOWN_TOPIC_OR_PARTITION).data;
+        }
+
+        if (!quorum.isLeader()) {
+            return new DescribeQuorumResponseData()
+                       .setTopics(Collections.singletonList(new DescribeQuorumTopicResponse()
+                       .setTopicName(log.topicPartition().topic())
+                       .setPartitions(Collections.singletonList(
+                           new DescribeQuorumPartitionResponse()
+                               .setErrorCode(Errors.INVALID_REQUEST.code())))));
+        }
+
+        LeaderState leaderState = quorum.leaderStateOrThrow();
+        return DescribeQuorumResponse.singletonResponse(log.topicPartition(),
+            leaderState.localId(),
+            leaderState.epoch(),
+            leaderState.highWatermark().isPresent() ? leaderState.highWatermark().get().offset : -1,
+            convertToReplicaStates(leaderState.getVoterEndOffsets()),
+            convertToReplicaStates(leaderState.getObserverStates(time.milliseconds()))
+        );
+    }
+
+    List<ReplicaState> convertToReplicaStates(Map<Integer, Long> replicaEndOffsets) {
+        return replicaEndOffsets.entrySet().stream()
+                   .map(entry -> new ReplicaState()
+                                     .setReplicaId(entry.getKey())
+                                     .setLogEndOffset(entry.getValue()))
+                   .collect(Collectors.toList());
+    }
+
+    /**
+     * @return true if the topic partition info matches the replicated log
+     */
+    private boolean validateRequestTopicPartition(DescribeQuorumRequestData data) {
+        return data.topics().size() != 1 ||
+                   !data.topics().get(0).topicName().equals(log.topicPartition().topic()) ||
+                   data.topics().get(0).partitions().size() != 1 ||
+                   data.topics().get(0).partitions().get(0).partitionIndex() != log.topicPartition().partition();
     }
 
     private void updateVoterConnections(FindQuorumResponseData response) {
@@ -1207,6 +1253,10 @@ public class KafkaRaftClient implements RaftClient {
 
             case FIND_QUORUM:
                 responseFuture = completedFuture(handleFindQuorumRequest(request));
+                break;
+
+            case DESCRIBE_QUORUM:
+                responseFuture = completedFuture(handleDescribeQuorumRequest(request));
                 break;
 
             default:

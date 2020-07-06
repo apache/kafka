@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
 
 import java.io.Closeable;
@@ -90,6 +91,11 @@ public interface ReplicatedLog extends Closeable {
     void truncateTo(long offset);
 
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
+
+    /**
+     * Return the topic partition associated with the log.
+     */
+    TopicPartition topicPartition();
 
     /**
      * Truncate to an offset and epoch.
