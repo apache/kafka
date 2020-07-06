@@ -1629,95 +1629,6 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public CreatePartitionsResult createPartitions(final Map<String, NewPartitions> newPartitions,
-                                                   final CreatePartitionsOptions options) {
-        final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
-        final CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection(newPartitions.size());
-        for (Entry<String, NewPartitions> entry : newPartitions.entrySet()) {
-            final String topic = entry.getKey();
-            final NewPartitions newPartition = entry.getValue();
-            List<List<Integer>> newAssignments = newPartition.assignments();
-            List<CreatePartitionsAssignment> assignments = newAssignments == null ? null :
-                newAssignments.stream()
-                    .map(brokerIds -> new CreatePartitionsAssignment().setBrokerIds(brokerIds))
-                    .collect(Collectors.toList());
-            topics.add(new CreatePartitionsTopic()
-                .setName(topic)
-                .setCount(newPartition.totalCount())
-                .setAssignments(assignments));
-            futures.put(topic, new KafkaFutureImpl<>());
-        }
-        if (!topics.isEmpty()) {
-            final long now = time.milliseconds();
-            final long deadline = calcDeadlineMs(now, options.timeoutMs());
-            final Call call = getCreatePartitionsCall(options, futures, topics, deadline);
-            runnable.call(call, now);
-        }
-        return new CreatePartitionsResult(new HashMap<>(futures));
-    }
-
-    private Call getCreatePartitionsCall(final CreatePartitionsOptions options,
-                                         final Map<String, KafkaFutureImpl<Void>> futures,
-                                         final CreatePartitionsTopicCollection topics,
-                                         final long deadline) {
-        return new Call("createPartitions", deadline, new ControllerNodeProvider()) {
-            @Override
-            public CreatePartitionsRequest.Builder createRequest(int timeoutMs) {
-                return new CreatePartitionsRequest.Builder(
-                    new CreatePartitionsRequestData()
-                        .setTopics(topics)
-                        .setValidateOnly(options.validateOnly())
-                        .setTimeoutMs(timeoutMs));
-            }
-
-            @Override
-            public void handleResponse(AbstractResponse abstractResponse) {
-                // Check for controller change
-                handleNotControllerError(abstractResponse);
-                // Handle server responses for particular topics.
-                final CreatePartitionsResponse response = (CreatePartitionsResponse) abstractResponse;
-                final CreatePartitionsTopicCollection retryTopics = new CreatePartitionsTopicCollection();
-                for (CreatePartitionsTopicResult result : response.data().results()) {
-                    KafkaFutureImpl<Void> future = futures.get(result.name());
-                    if (future == null) {
-                        log.warn("Server response mentioned unknown topic {}", result.name());
-                    } else {
-                        ApiError error = new ApiError(result.errorCode(), result.errorMessage());
-                        if (error.isFailure()) {
-                            if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
-                                if (options.shouldRetryQuotaViolatedException()) {
-                                    retryTopics.add(topics.find(result.name()).duplicate());
-                                } else {
-                                    future.completeExceptionally(new ThrottlingQuotaExceededException(
-                                        response.throttleTimeMs(), error.messageWithFallback()));
-                                }
-                            } else {
-                                future.completeExceptionally(error.exception());
-                            }
-                        } else {
-                            future.complete(null);
-                        }
-                    }
-                }
-                // If there are topics to retry, retry them; complete unrealized futures otherwise.
-                if (retryTopics.isEmpty()) {
-                    // The server should send back a response for every topic. But do a sanity check anyway.
-                    completeUnrealizedFutures(futures.entrySet().stream(),
-                        topic -> "The controller response did not contain a result for topic " + topic);
-                } else {
-                    final Call call = getCreatePartitionsCall(options, futures, retryTopics, deadline);
-                    runnable.call(call, time.milliseconds());
-                }
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(futures.values(), throwable);
-            }
-        };
-    }
-
-    @Override
     public ListTopicsResult listTopics(final ListTopicsOptions options) {
         final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
@@ -2530,6 +2441,95 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         return new DescribeReplicaLogDirsResult(new HashMap<>(futures));
+    }
+
+    @Override
+    public CreatePartitionsResult createPartitions(final Map<String, NewPartitions> newPartitions,
+        final CreatePartitionsOptions options) {
+        final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>(newPartitions.size());
+        final CreatePartitionsTopicCollection topics = new CreatePartitionsTopicCollection(newPartitions.size());
+        for (Entry<String, NewPartitions> entry : newPartitions.entrySet()) {
+            final String topic = entry.getKey();
+            final NewPartitions newPartition = entry.getValue();
+            List<List<Integer>> newAssignments = newPartition.assignments();
+            List<CreatePartitionsAssignment> assignments = newAssignments == null ? null :
+                newAssignments.stream()
+                    .map(brokerIds -> new CreatePartitionsAssignment().setBrokerIds(brokerIds))
+                    .collect(Collectors.toList());
+            topics.add(new CreatePartitionsTopic()
+                .setName(topic)
+                .setCount(newPartition.totalCount())
+                .setAssignments(assignments));
+            futures.put(topic, new KafkaFutureImpl<>());
+        }
+        if (!topics.isEmpty()) {
+            final long now = time.milliseconds();
+            final long deadline = calcDeadlineMs(now, options.timeoutMs());
+            final Call call = getCreatePartitionsCall(options, futures, topics, deadline);
+            runnable.call(call, now);
+        }
+        return new CreatePartitionsResult(new HashMap<>(futures));
+    }
+
+    private Call getCreatePartitionsCall(final CreatePartitionsOptions options,
+        final Map<String, KafkaFutureImpl<Void>> futures,
+        final CreatePartitionsTopicCollection topics,
+        final long deadline) {
+        return new Call("createPartitions", deadline, new ControllerNodeProvider()) {
+            @Override
+            public CreatePartitionsRequest.Builder createRequest(int timeoutMs) {
+                return new CreatePartitionsRequest.Builder(
+                    new CreatePartitionsRequestData()
+                        .setTopics(topics)
+                        .setValidateOnly(options.validateOnly())
+                        .setTimeoutMs(timeoutMs));
+            }
+
+            @Override
+            public void handleResponse(AbstractResponse abstractResponse) {
+                // Check for controller change
+                handleNotControllerError(abstractResponse);
+                // Handle server responses for particular topics.
+                final CreatePartitionsResponse response = (CreatePartitionsResponse) abstractResponse;
+                final CreatePartitionsTopicCollection retryTopics = new CreatePartitionsTopicCollection();
+                for (CreatePartitionsTopicResult result : response.data().results()) {
+                    KafkaFutureImpl<Void> future = futures.get(result.name());
+                    if (future == null) {
+                        log.warn("Server response mentioned unknown topic {}", result.name());
+                    } else {
+                        ApiError error = new ApiError(result.errorCode(), result.errorMessage());
+                        if (error.isFailure()) {
+                            if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
+                                if (options.shouldRetryQuotaViolatedException()) {
+                                    retryTopics.add(topics.find(result.name()).duplicate());
+                                } else {
+                                    future.completeExceptionally(new ThrottlingQuotaExceededException(
+                                        response.throttleTimeMs(), error.messageWithFallback()));
+                                }
+                            } else {
+                                future.completeExceptionally(error.exception());
+                            }
+                        } else {
+                            future.complete(null);
+                        }
+                    }
+                }
+                // If there are topics to retry, retry them; complete unrealized futures otherwise.
+                if (retryTopics.isEmpty()) {
+                    // The server should send back a response for every topic. But do a sanity check anyway.
+                    completeUnrealizedFutures(futures.entrySet().stream(),
+                        topic -> "The controller response did not contain a result for topic " + topic);
+                } else {
+                    final Call call = getCreatePartitionsCall(options, futures, retryTopics, deadline);
+                    runnable.call(call, time.milliseconds());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(futures.values(), throwable);
+            }
+        };
     }
 
     @Override
