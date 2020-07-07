@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import java.util.HashSet;
 import java.util.Set;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
@@ -405,7 +406,8 @@ final class ClusterConnectionStates {
     /**
      * Get the id set of nodes which are in CONNECTING state
      */
-    public Set<String> connectingNodes() {
+    // package private for testing only
+    Set<String> connectingNodes() {
         return this.connectingNodes;
     }
 
@@ -438,6 +440,16 @@ final class ClusterConnectionStates {
         if (nodeState.state != ConnectionState.CONNECTING)
             throw new IllegalStateException("Node " + id + " is not in connecting state");
         return now - lastConnectAttemptMs(id) > connectionSetupTimeoutMs(id);
+    }
+
+    /**
+     * Return the Set of nodes whose connection setup has timed out.
+     * @param now the current time in ms
+     */
+    public Set<String> nodesWithConnectionSetupTimeout(long now) {
+        return connectingNodes.stream()
+            .filter(id -> isConnectionSetupTimeout(id, now))
+            .collect(Collectors.toSet());
     }
 
     /**
