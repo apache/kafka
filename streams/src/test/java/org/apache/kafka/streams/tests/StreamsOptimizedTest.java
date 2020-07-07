@@ -130,6 +130,7 @@ public class StreamsOptimizedTest {
             }
         });
 
+        streams.cleanUp();
         streams.start();
 
         Exit.addShutdownHook("streams-shutdown-hook", () -> {
