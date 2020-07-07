@@ -375,12 +375,12 @@ public class ClusterConnectionStatesTest {
         connectionStates.connecting(nodeId2, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
 
         // Expect no timed out connections
-        assertTrue(connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).isEmpty());
+        assertEquals(0, connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).size());
 
         // Advance time by half of the connection setup timeout
         time.sleep(connectionSetupTimeoutMs / 2);
 
-        // Initiate a third connections
+        // Initiate a third connection
         connectionStates.connecting(nodeId3, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
 
         // Advance time beyond the connection setup timeout (+ max jitter) for the first two connections
@@ -396,10 +396,10 @@ public class ClusterConnectionStatesTest {
         connectionStates.disconnected(nodeId1, time.milliseconds());
         connectionStates.disconnected(nodeId2, time.milliseconds());
 
-        // Advance time beyond the connection setup timeout (+ max jitter) for for the third connections
+        // Advance time beyond the connection setup timeout (+ max jitter) for the third connections
         time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
 
-        // Expect two timed out connections.
+        // Expect one timed out connection
         timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
         assertEquals(1, timedOutConnections.size());
         assertTrue(timedOutConnections.contains(nodeId3));
@@ -408,7 +408,6 @@ public class ClusterConnectionStatesTest {
         connectionStates.disconnected(nodeId3, time.milliseconds());
 
         // Expect no timed out connections
-        timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
-        assertEquals(0, timedOutConnections.size());
+        assertEquals(0, connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).size());
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import java.util.HashSet;
 import java.util.Set;
 
+import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
@@ -446,13 +447,9 @@ final class ClusterConnectionStates {
      * @param now the current time in ms
      */
     public Set<String> nodesWithConnectionSetupTimeout(long now) {
-        Set<String> nodes = new HashSet<>();
-        for (String nodeId : connectingNodes) {
-            if (isConnectionSetupTimeout(nodeId, now)) {
-                nodes.add(nodeId);
-            }
-        }
-        return nodes;
+        return connectingNodes.stream()
+            .filter(id -> isConnectionSetupTimeout(id, now))
+            .collect(Collectors.toSet());
     }
 
     /**
