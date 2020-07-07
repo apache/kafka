@@ -169,7 +169,7 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                stateMgr.flushCache();
+                // do not need to flush state store caches in pre-commit since nothing would be sent for standby tasks
                 log.debug("Prepared {} task for committing", state());
 
                 break;

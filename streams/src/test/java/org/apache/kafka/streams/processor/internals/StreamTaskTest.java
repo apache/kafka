@@ -1760,10 +1760,15 @@ public class StreamTaskTest {
 
         task = createOptimizedStatefulTask(createConfig(false, "100"), consumer);
         task.initializeIfNeeded();
+        task.completeRestoration();
+
+        // process one record to make commit needed
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, offset)));
+        task.process(100L);
 
         assertThrows(ProcessorStateException.class, task::prepareCommit);
 
-        assertEquals(RESTORING, task.state());
+        assertEquals(RUNNING, task.state());
 
         final double expectedCloseTaskMetric = 0.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);

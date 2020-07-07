@@ -986,7 +986,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCommitOnlyRevokedActiveTasksThatNeedCommittingOnHandleRevocation() {
+    public void shouldCommitAllNeededTasksOnHandleRevocation() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true);
         final Map<TopicPartition, OffsetAndMetadata> offsets00 = singletonMap(t1p0, new OffsetAndMetadata(0L, null));
         task00.setCommittableOffsetsAndMetadata(offsets00);
@@ -1005,6 +1005,7 @@ public class TaskManagerTest {
 
         final Map<TopicPartition, OffsetAndMetadata> expectedCommittedOffsets = new HashMap<>();
         expectedCommittedOffsets.putAll(offsets00);
+        expectedCommittedOffsets.putAll(offsets01);
 
         final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
             mkEntry(taskId00, taskId00Partitions),
@@ -1038,7 +1039,9 @@ public class TaskManagerTest {
         taskManager.handleRevocation(taskId00Partitions);
 
         assertThat(task00.commitNeeded, is(false));
-        assertThat(task01.commitPrepared, is(false));
+        assertThat(task00.commitPrepared, is(true));
+        assertThat(task00.commitNeeded, is(false));
+        assertThat(task01.commitPrepared, is(true));
         assertThat(task02.commitPrepared, is(false));
         assertThat(task10.commitPrepared, is(false));
     }
@@ -2682,8 +2685,12 @@ public class TaskManagerTest {
 
         @Override
         public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
-            commitPrepared = true;
-            return committableOffsets;
+            if (commitNeeded) {
+                commitPrepared = true;
+                return committableOffsets;
+            } else {
+                return Collections.emptyMap();
+            }
         }
 
         @Override

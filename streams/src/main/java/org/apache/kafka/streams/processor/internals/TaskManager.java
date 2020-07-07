@@ -35,7 +35,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
@@ -243,19 +242,24 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                if (task.isActive()) {
-                    // Active tasks are revoked and suspended/committed during #handleRevocation
-                    if (!task.state().equals(State.SUSPENDED)) {
-                        log.error("Active task {} should be suspended prior to attempting to close but was in {}",
-                                  task.id(), task.state());
-                        throw new IllegalStateException("Active task " + task.id() + " should have been suspended");
-                    }
-                } else {
-                    task.suspend();
-                    task.prepareCommit();
-                    // Upon close we should enforce a checkpoint post commit
-                    task.postCommit(true);
+                // Always try to first suspend and commit the task before closing it;
+                // some tasks may already be suspended which should be a no-op.
+                //
+                // Also since active tasks should already be suspended / committed and
+                // standby tasks should have no offsets to commit, we should expect nothing to commit
+                task.suspend();
+
+                final Map<TopicPartition, OffsetAndMetadata> offsets = task.prepareCommit();
+
+                if (!offsets.isEmpty()) {
+                    log.error("Task {} should has been committed prior to attempting to close, but it reports non-empty offsets {} to commit",
+                            task.id(), offsets);
+                    throw new IllegalStateException("Task " + task.id() + " should have been committed");
                 }
+
+                // Upon close we should enforce a checkpoint post suspension
+                task.postCommit(true);
+
                 completeTaskCloseClean(task);
                 cleanUpTaskProducer(task, taskCloseExceptions);
                 tasks.remove(task.id());
@@ -274,20 +278,25 @@ public class TaskManager {
         for (final Task oldTask : tasksToRecycle) {
             final Task newTask;
             try {
+                // similar to pre-closing, we should make sure the task is suspended and committed
+                oldTask.suspend();
+
+                final Map<TopicPartition, OffsetAndMetadata> offsets = oldTask.prepareCommit();
+
+                if (!offsets.isEmpty()) {
+                    log.error("Task {} should has been committed prior to attempting to recycle, but it reports non-empty offsets {} to commit",
+                            oldTask.id(), offsets);
+                    throw new IllegalStateException("Task " + oldTask.id() + " should have been committed");
+                }
+
+                // Upon close we should enforce a checkpoint post suspension
+                oldTask.postCommit(true);
+
                 if (oldTask.isActive()) {
-                    if (!oldTask.state().equals(State.SUSPENDED)) {
-                        // Active tasks are revoked and suspended/committed during #handleRevocation
-                        log.error("Active task {} should be suspended prior to attempting to close but was in {}",
-                                  oldTask.id(), oldTask.state());
-                        throw new IllegalStateException("Active task " + oldTask.id() + " should have been suspended");
-                    }
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
                     cleanUpTaskProducer(oldTask, taskCloseExceptions);
                 } else {
-                    oldTask.suspend();
-                    oldTask.prepareCommit();
-                    oldTask.postCommit();
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
@@ -483,11 +492,8 @@ public class TaskManager {
 
         prepareCommitAndAddOffsetsToMap(revokedTasks, consumedOffsetsAndMetadataPerTask);
 
-        // If using eos-beta, if we must commit any task then we must commit all of them
-        // TODO: when KAFKA-9450 is done this will be less expensive, and we can simplify by always committing everything
-        final boolean shouldCommitAdditionalTasks =
-            processingMode == EXACTLY_ONCE_BETA && !consumedOffsetsAndMetadataPerTask.isEmpty();
-
+        // if we need to commit any task then we just commit all of them
+        final boolean shouldCommitAdditionalTasks = !consumedOffsetsAndMetadataPerTask.isEmpty();
         if (shouldCommitAdditionalTasks) {
             prepareCommitAndAddOffsetsToMap(additionalTasksForCommitting, consumedOffsetsAndMetadataPerTask);
         }
@@ -495,7 +501,8 @@ public class TaskManager {
         commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
         // We do not need to enforce checkpointing upon suspending a task: if it is resumed later we just
-        // proceed normally; if it is closed we would checkpoint then
+        // proceed normally; if it is closed we would checkpoint then; for other non-suspended but committed
+        // tasks we do not even need to try checkpointing them
         for (final Task task : revokedTasks) {
             try {
                 task.postCommit(false);
