@@ -170,7 +170,8 @@ class KStreamImplJoin {
         final boolean allMatch = supplier.retentionPeriod() == (joinWindows.size() + joinWindows.gracePeriodMs()) &&
             supplier.windowSize() == joinWindows.size();
         if (!allMatch) {
-            throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s", supplier, joinWindows));
+            throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s" +
+                                                         " for the window size and retention period", supplier, joinWindows));
         }
     }
 

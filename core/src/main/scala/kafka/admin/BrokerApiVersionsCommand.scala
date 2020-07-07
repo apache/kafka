@@ -205,6 +205,8 @@ object BrokerApiVersionsCommand {
   private object AdminClient {
     val DefaultConnectionMaxIdleMs = 9 * 60 * 1000
     val DefaultRequestTimeoutMs = 5000
+    val DefaultSocketConnectionSetupMs = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG
+    val DefaultSocketConnectionSetupMaxMs = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
     val DefaultMaxInFlightRequestsPerConnection = 100
     val DefaultReconnectBackoffMs = 50
     val DefaultReconnectBackoffMax = 50
@@ -241,6 +243,18 @@ object BrokerApiVersionsCommand {
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
         .define(
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
+          ConfigDef.Type.LONG,
+          CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS,
+          ConfigDef.Importance.MEDIUM,
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
+        .define(
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
+          ConfigDef.Type.LONG,
+          CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS,
+          ConfigDef.Importance.MEDIUM,
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+        .define(
           CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
           ConfigDef.Type.LONG,
           DefaultRetryBackoffMs,
@@ -271,6 +285,8 @@ object BrokerApiVersionsCommand {
         new ClusterResourceListeners)
       val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
+      val connectionSetupTimeoutMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
+      val connectionSetupTimeoutMaxMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG)
       val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
       val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
@@ -296,6 +312,8 @@ object BrokerApiVersionsCommand {
         DefaultSendBufferBytes,
         DefaultReceiveBufferBytes,
         requestTimeoutMs,
+        connectionSetupTimeoutMs,
+        connectionSetupTimeoutMaxMs,
         ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         true,

@@ -255,6 +255,8 @@ public class IntegrationTestUtils {
             }
             if (enableTransactions) {
                 producer.commitTransaction();
+            } else {
+                producer.flush();
             }
         }
     }
@@ -594,7 +596,7 @@ public class IntegrationTestUtils {
                 final List<KeyValue<K, V>> readData =
                     readKeyValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
-                assertThat(reason, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
+                assertThat(reason + ",  currently accumulated data is " + accumData, accumData.size(), is(greaterThanOrEqualTo(expectedNumRecords)));
             });
         }
         return accumData;
@@ -1271,7 +1273,7 @@ public class IntegrationTestUtils {
          */
         public void waitForNextStableAssignment(final long maxWaitMs) throws InterruptedException {
             waitForCondition(
-                () -> nextExpectedNumStableAssignments == numStableAssignments(),
+                () -> numStableAssignments() >= nextExpectedNumStableAssignments,
                 maxWaitMs,
                 () -> "Client did not reach " + nextExpectedNumStableAssignments + " stable assignments on time, " +
                     "numStableAssignments was " + numStableAssignments()

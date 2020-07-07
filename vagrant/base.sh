@@ -32,7 +32,7 @@ fetch_jdk_tgz() {
 
   if [ ! -e $path ]; then
     mkdir -p $(dirname $path)
-    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
+    curl --retry 5 -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
   fi
 }
 
@@ -79,8 +79,8 @@ get_kafka() {
     url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
-        curl -O $url
-        curl -O $url_streams_test || true
+        curl --retry 5 -O $url
+        curl --retry 5 -O $url_streams_test || true
         file_tgz=`basename $url`
         file_streams_jar=`basename $url_streams_test` || true
         tar -xzf $file_tgz

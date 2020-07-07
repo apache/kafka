@@ -35,6 +35,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
@@ -242,15 +243,17 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                task.suspend(); // Should be a no-op for active tasks since they're suspended in handleRevocation
-                if (task.commitNeeded()) {
-                    if (task.isActive()) {
-                        log.error("Active task {} was revoked and should have already been committed", task.id());
-                        throw new IllegalStateException("Revoked active task was not committed during handleRevocation");
-                    } else {
-                        task.prepareCommit();
-                        task.postCommit();
+                if (task.isActive()) {
+                    // Active tasks are revoked and suspended/committed during #handleRevocation
+                    if (!task.state().equals(State.SUSPENDED)) {
+                        log.error("Active task {} should be suspended prior to attempting to close but was in {}",
+                                  task.id(), task.state());
+                        throw new IllegalStateException("Active task " + task.id() + " should have been suspended");
                     }
+                } else {
+                    task.suspend();
+                    task.prepareCommit();
+                    task.postCommit();
                 }
                 completeTaskCloseClean(task);
                 cleanUpTaskProducer(task, taskCloseExceptions);
@@ -271,10 +274,19 @@ public class TaskManager {
             final Task newTask;
             try {
                 if (oldTask.isActive()) {
+                    if (!oldTask.state().equals(State.SUSPENDED)) {
+                        // Active tasks are revoked and suspended/committed during #handleRevocation
+                        log.error("Active task {} should be suspended prior to attempting to close but was in {}",
+                                  oldTask.id(), oldTask.state());
+                        throw new IllegalStateException("Active task " + oldTask.id() + " should have been suspended");
+                    }
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
+                    cleanUpTaskProducer(oldTask, taskCloseExceptions);
                 } else {
-                    oldTask.suspend(); // Only need to suspend transitioning standbys, actives should be suspended already
+                    oldTask.suspend();
+                    oldTask.prepareCommit();
+                    oldTask.postCommit();
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
@@ -437,17 +449,16 @@ public class TaskManager {
     void handleRevocation(final Collection<TopicPartition> revokedPartitions) {
         final Set<TopicPartition> remainingRevokedPartitions = new HashSet<>(revokedPartitions);
 
-        final Set<Task> tasksToCommit = new HashSet<>();
+        final Set<Task> revokedTasks = new HashSet<>();
         final Set<Task> additionalTasksForCommitting = new HashSet<>();
+        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         for (final Task task : activeTaskIterable()) {
             if (remainingRevokedPartitions.containsAll(task.inputPartitions())) {
                 try {
                     task.suspend();
-                    if (task.commitNeeded()) {
-                        tasksToCommit.add(task);
-                    }
+                    revokedTasks.add(task);
                 } catch (final RuntimeException e) {
                     log.error("Caught the following exception while trying to suspend revoked task " + task.id(), e);
                     firstException.compareAndSet(null, new StreamsException("Failed to suspend " + task.id(), e));
@@ -469,21 +480,20 @@ public class TaskManager {
             throw suspendException;
         }
 
+        prepareCommitAndAddOffsetsToMap(revokedTasks, consumedOffsetsAndMetadataPerTask);
+
         // If using eos-beta, if we must commit any task then we must commit all of them
         // TODO: when KAFKA-9450 is done this will be less expensive, and we can simplify by always committing everything
-        if (processingMode ==  EXACTLY_ONCE_BETA && !tasksToCommit.isEmpty()) {
-            tasksToCommit.addAll(additionalTasksForCommitting);
-        }
+        final boolean shouldCommitAdditionalTasks =
+            processingMode == EXACTLY_ONCE_BETA && !consumedOffsetsAndMetadataPerTask.isEmpty();
 
-        final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
-        for (final Task task : tasksToCommit) {
-            final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-            consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+        if (shouldCommitAdditionalTasks) {
+            prepareCommitAndAddOffsetsToMap(additionalTasksForCommitting, consumedOffsetsAndMetadataPerTask);
         }
 
         commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-        for (final Task task : tasksToCommit) {
+        for (final Task task : revokedTasks) {
             try {
                 task.postCommit();
             } catch (final RuntimeException e) {
@@ -492,9 +502,30 @@ public class TaskManager {
             }
         }
 
-        final RuntimeException commitException = firstException.get();
-        if (commitException != null) {
-            throw commitException;
+        if (shouldCommitAdditionalTasks) {
+            for (final Task task : additionalTasksForCommitting) {
+                try {
+                    task.postCommit();
+                } catch (final RuntimeException e) {
+                    log.error("Exception caught while post-committing task " + task.id(), e);
+                    firstException.compareAndSet(null, e);
+                }
+            }
+        }
+
+        final RuntimeException postCommitException = firstException.get();
+        if (postCommitException != null) {
+            throw postCommitException;
+        }
+    }
+
+    private void prepareCommitAndAddOffsetsToMap(final Set<Task> tasksToPrepare,
+                                                 final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask) {
+        for (final Task task : tasksToPrepare) {
+            final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+            if (!committableOffsets.isEmpty()) {
+                consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
+            }
         }
     }
 
@@ -723,17 +754,17 @@ public class TaskManager {
         if (!clean) {
             return activeTaskIterable();
         }
+        final Set<Task> tasksToCommit = new HashSet<>();
         final Set<Task> tasksToCloseDirty = new HashSet<>();
         final Set<Task> tasksToCloseClean = new HashSet<>();
-        final Set<Task> tasksToCommit = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
         for (final Task task : activeTaskIterable()) {
             try {
                 task.suspend();
-                if (task.commitNeeded()) {
-                    final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
-                    tasksToCommit.add(task);
+                final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
+                tasksToCommit.add(task);
+                if (!committableOffsets.isEmpty()) {
                     consumedOffsetsAndMetadataPerTask.put(task.id(), committableOffsets);
                 }
                 tasksToCloseClean.add(task);
@@ -754,7 +785,7 @@ public class TaskManager {
             try {
                 commitOffsetsOrTransaction(consumedOffsetsAndMetadataPerTask);
 
-                for (final Task task : tasksToCommit) {
+                for (final Task task : activeTaskIterable()) {
                     try {
                         task.postCommit();
                     } catch (final RuntimeException e) {
@@ -794,42 +825,17 @@ public class TaskManager {
             return standbyTaskIterable();
         }
         final Set<Task> tasksToCloseDirty = new HashSet<>();
-        final Set<Task> tasksToCloseClean = new HashSet<>();
-        final Set<Task> tasksToCommit = new HashSet<>();
 
         for (final Task task : standbyTaskIterable()) {
             try {
                 task.suspend();
-                if (task.commitNeeded()) {
-                    task.prepareCommit();
-                    tasksToCommit.add(task);
-                }
-                tasksToCloseClean.add(task);
+                task.prepareCommit();
+                task.postCommit();
+                completeTaskCloseClean(task);
             } catch (final TaskMigratedException e) {
                 // just ignore the exception as it doesn't matter during shutdown
                 tasksToCloseDirty.add(task);
             } catch (final RuntimeException e) {
-                firstException.compareAndSet(null, e);
-                tasksToCloseDirty.add(task);
-            }
-        }
-
-        for (final Task task : tasksToCommit) {
-            try {
-                task.postCommit();
-            } catch (final RuntimeException e) {
-                log.error("Exception caught while post-committing standby task " + task.id(), e);
-                firstException.compareAndSet(null, e);
-                tasksToCloseDirty.add(task);
-                tasksToCloseClean.remove(task);
-            }
-        }
-
-        for (final Task task : tasksToCloseClean) {
-            try {
-                completeTaskCloseClean(task);
-            } catch (final RuntimeException e) {
-                log.error("Exception caught while clean-closing standby task " + task.id(), e);
                 firstException.compareAndSet(null, e);
                 tasksToCloseDirty.add(task);
             }

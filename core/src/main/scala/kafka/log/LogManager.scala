@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent._
+import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -252,8 +253,9 @@ class LogManager(logDirs: Seq[File],
   // Only for testing
   private[log] def hasLogsToBeDeleted: Boolean = !logsToBeDeleted.isEmpty
 
-  private def loadLog(logDir: File, recoveryPoints: Map[TopicPartition, Long], logStartOffsets: Map[TopicPartition, Long]): Unit = {
-    debug(s"Loading log '${logDir.getName}'")
+  private def loadLog(logDir: File,
+                      recoveryPoints: Map[TopicPartition, Long],
+                      logStartOffsets: Map[TopicPartition, Long]): Log = {
     val topicPartition = Log.parseTopicPartitionName(logDir)
     val config = topicConfigs.getOrElse(topicPartition.topic, currentDefaultConfig)
     val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
@@ -290,29 +292,33 @@ class LogManager(logDirs: Seq[File],
             s"for this partition. It is recommended to delete the partition in the log directory that is known to have failed recently.")
       }
     }
+
+    log
   }
 
   /**
    * Recover and load all logs in the given data directories
    */
   private def loadLogs(): Unit = {
-    info("Loading logs.")
-    val startMs = time.milliseconds
+    info(s"Loading logs from log dirs $liveLogDirs")
+    val startMs = time.hiResClockMs()
     val threadPools = ArrayBuffer.empty[ExecutorService]
     val offlineDirs = mutable.Set.empty[(String, IOException)]
     val jobs = mutable.Map.empty[File, Seq[Future[_]]]
+    var numTotalLogs = 0
 
     for (dir <- liveLogDirs) {
+      val logDirAbsolutePath = dir.getAbsolutePath
       try {
         val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
         threadPools.append(pool)
 
         val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
-
         if (cleanShutdownFile.exists) {
-          debug(s"Found clean shutdown file. Skipping recovery for all logs in data directory: ${dir.getAbsolutePath}")
+          info(s"Skipping recovery for all logs in $logDirAbsolutePath since clean shutdown file was found")
         } else {
           // log recovery itself is being performed by `Log` class during initialization
+          info(s"Attempting recovery for all logs in $logDirAbsolutePath since no clean shutdown file was found")
           brokerState.newState(RecoveringFromUncleanShutdown)
         }
 
@@ -321,8 +327,8 @@ class LogManager(logDirs: Seq[File],
           recoveryPoints = this.recoveryPointCheckpoints(dir).read()
         } catch {
           case e: Exception =>
-            warn(s"Error occurred while reading recovery-point-offset-checkpoint file of directory $dir", e)
-            warn("Resetting the recovery checkpoint to 0")
+            warn(s"Error occurred while reading recovery-point-offset-checkpoint file of directory " +
+              s"$logDirAbsolutePath, resetting the recovery checkpoint to 0", e)
         }
 
         var logStartOffsets = Map[TopicPartition, Long]()
@@ -330,29 +336,40 @@ class LogManager(logDirs: Seq[File],
           logStartOffsets = this.logStartOffsetCheckpoints(dir).read()
         } catch {
           case e: Exception =>
-            warn(s"Error occurred while reading log-start-offset-checkpoint file of directory $dir", e)
+            warn(s"Error occurred while reading log-start-offset-checkpoint file of directory " +
+              s"$logDirAbsolutePath, resetting to the base offset of the first segment", e)
         }
 
-        val jobsForDir = for {
-          dirContent <- Option(dir.listFiles).toList
-          logDir <- dirContent if logDir.isDirectory
-        } yield {
+        val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(_.isDirectory)
+        val numLogsLoaded = new AtomicInteger(0)
+        numTotalLogs += logsToLoad.length
+
+        val jobsForDir = logsToLoad.map { logDir =>
           val runnable: Runnable = () => {
             try {
-              loadLog(logDir, recoveryPoints, logStartOffsets)
+              debug(s"Loading log $logDir")
+
+              val logLoadStartMs = time.hiResClockMs()
+              val log = loadLog(logDir, recoveryPoints, logStartOffsets)
+              val logLoadDurationMs = time.hiResClockMs() - logLoadStartMs
+              val currentNumLoaded = numLogsLoaded.incrementAndGet()
+
+              info(s"Completed load of $log with ${log.numberOfSegments} segments in ${logLoadDurationMs}ms " +
+                s"($currentNumLoaded/${logsToLoad.length} loaded in $logDirAbsolutePath)")
             } catch {
               case e: IOException =>
-                offlineDirs.add((dir.getAbsolutePath, e))
-                error(s"Error while loading log dir ${dir.getAbsolutePath}", e)
+                offlineDirs.add((logDirAbsolutePath, e))
+                error(s"Error while loading log dir $logDirAbsolutePath", e)
             }
           }
           runnable
         }
+
         jobs(cleanShutdownFile) = jobsForDir.map(pool.submit)
       } catch {
         case e: IOException =>
-          offlineDirs.add((dir.getAbsolutePath, e))
-          error(s"Error while loading log dir ${dir.getAbsolutePath}", e)
+          offlineDirs.add((logDirAbsolutePath, e))
+          error(s"Error while loading log dir $logDirAbsolutePath", e)
       }
     }
 
@@ -379,7 +396,7 @@ class LogManager(logDirs: Seq[File],
       threadPools.foreach(_.shutdown())
     }
 
-    info(s"Logs loading complete in ${time.milliseconds - startMs} ms.")
+    info(s"Loaded $numTotalLogs logs in ${time.hiResClockMs() - startMs}ms.")
   }
 
   /**

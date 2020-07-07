@@ -22,15 +22,14 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Properties, Random}
+import java.util.{Collections, Locale, Map, Properties, Random}
 
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
-import kafka.common.MessageFormatter
 import kafka.utils.Implicits._
 import kafka.utils.{Exit, _}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{MessageFormatter, TopicPartition}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetRequest
@@ -309,7 +308,7 @@ object ConsoleConsumer extends Logging {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
 
-    formatter.init(formatterArgs)
+    formatter.configure(formatterArgs.asScala.asJava)
 
     val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
     if (topicOrFilterOpt.size != 1)
@@ -466,7 +465,9 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
 
-  override def init(props: Properties): Unit = {
+  override def configure(configs: Map[String, _]): Unit = {
+    val props = new java.util.Properties()
+    configs.asScala.foreach { case (key, value) => props.put(key, value.toString) }
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
@@ -548,7 +549,7 @@ class DefaultMessageFormatter extends MessageFormatter {
 class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
   private val defaultWriter: DefaultMessageFormatter = new DefaultMessageFormatter
 
-  override def init(props: Properties): Unit = defaultWriter.init(props)
+  override def configure(configs: Map[String, _]): Unit = defaultWriter.configure(configs)
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
     import consumerRecord._
@@ -560,7 +561,6 @@ class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
 }
 
 class NoOpMessageFormatter extends MessageFormatter {
-  override def init(props: Properties): Unit = {}
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {}
 }
@@ -568,12 +568,11 @@ class NoOpMessageFormatter extends MessageFormatter {
 class ChecksumMessageFormatter extends MessageFormatter {
   private var topicStr: String = _
 
-  override def init(props: Properties): Unit = {
-    topicStr = props.getProperty("topic")
-    if (topicStr != null)
-      topicStr = topicStr + ":"
+  override def configure(configs: Map[String, _]): Unit = {
+    topicStr = if (configs.containsKey("topic"))
+      configs.get("topic").toString + ":"
     else
-      topicStr = ""
+      ""
   }
 
   @nowarn("cat=deprecation")
