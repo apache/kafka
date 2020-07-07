@@ -33,10 +33,6 @@ broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-# once 0.10.1.2 is available backward_compatible_metadata_2_versions
-# can be replaced with metadata_2_versions
-backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3), str(LATEST_2_4), str(LATEST_2_5), str(DEV_VERSION)]
 
 """
 After each release one should first check that the released version has been uploaded to 
@@ -189,9 +185,8 @@ class StreamsUpgradeTest(Test):
         processor.stop()
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
-    @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
-    @matrix(from_version=metadata_1_versions, to_version=metadata_3_or_higher_versions)
-    @matrix(from_version=metadata_2_versions, to_version=metadata_3_or_higher_versions)
+    @matrix(from_version=metadata_1_versions, to_version=[str(DEV_VERSION)])
+    @matrix(from_version=metadata_2_versions, to_version=[str(DEV_VERSION)])
     def test_metadata_upgrade(self, from_version, to_version):
         """
         Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
