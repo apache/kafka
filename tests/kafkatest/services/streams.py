@@ -502,11 +502,13 @@ class StreamsStandbyTaskService(StreamsTestBaseService):
                                                         configs)
 
 class StreamsResetter(StreamsTestBaseService):
-    def __init__(self, test_context, kafka):
+    def __init__(self, test_context, kafka, topic, applicationId):
         super(StreamsResetter, self).__init__(test_context,
                                               kafka,
                                               "kafka.tools.StreamsResetter",
                                               "")
+        self.topic = topic
+        self.applicationId = applicationId
 
     @property
     def expectedMessage(self):
@@ -519,14 +521,16 @@ class StreamsResetter(StreamsTestBaseService):
         args['stderr'] = self.STDERR_FILE
         args['pidfile'] = self.PID_FILE
         args['log4j'] = self.LOG4J_CONFIG_FILE
+        args['application.id'] = self.applicationId
+        args['input.topics'] = self.topic
         args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
 
         cmd = "(export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
               "%(kafka_run_class)s %(streams_class_name)s " \
               "--bootstrap-servers %(bootstrap.servers)s " \
               "--force " \
-              "--application-id StreamsOptimizedTest " \
-              "--input-topics input.topic " \
+              "--application-id %(application.id)s " \
+              "--input-topics %(input.topics)s " \
               "& echo $! >&3 ) " \
               "1>> %(stdout)s " \
               "2>> %(stderr)s " \
