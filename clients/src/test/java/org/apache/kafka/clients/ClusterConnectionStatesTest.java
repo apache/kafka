@@ -375,7 +375,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.connecting(nodeId2, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
 
         // Expect no timed out connections
-        assertTrue(connectionStates.timedOutConnections(time.milliseconds()).isEmpty());
+        assertTrue(connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).isEmpty());
 
         // Advance time by half of the connection setup timeout
         time.sleep(connectionSetupTimeoutMs / 2);
@@ -387,7 +387,7 @@ public class ClusterConnectionStatesTest {
         time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
 
         // Expect two timed out connections.
-        Set<String> timedOutConnections = connectionStates.timedOutConnections(time.milliseconds());
+        Set<String> timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
         assertEquals(2, timedOutConnections.size());
         assertTrue(timedOutConnections.contains(nodeId1));
         assertTrue(timedOutConnections.contains(nodeId2));
@@ -400,7 +400,7 @@ public class ClusterConnectionStatesTest {
         time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
 
         // Expect two timed out connections.
-        timedOutConnections = connectionStates.timedOutConnections(time.milliseconds());
+        timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
         assertEquals(1, timedOutConnections.size());
         assertTrue(timedOutConnections.contains(nodeId3));
 
@@ -408,7 +408,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.disconnected(nodeId3, time.milliseconds());
 
         // Expect no timed out connections
-        timedOutConnections = connectionStates.timedOutConnections(time.milliseconds());
+        timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
         assertEquals(0, timedOutConnections.size());
     }
 }

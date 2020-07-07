@@ -445,7 +445,7 @@ final class ClusterConnectionStates {
      * Return the Set of nodes whose connection setup has timed out.
      * @param now the current time in ms
      */
-    public Set<String> timedOutConnections(long now) {
+    public Set<String> nodesWithConnectionSetupTimeout(long now) {
         Set<String> nodes = new HashSet<>();
         for (String nodeId : connectingNodes) {
             if (isConnectionSetupTimeout(nodeId, now)) {
