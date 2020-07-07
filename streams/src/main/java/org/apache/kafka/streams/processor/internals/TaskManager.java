@@ -35,6 +35,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
@@ -242,9 +243,14 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                if (!task.isActive()) {
-                    // Active tasks should have already been suspended and committed during handleRevocation, but
-                    // standbys must be suspended/committed/closed all here
+                if (task.isActive()) {
+                    // Active tasks are revoked and suspended/committed during #handleRevocation
+                    if (!task.state().equals(State.SUSPENDED)) {
+                        log.error("Active task {} should be suspended prior to attempting to close but was in {}",
+                                  task.id(), task.state());
+                        throw new IllegalStateException("Active task " + task.id() + " should have been suspended");
+                    }
+                } else {
                     task.suspend();
                     task.prepareCommit();
                     task.postCommit();
@@ -268,10 +274,19 @@ public class TaskManager {
             final Task newTask;
             try {
                 if (oldTask.isActive()) {
+                    if (!oldTask.state().equals(State.SUSPENDED)) {
+                        // Active tasks are revoked and suspended/committed during #handleRevocation
+                        log.error("Active task {} should be suspended prior to attempting to close but was in {}",
+                                  oldTask.id(), oldTask.state());
+                        throw new IllegalStateException("Active task " + oldTask.id() + " should have been suspended");
+                    }
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
+                    cleanUpTaskProducer(oldTask, taskCloseExceptions);
                 } else {
-                    oldTask.suspend(); // Only need to suspend transitioning standbys, actives should be suspended already
+                    oldTask.suspend();
+                    oldTask.prepareCommit();
+                    oldTask.postCommit();
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
