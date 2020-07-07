@@ -1,0 +1,17 @@
+{
+  "apiKey": 15,
+  "type": "response",
+  "name": "SomeMessage",
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
+  "fields": [
+    { "name": "Outer", "type": "[]InnerTypeName", "versions": "0+",
+      "about": "Each described group.", "fields": [
+      { "name": "Foo", "type": "string", "versions": "0+",
+        "default": "1", // default added
+        "about": "" },
+      { "name": "Bar", "type": "string", "versions": "0+",
+        "about": "" }
+    ]}
+  ]
+}

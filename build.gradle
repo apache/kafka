@@ -1017,6 +1017,8 @@ project(':clients') {
 
     testCompile libs.bcpkix
     testCompile libs.junit
+    testCompile libs.jgit
+    testCompile project(":generator")
     testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
@@ -1199,6 +1201,8 @@ project(':streams') {
     testCompile libs.powermockEasymock
     testCompile libs.bcpkix
     testCompile libs.hamcrest
+    testCompile libs.jgit
+    testCompile project(":generator")
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntime libs.slf4jlog4j

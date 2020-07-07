@@ -1,0 +1,16 @@
+{
+  "apiKey": 15,
+  "type": "response",
+  "name": "SomeMessage",
+  "validVersions": "1-2", // valid version has been changed
+  "flexibleVersions": "2+",
+  "fields": [
+    { "name": "Outer", "type": "[]InnerTypeName", "versions": "0+",
+      "about": "Each described group.", "fields": [
+      { "name": "Foo", "type": "string", "versions": "0+",
+        "about": "" },
+      { "name": "Bar", "type": "string", "versions": "0+",
+        "about": "" }
+    ]}
+  ]
+}
