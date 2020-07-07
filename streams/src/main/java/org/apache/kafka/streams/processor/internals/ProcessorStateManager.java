@@ -47,6 +47,7 @@ import static java.lang.String.format;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
+import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_UNKNOWN;
 
 /**
  * ProcessorStateManager is the source of truth for the current offset for each state store,
@@ -225,7 +226,8 @@ public class ProcessorStateManager implements StateManager {
                     log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
                 } else if (store.offset() == null) {
                     if (loadedCheckpoints.containsKey(store.changelogPartition)) {
-                        store.setOffset(loadedCheckpoints.remove(store.changelogPartition));
+                        final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
+                        store.setOffset(offset);
 
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                                   store.stateStore.name(), store.offset, store.changelogPartition);
@@ -538,10 +540,10 @@ public class ProcessorStateManager implements StateManager {
             // store is logged, persistent, not corrupted, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
-                storeMetadata.offset != null &&
                 !storeMetadata.corrupted) {
 
-                checkpointingOffsets.put(storeMetadata.changelogPartition, storeMetadata.offset);
+                final long checkpointableOffset = checkpointableOffsetFromChangelogOffset(storeMetadata.offset);
+                checkpointingOffsets.put(storeMetadata.changelogPartition, checkpointableOffset);
             }
         }
 
@@ -577,5 +579,15 @@ public class ProcessorStateManager implements StateManager {
         }
 
         return found.isEmpty() ? null : found.get(0);
+    }
+
+    // Pass in a sentinel value to checkpoint when the changelog offset is not yet initialized/known
+    private long checkpointableOffsetFromChangelogOffset(final Long offset) {
+        return offset != null ? offset : OFFSET_UNKNOWN;
+    }
+
+    // Convert the written offsets in the checkpoint file back to the changelog offset
+    private Long changelogOffsetFromCheckpointedOffset(final long offset) {
+        return offset != OFFSET_UNKNOWN ? offset : null;
     }
 }
