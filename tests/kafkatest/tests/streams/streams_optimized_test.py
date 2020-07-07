@@ -94,7 +94,7 @@ class StreamsOptimizedTest(Test):
         self.zookeeper.stop()
 
     def reset_application(self):
-        resetter = StreamsResetter(self.test_context, self.kafka, topic = 'input.topic', applicationId = 'StreamsOptimizedTest')
+        resetter = StreamsResetter(self.test_context, self.kafka, topic = self.input_topic, applicationId = 'StreamsOptimizedTest')
         resetter.start()
         # resetter is not long-term running but it would be better to check the pid by stopping it
         resetter.stop()
