@@ -2319,6 +2319,11 @@ class Log(@volatile private var _dir: File,
     }
   }
 
+  private[log] def removeEmptySegmentsAndMaybeUpdateLogStartOffset(segments: Seq[LogSegment]): Unit = lock synchronized {
+    removeAndDeleteSegments(segments.filter(_.size == 0), true)
+    maybeIncrementLogStartOffset(this.segments.firstKey, SegmentDeletion)
+  }
+
   /**
     * This function does not acquire Log.lock. The caller has to make sure log segments don't get deleted during
     * this call, and also protects against calling this function on the same segment in parallel.

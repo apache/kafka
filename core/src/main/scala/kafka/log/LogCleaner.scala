@@ -612,6 +612,7 @@ private[log] class Cleaner(val id: Int,
       // swap in new segment
       info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
       log.replaceSegments(List(cleaned), segments)
+      log.removeEmptySegmentsAndMaybeUpdateLogStartOffset(List(cleaned))
     } catch {
       case e: LogCleaningAbortedException =>
         try cleaned.deleteIfExists()

@@ -346,6 +346,7 @@ class LogCleanerTest {
     appendProducer(Seq(2))
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
     log.roll()
+    log.updateHighWatermark(log.logEndOffset)
 
     // cannot remove the marker in this pass because there are still valid records
     var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)._1
@@ -434,6 +435,7 @@ class LogCleanerTest {
     log.appendAsLeader(commitMarker(1L, producerEpoch), leaderEpoch = 0,
       origin = AppendOrigin.Coordinator) // offset 7
     log.roll()
+    log.updateHighWatermark(log.logEndOffset)
 
     // first time through the records are removed
     // Expected State: [{Producer1: EmptyBatch}, {Producer2: EmptyBatch}, {Producer2: Commit}, {2}, {3}, {Producer1: Commit}]
@@ -518,6 +520,7 @@ class LogCleanerTest {
 
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
     log.roll()
+    log.updateHighWatermark(log.logEndOffset)
 
     // Both the record and the marker should remain after cleaning
     cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = Long.MaxValue)
@@ -541,6 +544,7 @@ class LogCleanerTest {
 
     log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
     log.roll()
+    log.updateHighWatermark(log.logEndOffset)
 
     // Both the batch and the marker should remain after cleaning. The batch is retained
     // because it is the last entry for this producerId. The marker is retained because
@@ -573,6 +577,7 @@ class LogCleanerTest {
     appendProducer(Seq(3))
     log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, origin = AppendOrigin.Coordinator)
     log.roll()
+    log.updateHighWatermark(log.logEndOffset)
 
     // delete horizon set to 0 to verify marker is not removed early
     val dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, log.activeSegment.baseOffset), deleteHorizonMs = 0L)._1
@@ -808,6 +813,7 @@ class LogCleanerTest {
     // append some new unique keys to pad out to a new active segment
     while(log.numberOfSegments < 4)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+    log.updateHighWatermark(log.logEndOffset)
 
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     val keys = LogTest.keysInLog(log).toSet
@@ -954,12 +960,13 @@ class LogCleanerTest {
 
     while(log.numberOfSegments < numTotalSegments - 1)
       log.appendAsLeader(record(log.logEndOffset.toInt % N, log.logEndOffset.toInt), leaderEpoch = 0)
+    log.updateHighWatermark(log.logEndOffset)
 
     // the last (active) segment has just one message
 
     def distinctValuesBySegment = log.logSegments.map(s => s.log.records.asScala.map(record => TestUtils.readString(record.value)).toSet.size).toSeq
 
-    val disctinctValuesBySegmentBeforeClean = distinctValuesBySegment
+    val distinctValuesBySegmentBeforeClean = distinctValuesBySegment
     assertTrue("Test is not effective unless each segment contains duplicates. Increase segment size or decrease number of keys.",
       distinctValuesBySegment.reverse.tail.forall(_ > N))
 
@@ -967,10 +974,12 @@ class LogCleanerTest {
 
     val distinctValuesBySegmentAfterClean = distinctValuesBySegment
 
+    // After cleaning, the first segment is totally empty, so it will be removed later on.
+    assertTrue(distinctValuesBySegmentAfterClean.size == distinctValuesBySegmentBeforeClean.size - 1)
     assertTrue("The cleanable segments should have fewer number of values after cleaning",
-      disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments).forall { case (before, after) => after < before })
-    assertTrue("The uncleanable segments should have the same number of values after cleaning", disctinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean)
-      .slice(numCleanableSegments, numTotalSegments).forall { x => x._1 == x._2 })
+      distinctValuesBySegmentBeforeClean.zip(distinctValuesBySegmentAfterClean).take(numCleanableSegments - 1).forall { case (before, after) => after < before })
+    assertTrue("The uncleanable segments should have the same number of values after cleaning", distinctValuesBySegmentBeforeClean.tail.zip(distinctValuesBySegmentAfterClean)
+      .slice(numCleanableSegments - 1, numTotalSegments).forall { x => x._1 == x._2 })
   }
 
   @Test
@@ -1041,6 +1050,7 @@ class LogCleanerTest {
     // append keyed messages
     while(log.numberOfSegments < 3)
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
+    log.updateHighWatermark(log.logEndOffset)
 
     val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
     val (_, stats) = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
@@ -1298,6 +1308,7 @@ class LogCleanerTest {
       expectedKeysAfterCleaning += allKeys(k - 1)
       offsetMap.put(key(allKeys(k)), Long.MaxValue)
     }
+    log.updateHighWatermark(log.logEndOffset)
 
     // Try to clean segment with offset overflow. This will trigger log split and the cleaning itself must abort.
     assertThrows[LogCleaningAbortedException] {
@@ -1622,6 +1633,25 @@ class LogCleanerTest {
       checkGauge("max-clean-time-secs")
       checkGauge("max-compaction-delay-secs")
     } finally logCleaner.shutdown()
+  }
+
+  @Test
+  def testEmptySegmentWillNotBeCreatedAfterCleaning(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+
+    val logProps = new Properties
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    // append keyed messages to generate four segments
+    while (log.numberOfSegments < 4)
+      log.appendAsLeader(record(key = 0, value = log.logEndOffset.toInt), leaderEpoch = 0)
+    log.updateHighWatermark(log.logEndOffset)
+
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
+    assertEquals("Empty segment(s) should not be created after cleaning.", 2, log.numberOfSegments)
+    assertEquals("Log start offset should be bumped.", log.logSegments.head.baseOffset, log.logStartOffset)
   }
 
 
