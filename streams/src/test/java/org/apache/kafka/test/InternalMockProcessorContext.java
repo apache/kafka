@@ -195,7 +195,7 @@ public class InternalMockProcessorContext
     }
 
     @Override
-    protected StateManagerStub stateManager() {
+    protected StateManager stateManager() {
         return new StateManagerStub();
     }
 

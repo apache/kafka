@@ -59,7 +59,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    protected StateManagerStub stateManager() {
+    protected StateManager stateManager() {
         return new StateManagerStub();
     }
 
