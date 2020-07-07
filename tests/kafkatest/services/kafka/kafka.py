@@ -98,7 +98,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
+                 jmx_attributes=None, zk_connect_timeout=18000, zk_session_timeout=18000, server_prop_overides=None, zk_chroot=None,
                  zk_client_secure=False,
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
                  extra_kafka_opts="", tls_version=None):
