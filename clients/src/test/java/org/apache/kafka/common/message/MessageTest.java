@@ -21,6 +21,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
+import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestPartition;
@@ -61,7 +63,7 @@ import java.util.function.Supplier;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -219,6 +221,82 @@ public final class MessageTest {
     }
 
     @Test
+    public void testDescribeGroupsRequestVersions() throws Exception {
+        testAllMessageRoundTrips(new DescribeGroupsRequestData()
+                .setGroups(Collections.singletonList("group"))
+                .setIncludeAuthorizedOperations(false));
+    }
+
+    @Test
+    public void testDescribeGroupsResponseVersions() throws Exception {
+        DescribedGroupMember baseMember = new DescribedGroupMember()
+            .setMemberId(memberId);
+
+        DescribedGroup baseGroup = new DescribedGroup()
+                                       .setGroupId("group")
+                                       .setGroupState("Stable").setErrorCode(Errors.NONE.code())
+                                       .setMembers(Collections.singletonList(baseMember))
+                                       .setProtocolType("consumer");
+        DescribeGroupsResponseData baseResponse = new DescribeGroupsResponseData()
+                                                      .setGroups(Collections.singletonList(baseGroup));
+        testAllMessageRoundTrips(baseResponse);
+
+        testAllMessageRoundTripsFromVersion((short) 1, baseResponse.setThrottleTimeMs(10));
+
+        baseGroup.setAuthorizedOperations(1);
+        testAllMessageRoundTripsFromVersion((short) 3, baseResponse);
+
+        baseMember.setGroupInstanceId(instanceId);
+        testAllMessageRoundTripsFromVersion((short) 4, baseResponse);
+    }
+
+    @Test
+    public void testGroupInstanceIdIgnorableInDescribeGroupsResponse() throws Exception {
+        DescribeGroupsResponseData responseWithGroupInstanceId =
+            new DescribeGroupsResponseData()
+                .setGroups(Collections.singletonList(
+                    new DescribedGroup()
+                        .setGroupId("group")
+                        .setGroupState("Stable")
+                        .setErrorCode(Errors.NONE.code())
+                        .setMembers(Collections.singletonList(
+                            new DescribedGroupMember()
+                                .setMemberId(memberId)
+                                .setGroupInstanceId(instanceId)))
+                        .setProtocolType("consumer")
+                ));
+
+        DescribeGroupsResponseData expectedResponse = responseWithGroupInstanceId.duplicate();
+        // Unset GroupInstanceId
+        expectedResponse.groups().get(0).members().get(0).setGroupInstanceId(null);
+
+        testAllMessageRoundTripsBeforeVersion((short) 4, responseWithGroupInstanceId, expectedResponse);
+    }
+
+    @Test
+    public void testThrottleTimeIgnorableInDescribeGroupsResponse() throws Exception {
+        DescribeGroupsResponseData responseWithGroupInstanceId =
+            new DescribeGroupsResponseData()
+                .setGroups(Collections.singletonList(
+                    new DescribedGroup()
+                        .setGroupId("group")
+                        .setGroupState("Stable")
+                        .setErrorCode(Errors.NONE.code())
+                        .setMembers(Collections.singletonList(
+                            new DescribedGroupMember()
+                                .setMemberId(memberId)))
+                        .setProtocolType("consumer")
+                ))
+                .setThrottleTimeMs(10);
+
+        DescribeGroupsResponseData expectedResponse = responseWithGroupInstanceId.duplicate();
+        // Unset throttle time
+        expectedResponse.setThrottleTimeMs(0);
+
+        testAllMessageRoundTripsBeforeVersion((short) 1, responseWithGroupInstanceId, expectedResponse);
+    }
+
+    @Test
     public void testOffsetForLeaderEpochVersions() throws Exception {
         // Version 2 adds optional current leader epoch
         OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataNoCurrentEpoch =
@@ -247,7 +325,6 @@ public final class MessageTest {
         testAllMessageRoundTripsBeforeVersion((short) 3,
                 new OffsetForLeaderEpochRequestData().setReplicaId(5),
                 new OffsetForLeaderEpochRequestData().setReplicaId(-2));
-
     }
 
     @Test
@@ -625,8 +702,8 @@ public final class MessageTest {
         assertEquals(duplicate, message);
         assertEquals(message, duplicate);
         duplicate.setMyTaggedIntArray(Collections.singletonList(123));
-        assertFalse(duplicate.equals(message));
-        assertFalse(message.equals(duplicate));
+        assertNotEquals(duplicate, message);
+        assertNotEquals(message, duplicate);
 
         testAllMessageRoundTripsFromVersion((short) 2, message);
     }
@@ -743,7 +820,7 @@ public final class MessageTest {
      * Test that the JSON request files match the schemas accessible through the ApiKey class.
      */
     @Test
-    public void testRequestSchemas() throws Exception {
+    public void testRequestSchemas() {
         for (ApiKeys apiKey : ApiKeys.values()) {
             Schema[] manualSchemas = apiKey.requestSchemas;
             Schema[] generatedSchemas = ApiMessageType.fromApiKey(apiKey.id).requestSchemas();
@@ -799,13 +876,9 @@ public final class MessageTest {
                 return true;
             }
             if (type.getClass().equals(Type.RECORDS.getClass())) {
-                if (other.type.getClass().equals(Type.NULLABLE_BYTES.getClass())) {
-                    return true;
-                }
+                return other.type.getClass().equals(Type.NULLABLE_BYTES.getClass());
             } else if (type.getClass().equals(Type.NULLABLE_BYTES.getClass())) {
-                if (other.type.getClass().equals(Type.RECORDS.getClass())) {
-                    return true;
-                }
+                return other.type.getClass().equals(Type.RECORDS.getClass());
             }
             return false;
         }
@@ -870,7 +943,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testDefaultValues() throws Exception {
+    public void testDefaultValues() {
         verifyWriteRaisesUve((short) 0, "validateOnly",
             new CreateTopicsRequestData().setValidateOnly(true));
         verifyWriteSucceeds((short) 0,
@@ -883,7 +956,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testNonIgnorableFieldWithDefaultNull() throws Exception {
+    public void testNonIgnorableFieldWithDefaultNull() {
         // Test non-ignorable string field `groupInstanceId` with default null
         verifyWriteRaisesUve((short) 0, "groupInstanceId", new HeartbeatRequestData()
                 .setGroupId("groupId")
@@ -902,7 +975,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testWriteNullForNonNullableFieldRaisesException() throws Exception {
+    public void testWriteNullForNonNullableFieldRaisesException() {
         CreateTopicsRequestData createTopics = new CreateTopicsRequestData().setTopics(null);
         for (short i = (short) 0; i <= createTopics.highestSupportedVersion(); i++) {
             verifyWriteRaisesNpe(i, createTopics);
@@ -912,7 +985,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testUnknownTaggedFields() throws Exception {
+    public void testUnknownTaggedFields() {
         CreateTopicsRequestData createTopics = new CreateTopicsRequestData();
         verifyWriteSucceeds((short) 6, createTopics);
         RawTaggedField field1000 = new RawTaggedField(1000, new byte[] {0x1, 0x2, 0x3});
@@ -921,7 +994,7 @@ public final class MessageTest {
         verifyWriteSucceeds((short) 6, createTopics);
     }
 
-    private void verifyWriteRaisesNpe(short version, Message message) throws Exception {
+    private void verifyWriteRaisesNpe(short version, Message message) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         assertThrows(NullPointerException.class, () -> {
             int size = message.size(cache, version);
@@ -933,7 +1006,7 @@ public final class MessageTest {
 
     private void verifyWriteRaisesUve(short version,
                                       String problemText,
-                                     Message message) throws Exception {
+                                      Message message) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         UnsupportedVersionException e =
             assertThrows(UnsupportedVersionException.class, () -> {
@@ -947,7 +1020,7 @@ public final class MessageTest {
                 e.getMessage().contains(problemText));
     }
 
-    private void verifyWriteSucceeds(short version, Message message) throws Exception {
+    private void verifyWriteSucceeds(short version, Message message) {
         ObjectSerializationCache cache = new ObjectSerializationCache();
         int size = message.size(cache, version);
         ByteBuffer buf = ByteBuffer.allocate(size * 2);
@@ -964,7 +1037,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testCompareWithUnknownTaggedFields() throws Exception {
+    public void testCompareWithUnknownTaggedFields() {
         CreateTopicsRequestData createTopics = new CreateTopicsRequestData();
         createTopics.setTimeoutMs(123);
         CreateTopicsRequestData createTopics2 = new CreateTopicsRequestData();
@@ -977,8 +1050,8 @@ public final class MessageTest {
         assertEquals(createTopics, createTopics2);
         assertEquals(createTopics2, createTopics);
         createTopics.unknownTaggedFields().add(new RawTaggedField(0, new byte[] {0}));
-        assertFalse(createTopics.equals(createTopics2));
-        assertFalse(createTopics2.equals(createTopics));
+        assertNotEquals(createTopics, createTopics2);
+        assertNotEquals(createTopics2, createTopics);
         createTopics2.unknownTaggedFields().add(new RawTaggedField(0, new byte[] {0}));
         assertEquals(createTopics, createTopics2);
         assertEquals(createTopics2, createTopics);
