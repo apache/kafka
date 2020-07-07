@@ -47,17 +47,16 @@ class TransactionsTest(Test):
         self.num_output_partitions = 3
         self.num_seed_messages = 100000
         self.transaction_size = 750
-        self.transaction_timeout = 40000
+        # This is reducing the transaction cleanup interval.
+        # IN hard_bounce mode, transaction is broke ungracefully. Hence, it produces unstable
+        # offsets which obstructs TransactionalMessageCopier from receiving position of group.
+        self.transaction_timeout = 5000
         self.consumer_group = "transactions-test-consumer-group"
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(test_context,
                                   num_nodes=self.num_brokers,
-                                  zk=self.zk,
-                                  # Reducing timeout of transaction can quickly cleanup the unstable offsets.
-                                  # IN hard_bounce mode, transaction is broke ungracefully. Hence, it produces unstable
-                                  # offsets which obstructs TransactionalMessageCopier from receiving position of group.
-                                  transaction_timeout=2000)
+                                  zk=self.zk)
 
     def setUp(self):
         self.zk.start()

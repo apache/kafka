@@ -101,7 +101,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  jmx_attributes=None, zk_connect_timeout=18000, zk_session_timeout=18000, server_prop_overides=None, zk_chroot=None,
                  zk_client_secure=False,
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
-                 extra_kafka_opts="", tls_version=None, transaction_timeout=10000):
+                 extra_kafka_opts="", tls_version=None):
         """
         :param context: test context
         :param ZookeeperService zk:
@@ -185,11 +185,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         for node in self.nodes:
             node.version = version
+<<<<<<< HEAD
             node.config = KafkaConfig(**{
                 config_property.BROKER_ID: self.idx(node),
                 config_property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: zk_connect_timeout,
                 config_property.ZOOKEEPER_SESSION_TIMEOUT_MS: zk_session_timeout
             })
+=======
+            node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
+>>>>>>> KAFKA-10235 reduce the transaction timeout
 
     def set_version(self, version):
         for node in self.nodes:
