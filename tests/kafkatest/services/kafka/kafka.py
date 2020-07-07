@@ -225,6 +225,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             for port in self.port_mappings.values():
                 if port.open:
                     self._security_config.enable_security_protocol(port.security_protocol)
+        if self.zk.zk_sasl:
+            self._security_config.enable_sasl()
+            self._security_config.zk_sasl = self.zk.zk_sasl
+        if self.zk_client_secure:
+            self._security_config.enable_ssl()
+            self._security_config.zk_tls = self.zk_client_secure
         return self._security_config
 
     def open_port(self, listener_name):
