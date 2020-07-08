@@ -48,7 +48,7 @@ class TransactionsTest(Test):
         self.num_seed_messages = 100000
         self.transaction_size = 750
         # This is reducing the transaction cleanup interval.
-        # IN hard_bounce mode, transaction is broke ungracefully. Hence, it produces unstable
+        # IN hard_bounce mode, transaction is broken ungracefully. Hence, it produces unstable
         # offsets which obstructs TransactionalMessageCopier from receiving position of group.
         self.transaction_timeout = 5000
         self.consumer_group = "transactions-test-consumer-group"
