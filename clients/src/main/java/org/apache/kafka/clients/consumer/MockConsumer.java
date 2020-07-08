@@ -504,7 +504,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         if (strategy == OffsetResetStrategy.EARLIEST) {
             offset = beginningOffsets.get(tp);
             if (offset == null)
-                throw new IllegalStateException("MockConsumer didn't have beginning offset specified, but tried to seek to beginning");
+                throw new IllegalStateException("MockConsumer didn't have beginning offset for " + tp + " specified, but tried to seek to beginning");
         } else if (strategy == OffsetResetStrategy.LATEST) {
             offset = endOffsets.get(tp);
             if (offset == null)

@@ -30,6 +30,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
@@ -54,6 +55,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -88,6 +90,7 @@ public class TaskManager {
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
+    private Function<Set<TopicPartition>, Set<TopicPartition>> resetter;
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -193,6 +196,26 @@ public class TaskManager {
                 log.error("Error suspending corrupted task {} ", task.id(), swallow);
             }
             task.closeDirty();
+            if (task.isActive()) {
+                // Pause so we won't poll any more records for this task until it has been re-initialized
+                // Note, closeDirty already clears the partitiongroup for the task.
+                final Set<TopicPartition> currentAssignment = mainConsumer().assignment();
+                final Set<TopicPartition> assignedToPauseAndReset =
+                    Utils.intersection(HashSet::new, currentAssignment, task.inputPartitions());
+
+                mainConsumer().pause(assignedToPauseAndReset);
+                final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer().committed(assignedToPauseAndReset);
+                for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {
+                    final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
+                    if (offsetAndMetadata != null) {
+                        mainConsumer().seek(committedEntry.getKey(), offsetAndMetadata);
+                        assignedToPauseAndReset.remove(committedEntry.getKey());
+                    }
+                }
+                final Set<TopicPartition> remainder = resetter.apply(assignedToPauseAndReset);
+                // If anything didn't have a configured policy, reset to beginning
+                mainConsumer().seekToBeginning(remainder);
+            }
             task.revive();
         }
     }
@@ -1139,5 +1162,13 @@ public class TaskManager {
         executeAndMaybeSwallow(clean, runnable, e -> {
             throw e; },
             e -> log.debug("Ignoring error in unclean {}", name));
+    }
+
+    boolean hasPreRunningTasks() {
+        return new LinkedList<>(tasks().values()).stream().anyMatch(Task::preRunning);
+    }
+
+    public void setPartitionResetter(final Function<Set<TopicPartition>, Set<TopicPartition>> resetter) {
+        this.resetter = resetter;
     }
 }

@@ -95,7 +95,7 @@ public class StreamThread extends Thread {
      *          |      | Assigned (3)| <----+
      *          |      +-----+-------+      |
      *          |            |              |
-     *          |            |              |
+     *          |            |--------------+
      *          |            v              |
      *          |      +-----+-------+      |
      *          |      | Running (4) | ---->+
@@ -137,7 +137,7 @@ public class StreamThread extends Thread {
         STARTING(2, 3, 5),                // 1
         PARTITIONS_REVOKED(2, 3, 5),      // 2
         PARTITIONS_ASSIGNED(2, 3, 4, 5),  // 3
-        RUNNING(2, 3, 5),                 // 4
+        RUNNING(2, 3, 4, 5),              // 4
         PENDING_SHUTDOWN(6),              // 5
         DEAD;                             // 6
 
@@ -386,6 +386,8 @@ public class StreamThread extends Thread {
             nextScheduledRebalanceMs
         );
 
+        taskManager.setPartitionResetter(streamThread::resetOffsets);
+
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
@@ -516,16 +518,16 @@ public class StreamThread extends Thread {
                     errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                        "Setting {}=\"{}\" requires broker version 2.5 or higher.",
-                        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                        EXACTLY_ONCE_BETA);
+                                  "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                              StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                              EXACTLY_ONCE_BETA);
 
                     throw e;
                 }
             }
 
             log.error("Encountered the following exception during processing " +
-                "and the thread is going to shut down: ", e);
+                          "and the thread is going to shut down: ", e);
             throw e;
         } finally {
             completeShutdown(cleanRun);
@@ -648,7 +650,7 @@ public class StreamThread extends Thread {
 
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
-        if (state == State.PARTITIONS_ASSIGNED) {
+        if (state == State.PARTITIONS_ASSIGNED || taskManager.hasPreRunningTasks()) {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
@@ -714,7 +716,7 @@ public class StreamThread extends Thread {
 
                     if (log.isDebugEnabled()) {
                         log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                            taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
+                                  taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
                     }
                 }
 
@@ -768,9 +770,30 @@ public class StreamThread extends Thread {
 
     private void resetInvalidOffsets(final InvalidOffsetException e) {
         final Set<TopicPartition> partitions = e.partitions();
+        final Set<TopicPartition> notReset = resetOffsets(partitions);
+        if (!notReset.isEmpty()) {
+            final String notResetString =
+                notReset.stream()
+                        .map(tp -> "topic " + tp.topic() + "(partition " + tp.partition() + ")")
+                        .collect(Collectors.joining(","));
+
+            final String format = String.format(
+                "No valid committed offset found for input [%s] and no valid reset policy configured." +
+                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                    "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or " +
+                    "StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))",
+                notResetString
+            );
+
+            throw new StreamsException(format, e);
+        }
+    }
+
+    private Set<TopicPartition> resetOffsets(final Set<TopicPartition> partitions) {
         final Set<String> loggedTopics = new HashSet<>();
         final Set<TopicPartition> seekToBeginning = new HashSet<>();
         final Set<TopicPartition> seekToEnd = new HashSet<>();
+        final Set<TopicPartition> notReset = new HashSet<>();
 
         for (final TopicPartition partition : partitions) {
             if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
@@ -779,13 +802,8 @@ public class StreamThread extends Thread {
                 addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
             } else {
                 if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                    final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
-                        " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                        "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))";
-                    throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), e);
-                }
-
-                if (originalReset.equals("earliest")) {
+                    notReset.add(partition);
+                } else if (originalReset.equals("earliest")) {
                     addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
                 } else { // can only be "latest"
                     addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
@@ -796,9 +814,12 @@ public class StreamThread extends Thread {
         if (!seekToBeginning.isEmpty()) {
             mainConsumer.seekToBeginning(seekToBeginning);
         }
+
         if (!seekToEnd.isEmpty()) {
             mainConsumer.seekToEnd(seekToEnd);
         }
+
+        return notReset;
     }
 
     private void addToResetList(final TopicPartition partition, final Set<TopicPartition> partitions, final String logMessage, final String resetPolicy, final Set<String> loggedTopics) {
@@ -827,10 +848,10 @@ public class StreamThread extends Thread {
 
             committed = taskManager.commit(
                 taskManager.tasks()
-                    .values()
-                    .stream()
-                    .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                    .collect(Collectors.toSet())
+                           .values()
+                           .stream()
+                           .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                           .collect(Collectors.toSet())
             );
 
             if (committed > 0) {
@@ -1028,7 +1049,7 @@ public class StreamThread extends Thread {
 
     Consumer<byte[], byte[]> restoreConsumer() {
         return restoreConsumer;
-    };
+    }
 
     Admin adminClient() {
         return adminClient;
@@ -1036,5 +1057,5 @@ public class StreamThread extends Thread {
 
     InternalTopologyBuilder internalTopologyBuilder() {
         return builder;
-    };
+    }
 }

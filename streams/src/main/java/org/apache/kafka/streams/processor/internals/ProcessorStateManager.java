@@ -214,7 +214,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // package-private for test only
-    void initializeStoreOffsetsFromCheckpoint(final boolean storeDirIsEmpty) {
+    void initializeStoreOffsetsFromCheckpoint(final boolean taskDirIsEmpty) {
         try {
             final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
 
@@ -239,10 +239,16 @@ public class ProcessorStateManager implements StateManager {
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
                                   store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
-                        // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
+                        // With EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
                         // and hence we are uncertain that the current local state only contains committed data;
                         // in that case we need to treat it as a task-corrupted exception
-                        if (eosEnabled && !storeDirIsEmpty) {
+
+                        // Note, this is a little overzealous, since we aren't checking whether the store's specific
+                        // directory is nonempty, only if there are any directories for any stores. So if there are
+                        // two stores in a task, and one is correctly written and checkpointed, while the other is
+                        // neither written nor checkpointed, we _could_ correctly load the first and recover the second
+                        // but instead we'll consider the whole task corrupted and discard the first and recover both.
+                        if (store.stateStore.persistent() && eosEnabled && !taskDirIsEmpty) {
                             log.warn("State store {} did not find checkpoint offsets while stores are not empty, " +
                                 "since under EOS it has the risk of getting uncommitted data in stores we have to " +
                                 "treat it as a task corruption error and wipe out the local state of task {} " +
