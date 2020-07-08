@@ -140,7 +140,7 @@ object AclCommand extends Logging {
       }
     }
 
-    private def listAcls(adminClient: Admin) = {
+    private def listAcls(adminClient: Admin): Unit = {
       val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
       val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
       val resourceToAcls = getAcls(adminClient, filters)
@@ -158,7 +158,7 @@ object AclCommand extends Logging {
       }
     }
 
-    private def printResourceAcls(resourceToAcls: Map[ResourcePattern, Set[AccessControlEntry]]) = {
+    private def printResourceAcls(resourceToAcls: Map[ResourcePattern, Set[AccessControlEntry]]): Unit = {
       for ((resource, acls) <- resourceToAcls)
         println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
     }

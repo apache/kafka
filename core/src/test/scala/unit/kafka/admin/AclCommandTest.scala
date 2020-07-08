@@ -195,7 +195,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testAclCliWithClientId(): Unit = {
-    val adminClientConfig = File.createTempFile(classOf[AclCommandTest].getName, "createServer")
+    val adminClientConfig = TestUtils.tempFile()
     adminClientConfig.deleteOnExit()
     val pw = new PrintWriter(adminClientConfig)
     pw.println("client.id=my-client")
@@ -205,11 +205,12 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
     val appender = LogCaptureAppender.createAndRegister()
     val previousLevel = LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], Level.WARN)
-
-    testAclCli(adminArgs)
-
-    LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
-    LogCaptureAppender.unregister(appender)
+    try {
+        testAclCli(adminArgs)
+    } finally {
+      LogCaptureAppender.setClassLoggerLevel(classOf[AppInfoParser], previousLevel)
+      LogCaptureAppender.unregister(appender)
+    }
     val warning = appender.getMessages.find(e => e.getLevel == Level.WARN &&
       e.getThrowableInformation != null &&
       e.getThrowableInformation.getThrowable.getClass.getName == classOf[InstanceAlreadyExistsException].getName)
