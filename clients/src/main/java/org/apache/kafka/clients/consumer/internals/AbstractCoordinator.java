@@ -388,22 +388,16 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    boolean joinGroupIfNeeded(final Timer timer) {
-        return joinGroupIfNeeded(timer, true);
-    }
-
     /**
      * Joins the group without starting the heartbeat thread.
      *
      * Visible for testing.
      *
      * @param timer Timer bounding how long this method can block
-     * @param waitUntilComplete Flag indicating if we should wait until complete or timer expired;
-     *                          otherwise it is tried with best-effort only
      * @throws KafkaException if the callback throws exception
      * @return true iff the operation succeeded
      */
-    boolean joinGroupIfNeeded(final Timer timer, boolean waitUntilComplete) {
+    boolean joinGroupIfNeeded(final Timer timer) {
         while (rejoinNeededOrPending()) {
             if (!ensureCoordinatorReady(timer)) {
                 return false;
@@ -423,11 +417,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
             final RequestFuture<ByteBuffer> future = initiateJoinGroup();
 
-            // if the flat is not set to true; we only try once and not block on the join result
-            if (waitUntilComplete)
-                client.poll(future, timer);
-            else
-                client.poll(timer);
+            client.poll(future, timer);
 
             if (!future.isDone()) {
                 // we ran out of time
