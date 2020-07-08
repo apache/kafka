@@ -452,18 +452,24 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    // for testing
+    boolean poll(Timer timer) {
+        return poll(timer, true);
+    }
+
     /**
      * Poll for coordinator events. This ensures that the coordinator is known and that the consumer
      * has joined the group (if it is using group management). This also handles periodic offset commits
      * if they are enabled.
      * <p>
-     * Returns early if the timeout expires
+     * Returns early if the timeout expires or if waiting on rejoin is not required
      *
      * @param timer Timer bounding how long this method can block
+     * @param waitForJoinGroup Boolean flag indicating if we should wait until re-join group completes
      * @throws KafkaException if the rebalance callback throws an exception
      * @return true iff the operation succeeded
      */
-    public boolean poll(Timer timer) {
+    public boolean poll(Timer timer, boolean waitForJoinGroup) {
         maybeUpdateSubscriptionMetadata();
 
         invokeCompletedOffsetCommitCallbacks();
@@ -503,7 +509,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     maybeUpdateSubscriptionMetadata();
                 }
 
-                if (!ensureActiveGroup(timer)) {
+                // if not wait for join group, we would just use a timer of 0
+                if (!ensureActiveGroup(waitForJoinGroup ? timer : time.timer(0L))) {
                     return false;
                 }
             }
