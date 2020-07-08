@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallba
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -251,7 +252,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 // This handles the case that state store is moved to a new client and does not
                 // have the local RocksDB instance for the segment. In this case, toggleDBForBulkLoading
                 // will only close the database and open it again with bulk loading enabled.
-                if (!bulkLoadSegments.contains(segment)) {
+                if (!bulkLoadSegments.contains(segment) && isStoreForActiveTask()) {
                     segment.toggleDbForBulkLoading(true);
                     // If the store does not exist yet, the getOrCreateSegmentIfLive will call openDB that
                     // makes the open flag for the newly created store.
@@ -268,6 +269,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             }
         }
         return writeBatchMap;
+    }
+
+    private boolean isStoreForActiveTask() {
+        return context instanceof ProcessorContextImpl;
     }
 
     private void toggleForBulkLoading(final boolean prepareForBulkload) {
