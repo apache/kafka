@@ -452,7 +452,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    public boolean poll(Timer timer) {
+    // for testing
+    boolean poll(Timer timer) {
         return poll(timer, true);
     }
 

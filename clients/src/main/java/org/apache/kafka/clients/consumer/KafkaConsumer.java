@@ -1253,10 +1253,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
-    private boolean coordinatorNeededForAssignment() {
-        return coordinator != null && coordinator.coordinatorUnknown();
-    }
-
     /**
      * Visible for testing
      */
