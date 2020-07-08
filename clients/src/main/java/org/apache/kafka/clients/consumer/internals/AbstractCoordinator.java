@@ -341,20 +341,14 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    boolean ensureActiveGroup(final Timer timer) {
-        return ensureActiveGroup(timer, true);
-    }
-
     /**
      * Ensure the group is active (i.e., joined and synced)
      *
      * @param timer Timer bounding how long this method can block
-     * @param waitUntilComplete Flag indicating if we should wait until complete or timer expired;
-     *                          otherwise it is tried with best-effort only
      * @throws KafkaException if the callback throws exception
      * @return true iff the group is active
      */
-    boolean ensureActiveGroup(final Timer timer, final boolean waitUntilComplete) {
+    boolean ensureActiveGroup(final Timer timer) {
         // always ensure that the coordinator is ready because we may have been disconnected
         // when sending heartbeats and does not necessarily require us to rejoin the group.
         if (!ensureCoordinatorReady(timer)) {
@@ -362,7 +356,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         startHeartbeatThreadIfNeeded();
-        return joinGroupIfNeeded(timer, waitUntilComplete);
+        return joinGroupIfNeeded(timer);
     }
 
     private synchronized void startHeartbeatThreadIfNeeded() {

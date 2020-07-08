@@ -508,7 +508,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     maybeUpdateSubscriptionMetadata();
                 }
 
-                if (!ensureActiveGroup(timer)) {
+                // if not wait for join group, we would just use a timer of 0
+                if (!ensureActiveGroup(waitForJoinGroup ? timer : time.timer(0L))) {
                     return false;
                 }
             }
