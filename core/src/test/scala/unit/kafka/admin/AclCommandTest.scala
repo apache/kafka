@@ -171,7 +171,7 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     }
   }
 
-  private def assertOutputContains(prefix: String, resources: Set[ResourcePattern], resourceCmd: Array[String], output: String) = {
+  private def assertOutputContains(prefix: String, resources: Set[ResourcePattern], resourceCmd: Array[String], output: String): Unit = {
     resources.foreach { resource =>
       val resourceType = resource.resourceType.toString
       (if (resource == ClusterResource) Array("kafka-cluster") else resourceCmd.filter(!_.startsWith("--"))).foreach { name =>
@@ -196,7 +196,6 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testAclCliWithClientId(): Unit = {
     val adminClientConfig = TestUtils.tempFile()
-    adminClientConfig.deleteOnExit()
     val pw = new PrintWriter(adminClientConfig)
     pw.println("client.id=my-client")
     pw.close()
