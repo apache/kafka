@@ -225,7 +225,8 @@ public class ProcessorStateManager implements StateManager {
                 if (store.changelogPartition == null) {
                     log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
                 } else if (!store.stateStore.persistent()) {
-                    log.debug("Skipping initialization of offset from checkpoint for in-memory state store {}", store.stateStore.name());
+                    log.info("Initializing to the starting offset for changelog {} of in-memory state store {}",
+                             store.changelogPartition, store.stateStore.name());
                 } else if (store.offset() == null) {
                     if (loadedCheckpoints.containsKey(store.changelogPartition)) {
                         final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
