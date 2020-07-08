@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManager;
 import org.apache.kafka.streams.processor.internals.StateManagerStub;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -195,7 +196,7 @@ public class InternalMockProcessorContext
     }
 
     @Override
-    protected StateManagerStub stateManager() {
+    protected StateManager stateManager() {
         return new StateManagerStub();
     }
 

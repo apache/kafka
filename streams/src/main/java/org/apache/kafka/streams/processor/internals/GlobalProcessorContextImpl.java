@@ -45,7 +45,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     }
 
     @Override
-    protected GlobalStateManager stateManager() {
+    protected StateManager stateManager() {
         return stateManager;
     }
 

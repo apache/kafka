@@ -36,6 +36,7 @@ import java.util.Properties;
 
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManager;
 import org.apache.kafka.streams.processor.internals.StateManagerStub;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -59,7 +60,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    protected StateManagerStub stateManager() {
+    protected StateManager stateManager() {
         return new StateManagerStub();
     }
 

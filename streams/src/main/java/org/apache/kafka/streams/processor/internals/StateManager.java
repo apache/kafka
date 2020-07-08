@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.util.Map;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
-interface StateManager {
+public interface StateManager {
     File baseDir();
 
     /**
