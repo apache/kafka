@@ -1838,14 +1838,19 @@ public class KafkaConsumerTest {
         initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
 
         consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
+
         Node node = metadata.fetch().nodes().get(0);
         Node coordinator = prepareRebalance(client, node, assignor, Arrays.asList(tp0, t2p0), null);
 
-        // a first rebalance to get the assignment, we need two poll calls since we need two round trips to finish join / sync-group
-        consumer.poll(Duration.ZERO);
+        // a first poll with zero millisecond would not complete the rebalance
         consumer.poll(Duration.ZERO);
 
         assertEquals(Utils.mkSet(topic, topic2), consumer.subscription());
+        assertEquals(Collections.emptySet(), consumer.assignment());
+
+        // a second poll with non-zero milliseconds would complete three round-trips (discover, join, sync)
+        consumer.poll(Duration.ofMillis(100L));
+
         assertEquals(Utils.mkSet(tp0, t2p0), consumer.assignment());
 
         // prepare a response of the outstanding fetch so that we have data available on the next poll
