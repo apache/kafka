@@ -2255,7 +2255,12 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 @Override
                 void handleFailure(Throwable throwable) {
-                    completeAllExceptionally(futures.values(), throwable);
+                    // Only completes the futures of brokerId
+                    completeAllExceptionally(
+                        futures.entrySet().stream()
+                            .filter(entry -> entry.getKey().brokerId() == brokerId)
+                            .map(Entry::getValue),
+                        throwable);
                 }
             }, now);
         }
