@@ -490,7 +490,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
     val logDirs = new mutable.HashSet[String]
     val curLogDirs = new mutable.HashMap[TopicPartition, String]
     val futureLogDirs = new mutable.HashMap[TopicPartition, String]
-    result.values.get(brokerId).get().forEach {
+    result.descriptions.get(brokerId).get().forEach {
       case (logDirName, logDirInfo) => {
         logDirs.add(logDirName)
         logDirInfo.replicaInfos.forEach {

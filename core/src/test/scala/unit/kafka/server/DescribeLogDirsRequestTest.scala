@@ -27,6 +27,8 @@ import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
 
+import scala.jdk.CollectionConverters._
+
 class DescribeLogDirsRequestTest extends BaseRequestTest {
   override val logDirCount = 2
   override val brokerCount: Int = 1
@@ -46,15 +48,23 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
 
     val request = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(null)).build()
     val response = connectAndReceive[DescribeLogDirsResponse](request, destination = controllerSocketServer)
-    val logDirInfos = response.logDirInfos()
+    case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
+    case class LogDirInfo(error: Errors, replicaInfos: Map[TopicPartition, ReplicaInfo])
+    val logDirInfos = response.data.results.asScala.map{case result =>
+      result.logDir() -> LogDirInfo(Errors.forCode(result.errorCode), result.topics.asScala.flatMap { topic =>
+          topic.partitions.asScala.map { partition =>
+            new TopicPartition(topic.name, partition.partitionIndex) -> ReplicaInfo(partition.partitionSize, partition.offsetLag, partition.isFutureKey)
+          }.toMap
+        }.toMap)
+    }.toMap
 
-    assertEquals(logDirCount, logDirInfos.size())
-    assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos.get(offlineDir).error)
-    assertEquals(0, logDirInfos.get(offlineDir).replicaInfos.size())
+    assertEquals(logDirCount, logDirInfos.size)
+    assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos(offlineDir).error)
+    assertEquals(0, logDirInfos(offlineDir).replicaInfos.size)
 
-    assertEquals(Errors.NONE, logDirInfos.get(onlineDir).error)
-    val replicaInfo0 = logDirInfos.get(onlineDir).replicaInfos.get(tp0)
-    val replicaInfo1 = logDirInfos.get(onlineDir).replicaInfos.get(tp1)
+    assertEquals(Errors.NONE, logDirInfos(onlineDir).error)
+    val replicaInfo0 = logDirInfos(onlineDir).replicaInfos(tp0)
+    val replicaInfo1 = logDirInfos(onlineDir).replicaInfos(tp1)
     val log0 = servers.head.logManager.getLog(tp0).get
     val log1 = servers.head.logManager.getLog(tp1).get
     assertEquals(log0.size, replicaInfo0.size)

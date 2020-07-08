@@ -51,6 +51,7 @@ import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -178,6 +179,7 @@ import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -1054,6 +1056,154 @@ public class KafkaAdminClientTest {
             assertEquals(new HashSet<>(asList(topic)), result.keySet());
             assertNotNull(result.get(topic).get());
             assertNull(result.get(unrequested));
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testDescribeLogDirs() throws ExecutionException, InterruptedException {
+        List<Integer> brokers = singletonList(0);
+        TopicPartition tp = new TopicPartition("topic", 12);
+
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponseFrom(new DescribeLogDirsResponse(
+                    new DescribeLogDirsResponseData().setResults(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                            .setErrorCode(Errors.NONE.code())
+                            .setLogDir("/var/data/kafka")
+                            .setTopics(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsTopic()
+                                    .setName(tp.topic())
+                                    .setPartitions(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsPartition()
+                                            .setPartitionIndex(tp.partition())
+                                            .setPartitionSize(1234567890)
+                                            .setIsFutureKey(false)
+                                            .setOffsetLag(0)))))
+                    ))), env.cluster().nodeById(0));
+            DescribeLogDirsResult result = env.adminClient().describeLogDirs(brokers);
+            Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> descriptions = result.descriptions();
+            assertEquals(Collections.singleton(0), descriptions.keySet());
+            assertNotNull(descriptions.get(0));
+            assertEquals(Collections.singleton("/var/data/kafka"), descriptions.get(0).get().keySet());
+            assertNull(descriptions.get(0).get().get("/var/data/kafka").error());
+            assertEquals(Collections.singleton(tp), descriptions.get(0).get().get("/var/data/kafka").replicaInfos().keySet());
+            assertEquals(1234567890, descriptions.get(0).get().get("/var/data/kafka").replicaInfos().get(tp).size());
+            assertEquals(0, descriptions.get(0).get().get("/var/data/kafka").replicaInfos().get(tp).offsetLag());
+            assertFalse(descriptions.get(0).get().get("/var/data/kafka").replicaInfos().get(tp).isFuture());
+
+            Map<Integer, KafkaFuture<Map<String, DescribeLogDirsResponse.LogDirInfo>>> deprecatedValues = result.values();
+            assertEquals(Collections.singleton(0), deprecatedValues.keySet());
+            assertNotNull(deprecatedValues.get(0));
+            assertEquals(Collections.singleton("/var/data/kafka"), deprecatedValues.get(0).get().keySet());
+            assertEquals(Errors.NONE, deprecatedValues.get(0).get().get("/var/data/kafka").error);
+            assertEquals(Collections.singleton(tp), deprecatedValues.get(0).get().get("/var/data/kafka").replicaInfos.keySet());
+            assertEquals(1234567890, deprecatedValues.get(0).get().get("/var/data/kafka").replicaInfos.get(tp).size);
+            assertEquals(0, deprecatedValues.get(0).get().get("/var/data/kafka").replicaInfos.get(tp).offsetLag);
+            assertFalse(deprecatedValues.get(0).get().get("/var/data/kafka").replicaInfos.get(tp).isFuture);
+
+            Map<Integer, Map<String, LogDirDescription>> allDescriptions = result.allDescriptions().get();
+            assertEquals(Collections.singleton(0), allDescriptions.keySet());
+            assertNotNull(allDescriptions.get(0));
+            assertEquals(Collections.singleton("/var/data/kafka"), allDescriptions.get(0).keySet());
+            assertNull(allDescriptions.get(0).get("/var/data/kafka").error());
+            assertEquals(Collections.singleton(tp), allDescriptions.get(0).get("/var/data/kafka").replicaInfos().keySet());
+            assertEquals(1234567890, allDescriptions.get(0).get("/var/data/kafka").replicaInfos().get(tp).size());
+            assertEquals(0, allDescriptions.get(0).get("/var/data/kafka").replicaInfos().get(tp).offsetLag());
+            assertFalse(allDescriptions.get(0).get("/var/data/kafka").replicaInfos().get(tp).isFuture());
+
+            Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>> deprecatedAll = result.all().get();
+            assertEquals(Collections.singleton(0), deprecatedAll.keySet());
+            assertNotNull(deprecatedAll.get(0));
+            assertEquals(Collections.singleton("/var/data/kafka"), deprecatedAll.get(0).keySet());
+            assertEquals(Errors.NONE, deprecatedAll.get(0).get("/var/data/kafka").error);
+            assertEquals(Collections.singleton(tp), deprecatedAll.get(0).get("/var/data/kafka").replicaInfos.keySet());
+            assertEquals(1234567890, deprecatedAll.get(0).get("/var/data/kafka").replicaInfos.get(tp).size);
+            assertEquals(0, deprecatedAll.get(0).get("/var/data/kafka").replicaInfos.get(tp).offsetLag);
+            assertFalse(deprecatedAll.get(0).get("/var/data/kafka").replicaInfos.get(tp).isFuture);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testDescribeLogDirsOfflineDir() throws ExecutionException, InterruptedException {
+        List<Integer> brokers = singletonList(0);
+
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponseFrom(new DescribeLogDirsResponse(
+                    new DescribeLogDirsResponseData().setResults(asList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                            .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code())
+                            .setLogDir("/var/data/kafka")
+                            .setTopics(null)
+                    ))), env.cluster().nodeById(0));
+            DescribeLogDirsResult result = env.adminClient().describeLogDirs(brokers);
+            Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> descriptions = result.descriptions();
+            assertEquals(Collections.singleton(0), descriptions.keySet());
+            assertNotNull(descriptions.get(0));
+            assertEquals(Collections.singleton("/var/data/kafka"), descriptions.get(0).get().keySet());
+            assertEquals(KafkaStorageException.class, descriptions.get(0).get().get("/var/data/kafka").error().getClass());
+            assertEquals(emptySet(), descriptions.get(0).get().get("/var/data/kafka").replicaInfos().keySet());
+
+            Map<Integer, KafkaFuture<Map<String, DescribeLogDirsResponse.LogDirInfo>>> deprecatedValues = result.values();
+            assertEquals(Collections.singleton(0), deprecatedValues.keySet());
+            assertNotNull(deprecatedValues.get(0));
+            assertEquals(Collections.singleton("/var/data/kafka"), deprecatedValues.get(0).get().keySet());
+            assertEquals(Errors.KAFKA_STORAGE_ERROR, deprecatedValues.get(0).get().get("/var/data/kafka").error);
+            assertEquals(emptySet(), deprecatedValues.get(0).get().get("/var/data/kafka").replicaInfos.keySet());
+
+            Map<Integer, Map<String, LogDirDescription>> allDescriptions = result.allDescriptions().get();
+            assertEquals(Collections.singleton(0), allDescriptions.keySet());
+            assertNotNull(allDescriptions.get(0));
+            assertEquals(Collections.singleton("/var/data/kafka"), allDescriptions.get(0).keySet());
+            assertEquals(KafkaStorageException.class, allDescriptions.get(0).get("/var/data/kafka").error().getClass());
+            assertEquals(emptySet(), allDescriptions.get(0).get("/var/data/kafka").replicaInfos().keySet());
+
+            Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>> deprecatedAll = result.all().get();
+            assertEquals(Collections.singleton(0), deprecatedAll.keySet());
+            assertNotNull(deprecatedAll.get(0));
+            assertEquals(Collections.singleton("/var/data/kafka"), deprecatedAll.get(0).keySet());
+            assertEquals(Errors.KAFKA_STORAGE_ERROR, deprecatedAll.get(0).get("/var/data/kafka").error);
+            assertEquals(emptySet(), deprecatedAll.get(0).get("/var/data/kafka").replicaInfos.keySet());
+        }
+    }
+
+    @Test
+    public void testDescribeReplicaLogDirs() throws ExecutionException, InterruptedException {
+        TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 12, 1);
+
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponseFrom(new DescribeLogDirsResponse(
+                    new DescribeLogDirsResponseData().setResults(asList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                            .setErrorCode(Errors.NONE.code())
+                            .setLogDir("/var/data/kafka0")
+                            .setTopics(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsTopic()
+                                    .setName(tpr1.topic())
+                                    .setPartitions(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsPartition()
+                                            .setPartitionIndex(tpr1.partition())
+                                            .setPartitionSize(987654321)
+                                            .setIsFutureKey(false)
+                                            .setOffsetLag(12))))),
+                            new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                                    .setErrorCode(Errors.NONE.code())
+                                    .setLogDir("/var/data/kafka1")
+                                    .setTopics(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsTopic()
+                                            .setName(tpr1.topic())
+                                            .setPartitions(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsPartition()
+                                                    .setPartitionIndex(tpr1.partition())
+                                                    .setPartitionSize(123456789)
+                                                    .setIsFutureKey(true)
+                                                    .setOffsetLag(4321)))))
+                    ))), env.cluster().nodeById(tpr1.brokerId()));
+
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(tpr1, tpr1));
+            Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
+            assertEquals(TestUtils.toSet(singletonList(tpr1)), values.keySet());
+
+            assertNotNull(values.get(tpr1));
+            assertEquals("/var/data/kafka0", values.get(tpr1).get().getCurrentReplicaLogDir());
+            assertEquals(12, values.get(tpr1).get().getCurrentReplicaOffsetLag());
+            assertEquals("/var/data/kafka1", values.get(tpr1).get().getFutureReplicaLogDir());
+            assertEquals(4321, values.get(tpr1).get().getFutureReplicaOffsetLag());
         }
     }
 
@@ -3761,8 +3911,8 @@ public class KafkaAdminClientTest {
 
             DescribeLogDirsResult result = env.adminClient().describeLogDirs(Arrays.asList(0, 1));
 
-            TestUtils.assertFutureThrows(result.values().get(0), ApiException.class);
-            assertNotNull(result.values().get(1).get());
+            TestUtils.assertFutureThrows(result.descriptions().get(0), ApiException.class);
+            assertNotNull(result.descriptions().get(1).get());
         }
     }
 
