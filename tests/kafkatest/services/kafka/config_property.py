@@ -58,10 +58,6 @@ DELEGATION_TOKEN_EXPIRY_TIME_MS="delegation.token.expiry.time.ms"
 DELEGATION_TOKEN_MASTER_KEY="delegation.token.master.key"
 SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 
-<<<<<<< HEAD
-
-=======
->>>>>>> KAFKA-10235 reduce the transaction timeout
 """
 From KafkaConfig.scala
 

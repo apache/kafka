@@ -185,15 +185,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         for node in self.nodes:
             node.version = version
-<<<<<<< HEAD
             node.config = KafkaConfig(**{
                 config_property.BROKER_ID: self.idx(node),
                 config_property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: zk_connect_timeout,
                 config_property.ZOOKEEPER_SESSION_TIMEOUT_MS: zk_session_timeout
             })
-=======
-            node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
->>>>>>> KAFKA-10235 reduce the transaction timeout
 
     def set_version(self, version):
         for node in self.nodes:
