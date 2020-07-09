@@ -203,7 +203,13 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
     if (brokerId == ConfigEntityName.Default)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
-      brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
+      val persistentProps = brokerConfig.dynamicConfig.fromPersistentProps(properties, perBrokerConfig = true)
+      // The filepath was changed for equivalent replacement, which means we should reload
+      if (brokerConfig.dynamicConfig.trimSslStorePaths(persistentProps)) {
+        brokerConfig.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(persistentProps)
+      }
+
+      brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, persistentProps, fromPersisted = true)
       quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp).toDouble))
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
