@@ -107,14 +107,17 @@ final class StateManagerUtil {
                 } catch (final ProcessorStateException e) {
                     firstException.compareAndSet(null, e);
                 } finally {
-                    if (wipeStateStore) {
-                        log.debug("Wiping state stores for {} task {}", taskType, id);
-                        // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
-                        // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
-                        // need to re-bootstrap the restoration from the beginning
-                        Utils.delete(stateMgr.baseDir());
+                    try {
+                        if (wipeStateStore) {
+                            log.debug("Wiping state stores for {} task {}", taskType, id);
+                            // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
+                            // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
+                            // need to re-bootstrap the restoration from the beginning
+                            Utils.delete(stateMgr.baseDir());
+                        }
+                    } finally {
+                        stateDirectory.unlock(id);
                     }
-                    stateDirectory.unlock(id);
                 }
             }
         } catch (final IOException e) {
