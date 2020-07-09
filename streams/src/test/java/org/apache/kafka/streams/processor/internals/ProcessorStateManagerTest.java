@@ -814,7 +814,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldNotThrowTaskCorruptedWithWithoutInMemoryStoreCheckpointAndNonEmptyDir() throws IOException {
+    public void shouldNotThrowTaskCorruptedWithoutInMemoryStoreCheckpointAndNonEmptyDir() throws IOException {
         final long checkpointOffset = 10L;
 
         final Map<TopicPartition, Long> offsets = mkMap(
