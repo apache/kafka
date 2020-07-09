@@ -16,19 +16,20 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.SortedMap;
+import java.util.stream.Collectors;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -50,9 +51,13 @@ public class ClientState {
     private final Set<TaskId> prevStandbyTasks;
 
     private final Map<String, Set<TaskId>> consumerToPreviousStatefulTaskIds;
+    private final Map<String, List<TaskId>> consumerToPreviousActiveTaskIds;
+    private final Map<String, List<TaskId>> consumerToAssignedActiveTaskIds;
+    private final Map<String, List<TaskId>> consumerToAssignedStandbyTaskIds;
     private final Map<TopicPartition, String> ownedPartitions;
     private final Map<TaskId, Long> taskOffsetSums; // contains only stateful tasks we previously owned
     private final Map<TaskId, Long> taskLagTotals;  // contains lag for all stateful tasks in the app topology
+
 
     private int capacity;
 
@@ -66,32 +71,16 @@ public class ClientState {
         prevActiveTasks = new TreeSet<>();
         prevStandbyTasks = new TreeSet<>();
         consumerToPreviousStatefulTaskIds = new TreeMap<>();
+        consumerToPreviousActiveTaskIds = new TreeMap<>();
+        consumerToAssignedActiveTaskIds = new TreeMap<>();
+        consumerToAssignedStandbyTaskIds = new TreeMap<>();
         ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
         this.capacity = capacity;
     }
 
-    private ClientState(final Set<TaskId> activeTasks,
-                        final Set<TaskId> standbyTasks,
-                        final Set<TaskId> prevActiveTasks,
-                        final Set<TaskId> prevStandbyTasks,
-                        final Map<String, Set<TaskId>> consumerToPreviousStatefulTaskIds,
-                        final SortedMap<TopicPartition, String> ownedPartitions,
-                        final Map<TaskId, Long> taskOffsetSums,
-                        final Map<TaskId, Long> taskLagTotals,
-                        final int capacity) {
-        this.activeTasks = activeTasks;
-        this.standbyTasks = standbyTasks;
-        this.prevActiveTasks = prevActiveTasks;
-        this.prevStandbyTasks = prevStandbyTasks;
-        this.consumerToPreviousStatefulTaskIds = consumerToPreviousStatefulTaskIds;
-        this.ownedPartitions = ownedPartitions;
-        this.taskOffsetSums = taskOffsetSums;
-        this.taskLagTotals = taskLagTotals;
-        this.capacity = capacity;
-    }
-
+    // For testing only
     public ClientState(final Set<TaskId> previousActiveTasks,
                        final Set<TaskId> previousStandbyTasks,
                        final Map<TaskId, Long> taskLagTotals,
@@ -101,25 +90,13 @@ public class ClientState {
         prevActiveTasks = unmodifiableSet(new TreeSet<>(previousActiveTasks));
         prevStandbyTasks = unmodifiableSet(new TreeSet<>(previousStandbyTasks));
         consumerToPreviousStatefulTaskIds = new TreeMap<>();
+        consumerToPreviousActiveTaskIds = new TreeMap<>();
+        consumerToAssignedActiveTaskIds = new TreeMap<>();
+        consumerToAssignedStandbyTaskIds = new TreeMap<>();
         ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
-    }
-
-    public ClientState copy() {
-        final TreeMap<TopicPartition, String> newOwnedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
-        newOwnedPartitions.putAll(ownedPartitions);
-        return new ClientState(
-            new TreeSet<>(activeTasks),
-            new TreeSet<>(standbyTasks),
-            new TreeSet<>(prevActiveTasks),
-            new TreeSet<>(prevStandbyTasks),
-            new TreeMap<>(consumerToPreviousStatefulTaskIds),
-            newOwnedPartitions,
-            new TreeMap<>(taskOffsetSums),
-            new TreeMap<>(taskLagTotals),
-            capacity);
     }
 
     int capacity() {
@@ -148,6 +125,39 @@ public class ClientState {
 
     public void assignActiveTasks(final Collection<TaskId> tasks) {
         activeTasks.addAll(tasks);
+    }
+
+    public void assignActiveToConsumer(final TaskId task, final String consumer) {
+        consumerToAssignedActiveTaskIds.getOrDefault(consumer, new ArrayList<>()).add(task);
+    }
+
+    public void assignStandbyToConsumer(final TaskId task, final String consumer) {
+        consumerToAssignedStandbyTaskIds.getOrDefault(consumer, new ArrayList<>()).add(task);
+    }
+
+    public Map<String, List<TaskId>> prevOwnedActiveByConsumer() {
+        return consumerToPreviousActiveTaskIds;
+    }
+
+    public Map<String, List<TaskId>> prevOwnedStandbyByConsumer() {
+        // standbys are just those stateful tasks minus active tasks
+        final Map<String, List<TaskId>> consumerToPreviousStandbyTaskIds = new TreeMap<>();
+
+        for (final Map.Entry<String, Set<TaskId>> entry: consumerToPreviousStatefulTaskIds.entrySet()) {
+            final List<TaskId> standbyTaskIds = new ArrayList<>(entry.getValue());
+            standbyTaskIds.removeAll(consumerToPreviousActiveTaskIds.get(entry.getKey()));
+            consumerToPreviousStandbyTaskIds.put(entry.getKey(), standbyTaskIds);
+        }
+
+        return consumerToPreviousStandbyTaskIds;
+    }
+
+    public Map<String, List<TaskId>> assignedActiveByConsumer() {
+        return consumerToAssignedActiveTaskIds;
+    }
+
+    public Map<String, List<TaskId>> assignedStandbyByConsumer() {
+        return consumerToAssignedStandbyTaskIds;
     }
 
     public void assignActive(final TaskId task) {
@@ -345,13 +355,17 @@ public class ClientState {
         }
     }
 
+    public String currentAssignment() {
+        return "[activeTasks: (" + activeTasks +
+                ") standbyTasks: (" + standbyTasks + ")]";
+    }
+
     @Override
     public String toString() {
         return "[activeTasks: (" + activeTasks +
             ") standbyTasks: (" + standbyTasks +
             ") prevActiveTasks: (" + prevActiveTasks +
             ") prevStandbyTasks: (" + prevStandbyTasks +
-            ") prevOwnedPartitionsByConsumerId: (" + ownedPartitions.keySet() +
             ") changelogOffsetTotalsByTask: (" + taskOffsetSums.entrySet() +
             ") taskLagTotals: (" + taskLagTotals.entrySet() +
             ") capacity: " + capacity +
@@ -373,6 +387,7 @@ public class ClientState {
             final TaskId task = taskForPartitionMap.get(tp);
             if (task != null) {
                 addPreviousActiveTask(task);
+                consumerToPreviousActiveTaskIds.getOrDefault(partitionEntry.getValue(), new ArrayList<>()).add(task);
             } else {
                 LOG.error("No task found for topic partition {}", tp);
             }
