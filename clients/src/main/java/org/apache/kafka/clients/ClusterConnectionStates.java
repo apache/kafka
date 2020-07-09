@@ -443,13 +443,13 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Return the Set of nodes whose connection setup has timed out.
+     * Return the List of nodes whose connection setup has timed out.
      * @param now the current time in ms
      */
-    public Set<String> nodesWithConnectionSetupTimeout(long now) {
+    public List<String> nodesWithConnectionSetupTimeout(long now) {
         return connectingNodes.stream()
             .filter(id -> isConnectionSetupTimeout(id, now))
-            .collect(Collectors.toSet());
+            .collect(Collectors.toList());
     }
 
     /**
