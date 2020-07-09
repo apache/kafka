@@ -49,6 +49,7 @@ import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -1088,5 +1089,24 @@ public class InternalTopologyBuilderTest {
             repartitionSourceTopics.get("Y-topic-1y"),
             new RepartitionTopicConfig("Y-topic-1y", Collections.emptyMap())
         );
+    }
+
+    @Test
+    public void shouldConnectGlobalStateStoreToInputTopic() {
+        final String globalStoreName = "global-store";
+        final String globalTopic = "global-topic";
+        builder.setApplicationId("X");
+        builder.addGlobalStore(
+            new MockKeyValueStoreBuilder(globalStoreName, false).withLoggingDisabled(),
+            "globalSource",
+            null,
+            null,
+            null,
+            globalTopic,
+            "global-processor",
+            new MockProcessorSupplier<>());
+        builder.initializeSubscription();
+
+        assertThat(builder.buildGlobalStateTopology().storeToChangelogTopic().get(globalStoreName), is(globalTopic));
     }
 }

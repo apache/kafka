@@ -145,4 +145,9 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
     }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return "mock-changelog";
+    }
 }

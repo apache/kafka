@@ -149,6 +149,17 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldReturnDefaultChangelogTopicName() {
+        final String applicationId = "appId";
+        final String storeName = "store";
+
+        assertThat(
+            ProcessorStateManager.storeChangelogTopic(applicationId, storeName),
+            is(applicationId + "-" + storeName + "-changelog")
+        );
+    }
+
+    @Test
     public void shouldReturnBaseDir() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         assertEquals(stateDirectory.directoryForTask(taskId), stateMgr.baseDir());
@@ -436,6 +447,44 @@ public class ProcessorStateManagerTest {
         } finally {
             stateMgr.close();
         }
+    }
+
+    @Test
+    public void shouldGetChangelogPartitionForRegisteredStore() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+
+        final TopicPartition changelogPartition = stateMgr.registeredChangelogPartitionFor(persistentStoreName);
+
+        assertThat(changelogPartition.topic(), is(persistentStoreTopicName));
+        assertThat(changelogPartition.partition(), is(taskId.partition));
+    }
+
+    @Test
+    public void shouldThrowIfStateStoreIsNotRegistered() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+
+        assertThrows("State store " + persistentStoreName
+            + " for which the registered changelog partition should be"
+            + " retrieved has not been registered",
+            IllegalStateException.class,
+            () -> stateMgr.registeredChangelogPartitionFor(persistentStoreName)
+        );
+    }
+
+    @Test
+    public void shouldThrowIfStateStoreHasLoggingDisabled() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
+        final String storeName = "store-with-logging-disabled";
+        final MockKeyValueStore storeWithLoggingDisabled = new MockKeyValueStore(storeName, true);
+        stateMgr.registerStore(storeWithLoggingDisabled, null);
+
+        assertThrows("Registered state store " + storeName
+                + " does not have a registered changelog partition."
+                + " This may happen if logging is disabled for the state store.",
+            IllegalStateException.class,
+            () -> stateMgr.registeredChangelogPartitionFor(storeName)
+        );
     }
 
     @Test
