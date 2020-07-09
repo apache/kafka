@@ -1044,7 +1044,8 @@ project(':clients') {
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "org.apache.kafka.common.message",
              "src/generated/java/org/apache/kafka/common/message",
-             "src/main/resources/common/message" ]
+             "src/main/resources/common/message",
+             "ApiMessageTypeGenerator" ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
@@ -1054,7 +1055,8 @@ project(':clients') {
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "org.apache.kafka.common.message",
              "src/generated-test/java/org/apache/kafka/common/message",
-             "src/test/resources/common/message" ]
+             "src/test/resources/common/message",
+             "none" ]
     inputs.dir("src/test/resources/common/message")
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
@@ -1189,7 +1191,8 @@ project(':streams') {
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "org.apache.kafka.streams.internals.generated",
              "src/generated/java/org/apache/kafka/streams/internals/generated",
-             "src/main/resources/common/message" ]
+             "src/main/resources/common/message",
+             "none" ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
   }
