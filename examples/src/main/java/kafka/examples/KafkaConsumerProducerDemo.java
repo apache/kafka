@@ -40,9 +40,8 @@ public class KafkaConsumerProducerDemo {
             e.printStackTrace();
         } finally {
             consumerThread.shutdown();
+            System.out.println("All finished!");
         }
 
-        consumerThread.shutdown();
-        System.out.println("All finished!");
     }
 }
