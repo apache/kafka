@@ -104,7 +104,7 @@ public class ProcessorTopology {
     }
 
     public List<StateStore> globalStateStores() {
-        return globalStateStores;
+        return Collections.unmodifiableList(globalStateStores);
     }
 
     public Map<String, String> storeToChangelogTopic() {
