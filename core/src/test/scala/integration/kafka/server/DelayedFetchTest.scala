@@ -62,7 +62,7 @@ class DelayedFetchTest extends EasyMockSupport {
 
     val partition: Partition = mock(classOf[Partition])
 
-    EasyMock.expect(replicaManager.getPartitionOrException(topicPartition, expectLeader = true))
+    EasyMock.expect(replicaManager.getPartitionOrException(topicPartition))
         .andReturn(partition)
     EasyMock.expect(partition.fetchOffsetSnapshot(currentLeaderEpoch, fetchOnlyFromLeader = true))
         .andThrow(new FencedLeaderEpochException("Requested epoch has been fenced"))
@@ -106,7 +106,7 @@ class DelayedFetchTest extends EasyMockSupport {
       clientMetadata = None,
       responseCallback = callback)
 
-    EasyMock.expect(replicaManager.getPartitionOrException(topicPartition, expectLeader = true))
+    EasyMock.expect(replicaManager.getPartitionOrException(topicPartition))
       .andThrow(new ReplicaNotAvailableException(s"Replica for $topicPartition not available"))
     expectReadFromReplicaWithError(replicaId, topicPartition, fetchStatus.fetchInfo, Errors.REPLICA_NOT_AVAILABLE)
     EasyMock.expect(replicaManager.isAddingReplica(EasyMock.anyObject(), EasyMock.anyInt())).andReturn(false)

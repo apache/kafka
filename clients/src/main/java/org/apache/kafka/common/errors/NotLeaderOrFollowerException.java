@@ -17,27 +17,27 @@
 package org.apache.kafka.common.errors;
 
 /**
- * This server is not the leader for the given partition.
- * @deprecated since 2.7. Use {@link NotLeaderOrFollowerException}.
+ * This server is not the leader or follower for the given partition.
+ * This could a transient exception during reassignments.
  */
-@Deprecated
-public class NotLeaderForPartitionException extends InvalidMetadataException {
+@SuppressWarnings("deprecation")
+public class NotLeaderOrFollowerException extends NotLeaderForPartitionException {
 
     private static final long serialVersionUID = 1L;
 
-    public NotLeaderForPartitionException() {
+    public NotLeaderOrFollowerException() {
         super();
     }
 
-    public NotLeaderForPartitionException(String message) {
+    public NotLeaderOrFollowerException(String message) {
         super(message);
     }
 
-    public NotLeaderForPartitionException(Throwable cause) {
+    public NotLeaderOrFollowerException(Throwable cause) {
         super(cause);
     }
 
-    public NotLeaderForPartitionException(String message, Throwable cause) {
+    public NotLeaderOrFollowerException(String message, Throwable cause) {
         super(message, cause);
     }
 

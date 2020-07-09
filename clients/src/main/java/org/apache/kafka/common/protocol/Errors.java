@@ -72,7 +72,7 @@ import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
-import org.apache.kafka.common.errors.NotLeaderForPartitionException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -139,8 +139,8 @@ public enum Errors {
             InvalidFetchSizeException::new),
     LEADER_NOT_AVAILABLE(5, "There is no leader for this topic-partition as we are in the middle of a leadership election.",
             LeaderNotAvailableException::new),
-    NOT_LEADER_FOR_PARTITION(6, "This server is not the leader for that topic-partition.",
-            NotLeaderForPartitionException::new),
+    NOT_LEADER_OR_FOLLOWER(6, "This server is not the leader or follower for that topic-partition.",
+            NotLeaderOrFollowerException::new),
     REQUEST_TIMED_OUT(7, "The request timed out.",
             TimeoutException::new),
     BROKER_NOT_AVAILABLE(8, "The broker is not available.",
