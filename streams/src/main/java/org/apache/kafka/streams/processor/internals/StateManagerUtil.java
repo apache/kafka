@@ -104,7 +104,9 @@ final class StateManagerUtil {
             if (stateDirectory.lock(id)) {
                 try {
                     stateMgr.close();
-
+                } catch (final ProcessorStateException e) {
+                    firstException.compareAndSet(null, e);
+                } finally {
                     if (wipeStateStore) {
                         log.debug("Wiping state stores for {} task {}", taskType, id);
                         // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
@@ -112,9 +114,6 @@ final class StateManagerUtil {
                         // need to re-bootstrap the restoration from the beginning
                         Utils.delete(stateMgr.baseDir());
                     }
-                } catch (final ProcessorStateException e) {
-                    firstException.compareAndSet(null, e);
-                } finally {
                     stateDirectory.unlock(id);
                 }
             }
@@ -123,7 +122,6 @@ final class StateManagerUtil {
                 String.format("%sFatal error while trying to close the state manager for task %s", logPrefix, id), e
             );
             firstException.compareAndSet(null, exception);
-
         }
 
         final ProcessorStateException exception = firstException.get();
