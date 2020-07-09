@@ -54,6 +54,7 @@ public class ClientState {
     private final Map<String, List<TaskId>> consumerToPreviousActiveTaskIds;
     private final Map<String, List<TaskId>> consumerToAssignedActiveTaskIds;
     private final Map<String, List<TaskId>> consumerToAssignedStandbyTaskIds;
+    private final Map<String, List<TaskId>> consumerToRevokingActiveTaskIds;
     private final Map<TopicPartition, String> ownedPartitions;
     private final Map<TaskId, Long> taskOffsetSums; // contains only stateful tasks we previously owned
     private final Map<TaskId, Long> taskLagTotals;  // contains lag for all stateful tasks in the app topology
@@ -74,6 +75,7 @@ public class ClientState {
         consumerToPreviousActiveTaskIds = new TreeMap<>();
         consumerToAssignedActiveTaskIds = new TreeMap<>();
         consumerToAssignedStandbyTaskIds = new TreeMap<>();
+        consumerToRevokingActiveTaskIds = new TreeMap<>();
         ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
@@ -93,6 +95,7 @@ public class ClientState {
         consumerToPreviousActiveTaskIds = new TreeMap<>();
         consumerToAssignedActiveTaskIds = new TreeMap<>();
         consumerToAssignedStandbyTaskIds = new TreeMap<>();
+        consumerToRevokingActiveTaskIds = new TreeMap<>();
         ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
@@ -135,6 +138,10 @@ public class ClientState {
         consumerToAssignedStandbyTaskIds.getOrDefault(consumer, new ArrayList<>()).add(task);
     }
 
+    public void revokeActiveFromConsumer(final TaskId task, final String consumer) {
+        consumerToRevokingActiveTaskIds.getOrDefault(consumer, new ArrayList<>()).add(task);
+    }
+
     public Map<String, List<TaskId>> prevOwnedActiveByConsumer() {
         return consumerToPreviousActiveTaskIds;
     }
@@ -145,7 +152,8 @@ public class ClientState {
 
         for (final Map.Entry<String, Set<TaskId>> entry: consumerToPreviousStatefulTaskIds.entrySet()) {
             final List<TaskId> standbyTaskIds = new ArrayList<>(entry.getValue());
-            standbyTaskIds.removeAll(consumerToPreviousActiveTaskIds.get(entry.getKey()));
+            if (consumerToPreviousActiveTaskIds.containsKey(entry.getKey()))
+                standbyTaskIds.removeAll(consumerToPreviousActiveTaskIds.get(entry.getKey()));
             consumerToPreviousStandbyTaskIds.put(entry.getKey(), standbyTaskIds);
         }
 
@@ -154,6 +162,10 @@ public class ClientState {
 
     public Map<String, List<TaskId>> assignedActiveByConsumer() {
         return consumerToAssignedActiveTaskIds;
+    }
+
+    public Map<String, List<TaskId>> revokingActiveByConsumer() {
+        return consumerToRevokingActiveTaskIds;
     }
 
     public Map<String, List<TaskId>> assignedStandbyByConsumer() {

@@ -961,10 +961,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                             "\tprev owned active {}\n" +
                             "\tprev owned standby {}\n" +
                             "\tassigned active {}\n" +
-                            "\tassigned standby {}", clientId,
+                            "\trevoking active {}" +
+                            "\tassigned standby {}\n", clientId,
                     clientMetadata.state.prevOwnedActiveByConsumer(),
                     clientMetadata.state.prevOwnedStandbyByConsumer(),
                     clientMetadata.state.assignedActiveByConsumer(),
+                    clientMetadata.state.revokingActiveByConsumer(),
                     clientMetadata.state.assignedStandbyByConsumer());
         }
 
@@ -1095,6 +1097,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                         consumer
                     );
                     removedActiveTasks.add(taskId);
+
+                    clientState.revokeActiveFromConsumer(taskId, consumer);
 
                     // Clear the assigned partitions list for this task if any partition can not safely be assigned,
                     // so as not to encode a partial task
