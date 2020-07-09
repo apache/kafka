@@ -29,7 +29,7 @@ import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs, AbstractConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -288,14 +288,17 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     dynamicDefaultConfigs.clone()
   }
 
-  private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
+  private[server] def updateBrokerConfig(brokerId: Int,
+                                         props: Properties,
+                                         fromPersisted: Boolean = false): Unit = CoreUtils.inWriteLock(lock) {
     try {
-      val props = fromPersistentProps(persistentProps, perBrokerConfig = true)
+      val newProps = if (fromPersisted) props else fromPersistentProps(props, perBrokerConfig = true)
+      trimSslStorePaths(newProps)
       dynamicBrokerConfigs.clear()
-      dynamicBrokerConfigs ++= props.asScala
+      dynamicBrokerConfigs ++= newProps.asScala
       updateCurrentConfig()
     } catch {
-      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: $persistentProps", e)
+      case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: $props", e)
     }
   }
 
@@ -329,6 +332,50 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         case reconfigurable =>
           trace(s"Files will not be reloaded without config change for $reconfigurable")
       }
+  }
+
+  private[server] def maybeAugmentSslStorePaths(configProps: Properties, previousConfigProps: Map[String, String]): Unit ={
+    val processedFiles = new mutable.HashSet[String]
+    reconfigurables
+      .filter(reconfigurable => ReloadableFileConfigs.exists(reconfigurable.reconfigurableConfigs.contains))
+        .foreach({
+          case reconfigurable: ListenerReconfigurable =>
+            ReloadableFileConfigs.foreach(configName => {
+              val prefixedName = reconfigurable.listenerName.configPrefix + configName
+              if (!processedFiles.contains(prefixedName) && configProps.containsKey(prefixedName) &&
+                configProps.get(prefixedName).equals(previousConfigProps.getOrElse(prefixedName, ""))) {
+                val equivalentFileName = configProps.getProperty(prefixedName).replace("/", "//")
+                configProps.setProperty(prefixedName, equivalentFileName)
+                processedFiles.add(prefixedName)
+              }
+            })
+        })
+  }
+
+  private[server] def trimSslStorePaths(configProps: Properties): Boolean = {
+    var fileChanged = false
+    val processedFiles = new mutable.HashSet[String]
+
+    reconfigurables
+      .filter(reconfigurable => ReloadableFileConfigs.exists(reconfigurable.reconfigurableConfigs.contains))
+      .foreach {
+        case reconfigurable: ListenerReconfigurable =>
+        ReloadableFileConfigs.foreach(configName => {
+          val prefixedName = reconfigurable.listenerName.configPrefix + configName
+          if (!processedFiles.contains(prefixedName) && configProps.containsKey(prefixedName)) {
+            val configFileName = configProps.getProperty(prefixedName)
+            val equivalentFileName = configFileName.replace("//", "/")
+            if (!configFileName.equals(equivalentFileName)) {
+              fileChanged = true
+            }
+
+            configProps.setProperty(prefixedName, equivalentFileName)
+            processedFiles.add(prefixedName)
+          }
+        }
+        )
+      }
+    fileChanged
   }
 
   private def maybeCreatePasswordEncoder(secret: Option[Password]): Option[PasswordEncoder] = {
@@ -572,7 +619,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                             newConfig: KafkaConfig,
                                             customConfigs: util.Map[String, Object],
                                             validateOnly: Boolean,
-                                            reloadOnly:  Boolean): Unit = {
+                                            reloadOnly: Boolean): Unit = {
     val listenerName = listenerReconfigurable.listenerName
     val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
     val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)

@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
+import org.apache.kafka.common.security.auth.KafkaPrincipalSerde;
 import org.apache.kafka.common.security.auth.SslAuthenticationContext;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
@@ -36,6 +37,7 @@ import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
@@ -199,6 +201,11 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
                     clientAddress,
                     listenerName.value());
             return principalBuilder.build(context);
+        }
+
+        @Override
+        public Optional<KafkaPrincipalSerde> principalSerde() {
+            return principalBuilder instanceof KafkaPrincipalSerde ? Optional.of((KafkaPrincipalSerde) principalBuilder) : Optional.empty();
         }
 
         @Override

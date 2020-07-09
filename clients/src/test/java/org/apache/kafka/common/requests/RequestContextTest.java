@@ -78,5 +78,4 @@ public class RequestContextTest {
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
         assertTrue(response.data.apiKeys().isEmpty());
     }
-
 }

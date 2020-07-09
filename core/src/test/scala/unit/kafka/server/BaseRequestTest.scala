@@ -45,6 +45,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   override def modifyConfigs(props: Seq[Properties]): Unit = {
     props.foreach { p =>
       p.put(KafkaConfig.ControlledShutdownEnableProp, "false")
+      p.put(KafkaConfig.enableMetadataQuorumProp, "true")
       brokerPropertyOverrides(p)
     }
   }

@@ -36,12 +36,15 @@ public class RequestHeader implements AbstractRequestResponse {
         this(new RequestHeaderData(struct, headerVersion), headerVersion);
     }
 
-    public RequestHeader(ApiKeys requestApiKey, short requestVersion, String clientId, int correlationId) {
-        this(new RequestHeaderData().
-                setRequestApiKey(requestApiKey.id).
-                setRequestApiVersion(requestVersion).
-                setClientId(clientId).
-                setCorrelationId(correlationId),
+    public RequestHeader(ApiKeys requestApiKey,
+                         short requestVersion,
+                         String clientId,
+                         int correlationId) {
+        this(new RequestHeaderData()
+                 .setRequestApiKey(requestApiKey.id)
+                 .setRequestApiVersion(requestVersion)
+                 .setClientId(clientId)
+                 .setCorrelationId(correlationId),
             ApiKeys.forId(requestApiKey.id).requestHeaderVersion(requestVersion));
     }
 

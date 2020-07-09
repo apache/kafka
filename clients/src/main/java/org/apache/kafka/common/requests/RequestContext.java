@@ -40,6 +40,7 @@ public class RequestContext implements AuthorizableRequestContext {
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
     public final ClientInformation clientInformation;
+    public final boolean fromPrivilegedListener;
 
     public RequestContext(RequestHeader header,
                           String connectionId,
@@ -47,7 +48,8 @@ public class RequestContext implements AuthorizableRequestContext {
                           KafkaPrincipal principal,
                           ListenerName listenerName,
                           SecurityProtocol securityProtocol,
-                          ClientInformation clientInformation) {
+                          ClientInformation clientInformation,
+                          boolean fromPrivilegedListener) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
@@ -55,6 +57,7 @@ public class RequestContext implements AuthorizableRequestContext {
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.clientInformation = clientInformation;
+        this.fromPrivilegedListener = fromPrivilegedListener;
     }
 
     public RequestAndSize parseRequest(ByteBuffer buffer) {

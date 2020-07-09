@@ -106,8 +106,7 @@ class InterBrokerSendThreadTest {
     EasyMock.expect(networkClient.newClientRequest(
       EasyMock.eq("1"),
       EasyMock.same(requestAndCompletionHandler.request),
-      EasyMock.anyLong(),
-      EasyMock.eq(true),
+      EasyMock.anyLong(), EasyMock.eq(true),
       EasyMock.eq(requestTimeoutMs),
       EasyMock.same(requestAndCompletionHandler.handler)))
       .andReturn(clientRequest)

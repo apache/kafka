@@ -34,6 +34,11 @@ public class ProtoUtilsTest {
                 case EXPIRE_DELEGATION_TOKEN:
                 case RENEW_DELEGATION_TOKEN:
                 case ALTER_USER_SCRAM_CREDENTIALS:
+                case ENVELOPE:
+                case ALTER_CONFIGS:
+                case INCREMENTAL_ALTER_CONFIGS:
+                case ALTER_CLIENT_QUOTAS:
+                case CREATE_TOPICS:
                     assertTrue(key + " should require delayed allocation", key.requiresDelayedAllocation);
                     break;
                 default:

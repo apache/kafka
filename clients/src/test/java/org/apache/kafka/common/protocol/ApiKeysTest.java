@@ -59,7 +59,8 @@ public class ApiKeysTest {
         for (ApiKeys apiKey: ApiKeys.values()) {
             Schema responseSchema = apiKey.responseSchema(apiKey.latestVersion());
             BoundField throttleTimeField = responseSchema.get(CommonFields.THROTTLE_TIME_MS.name);
-            if (apiKey.clusterAction || authenticationKeys.contains(apiKey))
+            // Envelope could be throttled, even though it requires cluster action.
+            if (apiKey != ApiKeys.ENVELOPE && (apiKey.clusterAction || authenticationKeys.contains(apiKey)))
                 assertNull("Unexpected throttle time field: " + apiKey, throttleTimeField);
             else
                 assertNotNull("Throttle time field missing: " + apiKey, throttleTimeField);

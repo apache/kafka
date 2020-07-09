@@ -345,6 +345,17 @@ public class AbstractConfig {
         return new RecordingMap<>(values);
     }
 
+    public Map<String, ?> nonInternalValues() {
+        Map<String, Object> nonInternalConfigs = new RecordingMap<>();
+        values.forEach((key, value) -> {
+            ConfigDef.ConfigKey configKey = definition.configKeys().get(key);
+            if (configKey == null || !configKey.internalConfig) {
+                nonInternalConfigs.put(key, value);
+            }
+        });
+        return nonInternalConfigs;
+    }
+
     private void logAll() {
         StringBuilder b = new StringBuilder();
         b.append(getClass().getSimpleName());

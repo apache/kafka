@@ -14,14 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.security.auth;
+
+import java.nio.ByteBuffer;
 
 /**
- * A callback interface for attaching an action to be executed when a request is complete and the corresponding response
- * has been received. This handler will also be invoked if there is a disconnection while handling the request.
+ * Serializer/Deserializer interface for {@link KafkaPrincipal} for the forwarding purpose.
  */
-public interface RequestCompletionHandler {
+public interface KafkaPrincipalSerde {
 
-    void onComplete(ClientResponse response);
+    ByteBuffer serialize(KafkaPrincipal principal);
 
+    KafkaPrincipal deserialize(ByteBuffer bytes);
 }

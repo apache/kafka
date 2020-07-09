@@ -36,7 +36,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData._
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde}
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 
 import scala.annotation.nowarn
@@ -76,12 +76,22 @@ object RequestChannel extends Logging {
     }
   }
 
+  class EnvelopeContext(val brokerContext: RequestContext,
+                        @volatile private var originalRequestBuffer: ByteBuffer) {
+    def release(memoryPool: MemoryPool): Unit = {
+      memoryPool.release(originalRequestBuffer)
+      originalRequestBuffer = null
+    }
+  }
+
   class Request(val processor: Int,
                 val context: RequestContext,
                 val startTimeNanos: Long,
                 memoryPool: MemoryPool,
-                @volatile private var buffer: ByteBuffer,
-                metrics: RequestChannel.Metrics) extends BaseRequest {
+                @volatile var buffer: ByteBuffer,
+                metrics: RequestChannel.Metrics,
+                val envelopeContext: Option[EnvelopeContext] = None,
+                val principalSerde: Option[KafkaPrincipalSerde] = None) extends BaseRequest {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeNanos = -1L
@@ -94,19 +104,63 @@ object RequestChannel extends Logging {
     @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
     val session = Session(context.principal, context.clientAddress)
+
     private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
 
     def header: RequestHeader = context.header
     def sizeOfBodyInBytes: Int = bodyAndSize.size
 
-    //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
-    //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
-    //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
+    // most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
+    // some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
+    // to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
     if (!header.apiKey.requiresDelayedAllocation) {
       releaseBuffer()
     }
 
-    def requestDesc(details: Boolean): String = s"$header -- ${loggableRequest.toString(details)}"
+    def buildResponse(abstractResponse: AbstractResponse,
+                      error: Errors): Send = {
+      envelopeContext match {
+        case Some(envelopeContext) =>
+          val envelopeResponse = new EnvelopeResponse(
+            abstractResponse.throttleTimeMs(),
+            abstractResponse.serializeBody(context.header.apiVersion),
+            error
+          )
+
+          envelopeContext.brokerContext.buildResponse(envelopeResponse)
+        case None =>
+          context.buildResponse(abstractResponse)
+      }
+    }
+
+    def responseString(response: AbstractResponse): Option[String] = {
+      if (RequestChannel.isRequestLoggingEnabled)
+        Some(envelopeContext match {
+          case Some(envelopeContext) =>
+            response.toString(envelopeContext.brokerContext.apiVersion)
+          case None =>
+            response.toString(context.apiVersion)
+        })
+      else
+        None
+    }
+
+    def headerForLoggingOrThrottling(): RequestHeader = {
+      envelopeContext match {
+        case Some(envelopeContext) =>
+          envelopeContext.brokerContext.header
+        case None =>
+          context.header
+      }
+    }
+
+    def requestDesc(details: Boolean): String = {
+      val redirectDescription = if(envelopeContext.isDefined)
+        s"Redirected request: ${envelopeContext.get.brokerContext.header} "
+      else ""
+
+      s"$redirectDescription$header -- ${loggableRequest.toString(details)}"
+    }
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], @nowarn("cat=unused") nn: NotNothing[T]): T = {
       bodyAndSize.request match {
@@ -250,9 +304,14 @@ object RequestChannel extends Logging {
     }
 
     def releaseBuffer(): Unit = {
-      if (buffer != null) {
-        memoryPool.release(buffer)
-        buffer = null
+      envelopeContext match {
+        case Some(envelopeContext) =>
+          envelopeContext.release(memoryPool)
+        case None =>
+          if (buffer != null) {
+            memoryPool.release(buffer)
+            buffer = null
+          }
       }
     }
 
@@ -351,7 +410,7 @@ class RequestChannel(val queueSize: Int,
   def sendResponse(response: RequestChannel.Response): Unit = {
 
     if (isTraceEnabled) {
-      val requestHeader = response.request.header
+      val requestHeader = response.request.headerForLoggingOrThrottling()
       val message = response match {
         case sendResponse: SendResponse =>
           s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of ${sendResponse.responseSend.size} bytes."

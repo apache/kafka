@@ -21,6 +21,7 @@ package kafka.server
 import java.io.{Closeable, File, FileWriter, IOException, Reader, StringReader}
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
+import java.lang.{Boolean => JBoolean}
 import java.security.KeyStore
 import java.time.Duration
 import java.util
@@ -61,6 +62,9 @@ import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.junit.Assert._
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
 import org.junit.{After, Before, Ignore, Test}
 import org.scalatest.Assertions.intercept
 
@@ -70,12 +74,8 @@ import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
-object DynamicBrokerReconfigurationTest {
-  val SecureInternal = "INTERNAL"
-  val SecureExternal = "EXTERNAL"
-}
-
-class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSetup {
+@RunWith(value = classOf[Parameterized])
+class DynamicBrokerReconfigurationTest(quorumBasedController: JBoolean) extends ZooKeeperTestHarness with SaslSetup {
 
   import DynamicBrokerReconfigurationTest._
 
@@ -123,6 +123,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       props.put(KafkaConfig.PasswordEncoderSecretProp, "dynamic-config-secret")
       props.put(KafkaConfig.LogRetentionTimeMillisProp, 1680000000.toString)
       props.put(KafkaConfig.LogRetentionTimeHoursProp, 168.toString)
+      props.put(KafkaConfig.enableMetadataQuorumProp, quorumBasedController)
 
       props ++= sslProperties1
       props ++= securityProps(sslProperties1, KEYSTORE_PROPS, listenerPrefix(SecureInternal))
@@ -446,6 +447,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       StandardCopyOption.REPLACE_EXISTING)
     TestUtils.incrementalAlterConfigs(servers, adminClients.head, oldTruststoreProps, perBrokerConfig = true).all.get()
     verifySslProduceConsume(sslProperties1, "alter-truststore-4")
+    // Sleep a short time to wait for config changes propagation
+    Thread.sleep(1000)
     verifySslProduceConsume(sslProperties2, "alter-truststore-5")
 
     // Update internal keystore/truststore and validate new client connections from broker (e.g. controller).
@@ -1235,7 +1238,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   private def fetchBrokerConfigsFromZooKeeper(server: KafkaServer): Properties = {
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
-    server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
+    val persistentProps = server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
+    server.config.dynamicConfig.trimSslStorePaths(persistentProps)
+    persistentProps
   }
 
   private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
@@ -1877,5 +1882,18 @@ class MockFileConfigProvider extends FileConfigProvider {
   @throws(classOf[IOException])
   override def reader(path: String): Reader = {
     new StringReader("key=testKey\npassword=ServerPassword\ninterval=1000\nupdinterval=2000\nstoretype=JKS");
+  }
+}
+
+object DynamicBrokerReconfigurationTest {
+  val SecureInternal = "INTERNAL"
+  val SecureExternal = "EXTERNAL"
+
+  @Parameters(name = "quorumBasedController={0}")
+  def parameters: java.util.Collection[Array[Object]] = {
+    val data = new java.util.ArrayList[Array[Object]]()
+    data.add(Array(JBoolean.TRUE))
+    data.add(Array(JBoolean.FALSE))
+    data
   }
 }
