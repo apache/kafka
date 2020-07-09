@@ -870,6 +870,21 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldThrowIllegalStateIfInitializingOffsetsForCorruptedTasks() {
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.markChangelogAsCorrupted(mkSet(persistentStorePartition));
+
+            final ProcessorStateException thrown = assertThrows(ProcessorStateException.class, () -> stateMgr.initializeStoreOffsetsFromCheckpoint(true));
+            assertTrue(thrown.getCause() instanceof IllegalStateException);
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
     public void shouldBeAbleToCloseWithoutRegisteringAnyStores() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
 
