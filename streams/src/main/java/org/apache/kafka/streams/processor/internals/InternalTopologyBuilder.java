@@ -258,8 +258,8 @@ public class InternalTopologyBuilder {
                     // the same topic cannot be matched to more than one pattern
                     // TODO: we should lift this requirement in the future
                     throw new TopologyException("Topic " + update +
-                                                    " is already matched for another regex pattern " + topicToPatterns.get(update) +
-                                                    " and hence cannot be matched to this regex pattern " + pattern + " any more.");
+                        " is already matched for another regex pattern " + topicToPatterns.get(update) +
+                        " and hence cannot be matched to this regex pattern " + pattern + " any more.");
                 } else if (isMatch(update)) {
                     topicToPatterns.put(update, pattern);
                     matchedTopics.add(update);
@@ -633,14 +633,14 @@ public class InternalTopologyBuilder {
         // allCopartitionedSourceTopics take the list of co-partitioned nodes and
         // replaces each processor name with the corresponding source topic name
         final List<Set<String>> allCopartitionedSourceTopics =
-            copartitionSourceGroups
-                .stream()
-                .map(sourceGroup -> sourceGroup
-                    .stream()
-                    .flatMap(sourceNodeName -> nodeToSourceTopics.getOrDefault(sourceNodeName,
-                                                                               Collections.emptyList()).stream())
-                    .collect(Collectors.toSet())
-                ).collect(Collectors.toList());
+                copartitionSourceGroups
+                        .stream()
+                        .map(sourceGroup -> sourceGroup
+                                .stream()
+                                .flatMap(sourceNodeName -> nodeToSourceTopics.getOrDefault(sourceNodeName,
+                                        Collections.emptyList()).stream())
+                                .collect(Collectors.toSet())
+                        ).collect(Collectors.toList());
         for (final Set<String> copartition : allCopartitionedSourceTopics) {
             final Map<String, Integer> numberOfPartitionsPerTopic = new HashMap<>();
             copartition.forEach(topic -> {
@@ -655,7 +655,7 @@ public class InternalTopologyBuilder {
                 for (final Integer partitionNumber : partitionNumbers) {
                     if (!partitionNumber.equals(first)) {
                         final String msg = String.format("Following topics do not have the same number of " +
-                                                             "partitions: [%s]", new TreeMap<>(numberOfPartitionsPerTopic));
+                                "partitions: [%s]", new TreeMap<>(numberOfPartitionsPerTopic));
                         throw new TopologyException(msg);
 
                     }
@@ -698,7 +698,7 @@ public class InternalTopologyBuilder {
                                                final String stateStoreName) {
         if (globalStateBuilders.containsKey(stateStoreName)) {
             throw new TopologyException("Global StateStore " + stateStoreName +
-                                            " can be used by a Processor without being specified; it should not be explicitly passed.");
+                    " can be used by a Processor without being specified; it should not be explicitly passed.");
         }
         if (!stateFactories.containsKey(stateStoreName)) {
             throw new TopologyException("StateStore " + stateStoreName + " is not added yet.");
@@ -930,11 +930,11 @@ public class InternalTopologyBuilder {
                                      repartitionTopics);
     }
 
-    private <KOut, VOut> void buildSinkNode(final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
-                                            final Map<String, SinkNode<?, ?, ?, ?>> topicSinkMap,
-                                            final Set<String> repartitionTopics,
-                                            final SinkNodeFactory<?, ?, ?, ?> sinkNodeFactory,
-                                            final SinkNode<Object, Object, Object, Object> node) {
+    private void buildSinkNode(final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
+                               final Map<String, SinkNode<?, ?, ?, ?>> topicSinkMap,
+                               final Set<String> repartitionTopics,
+                               final SinkNodeFactory<?, ?, ?, ?> sinkNodeFactory,
+                               final SinkNode<Object, Object, Object, Object> node) {
 
         for (final String predecessorName : sinkNodeFactory.predecessors) {
             getProcessor(processorMap, predecessorName).addChild(node);
@@ -1099,10 +1099,10 @@ public class InternalTopologyBuilder {
             }
             if (!sourceTopics.isEmpty()) {
                 topicGroups.put(entry.getKey(), new TopicsInfo(
-                    Collections.unmodifiableSet(sinkTopics),
-                    Collections.unmodifiableSet(sourceTopics),
-                    Collections.unmodifiableMap(repartitionTopics),
-                    Collections.unmodifiableMap(stateChangelogTopics)));
+                        Collections.unmodifiableSet(sinkTopics),
+                        Collections.unmodifiableSet(sourceTopics),
+                        Collections.unmodifiableMap(repartitionTopics),
+                        Collections.unmodifiableMap(stateChangelogTopics)));
             }
         }
 
@@ -1276,8 +1276,8 @@ public class InternalTopologyBuilder {
     private String decorateTopic(final String topic) {
         if (applicationId == null) {
             throw new TopologyException("there are internal topics and "
-                                            + "applicationId hasn't been set. Call "
-                                            + "setApplicationId first");
+                    + "applicationId hasn't been set. Call "
+                    + "setApplicationId first");
         }
 
         return applicationId + "-" + topic;
@@ -1427,8 +1427,8 @@ public class InternalTopologyBuilder {
         }
 
         description.addSubtopology(new Subtopology(
-            subtopologyId,
-            new HashSet<>(nodesByName.values())));
+                subtopologyId,
+                new HashSet<>(nodesByName.values())));
     }
 
     public final static class GlobalStore implements TopologyDescription.GlobalStore {
@@ -1466,8 +1466,8 @@ public class InternalTopologyBuilder {
         @Override
         public String toString() {
             return "Sub-topology: " + id + " for global store (will not generate tasks)\n"
-                + "    " + source.toString() + "\n"
-                + "    " + processor.toString() + "\n";
+                    + "    " + source.toString() + "\n"
+                    + "    " + processor.toString() + "\n";
         }
 
         @Override
@@ -1589,8 +1589,8 @@ public class InternalTopologyBuilder {
             return name.equals(source.name)
                 && Objects.equals(topics, source.topics)
                 && (topicPattern == null ?
-                source.topicPattern == null :
-                topicPattern.pattern().equals(source.topicPattern.pattern()));
+                        source.topicPattern == null :
+                        topicPattern.pattern().equals(source.topicPattern.pattern()));
         }
 
         @Override
@@ -1645,7 +1645,6 @@ public class InternalTopologyBuilder {
 
     public final static class Sink<K, V> extends AbstractNode implements TopologyDescription.Sink {
         private final TopicNameExtractor<K, V> topicNameExtractor;
-
         public Sink(final String name,
                     final TopicNameExtractor<K, V> topicNameExtractor) {
             super(name);
@@ -1977,7 +1976,7 @@ public class InternalTopologyBuilder {
 
             final Collection<String> existingTopics = subscriptionUpdates();
 
-            if (!existingTopics.equals(assignedTopics)) {
+            if  (!existingTopics.equals(assignedTopics)) {
                 assignedTopics.addAll(existingTopics);
                 updateSubscribedTopics(assignedTopics, logPrefix);
             }

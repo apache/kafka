@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
@@ -144,8 +145,18 @@ public final class ProcessorContextReverseShim implements InternalProcessorConte
     }
 
     @Override
+    public <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
+        return delegate.getStateStore(builder);
+    }
+
+    @Override
     public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp) {
         delegate.logChange(storeName, key, value, timestamp);
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return delegate.changelogFor(storeName);
     }
 
     @Override

@@ -38,11 +38,11 @@ public class MockProcessorNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, 
     }
 
     public MockProcessorNode(final long scheduleInterval, final PunctuationType punctuationType) {
-        this(new MockProcessor<KIn, VIn>(punctuationType, scheduleInterval));
+        this(new MockProcessor<>(punctuationType, scheduleInterval));
     }
 
     public MockProcessorNode() {
-        this(new MockProcessor<KIn, VIn>());
+        this(new MockProcessor<>());
     }
 
     private MockProcessorNode(final MockProcessor<KIn, VIn> mockProcessor) {

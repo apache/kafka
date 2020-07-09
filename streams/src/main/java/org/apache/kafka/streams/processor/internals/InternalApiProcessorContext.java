@@ -119,4 +119,5 @@ public interface InternalApiProcessorContext<KForward, VForward> extends Process
                    final byte[] value,
                    final long timestamp);
 
+    String changelogFor(final String storeName);
 }
