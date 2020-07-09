@@ -30,18 +30,24 @@ import java.util.Map;
 
 public class IncrementalAlterConfigsResponse extends AbstractResponse {
 
-    public static IncrementalAlterConfigsResponseData toResponseData(final int requestThrottleMs,
-                                                                     final Map<ConfigResource, ApiError> results) {
-        IncrementalAlterConfigsResponseData responseData = new IncrementalAlterConfigsResponseData();
-        responseData.setThrottleTimeMs(requestThrottleMs);
+    public IncrementalAlterConfigsResponse(final int requestThrottleMs,
+                                           final Map<ConfigResource, ApiError> results) {
+        this.data = new IncrementalAlterConfigsResponseData()
+                        .setThrottleTimeMs(requestThrottleMs);
+
+        addResults(results);
+    }
+
+    public IncrementalAlterConfigsResponse addResults(final Map<ConfigResource, ApiError> results) {
         for (Map.Entry<ConfigResource, ApiError> entry : results.entrySet()) {
-            responseData.responses().add(new AlterConfigsResourceResponse().
-                    setResourceName(entry.getKey().name()).
-                    setResourceType(entry.getKey().type().id()).
-                    setErrorCode(entry.getValue().error().code()).
-                    setErrorMessage(entry.getValue().message()));
+            this.data.responses().add(
+                new AlterConfigsResourceResponse()
+                    .setResourceName(entry.getKey().name())
+                    .setResourceType(entry.getKey().type().id())
+                    .setErrorCode(entry.getValue().error().code())
+                    .setErrorMessage(entry.getValue().message()));
         }
-        return responseData;
+        return this;
     }
 
     public static Map<ConfigResource, ApiError> fromResponseData(final IncrementalAlterConfigsResponseData data) {

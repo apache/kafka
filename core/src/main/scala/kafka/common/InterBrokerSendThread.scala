@@ -63,8 +63,8 @@ abstract class InterBrokerSendThread(name: String,
           now,
           true,
           requestTimeoutMs,
-          null,
-          null,
+          request.initialPrincipalName,
+          request.initialClientId,
           completionHandler))
     }
 
@@ -147,7 +147,9 @@ abstract class InterBrokerSendThread(name: String,
 
 case class RequestAndCompletionHandler(destination: Node,
                                        request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                       handler: RequestCompletionHandler)
+                                       handler: RequestCompletionHandler,
+                                       initialPrincipalName: String = null,
+                                       initialClientId: String = null)
 
 private class UnsentRequests {
   private val unsent = new HashMap[Node, ArrayDeque[ClientRequest]]

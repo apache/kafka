@@ -17,8 +17,9 @@
   "apiKey": 49,
   "type": "request",
   "name": "AlterClientQuotasRequest",
-  "validVersions": "0",
-  "flexibleVersions": "none",
+  // Version 1 supports flexible versions.
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
     { "name": "Entries", "type": "[]EntryData", "versions": "0+",
       "about": "The quota configuration entries to alter.", "fields": [

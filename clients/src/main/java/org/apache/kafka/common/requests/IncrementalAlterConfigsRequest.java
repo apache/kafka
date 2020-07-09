@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 public class IncrementalAlterConfigsRequest extends AbstractRequest {
 
@@ -44,6 +45,16 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
         @Override
         public String toString() {
             return data.toString();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Builder && this.data.equals(((Builder) other).data);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(data);
         }
     }
 

@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntryData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.nio.ByteBuffer;
@@ -31,10 +32,16 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class AlterClientQuotasResponse extends AbstractResponse {
 
     private final AlterClientQuotasResponseData data;
+
+    public static Map<ClientQuotaEntity, ApiError> convertResult(Map<ClientQuotaAlteration, ApiError> result) {
+        return result.entrySet().stream().collect(
+            Collectors.toMap(entry -> entry.getKey().entity(), Map.Entry::getValue));
+    }
 
     public AlterClientQuotasResponse(Map<ClientQuotaEntity, ApiError> result, int throttleTimeMs) {
         List<EntryData> entries = new ArrayList<>(result.size());
