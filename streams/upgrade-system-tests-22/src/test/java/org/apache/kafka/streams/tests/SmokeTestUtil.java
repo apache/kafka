@@ -34,7 +34,6 @@ import java.time.Instant;
 
 public class SmokeTestUtil {
     private static final Logger LOG = LoggerFactory.getLogger(SmokeTestUtil.class);
-
     final static int END = Integer.MAX_VALUE;
 
     static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
@@ -64,9 +63,11 @@ public class SmokeTestUtil {
                     @Override
                     public void process(final Object key, final Object value) {
                         numRecordsProcessed++;
-                        LOG.info("processed " + numRecordsProcessed + " records from topic=" + topic);
-                        System.out.printf("%s: %s%n", name, Instant.now());
-                        System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
+                        if (numRecordsProcessed % 100 == 0) {
+                            LOG.info("processed " + numRecordsProcessed + " records from topic=" + topic);
+                            System.out.printf("%s: %s%n", name, Instant.now());
+                            System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
+                        }
 
                         if (smallestOffset > context().offset()) {
                             smallestOffset = context().offset();

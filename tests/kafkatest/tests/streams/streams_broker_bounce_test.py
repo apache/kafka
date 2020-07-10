@@ -164,7 +164,7 @@ class StreamsBrokerBounceTest(Test):
 
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, num_threads)
+        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka, num_threads = num_threads)
 
         self.driver.start()
 
