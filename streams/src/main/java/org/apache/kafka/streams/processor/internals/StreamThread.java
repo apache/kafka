@@ -383,7 +383,7 @@ public class StreamThread extends Thread {
             nextScheduledRebalanceMs
         );
 
-        taskManager.setPartitionResetter(streamThread::resetOffsets);
+        taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
@@ -766,27 +766,10 @@ public class StreamThread extends Thread {
     }
 
     private void resetInvalidOffsets(final InvalidOffsetException e) {
-        final Set<TopicPartition> partitions = e.partitions();
-        final Set<TopicPartition> notReset = maybeResetOffsets(partitions);
-        if (!notReset.isEmpty()) {
-            final String notResetString =
-                notReset.stream()
-                        .map(tp -> "topic " + tp.topic() + "(partition " + tp.partition() + ")")
-                        .collect(Collectors.joining(","));
-
-            final String format = String.format(
-                "No valid committed offset found for input [%s] and no valid reset policy configured." +
-                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                    "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or " +
-                    "StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))",
-                notResetString
-            );
-
-            throw new StreamsException(format, e);
-        }
+        resetOffsets(e.partitions(), e);
     }
 
-    private void resetOffsets(final Set<TopicPartition> partitions) {
+    private void resetOffsets(final Set<TopicPartition> partitions, final Exception cause) {
         final Set<TopicPartition> notReset = maybeResetOffsets(partitions);
         if (!notReset.isEmpty()) {
             final String notResetString =
@@ -803,7 +786,11 @@ public class StreamThread extends Thread {
                 notResetString
             );
 
-            throw new StreamsException(format);
+            if (cause == null) {
+                throw new StreamsException(format);
+            } else {
+                throw new StreamsException(format, cause);
+            }
         }
     }
 
@@ -819,12 +806,12 @@ public class StreamThread extends Thread {
             } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
                 addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
             } else {
-                if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                    notReset.add(partition);
-                } else if (originalReset.equals("earliest")) {
+                if ("earliest".equals(originalReset)) {
                     addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                } else { // can only be "latest"
+                } else if ("latest".equals(originalReset)) {
                     addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
+                } else {
+                    notReset.add(partition);
                 }
             }
         }
