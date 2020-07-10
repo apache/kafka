@@ -107,9 +107,18 @@ public class StateDirectory {
      */
     public File directoryForTask(final TaskId taskId) {
         final File taskDir = new File(stateDir, taskId.toString());
-        if (hasPersistentStores && !taskDir.exists() && !taskDir.mkdir()) {
-            throw new ProcessorStateException(
-                String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
+        if (hasPersistentStores && !taskDir.exists()) {
+            // we can use any `final` member to synchronize the task dir creation step; picking `stateDir` at random
+            synchronized (stateDir) {
+                // to avoid a race condition, we need to check again if the directory does not exist:
+                // otherwise, two threads might pass the outer `if` (and enter the `then` block),
+                // one blocks on `synchronized` while the other creates the directory,
+                // and the blocking one fails when trying to create it after it's unblocked
+                if (!taskDir.exists() && !taskDir.mkdir()) {
+                    throw new ProcessorStateException(
+                        String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
+                }
+            }
         }
         return taskDir;
     }
