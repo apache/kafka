@@ -763,42 +763,13 @@ public class StreamThread extends Thread {
         try {
             records = mainConsumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
-            resetInvalidOffsets(e);
+            resetOffsets(e.partitions(), e);
         }
 
         return records;
     }
 
-    private void resetInvalidOffsets(final InvalidOffsetException e) {
-        resetOffsets(e.partitions(), e);
-    }
-
     private void resetOffsets(final Set<TopicPartition> partitions, final Exception cause) {
-        final Set<TopicPartition> notReset = maybeResetOffsets(partitions);
-        if (!notReset.isEmpty()) {
-            final String notResetString =
-                notReset.stream()
-                        .map(TopicPartition::topic)
-                        .distinct()
-                        .collect(Collectors.joining(","));
-
-            final String format = String.format(
-                "No valid committed offset found for input [%s] and no valid reset policy configured." +
-                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                    "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or " +
-                    "StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))",
-                notResetString
-            );
-
-            if (cause == null) {
-                throw new StreamsException(format);
-            } else {
-                throw new StreamsException(format, cause);
-            }
-        }
-    }
-
-    private Set<TopicPartition> maybeResetOffsets(final Set<TopicPartition> partitions) {
         final Set<String> loggedTopics = new HashSet<>();
         final Set<TopicPartition> seekToBeginning = new HashSet<>();
         final Set<TopicPartition> seekToEnd = new HashSet<>();
@@ -820,15 +791,35 @@ public class StreamThread extends Thread {
             }
         }
 
-        if (!seekToBeginning.isEmpty()) {
-            mainConsumer.seekToBeginning(seekToBeginning);
-        }
+        if (notReset.isEmpty()) {
+            if (!seekToBeginning.isEmpty()) {
+                mainConsumer.seekToBeginning(seekToBeginning);
+            }
 
-        if (!seekToEnd.isEmpty()) {
-            mainConsumer.seekToEnd(seekToEnd);
-        }
+            if (!seekToEnd.isEmpty()) {
+                mainConsumer.seekToEnd(seekToEnd);
+            }
+        } else {
+            final String notResetString =
+                notReset.stream()
+                        .map(TopicPartition::topic)
+                        .distinct()
+                        .collect(Collectors.joining(","));
 
-        return notReset;
+            final String format = String.format(
+                "No valid committed offset found for input [%s] and no valid reset policy configured." +
+                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                    "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or " +
+                    "StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))",
+                notResetString
+            );
+
+            if (cause == null) {
+                throw new StreamsException(format);
+            } else {
+                throw new StreamsException(format, cause);
+            }
+        }
     }
 
     private void addToResetList(final TopicPartition partition, final Set<TopicPartition> partitions, final String logMessage, final String resetPolicy, final Set<String> loggedTopics) {
