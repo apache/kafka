@@ -574,13 +574,8 @@ public class TaskManagerTest {
         expect(consumer.committed(taskId00Partitions)).andReturn(singletonMap(t1p0, offsetAndMetadata));
         consumer.seek(t1p0, offsetAndMetadata);
         expectLastCall();
-        consumer.seekToBeginning(emptySet());
-        expectLastCall();
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
-        taskManager.setPartitionResetter(tp -> {
-            assertThat(tp, is(empty()));
-            return emptySet();
-        });
+        taskManager.setPartitionResetter(tp -> assertThat(tp, is(empty())));
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -619,12 +614,7 @@ public class TaskManagerTest {
         expect(consumer.committed(taskId00Partitions)).andReturn(singletonMap(t1p0, offsetAndMetadata));
         consumer.seek(t1p0, offsetAndMetadata);
         expectLastCall();
-        consumer.seekToBeginning(emptySet());
-        expectLastCall();
-        taskManager.setPartitionResetter(tp -> {
-            assertThat(tp, is(empty()));
-            return emptySet();
-        });
+        taskManager.setPartitionResetter(tp -> assertThat(tp, is(empty())));
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
@@ -667,13 +657,8 @@ public class TaskManagerTest {
         expect(consumer.committed(taskId00Partitions)).andReturn(singletonMap(t1p0, offsetAndMetadata));
         consumer.seek(t1p0, offsetAndMetadata);
         expectLastCall();
-        consumer.seekToBeginning(emptySet());
-        expectLastCall();
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
-        taskManager.setPartitionResetter(tp -> {
-            assertThat(tp, is(empty()));
-            return emptySet();
-        });
+        taskManager.setPartitionResetter(tp -> assertThat(tp, is(empty())));
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(taskManager.tryToCompleteRestoration(), is(true));
 
@@ -713,14 +698,9 @@ public class TaskManagerTest {
         expect(consumer.committed(taskId00Partitions)).andReturn(singletonMap(t1p0, offsetAndMetadata));
         consumer.seek(t1p0, offsetAndMetadata);
         expectLastCall();
-        consumer.seekToBeginning(emptySet());
-        expectLastCall();
 
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
-        taskManager.setPartitionResetter(tp -> {
-            assertThat(tp, is(empty()));
-            return emptySet();
-        });
+        taskManager.setPartitionResetter(tp -> assertThat(tp, is(empty())));
         taskManager.handleAssignment(assignment, emptyMap());
         assertThat(nonRunningNonCorruptedTask.state(), is(Task.State.CREATED));
 

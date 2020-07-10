@@ -55,7 +55,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -90,7 +89,7 @@ public class TaskManager {
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
-    private Function<Set<TopicPartition>, Set<TopicPartition>> resetter;
+    private java.util.function.Consumer<Set<TopicPartition>> resetter;
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -212,9 +211,8 @@ public class TaskManager {
                         assignedToPauseAndReset.remove(committedEntry.getKey());
                     }
                 }
-                final Set<TopicPartition> remainder = resetter.apply(assignedToPauseAndReset);
-                // If anything didn't have a configured policy, reset to beginning
-                mainConsumer().seekToBeginning(remainder);
+                // throws if anything has no configured reset policy
+                resetter.accept(assignedToPauseAndReset);
             }
             task.revive();
         }
@@ -1168,7 +1166,7 @@ public class TaskManager {
         return new LinkedList<>(tasks().values()).stream().anyMatch(Task::needsInitializationOrRestoration);
     }
 
-    public void setPartitionResetter(final Function<Set<TopicPartition>, Set<TopicPartition>> resetter) {
+    public void setPartitionResetter(final java.util.function.Consumer<Set<TopicPartition>> resetter) {
         this.resetter = resetter;
     }
 }

@@ -359,11 +359,8 @@ public class StreamThread extends Thread {
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
         final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
         consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
-        String originalReset = null;
-        if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
-            originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-            consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
-        }
+        final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
         changelogReader.setMainConsumer(mainConsumer);
@@ -770,7 +767,7 @@ public class StreamThread extends Thread {
 
     private void resetInvalidOffsets(final InvalidOffsetException e) {
         final Set<TopicPartition> partitions = e.partitions();
-        final Set<TopicPartition> notReset = resetOffsets(partitions);
+        final Set<TopicPartition> notReset = maybeResetOffsets(partitions);
         if (!notReset.isEmpty()) {
             final String notResetString =
                 notReset.stream()
@@ -789,7 +786,28 @@ public class StreamThread extends Thread {
         }
     }
 
-    private Set<TopicPartition> resetOffsets(final Set<TopicPartition> partitions) {
+    private void resetOffsets(final Set<TopicPartition> partitions) {
+        final Set<TopicPartition> notReset = maybeResetOffsets(partitions);
+        if (!notReset.isEmpty()) {
+            final String notResetString =
+                notReset.stream()
+                        .map(TopicPartition::topic)
+                        .distinct()
+                        .collect(Collectors.joining(","));
+
+            final String format = String.format(
+                "No valid committed offset found for input [%s] and no valid reset policy configured." +
+                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                    "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or " +
+                    "StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))",
+                notResetString
+            );
+
+            throw new StreamsException(format);
+        }
+    }
+
+    private Set<TopicPartition> maybeResetOffsets(final Set<TopicPartition> partitions) {
         final Set<String> loggedTopics = new HashSet<>();
         final Set<TopicPartition> seekToBeginning = new HashSet<>();
         final Set<TopicPartition> seekToEnd = new HashSet<>();
