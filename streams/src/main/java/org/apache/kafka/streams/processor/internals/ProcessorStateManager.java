@@ -222,8 +222,16 @@ public class ProcessorStateManager implements StateManager {
             log.trace("Loaded offsets from the checkpoint file: {}", loadedCheckpoints);
 
             for (final StateStoreMetadata store : stores.values()) {
+                if (store.corrupted) {
+                    log.error("Tried to initialize store offsets for corrupted store {}", store);
+                    throw new IllegalStateException("Should not initialize offsets for a corrupted task");
+                }
+
                 if (store.changelogPartition == null) {
                     log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
+                } else if (!store.stateStore.persistent()) {
+                    log.info("Initializing to the starting offset for changelog {} of in-memory state store {}",
+                             store.changelogPartition, store.stateStore.name());
                 } else if (store.offset() == null) {
                     if (loadedCheckpoints.containsKey(store.changelogPartition)) {
                         final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
