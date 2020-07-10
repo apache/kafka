@@ -65,7 +65,7 @@ public class GlobalProcessorContextImplTest {
         expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
         replay(streamsConfig);
 
-        final StateManager stateManager = mock(StateManager.class);
+        final GlobalStateManager stateManager = mock(GlobalStateManager.class);
         expect(stateManager.getGlobalStore(GLOBAL_STORE_NAME)).andReturn(mock(StateStore.class));
         expect(stateManager.getGlobalStore(GLOBAL_KEY_VALUE_STORE_NAME)).andReturn(mock(KeyValueStore.class));
         expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).andReturn(mock(TimestampedKeyValueStore.class));

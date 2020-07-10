@@ -59,7 +59,6 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.conv
  */
 public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Logger log;
-    private final ProcessorTopology topology;
     private final Consumer<byte[], byte[]> globalConsumer;
     private final File baseDir;
     private final StateDirectory stateDirectory;
@@ -73,6 +72,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final OffsetCheckpoint checkpointFile;
     private final Map<TopicPartition, Long> checkpointFileCache;
+    private final Map<String, String> storeToChangelogTopic;
+    private final List<StateStore> globalStateStores;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
@@ -80,20 +81,20 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                   final StateDirectory stateDirectory,
                                   final StateRestoreListener stateRestoreListener,
                                   final StreamsConfig config) {
+        storeToChangelogTopic = topology.storeToChangelogTopic();
+        globalStateStores = topology.globalStateStores();
         baseDir = stateDirectory.globalStateDir();
         checkpointFile = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
         checkpointFileCache = new HashMap<>();
 
         // Find non persistent store's topics
-        final Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
-        for (final StateStore store : topology.globalStateStores()) {
+        for (final StateStore store : globalStateStores) {
             if (!store.persistent()) {
-                globalNonPersistentStoresTopics.add(storeToChangelogTopic.get(store.name()));
+                globalNonPersistentStoresTopics.add(changelogFor(store.name()));
             }
         }
 
         log = logContext.logger(GlobalStateManagerImpl.class);
-        this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
         this.stateRestoreListener = stateRestoreListener;
@@ -128,12 +129,10 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             throw new StreamsException("Failed to read checkpoints for global state globalStores", e);
         }
 
-        final List<StateStore> stateStores = topology.globalStateStores();
-        final Map<String, String> storeNameToChangelog = topology.storeToChangelogTopic();
         final Set<String> changelogTopics = new HashSet<>();
-        for (final StateStore stateStore : stateStores) {
+        for (final StateStore stateStore : globalStateStores) {
             globalStoreNames.add(stateStore.name());
-            final String sourceTopic = storeNameToChangelog.get(stateStore.name());
+            final String sourceTopic = storeToChangelogTopic.get(stateStore.name());
             changelogTopics.add(sourceTopic);
             stateStore.init(globalProcessorContext, stateStore);
         }
@@ -226,7 +225,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     private List<TopicPartition> topicPartitionsForStore(final StateStore store) {
-        final String sourceTopic = topology.storeToChangelogTopic().get(store.name());
+        final String sourceTopic = storeToChangelogTopic.get(store.name());
         List<PartitionInfo> partitionInfos;
         int attempts = 0;
         while (true) {
@@ -401,5 +400,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     @Override
     public Map<TopicPartition, Long> changelogOffsets() {
         return Collections.unmodifiableMap(checkpointFileCache);
+    }
+
+    public String changelogFor(final String storeName) {
+        return storeToChangelogTopic.get(storeName);
     }
 }

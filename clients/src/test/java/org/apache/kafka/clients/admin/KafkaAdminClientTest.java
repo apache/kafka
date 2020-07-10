@@ -3701,15 +3701,47 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testAlterReplicaLogDirsPartialFailure() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.RETRIES_CONFIG, "0")) {
+            // As we won't retry, this calls fails immediately with a DisconnectException
+            env.kafkaClient().prepareResponseFrom(
+                prepareAlterLogDirsResponse(Errors.NONE, "topic", 1),
+                env.cluster().nodeById(0),
+                true);
+
+            env.kafkaClient().prepareResponseFrom(
+                prepareAlterLogDirsResponse(Errors.NONE, "topic", 2),
+                env.cluster().nodeById(1));
+
+            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 1, 0);
+            TopicPartitionReplica tpr2 = new TopicPartitionReplica("topic", 2, 1);
+
+            Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
+            logDirs.put(tpr1, "/data1");
+            logDirs.put(tpr2, "/data1");
+
+            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
+
+            TestUtils.assertFutureThrows(result.values().get(tpr1), ApiException.class);
+            assertNull(result.values().get(tpr2).get());
+        }
+    }
+
     private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error, int... partitions) {
-        env.kafkaClient().prepareResponseFrom(new AlterReplicaLogDirsResponse(
-                new AlterReplicaLogDirsResponseData().setResults(singletonList(
-                        new AlterReplicaLogDirTopicResult()
-                                .setTopicName("topic")
-                                .setPartitions(Arrays.stream(partitions).boxed().map(partitionId ->
-                                        new AlterReplicaLogDirPartitionResult()
-                                                .setPartitionIndex(partitionId)
-                                                .setErrorCode(error.code())).collect(Collectors.toList()))))), node);
+        env.kafkaClient().prepareResponseFrom(
+            prepareAlterLogDirsResponse(error, "topic", partitions), node);
+    }
+
+    private AlterReplicaLogDirsResponse prepareAlterLogDirsResponse(Errors error, String topic, int... partitions) {
+        return new AlterReplicaLogDirsResponse(
+            new AlterReplicaLogDirsResponseData().setResults(singletonList(
+                new AlterReplicaLogDirTopicResult()
+                    .setTopicName(topic)
+                    .setPartitions(Arrays.stream(partitions).boxed().map(partitionId ->
+                        new AlterReplicaLogDirPartitionResult()
+                            .setPartitionIndex(partitionId)
+                            .setErrorCode(error.code())).collect(Collectors.toList())))));
     }
 
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,

@@ -37,6 +37,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManager;
+import org.apache.kafka.streams.processor.internals.StateManagerStub;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
@@ -70,6 +72,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private long timestamp = -1L;
+    private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     public InternalMockProcessorContext() {
         this(null,
@@ -182,7 +185,6 @@ public class InternalMockProcessorContext
             new TaskId(0, 0),
             config,
             metrics,
-            null,
             cache
         );
         super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
@@ -191,6 +193,11 @@ public class InternalMockProcessorContext
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
         this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
+    }
+
+    @Override
+    protected StateManager stateManager() {
+        return new StateManagerStub();
     }
 
     @Override
@@ -399,5 +406,14 @@ public class InternalMockProcessorContext
             records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
         }
         restoreCallback.restoreBatch(records);
+    }
+
+    public void addChangelogForStore(final String storeName, final String changelogTopic) {
+        storeToChangelogTopic.put(storeName, changelogTopic);
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return storeToChangelogTopic.get(storeName);
     }
 }
