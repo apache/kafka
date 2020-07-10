@@ -1195,6 +1195,23 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchOffsetOutOfRangeWithNearestReset() {
+        buildFetcherWithNearestOffset();
+        assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 9);
+
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp1, this.records, Errors.OFFSET_OUT_OF_RANGE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        assertEquals(0, fetcher.fetchedRecords().size());
+        assertTrue(subscriptions.isOffsetResetNeeded(tp1));
+        assertEquals(OffsetResetStrategy.NEAREST, subscriptions.resetStrategy(tp1));
+        assertEquals(null, subscriptions.position(tp1));
+        assertEquals(new Long(9), subscriptions.outOffRangeOffset(tp1));
+        fetcher.close();
+    }
+
+    @Test
     public void testStaleOutOfRangeError() {
         // verify that an out of range error which arrives after a seek
         // does not cause us to reset our position or throw an exception
@@ -1458,6 +1475,52 @@ public class FetcherTest {
         assertTrue(subscriptions.isFetchable(tp0));
         assertEquals(5, subscriptions.position(tp0).offset);
     }
+
+    @Test
+    public void testNearestOffsetResetWithSmallerOffset() {
+        buildFetcherWithNearestOffset();
+        assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.NEAREST, 1L);
+
+        client.updateMetadata(initialUpdateResponse);
+
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 100L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).offset);
+    }
+
+    @Test
+    public void testNearestOffsetResetWithLargerOffset() {
+        buildFetcherWithNearestOffset();
+        assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.NEAREST, 150L);
+
+        client.updateMetadata(initialUpdateResponse);
+
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.EARLIEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 100L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        // First reset should not be success since outOfRangeOffset is larger than earliest offset
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.isFetchable(tp0));
+
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(100, subscriptions.position(tp0).offset);
+        fetcher.close();
+    }
+
 
     /**
      * Make sure the client behaves appropriately when receiving an exception for unavailable offsets
@@ -4468,6 +4531,34 @@ public class FetcherTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 isolationLevel,
+                apiVersions);
+    }
+
+    private <K, V> void buildFetcherWithNearestOffset() {
+        LogContext logContext = new LogContext();
+        SubscriptionState subscriptionState = new SubscriptionState(logContext, OffsetResetStrategy.LATEST);
+        buildDependencies(new MetricConfig(), Long.MAX_VALUE, subscriptionState, logContext);
+        fetcher = new Fetcher<>(
+                new LogContext(),
+                consumerClient,
+                minBytes,
+                maxBytes,
+                maxWaitMs,
+                fetchSize,
+                Integer.MAX_VALUE,
+                true, // check crc
+                "",
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(),
+                metadata,
+                subscriptions,
+                metrics,
+                metricsRegistry,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                IsolationLevel.READ_UNCOMMITTED,
+                true,
                 apiVersions);
     }
 

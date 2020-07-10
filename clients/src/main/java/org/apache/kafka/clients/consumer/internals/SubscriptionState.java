@@ -391,7 +391,8 @@ public class SubscriptionState {
             log.debug("Skipping reset of partition {} since it is no longer assigned", tp);
         } else if (!state.awaitingReset()) {
             log.debug("Skipping reset of partition {} since reset is no longer needed", tp);
-        } else if (requestedResetStrategy != state.resetStrategy) {
+        } else if (requestedResetStrategy != state.resetStrategy && state.resetStrategy != OffsetResetStrategy.NEAREST) {
+            // NOTE: we'll always do the reset for nearest reset strategy, the requestedResetTimestamp will always not equal to the strategy timestamp.
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", tp);
         } else {
             log.info("Resetting offset for partition {} to offset {}.", tp, offset);
@@ -605,6 +606,10 @@ public class SubscriptionState {
         return allConsumed;
     }
 
+    public void requestOffsetReset(TopicPartition partition, OffsetResetStrategy offsetResetStrategy, Long outOfRangeOffset) {
+        assignedState(partition).reset(offsetResetStrategy, outOfRangeOffset);
+    }
+
     public synchronized void requestOffsetReset(TopicPartition partition, OffsetResetStrategy offsetResetStrategy) {
         assignedState(partition).reset(offsetResetStrategy);
     }
@@ -636,6 +641,10 @@ public class SubscriptionState {
 
     public synchronized OffsetResetStrategy resetStrategy(TopicPartition partition) {
         return assignedState(partition).resetStrategy();
+    }
+
+    public Long outOffRangeOffset(TopicPartition partition) {
+        return assignedState(partition).getOutOfRangeOffset();
     }
 
     public synchronized boolean hasAllFetchPositions() {
@@ -739,6 +748,7 @@ public class SubscriptionState {
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
         private Long preferredReadReplicaExpireTimeMs;
+        private Long outOfRangeOffset; // save the out of range offset for nearest reset
 
         TopicPartitionState() {
             this.paused = false;
@@ -750,6 +760,7 @@ public class SubscriptionState {
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
             this.preferredReadReplica = null;
+            this.outOfRangeOffset = null;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
@@ -793,9 +804,14 @@ public class SubscriptionState {
         }
 
         private void reset(OffsetResetStrategy strategy) {
+            reset(strategy, null);
+        }
+
+        private void reset(OffsetResetStrategy strategy, Long outOfRangeOffset) {
             transitionState(FetchStates.AWAIT_RESET, () -> {
                 this.resetStrategy = strategy;
                 this.nextRetryTimeMs = null;
+                this.outOfRangeOffset = outOfRangeOffset;
             });
         }
 
@@ -896,6 +912,7 @@ public class SubscriptionState {
                 this.position = position;
                 this.resetStrategy = null;
                 this.nextRetryTimeMs = null;
+                this.outOfRangeOffset = null;
             });
         }
 
@@ -944,6 +961,10 @@ public class SubscriptionState {
 
         private OffsetResetStrategy resetStrategy() {
             return resetStrategy;
+        }
+
+        private Long getOutOfRangeOffset() {
+            return outOfRangeOffset;
         }
     }
 
