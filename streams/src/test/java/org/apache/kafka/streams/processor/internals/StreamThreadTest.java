@@ -2068,6 +2068,7 @@ public class StreamThreadTest {
 
         thread.setState(StreamThread.State.STARTING);
         thread.runLoop();
+
         verify(taskManager);
     }
 

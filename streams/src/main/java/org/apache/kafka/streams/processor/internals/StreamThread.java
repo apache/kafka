@@ -518,16 +518,16 @@ public class StreamThread extends Thread {
                     errorMessage.startsWith("Broker unexpectedly doesn't support requireStable flag on version ")) {
 
                     log.error("Shutting down because the Kafka cluster seems to be on a too old version. " +
-                                  "Setting {}=\"{}\" requires broker version 2.5 or higher.",
-                              StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
-                              EXACTLY_ONCE_BETA);
+                        "Setting {}=\"{}\" requires broker version 2.5 or higher.",
+                        StreamsConfig.PROCESSING_GUARANTEE_CONFIG,
+                        EXACTLY_ONCE_BETA);
 
                     throw e;
                 }
             }
 
             log.error("Encountered the following exception during processing " +
-                          "and the thread is going to shut down: ", e);
+                "and the thread is going to shut down: ", e);
             throw e;
         } finally {
             completeShutdown(cleanRun);
@@ -650,7 +650,7 @@ public class StreamThread extends Thread {
 
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
-        if (state == State.PARTITIONS_ASSIGNED || taskManager.hasPreRunningTasks()) {
+        if (state == State.PARTITIONS_ASSIGNED || taskManager.needsInitializationOrRestoration()) {
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
@@ -716,7 +716,7 @@ public class StreamThread extends Thread {
 
                     if (log.isDebugEnabled()) {
                         log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
-                                  taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
+                            taskManager.activeTaskIds(), taskManager.standbyTaskIds(), commitLatency);
                     }
                 }
 
@@ -848,10 +848,10 @@ public class StreamThread extends Thread {
 
             committed = taskManager.commit(
                 taskManager.tasks()
-                           .values()
-                           .stream()
-                           .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                           .collect(Collectors.toSet())
+                    .values()
+                    .stream()
+                    .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
+                    .collect(Collectors.toSet())
             );
 
             if (committed > 0) {
@@ -1049,7 +1049,7 @@ public class StreamThread extends Thread {
 
     Consumer<byte[], byte[]> restoreConsumer() {
         return restoreConsumer;
-    }
+    };
 
     Admin adminClient() {
         return adminClient;
@@ -1057,5 +1057,5 @@ public class StreamThread extends Thread {
 
     InternalTopologyBuilder internalTopologyBuilder() {
         return builder;
-    }
+    };
 }

@@ -1164,8 +1164,8 @@ public class TaskManager {
             e -> log.debug("Ignoring error in unclean {}", name));
     }
 
-    boolean hasPreRunningTasks() {
-        return new LinkedList<>(tasks().values()).stream().anyMatch(Task::preRunning);
+    boolean needsInitializationOrRestoration() {
+        return new LinkedList<>(tasks().values()).stream().anyMatch(Task::needsInitializationOrRestoration);
     }
 
     public void setPartitionResetter(final Function<Set<TopicPartition>, Set<TopicPartition>> resetter) {
