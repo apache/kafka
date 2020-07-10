@@ -35,7 +35,7 @@ public interface TypeClassGenerator {
     void registerMessageType(MessageSpec spec);
 
     /**
-     * Write out the internal state.
+     * Generate the type, and then write it out.
      *
      * @param writer    The writer to write out the state to.
      */
