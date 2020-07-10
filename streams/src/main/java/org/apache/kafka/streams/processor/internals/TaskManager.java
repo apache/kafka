@@ -30,7 +30,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
@@ -58,6 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
@@ -199,8 +199,17 @@ public class TaskManager {
                 // Pause so we won't poll any more records for this task until it has been re-initialized
                 // Note, closeDirty already clears the partitiongroup for the task.
                 final Set<TopicPartition> currentAssignment = mainConsumer().assignment();
+                final Set<TopicPartition> taskInputPartitions = task.inputPartitions();
                 final Set<TopicPartition> assignedToPauseAndReset =
-                    Utils.intersection(HashSet::new, currentAssignment, task.inputPartitions());
+                    intersection(HashSet::new, currentAssignment, taskInputPartitions);
+                if (!assignedToPauseAndReset.equals(taskInputPartitions)) {
+                    log.warn(
+                        "Expected the current consumer assignment {} to contain the input partitions {}. " +
+                            "Will proceed to recover.",
+                        currentAssignment,
+                        taskInputPartitions
+                    );
+                }
 
                 mainConsumer().pause(assignedToPauseAndReset);
                 final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer().committed(assignedToPauseAndReset);
