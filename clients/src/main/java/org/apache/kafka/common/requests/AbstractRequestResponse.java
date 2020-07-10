@@ -16,5 +16,16 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.protocol.ApiMessage;
+
 public interface AbstractRequestResponse {
+    /**
+     * Return the auto-generated `Message` instance if this request/response relies on one for
+     * serialization/deserialization. If this class has not yet been updated to rely on the auto-generated protocol
+     * classes, return `null`.
+     * @return
+     */
+    default ApiMessage data() {
+        return null;
+    }
 }

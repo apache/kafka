@@ -951,8 +951,8 @@ public final class MessageTest {
         verifyWriteSucceeds((short) 0,
             new OffsetCommitRequestData().setRetentionTimeMs(123));
         verifyWriteRaisesUve((short) 5, "forgotten",
-            new FetchRequestData().setForgotten(singletonList(
-                new FetchRequestData.ForgottenTopic().setName("foo"))));
+            new FetchRequestData().setForgottenTopicsData(singletonList(
+                new FetchRequestData.ForgottenTopic().setTopic("foo"))));
     }
 
     @Test

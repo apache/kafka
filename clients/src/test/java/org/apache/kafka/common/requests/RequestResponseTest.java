@@ -93,6 +93,7 @@ import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -144,7 +145,9 @@ import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
@@ -210,7 +213,7 @@ public class RequestResponseTest {
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException(), true);
         checkErrorResponse(createControlledShutdownRequest(0), new UnknownServerException(), true);
         checkRequest(createFetchRequest(4), true);
-        checkResponse(createFetchResponse(), 4, true);
+        checkResponse(createFetchResponse(true), 4, true);
         List<TopicPartition> toForgetTopics = new ArrayList<>();
         toForgetTopics.add(new TopicPartition("foo", 0));
         toForgetTopics.add(new TopicPartition("foo", 2));
@@ -218,7 +221,7 @@ public class RequestResponseTest {
         checkRequest(createFetchRequest(7, new FetchMetadata(123, 456), toForgetTopics), true);
         checkResponse(createFetchResponse(123), 7, true);
         checkResponse(createFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND, 123), 7, true);
-        checkErrorResponse(createFetchRequest(4), new UnknownServerException(), true);
+        checkErrorResponse(createFetchRequest(7), new UnknownServerException(), true);
         checkRequest(createHeartBeatRequest(), true);
         checkErrorResponse(createHeartBeatRequest(), new UnknownServerException(), true);
         checkResponse(createHeartBeatResponse(), 0, true);
@@ -496,9 +499,11 @@ public class RequestResponseTest {
     private void checkOlderFetchVersions() throws Exception {
         int latestVersion = FETCH.latestVersion();
         for (int i = 0; i < latestVersion; ++i) {
-            checkErrorResponse(createFetchRequest(i), new UnknownServerException(), true);
+            if (i > 7) {
+                checkErrorResponse(createFetchRequest(i), new UnknownServerException(), true);
+            }
             checkRequest(createFetchRequest(i), true);
-            checkResponse(createFetchResponse(), i, true);
+            checkResponse(createFetchResponse(i >= 4), i, true);
         }
     }
 
@@ -657,7 +662,7 @@ public class RequestResponseTest {
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(
                 Errors.NONE, 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                0L, Optional.empty(), null, records));
+                0L, Optional.empty(), Collections.emptyList(), records));
 
         FetchResponse<MemoryRecords> v0Response = new FetchResponse<>(Errors.NONE, responseData, 0, INVALID_SESSION_ID);
         FetchResponse<MemoryRecords> v1Response = new FetchResponse<>(Errors.NONE, responseData, 10, INVALID_SESSION_ID);
@@ -698,7 +703,7 @@ public class RequestResponseTest {
         verifyFetchResponseFullWrite(FETCH.latestVersion(),
             createFetchResponse(Errors.FETCH_SESSION_ID_NOT_FOUND, 123));
         for (short version = 0; version <= FETCH.latestVersion(); version++) {
-            verifyFetchResponseFullWrite(version, createFetchResponse());
+            verifyFetchResponseFullWrite(version, createFetchResponse(version >= 4));
         }
     }
 
@@ -770,7 +775,7 @@ public class RequestResponseTest {
     public void testFetchRequestMaxBytesOldVersions() throws Exception {
         final short version = 1;
         FetchRequest fr = createFetchRequest(version);
-        FetchRequest fr2 = new FetchRequest(fr.toStruct(), version);
+        FetchRequest fr2 = new FetchRequest(new FetchRequestData(fr.toStruct(), version), version);
         assertEquals(fr2.maxBytes(), fr.maxBytes());
     }
 
@@ -798,6 +803,24 @@ public class RequestResponseTest {
         struct = request.toStruct();
         deserialized = (FetchRequest) deserialize(request, struct, request.version());
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
+    }
+
+    @Test
+    public void testFetchRequestCompat() {
+        Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<>();
+        fetchData.put(new TopicPartition("test", 0), new FetchRequest.PartitionData(100, 2, 100, Optional.of(42)));
+        FetchRequest req = FetchRequest.Builder
+                .forConsumer(100, 100, fetchData)
+                .metadata(new FetchMetadata(10, 20))
+                .isolationLevel(IsolationLevel.READ_COMMITTED)
+                .build((short) 2);
+
+        FetchRequestData data = req.data();
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = data.size(cache, (short) 2);
+
+        ByteBufferAccessor writer = new ByteBufferAccessor(ByteBuffer.allocate(size));
+        data.write(writer, cache, (short) 2);
     }
 
     @Test
@@ -949,30 +972,30 @@ public class RequestResponseTest {
 
     private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
-        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
-                1000000, Optional.of(15)));
-        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
-                1000000, Optional.of(25)));
+        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, -1L,
+                1000000, Optional.empty()));
+        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
+                1000000, Optional.empty()));
         return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
             metadata(metadata).setMaxBytes(1000).toForget(toForget).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version, IsolationLevel isolationLevel) {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
-        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
-                1000000, Optional.of(15)));
-        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
-                1000000, Optional.of(25)));
+        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, -1L,
+                1000000, Optional.empty()));
+        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
+                1000000, Optional.empty()));
         return FetchRequest.Builder.forConsumer(100, 100000, fetchData).
             isolationLevel(isolationLevel).setMaxBytes(1000).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version) {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
-        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L,
-                1000000, Optional.of(15)));
-        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L,
-                1000000, Optional.of(25)));
+        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, -1L,
+                1000000, Optional.empty()));
+        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, -1L,
+                1000000, Optional.empty()));
         return FetchRequest.Builder.forConsumer(100, 100000, fetchData).setMaxBytes(1000).build((short) version);
     }
 
@@ -984,7 +1007,7 @@ public class RequestResponseTest {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(Errors.NONE,
-            1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), null, records));
+            1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), Collections.emptyList(), records));
         List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(
             new FetchResponse.AbortedTransaction(234L, 999L));
         responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData<>(Errors.NONE,
@@ -992,14 +1015,18 @@ public class RequestResponseTest {
         return new FetchResponse<>(Errors.NONE, responseData, 25, sessionId);
     }
 
-    private FetchResponse<MemoryRecords> createFetchResponse() {
+    private FetchResponse<MemoryRecords> createFetchResponse(boolean includeAborted) {
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData = new LinkedHashMap<>();
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
-        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(Errors.NONE,
-                1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), null, records));
 
-        List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.singletonList(
-                new FetchResponse.AbortedTransaction(234L, 999L));
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData<>(Errors.NONE,
+                1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), Collections.emptyList(), records));
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = Collections.emptyList();
+        if (includeAborted) {
+            abortedTransactions = Collections.singletonList(
+                    new FetchResponse.AbortedTransaction(234L, 999L));
+        }
         responseData.put(new TopicPartition("test", 1), new FetchResponse.PartitionData<>(Errors.NONE,
                 1000000, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, Optional.empty(), abortedTransactions, MemoryRecords.EMPTY));
 
