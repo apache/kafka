@@ -90,7 +90,7 @@ public final class MessageGenerator {
 
     static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.BaseRecords";
 
-    static final String MEMORY_RECORDS_CLASS ="org.apache.kafka.common.record.MemoryRecords";
+    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.MemoryRecords";
 
     static final String REQUEST_SUFFIX = "Request";
 

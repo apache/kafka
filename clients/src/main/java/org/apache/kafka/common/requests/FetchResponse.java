@@ -473,7 +473,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                       partitionHeader.logStartOffset(),
                     preferredReplica,
                     abortedTransactions,
-                    (T)partitionResponse.recordSet()
+                    (T) partitionResponse.recordSet()
                 );
 
                 responseMap.put(tp, partitionData);
@@ -506,10 +506,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                         .setLogStartOffset(partitionData.logStartOffset);
                 if (partitionData.abortedTransactions != null) {
                     partitionHeader.setAbortedTransactions(partitionData.abortedTransactions.stream().map(
-                            aborted -> new FetchResponseData.AbortedTransaction()
-                                    .setProducerId(aborted.producerId)
-                                    .setFirstOffset(aborted.firstOffset))
-                            .collect(Collectors.toList()));
+                        aborted -> new FetchResponseData.AbortedTransaction()
+                                .setProducerId(aborted.producerId)
+                                .setFirstOffset(aborted.firstOffset))
+                        .collect(Collectors.toList()));
                 } else {
                     partitionHeader.setAbortedTransactions(null);
                 }

@@ -278,7 +278,7 @@ public class FetchRequest extends AbstractRequest {
                         new PartitionData(fetchPartition.fetchOffset(), fetchPartition.logStartOffset(),
                             fetchPartition.partitionMaxBytes(), Optional.of(fetchPartition.currentLeaderEpoch())))
                 )
-            );
+        );
 
         return Collections.unmodifiableMap(result);
     }

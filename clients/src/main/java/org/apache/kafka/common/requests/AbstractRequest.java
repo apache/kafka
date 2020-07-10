@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.network.NetworkSend;
