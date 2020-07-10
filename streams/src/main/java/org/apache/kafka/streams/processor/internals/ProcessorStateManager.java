@@ -147,8 +147,8 @@ public class ProcessorStateManager implements StateManager {
     private final TaskId taskId;
     private final boolean eosEnabled;
     private final ChangelogRegister changelogReader;
-    private final Map<String, String> storeToChangelogTopic;
     private final Collection<TopicPartition> sourcePartitions;
+    private final Map<String, String> storeToChangelogTopic;
 
     // must be maintained in topological order
     private final FixedOrderMap<String, StateStoreMetadata> stores = new FixedOrderMap<>();
@@ -174,7 +174,7 @@ public class ProcessorStateManager implements StateManager {
                                  final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
-
+        this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
         this.taskId = taskId;
@@ -182,7 +182,6 @@ public class ProcessorStateManager implements StateManager {
         this.eosEnabled = eosEnabled;
         this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
-        this.storeToChangelogTopic = storeToChangelogTopic;
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
@@ -222,8 +221,16 @@ public class ProcessorStateManager implements StateManager {
             log.trace("Loaded offsets from the checkpoint file: {}", loadedCheckpoints);
 
             for (final StateStoreMetadata store : stores.values()) {
+                if (store.corrupted) {
+                    log.error("Tried to initialize store offsets for corrupted store {}", store);
+                    throw new IllegalStateException("Should not initialize offsets for a corrupted task");
+                }
+
                 if (store.changelogPartition == null) {
                     log.info("State store {} is not logged and hence would not be restored", store.stateStore.name());
+                } else if (!store.stateStore.persistent()) {
+                    log.info("Initializing to the starting offset for changelog {} of in-memory state store {}",
+                             store.changelogPartition, store.stateStore.name());
                 } else if (store.offset() == null) {
                     if (loadedCheckpoints.containsKey(store.changelogPartition)) {
                         final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
@@ -559,13 +566,13 @@ public class ProcessorStateManager implements StateManager {
         // NOTE we assume the partition of the topic can always be inferred from the task id;
         // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
         // it is not a regression (it would always break anyways)
-        return new TopicPartition(storeToChangelogTopic.get(storeName), taskId.partition);
+        return new TopicPartition(changelogFor(storeName), taskId.partition);
     }
 
     private boolean isLoggingEnabled(final String storeName) {
         // if the store name does not exist in the changelog map, it means the underlying store
         // is not log enabled (including global stores)
-        return storeToChangelogTopic.containsKey(storeName);
+        return changelogFor(storeName) != null;
     }
 
     private StateStoreMetadata findStore(final TopicPartition changelogPartition) {
@@ -589,5 +596,26 @@ public class ProcessorStateManager implements StateManager {
     // Convert the written offsets in the checkpoint file back to the changelog offset
     private Long changelogOffsetFromCheckpointedOffset(final long offset) {
         return offset != OFFSET_UNKNOWN ? offset : null;
+    }
+
+    public TopicPartition registeredChangelogPartitionFor(final String storeName) {
+        final StateStoreMetadata storeMetadata = stores.get(storeName);
+        if (storeMetadata == null) {
+            throw new IllegalStateException("State store " + storeName
+                + " for which the registered changelog partition should be"
+                + " retrieved has not been registered"
+            );
+        }
+        if (storeMetadata.changelogPartition == null) {
+            throw new IllegalStateException("Registered state store " + storeName
+                + " does not have a registered changelog partition."
+                + " This may happen if logging is disabled for the state store."
+            );
+        }
+        return storeMetadata.changelogPartition;
+    }
+
+    public String changelogFor(final String storeName) {
+        return storeToChangelogTopic.get(storeName);
     }
 }
