@@ -144,8 +144,9 @@
                 <code>max(left.ts, right.ts)</code>.</li>
             <li>For stream-table joins, the output record is assigned the timestamp
                 from the stream record.</li>
-            <li>For aggregations, Kafka Streams also computes the <code>max</code> over
-                all records, per key, either globally (for non-windowed) or per-window.</li>
+            <li>For aggregations, Kafka Streams also computes the <code>max</code>
+                timestamp over all records, per key, either globally (for non-windowed)
+                or per-window.</li>
             <li>For stateless operations, the input record timestamp is passed through.
                 For <code>flatMap</code> and siblings that emit multiple records, all
                 output records inherit the timestamp from the corresponding input record.</li>
