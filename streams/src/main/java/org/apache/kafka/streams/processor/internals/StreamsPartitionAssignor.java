@@ -725,8 +725,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                    statefulTasks,
                                                                    assignmentConfigs);
 
-        log.info("Assigned tasks to clients as: {}{}.", Utils.NL,
-                clientStates.entrySet().stream()
+        log.info("Assigned tasks {} including stateful {} to clients as: \n{}.",
+                allTasks, statefulTasks, clientStates.entrySet().stream()
                         .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
                         .collect(Collectors.joining(Utils.NL)));
 
@@ -934,7 +934,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             );
 
             // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance,
-            // note once we pick the first consumer of the processor to trigger probing rebalance, other threads
+            // note once we pick the first consumer within the process to trigger probing rebalance, other consumer
             // would not set to trigger any more.
             final boolean encodeNextProbingRebalanceTime = shouldTriggerProbingRebalance && clientId.equals(taskManager.processId());
 
