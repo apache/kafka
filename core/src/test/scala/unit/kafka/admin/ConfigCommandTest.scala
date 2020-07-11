@@ -1517,6 +1517,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
       zkOpts ++ commonOpts ++ configOpts,
       zkOpts ++ commonOpts ++ fileOpts)) {
       val props = ConfigCommand.parseConfigsToBeAdded(new ConfigCommandOptions(config))
+      ConfigCommand.preProcessTopicConfigs(props)
       assertEquals(2, props.values().size)
       assertEquals("delete,compact", props.get("cleanup.policy"))
     }

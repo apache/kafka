@@ -153,6 +153,8 @@ object ConfigCommand extends Config {
         }
         preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig)
       }
+    } else if (entityType == ConfigType.Topic) {
+      preProcessTopicConfigs(configsToBeAdded)
     }
 
     // compile the final set of configs
@@ -189,6 +191,18 @@ object ConfigCommand extends Config {
         case value =>
           configsToBeAdded.setProperty(mechanism.mechanismName, scramCredential(mechanism, value))
       }
+    }
+  }
+
+  private[admin] def preProcessTopicConfigs(configsToBeAdded: Properties): Unit = {
+    val originalValueForCleanupPolicyOpt = Option(configsToBeAdded.getProperty(LogConfig.CleanupPolicyProp))
+    LogConfig.processValues(configsToBeAdded)
+    Option(configsToBeAdded.getProperty(LogConfig.CleanupPolicyProp)) match {
+      case Some(value) if value.contains(",") =>
+        if (value != originalValueForCleanupPolicyOpt.getOrElse(value))
+          println(s"WARNING: The configuration ${LogConfig.CleanupPolicyProp}=${originalValueForCleanupPolicyOpt.get} which contains duplicate items is specified. " +
+            "The de-duplicated value will be applied.")
+      case _ => // do nothing
     }
   }
 
@@ -271,17 +285,6 @@ object ConfigCommand extends Config {
       println(s"WARNING: The configuration ${LogConfig.MessageFormatVersionProp}=${props.getProperty(LogConfig.MessageFormatVersionProp)} is specified. " +
         s"This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker.")
     }
-    props.forEach((config, value) => {
-      if (value.toString.contains(",")) {
-        val values = value.toString.split(",")
-        if (values.distinct.size != values.size) {
-          println(s"WARNING: The configuration $config=${value.toString} which contains duplicate items is specified. " +
-            "The value with duplicates removed will be applied.")
-          // Remove duplicates from the value
-          props.put(config, values.distinct.mkString(","))
-        }
-      }
-    })
     props
   }
 

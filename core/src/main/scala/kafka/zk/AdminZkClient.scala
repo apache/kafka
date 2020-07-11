@@ -151,6 +151,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         throw new InvalidReplicaAssignmentException("partitions should be a consecutive 0-based integer sequence")
 
     LogConfig.validate(config)
+    LogConfig.processValues(config)
   }
 
   private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment], isUpdate: Boolean): Unit = {
@@ -395,6 +396,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       throw new UnknownTopicOrPartitionException(s"Topic '$topic' does not exist.")
     // remove the topic overrides
     LogConfig.validate(configs)
+    LogConfig.processValues(configs)
   }
 
   /**
