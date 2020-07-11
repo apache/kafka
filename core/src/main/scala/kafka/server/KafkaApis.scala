@@ -47,6 +47,7 @@ import org.apache.kafka.common.acl.{AclBinding, AclOperation}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
@@ -65,6 +66,7 @@ import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.ListOffsetRequestData.ListOffsetPartition
 import org.apache.kafka.common.message.ListOffsetResponseData
 import org.apache.kafka.common.message.ListOffsetResponseData.{ListOffsetPartitionResponse, ListOffsetTopicResponse}
+import org.apache.kafka.common.message.UpdateFinalizedFeaturesResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -112,8 +114,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                 brokerTopicStats: BrokerTopicStats,
                 val clusterId: String,
                 time: Time,
-                val tokenManager: DelegationTokenManager)
-  extends ApiRequestHandler with Logging {
+                val tokenManager: DelegationTokenManager,
+                val brokerFeatures: BrokerFeatures,
+                val featureCache: FinalizedFeatureCache) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
@@ -186,7 +189,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentialsRequest(request)
         case ApiKeys.ALTER_ISR => handleAlterIsrRequest(request)
-
+        case ApiKeys.UPDATE_FINALIZED_FEATURES => handleUpdateFinalizedFeatures(request)
         // Until we are ready to integrate the Raft layer, these APIs are treated as
         // unexpected and we just close the connection.
         case ApiKeys.VOTE => closeConnection(request, util.Collections.emptyMap())
@@ -1733,8 +1736,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       else if (!apiVersionRequest.isValid)
         apiVersionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception)
       else {
-        val supportedFeatures = SupportedFeatures.get
-        val finalizedFeatures = FinalizedFeatureCache.get
+        val supportedFeatures = brokerFeatures.supportedFeatures
+        val finalizedFeatures = featureCache.get
         if (finalizedFeatures.isEmpty) {
           ApiVersionsResponse.apiVersionsResponse(
             requestThrottleMs,
@@ -3107,6 +3110,135 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       )
     }
+  }
+
+  def handleUpdateFinalizedFeatures(request: RequestChannel.Request): Unit = {
+    val updateFinalizedFeaturesRequest = request.body[UpdateFinalizedFeaturesRequest]
+    def sendResponseCallback(error: Errors, msgOverride: Option[String]): Unit = {
+      sendResponseExemptThrottle(request, new UpdateFinalizedFeaturesResponse(
+        new UpdateFinalizedFeaturesResponseData()
+          .setErrorCode(error.code())
+          .setErrorMessage(msgOverride.getOrElse(error.message()))))
+    }
+
+    if (!authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+      sendResponseCallback(Errors.CLUSTER_AUTHORIZATION_FAILED, Option.empty)
+    } else if (!controller.isActive) {
+      sendResponseCallback(Errors.NOT_CONTROLLER, Option.empty)
+    } else if (!config.isFeatureVersioningEnabled) {
+      sendResponseCallback(Errors.INVALID_REQUEST, Some("Feature versioning system is disabled."))
+    } else {
+      val targetFeaturesOrError = getTargetFinalizedFeaturesOrError(updateFinalizedFeaturesRequest)
+      targetFeaturesOrError match {
+        case Left(targetFeatures) =>
+          controller.updateFinalizedFeatures(targetFeatures, sendResponseCallback)
+        case Right(error) =>
+          sendResponseCallback(error.error, Some(error.message))
+      }
+    }
+  }
+
+  /**
+   * Validates the provided UpdateFinalizedFeaturesRequest, checking for various error cases.
+   * If the validation is successful, returns the target finalized features constructed from the
+   * request.
+   *
+   * @param request   the request to be validated
+   *
+   * @return          - the target finalized features, if request validation is successful
+   *                  - an ApiError if request validation fails
+   */
+  def getTargetFinalizedFeaturesOrError(request: UpdateFinalizedFeaturesRequest):
+    Either[Features[FinalizedVersionRange], ApiError] = {
+    val updates = request.data.finalizedFeatureUpdates
+    if (updates.isEmpty) {
+      return Right(new ApiError(Errors.INVALID_REQUEST,
+        "Can not provide empty FinalizedFeatureUpdates in the request."))
+    }
+    val latestFeatures = featureCache.get
+    val newFeatures = scala.collection.mutable.Map[String, FinalizedVersionRange]()
+    updates.asScala.foreach(
+      update => {
+        // Rule #1) Check that the feature name is not empty.
+        if (update.name.isEmpty) {
+          return Right(
+            new ApiError(Errors.INVALID_REQUEST,
+              "Can not contain empty feature name in the request."))
+        }
+
+        val cacheEntry = latestFeatures.map(lf => lf.features.get(update.name)).orNull
+
+        // We handle deletion requests separately from non-deletion requests.
+        if (UpdateFinalizedFeaturesRequest.isDeleteRequest(update)) { // Deletion request
+          // Rule #2) Disallow deletion of a finalized feature without allowDowngrade flag set.
+          if (!update.allowDowngrade) {
+            return Right(
+              new ApiError(Errors.INVALID_REQUEST,
+                s"Can not delete feature: '${update.name}' without setting the" +
+                  " allowDowngrade flag in the request."))
+          }
+
+          // Rule #3) Disallow deletion of a non-existing finalized feature.
+          if (cacheEntry == null) {
+            return Right(
+              new ApiError(Errors.INVALID_REQUEST,
+                s"Can not delete non-existing finalized feature: '${update.name}'"))
+          }
+        } else { // Non-deletion request
+          if (cacheEntry != null) {
+            // Rule 4) Disallow a case where target maxVersionLevel matches
+            // existing maxVersionLevel.
+            if (update.maxVersionLevel == cacheEntry.max()) {
+              return Right(
+                new ApiError(Errors.INVALID_REQUEST,
+                  s"Can not upgrade a finalized feature: '${update.name}' from" +
+                    s" existing maxVersionLevel:${cacheEntry.max} to the same value."))
+            }
+
+            // Rule #5) Disallow downgrade of a finalized feature without the
+            // allowDowngrade flag set.
+            if (update.maxVersionLevel < cacheEntry.max && !update.allowDowngrade) {
+              return Right(
+                new ApiError(Errors.INVALID_REQUEST,
+                  s"Can not downgrade finalized feature: '${update.name}' from" +
+                    s" existing maxVersionLevel:${cacheEntry.max} to provided" +
+                    s" maxVersionLevel:${update.maxVersionLevel} without setting the" +
+                    " allowDowngrade flag in the request."))
+            }
+
+            // Rule #6) Disallow a request that sets allowDowngrade flag without specifying a
+            // maxVersionLevel that's lower than the existing maxVersionLevel.
+            if (update.allowDowngrade && update.maxVersionLevel > cacheEntry.max) {
+              return Right(
+                new ApiError(Errors.INVALID_REQUEST,
+                  s"When finalized feature: '${update.name}' has the allowDowngrade flag" +
+                    s" set in the request, the provided maxVersionLevel:${update.maxVersionLevel}" +
+                    s" can not be greater than existing maxVersionLevel:${cacheEntry.max}."))
+            }
+
+            // Rule #7) Disallow downgrade of a finalized feature below the existing finalized
+            // minVersionLevel.
+            if (update.maxVersionLevel() < cacheEntry.min()) {
+              return Right(
+                new ApiError(Errors.INVALID_REQUEST,
+                  s"Can not downgrade finalized feature: '${update.name}' to" +
+                    s" maxVersionLevel:${update.maxVersionLevel} because it's lower than the" +
+                    s" existing minVersionLevel:${cacheEntry.min}."))
+            }
+          }
+
+          // NOTE: if the finalized feature already exists, then, below we set the default minimum
+          // version level. This can cause deprecation of all version levels in the closed range:
+          // [existingVersionRange.min(), defaultMinVersionLevel - 1]
+          val defaultMinVersionLevel = brokerFeatures.defaultMinVersionLevel(update.name)
+          newFeatures += (
+            update.name -> new FinalizedVersionRange(
+              defaultMinVersionLevel,
+              update.maxVersionLevel))
+        }
+      }
+    )
+    Left(Features.finalizedFeatures(newFeatures.asJava))
   }
 
   // private package for testing

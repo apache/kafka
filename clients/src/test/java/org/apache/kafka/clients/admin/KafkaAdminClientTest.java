@@ -66,11 +66,15 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.feature.FinalizedVersionRange;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateAclsResponseData;
@@ -111,6 +115,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.UpdateFinalizedFeaturesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -122,6 +127,8 @@ import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
@@ -152,6 +159,8 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.UpdateFinalizedFeaturesRequest;
+import org.apache.kafka.common.requests.UpdateFinalizedFeaturesResponse;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -474,6 +483,40 @@ public class KafkaAdminClientTest {
                 Collections.emptySet()));
         return data;
     }
+
+    private static UpdateFinalizedFeaturesResponse prepareUpdateFinalizedFeaturesResponse(Errors error) {
+        final UpdateFinalizedFeaturesResponseData data = new UpdateFinalizedFeaturesResponseData();
+        data.setErrorCode(error.code());
+        return new UpdateFinalizedFeaturesResponse(data);
+    }
+
+    private static FeatureMetadata getDefaultFeatureMetadata() {
+        return new FeatureMetadata(
+            Features.finalizedFeatures(new HashMap<String, FinalizedVersionRange>() {{
+                put("test_feature_1", new FinalizedVersionRange((short) 2, (short) 3));
+            }}),
+            1,
+            Features.supportedFeatures(new HashMap<String, SupportedVersionRange>() {{
+                put("test_feature_1", new SupportedVersionRange((short) 1, (short) 5));
+            }})
+        );
+    }
+
+    private static ApiVersionsResponse prepareApiVersionsResponseForDescribeFeatures(Errors error) {
+        if (error == Errors.NONE) {
+            return new ApiVersionsResponse(ApiVersionsResponse.createApiVersionsResponseData(
+                ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs(),
+                error,
+                ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys(),
+                getDefaultFeatureMetadata().supportedFeatures(),
+                getDefaultFeatureMetadata().finalizedFeatures(),
+                getDefaultFeatureMetadata().finalizedFeaturesEpoch()));
+        }
+        final ApiVersionsResponseData data = new ApiVersionsResponseData();
+        data.setErrorCode(error.code());
+        return new ApiVersionsResponse(data);
+    }
+
     /**
      * Test that the client properly times out when we don't receive any metadata.
      */
@@ -3881,6 +3924,104 @@ public class KafkaAdminClientTest {
             ListOffsetsResult result = env.adminClient().listOffsets(partitions);
 
             TestUtils.assertFutureError(result.all(), TopicAuthorizationException.class);
+        }
+    }
+
+    @Test
+    public void testUpdateFinalizedFeaturesDuringSuccess() throws Exception {
+        testUpdateFinalizedFeaturesDuringError(Errors.NONE);
+    }
+
+    @Test
+    public void testUpdateFinalizedFeaturesInvalidRequestError() throws Exception {
+        testUpdateFinalizedFeaturesDuringError(Errors.INVALID_REQUEST);
+    }
+
+    @Test
+    public void testUpdateFinalizedFeaturesUpdateFailedError() throws Exception {
+        testUpdateFinalizedFeaturesDuringError(Errors.FINALIZED_FEATURE_UPDATE_FAILED);
+    }
+
+    private void testUpdateFinalizedFeaturesDuringError(Errors error) throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponse(
+                body -> body instanceof UpdateFinalizedFeaturesRequest,
+                prepareUpdateFinalizedFeaturesResponse(error));
+            final KafkaFuture<Void> future = env.adminClient().updateFinalizedFeatures(
+                new HashSet<>(
+                    Arrays.asList(
+                        new FinalizedFeatureUpdate(
+                            "test_feature_1", (short) 2, false),
+                        new FinalizedFeatureUpdate(
+                            "test_feature_2", (short) 3, true))),
+                new UpdateFinalizedFeaturesOptions().timeoutMs(10000)).result();
+            if (error.exception() == null) {
+                future.get();
+            } else {
+                final ExecutionException e = assertThrows(ExecutionException.class,
+                    () -> future.get());
+                assertEquals(e.getCause().getClass(), error.exception().getClass());
+            }
+        }
+    }
+
+    @Test
+    public void testUpdateFinalizedFeaturesHandleNotControllerException() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponseFrom(
+                prepareUpdateFinalizedFeaturesResponse(Errors.NOT_CONTROLLER),
+                env.cluster().nodeById(0));
+            env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
+                env.cluster().clusterResource().clusterId(),
+                1,
+                Collections.<MetadataResponse.TopicMetadata>emptyList()));
+            env.kafkaClient().prepareResponseFrom(
+                prepareUpdateFinalizedFeaturesResponse(Errors.NONE),
+                env.cluster().nodeById(1));
+            final KafkaFuture<Void> future = env.adminClient().updateFinalizedFeatures(
+                new HashSet<>(
+                    Arrays.asList(
+                        new FinalizedFeatureUpdate(
+                            "test_feature_1",(short) 2, false),
+                        new FinalizedFeatureUpdate(
+                            "test_feature_2", (short) 3, true))),
+                new UpdateFinalizedFeaturesOptions().timeoutMs(10000)).result();
+            future.get();
+        }
+    }
+
+    @Test
+    public void testDescribeFeaturesSuccess() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponse(
+                body -> body instanceof ApiVersionsRequest,
+                prepareApiVersionsResponseForDescribeFeatures(Errors.NONE));
+            final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
+                new DescribeFeaturesOptions().timeoutMs(10000)).featureMetadata();
+            FeatureMetadata metadata = future.get();
+            assertEquals(getDefaultFeatureMetadata(), metadata);
+        }
+    }
+
+    @Test
+    public void testDescribeFeaturesHandleNotControllerException() throws Exception {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponseFrom(
+                prepareApiVersionsResponseForDescribeFeatures(Errors.NOT_CONTROLLER),
+                env.cluster().nodeById(0));
+            env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
+                env.cluster().clusterResource().clusterId(),
+                1,
+                Collections.<MetadataResponse.TopicMetadata>emptyList()));
+            env.kafkaClient().prepareResponseFrom(
+                prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
+                env.cluster().nodeById(1));
+            final DescribeFeaturesOptions options = new DescribeFeaturesOptions();
+            options.sendRequestToController(true);
+            options.timeoutMs(10000);
+            final KafkaFuture<FeatureMetadata> future
+                = env.adminClient().describeFeatures(options).featureMetadata();
+            future.get();
         }
     }
 

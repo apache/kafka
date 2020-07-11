@@ -1307,6 +1307,70 @@ public interface Admin extends AutoCloseable {
                                                               AlterUserScramCredentialsOptions options);
 
     /**
+     * Describes finalized as well as supported features. By default, the request is issued to any
+     * broker, but it can be optionally directed only to the controller via DescribeFeaturesOptions
+     * parameter.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * returned {@link DescribeFeaturesResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
+     * </ul>
+     * <p>
+     * @param options   the options to use
+     *
+     * @return          the DescribeFeaturesResult containing the result
+     */
+    DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
+
+    /**
+     * Applies specified updates to finalized features. The API is atomic, meaning that if a single
+     * feature update in the request can't succeed on the controller, then none of the feature
+     * updates are carried out. This request is issued only to the controller since the API is
+     * only served by the controller.
+     * <p>
+     * The API takes as input a set of FinalizedFeatureUpdate that need to be applied. Each such
+     * update specifies the finalized feature to be added or updated or deleted, along with the new
+     * max feature version level value.
+     * <ul>
+     * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
+     * in the controller if the feature update has the allowDowngrade flag set - setting this flag
+     * conveys user intent to attempt downgrade of a feature max version level. Note that despite
+     * the allowDowngrade flag being set, certain downgrades may be rejected by the controller if it
+     * is deemed impossible.</li>
+     * <li>Deletion of a finalized feature version is not a regular operation/intent. It is allowed
+     * only if the allowDowngrade flag is set in the feature update, and, if the max version level
+     * is set to a value less than 1.</li>
+     * </ul>
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures
+     * obtained from the returned {@link UpdateFinalizedFeaturesResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *   If the request details are invalid. e.g., a non-existing finalized feature is attempted
+     *   to be deleted or downgraded.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the updates could finish. It cannot be guaranteed whether
+     *   the updates succeeded or not.</li>
+     *   <li>{@link org.apache.kafka.common.errors.FinalizedFeatureUpdateFailedException}
+     *   If the updates could not be applied on the controller, despite the request being valid.
+     *   This may be a temporary problem.</li>
+     * </ul>
+     * <p>
+     * This operation is supported by brokers with version 2.7.0 or higher.
+
+     * @param featureUpdates   the set of finalized feature updates
+     * @param options          the options to use
+     *
+     * @return                 the UpdateFinalizedFeaturesResult containing the result
+     */
+    UpdateFinalizedFeaturesResult updateFinalizedFeatures(
+        Set<FinalizedFeatureUpdate> featureUpdates, UpdateFinalizedFeaturesOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();

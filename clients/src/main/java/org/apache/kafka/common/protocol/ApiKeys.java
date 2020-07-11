@@ -121,6 +121,8 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.message.UpdateFinalizedFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFinalizedFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
@@ -248,6 +250,9 @@ public enum ApiKeys {
     DESCRIBE_QUORUM(55, "DescribeQuorum", true, false,
         DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS),
     ALTER_ISR(56, "AlterIsr", AlterIsrRequestData.SCHEMAS, AlterIsrResponseData.SCHEMAS);
+        DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS),
+    UPDATE_FINALIZED_FEATURES(57, "UpdateFinalizedFeatures",
+        UpdateFinalizedFeaturesRequestData.SCHEMAS, UpdateFinalizedFeaturesResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

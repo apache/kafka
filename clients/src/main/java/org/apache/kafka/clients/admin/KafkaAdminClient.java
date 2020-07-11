@@ -169,6 +169,8 @@ import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsRequest;
 import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateDelegationTokenRequest;
@@ -226,6 +228,8 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
+import org.apache.kafka.common.requests.UpdateFinalizedFeaturesRequest;
+import org.apache.kafka.common.requests.UpdateFinalizedFeaturesResponse;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
@@ -4333,6 +4337,106 @@ public class KafkaAdminClient extends AdminClient {
     private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int iterations) throws NoSuchAlgorithmException, InvalidKeyException {
         return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.mechanismName()))
                 .hi(password, salt, iterations);
+    }
+
+    public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
+        final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        Call callViaLeastLoadedNode = new Call("describeFeatures", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            ApiVersionsRequest.Builder createRequest(int timeoutMs) {
+                return new ApiVersionsRequest.Builder();
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
+                if (apiVersionsResponse.data.errorCode() == Errors.NONE.code()) {
+                    future.complete(
+                        new FeatureMetadata(
+                            apiVersionsResponse.finalizedFeatures(),
+                            apiVersionsResponse.finalizedFeaturesEpoch(),
+                            apiVersionsResponse.supportedFeatures()));
+                } else {
+                    future.completeExceptionally(
+                        Errors.forCode(apiVersionsResponse.data.errorCode()).exception());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(Collections.singletonList(future), throwable);
+            }
+        };
+
+        Call call = callViaLeastLoadedNode;
+        if (options.sendRequestToController()) {
+            call = new Call("describeFeatures", calcDeadlineMs(now, options.timeoutMs()),
+                new ControllerNodeProvider()) {
+
+                @Override
+                ApiVersionsRequest.Builder createRequest(int timeoutMs) {
+                    return (ApiVersionsRequest.Builder) callViaLeastLoadedNode.createRequest(timeoutMs);
+                }
+
+                @Override
+                void handleResponse(AbstractResponse response) {
+                    final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
+                    if (apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
+                        handleNotControllerError(Errors.NOT_CONTROLLER);
+                    } else {
+                        callViaLeastLoadedNode.handleResponse(response);
+                    }
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    callViaLeastLoadedNode.handleFailure(throwable);
+                }
+            };
+        }
+        runnable.call(call, now);
+        return new DescribeFeaturesResult(future);
+    }
+
+    @Override
+    public UpdateFinalizedFeaturesResult updateFinalizedFeatures(
+        final Set<FinalizedFeatureUpdate> featureUpdates, final UpdateFinalizedFeaturesOptions options) {
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+
+        final Call call = new Call("updateFinalizedFeatures", calcDeadlineMs(now, options.timeoutMs()),
+            new ControllerNodeProvider()) {
+
+            @Override
+            UpdateFinalizedFeaturesRequest.Builder createRequest(int timeoutMs) {
+                return new UpdateFinalizedFeaturesRequest.Builder(FinalizedFeatureUpdate.createRequest(featureUpdates));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                final UpdateFinalizedFeaturesResponse featuresResponse =
+                    (UpdateFinalizedFeaturesResponse) response;
+                final Errors error = Errors.forCode(featuresResponse.data().errorCode());
+                if (error == Errors.NONE) {
+                    future.complete(null);
+                } else if (error == Errors.NOT_CONTROLLER) {
+                    handleNotControllerError(error);
+                } else {
+                    future.completeExceptionally(
+                        error.exception(featuresResponse.data.errorMessage()));
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(Collections.singletonList(future), throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new UpdateFinalizedFeaturesResult(future);
     }
 
     /**

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.util.HashMap;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
@@ -65,6 +66,36 @@ public class ApiVersionsResponse extends AbstractResponse {
 
     public ApiVersionsResponse(Struct struct, short version) {
         this(new ApiVersionsResponseData(struct, version));
+    }
+
+    public ApiVersionsResponseData data() {
+        return data;
+    }
+
+    public Features<SupportedVersionRange> supportedFeatures() {
+        final Map<String, SupportedVersionRange> features = new HashMap<>();
+
+        for (SupportedFeatureKey key : data.supportedFeatures().valuesSet()) {
+            features.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
+        }
+
+        return Features.supportedFeatures(features);
+    }
+
+    public Features<FinalizedVersionRange> finalizedFeatures() {
+        final Map<String, FinalizedVersionRange> features = new HashMap<>();
+
+        for (FinalizedFeatureKey key : data.finalizedFeatures().valuesSet()) {
+            features.put(
+                key.name(),
+                new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
+        }
+
+        return Features.finalizedFeatures(features);
+    }
+
+    public int finalizedFeaturesEpoch() {
+        return data.finalizedFeaturesEpoch();
     }
 
     @Override
@@ -142,7 +173,13 @@ public class ApiVersionsResponse extends AbstractResponse {
         Features<FinalizedVersionRange> finalizedFeatures,
         int finalizedFeaturesEpoch) {
         if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
-            return DEFAULT_API_VERSIONS_RESPONSE;
+            return new ApiVersionsResponse(createApiVersionsResponseData(
+                DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs(),
+                Errors.forCode(DEFAULT_API_VERSIONS_RESPONSE.data().errorCode()),
+                DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys(),
+                latestSupportedFeatures,
+                finalizedFeatures,
+                finalizedFeaturesEpoch));
         }
         return createApiVersionsResponse(
             throttleTimeMs, maxMagic, latestSupportedFeatures, finalizedFeatures, finalizedFeaturesEpoch);
@@ -176,15 +213,33 @@ public class ApiVersionsResponse extends AbstractResponse {
             }
         }
 
+        return new ApiVersionsResponse(
+            createApiVersionsResponseData(
+                throttleTimeMs,
+                Errors.NONE,
+                apiKeys,
+                latestSupportedFeatures,
+                finalizedFeatures,
+                finalizedFeaturesEpoch));
+    }
+
+    public static ApiVersionsResponseData createApiVersionsResponseData(
+        final int throttleTimeMs,
+        final Errors error,
+        final ApiVersionsResponseKeyCollection apiKeys,
+        final Features<SupportedVersionRange> latestSupportedFeatures,
+        final Features<FinalizedVersionRange> finalizedFeatures,
+        final int finalizedFeaturesEpoch
+    ) {
         ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
-        data.setErrorCode(Errors.NONE.code());
+        data.setErrorCode(error.code());
         data.setApiKeys(apiKeys);
         data.setSupportedFeatures(createSupportedFeatureKeys(latestSupportedFeatures));
         data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures));
         data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
 
-        return new ApiVersionsResponse(data);
+        return data;
     }
 
     private static SupportedFeatureKeyCollection createSupportedFeatureKeys(

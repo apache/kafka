@@ -23,18 +23,21 @@ import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
 import kafka.controller.KafkaController.{AlterIsrCallback, AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback}
+import kafka.cluster.Broker
+import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback, UpdateFinalizedFeaturesCallback}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
-import kafka.zk._
+import kafka.zk.{FeatureZNodeStatus, _}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateMetadataResponse}
@@ -60,6 +63,7 @@ object KafkaController extends Logging {
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
   type AlterIsrCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
+  type UpdateFinalizedFeaturesCallback = (Errors, Option[String]) => Unit
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -69,6 +73,8 @@ class KafkaController(val config: KafkaConfig,
                       initialBrokerInfo: BrokerInfo,
                       initialBrokerEpoch: Long,
                       tokenManager: DelegationTokenManager,
+                      brokerFeatures: BrokerFeatures,
+                      featureCache: FinalizedFeatureCache,
                       threadNamePrefix: Option[String] = None)
   extends ControllerEventProcessor with Logging with KafkaMetricsGroup {
 
@@ -219,6 +225,8 @@ class KafkaController(val config: KafkaConfig,
    * This ensures another controller election will be triggered and there will always be an actively serving controller
    */
   private def onControllerFailover(): Unit = {
+    setupFeatureVersioning()
+
     info("Registering handlers")
 
     // before reading source of truth from zookeeper, register the listeners to get broker/topic callbacks
@@ -269,6 +277,156 @@ class KafkaController(val config: KafkaConfig,
         fun = () => tokenManager.expireTokens(),
         period = config.delegationTokenExpiryCheckIntervalMs,
         unit = TimeUnit.MILLISECONDS)
+    }
+  }
+
+  private def createFeatureZNode(newNode: FeatureZNode): Int = {
+    info(s"Creating FeatureZNode at path: ${FeatureZNode.path} with contents: $newNode")
+    zkClient.createFeatureZNode(newNode)
+    val (_, newVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
+    newVersion
+  }
+
+  private def updateFeatureZNode(updatedNode: FeatureZNode): Int = {
+    info(s"Updating FeatureZNode at path: ${FeatureZNode.path} with contents: $updatedNode")
+    zkClient.updateFeatureZNode(updatedNode)
+  }
+
+  /**
+   * Enables the feature versioning system (KIP-584).
+   *
+   * Sets up the FeatureZNode with enabled status. This status means the feature versioning system
+   * (KIP-584) is enabled, and, the finalized features stored in the FeatureZNode are active. This
+   * status should be written by the controller to the FeatureZNode only when the broker IBP config
+   * is greater than or equal to KAFKA_2_7_IV0.
+   *
+   * There are multiple cases handled here:
+   *
+   * 1. New cluster bootstrap:
+   *    For a new Kafka cluster (i.e. it is deployed first time), we would like to start the cluster
+   *    with all the possible supported features finalized immediately. The new cluster will almost
+   *    never be started with an old IBP config that’s less than KAFKA_2_7_IV0. Assuming this is the
+   *    case, then here is how we it: the controller will start up and notice that the FeatureZNode
+   *    is absent in the new cluster, it will then create a FeatureZNode (with enabled status)
+   *    containing the entire list of default supported features as its finalized features.
+   *
+   * 2. Broker binary upgraded, but IBP config set to lower than KAFKA_2_7_IV0:
+   *    Imagine there is an existing Kafka cluster with IBP config less than KAFKA_2_7_IV0, and the
+   *    Broker binary has been upgraded to a newer version that supports the feature versioning
+   *    system (KIP-584). This means the user is upgrading from an earlier version of the Broker
+   *    binary. In this case, we want to start with no finalized features and allow the user to
+   *    finalize them whenever they are ready i.e. in the future whenever the user sets IBP config
+   *    to be greater than or equal to KAFKA_2_7_IV0, then the user could start finalizing the
+   *    features. The reason to do this is that enabling all the possible features immediately after
+   *    an upgrade could be harmful to the cluster.
+   *    This is how we handle such a case:
+   *      - Before the IBP config upgrade (i.e. IBP config set to less than KAFKA_2_7_IV0), the
+   *        controller will start up and check if the FeatureZNode is absent. If absent, then it
+   *        will react by creating a FeatureZNode with disabled status and empty finalized features.
+   *        Otherwise, if a node already exists in enabled status then the controller will just
+   *        flip the status to disabled and clear the finalized features.
+   *      - After the IBP config upgrade (i.e. IBP config set to greater than or equal to
+   *        KAFKA_2_7_IV0), when the controller starts up it will check if the FeatureZNode exists
+   *        and whether it is disabled. In such a case, it won’t upgrade all features immediately.
+   *        Instead it will just switch the FeatureZNode status to enabled status. This lets the
+   *        user finalize the features later.
+   *
+   * 3. Broker binary upgraded, with existing cluster IBP config >= KAFKA_2_7_IV0:
+   *    Imagine an existing Kafka cluster with IBP config >= KAFKA_2_7_IV0, and the broker binary
+   *    has just been upgraded to a newer version (that supports IBP config KAFKA_2_7_IV0 and higher).
+   *    The controller will start up and find that a FeatureZNode is already present with enabled
+   *    status and existing finalized features. In such a case, the controller needs to scan the
+   *    existing finalized features and mutate them for the purpose of version level deprecation
+   *    (if needed).
+   *    This is how we handle this case: If an existing finalized feature is present in the default
+   *    finalized features, then, it's existing minimum version level is updated to the default
+   *    minimum version level maintained in the BrokerFeatures object. The goal of this mutation is
+   *    to permanently deprecate one or more feature version levels. The range of feature version
+   *    levels deprecated are from the closed range: [existing_min_version_level, default_min_version_level].
+   *    NOTE: Deprecating a feature version level is an incompatible change, which requires a major
+   *    release of Kafka. In such a release, the minimum version level maintained within the
+   *    BrokerFeatures class is updated suitably to record the deprecation of the feature.
+   *
+   * 4. Broker downgrade:
+   *    Imagine that a Kafka cluster exists already and the IBP config is greater than or equal to
+   *    KAFKA_2_7_IV0. Then, the user decided to downgrade the cluster by setting IBP config to a
+   *    value less than KAFKA_2_7_IV0. This means the user is also disabling the feature versioning
+   *    system (KIP-584). In this case, when the controller starts up with the lower IBP config, it
+   *    will switch the FeatureZNode status to disabled with empty features.
+   */
+  private def enableFeatureVersioning(): Unit = {
+    val defaultFinalizedFeatures = brokerFeatures.getDefaultFinalizedFeatures
+    val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
+    if (version == ZkVersion.UnknownVersion) {
+      val newVersion = createFeatureZNode(new FeatureZNode(FeatureZNodeStatus.Enabled, defaultFinalizedFeatures))
+      featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+    } else {
+      val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+      var newFeatures: Features[FinalizedVersionRange] = Features.emptyFinalizedFeatures()
+      if (existingFeatureZNode.status.equals(FeatureZNodeStatus.Enabled)) {
+        newFeatures = Features.finalizedFeatures(existingFeatureZNode.features.features().asScala.map {
+          case (featureName, existingVersionRange) => {
+            val updatedVersionRange = defaultFinalizedFeatures.get(featureName)
+            if (updatedVersionRange == null) {
+              warn(s"Existing finalized feature: $featureName with $existingVersionRange"
+                + s" is absent in default finalized $defaultFinalizedFeatures")
+              (featureName, existingVersionRange)
+            } else if (existingVersionRange.max() >= updatedVersionRange.min()) {
+              // Through this change, we deprecate all version levels in the closed range:
+              // [existingVersionRange.min(), updatedVersionRange.min() - 1]
+              (featureName, new FinalizedVersionRange(updatedVersionRange.min(), existingVersionRange.max()))
+            } else {
+              // This is a special case: If the existing version levels fall completely outside the
+              // range of the default finalized version levels (i.e. no intersection), then, this
+              // case is not eligible for deprecation. This requires that the max version level be
+              // upgraded first to a value that's equal to the the default minimum version level.
+              info(s"Can not update minimum version level in finalized feature: $featureName,"
+              + s" since the existing $existingVersionRange does not intersect with the default"
+              + s" $updatedVersionRange.")
+              (featureName, existingVersionRange)
+            }
+          }
+        }.asJava)
+      }
+      val newFeatureZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures)
+      if (!newFeatureZNode.equals(existingFeatureZNode)) {
+        val newVersion = updateFeatureZNode(newFeatureZNode)
+        featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+      }
+    }
+  }
+
+  /**
+   * Disables the feature versioning system (KIP-584).
+   *
+   * Sets up the FeatureZNode with disabled status. This status means the feature versioning system
+   * (KIP-584) is disabled, and, the finalized features stored in the FeatureZNode are not relevant.
+   * This status should be written by the controller to the FeatureZNode only when the broker
+   * IBP config is less than KAFKA_2_7_IV0.
+   *
+   * NOTE: when this method returns, existing finalized features (if any) will be cleared from the
+   * FeatureZNode.
+   */
+  private def disableFeatureVersioning(): Unit = {
+    val newNode = FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())
+    val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
+    if (version == ZkVersion.UnknownVersion) {
+      createFeatureZNode(newNode)
+      featureCache.waitUntilEmptyOrThrow(config.zkConnectionTimeoutMs)
+    } else {
+      val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+      if (!existingFeatureZNode.status.equals(FeatureZNodeStatus.Disabled)) {
+        updateFeatureZNode(newNode)
+        featureCache.waitUntilEmptyOrThrow(config.zkConnectionTimeoutMs)
+      }
+    }
+  }
+
+  private def setupFeatureVersioning(): Unit = {
+    if (config.isFeatureVersioningEnabled) {
+      enableFeatureVersioning()
+    } else {
+      disableFeatureVersioning()
     }
   }
 
@@ -996,8 +1154,25 @@ class KafkaController(val config: KafkaConfig,
    */
   private[controller] def sendUpdateMetadataRequest(brokers: Seq[Int], partitions: Set[TopicPartition]): Unit = {
     try {
+      val filteredBrokers = scala.collection.mutable.Set[Int]() ++ brokers
+      if (config.isFeatureVersioningEnabled) {
+        def hasIncompatibleFeatures(broker: Broker): Boolean = {
+          val latestFinalizedFeatures = featureCache.get
+          if (latestFinalizedFeatures.isDefined) {
+            BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.get.features)
+          } else {
+            false
+          }
+        }
+        controllerContext.liveOrShuttingDownBrokers.foreach(broker => {
+          if (filteredBrokers.contains(broker.id) && hasIncompatibleFeatures(broker)) {
+            warn(s"Ignoring UpdateMetadataRequest to broker: ${broker.id} due to incompatible features")
+            filteredBrokers -= broker.id
+          }
+        })
+      }
       brokerRequestBatch.newBatch()
-      brokerRequestBatch.addUpdateMetadataRequestForBrokers(brokers, partitions)
+      brokerRequestBatch.addUpdateMetadataRequestForBrokers(filteredBrokers.toSeq, partitions)
       brokerRequestBatch.sendRequestsToBrokers(epoch)
     } catch {
       case e: IllegalStateException =>
@@ -1404,7 +1579,7 @@ class KafkaController(val config: KafkaConfig,
     if (newMetadataOpt.nonEmpty && oldMetadataOpt.nonEmpty) {
       val oldMetadata = oldMetadataOpt.get
       val newMetadata = newMetadataOpt.get
-      if (newMetadata.endPoints != oldMetadata.endPoints) {
+      if (newMetadata.endPoints != oldMetadata.endPoints || !oldMetadata.features.equals(newMetadata.features)) {
         info(s"Updated broker metadata: $oldMetadata -> $newMetadata")
         controllerContext.updateBrokerMetadata(oldMetadata, newMetadata)
         onBrokerUpdate(brokerId)
@@ -1656,6 +1831,36 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
+  private def processUpdateFinalizedFeatures(newFeatures: Features[FinalizedVersionRange],
+                                             callback: UpdateFinalizedFeaturesCallback): Unit = {
+    if (isActive) {
+      val incompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.filter(broker => {
+        BrokerFeatures.hasIncompatibleFeatures(broker.features, newFeatures)
+      })
+      if (incompatibleBrokers.size > 0) {
+        callback(
+          Errors.INVALID_REQUEST,
+          Some(
+            s"Could not apply finalized feature updates because ${incompatibleBrokers.size} brokers"
+            + s" were found to have incompatible features. newFeatures: $newFeatures"
+           + s", incompatibleBrokers: $incompatibleBrokers."))
+      } else {
+        try {
+          val newVersion = zkClient.updateFeatureZNode(
+            new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures))
+          featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+          callback(Errors.NONE, Option.empty)
+        } catch {
+          case e: Exception => callback(
+            Errors.FINALIZED_FEATURE_UPDATE_FAILED,
+            Some(Errors.FINALIZED_FEATURE_UPDATE_FAILED.message() + " Error: " + e))
+        }
+      }
+    } else {
+      callback(Errors.NOT_CONTROLLER, Option.empty)
+    }
+  }
+
   private def processIsrChangeNotification(): Unit = {
     def processUpdateNotifications(partitions: Seq[TopicPartition]): Unit = {
       val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
@@ -1688,6 +1893,11 @@ class KafkaController(val config: KafkaConfig,
   def listPartitionReassignments(partitions: Option[Set[TopicPartition]],
                                  callback: ListReassignmentsCallback): Unit = {
     eventManager.put(ListPartitionReassignments(partitions, callback))
+  }
+
+  def updateFinalizedFeatures(newFeatures: Features[FinalizedVersionRange],
+                              callback: UpdateFinalizedFeaturesCallback): Unit = {
+    eventManager.put(UpdateFinalizedFeatures(newFeatures, callback))
   }
 
   def alterPartitionReassignments(partitions: Map[TopicPartition, Option[Seq[Int]]],
@@ -1979,6 +2189,8 @@ class KafkaController(val config: KafkaConfig,
           processZkPartitionReassignment()
         case ListPartitionReassignments(partitions, callback) =>
           processListPartitionReassignments(partitions, callback)
+        case UpdateFinalizedFeatures(request, callback) =>
+          processUpdateFinalizedFeatures(request, callback)
         case PartitionReassignmentIsrChange(partition) =>
           processPartitionReassignmentIsrChange(partition)
         case IsrChangeNotification =>
@@ -2270,6 +2482,11 @@ case class ListPartitionReassignments(partitionsOpt: Option[Set[TopicPartition]]
                                       callback: ListReassignmentsCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.ListPartitionReassignment
   override def preempt(): Unit = callback(Right(new ApiError(Errors.NOT_CONTROLLER, null)))
+}
+
+case class UpdateFinalizedFeatures(newFeatures: Features[FinalizedVersionRange],
+                                   callback: UpdateFinalizedFeaturesCallback) extends ControllerEvent {
+  override def state: ControllerState = ControllerState.UpdateFinalizedFeatures
 }
 
 

@@ -34,7 +34,7 @@ import scala.concurrent.TimeoutException
  *
  * @param zkClient     the Zookeeper client
  */
-class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
+class FinalizedFeatureChangeListener(private val featureCache: FinalizedFeatureCache, private val zkClient: KafkaZkClient) extends Logging {
 
   /**
    * Helper class used to update the FinalizedFeatureCache.
@@ -85,7 +85,7 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
       //                                           a case.
       if (version == ZkVersion.UnknownVersion) {
         info(s"Feature ZK node at path: $featureZkNodePath does not exist")
-        FinalizedFeatureCache.clear()
+        featureCache.clear()
       } else {
         var maybeFeatureZNode: Option[FeatureZNode] = Option.empty
         try {
@@ -93,17 +93,17 @@ class FinalizedFeatureChangeListener(zkClient: KafkaZkClient) extends Logging {
         } catch {
           case e: IllegalArgumentException => {
             error(s"Unable to deserialize feature ZK node at path: $featureZkNodePath", e)
-            FinalizedFeatureCache.clear()
+            featureCache.clear()
           }
         }
-        maybeFeatureZNode.map(featureZNode => {
+        maybeFeatureZNode.foreach(featureZNode => {
           featureZNode.status match {
             case FeatureZNodeStatus.Disabled => {
               info(s"Feature ZK node at path: $featureZkNodePath is in disabled status.")
-              FinalizedFeatureCache.clear()
+              featureCache.clear()
             }
             case FeatureZNodeStatus.Enabled => {
-              FinalizedFeatureCache.updateOrThrow(featureZNode.features, version)
+              featureCache.updateOrThrow(featureZNode.features, version)
             }
             case _ => throw new IllegalStateException(s"Unexpected FeatureZNodeStatus found in $featureZNode")
           }

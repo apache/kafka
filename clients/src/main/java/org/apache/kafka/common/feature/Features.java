@@ -93,6 +93,15 @@ public class Features<VersionRangeType extends BaseVersionRange> {
         return features.get(feature);
     }
 
+    /**
+     * @param feature   the feature to be checked
+     * @return          - true, if the feature is present
+     *                  - false, otherwise.
+     */
+    public boolean has(String feature) {
+        return get(feature) != null;
+    }
+
     public String toString() {
         return String.format(
             "Features{%s}",

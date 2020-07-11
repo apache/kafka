@@ -21,11 +21,14 @@ import java.util.Properties
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
 import com.yammer.metrics.core.Timer
-import kafka.api.LeaderAndIsr
+import kafka.api.{ApiVersion, KAFKA_2_6_IV0, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk._
+import org.junit.{After, Before, Test}
+import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
+import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
@@ -596,6 +599,16 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsEnabled(): Unit = {
+    testControllerFeatureZNodeSetup(KAFKA_2_7_IV0)
+  }
+
+  @Test
+  def testControllerFeatureZNodeSetupWhenFeatureVersioningIsDisabled(): Unit = {
+    testControllerFeatureZNodeSetup(KAFKA_2_6_IV0)
+  }
+
+  @Test
   def testControllerDetectsBouncedBrokers(): Unit = {
     servers = makeServers(2, enableControlledShutdown = false)
     val controller = getController().kafkaController
@@ -679,6 +692,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     controller.eventManager.thread = spyThread
     val processedEvent = new MockEvent(ControllerState.TopicChange) {
       override def process(): Unit = latch.await()
+
       override def preempt(): Unit = {}
     }
     val tp0 = new TopicPartition("t", 0)
@@ -697,7 +711,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       case Failure(e) =>
         assertEquals(classOf[ControllerMovedException], e.getClass)
     })
-    val event3  = ApiPartitionReassignment(Map(tp0 -> None, tp1 -> None), {
+    val event3 = ApiPartitionReassignment(Map(tp0 -> None, tp1 -> None), {
       case Left(_) => fail("api partition reassignment should error")
       case Right(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
     })
@@ -715,7 +729,22 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     doAnswer((_: InvocationOnMock) => {
       latch.countDown()
     }).doCallRealMethod().when(spyThread).awaitShutdown()
-    controller.shutdown() 
+    controller.shutdown()
+  }
+
+  private def testControllerFeatureZNodeSetup(interBrokerProtocolVersion: ApiVersion): Unit = {
+    servers = makeServers(1, interBrokerProtocolVersion = Some(interBrokerProtocolVersion))
+    TestUtils.waitUntilControllerElected(zkClient)
+
+    val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
+    assertNotEquals(version, ZkVersion.UnknownVersion)
+    val featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
+    if (interBrokerProtocolVersion >= KAFKA_2_7_IV0) {
+      assertEquals(FeatureZNodeStatus.Enabled, featureZNode.status)
+    } else {
+      assertEquals(FeatureZNodeStatus.Disabled, featureZNode.status)
+    }
+    assertTrue(featureZNode.features.empty)
   }
 
   @Test
@@ -840,6 +869,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                           listeners : Option[String] = None,
                           listenerSecurityProtocolMap : Option[String] = None,
                           controlPlaneListenerName : Option[String] = None,
+                          interBrokerProtocolVersion: Option[ApiVersion] = None,
                           logDirCount: Int = 1) = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount)
     configs.foreach { config =>
@@ -849,6 +879,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
       listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
       controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))
+      interBrokerProtocolVersion.foreach(ibp => config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.toString))
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }

@@ -20,6 +20,9 @@ package kafka.server
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
 
+import scala.concurrent.TimeoutException
+import scala.math.max
+
 // Raised whenever there was an error in updating the FinalizedFeatureCache with features.
 class FeatureCacheUpdateException(message: String) extends RuntimeException(message) {
 }
@@ -39,7 +42,7 @@ case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], 
  *
  * @see FinalizedFeatureChangeListener
  */
-object FinalizedFeatureCache extends Logging {
+class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends Logging {
   @volatile private var featuresAndEpoch: Option[FinalizedFeaturesAndEpoch] = Option.empty
 
   /**
@@ -54,10 +57,46 @@ object FinalizedFeatureCache extends Logging {
   }
 
   /**
+   * Waits no more than timeoutMs for the cache's epoch to reach an epoch >= minExpectedEpoch.
+   *
+   * @param minExpectedEpoch   the minimum expected epoch to be reached by the cache
+   *                           (should be >= 0)
+   * @param timeoutMs          the timeout (in milli seconds)
+   *
+   * @throws                   TimeoutException if the cache's epoch has not reached at least
+   *                           minExpectedEpoch within timeoutMs.
+   */
+  def waitUntilEpochOrThrow(minExpectedEpoch: Int, timeoutMs: Long): Unit = {
+    if(minExpectedEpoch < 0) {
+      throw new IllegalArgumentException(
+        s"Expected minExpectedEpoch >= 0, but $minExpectedEpoch was provided.")
+    }
+    waitUntilConditionOrThrow(
+      () => featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch >= minExpectedEpoch,
+      timeoutMs)
+  }
+
+  /**
+   * Waits no more than timeoutMs for the cache to become empty.
+   *
+   * @param timeoutMs   the timeout (in milli seconds)
+   *
+   * @throws            TimeoutException if the cache's epoch has not become empty within timeoutMs.
+   */
+  def waitUntilEmptyOrThrow(timeoutMs: Long): Unit = {
+    waitUntilConditionOrThrow(
+      () => featuresAndEpoch.isEmpty,
+      timeoutMs)
+  }
+
+  /**
    * Clears all existing finalized features and epoch from the cache.
    */
   def clear(): Unit = {
-    featuresAndEpoch = Option.empty
+    synchronized {
+      featuresAndEpoch = Option.empty
+      notifyAll()
+    }
     info("Cleared cache")
   }
 
@@ -82,17 +121,54 @@ object FinalizedFeatureCache extends Logging {
         " The existing cache contents are %s").format(latest, oldFeatureAndEpoch)
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
-      val incompatibleFeatures = SupportedFeatures.incompatibleFeatures(latest.features)
+      val incompatibleFeatures = brokerFeatures.incompatibleFeatures(latest.features)
       if (!incompatibleFeatures.empty) {
         val errorMsg = ("FinalizedFeatureCache update failed since feature compatibility" +
           " checks failed! Supported %s has incompatibilities with the latest %s."
-          ).format(SupportedFeatures.get, latest)
+          ).format(brokerFeatures.supportedFeatures, latest)
         throw new FeatureCacheUpdateException(errorMsg)
       } else {
-        val logMsg = "Updated cache from existing finalized %s to latest finalized %s".format(
+        val logMsg = "Updated cache from existing %s to latest %s".format(
           oldFeatureAndEpoch, latest)
-        featuresAndEpoch = Some(latest)
+        synchronized {
+          featuresAndEpoch = Some(latest)
+          notifyAll()
+        }
         info(logMsg)
+      }
+    }
+  }
+
+  /**
+   * Causes the current thread to wait no more than timeoutMs for the specified condition to be met.
+   * It is guaranteed that the provided condition will always be invoked only from within a
+   * synchronized block.
+   *
+   * @param waitCondition   the condition to be waited upon:
+   *                         - if the condition returns true, then, the wait will stop.
+   *                         - if the condition returns false, it means the wait must continue until
+   *                           timeout.
+   *
+   * @param timeoutMs       the timeout (in milli seconds)
+   *
+   * @throws                TimeoutException if the condition is not met within timeoutMs.
+   */
+  private def waitUntilConditionOrThrow(waitCondition: () => Boolean, timeoutMs: Long): Unit = {
+    if(timeoutMs < 0L) {
+      throw new IllegalArgumentException(s"Expected timeoutMs >= 0, but $timeoutMs was provided.")
+    }
+    synchronized {
+      var sleptTimeMs = 0L
+      while (!waitCondition()) {
+        val timeoutLeftMs = timeoutMs - sleptTimeMs
+        if (timeoutLeftMs <= 0) {
+          throw new TimeoutException(
+            s"Timed out after waiting for ${timeoutMs}ms for required condition to be met." +
+              s" Current epoch: ${featuresAndEpoch.map(fe => fe.epoch).getOrElse("<none>")}.")
+        }
+        val timeBeforeNanos = System.nanoTime
+        wait(timeoutLeftMs)
+        sleptTimeMs += max(1L, (System.nanoTime - timeBeforeNanos) / 1_000_000)
       }
     }
   }
