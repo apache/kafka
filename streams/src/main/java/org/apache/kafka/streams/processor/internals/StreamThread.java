@@ -651,7 +651,9 @@ public class StreamThread extends Thread {
 
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
-        if (state == State.PARTITIONS_ASSIGNED || taskManager.needsInitializationOrRestoration()) {
+        if (state == State.PARTITIONS_ASSIGNED
+            || state == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
+
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 

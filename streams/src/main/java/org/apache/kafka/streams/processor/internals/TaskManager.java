@@ -1172,7 +1172,7 @@ public class TaskManager {
     }
 
     boolean needsInitializationOrRestoration() {
-        return new LinkedList<>(tasks().values()).stream().anyMatch(Task::needsInitializationOrRestoration);
+        return tasks().values().stream().anyMatch(Task::needsInitializationOrRestoration);
     }
 
     public void setPartitionResetter(final java.util.function.Consumer<Set<TopicPartition>> resetter) {
