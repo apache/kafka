@@ -1226,7 +1226,6 @@ public class StreamThreadTest {
             ),
             "proc"
         );
-        internalTopologyBuilder.addSink("out", "output", null, null, null, "proc");
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
