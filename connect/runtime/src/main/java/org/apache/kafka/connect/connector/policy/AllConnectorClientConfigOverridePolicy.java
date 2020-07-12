@@ -26,6 +26,7 @@ import java.util.Map;
 /**
  * Allows all client configurations to be overridden via the connector configs by setting {@code connector.client.config.override.policy} to {@code All}
  */
+@SuppressWarnings("try")
 public class AllConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
     private static final Logger log = LoggerFactory.getLogger(AllConnectorClientConfigOverridePolicy.class);
 

@@ -290,8 +290,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testCloseAdminClient() {
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
-        }
+        mockClientEnv().close();
     }
 
     /**

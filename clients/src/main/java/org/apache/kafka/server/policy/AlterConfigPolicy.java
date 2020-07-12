@@ -32,6 +32,7 @@ import java.util.Map;
  * using the default constructor and will then pass the broker configs to its <code>configure()</code> method. During
  * broker shutdown, the <code>close()</code> method will be invoked so that resources can be released (if necessary).
  */
+@SuppressWarnings("try")
 public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
     /**

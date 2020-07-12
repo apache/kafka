@@ -108,8 +108,8 @@ public class WorkerConnector implements Runnable {
     public void run() {
         // Clear all MDC parameters, in case this thread is being reused
         LoggingContext.clear();
-
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();
             try {
@@ -120,6 +120,7 @@ public class WorkerConnector implements Runnable {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
         } finally {
+            loggingContext.close();
             // In the rare case of an exception being thrown outside the doRun() method, or an
             // uncaught one being thrown from within it, mark the connector as shut down to avoid
             // unnecessarily blocking and eventually timing out during awaitShutdown

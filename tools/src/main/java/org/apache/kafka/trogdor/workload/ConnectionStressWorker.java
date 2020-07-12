@@ -137,6 +137,8 @@ public class ConnectionStressWorker implements TaskWorker {
         }
 
         boolean tryConnect();
+
+        void close();
     }
 
     static class ConnectStressor implements Stressor {
@@ -192,7 +194,7 @@ public class ConnectionStressWorker implements TaskWorker {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             Utils.closeQuietly(updater, "ManualMetadataUpdater");
         }
     }
@@ -219,7 +221,7 @@ public class ConnectionStressWorker implements TaskWorker {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
         }
     }
 

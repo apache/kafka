@@ -75,6 +75,7 @@ public class CoordinatorTest {
     final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
+    @SuppressWarnings("try")
     public void testCoordinatorStatus() throws Exception {
         try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
                 addCoordinator("node01").
@@ -85,6 +86,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testCoordinatorUptime() throws Exception {
         MockTime time = new MockTime(0, 200, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -101,6 +103,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testCreateTask() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -153,6 +156,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testTaskDistribution() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -210,6 +214,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testTaskCancellation() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -274,6 +279,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testTaskDestruction() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -378,6 +384,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testNetworkPartitionFault() throws Exception {
         CapturingCommandRunner runner = new CapturingCommandRunner();
         MockTime time = new MockTime(0, 0, 0);
@@ -461,6 +468,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testTasksRequest() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -521,6 +529,7 @@ public class CoordinatorTest {
      * we want the task to be marked as DONE and not re-sent should a second failure happen.
      */
     @Test
+    @SuppressWarnings("try")
     public void testAgentFailureAndTaskExpiry() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -572,6 +581,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testTaskRequestWithOldStartMsGetsUpdated() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -597,6 +607,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testTaskRequestWithFutureStartMsDoesNotGetRun() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -621,6 +632,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testTaskRequest() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -655,6 +667,7 @@ public class CoordinatorTest {
     }
 
     @Test
+    @SuppressWarnings("try")
     public void testWorkersExitingAtDifferentTimes() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);

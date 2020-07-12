@@ -48,6 +48,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * MiniTrogdorCluster sets up a local cluster of Trogdor Agents and Coordinators.
  */
+@SuppressWarnings("try")
 public class MiniTrogdorCluster implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(MiniTrogdorCluster.class);
 

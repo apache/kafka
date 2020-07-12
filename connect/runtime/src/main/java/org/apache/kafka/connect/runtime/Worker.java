@@ -253,7 +253,8 @@ public class Worker {
             TargetState initialState,
             Callback<TargetState> onConnectorStateChange
     ) {
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             if (connectors.containsKey(connName)) {
                 onConnectorStateChange.onCompletion(
                         new ConnectException("Connector with name " + connName + " already exists"),
@@ -309,6 +310,8 @@ public class Worker {
 
             log.info("Finished creating connector {}", connName);
             workerMetricsGroup.recordConnectorStartupSuccess();
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -341,7 +344,8 @@ public class Worker {
      */
     public List<Map<String, String>> connectorTaskConfigs(String connName, ConnectorConfig connConfig) {
         List<Map<String, String>> result = new ArrayList<>();
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             log.trace("Reconfiguring connector tasks for {}", connName);
 
             WorkerConnector workerConnector = connectors.get(connName);
@@ -371,6 +375,8 @@ public class Worker {
             } finally {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
+        } finally {
+            loggingContext.close();
         }
 
         return result;
@@ -382,7 +388,8 @@ public class Worker {
      * @param connName the connector name.
      */
     private void stopConnector(String connName) {
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             WorkerConnector workerConnector = connectors.get(connName);
             log.info("Stopping connector {}", connName);
 
@@ -398,6 +405,8 @@ public class Worker {
             } finally {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -409,7 +418,8 @@ public class Worker {
     }
 
     private void awaitStopConnector(String connName, long timeout) {
-        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(connName);
+        try {
             WorkerConnector connector = connectors.remove(connName);
             if (connector == null) {
                 log.warn("Ignoring await stop request for non-present connector {}", connName);
@@ -426,6 +436,8 @@ public class Worker {
             } else {
                 log.debug("Graceful stop of connector {} succeeded.", connName);
             }
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -505,7 +517,8 @@ public class Worker {
             TargetState initialState
     ) {
         final WorkerTask workerTask;
-        try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
+        LoggingContext loggingContext = LoggingContext.forTask(id);
+        try {
             log.info("Creating task {}", id);
 
             if (tasks.containsKey(id))
@@ -577,6 +590,8 @@ public class Worker {
             }
             workerMetricsGroup.recordTaskSuccess();
             return true;
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -826,7 +841,8 @@ public class Worker {
     }
 
     private void stopTask(ConnectorTaskId taskId) {
-        try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
+        LoggingContext loggingContext = LoggingContext.forTask(taskId);
+        try {
             WorkerTask task = tasks.get(taskId);
             if (task == null) {
                 log.warn("Ignoring stop request for unowned task {}", taskId);
@@ -844,6 +860,8 @@ public class Worker {
             } finally {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
+        } finally {
+            loggingContext.close();
         }
     }
 
@@ -856,7 +874,8 @@ public class Worker {
     }
 
     private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
-        try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
+        LoggingContext loggingContext = LoggingContext.forTask(taskId);
+        try {
             WorkerTask task = tasks.remove(taskId);
             if (task == null) {
                 log.warn("Ignoring await stop request for non-present task {}", taskId);
@@ -875,6 +894,8 @@ public class Worker {
             } finally {
                 connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             }
+        } finally {
+            loggingContext.close();
         }
     }
 

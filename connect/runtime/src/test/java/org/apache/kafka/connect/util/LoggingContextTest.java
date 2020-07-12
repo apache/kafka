@@ -82,9 +82,12 @@ public class LoggingContextTest {
     public void shouldCreateAndCloseLoggingContextEvenWithNullContextMap() {
         MDC.clear();
         assertMdc(null, null, null);
-        try (LoggingContext loggingContext = LoggingContext.forConnector(CONNECTOR_NAME)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(CONNECTOR_NAME);
+        try {
             assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
             log.info("Starting Connector");
+        } finally {
+            loggingContext.close();
         }
         assertMdc(null, null, null);
     }
@@ -94,9 +97,12 @@ public class LoggingContextTest {
         assertMdcExtrasUntouched();
         assertMdc(null, null, null);
 
-        try (LoggingContext loggingContext = LoggingContext.forConnector(CONNECTOR_NAME)) {
+        LoggingContext loggingContext = LoggingContext.forConnector(CONNECTOR_NAME);
+        try {
             assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
             log.info("Starting Connector");
+        } finally {
+            loggingContext.close();
         }
 
         assertMdcExtrasUntouched();
@@ -106,9 +112,12 @@ public class LoggingContextTest {
     @Test
     public void shouldCreateTaskLoggingContext() {
         assertMdcExtrasUntouched();
-        try (LoggingContext loggingContext = LoggingContext.forTask(TASK_ID1)) {
+        LoggingContext loggingContext = LoggingContext.forTask(TASK_ID1);
+        try {
             assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
             log.info("Running task");
+        } finally {
+            loggingContext.close();
         }
 
         assertMdcExtrasUntouched();
@@ -118,9 +127,12 @@ public class LoggingContextTest {
     @Test
     public void shouldCreateOffsetsLoggingContext() {
         assertMdcExtrasUntouched();
-        try (LoggingContext loggingContext = LoggingContext.forOffsets(TASK_ID1)) {
+        LoggingContext loggingContext = LoggingContext.forOffsets(TASK_ID1);
+        try {
             assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.OFFSETS);
             log.info("Running task");
+        } finally {
+            loggingContext.close();
         }
 
         assertMdcExtrasUntouched();
@@ -131,35 +143,44 @@ public class LoggingContextTest {
     public void shouldAllowNestedLoggingContexts() {
         assertMdcExtrasUntouched();
         assertMdc(null, null, null);
-        try (LoggingContext loggingContext1 = LoggingContext.forConnector(CONNECTOR_NAME)) {
+        LoggingContext loggingContext1 = LoggingContext.forConnector(CONNECTOR_NAME);
+        try {
             assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
             log.info("Starting Connector");
             // Set the extra MDC parameter, as if the connector were
             MDC.put(EXTRA_KEY3, EXTRA_VALUE3);
             assertConnectorMdcSet();
 
-            try (LoggingContext loggingContext2 = LoggingContext.forTask(TASK_ID1)) {
+            LoggingContext loggingContext2 = LoggingContext.forTask(TASK_ID1);
+            try {
                 assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
                 log.info("Starting task");
                 // The extra connector-specific MDC parameter should still be set
                 assertConnectorMdcSet();
 
-                try (LoggingContext loggingContext3 = LoggingContext.forOffsets(TASK_ID1)) {
+                LoggingContext loggingContext3 = LoggingContext.forOffsets(TASK_ID1);
+                try {
                     assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.OFFSETS);
                     assertConnectorMdcSet();
                     log.info("Offsets for task");
+                } finally {
+                    loggingContext3.close();
                 }
 
                 assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
                 log.info("Stopping task");
                 // The extra connector-specific MDC parameter should still be set
                 assertConnectorMdcSet();
+            } finally {
+                loggingContext2.close();
             }
 
             assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
             log.info("Stopping Connector");
             // The extra connector-specific MDC parameter should still be set
             assertConnectorMdcSet();
+        } finally {
+            loggingContext1.close();
         }
         assertMdcExtrasUntouched();
         assertMdc(null, null, null);

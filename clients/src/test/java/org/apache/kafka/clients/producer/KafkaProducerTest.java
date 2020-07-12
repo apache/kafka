@@ -192,12 +192,18 @@ public class KafkaProducerTest {
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
-        try (KafkaProducer<byte[], byte[]> ignored = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+        KafkaProducer<byte[], byte[]> producer = null;
+        try {
+            producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
             fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
             assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
             assertEquals("Failed to construct kafka producer", e.getMessage());
+        } finally {
+            if (producer != null) {
+                producer.close();
+            }
         }
     }
 
@@ -206,10 +212,16 @@ public class KafkaProducerTest {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(1, "not string key");
-        try (KafkaProducer<?, ?> ff = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())) {
+        KafkaProducer<?, ?> producer = null;
+        try {
+            producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
             fail("Constructor should throw exception");
         } catch (ConfigException e) {
             assertTrue("Unexpected exception message: " + e.getMessage(), e.getMessage().contains("not string key"));
+        } finally {
+            if (producer != null) {
+                producer.close();
+            }
         }
     }
 

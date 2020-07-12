@@ -32,6 +32,7 @@ import java.util.stream.Stream;
  * Allows all {@code sasl} configurations to be overridden via the connector configs by setting {@code connector.client.config.override.policy} to
  * {@code Principal}. This allows to set a principal per connector.
  */
+@SuppressWarnings("try")
 public class PrincipalConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
     private static final Logger log = LoggerFactory.getLogger(PrincipalConnectorClientConfigOverridePolicy.class);
 

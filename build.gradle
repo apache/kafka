@@ -191,7 +191,6 @@ subprojects {
     // temporary exclusions until all the warnings are fixed
     options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
-    options.compilerArgs << "-Xlint:-try"
     options.compilerArgs << "-Werror"
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
     // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
