@@ -642,6 +642,10 @@ public class SubscriptionState {
         return assignment.stream().allMatch(state -> state.value().hasValidPosition());
     }
 
+    public synchronized boolean hasAnyFetchablePartitions() {
+        return assignment.stream().anyMatch(state -> state.value().isFetchable());
+    }
+
     public synchronized Set<TopicPartition> initializingPartitions() {
         return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING), Collectors.toSet());
     }
@@ -652,7 +656,6 @@ public class SubscriptionState {
                 .map(PartitionStates.PartitionState::topicPartition)
                 .collect(collector);
     }
-
 
     public synchronized void resetInitializingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();

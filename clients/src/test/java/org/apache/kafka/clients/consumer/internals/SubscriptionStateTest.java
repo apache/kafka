@@ -59,18 +59,23 @@ public class SubscriptionStateTest {
 
     @Test
     public void partitionAssignment() {
-        state.assignFromUser(singleton(tp0));
-        assertEquals(singleton(tp0), state.assignedPartitions());
-        assertEquals(1, state.numAssignedPartitions());
+        state.assignFromUser(Utils.mkSet(tp0, tp1));
+        assertEquals(Utils.mkSet(tp0, tp1), state.assignedPartitions());
+        assertEquals(2, state.numAssignedPartitions());
         assertFalse(state.hasAllFetchPositions());
+        assertFalse(state.hasAnyFetchablePartitions());
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
         assertEquals(1L, state.position(tp0).offset);
+        assertFalse(state.hasAllFetchPositions());
+        assertTrue(state.hasAnyFetchablePartitions());
         state.assignFromUser(Collections.emptySet());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
         assertFalse(state.isAssigned(tp0));
         assertFalse(state.isFetchable(tp0));
+        assertTrue(state.hasAllFetchPositions());
+        assertFalse(state.hasAnyFetchablePartitions());
     }
 
     @Test

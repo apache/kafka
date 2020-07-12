@@ -1222,8 +1222,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 client.maybeTriggerWakeup();
 
                 if (includeMetadataInTimeout) {
-                    // try to update assignment metadata BUT do not need to block on the timer for join group
-                    updateAssignmentMetadataIfNeeded(timer, false);
+                    // try to update assignment metadata;
+                    // do not need to block on the timer for join group if we have any fetchable partitions
+                    updateAssignmentMetadataIfNeeded(timer, !subscriptions.hasAnyFetchablePartitions());
                 } else {
                     while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE), true)) {
                         log.warn("Still waiting for metadata");
