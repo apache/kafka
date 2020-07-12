@@ -974,11 +974,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                             "\tassigned active {}\n" +
                             "\trevoking active {}" +
                             "\tassigned standby {}\n", clientId,
-                    clientMetadata.state.prevOwnedActiveByConsumer(),
+                    clientMetadata.state.prevOwnedActiveTasksByConsumer(),
                     clientMetadata.state.prevOwnedStandbyByConsumer(),
-                    clientMetadata.state.assignedActiveByConsumer(),
-                    clientMetadata.state.revokingActiveByConsumer(),
-                    clientMetadata.state.assignedStandbyByConsumer());
+                    clientMetadata.state.assignedActiveTasksByConsumer(),
+                    clientMetadata.state.revokingActiveTasksByConsumer(),
+                    clientMetadata.state.assignedStandbyTasksByConsumer());
         }
 
         if (rebalanceRequired) {
@@ -1158,7 +1158,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             if (allStatefulTasks.contains(task)) {
                 log.info("Adding removed stateful active task {} as a standby for {} before it is revoked in followup rebalance",
                         task, consumer);
-                
+
                 // This has no effect on the assignment, as we'll never consult the ClientState again, but
                 // it does perform a useful assertion that the it's legal to assign this task as a standby to this instance
                 clientState.assignStandbyToConsumer(task, consumer);
@@ -1288,7 +1288,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private static SortedSet<TaskId> getPreviousTasksByLag(final ClientState state, final String consumer) {
         final SortedSet<TaskId> prevTasksByLag = new TreeSet<>(comparingLong(state::lagFor).thenComparing(TaskId::compareTo));
-        prevTasksByLag.addAll(state.previousTasksForConsumer(consumer));
+        prevTasksByLag.addAll(state.prevOwnedStatefulTasksByConsumer(consumer));
         return prevTasksByLag;
     }
 

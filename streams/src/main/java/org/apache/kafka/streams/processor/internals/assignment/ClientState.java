@@ -22,11 +22,9 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -51,10 +49,12 @@ public class ClientState {
     private final Set<TaskId> prevStandbyTasks;
 
     private final Map<String, Set<TaskId>> consumerToPreviousStatefulTaskIds;
-    private final Map<String, List<TaskId>> consumerToPreviousActiveTaskIds;
-    private final Map<String, List<TaskId>> consumerToAssignedActiveTaskIds;
-    private final Map<String, List<TaskId>> consumerToAssignedStandbyTaskIds;
-    private final Map<String, List<TaskId>> consumerToRevokingActiveTaskIds;
+    // the following four maps are used only for logging purposes;
+    // TODO: we could consider merging them with other book-keeping maps
+    private final Map<String, Set<TaskId>> consumerToPreviousActiveTaskIds;
+    private final Map<String, Set<TaskId>> consumerToAssignedActiveTaskIds;
+    private final Map<String, Set<TaskId>> consumerToAssignedStandbyTaskIds;
+    private final Map<String, Set<TaskId>> consumerToRevokingActiveTaskIds;
     private final Map<TopicPartition, String> ownedPartitions;
     private final Map<TaskId, Long> taskOffsetSums; // contains only stateful tasks we previously owned
     private final Map<TaskId, Long> taskLagTotals;  // contains lag for all stateful tasks in the app topology
@@ -131,27 +131,27 @@ public class ClientState {
     }
 
     public void assignActiveToConsumer(final TaskId task, final String consumer) {
-        consumerToAssignedActiveTaskIds.getOrDefault(consumer, new ArrayList<>()).add(task);
+        consumerToAssignedActiveTaskIds.computeIfAbsent(consumer, k -> new HashSet<>()).add(task);
     }
 
     public void assignStandbyToConsumer(final TaskId task, final String consumer) {
-        consumerToAssignedStandbyTaskIds.getOrDefault(consumer, new ArrayList<>()).add(task);
+        consumerToAssignedStandbyTaskIds.computeIfAbsent(consumer, k -> new HashSet<>()).add(task);
     }
 
     public void revokeActiveFromConsumer(final TaskId task, final String consumer) {
-        consumerToRevokingActiveTaskIds.getOrDefault(consumer, new ArrayList<>()).add(task);
+        consumerToRevokingActiveTaskIds.computeIfAbsent(consumer, k -> new HashSet<>()).add(task);
     }
 
-    public Map<String, List<TaskId>> prevOwnedActiveByConsumer() {
+    public Map<String, Set<TaskId>> prevOwnedActiveTasksByConsumer() {
         return consumerToPreviousActiveTaskIds;
     }
 
-    public Map<String, List<TaskId>> prevOwnedStandbyByConsumer() {
+    public Map<String, Set<TaskId>> prevOwnedStandbyByConsumer() {
         // standbys are just those stateful tasks minus active tasks
-        final Map<String, List<TaskId>> consumerToPreviousStandbyTaskIds = new TreeMap<>();
+        final Map<String, Set<TaskId>> consumerToPreviousStandbyTaskIds = new TreeMap<>();
 
         for (final Map.Entry<String, Set<TaskId>> entry: consumerToPreviousStatefulTaskIds.entrySet()) {
-            final List<TaskId> standbyTaskIds = new ArrayList<>(entry.getValue());
+            final Set<TaskId> standbyTaskIds = new HashSet<>(entry.getValue());
             if (consumerToPreviousActiveTaskIds.containsKey(entry.getKey()))
                 standbyTaskIds.removeAll(consumerToPreviousActiveTaskIds.get(entry.getKey()));
             consumerToPreviousStandbyTaskIds.put(entry.getKey(), standbyTaskIds);
@@ -160,15 +160,20 @@ public class ClientState {
         return consumerToPreviousStandbyTaskIds;
     }
 
-    public Map<String, List<TaskId>> assignedActiveByConsumer() {
+    // including both active and standby tasks
+    public Set<TaskId> prevOwnedStatefulTasksByConsumer(final String memberId) {
+        return consumerToPreviousStatefulTaskIds.get(memberId);
+    }
+
+    public Map<String, Set<TaskId>> assignedActiveTasksByConsumer() {
         return consumerToAssignedActiveTaskIds;
     }
 
-    public Map<String, List<TaskId>> revokingActiveByConsumer() {
+    public Map<String, Set<TaskId>> revokingActiveTasksByConsumer() {
         return consumerToRevokingActiveTaskIds;
     }
 
-    public Map<String, List<TaskId>> assignedStandbyByConsumer() {
+    public Map<String, Set<TaskId>> assignedStandbyTasksByConsumer() {
         return consumerToAssignedStandbyTaskIds;
     }
 
@@ -338,10 +343,6 @@ public class ClientState {
         return activeTasks.stream().filter(task -> !isStateful(task)).collect(Collectors.toSet());
     }
 
-    public Set<TaskId> previousTasksForConsumer(final String memberId) {
-        return consumerToPreviousStatefulTaskIds.get(memberId);
-    }
-
     boolean hasUnfulfilledQuota(final int tasksPerThread) {
         return activeTasks.size() < capacity * tasksPerThread;
     }
@@ -399,7 +400,7 @@ public class ClientState {
             final TaskId task = taskForPartitionMap.get(tp);
             if (task != null) {
                 addPreviousActiveTask(task);
-                consumerToPreviousActiveTaskIds.getOrDefault(partitionEntry.getValue(), new ArrayList<>()).add(task);
+                consumerToPreviousActiveTaskIds.computeIfAbsent(partitionEntry.getValue(), k -> new HashSet<>()).add(task);
             } else {
                 LOG.error("No task found for topic partition {}", tp);
             }
