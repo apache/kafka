@@ -179,53 +179,6 @@ public class Fetcher<K, V> implements Closeable {
                    long retryBackoffMs,
                    long requestTimeoutMs,
                    IsolationLevel isolationLevel,
-                   ApiVersions apiVersions) {
-        this(logContext,
-                client,
-                minBytes,
-                maxBytes,
-                maxWaitMs,
-                fetchSize,
-                maxPollRecords,
-                checkCrcs,
-                clientRackId,
-                keyDeserializer,
-                valueDeserializer,
-                metadata,
-                subscriptions,
-                metrics,
-                metricsRegistry,
-                time,
-                retryBackoffMs,
-                requestTimeoutMs,
-                isolationLevel,
-                /* Disable nearest offset for code path that use this constructor. The nearest offset reset is meant to be used only in client consumer.
-                We don't want to risk using nearest reset with other internal module of kafka eg. follower broker replication.
-                This also make the nearest reset feature not effect the old test case.
-                */
-                true,
-                apiVersions);
-    }
-
-    public Fetcher(LogContext logContext,
-                   ConsumerNetworkClient client,
-                   int minBytes,
-                   int maxBytes,
-                   int maxWaitMs,
-                   int fetchSize,
-                   int maxPollRecords,
-                   boolean checkCrcs,
-                   String clientRackId,
-                   Deserializer<K> keyDeserializer,
-                   Deserializer<V> valueDeserializer,
-                   ConsumerMetadata metadata,
-                   SubscriptionState subscriptions,
-                   Metrics metrics,
-                   FetcherMetricsRegistry metricsRegistry,
-                   Time time,
-                   long retryBackoffMs,
-                   long requestTimeoutMs,
-                   IsolationLevel isolationLevel,
                    boolean useNearestOffsetReset,
                    ApiVersions apiVersions) {
         this.log = logContext.logger(Fetcher.class);

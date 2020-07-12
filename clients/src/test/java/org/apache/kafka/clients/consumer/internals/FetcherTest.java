@@ -3310,6 +3310,7 @@ public class FetcherTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 IsolationLevel.READ_UNCOMMITTED,
+                false,
                 apiVersions) {
             @Override
             protected FetchSessionHandler sessionHandler(int id) {
@@ -4531,6 +4532,7 @@ public class FetcherTest {
                 retryBackoffMs,
                 requestTimeoutMs,
                 isolationLevel,
+                false,
                 apiVersions);
     }
 
