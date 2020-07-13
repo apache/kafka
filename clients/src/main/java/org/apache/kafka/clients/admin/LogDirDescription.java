@@ -54,9 +54,9 @@ public class LogDirDescription {
 
     @Override
     public String toString() {
-        return "LogDirDescription{" +
+        return "LogDirDescription(" +
                 "replicaInfos=" + replicaInfos +
                 ", error=" + error +
-                '}';
+                ')';
     }
 }

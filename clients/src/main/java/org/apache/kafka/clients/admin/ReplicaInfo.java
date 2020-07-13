@@ -61,10 +61,10 @@ public class ReplicaInfo {
 
     @Override
     public String toString() {
-        return "ReplicaInfo{" +
+        return "ReplicaInfo(" +
                 "size=" + size +
                 ", offsetLag=" + offsetLag +
                 ", isFuture=" + isFuture +
-                '}';
+                ')';
     }
 }

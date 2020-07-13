@@ -48,27 +48,25 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
 
     val request = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(null)).build()
     val response = connectAndReceive[DescribeLogDirsResponse](request, destination = controllerSocketServer)
-    case class ReplicaInfo(size: Long, offsetLag: Long, isFuture: Boolean)
-    case class LogDirInfo(error: Errors, replicaInfos: Map[TopicPartition, ReplicaInfo])
-    val logDirInfos = response.data.results.asScala.map{case result =>
-      result.logDir() -> LogDirInfo(Errors.forCode(result.errorCode), result.topics.asScala.flatMap { topic =>
-          topic.partitions.asScala.map { partition =>
-            new TopicPartition(topic.name, partition.partitionIndex) -> ReplicaInfo(partition.partitionSize, partition.offsetLag, partition.isFutureKey)
-          }.toMap
-        }.toMap)
+
+    assertEquals(logDirCount, response.data.results.size)
+    val offlineResult = response.data.results.asScala.find(logDirResult => logDirResult.logDir == offlineDir).get
+    assertEquals(Errors.KAFKA_STORAGE_ERROR.code, offlineResult.errorCode)
+    assertEquals(0, offlineResult.topics.asScala.map(t => t.partitions().size()).sum)
+
+    val onlineResult = response.data.results.asScala.find(logDirResult => logDirResult.logDir == onlineDir).get
+    assertEquals(Errors.NONE.code, onlineResult.errorCode)
+    val onlinePartitionsMap = onlineResult.topics.asScala.flatMap { topic =>
+      topic.partitions().asScala.map { partitionResult =>
+        new TopicPartition(topic.name, partitionResult.partitionIndex) -> partitionResult
+      }
     }.toMap
-
-    assertEquals(logDirCount, logDirInfos.size)
-    assertEquals(Errors.KAFKA_STORAGE_ERROR, logDirInfos(offlineDir).error)
-    assertEquals(0, logDirInfos(offlineDir).replicaInfos.size)
-
-    assertEquals(Errors.NONE, logDirInfos(onlineDir).error)
-    val replicaInfo0 = logDirInfos(onlineDir).replicaInfos(tp0)
-    val replicaInfo1 = logDirInfos(onlineDir).replicaInfos(tp1)
+    val replicaInfo0 = onlinePartitionsMap(tp0)
+    val replicaInfo1 = onlinePartitionsMap(tp1)
     val log0 = servers.head.logManager.getLog(tp0).get
     val log1 = servers.head.logManager.getLog(tp1).get
-    assertEquals(log0.size, replicaInfo0.size)
-    assertEquals(log1.size, replicaInfo1.size)
+    assertEquals(log0.size, replicaInfo0.partitionSize)
+    assertEquals(log1.size, replicaInfo1.partitionSize)
     val logEndOffset = servers.head.logManager.getLog(tp0).get.logEndOffset
     assertTrue(s"LogEndOffset '$logEndOffset' should be > 0", logEndOffset > 0)
     assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0, log0.logEndOffset, false), replicaInfo0.offsetLag)

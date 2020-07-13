@@ -63,7 +63,7 @@ object LogDirsCommand {
                     "logDirs" -> logDirInfos.map { case (logDir, logDirInfo) =>
                         Map(
                             "logDir" -> logDir,
-                            "error" -> Option(logDirInfo.error).flatMap(ex => Some(ex.getClass.getName)).orNull,
+                            "error" -> Option(logDirInfo.error).map(ex => ex.getClass.getName).orNull,
                             "partitions" -> logDirInfo.replicaInfos.asScala.filter { case (topicPartition, _) =>
                                 topicSet.isEmpty || topicSet.contains(topicPartition.topic)
                             }.map { case (topicPartition, replicaInfo) =>
