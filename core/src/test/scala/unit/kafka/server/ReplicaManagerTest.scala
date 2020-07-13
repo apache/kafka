@@ -2098,8 +2098,8 @@ class ReplicaManagerTest {
     partition.log.get.maybeIncrementLogStartOffset(1L, LeaderOffsetIncremented)
     replicaManager.logManager.checkpointLogRecoveryOffsets()
     replicaManager.logManager.checkpointLogStartOffsets()
-    assertTrue(readRecoveryPointCheckpoint().contains(tp0))
-    assertTrue(readLogStartOffsetCheckpoint().contains(tp0))
+    assertEquals(Some(1L), readRecoveryPointCheckpoint().get(tp0))
+    assertEquals(Some(1L), readLogStartOffsetCheckpoint().get(tp0))
 
     if (throwIOException) {
       // Delete the underlying directory to trigger an KafkaStorageException
