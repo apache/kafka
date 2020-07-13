@@ -294,6 +294,7 @@ public final class Sensor {
 
     /**
      * Register a metric with this sensor
+     *
      * @param metricName The name of the metric
      * @param stat       The statistic to keep
      * @param config     A special configuration for this metric. If null use the sensor default configuration.
