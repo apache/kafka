@@ -27,10 +27,15 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 
 public class ListSerializer<Inner> implements Serializer<List<Inner>> {
 
     private Serializer<Inner> inner;
+    private SerializationStrategy serStrategy;
     private boolean isFixedLength;
 
     static private List<Class<? extends Serializer<?>>> fixedLengthSerializers = Arrays.asList(
@@ -46,9 +51,14 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
     public ListSerializer(Serializer<Inner> serializer) {
         this.inner = serializer;
         this.isFixedLength = serializer != null && fixedLengthSerializers.contains(serializer.getClass());
+        this.serStrategy = this.isFixedLength ? SerializationStrategy.NULL_INDEX_LIST : SerializationStrategy.NEGATIVE_SIZE;
     }
 
-    Serializer<Inner> getInnerSerializer() {
+    public ListSerializer(Serializer<Inner> serializer, SerializationStrategy serStrategy) {
+        this(serializer);
+        this.serStrategy = serStrategy;
+    }
+
     public Serializer<Inner> getInnerSerializer() {
         return inner;
     }
@@ -77,21 +87,39 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
         }
     }
 
+    private void serializeNullIndexList(final DataOutputStream out, List<Inner> data) throws IOException {
+        List<Integer> nullIndexList = IntStream.range(0, data.size())
+                .filter(i -> data.get(i) == null)
+                .boxed().collect(Collectors.toList());
+        out.writeInt(nullIndexList.size());
+        for (int i : nullIndexList) out.writeInt(i);
+    }
+
     @Override
     public byte[] serialize(String topic, List<Inner> data) {
         if (data == null) {
             return null;
         }
-        final int size = data.size();
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream();
              final DataOutputStream out = new DataOutputStream(baos)) {
+            out.writeByte(serStrategy.ordinal()); // write serialization strategy flag
+            if (serStrategy == SerializationStrategy.NULL_INDEX_LIST) {
+                serializeNullIndexList(out, data);
+            }
+            final int size = data.size();
             out.writeInt(size);
             for (Inner entry : data) {
-                final byte[] bytes = inner.serialize(topic, entry);
-                if (!isFixedLength) {
-                    out.writeInt(bytes.length);
+                if (entry == null) {
+                    if (serStrategy == SerializationStrategy.NEGATIVE_SIZE) {
+                        out.writeInt(Serdes.ListSerde.NEGATIVE_SIZE_VALUE);
+                    }
+                } else {
+                    final byte[] bytes = inner.serialize(topic, entry);
+                    if (!isFixedLength || serStrategy == SerializationStrategy.NEGATIVE_SIZE) {
+                        out.writeInt(bytes.length);
+                    }
+                    out.write(bytes);
                 }
-                out.write(bytes);
             }
             return baos.toByteArray();
         } catch (IOException e) {

@@ -128,6 +128,15 @@ public class Serdes {
 
     static public final class ListSerde<Inner> extends WrapperSerde<List<Inner>> {
 
+        final static int NEGATIVE_SIZE_VALUE = -1;
+
+        enum SerializationStrategy {
+            NULL_INDEX_LIST,
+            NEGATIVE_SIZE;
+
+            public static final SerializationStrategy[] VALUES = SerializationStrategy.values();
+        }
+
         public ListSerde() {
             super(new ListSerializer<>(), new ListDeserializer<>());
         }
@@ -135,6 +144,11 @@ public class Serdes {
         public <L extends List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> serde) {
             super(new ListSerializer<>(serde.serializer()), new ListDeserializer<>(listClass, serde.deserializer()));
         }
+
+        public <L extends List<Inner>> ListSerde(Class<L> listClass, Serde<Inner> serde, SerializationStrategy serStrategy) {
+            super(new ListSerializer<>(serde.serializer(), serStrategy), new ListDeserializer<>(listClass, serde.deserializer()));
+        }
+
     }
 
     @SuppressWarnings("unchecked")
@@ -285,6 +299,15 @@ public class Serdes {
         ListSerde(Class<L> listClass, Serde<Inner> innerSerde) {
 
         return new ListSerde<>(listClass, innerSerde);
+    }
+
+    /*
+     * A serde for {@code List} type
+     */
+    public static <L extends List<Inner>, Inner> Serde<List<Inner>>
+        ListSerde(Class<L> listClass, Serde<Inner> innerSerde, ListSerde.SerializationStrategy serStrategy) {
+
+        return new ListSerde<>(listClass, innerSerde, serStrategy);
     }
 
 }

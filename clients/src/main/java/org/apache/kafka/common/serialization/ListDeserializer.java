@@ -27,9 +27,11 @@ import java.io.DataInputStream;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.serialization.Serdes.ListSerde.SerializationStrategy;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 
@@ -58,7 +60,6 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         }
     }
 
-    Deserializer<Inner> getInnerDeserializer() {
     public Deserializer<Inner> getInnerDeserializer() {
         return inner;
     }
@@ -131,20 +132,53 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         }
     }
 
+    private SerializationStrategy parseSerializationStrategyFlag(final int serializationStrategyFlag) throws IOException {
+        if (serializationStrategyFlag < 0 || serializationStrategyFlag >= SerializationStrategy.VALUES.length) {
+            throw new SerializationException("Invalid serialization strategy flag value");
+        }
+        return SerializationStrategy.VALUES[serializationStrategyFlag];
+    }
+
+    private List<Integer> deserializeNullIndexList(final DataInputStream dis) throws IOException {
+        int nullIndexListSize = dis.readInt();
+        List<Integer> nullIndexList = new ArrayList<>(nullIndexListSize);
+        while (nullIndexListSize != 0) {
+            nullIndexList.add(dis.readInt());
+            nullIndexListSize--;
+        }
+        return nullIndexList;
+    }
+
     @Override
     public List<Inner> deserialize(String topic, byte[] data) {
         if (data == null) {
             return null;
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
+            SerializationStrategy serStrategy = parseSerializationStrategyFlag(dis.readByte());
+            List<Integer> nullIndexList = null;
+            if (serStrategy == SerializationStrategy.NULL_INDEX_LIST) {
+                nullIndexList = deserializeNullIndexList(dis);
+            }
             final int size = dis.readInt();
             List<Inner> deserializedList = getListInstance(size);
             for (int i = 0; i < size; i++) {
-                byte[] payload = new byte[primitiveSize == null ? dis.readInt() : primitiveSize];
-                if (dis.read(payload) == -1) {
-                    throw new SerializationException("End of the stream was reached prematurely");
+                if (serStrategy == SerializationStrategy.NULL_INDEX_LIST
+                        && nullIndexList.contains(i)) {
+                    deserializedList.add(null);
+                    continue;
                 }
-                deserializedList.add(inner.deserialize(topic, payload));
+                int entrySize = primitiveSize == null || serStrategy == SerializationStrategy.NEGATIVE_SIZE ? dis.readInt() : primitiveSize;
+                if (serStrategy == SerializationStrategy.NEGATIVE_SIZE &&
+                        entrySize == Serdes.ListSerde.NEGATIVE_SIZE_VALUE) {
+                    deserializedList.add(null);
+                } else {
+                    byte[] payload = new byte[entrySize];
+                    if (dis.read(payload) == -1) {
+                        throw new SerializationException("End of the stream was reached prematurely");
+                    }
+                    deserializedList.add(inner.deserialize(topic, payload));
+                }
             }
             return deserializedList;
         } catch (IOException e) {
