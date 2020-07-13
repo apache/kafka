@@ -275,7 +275,7 @@ public final class Sensor {
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time);
             if (!metrics.containsKey(metric.metricName())) {
-                registry.registerMetric(metric, true);
+                registry.registerMetric(metric);
                 metrics.put(metric.metricName(), metric);
             }
         }
@@ -289,7 +289,7 @@ public final class Sensor {
      * @return true if metric is added to sensor, false if sensor is expired
      */
     public boolean add(MetricName metricName, MeasurableStat stat) {
-        return add(metricName, stat, null, true);
+        return add(metricName, stat, null);
     }
 
     /**
@@ -299,20 +299,7 @@ public final class Sensor {
      * @param config A special configuration for this metric. If null use the sensor default configuration.
      * @return true if metric is added to sensor, false if sensor is expired
      */
-    public boolean add(MetricName metricName, MeasurableStat stat, MetricConfig config) {
-        return add(metricName, stat, config, true);
-    }
-
-    /**
-     * Register a metric with this sensor
-     *
-     * @param metricName The name of the metric
-     * @param stat       The statistic to keep
-     * @param config     A special configuration for this metric. If null use the sensor default configuration.
-     * @param report     true if metric should be reported by metrics reporters, false means do not report
-     * @return true if metric is added to sensor, false if sensor is expired
-     */
-    public synchronized boolean add(final MetricName metricName, final MeasurableStat stat, final MetricConfig config, final boolean report) {
+    public synchronized boolean add(final MetricName metricName, final MeasurableStat stat, final MetricConfig config) {
         if (hasExpired()) {
             return false;
         } else if (metrics.containsKey(metricName)) {
@@ -326,7 +313,7 @@ public final class Sensor {
                 statConfig,
                 time
             );
-            registry.registerMetric(metric, report);
+            registry.registerMetric(metric);
             metrics.put(metric.metricName(), metric);
             stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig));
             return true;

@@ -518,7 +518,7 @@ public class Metrics implements Closeable {
                                         Objects.requireNonNull(metricValueProvider),
                                         config == null ? this.config : config,
                                         time);
-        registerMetric(m, true);
+        registerMetric(m);
     }
 
     /**
@@ -572,12 +572,12 @@ public class Metrics implements Closeable {
         }
     }
 
-    synchronized void registerMetric(KafkaMetric metric, boolean report) {
+    synchronized void registerMetric(KafkaMetric metric) {
         MetricName metricName = metric.metricName();
         if (this.metrics.containsKey(metricName))
             throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
         this.metrics.put(metricName, metric);
-        if (report) {
+        if (!metric.config().skipReporting()) {
             for (MetricsReporter reporter : reporters) {
                 try {
                     reporter.metricChange(metric);

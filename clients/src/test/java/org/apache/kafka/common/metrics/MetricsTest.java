@@ -966,8 +966,8 @@ public class MetricsTest {
         MetricName metricWithReporters = metrics.metricName("metric-to-report", "group-2");
         String mBeanName = JmxReporter.getMBeanName("", metricWithReporters);
 
-        sensor.add(metricWithoutReporters, new Rate(), null, false);
-        sensor.add(metricWithReporters, new Rate(), null, true);
+        sensor.add(metricWithoutReporters, new Rate(), new MetricConfig().skipReporting(true));
+        sensor.add(metricWithReporters, new Rate(), null);
         for (MetricsReporter reporter : metrics.reporters()) {
             if (reporter instanceof JmxReporter) {
                 JmxReporter jmxReporter = (JmxReporter) reporter;

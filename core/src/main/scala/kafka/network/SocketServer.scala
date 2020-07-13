@@ -1274,12 +1274,12 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private def waitForConnectionSlot(listenerName: ListenerName,
                                     acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
     counts.synchronized {
-      val startTimeMs = time.milliseconds()
-      val throttleTimeMs = math.max(recordConnectionAndGetThrottleTimeMs(listenerName, startTimeMs), 0)
+      val startThrottleTimeMs = time.milliseconds
+      val throttleTimeMs = math.max(recordConnectionAndGetThrottleTimeMs(listenerName, startThrottleTimeMs), 0)
 
       if (throttleTimeMs > 0 || !connectionSlotAvailable(listenerName)) {
         val startNs = time.nanoseconds
-        val endThrottleTimeMs = startTimeMs + throttleTimeMs
+        val endThrottleTimeMs = startThrottleTimeMs + throttleTimeMs
         var remainingThrottleTimeMs = throttleTimeMs
         do {
           counts.wait(remainingThrottleTimeMs)
@@ -1355,24 +1355,23 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private def createConnectionRateQuotaSensor(quotaLimit: Int, listenerOpt: Option[String] = None): Sensor = {
     val quotaEntity = listenerOpt.getOrElse("broker")
     val sensor = metrics.sensor(s"ConnectionCreationRate-$quotaEntity", rateQuotaMetricConfig(quotaLimit))
-    sensor.add(connectionRateMetricName(listenerOpt), new Rate, null, false)
+    sensor.add(connectionRateMetricName(quotaEntity), new Rate, null)
     info(s"Created ConnectionCreationRate-$quotaEntity sensor, quotaLimit=$quotaLimit")
     sensor
   }
 
   private def updateConnectionRateQuota(quotaLimit: Int, listenerOpt: Option[String] = None): Unit = {
-    val metric = metrics.metric(connectionRateMetricName((listenerOpt)))
+    val quotaEntity = listenerOpt.getOrElse("broker")
+    val metric = metrics.metric(connectionRateMetricName(quotaEntity))
     metric.config(rateQuotaMetricConfig(quotaLimit))
-    info(s"Updated ${listenerOpt.getOrElse("broker")} max connection creation rate to $quotaLimit")
+    info(s"Updated $quotaEntity max connection creation rate to $quotaLimit")
   }
 
-  private def connectionRateMetricName(listenerOpt: Option[String]): MetricName = {
-    val quotaEntity = listenerOpt.getOrElse("broker")
+  private def connectionRateMetricName(quotaEntity: String): MetricName = {
     metrics.metricName(
       s"connection-creation-rate-$quotaEntity",
-      "connection-quota-no-jmx",
-      s"Tracking $quotaEntity connection creation rate",
-      rateQuotaMetricTags(listenerOpt))
+      "connection-quota",
+      s"Tracking $quotaEntity connection creation rate")
   }
 
   private def rateQuotaMetricConfig(quotaLimit: Int): MetricConfig = {
@@ -1380,12 +1379,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       .timeWindow(config.quotaWindowSizeSeconds.toLong, TimeUnit.SECONDS)
       .samples(config.numQuotaSamples)
       .quota(new Quota(quotaLimit, true))
-  }
-
-  private def rateQuotaMetricTags(listenerOpt: Option[String]): util.Map[String, String] = {
-    val tags = new util.LinkedHashMap[String, String]
-    listenerOpt.foreach(listener => tags.put("listener", listener))
-    tags
+      .skipReporting(true)
   }
 
   class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable {
@@ -1409,7 +1403,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
       val value = maxConnections(configs)
       if (value <= 0)
-        throw new ConfigException("Invalid max.connections $listenerMax")
+        throw new ConfigException(s"Invalid ${KafkaConfig.MaxConnectionsProp} $value")
 
       val rate = maxConnectionCreationRate(configs)
       if (rate <= 0)

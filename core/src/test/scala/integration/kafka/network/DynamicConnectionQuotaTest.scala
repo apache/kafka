@@ -185,7 +185,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
     verifyConnectionRate(2 * connRateLimit, Int.MaxValue, "PLAINTEXT")
 
-    // Reduce total broker connection rate limit to 10 at the cluster level and verify the limit is enforced
+    // Reduce total broker connection rate limit to 18 at the cluster level and verify the limit is enforced
     props.clear()  // so that we do not pass security protocol map which cannot be set at the cluster level
     props.put(KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString)
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString))
