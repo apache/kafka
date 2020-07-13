@@ -2314,13 +2314,11 @@ public class KafkaAdminClient extends AdminClient {
         HashMap<String, LogDirDescription> result = new HashMap<>(response.data().results().size());
         for (DescribeLogDirsResponseData.DescribeLogDirsResult logDirResult : response.data().results()) {
             Map<TopicPartition, ReplicaInfo> replicaInfoMap = new HashMap<>();
-            if (logDirResult.topics() != null) {
-                for (DescribeLogDirsResponseData.DescribeLogDirsTopic t : logDirResult.topics()) {
-                    for (DescribeLogDirsResponseData.DescribeLogDirsPartition p : t.partitions()) {
-                        replicaInfoMap.put(
-                                new TopicPartition(t.name(), p.partitionIndex()),
-                                new ReplicaInfo(p.partitionSize(), p.offsetLag(), p.isFutureKey()));
-                    }
+            for (DescribeLogDirsResponseData.DescribeLogDirsTopic t : logDirResult.topics()) {
+                for (DescribeLogDirsResponseData.DescribeLogDirsPartition p : t.partitions()) {
+                    replicaInfoMap.put(
+                            new TopicPartition(t.name(), p.partitionIndex()),
+                            new ReplicaInfo(p.partitionSize(), p.offsetLag(), p.isFutureKey()));
                 }
             }
             result.put(logDirResult.logDir(), new LogDirDescription(Errors.forCode(logDirResult.errorCode()).exception(), replicaInfoMap));
@@ -2392,8 +2390,7 @@ public class KafkaAdminClient extends AdminClient {
                             ReplicaInfo replicaInfo = replicaInfoEntry.getValue();
                             ReplicaLogDirInfo replicaLogDirInfo = replicaDirInfoByPartition.get(tp);
                             if (replicaLogDirInfo == null) {
-                                handleFailure(new IllegalStateException(
-                                    "The partition " + tp + " in the response from broker " + brokerId + " is not in the request"));
+                                log.warn("Server response from broker {} mentioned unknown partition {}", brokerId, tp);
                             } else if (replicaInfo.isFuture()) {
                                 replicaDirInfoByPartition.put(tp, new ReplicaLogDirInfo(replicaLogDirInfo.getCurrentReplicaLogDir(),
                                                                                         replicaLogDirInfo.getCurrentReplicaOffsetLag(),

@@ -1163,7 +1163,7 @@ public class KafkaAdminClientTest {
                     new DescribeLogDirsResponseData().setResults(asList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
                             .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code())
                             .setLogDir("/var/data/kafka")
-                            .setTopics(null)
+                            .setTopics(emptyList())
                     ))), env.cluster().nodeById(0));
             DescribeLogDirsResult result = env.adminClient().describeLogDirs(brokers);
             Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> descriptions = result.descriptions();
@@ -1195,7 +1195,7 @@ public class KafkaAdminClientTest {
                     new DescribeLogDirsResponseData().setResults(asList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
                             .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code())
                             .setLogDir("/var/data/kafka")
-                            .setTopics(null)
+                            .setTopics(emptyList())
                     ))), env.cluster().nodeById(0));
             DescribeLogDirsResult result = env.adminClient().describeLogDirs(brokers);
 
