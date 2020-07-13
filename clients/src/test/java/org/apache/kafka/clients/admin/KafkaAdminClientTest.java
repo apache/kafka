@@ -492,13 +492,17 @@ public class KafkaAdminClientTest {
 
     private static FeatureMetadata getDefaultFeatureMetadata() {
         return new FeatureMetadata(
-            Features.finalizedFeatures(new HashMap<String, FinalizedVersionRange>() {{
-                put("test_feature_1", new FinalizedVersionRange((short) 2, (short) 3));
-            }}),
+            Features.finalizedFeatures(new HashMap<String, FinalizedVersionRange>() {
+                {
+                    put("test_feature_1", new FinalizedVersionRange((short) 2, (short) 3));
+                }
+            }),
             1,
-            Features.supportedFeatures(new HashMap<String, SupportedVersionRange>() {{
-                put("test_feature_1", new SupportedVersionRange((short) 1, (short) 5));
-            }})
+            Features.supportedFeatures(new HashMap<String, SupportedVersionRange>() {
+                {
+                    put("test_feature_1", new SupportedVersionRange((short) 1, (short) 5));
+                }
+            })
         );
     }
 
@@ -3982,7 +3986,7 @@ public class KafkaAdminClientTest {
                 new HashSet<>(
                     Arrays.asList(
                         new FinalizedFeatureUpdate(
-                            "test_feature_1",(short) 2, false),
+                            "test_feature_1", (short) 2, false),
                         new FinalizedFeatureUpdate(
                             "test_feature_2", (short) 3, true))),
                 new UpdateFinalizedFeaturesOptions().timeoutMs(10000)).result();
