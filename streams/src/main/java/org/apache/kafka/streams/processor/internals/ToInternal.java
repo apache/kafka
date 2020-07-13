@@ -39,7 +39,7 @@ public class ToInternal extends To {
         return childName;
     }
 
-    public boolean isChildExcluded(String child){
+    public boolean isChildExcluded(final String child) {
         return childExclusions.contains(child);
     }
 

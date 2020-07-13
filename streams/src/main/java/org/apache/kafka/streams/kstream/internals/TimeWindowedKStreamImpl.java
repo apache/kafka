@@ -19,7 +19,17 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
@@ -36,7 +46,6 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
-import static org.apache.kafka.streams.kstream.internals.KStreamImpl.SINK_NAME;
 
 public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V> implements TimeWindowedKStream<K, V> {
 
@@ -155,7 +164,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
         String deadLetterNodeName = null;
         StreamSinkNode<K, V> lateMessagesSinkNode = null;
-        if(deadLetterTopic != null){
+        if (deadLetterTopic != null) {
             deadLetterNodeName = new NamedInternal(named).suffixWithOrElseGet("-lateMessages", builder, AGGREGATE_NAME);
             lateMessagesSinkNode = new StreamSinkNode<>(
                 deadLetterNodeName,

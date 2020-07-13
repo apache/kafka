@@ -115,7 +115,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
 
-        if(lateMessagesSinkNode != null){
+        if (lateMessagesSinkNode != null) {
             builder.addGraphNode(statefulProcessorNode, lateMessagesSinkNode);
         }
 

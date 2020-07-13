@@ -16,8 +16,16 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.clients.consumer.*;
-import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -29,7 +37,11 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -50,9 +62,13 @@ import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.*;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.*;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.quietlyCleanStateAfterTest;
 import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -97,7 +113,7 @@ public class WindowedSuppressionIntegrationTest {
         cleanStateBeforeTest(CLUSTER, inputTopic, outputTopic, lateArrived);
     }
 
-    private void initConsumer(Consumer<Object, Object> consumer, String topic) {
+    private void initConsumer(final Consumer<Object, Object> consumer, final String topic) {
         final List<TopicPartition> partitions =
             consumer.partitionsFor(topic)
                 .stream()
@@ -124,7 +140,7 @@ public class WindowedSuppressionIntegrationTest {
             .aggregate(
                 () -> "",
                 (key, value, aggregate) -> value,
-                Named.as("aggregation"+appId),
+                Named.as("aggregation" + appId),
                 Materialized.<String, String>as(Stores.inMemoryWindowStore("store" + appId, Duration.ofMillis(windowSize), Duration.ofMillis(windowSize), true))
                     .withKeySerde(Serdes.String())
                     .withValueSerde(Serdes.String()),
@@ -180,7 +196,7 @@ public class WindowedSuppressionIntegrationTest {
         }
     }
 
-    private List<ConsumerRecord<Object, Object>> waitForRecords(Consumer<Object, Object> consumer) {
+    private List<ConsumerRecord<Object, Object>> waitForRecords(final Consumer<Object, Object> consumer) {
         final long start = System.currentTimeMillis();
         List<ConsumerRecord<Object, Object>> result = new ArrayList<>();
         while ((System.currentTimeMillis() - start) < DEFAULT_TIMEOUT) {
@@ -225,7 +241,7 @@ public class WindowedSuppressionIntegrationTest {
     }
 
     @After
-    public void tearDown() throws Exception {
+    public void tearDown() {
         outputConsumer.close();
         lateArrivedConsumer.close();
         producer.close();

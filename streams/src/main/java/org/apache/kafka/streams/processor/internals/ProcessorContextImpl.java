@@ -214,7 +214,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             if (sendTo == null) {
                 final List<ProcessorNode<?, ?>> children = currentNode().children();
                 for (final ProcessorNode<?, ?> child : children) {
-                    if(!toInternal.isChildExcluded(child.name())) {
+                    if (!toInternal.isChildExcluded(child.name())) {
                         forward((ProcessorNode<K, V>) child, key, value);
                     }
                 }
