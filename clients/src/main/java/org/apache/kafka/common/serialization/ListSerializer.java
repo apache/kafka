@@ -48,6 +48,11 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
         this.isFixedLength = serializer != null && fixedLengthSerializers.contains(serializer.getClass());
     }
 
+    Serializer<Inner> getInnerSerializer() {
+    public Serializer<Inner> getInnerSerializer() {
+        return inner;
+    }
+
     @SuppressWarnings("unchecked")
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
@@ -99,11 +104,6 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
         if (inner != null) {
             inner.close();
         }
-    }
-
-    // Only for testing
-    Serializer<Inner> innerSerializer() {
-        return inner;
     }
 
 }

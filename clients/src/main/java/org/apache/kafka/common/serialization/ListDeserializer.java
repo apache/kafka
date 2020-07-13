@@ -58,6 +58,11 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         }
     }
 
+    Deserializer<Inner> getInnerDeserializer() {
+    public Deserializer<Inner> getInnerDeserializer() {
+        return inner;
+    }
+
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
         if (listClass == null) {
@@ -152,11 +157,6 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
         if (inner != null) {
             inner.close();
         }
-    }
-
-    // Only for testing
-    Deserializer<Inner> innerDeserializer() {
-        return inner;
     }
 
 }

@@ -41,7 +41,7 @@ public class ListSerializerTest {
     public void testListKeySerializerNoArgConstructorsWithClassName() {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         listSerializer.configure(props, true);
-        final Serializer<?> inner = listSerializer.innerSerializer();
+        final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
     }
@@ -50,7 +50,7 @@ public class ListSerializerTest {
     public void testListValueSerializerNoArgConstructorsWithClassName() {
         props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
         listSerializer.configure(props, false);
-        final Serializer<?> inner = listSerializer.innerSerializer();
+        final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
     }
@@ -59,7 +59,7 @@ public class ListSerializerTest {
     public void testListKeySerializerNoArgConstructorsWithClassObject() {
         props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class);
         listSerializer.configure(props, true);
-        final Serializer<?> inner = listSerializer.innerSerializer();
+        final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
     }
@@ -68,7 +68,7 @@ public class ListSerializerTest {
     public void testListValueSerializerNoArgConstructorsWithClassObject() {
         props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
         listSerializer.configure(props, false);
-        final Serializer<?> inner = listSerializer.innerSerializer();
+        final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull("Inner serializer should be not null", inner);
         assertTrue("Inner serializer type should be StringSerializer", inner instanceof StringSerializer);
     }
