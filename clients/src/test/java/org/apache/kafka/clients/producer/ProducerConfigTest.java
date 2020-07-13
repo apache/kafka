@@ -36,6 +36,7 @@ public class ProducerConfigTest {
     private final Object keySerializerClass = keySerializer.getClass();
     private final Object valueSerializerClass = valueSerializer.getClass();
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testSerializerToPropertyConfig() {
         Properties properties = new Properties();
@@ -68,24 +69,24 @@ public class ProducerConfigTest {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
-        Map<String, Object> newConfigs = ProducerConfig.addSerializerToConfig(configs, null, null);
+        Map<String, Object> newConfigs = ProducerConfig.appendSerializerToConfig(configs, null, null);
         assertEquals(newConfigs.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClass);
         assertEquals(newConfigs.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClass);
 
         configs.clear();
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
-        newConfigs = ProducerConfig.addSerializerToConfig(configs, keySerializer, null);
+        newConfigs = ProducerConfig.appendSerializerToConfig(configs, keySerializer, null);
         assertEquals(newConfigs.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClass);
         assertEquals(newConfigs.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClass);
 
         configs.clear();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
-        newConfigs = ProducerConfig.addSerializerToConfig(configs, null, valueSerializer);
+        newConfigs = ProducerConfig.appendSerializerToConfig(configs, null, valueSerializer);
         assertEquals(newConfigs.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClass);
         assertEquals(newConfigs.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClass);
 
         configs.clear();
-        newConfigs = ProducerConfig.addSerializerToConfig(configs, keySerializer, valueSerializer);
+        newConfigs = ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer);
         assertEquals(newConfigs.get(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG), keySerializerClass);
         assertEquals(newConfigs.get(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG), valueSerializerClass);
     }
