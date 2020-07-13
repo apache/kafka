@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
+import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -72,6 +73,15 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
                                   final Serde<VR> valueSerde) {
+        return build(functionName, storeBuilder, aggregateSupplier, queryableStoreName, keySerde, valueSerde, null);
+    }
+    <KR, VR> KTable<KR, VR> build(final NamedInternal functionName,
+                                  final StoreBuilder<?> storeBuilder,
+                                  final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
+                                  final String queryableStoreName,
+                                  final Serde<KR> keySerde,
+                                  final Serde<VR> valueSerde,
+                                  final StreamSinkNode<K, V> lateMessagesSinkNode) {
         assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
 
         final String aggFunctionName = functionName.name();
@@ -104,6 +114,10 @@ class GroupedStreamAggregateBuilder<K, V> {
             );
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
+
+        if(lateMessagesSinkNode != null){
+            builder.addGraphNode(statefulProcessorNode, lateMessagesSinkNode);
+        }
 
         return new KTableImpl<>(aggFunctionName,
                                 keySerde,
