@@ -463,8 +463,13 @@ public class SelectorTest {
         time.sleep(6000); // The max idle time is 5000ms
         selector.poll(0);
 
-        assertTrue("The idle connection should have been closed", selector.disconnected().containsKey(id));
-        assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
+        assertTrue("The idle connection should have been closed or be in closing state",
+                selector.disconnected().get(id) != null || selector.closingChannel(id) != null);
+        if (selector.disconnected().get(id) != null) {
+            assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
+        } else {
+            assertEquals(ChannelState.EXPIRED, selector.closingChannel(id).state());
+        }
     }
 
     @Test
