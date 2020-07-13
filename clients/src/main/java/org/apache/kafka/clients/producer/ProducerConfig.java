@@ -501,8 +501,7 @@ public class ProducerConfig extends AbstractConfig {
         return appendSerializerToConfig(configs, keySerializer, valueSerializer);
     }
 
-    static Map<String, Object> appendSerializerToConfig(
-            Map<String, Object> configs,
+    static Map<String, Object> appendSerializerToConfig(Map<String, Object> configs,
             Serializer<?> keySerializer,
             Serializer<?> valueSerializer) {
         Map<String, Object> newConfigs = new HashMap<>(configs);
