@@ -112,8 +112,8 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
   }
 
   /**
-   * Tests whether an invalid feature update does not get processed on the server (as expected)
-   * and raises the InvalidRequestException on the client side (as expected).
+   * Tests whether an invalid feature update does not get processed on the server as expected,
+   * and raises the ExceptionType on the client side as expected.
    *
    * @param invalidUpdate         the invalid feature update to be sent in the
    *                              updateFinalizedFeatures request to the server
