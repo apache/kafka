@@ -259,6 +259,53 @@ public class SerializationTest {
                 listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void listSerdeShouldRoundtripPrimitiveInputWithNullEntries() {
+        List<Integer> testData = Arrays.asList(1, null, 3);
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
+        assertEquals("Should get the original collection of integer primitives with null entries"
+                        + " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void listSerdeShouldRoundtripNonPrimitiveInputWithNullEntries() {
+        List<String> testData = Arrays.asList("A", null, "C");
+        Serde<List<String>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.String());
+        assertEquals("Should get the original collection of strings list with null entries "
+                        + "after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void listSerdeShouldRoundtripInputWithNullIndexListSerializationStrategy() {
+        List<Integer> testData = Arrays.asList(1, null, 3);
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer(), SerializationStrategy.NULL_INDEX_LIST);
+        byte[] serializedPayload = listSerde.serializer().serialize(topic, testData);
+        assertEquals("Should get length of 21 bytes (serialization flag + size of the null index list + 1 null index entry "
+                        + "+ size of the input list + 2 integer entries) after serialization", 21,
+                listSerde.serializer().serialize(topic, testData).length);
+        assertEquals("Should get the original collection of integer primitives with null entries "
+                        + "after serialization and deserialization with null index list serialization strategy", testData,
+                listSerde.deserializer().deserialize(topic, serializedPayload));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void listSerdeShouldRoundtripInputWithNegativeSizeSerializationStrategy() {
+        List<Integer> testData = Arrays.asList(1, null, 3);
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer(), SerializationStrategy.NEGATIVE_SIZE);
+        byte[] serializedPayload = listSerde.serializer().serialize(topic, testData);
+        assertEquals("Should get length of 25 bytes (serialization flag + size of the input list + 2 integer entries "
+                        + "+ 1 negative size entry) after serialization", 25,
+                listSerde.serializer().serialize(topic, testData).length);
+        assertEquals("Should get the original collection of integer primitives with null entries "
+                        + "after serialization and deserialization with negative size serialization strategy", testData,
+                listSerde.deserializer().deserialize(topic, serializedPayload));
+    }
 
     @SuppressWarnings("unchecked")
     @Test
