@@ -97,7 +97,7 @@ public class ConsumerConfigTest {
     }
 
     @Test
-    public void testDeserializerToMapConfig() {
+    public void testAppendDeserializerToConfig() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);

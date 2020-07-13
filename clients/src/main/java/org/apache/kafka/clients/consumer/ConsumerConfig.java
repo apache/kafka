@@ -589,9 +589,10 @@ public class ConsumerConfig extends AbstractConfig {
         return appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer);
     }
 
-    static Map<String, Object> appendDeserializerToConfig(Map<String, Object> configs,
-                                                              Deserializer<?> keyDeserializer,
-                                                              Deserializer<?> valueDeserializer) {
+    static Map<String, Object> appendDeserializerToConfig(
+            Map<String, Object> configs,
+            Deserializer<?> keyDeserializer,
+            Deserializer<?> valueDeserializer) {
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keyDeserializer != null)
             newConfigs.put(KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());

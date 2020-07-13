@@ -65,7 +65,7 @@ public class ProducerConfigTest {
     }
     
     @Test
-    public void testSerializerToMapConfig() {
+    public void testAppendSerializerToConfig() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializerClass);
         configs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializerClass);
