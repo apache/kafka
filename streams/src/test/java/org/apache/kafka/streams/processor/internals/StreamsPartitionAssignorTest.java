@@ -1382,12 +1382,13 @@ public class StreamsPartitionAssignorTest {
         builder.addSource(null, "source1", null, null, null, "topic1");
 
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final List<TopicPartition> allPartitions = asList(t1p0, t1p1, t1p2);
 
         subscriptions.put(CONSUMER_1,
                           new Subscription(
                               Collections.singletonList("topic1"),
                               getInfo(UUID_1, allTasks, EMPTY_TASKS).encode(),
-                              asList(t1p0, t1p1, t1p2))
+                              allPartitions)
         );
         subscriptions.put(CONSUMER_2,
                           new Subscription(
@@ -1402,8 +1403,12 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Assignment> assignment = partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
 
         // Verify at least one partition was revoked
-        assertThat(assignment.get(CONSUMER_1).partitions(), not(allTasks));
+        assertThat(assignment.get(CONSUMER_1).partitions(), not(allPartitions));
         assertThat(assignment.get(CONSUMER_2).partitions(), equalTo(emptyList()));
+
+        // Verify that stateless revoked tasks would not be assigned as standbys
+        assertThat(AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()).activeTasks(), equalTo(emptyList()));
+        assertThat(AssignmentInfo.decode(assignment.get(CONSUMER_2).userData()).standbyTasks(), equalTo(emptyMap()));
 
         partitionAssignor.onAssignment(assignment.get(CONSUMER_2), null);
 

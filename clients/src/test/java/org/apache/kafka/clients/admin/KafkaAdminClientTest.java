@@ -84,6 +84,7 @@ import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
+import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
@@ -123,6 +124,7 @@ import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
@@ -3742,6 +3744,34 @@ public class KafkaAdminClientTest {
                         new AlterReplicaLogDirPartitionResult()
                             .setPartitionIndex(partitionId)
                             .setErrorCode(error.code())).collect(Collectors.toList())))));
+    }
+
+    @Test
+    public void testDescribeLogDirsPartialFailure() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.RETRIES_CONFIG, "0")) {
+            // As we won't retry, this calls fails immediately with a DisconnectException
+            env.kafkaClient().prepareResponseFrom(
+                prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
+                env.cluster().nodeById(0),
+                true);
+
+            env.kafkaClient().prepareResponseFrom(
+                prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
+                env.cluster().nodeById(1));
+
+            DescribeLogDirsResult result = env.adminClient().describeLogDirs(Arrays.asList(0, 1));
+
+            TestUtils.assertFutureThrows(result.values().get(0), ApiException.class);
+            assertNotNull(result.values().get(1).get());
+        }
+    }
+
+    private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {
+        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData()
+            .setResults(Collections.singletonList(
+                new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                    .setErrorCode(error.code())
+                    .setLogDir(logDir))));
     }
 
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,
