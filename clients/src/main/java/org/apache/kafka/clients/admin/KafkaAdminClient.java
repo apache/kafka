@@ -2272,12 +2272,11 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options) {
         final Map<Integer, KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
 
-        for (Integer brokerId: brokers) {
-            futures.put(brokerId, new KafkaFutureImpl<>());
-        }
-
         final long now = time.milliseconds();
-        for (final Integer brokerId: brokers) {
+        for (final Integer brokerId : brokers) {
+            KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future = new KafkaFutureImpl<>();
+            futures.put(brokerId, future);
+
             runnable.call(new Call("describeLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
@@ -2290,7 +2289,6 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
-                    KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future = futures.get(brokerId);
                     if (response.logDirInfos().size() > 0) {
                         future.complete(response.logDirInfos());
                     } else {
@@ -2300,7 +2298,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 @Override
                 void handleFailure(Throwable throwable) {
-                    completeAllExceptionally(futures.values(), throwable);
+                    future.completeExceptionally(throwable);
                 }
             }, now);
         }
