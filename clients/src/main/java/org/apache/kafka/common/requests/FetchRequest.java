@@ -22,10 +22,7 @@ import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
@@ -41,180 +38,15 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.protocol.CommonFields.CURRENT_LEADER_EPOCH;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-
 public class FetchRequest extends AbstractRequest {
+
     public static final int CONSUMER_REPLICA_ID = -1;
-
-    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
-            "Topics to fetch in the order provided.");
-    private static final Field.ComplexArray FORGOTTEN_TOPICS = new Field.ComplexArray("forgotten_topics_data",
-            "Topics to remove from the fetch session.");
-    private static final Field.Int32 MAX_BYTES = new Field.Int32("max_bytes",
-            "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
-                    "if the first message in the first non-empty partition of the fetch is larger than this " +
-                    "value, the message will still be returned to ensure that progress can be made.");
-    private static final Field.Int8 ISOLATION_LEVEL = new Field.Int8("isolation_level",
-            "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
-                    "(isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), " +
-                    "non-transactional and COMMITTED transactional records are visible. To be more concrete, " +
-                    "READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), " +
-                    "and enables the inclusion of the list of aborted transactions in the result, which allows " +
-                    "consumers to discard ABORTED transactional records");
-    private static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
-    private static final Field.Int32 SESSION_EPOCH = new Field.Int32("session_epoch", "The fetch session epoch");
-    private static final Field.Str RACK_ID = new Field.Str("rack_id", "The consumer's rack id");
-
-    // topic level fields
-    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
-            "Partitions to fetch.");
-
-    // partition level fields
-    private static final Field.Int32 REPLICA_ID = new Field.Int32("replica_id",
-            "Broker id of the follower. For normal consumers, use -1.");
-    private static final Field.Int64 FETCH_OFFSET = new Field.Int64("fetch_offset", "Message offset.");
-    private static final Field.Int32 PARTITION_MAX_BYTES = new Field.Int32("partition_max_bytes",
-            "Maximum bytes to fetch.");
-    private static final Field.Int32 MAX_WAIT_TIME = new Field.Int32("max_wait_time",
-            "Maximum time in ms to wait for the response.");
-    private static final Field.Int32 MIN_BYTES = new Field.Int32("min_bytes",
-            "Minimum bytes to accumulate in the response.");
-    private static final Field.Int64 LOG_START_OFFSET = new Field.Int64("log_start_offset",
-            "Earliest available offset of the follower replica. " +
-                    "The field is only used when request is sent by follower. ");
-
-    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
-            PARTITION_ID,
-            FETCH_OFFSET,
-            PARTITION_MAX_BYTES);
-
-    private static final Field TOPICS_V0 = TOPICS.withFields(
-            TOPIC_NAME,
-            PARTITIONS_V0);
-
-    private static final Schema FETCH_REQUEST_V0 = new Schema(
-            REPLICA_ID,
-            MAX_WAIT_TIME,
-            MIN_BYTES,
-            TOPICS_V0);
-
-    // The V1 Fetch Request body is the same as V0.
-    // Only the version number is incremented to indicate a newer client
-    private static final Schema FETCH_REQUEST_V1 = FETCH_REQUEST_V0;
-
-    // V2 bumped to indicate the client support message format V1 which uses relative offset and has timestamp.
-    public static final Schema FETCH_REQUEST_V2 = FETCH_REQUEST_V1;
-
-    // V3 added top level max_bytes field - the total size of partition data to accumulate in response.
-    // The partition ordering is now relevant - partitions will be processed in order they appear in request.
-    private static final Schema FETCH_REQUEST_V3 = new Schema(
-            REPLICA_ID,
-            MAX_WAIT_TIME,
-            MIN_BYTES,
-            MAX_BYTES,
-            TOPICS_V0);
-
-    // V4 adds the fetch isolation level and exposes magic v2 (via the response).
-
-    private static final Schema FETCH_REQUEST_V4 = new Schema(
-            REPLICA_ID,
-            MAX_WAIT_TIME,
-            MIN_BYTES,
-            MAX_BYTES,
-            ISOLATION_LEVEL,
-            TOPICS_V0);
-
-
-    // V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
-    private static final Field PARTITIONS_V5 = PARTITIONS.withFields(
-            PARTITION_ID,
-            FETCH_OFFSET,
-            LOG_START_OFFSET,
-            PARTITION_MAX_BYTES);
-
-    private static final Field TOPICS_V5 = TOPICS.withFields(
-            TOPIC_NAME,
-            PARTITIONS_V5);
-
-    private static final Schema FETCH_REQUEST_V5 = new Schema(
-            REPLICA_ID,
-            MAX_WAIT_TIME,
-            MIN_BYTES,
-            MAX_BYTES,
-            ISOLATION_LEVEL,
-            TOPICS_V5);
-
-    // V6 bumped up to indicate that the client supports KafkaStorageException. The KafkaStorageException will be
-    // translated to NotLeaderForPartitionException in the response if version <= 5
-    private static final Schema FETCH_REQUEST_V6 = FETCH_REQUEST_V5;
-
-    // V7 added incremental fetch requests.
-    private static final Field.Array FORGOTTEN_PARTITIONS = new Field.Array("partitions", Type.INT32,
-            "Partitions to remove from the fetch session.");
-    private static final Field FORGOTTEN_TOPIC_DATA_V7 = FORGOTTEN_TOPICS.withFields(
-            TOPIC_NAME,
-            FORGOTTEN_PARTITIONS);
-
-    private static final Schema FETCH_REQUEST_V7 = new Schema(
-            REPLICA_ID,
-            MAX_WAIT_TIME,
-            MIN_BYTES,
-            MAX_BYTES,
-            ISOLATION_LEVEL,
-            SESSION_ID,
-            SESSION_EPOCH,
-            TOPICS_V5,
-            FORGOTTEN_TOPIC_DATA_V7);
-
-    // V8 bump used to indicate that on quota violation brokers send out responses before throttling.
-    private static final Schema FETCH_REQUEST_V8 = FETCH_REQUEST_V7;
-
-    // V9 adds the current leader epoch (see KIP-320)
-    private static final Field FETCH_REQUEST_PARTITION_V9 = PARTITIONS.withFields(
-            PARTITION_ID,
-            CURRENT_LEADER_EPOCH,
-            FETCH_OFFSET,
-            LOG_START_OFFSET,
-            PARTITION_MAX_BYTES);
-
-    private static final Field FETCH_REQUEST_TOPIC_V9 = TOPICS.withFields(
-            TOPIC_NAME,
-            FETCH_REQUEST_PARTITION_V9);
-
-    private static final Schema FETCH_REQUEST_V9 = new Schema(
-            REPLICA_ID,
-            MAX_WAIT_TIME,
-            MIN_BYTES,
-            MAX_BYTES,
-            ISOLATION_LEVEL,
-            SESSION_ID,
-            SESSION_EPOCH,
-            FETCH_REQUEST_TOPIC_V9,
-            FORGOTTEN_TOPIC_DATA_V7);
-
-    // V10 bumped up to indicate ZStandard capability. (see KIP-110)
-    private static final Schema FETCH_REQUEST_V10 = FETCH_REQUEST_V9;
-
-    // V11 added rack ID to support read from followers (KIP-392)
-    private static final Schema FETCH_REQUEST_V11 = new Schema(
-            REPLICA_ID,
-            MAX_WAIT_TIME,
-            MIN_BYTES,
-            MAX_BYTES,
-            ISOLATION_LEVEL,
-            SESSION_ID,
-            SESSION_EPOCH,
-            FETCH_REQUEST_TOPIC_V9,
-            FORGOTTEN_TOPIC_DATA_V7,
-            RACK_ID);
 
     // default values for older versions where a request level limit did not exist
     public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
     public static final long INVALID_LOG_START_OFFSET = -1L;
 
-    private final FetchRequestData fetchRequestData;
+    private final FetchRequestData data;
 
     // These are immutable read-only structures derived from FetchRequestData
     private final Map<TopicPartition, PartitionData> fetchData;
@@ -223,7 +55,7 @@ public class FetchRequest extends AbstractRequest {
 
     @Override
     public FetchRequestData data() {
-        return fetchRequestData;
+        return data;
     }
 
     public static final class PartitionData {
@@ -265,9 +97,9 @@ public class FetchRequest extends AbstractRequest {
         }
     }
 
-    private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchableTopic> fetchableTopics) {
-        Map<String, List<FetchRequestData.FetchableTopic>> topicsByName = fetchableTopics.stream()
-            .collect(Collectors.groupingBy(FetchRequestData.FetchableTopic::topic, LinkedHashMap::new, Collectors.toList()));
+    private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics) {
+        Map<String, List<FetchRequestData.FetchTopic>> topicsByName = fetchableTopics.stream()
+            .collect(Collectors.groupingBy(FetchRequestData.FetchTopic::topic, LinkedHashMap::new, Collectors.toList()));
 
         Map<TopicPartition, PartitionData> result = new LinkedHashMap<>();
         topicsByName.forEach((topicName, groupedFetchableTopics) ->
@@ -388,7 +220,7 @@ public class FetchRequest extends AbstractRequest {
 
             FetchRequestData fetchRequestData = new FetchRequestData();
             fetchRequestData.setReplicaId(replicaId);
-            fetchRequestData.setMaxWaitTime(maxWait);
+            fetchRequestData.setMaxWaitMs(maxWait);
             fetchRequestData.setMinBytes(minBytes);
             fetchRequestData.setMaxBytes(maxBytes);
             fetchRequestData.setIsolationLevel(isolationLevel.id());
@@ -404,7 +236,7 @@ public class FetchRequest extends AbstractRequest {
             fetchData.entrySet().stream()
                 .collect(Collectors.groupingBy(entry -> entry.getKey().topic(), LinkedHashMap::new, Collectors.toList()))
                 .forEach((topic, entries) -> {
-                    FetchRequestData.FetchableTopic fetchableTopic = new FetchRequestData.FetchableTopic()
+                    FetchRequestData.FetchTopic fetchableTopic = new FetchRequestData.FetchTopic()
                         .setTopic(topic)
                         .setPartitions(new ArrayList<>());
                     entries.forEach(entry ->
@@ -418,7 +250,7 @@ public class FetchRequest extends AbstractRequest {
                     fetchRequestData.topics().add(fetchableTopic);
                 });
             if (metadata != null) {
-                fetchRequestData.setEpoch(metadata.epoch());
+                fetchRequestData.setSessionEpoch(metadata.epoch());
                 fetchRequestData.setSessionId(metadata.sessionId());
             }
             fetchRequestData.setRackId(rackId);
@@ -446,10 +278,10 @@ public class FetchRequest extends AbstractRequest {
 
     public FetchRequest(FetchRequestData fetchRequestData, short version) {
         super(ApiKeys.FETCH, version);
-        this.fetchRequestData = fetchRequestData;
+        this.data = fetchRequestData;
         this.fetchData = toPartitionDataMap(fetchRequestData.topics());
         this.toForget = toForgottonTopicList(fetchRequestData.forgottenTopicsData());
-        this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.epoch());
+        this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
     }
 
     @Override
@@ -468,23 +300,23 @@ public class FetchRequest extends AbstractRequest {
                 FetchResponse.INVALID_LOG_START_OFFSET, Optional.empty(), null, MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
-        return new FetchResponse<>(error, responseData, throttleTimeMs, fetchRequestData.sessionId());
+        return new FetchResponse<>(error, responseData, throttleTimeMs, data.sessionId());
     }
 
     public int replicaId() {
-        return fetchRequestData.replicaId();
+        return data.replicaId();
     }
 
     public int maxWait() {
-        return fetchRequestData.maxWaitTime();
+        return data.maxWaitMs();
     }
 
     public int minBytes() {
-        return fetchRequestData.minBytes();
+        return data.minBytes();
     }
 
     public int maxBytes() {
-        return fetchRequestData.maxBytes();
+        return data.maxBytes();
     }
 
     public Map<TopicPartition, PartitionData> fetchData() {
@@ -500,7 +332,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public IsolationLevel isolationLevel() {
-        return IsolationLevel.forId(fetchRequestData.isolationLevel());
+        return IsolationLevel.forId(data.isolationLevel());
     }
 
     public FetchMetadata metadata() {
@@ -508,7 +340,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public String rackId() {
-        return fetchRequestData.rackId();
+        return data.rackId();
     }
 
     public static FetchRequest parse(ByteBuffer buffer, short version) {
@@ -520,6 +352,6 @@ public class FetchRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        return fetchRequestData.toStruct(version());
+        return data.toStruct(version());
     }
 }

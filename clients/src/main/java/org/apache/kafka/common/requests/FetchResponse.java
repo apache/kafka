@@ -26,9 +26,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.RecordsReader;
 import org.apache.kafka.common.protocol.RecordsWriter;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -46,11 +43,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
 /**
@@ -75,162 +67,17 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  */
 public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
-    private static final String RESPONSES_KEY_NAME = "responses";
-
-    // topic level field names
-    private static final String PARTITIONS_KEY_NAME = "partition_responses";
-
-    // partition level fields
-    private static final Field.Int64 HIGH_WATERMARK = new Field.Int64("high_watermark",
-            "Last committed offset.");
-    private static final Field.Int64 LOG_START_OFFSET = new Field.Int64("log_start_offset",
-            "Earliest available offset.");
-    private static final Field.Int32 PREFERRED_READ_REPLICA = new Field.Int32("preferred_read_replica",
-            "The ID of the replica that the consumer should prefer.");
-
-    private static final String PARTITION_HEADER_KEY_NAME = "partition_header";
-    private static final String ABORTED_TRANSACTIONS_KEY_NAME = "aborted_transactions";
-    private static final String RECORD_SET_KEY_NAME = "record_set";
-
-    private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(
-            PARTITION_ID,
-            ERROR_CODE,
-            HIGH_WATERMARK);
-    private static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(
-            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V0),
-            new Field(RECORD_SET_KEY_NAME, RECORDS));
-
-    private static final Schema FETCH_RESPONSE_TOPIC_V0 = new Schema(
-            TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V0)));
-
-    private static final Schema FETCH_RESPONSE_V0 = new Schema(
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
-
-    // V1 bumped for the addition of the throttle time
-    private static final Schema FETCH_RESPONSE_V1 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
-
-    // V2 bumped to indicate the client support message format V1 which uses relative offset and has timestamp.
-    private static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
-
-    // V3 bumped for addition of top-levl max_bytes field and to indicate that partition ordering is relevant
-    private static final Schema FETCH_RESPONSE_V3 = FETCH_RESPONSE_V2;
-
-    // V4 adds features for transactional consumption (the aborted transaction list and the
-    // last stable offset). It also exposes messages with magic v2 (along with older formats).
-    // aborted transaction field names
-    private static final Field.Int64 LAST_STABLE_OFFSET = new Field.Int64("last_stable_offset",
-            "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
-                    "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)");
-    private static final Field.Int64 PRODUCER_ID = new Field.Int64("producer_id",
-            "The producer id associated with the aborted transactions");
-    private static final Field.Int64 FIRST_OFFSET = new Field.Int64("first_offset",
-            "The first offset in the aborted transaction");
-
-    private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V4 = new Schema(
-            PRODUCER_ID,
-            FIRST_OFFSET);
-
-    private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V4 = new Schema(
-            PARTITION_ID,
-            ERROR_CODE,
-            HIGH_WATERMARK,
-            LAST_STABLE_OFFSET,
-            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
-
-    // V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
-    private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V5 = new Schema(
-            PARTITION_ID,
-            ERROR_CODE,
-            HIGH_WATERMARK,
-            LAST_STABLE_OFFSET,
-            LOG_START_OFFSET,
-            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
-
-    // Introduced in V11 to support read from followers (KIP-392)
-    private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V6 = new Schema(
-            PARTITION_ID,
-            ERROR_CODE,
-            HIGH_WATERMARK,
-            LAST_STABLE_OFFSET,
-            LOG_START_OFFSET,
-            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)),
-            PREFERRED_READ_REPLICA);
-
-    private static final Schema FETCH_RESPONSE_PARTITION_V4 = new Schema(
-            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V4),
-            new Field(RECORD_SET_KEY_NAME, RECORDS));
-
-    private static final Schema FETCH_RESPONSE_PARTITION_V5 = new Schema(
-            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V5),
-            new Field(RECORD_SET_KEY_NAME, RECORDS));
-
-    private static final Schema FETCH_RESPONSE_PARTITION_V6 = new Schema(
-            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V6),
-            new Field(RECORD_SET_KEY_NAME, RECORDS));
-
-    private static final Schema FETCH_RESPONSE_TOPIC_V4 = new Schema(
-            TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V4)));
-
-    private static final Schema FETCH_RESPONSE_TOPIC_V5 = new Schema(
-            TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V5)));
-
-    private static final Schema FETCH_RESPONSE_TOPIC_V6 = new Schema(
-            TOPIC_NAME,
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V6)));
-
-    private static final Schema FETCH_RESPONSE_V4 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V4)));
-
-    private static final Schema FETCH_RESPONSE_V5 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
-
-    // V6 bumped up to indicate that the client supports KafkaStorageException. The KafkaStorageException will
-    // be translated to NotLeaderForPartitionException in the response if version <= 5
-    private static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
-
-    // V7 added incremental fetch responses and a top-level error code.
-    private static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
-
-    private static final Schema FETCH_RESPONSE_V7 = new Schema(
-            THROTTLE_TIME_MS,
-            ERROR_CODE,
-            SESSION_ID,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
-
-    // V8 bump used to indicate that on quota violation brokers send out responses before throttling.
-    private static final Schema FETCH_RESPONSE_V8 = FETCH_RESPONSE_V7;
-
-    // V9 adds the current leader epoch (see KIP-320)
-    private static final Schema FETCH_RESPONSE_V9 = FETCH_RESPONSE_V8;
-
-    // V10 bumped up to indicate ZStandard capability. (see KIP-110)
-    private static final Schema FETCH_RESPONSE_V10 = FETCH_RESPONSE_V9;
-
-    // V11 added preferred read replica for each partition response to support read from followers (KIP-392)
-    private static final Schema FETCH_RESPONSE_V11 = new Schema(
-            THROTTLE_TIME_MS,
-            ERROR_CODE,
-            SESSION_ID,
-            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V6)));
-
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
     public static final long INVALID_LOG_START_OFFSET = -1L;
     public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
-    private final FetchResponseData fetchResponseData;
+    private final FetchResponseData data;
     private final LinkedHashMap<TopicPartition, PartitionData<T>> responseDataMap;
 
     @Override
     public FetchResponseData data() {
-        return fetchResponseData;
+        return data;
     }
 
 
@@ -368,18 +215,18 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                          LinkedHashMap<TopicPartition, PartitionData<T>> responseData,
                          int throttleTimeMs,
                          int sessionId) {
-        this.fetchResponseData = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
+        this.data = toMessage(throttleTimeMs, error, responseData.entrySet().iterator(), sessionId);
         this.responseDataMap = responseData;
     }
 
     public FetchResponse(FetchResponseData fetchResponseData) {
-        this.fetchResponseData = fetchResponseData;
+        this.data = fetchResponseData;
         this.responseDataMap = toResponseDataMap(fetchResponseData);
     }
 
     @Override
     public Struct toStruct(short version) {
-        return fetchResponseData.toStruct(version);
+        return data.toStruct(version);
     }
 
     @Override
@@ -388,14 +235,13 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         ArrayDeque<Send> sends = new ArrayDeque<>();
         RecordsWriter writer = new RecordsWriter(dest, sends::add);
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        fetchResponseData.size(cache, apiVersion);
-        fetchResponseData.write(writer, cache, apiVersion);
+        data.size(cache, apiVersion);
+        data.write(writer, cache, apiVersion);
         writer.flush();
 
         // Compute the total size of all the Sends and write it out along with the header in the first Send
         ResponseHeaderData responseHeaderData = responseHeader.data();
 
-        //Struct responseHeaderStruct = responseHeader.toStruct();
         int headerSize = responseHeaderData.size(cache, responseHeader.headerVersion());
         int bodySize = (int) sends.stream().mapToLong(Send::size).sum();
 
@@ -414,7 +260,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     }
 
     public Errors error() {
-        return Errors.forCode(fetchResponseData.errorCode());
+        return Errors.forCode(data.errorCode());
     }
 
     public LinkedHashMap<TopicPartition, PartitionData<T>> responseData() {
@@ -423,11 +269,11 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     @Override
     public int throttleTimeMs() {
-        return fetchResponseData.throttleTimeMs();
+        return data.throttleTimeMs();
     }
 
     public int sessionId() {
-        return fetchResponseData.sessionId();
+        return data.sessionId();
     }
 
     @Override
