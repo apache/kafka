@@ -486,6 +486,7 @@ public class StreamThread extends Thread {
         this.numIterations = 1;
     }
 
+    @SuppressWarnings("deprecation")
     private static final class InternalConsumerConfig extends ConsumerConfig {
         private InternalConsumerConfig(final Map<String, Object> props) {
             super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
