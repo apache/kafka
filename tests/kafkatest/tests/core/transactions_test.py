@@ -47,7 +47,11 @@ class TransactionsTest(Test):
         self.num_output_partitions = 3
         self.num_seed_messages = 100000
         self.transaction_size = 750
-        self.transaction_timeout = 40000
+        # The timeout of transaction should be lower than the timeout of verification. The transactional message sent by
+        # client may be not correctly completed in hard_bounce mode. The pending transaction (unstable offset) stored by
+        # broker obstructs TransactionMessageCopier from getting offset of partition which is used to calculate
+        # remaining messages after restarting.
+        self.transaction_timeout = 5000
         self.consumer_group = "transactions-test-consumer-group"
 
         self.zk = ZookeeperService(test_context, num_nodes=1)

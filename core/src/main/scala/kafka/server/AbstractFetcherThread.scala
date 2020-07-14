@@ -382,6 +382,12 @@ abstract class AbstractFetcherThread(name: String,
                     "that the partition is being moved")
                   partitionsWithError += topicPartition
 
+                case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+                  warn(s"Received ${Errors.UNKNOWN_TOPIC_OR_PARTITION} from the leader for partition $topicPartition. " +
+                       "This error may be returned transiently when the partition is being created or deleted, but it is not " +
+                       "expected to persist.")
+                  partitionsWithError += topicPartition
+
                 case _ =>
                   error(s"Error for partition $topicPartition at offset ${currentFetchState.fetchOffset}",
                     partitionData.error.exception)
@@ -651,7 +657,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def partitionCount(): Int = {
+  def partitionCount: Int = {
     partitionMapLock.lockInterruptibly()
     try partitionStates.size
     finally partitionMapLock.unlock()

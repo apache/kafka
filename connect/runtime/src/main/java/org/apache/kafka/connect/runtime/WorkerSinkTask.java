@@ -196,6 +196,9 @@ class WorkerSinkTask extends WorkerTask {
         try (UncheckedCloseable suppressible = this::closePartitions) {
             while (!isStopping())
                 iteration();
+        } catch (WakeupException e) {
+            log.trace("Consumer woken up during initial offset commit attempt, " 
+                + "but succeeded during a later attempt");
         }
     }
 
@@ -489,10 +492,10 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
-        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key()),
+        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> convertKey(msg),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 
-        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value()),
+        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> convertValue(msg),
                 Stage.VALUE_CONVERTER, valueConverter.getClass());
 
         Headers headers = retryWithToleranceOperator.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
@@ -522,6 +525,26 @@ class WorkerSinkTask extends WorkerTask {
         }
         // Error reporting will need to correlate each sink record with the original consumer record
         return new InternalSinkRecord(msg, transformedRecord);
+    }
+
+    private SchemaAndValue convertKey(ConsumerRecord<byte[], byte[]> msg) {
+        try {
+            return keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key());
+        } catch (Exception e) {
+            log.error("{} Error converting message key in topic '{}' partition {} at offset {} and timestamp {}: {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    private SchemaAndValue convertValue(ConsumerRecord<byte[], byte[]> msg) {
+        try {
+            return valueConverter.toConnectData(msg.topic(), msg.headers(), msg.value());
+        } catch (Exception e) {
+            log.error("{} Error converting message value in topic '{}' partition {} at offset {} and timestamp {}: {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), e.getMessage(), e);
+            throw e;
+        }
     }
 
     private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {

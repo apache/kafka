@@ -159,7 +159,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     val responseFutures = new ConcurrentHashMap[GroupMember, Future[R]]()
 
     def setUpCallback(member: GroupMember): C = {
-      val responsePromise = Promise[R]
+      val responsePromise = Promise[R]()
       val responseFuture = responsePromise.future
       responseFutures.put(member, responseFuture)
       responseCallback(responsePromise)

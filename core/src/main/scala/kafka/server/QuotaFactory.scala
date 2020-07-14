@@ -49,9 +49,9 @@ object QuotaFactory extends Logging {
                            alterLogDirs: ReplicationQuotaManager,
                            clientQuotaCallback: Option[ClientQuotaCallback]) {
     def shutdown(): Unit = {
-      fetch.shutdown
-      produce.shutdown
-      request.shutdown
+      fetch.shutdown()
+      produce.shutdown()
+      request.shutdown()
       clientQuotaCallback.foreach(_.close())
     }
   }

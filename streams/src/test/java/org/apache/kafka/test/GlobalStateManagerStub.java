@@ -88,4 +88,9 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     public TaskType taskType() {
         return TaskType.GLOBAL;
     }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return null;
+    }
 }

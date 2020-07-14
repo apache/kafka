@@ -26,6 +26,8 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.utils.Utils.getNullableSizePrefixedArray;
 
 public class ProcessorRecordContext implements RecordContext {
 
@@ -161,12 +163,10 @@ public class ProcessorRecordContext implements RecordContext {
     public static ProcessorRecordContext deserialize(final ByteBuffer buffer) {
         final long timestamp = buffer.getLong();
         final long offset = buffer.getLong();
-        final int topicSize = buffer.getInt();
         final String topic;
         {
-            // not handling the null topic condition, because we believe the topic will never be null when we serialize
-            final byte[] topicBytes = new byte[topicSize];
-            buffer.get(topicBytes);
+            // we believe the topic will never be null when we serialize
+            final byte[] topicBytes = requireNonNull(getNullableSizePrefixedArray(buffer));
             topic = new String(topicBytes, UTF_8);
         }
         final int partition = buffer.getInt();
@@ -177,19 +177,8 @@ public class ProcessorRecordContext implements RecordContext {
         } else {
             final Header[] headerArr = new Header[headerCount];
             for (int i = 0; i < headerCount; i++) {
-                final int keySize = buffer.getInt();
-                final byte[] keyBytes = new byte[keySize];
-                buffer.get(keyBytes);
-
-                final int valueSize = buffer.getInt();
-                final byte[] valueBytes;
-                if (valueSize == -1) {
-                    valueBytes = null;
-                } else {
-                    valueBytes = new byte[valueSize];
-                    buffer.get(valueBytes);
-                }
-
+                final byte[] keyBytes = requireNonNull(getNullableSizePrefixedArray(buffer));
+                final byte[] valueBytes = getNullableSizePrefixedArray(buffer);
                 headerArr[i] = new RecordHeader(new String(keyBytes, UTF_8), valueBytes);
             }
             headers = new RecordHeaders(headerArr);

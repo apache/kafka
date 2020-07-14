@@ -191,7 +191,7 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
    */
   @Test
   def testNotificationFailureDueToFeatureIncompatibility(): Unit = {
-    createSupportedFeatures
+    createSupportedFeatures()
     val initialFinalizedFeatures = createFinalizedFeatures()
     val listener = createListener(Some(initialFinalizedFeatures))
 

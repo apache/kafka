@@ -84,6 +84,7 @@ import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
+import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
@@ -123,6 +124,7 @@ import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
@@ -3701,15 +3703,75 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testAlterReplicaLogDirsPartialFailure() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.RETRIES_CONFIG, "0")) {
+            // As we won't retry, this calls fails immediately with a DisconnectException
+            env.kafkaClient().prepareResponseFrom(
+                prepareAlterLogDirsResponse(Errors.NONE, "topic", 1),
+                env.cluster().nodeById(0),
+                true);
+
+            env.kafkaClient().prepareResponseFrom(
+                prepareAlterLogDirsResponse(Errors.NONE, "topic", 2),
+                env.cluster().nodeById(1));
+
+            TopicPartitionReplica tpr1 = new TopicPartitionReplica("topic", 1, 0);
+            TopicPartitionReplica tpr2 = new TopicPartitionReplica("topic", 2, 1);
+
+            Map<TopicPartitionReplica, String> logDirs = new HashMap<>();
+            logDirs.put(tpr1, "/data1");
+            logDirs.put(tpr2, "/data1");
+
+            AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
+
+            TestUtils.assertFutureThrows(result.values().get(tpr1), ApiException.class);
+            assertNull(result.values().get(tpr2).get());
+        }
+    }
+
     private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error, int... partitions) {
-        env.kafkaClient().prepareResponseFrom(new AlterReplicaLogDirsResponse(
-                new AlterReplicaLogDirsResponseData().setResults(singletonList(
-                        new AlterReplicaLogDirTopicResult()
-                                .setTopicName("topic")
-                                .setPartitions(Arrays.stream(partitions).boxed().map(partitionId ->
-                                        new AlterReplicaLogDirPartitionResult()
-                                                .setPartitionIndex(partitionId)
-                                                .setErrorCode(error.code())).collect(Collectors.toList()))))), node);
+        env.kafkaClient().prepareResponseFrom(
+            prepareAlterLogDirsResponse(error, "topic", partitions), node);
+    }
+
+    private AlterReplicaLogDirsResponse prepareAlterLogDirsResponse(Errors error, String topic, int... partitions) {
+        return new AlterReplicaLogDirsResponse(
+            new AlterReplicaLogDirsResponseData().setResults(singletonList(
+                new AlterReplicaLogDirTopicResult()
+                    .setTopicName(topic)
+                    .setPartitions(Arrays.stream(partitions).boxed().map(partitionId ->
+                        new AlterReplicaLogDirPartitionResult()
+                            .setPartitionIndex(partitionId)
+                            .setErrorCode(error.code())).collect(Collectors.toList())))));
+    }
+
+    @Test
+    public void testDescribeLogDirsPartialFailure() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv(AdminClientConfig.RETRIES_CONFIG, "0")) {
+            // As we won't retry, this calls fails immediately with a DisconnectException
+            env.kafkaClient().prepareResponseFrom(
+                prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
+                env.cluster().nodeById(0),
+                true);
+
+            env.kafkaClient().prepareResponseFrom(
+                prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
+                env.cluster().nodeById(1));
+
+            DescribeLogDirsResult result = env.adminClient().describeLogDirs(Arrays.asList(0, 1));
+
+            TestUtils.assertFutureThrows(result.values().get(0), ApiException.class);
+            assertNotNull(result.values().get(1).get());
+        }
+    }
+
+    private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir) {
+        return new DescribeLogDirsResponse(new DescribeLogDirsResponseData()
+            .setResults(Collections.singletonList(
+                new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                    .setErrorCode(error.code())
+                    .setLogDir(logDir))));
     }
 
     private static MemberDescription convertToMemberDescriptions(DescribedGroupMember member,

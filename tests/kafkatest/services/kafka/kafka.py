@@ -98,7 +98,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
+                 jmx_attributes=None, zk_connect_timeout=18000, zk_session_timeout=18000, server_prop_overides=None, zk_chroot=None,
                  zk_client_secure=False,
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
                  extra_kafka_opts="", tls_version=None):
@@ -181,10 +181,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.interbroker_listener = None
         self.setup_interbroker_listener(interbroker_security_protocol, self.listener_security_config.use_separate_interbroker_listener)
         self.interbroker_sasl_mechanism = interbroker_sasl_mechanism
+        self._security_config = None
 
         for node in self.nodes:
             node.version = version
-            node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
+            node.config = KafkaConfig(**{
+                config_property.BROKER_ID: self.idx(node),
+                config_property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: zk_connect_timeout,
+                config_property.ZOOKEEPER_SESSION_TIMEOUT_MS: zk_session_timeout
+            })
 
     def set_version(self, version):
         for node in self.nodes:
@@ -214,16 +219,23 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     @property
     def security_config(self):
-        config = SecurityConfig(self.context, self.security_protocol, self.interbroker_listener.security_protocol,
-                                zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
-                                client_sasl_mechanism=self.client_sasl_mechanism,
-                                interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
-                                listener_security_config=self.listener_security_config,
-                                tls_version=self.tls_version)
-        for port in self.port_mappings.values():
-            if port.open:
-                config.enable_security_protocol(port.security_protocol)
-        return config
+        if not self._security_config:
+            self._security_config = SecurityConfig(self.context, self.security_protocol, self.interbroker_listener.security_protocol,
+                                    zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
+                                    client_sasl_mechanism=self.client_sasl_mechanism,
+                                    interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
+                                    listener_security_config=self.listener_security_config,
+                                    tls_version=self.tls_version)
+            for port in self.port_mappings.values():
+                if port.open:
+                    self._security_config.enable_security_protocol(port.security_protocol)
+        if self.zk.zk_sasl:
+            self._security_config.enable_sasl()
+            self._security_config.zk_sasl = self.zk.zk_sasl
+        if self.zk_client_secure:
+            self._security_config.enable_ssl()
+            self._security_config.zk_tls = self.zk_client_secure
+        return self._security_config
 
     def open_port(self, listener_name):
         self.port_mappings[listener_name].open = True

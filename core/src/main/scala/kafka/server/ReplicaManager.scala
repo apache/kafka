@@ -334,32 +334,6 @@ class ReplicaManager(val config: KafkaConfig,
       brokerTopicStats.removeMetrics(topic)
   }
 
-  def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean): Unit  = {
-    if (deletePartition) {
-      getPartition(topicPartition) match {
-        case hostedPartition @ HostedPartition.Online(removedPartition) =>
-          if (allPartitions.remove(topicPartition, hostedPartition)) {
-            maybeRemoveTopicMetrics(topicPartition.topic)
-            // this will delete the local log. This call may throw exception if the log is on offline directory
-            removedPartition.delete()
-          }
-
-        case _ =>
-      }
-
-      // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
-      // This could happen when topic is being deleted while broker is down and recovers.
-      if (logManager.getLog(topicPartition).isDefined)
-        logManager.asyncDelete(topicPartition)
-      if (logManager.getLog(topicPartition, isFuture = true).isDefined)
-        logManager.asyncDelete(topicPartition, isFuture = true)
-    }
-
-    // If we were the leader, we may have some operations still waiting for completion.
-    // We force completion to prevent them from timing out.
-    completeDelayedFetchOrProduceRequests(topicPartition)
-  }
-
   private def completeDelayedFetchOrProduceRequests(topicPartition: TopicPartition): Unit = {
     val topicPartitionOperationKey = TopicPartitionOperationKey(topicPartition)
     delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
@@ -392,7 +366,8 @@ class ReplicaManager(val config: KafkaConfig,
       } else {
         this.controllerEpoch = controllerEpoch
 
-        val stoppedPartitions = mutable.Map.empty[TopicPartition, StopReplicaPartitionState]
+        val stoppedPartitions = mutable.Set.empty[TopicPartition]
+        val deletedPartitions = mutable.Set.empty[TopicPartition]
         partitionStates.foreach { case (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition
 
@@ -404,7 +379,7 @@ class ReplicaManager(val config: KafkaConfig,
                 "partition is in an offline log directory")
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
 
-            case HostedPartition.Online(partition) =>
+            case hostedPartition @ HostedPartition.Online(partition) =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
               // When a topic is deleted, the leader epoch is not incremented. To circumvent this,
@@ -414,7 +389,24 @@ class ReplicaManager(val config: KafkaConfig,
               if (requestLeaderEpoch == LeaderAndIsr.EpochDuringDelete ||
                   requestLeaderEpoch == LeaderAndIsr.NoEpoch ||
                   requestLeaderEpoch > currentLeaderEpoch) {
-                stoppedPartitions += topicPartition -> partitionState
+                stoppedPartitions += topicPartition
+
+                if (deletePartition) {
+                  if (allPartitions.remove(topicPartition, hostedPartition)) {
+                    maybeRemoveTopicMetrics(topicPartition.topic)
+                    // Logs are not deleted here. They are deleted in a single batch later on.
+                    // This is done to avoid having to checkpoint for every deletions.
+                    partition.delete()
+                    deletedPartitions += topicPartition
+                  }
+                }
+
+                // If we were the leader, we may have some operations still waiting for completion.
+                // We force completion to prevent them from timing out.
+                completeDelayedFetchOrProduceRequests(topicPartition)
+
+                // Assume that everything will go right. It is overwritten in case of an error.
+                responseMap.put(topicPartition, Errors.NONE)
               } else if (requestLeaderEpoch < currentLeaderEpoch) {
                 stateChangeLogger.warn(s"Ignoring StopReplica request (delete=$deletePartition) from " +
                   s"controller $controllerId with correlation id $correlationId " +
@@ -433,29 +425,35 @@ class ReplicaManager(val config: KafkaConfig,
             case HostedPartition.None =>
               // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
               // This could happen when topic is being deleted while broker is down and recovers.
-              stoppedPartitions += topicPartition -> partitionState
+              stoppedPartitions += topicPartition
+              if (deletePartition)
+                deletedPartitions += topicPartition
+              responseMap.put(topicPartition, Errors.NONE)
           }
         }
 
         // First stop fetchers for all partitions, then stop the corresponding replicas
-        val partitions = stoppedPartitions.keySet
-        replicaFetcherManager.removeFetcherForPartitions(partitions)
-        replicaAlterLogDirsManager.removeFetcherForPartitions(partitions)
+        replicaFetcherManager.removeFetcherForPartitions(stoppedPartitions)
+        replicaAlterLogDirsManager.removeFetcherForPartitions(stoppedPartitions)
 
-        stoppedPartitions.foreach { case (topicPartition, partitionState) =>
-          val deletePartition = partitionState.deletePartition
-          try {
-            stopReplica(topicPartition, deletePartition)
-            responseMap.put(topicPartition, Errors.NONE)
-          } catch {
+        // Delete the logs and checkpoint
+        logManager.asyncDelete(deletedPartitions, (topicPartition, exception) => {
+          exception match {
             case e: KafkaStorageException =>
-              stateChangeLogger.error(s"Ignoring StopReplica request (delete=$deletePartition) from " +
+              stateChangeLogger.error(s"Ignoring StopReplica request (delete=true) from " +
                 s"controller $controllerId with correlation id $correlationId " +
                 s"epoch $controllerEpoch for partition $topicPartition as the local replica for the " +
-                "partition is in an offline log directory", e)
+                "partition is in an offline log directory")
               responseMap.put(topicPartition, Errors.KAFKA_STORAGE_ERROR)
+
+            case e =>
+              stateChangeLogger.error(s"Ignoring StopReplica request (delete=true) from " +
+                s"controller $controllerId with correlation id $correlationId " +
+                s"epoch $controllerEpoch for partition $topicPartition due to an unexpected " +
+                s"${e.getClass.getName} exception: ${e.getMessage}")
+              responseMap.put(topicPartition, Errors.forException(e))
           }
-        }
+        })
 
         (responseMap, Errors.NONE)
       }
