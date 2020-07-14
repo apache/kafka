@@ -464,9 +464,9 @@ class LogManager(logDirs: Seq[File],
       val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
       threadPools.append(pool)
 
-      val logsInDir = localLogsByDir.getOrElse(dir.toString, Map()).values
+      val logs = logsInDir(localLogsByDir, dir).values
 
-      val jobsForDir = logsInDir.map { log =>
+      val jobsForDir = logs.map { log =>
         val runnable: Runnable = () => {
           // flush the log to ensure latest possible recovery point
           log.flush()
@@ -482,12 +482,14 @@ class LogManager(logDirs: Seq[File],
       for ((dir, dirJobs) <- jobs) {
         dirJobs.foreach(_.get)
 
+        val logs = logsInDir(localLogsByDir, dir)
+
         // update the last flush point
         debug(s"Updating recovery points at $dir")
-        checkpointRecoveryOffsetsAndCleanSnapshot(dir, localLogsByDir.getOrElse(dir.toString, Map()).values.toSeq)
+        checkpointRecoveryOffsetsAndCleanSnapshotsInDir(dir, logs, logs.values.toSeq)
 
         debug(s"Updating log start offsets at $dir")
-        checkpointLogStartOffsetsInDir(dir)
+        checkpointLogStartOffsetsInDir(dir, logs)
 
         // mark that the shutdown was clean by creating marker file
         debug(s"Writing clean shutdown marker at $dir")
@@ -523,26 +525,24 @@ class LogManager(logDirs: Seq[File],
       }
       // If the log does not exist, skip it
       if (log != null) {
-        //May need to abort and pause the cleaning of the log, and resume after truncation is done.
-        val needToStopCleaner = cleaner != null && truncateOffset < log.activeSegment.baseOffset
+        // May need to abort and pause the cleaning of the log, and resume after truncation is done.
+        val needToStopCleaner = truncateOffset < log.activeSegment.baseOffset
         if (needToStopCleaner && !isFuture)
-          cleaner.abortAndPauseCleaning(topicPartition)
+          abortAndPauseCleaning(topicPartition)
         try {
           if (log.truncateTo(truncateOffset))
             affectedLogs += log
           if (needToStopCleaner && !isFuture)
-            cleaner.maybeTruncateCheckpoint(log.parentDirFile, topicPartition, log.activeSegment.baseOffset)
+            maybeTruncateCleanerCheckpointToActiveSegmentBaseOffset(log, topicPartition)
         } finally {
-          if (needToStopCleaner && !isFuture) {
-            cleaner.resumeCleaning(Seq(topicPartition))
-            info(s"Cleaning for partition $topicPartition is resumed")
-          }
+          if (needToStopCleaner && !isFuture)
+            resumeCleaning(topicPartition)
         }
       }
     }
 
     for ((dir, logs) <- affectedLogs.groupBy(_.parentDirFile)) {
-      checkpointRecoveryOffsetsAndCleanSnapshot(dir, logs)
+      checkpointRecoveryOffsetsAndCleanSnapshotsInDir(dir, logs)
     }
   }
 
@@ -562,21 +562,18 @@ class LogManager(logDirs: Seq[File],
     }
     // If the log does not exist, skip it
     if (log != null) {
-        //Abort and pause the cleaning of the log, and resume after truncation is done.
-      if (cleaner != null && !isFuture)
-        cleaner.abortAndPauseCleaning(topicPartition)
+      // Abort and pause the cleaning of the log, and resume after truncation is done.
+      if (!isFuture)
+        abortAndPauseCleaning(topicPartition)
       try {
         log.truncateFullyAndStartAt(newOffset)
-        if (cleaner != null && !isFuture) {
-          cleaner.maybeTruncateCheckpoint(log.parentDirFile, topicPartition, log.activeSegment.baseOffset)
-        }
+        if (!isFuture)
+          maybeTruncateCleanerCheckpointToActiveSegmentBaseOffset(log, topicPartition)
       } finally {
-        if (cleaner != null && !isFuture) {
-          cleaner.resumeCleaning(Seq(topicPartition))
-          info(s"Compaction for partition $topicPartition is resumed")
-        }
+        if (!isFuture)
+          resumeCleaning(topicPartition)
       }
-      checkpointRecoveryOffsetsAndCleanSnapshot(log.parentDirFile, Seq(log))
+      checkpointRecoveryOffsetsAndCleanSnapshotsInDir(log.parentDirFile, Seq(log))
     }
   }
 
@@ -585,10 +582,10 @@ class LogManager(logDirs: Seq[File],
    * to avoid recovering the whole log on startup.
    */
   def checkpointLogRecoveryOffsets(): Unit = {
-    logsByDir.foreach { case (dir, partitionToLogMap) =>
-      liveLogDirs.find(_.getAbsolutePath.equals(dir)).foreach { f =>
-        checkpointRecoveryOffsetsAndCleanSnapshot(f, partitionToLogMap.values.toSeq)
-      }
+    val logsByDirCached = logsByDir
+    liveLogDirs.foreach { logDir =>
+      val logsToCheckpoint = logsInDir(logsByDirCached, logDir)
+      checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, logsToCheckpoint.values.toSeq)
     }
   }
 
@@ -597,53 +594,66 @@ class LogManager(logDirs: Seq[File],
    * to avoid exposing data that have been deleted by DeleteRecordsRequest
    */
   def checkpointLogStartOffsets(): Unit = {
-    liveLogDirs.foreach(checkpointLogStartOffsetsInDir)
+    val logsByDirCached = logsByDir
+    liveLogDirs.foreach { logDir =>
+      checkpointLogStartOffsetsInDir(logDir, logsInDir(logsByDirCached, logDir))
+    }
   }
 
   /**
-    * Write the recovery checkpoint file for all logs in provided directory and clean older snapshots for provided logs.
-    *
-    * @param dir the directory in which logs are checkpointed
-    * @param logsToCleanSnapshot logs whose snapshots need to be cleaned
-    */
+   * Checkpoint recovery offsets for all the logs in logDir and clean the snapshots of all the
+   * provided logs.
+   *
+   * @param logDir the directory in which the logs to be checkpointed are
+   * @param logsToCleanSnapshot the logs whose snapshots will be cleaned
+   */
   // Only for testing
-  private[log] def checkpointRecoveryOffsetsAndCleanSnapshot(dir: File, logsToCleanSnapshot: Seq[Log]): Unit = {
+  private[log] def checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir: File, logsToCleanSnapshot: Seq[Log]): Unit = {
+    checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsInDir(logDir), logsToCleanSnapshot)
+  }
+
+  /**
+   * Checkpoint recovery offsets for all the provided logs and clean the snapshots of all the
+   * provided logs.
+   *
+   * @param logDir the directory in which the logs are
+   * @param logsToCheckpoint the logs to be checkpointed
+   * @param logsToCleanSnapshot the logs whose snapshots will be cleaned
+   */
+  private def checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir: File, logsToCheckpoint: Map[TopicPartition, Log],
+                                                              logsToCleanSnapshot: Seq[Log]): Unit = {
     try {
-      checkpointLogRecoveryOffsetsInDir(dir)
+      recoveryPointCheckpoints.get(logDir).foreach { checkpoint =>
+        val recoveryOffsets = logsToCheckpoint.map { case (tp, log) => tp -> log.recoveryPoint }
+        checkpoint.write(recoveryOffsets)
+      }
       logsToCleanSnapshot.foreach(_.deleteSnapshotsAfterRecoveryPointCheckpoint())
     } catch {
+      case e: KafkaStorageException =>
+        error(s"Disk error while writing recovery offsets checkpoint in directory $logDir: ${e.getMessage}")
       case e: IOException =>
-        logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to recovery point " +
-          s"file in directory $dir", e)
-    }
-  }
-
-  private def checkpointLogRecoveryOffsetsInDir(dir: File): Unit = {
-    for {
-      partitionToLog <- logsByDir.get(dir.getAbsolutePath)
-      checkpoint <- recoveryPointCheckpoints.get(dir)
-    } {
-      checkpoint.write(partitionToLog.map { case (tp, log) => tp -> log.recoveryPoint })
+        logDirFailureChannel.maybeAddOfflineLogDir(logDir.getAbsolutePath,
+          s"Disk error while writing recovery offsets checkpoint in directory $logDir: ${e.getMessage}", e)
     }
   }
 
   /**
-   * Checkpoint log start offset for all logs in provided directory.
+   * Checkpoint log start offsets for all the provided logs in the provided directory.
+   *
+   * @param logDir the directory in which logs are checkpointed
+   * @param logsToCheckpoint the logs to be checkpointed
    */
-  private def checkpointLogStartOffsetsInDir(dir: File): Unit = {
-    for {
-      partitionToLog <- logsByDir.get(dir.getAbsolutePath)
-      checkpoint <- logStartOffsetCheckpoints.get(dir)
-    } {
-      try {
-        val logStartOffsets = partitionToLog.collect {
-          case (k, log) if log.logStartOffset > log.logSegments.head.baseOffset => k -> log.logStartOffset
+  private def checkpointLogStartOffsetsInDir(logDir: File, logsToCheckpoint: Map[TopicPartition, Log]): Unit = {
+    try {
+      logStartOffsetCheckpoints.get(logDir).foreach { checkpoint =>
+        val logStartOffsets = logsToCheckpoint.collect {
+          case (tp, log) if log.logStartOffset > log.logSegments.head.baseOffset => tp -> log.logStartOffset
         }
         checkpoint.write(logStartOffsets)
-      } catch {
-        case e: IOException =>
-          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to logStartOffset file in directory $dir", e)
       }
+    } catch {
+      case e: KafkaStorageException =>
+        error(s"Disk error while writing log start offsets checkpoint in directory $logDir: ${e.getMessage}")
     }
   }
 
@@ -655,11 +665,35 @@ class LogManager(logDirs: Seq[File],
       preferredLogDirs.put(topicPartition, logDir)
   }
 
+  /**
+   * Abort and pause cleaning of the provided partition and log a message about it.
+   */
   def abortAndPauseCleaning(topicPartition: TopicPartition): Unit = {
-    if (cleaner != null)
+    if (cleaner != null) {
       cleaner.abortAndPauseCleaning(topicPartition)
+      info(s"The cleaning for partition $topicPartition is aborted and paused")
+    }
   }
 
+  /**
+   * Resume cleaning of the provided partition and log a message about it.
+   */
+  private def resumeCleaning(topicPartition: TopicPartition): Unit = {
+    if (cleaner != null) {
+      cleaner.resumeCleaning(Seq(topicPartition))
+      info(s"Cleaning for partition $topicPartition is resumed")
+    }
+  }
+
+  /**
+   * Truncate the cleaner's checkpoint to the based offset of the active segment of
+   * the provided log.
+   */
+  private def maybeTruncateCleanerCheckpointToActiveSegmentBaseOffset(log: Log, topicPartition: TopicPartition): Unit = {
+    if (cleaner != null) {
+      cleaner.maybeTruncateCheckpoint(log.parentDirFile, topicPartition, log.activeSegment.baseOffset)
+    }
+  }
 
   /**
    * Get the log if it exists, otherwise return None
@@ -886,8 +920,7 @@ class LogManager(logDirs: Seq[File],
       currentLogs.put(topicPartition, destLog)
       if (cleaner != null) {
         cleaner.alterCheckpointDir(topicPartition, sourceLog.parentDirFile, destLog.parentDirFile)
-        cleaner.resumeCleaning(Seq(topicPartition))
-        info(s"Compaction for partition $topicPartition is resumed")
+        resumeCleaning(topicPartition)
       }
 
       try {
@@ -895,8 +928,10 @@ class LogManager(logDirs: Seq[File],
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         sourceLog.close()
-        checkpointRecoveryOffsetsAndCleanSnapshot(sourceLog.parentDirFile, ArrayBuffer.empty)
-        checkpointLogStartOffsetsInDir(sourceLog.parentDirFile)
+        val logDir = sourceLog.parentDirFile
+        val logsToCheckpoint = logsInDir(logDir)
+        checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
+        checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
         addLogToBeDeleted(sourceLog)
       } catch {
         case e: KafkaStorageException =>
@@ -917,9 +952,12 @@ class LogManager(logDirs: Seq[File],
     *
     * @param topicPartition TopicPartition that needs to be deleted
     * @param isFuture True iff the future log of the specified partition should be deleted
+    * @param checkpoint True if checkpoints must be written
     * @return the removed log
     */
-  def asyncDelete(topicPartition: TopicPartition, isFuture: Boolean = false): Log = {
+  def asyncDelete(topicPartition: TopicPartition,
+                  isFuture: Boolean = false,
+                  checkpoint: Boolean = true): Log = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {
       if (isFuture)
         futureLogs.remove(topicPartition)
@@ -927,20 +965,61 @@ class LogManager(logDirs: Seq[File],
         currentLogs.remove(topicPartition)
     }
     if (removedLog != null) {
-      //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
+      // We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
       if (cleaner != null && !isFuture) {
         cleaner.abortCleaning(topicPartition)
-        cleaner.updateCheckpoints(removedLog.parentDirFile)
+        if (checkpoint)
+          cleaner.updateCheckpoints(removedLog.parentDirFile)
       }
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
-      checkpointRecoveryOffsetsAndCleanSnapshot(removedLog.parentDirFile, ArrayBuffer.empty)
-      checkpointLogStartOffsetsInDir(removedLog.parentDirFile)
+      if (checkpoint) {
+        val logDir = removedLog.parentDirFile
+        val logsToCheckpoint = logsInDir(logDir)
+        checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
+        checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
+      }
       addLogToBeDeleted(removedLog)
       info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
     } else if (offlineLogDirs.nonEmpty) {
       throw new KafkaStorageException(s"Failed to delete log for ${if (isFuture) "future" else ""} $topicPartition because it may be in one of the offline directories ${offlineLogDirs.mkString(",")}")
     }
     removedLog
+  }
+
+  /**
+   * Rename the directories of the given topic-partitions and add them in the queue for
+   * deletion. Checkpoints are updated once all the directories have been renamed.
+   *
+   * @param topicPartitions The set of topic-partitions to delete asynchronously
+   * @param errorHandler The error handler that will be called when a exception for a particular
+   *                     topic-partition is raised
+   */
+  def asyncDelete(topicPartitions: Set[TopicPartition],
+                  errorHandler: (TopicPartition, Throwable) => Unit): Unit = {
+    val logDirs = mutable.Set.empty[File]
+
+    topicPartitions.foreach { topicPartition =>
+      try {
+        getLog(topicPartition).foreach { log =>
+          logDirs += log.parentDirFile
+          asyncDelete(topicPartition, checkpoint = false)
+        }
+        getLog(topicPartition, isFuture = true).foreach { log =>
+          logDirs += log.parentDirFile
+          asyncDelete(topicPartition, isFuture = true, checkpoint = false)
+        }
+      } catch {
+        case e: Throwable => errorHandler(topicPartition, e)
+      }
+    }
+
+    val logsByDirCached = logsByDir
+    logDirs.foreach { logDir =>
+      if (cleaner != null) cleaner.updateCheckpoints(logDir)
+      val logsToCheckpoint = logsInDir(logsByDirCached, logDir)
+      checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
+      checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
+    }
   }
 
   /**
@@ -1022,7 +1101,7 @@ class LogManager(logDirs: Seq[File],
   /**
    * Map of log dir to logs by topic and partitions in that dir
    */
-  def logsByDir: Map[String, Map[TopicPartition, Log]] = {
+  private def logsByDir: Map[String, Map[TopicPartition, Log]] = {
     // This code is called often by checkpoint processes and is written in a way that reduces
     // allocations and CPU with many topic partitions.
     // When changing this code please measure the changes with org.apache.kafka.jmh.server.CheckpointBench
@@ -1033,6 +1112,15 @@ class LogManager(logDirs: Seq[File],
     currentLogs.foreachEntry(addToDir)
     futureLogs.foreachEntry(addToDir)
     byDir
+  }
+
+  private def logsInDir(dir: File): Map[TopicPartition, Log] = {
+    logsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
+  }
+
+  private def logsInDir(cachedLogsByDir: Map[String, Map[TopicPartition, Log]],
+                        dir: File): Map[TopicPartition, Log] = {
+    cachedLogsByDir.getOrElse(dir.getAbsolutePath, Map.empty)
   }
 
   // logDir should be an absolute path

@@ -460,6 +460,10 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  /**
+   * Delete the partition. Note that deleting the partition does not delete the underlying logs.
+   * The logs are deleted by the ReplicaManager after having deleted the partition.
+   */
   def delete(): Unit = {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
@@ -471,9 +475,6 @@ class Partition(val topicPartition: TopicPartition,
       leaderReplicaIdOpt = None
       leaderEpochStartOffsetOpt = None
       Partition.removeMetrics(topicPartition)
-      logManager.asyncDelete(topicPartition)
-      if (logManager.getLog(topicPartition, isFuture = true).isDefined)
-        logManager.asyncDelete(topicPartition, isFuture = true)
     }
   }
 
