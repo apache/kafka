@@ -677,9 +677,15 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(configMap))).all().get()
     waitForTopicCreated(testTopicName)
-    TestUtils.generateAndProduceMessages(servers, testTopicName, numMessages = 1000, acks = -1)
+    TestUtils.generateAndProduceMessages(servers, testTopicName, numMessages = 10, acks = -1)
+    Thread.sleep(10)
+    TestUtils.generateAndProduceMessages(servers, testTopicName, numMessages = 10, acks = -1)
 
+    // Enable throttling. Note the broker config sets the replica max fetch bytes to `1` upon to minimize replication
+    // throughput so the reassignment doesn't complete quickly.
     val brokerIds = servers.map(_.config.brokerId)
+    TestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp), throttleBytes = 1)
+   
     val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
     val firstPartition = testTopicDesc.partitions().asScala.head
 
@@ -705,6 +711,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val underReplicatedOutput = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
     assertEquals(s"--under-replicated-partitions shouldn't return anything: '$underReplicatedOutput'", "", underReplicatedOutput)
+
+    TestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp))
 
     // Verify reassignment is still ongoing.
     val reassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().get(tp)
