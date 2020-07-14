@@ -30,7 +30,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
-import org.apache.kafka.common.errors.{ApiException, OffsetNotAvailableException, ReplicaNotAvailableException}
+import org.apache.kafka.common.errors.{ApiException, NotLeaderOrFollowerException, OffsetNotAvailableException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -783,14 +783,14 @@ class PartitionTest extends AbstractPartitionTest {
   @Test
   def testGetReplica(): Unit = {
     assertEquals(None, partition.log)
-    assertThrows[ReplicaNotAvailableException] {
+    assertThrows[NotLeaderOrFollowerException] {
       partition.localLogOrException
     }
   }
 
   @Test
   def testAppendRecordsToFollowerWithNoReplicaThrowsException(): Unit = {
-    assertThrows[ReplicaNotAvailableException] {
+    assertThrows[NotLeaderOrFollowerException] {
       partition.appendRecordsToFollowerOrFutureReplica(
            createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 0L), isFuture = false)
     }

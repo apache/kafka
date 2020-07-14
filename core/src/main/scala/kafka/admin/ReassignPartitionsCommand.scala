@@ -29,7 +29,7 @@ import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, ConfigEntry, NewPartitionReassignment, PartitionReassignment, TopicDescription}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{ReplicaNotAvailableException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{NotLeaderOrFollowerException, ReplicaNotAvailableException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, KafkaFuture, TopicPartition, TopicPartitionReplica}
@@ -1763,9 +1763,8 @@ object ReassignPartitionsCommand extends Logging {
         } catch {
           case t: ExecutionException =>
             t.getCause match {
-              // Ignore ReplicaNotAvailableException.  It is OK if the replica is not
-              // available at this moment.
-              case _: ReplicaNotAvailableException => None
+              // It is OK if the replica is not available at this moment.
+              case _: ReplicaNotAvailableException | _: NotLeaderOrFollowerException => None
               case e: Throwable =>
                 throw new AdminCommandFailedException(s"Failed to alter dir for $replica", e)
             }

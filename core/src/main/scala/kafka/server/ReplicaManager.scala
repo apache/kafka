@@ -708,14 +708,13 @@ class ReplicaManager(val config: KafkaConfig,
         } catch {
           case e@(_: InvalidTopicException |
                   _: LogDirNotFoundException |
-                  _: ReplicaNotAvailableException |
                   _: KafkaStorageException) =>
             warn(s"Unable to alter log dirs for $topicPartition", e)
             (topicPartition, Errors.forException(e))
           case e: NotLeaderOrFollowerException =>
-            // Retaining REPLICA_NOT_AVAILABLE exception for ALTER_REPLICA_LOG_DIRS for compatibility
             warn(s"Unable to alter log dirs for $topicPartition", e)
-            (topicPartition, Errors.REPLICA_NOT_AVAILABLE)
+            // Retaining REPLICA_NOT_AVAILABLE exception for ALTER_REPLICA_LOG_DIRS for older versions for compatibility
+            (topicPartition, if (config.interBrokerProtocolVersion >= KAFKA_2_7_IV0) Errors.NOT_LEADER_OR_FOLLOWER else Errors.REPLICA_NOT_AVAILABLE)
           case t: Throwable =>
             error("Error while changing replica dir for partition %s".format(topicPartition), t)
             (topicPartition, Errors.forException(t))

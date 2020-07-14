@@ -23,10 +23,9 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.{Optional, Properties}
 
-import kafka.api.LeaderAndIsr
-import kafka.api.Request
+import kafka.api._
 import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
-import kafka.cluster.BrokerEndPoint
+import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.LeaderOffsetIncremented
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.checkpoints.LazyOffsetCheckpoints
@@ -2123,5 +2122,38 @@ class ReplicaManagerTest {
       assertFalse(readRecoveryPointCheckpoint().contains(tp0))
       assertFalse(readLogStartOffsetCheckpoint().contains(tp0))
     }
+  }
+
+  @Test
+  def testReplicaNotAvailable(): Unit = {
+
+    def createReplicaManager(ibpVersion: ApiVersion): ReplicaManager = {
+      val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+      props.put(KafkaConfig.InterBrokerProtocolVersionProp, ibpVersion.version)
+      val config = KafkaConfig.fromProps(props)
+      val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
+      new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
+        new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+        new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size)) {
+        override def getPartitionOrException(topicPartition: TopicPartition): Partition = {
+          throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
+        }
+      }
+    }
+
+    def verifyAlterLogDirs(ibpVersion: ApiVersion, expectedError: Errors): Unit = {
+      val replicaManager = createReplicaManager(ibpVersion)
+      try {
+        val tp = new TopicPartition(topic, 0)
+        val dir = replicaManager.logManager.liveLogDirs.head.getAbsolutePath
+        val errors = replicaManager.alterReplicaLogDirs(Map(tp -> dir))
+        assertEquals(expectedError, errors(tp))
+      } finally {
+        replicaManager.shutdown(false)
+      }
+    }
+
+    verifyAlterLogDirs(KAFKA_2_6_IV0, Errors.REPLICA_NOT_AVAILABLE)
+    verifyAlterLogDirs(KAFKA_2_7_IV0, Errors.NOT_LEADER_OR_FOLLOWER)
   }
 }

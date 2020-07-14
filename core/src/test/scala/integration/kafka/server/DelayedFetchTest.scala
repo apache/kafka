@@ -21,7 +21,7 @@ import java.util.Optional
 import scala.collection.Seq
 import kafka.cluster.Partition
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{FencedLeaderEpochException, ReplicaNotAvailableException}
+import org.apache.kafka.common.errors.{FencedLeaderEpochException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
@@ -81,7 +81,7 @@ class DelayedFetchTest extends EasyMockSupport {
   }
 
   @Test
-  def testReplicaNotAvailable(): Unit = {
+  def testNotLeaderOrFollower(): Unit = {
     val topicPartition = new TopicPartition("topic", 0)
     val fetchOffset = 500L
     val logStartOffset = 0L
@@ -107,8 +107,8 @@ class DelayedFetchTest extends EasyMockSupport {
       responseCallback = callback)
 
     EasyMock.expect(replicaManager.getPartitionOrException(topicPartition))
-      .andThrow(new ReplicaNotAvailableException(s"Replica for $topicPartition not available"))
-    expectReadFromReplicaWithError(replicaId, topicPartition, fetchStatus.fetchInfo, Errors.REPLICA_NOT_AVAILABLE)
+      .andThrow(new NotLeaderOrFollowerException(s"Replica for $topicPartition not available"))
+    expectReadFromReplicaWithError(replicaId, topicPartition, fetchStatus.fetchInfo, Errors.NOT_LEADER_OR_FOLLOWER)
     EasyMock.expect(replicaManager.isAddingReplica(EasyMock.anyObject(), EasyMock.anyInt())).andReturn(false)
 
     replayAll()

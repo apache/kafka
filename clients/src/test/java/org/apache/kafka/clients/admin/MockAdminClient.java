@@ -33,7 +33,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -654,7 +654,7 @@ public class MockAdminClient extends AdminClient {
             List<String> dirs = brokerLogDirs.get(replica.brokerId());
             if (dirs == null) {
                 future.completeExceptionally(
-                    new ReplicaNotAvailableException("Can't find " + replica));
+                    new NotLeaderOrFollowerException("Can't find " + replica));
             } else if (!dirs.contains(newLogDir)) {
                 future.completeExceptionally(
                     new KafkaStorageException("Log directory " + newLogDir + " is offline"));
@@ -662,7 +662,7 @@ public class MockAdminClient extends AdminClient {
                 TopicMetadata metadata = allTopics.get(replica.topic());
                 if (metadata == null || metadata.partitions.size() <= replica.partition()) {
                     future.completeExceptionally(
-                        new ReplicaNotAvailableException("Can't find " + replica));
+                        new NotLeaderOrFollowerException("Can't find " + replica));
                 } else {
                     String currentLogDir = metadata.partitionLogDirs.get(replica.partition());
                     replicaMoves.put(replica,

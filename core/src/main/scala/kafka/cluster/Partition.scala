@@ -332,7 +332,7 @@ class Partition(val topicPartition: TopicPartition,
   def getReplica(replicaId: Int): Option[Replica] = Option(remoteReplicasMap.get(replicaId))
 
   private def getReplicaOrException(replicaId: Int): Replica = getReplica(replicaId).getOrElse{
-    throw new ReplicaNotAvailableException(s"Replica with id $replicaId is not available on broker $localBrokerId")
+    throw new NotLeaderOrFollowerException(s"Replica with id $replicaId is not available on broker $localBrokerId")
   }
 
   private def checkCurrentLeaderEpoch(remoteLeaderEpochOpt: Optional[Integer]): Errors = {
@@ -370,12 +370,12 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def localLogOrException: Log = log.getOrElse {
-    throw new ReplicaNotAvailableException(s"Log for partition $topicPartition is not available " +
+    throw new NotLeaderOrFollowerException(s"Log for partition $topicPartition is not available " +
       s"on broker $localBrokerId")
   }
 
   def futureLocalLogOrException: Log = futureLog.getOrElse {
-    throw new ReplicaNotAvailableException(s"Future log for partition $topicPartition is not available " +
+    throw new NotLeaderOrFollowerException(s"Future log for partition $topicPartition is not available " +
       s"on broker $localBrokerId")
   }
 

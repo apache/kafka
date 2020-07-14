@@ -120,11 +120,8 @@ class DelayedFetch(delayMs: Long,
             }
           }
         } catch {
-          case _: NotLeaderOrFollowerException =>  // Case A
+          case _: NotLeaderOrFollowerException =>  // Case A or Case B
             debug(s"Broker is no longer the leader or follower of $topicPartition, satisfy $fetchMetadata immediately")
-            return forceComplete()
-          case _: ReplicaNotAvailableException =>  // Case B
-            debug(s"Broker no longer has a replica of $topicPartition, satisfy $fetchMetadata immediately")
             return forceComplete()
           case _: UnknownTopicOrPartitionException => // Case C
             debug(s"Broker no longer knows of partition $topicPartition, satisfy $fetchMetadata immediately")

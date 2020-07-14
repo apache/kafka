@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.UnknownServerException;
 
@@ -59,7 +60,8 @@ public class AlterReplicaLogDirsResult {
      *     <li>{@link ClusterAuthorizationException}: Authorization failed. (CLUSTER_AUTHORIZATION_FAILED, 31)</li>
      *     <li>{@link InvalidTopicException}: The specified topic name is too long. (INVALID_TOPIC_EXCEPTION, 17)</li>
      *     <li>{@link LogDirNotFoundException}: The specified log directory is not found in the broker. (LOG_DIR_NOT_FOUND, 57)</li>
-     *     <li>{@link ReplicaNotAvailableException}: The replica does not exist on the broker. (REPLICA_NOT_AVAILABLE, 9)</li>
+     *     <li>{@link ReplicaNotAvailableException}: The replica does not exist on the broker with inter-broker protocol version < 2.7. (REPLICA_NOT_AVAILABLE, 9)</li>
+     *     <li>{@link NotLeaderOrFollowerException}: The replica does not exist on the broker with inter-broker protocol version >= 2.7. (NOT_LEADER_OR_FOLLOWER, 6)</li>
      *     <li>{@link KafkaStorageException}: Disk error occurred. (KAFKA_STORAGE_ERROR, 56)</li>
      *     <li>{@link UnknownServerException}: Unknown. (UNKNOWN_SERVER_ERROR, -1)</li>
      *   </ul>
