@@ -43,7 +43,7 @@
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "ErrorCode", "type": "int16", "versions": "7+", "ignorable": false,
+    { "name": "ErrorCode", "type": "int16", "versions": "7+", "ignorable": true,
       "about": "The top level response error code." },
     { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": false,
       "about": "The fetch session ID, or 0 if this is not part of a fetch session." },
@@ -65,7 +65,7 @@
             "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)" },
           { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
             "about": "The current log start offset." },
-          { "name": "AbortedTransactions", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": false,
+          { "name": "AbortedTransactions", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": true,
             "about": "The aborted transactions.",  "fields": [
             { "name": "ProducerId", "type": "int64", "versions": "4+", "entityType": "producerId",
               "about": "The producer id associated with the aborted transaction." },
