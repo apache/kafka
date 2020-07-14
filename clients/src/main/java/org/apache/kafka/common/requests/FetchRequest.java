@@ -19,9 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -345,6 +347,27 @@ public class FetchRequest extends AbstractRequest {
         FetchRequestData message = new FetchRequestData();
         message.read(accessor, version);
         return new FetchRequest(message, version);
+    }
+
+    @Override
+    public ByteBuffer serialize(RequestHeader header) {
+        // Unlike the custom FetchResponse#toSend, we don't include the buffer size here. This buffer is passed
+        // to a NetworkSend which adds the length value in the eventual serialization
+
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        RequestHeaderData requestHeaderData = header.data();
+
+        int headerSize = requestHeaderData.size(cache, header.headerVersion());
+        int bodySize = data.size(cache, header.apiVersion());
+
+        ByteBuffer buffer = ByteBuffer.allocate(headerSize + bodySize);
+        ByteBufferAccessor writer = new ByteBufferAccessor(buffer);
+
+        requestHeaderData.write(writer, cache, header.headerVersion());
+        data.write(writer, cache, header.apiVersion());
+
+        buffer.rewind();
+        return buffer;
     }
 
     @Override
