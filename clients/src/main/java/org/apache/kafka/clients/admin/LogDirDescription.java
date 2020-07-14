@@ -36,9 +36,11 @@ public class LogDirDescription {
     }
 
     /**
-     * A KafkaStorageException if this log directory is offline,
-     * possibly some other exception if there were problems describing the log directory
-     * or null if the directory is online.
+     * <p>Returns `ApiException` if the log directory is offline or an error occurred, otherwise returns null.</p>
+     * <ul>
+     * <li> KafkaStorageException - The log directory is offline.
+     * <li> UnknownServerException - The server experienced an unexpected error when processing the request.
+     * </ul>
      */
     public ApiException error() {
         return error;
