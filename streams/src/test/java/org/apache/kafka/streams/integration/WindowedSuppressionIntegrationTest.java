@@ -198,7 +198,7 @@ public class WindowedSuppressionIntegrationTest {
 
     private List<ConsumerRecord<Object, Object>> waitForRecords(final Consumer<Object, Object> consumer) {
         final long start = System.currentTimeMillis();
-        List<ConsumerRecord<Object, Object>> result = new ArrayList<>();
+        final List<ConsumerRecord<Object, Object>> result = new ArrayList<>();
         while ((System.currentTimeMillis() - start) < DEFAULT_TIMEOUT) {
             final ConsumerRecords<Object, Object> records = consumer.poll(ofMillis(500));
             if (!records.isEmpty()) {
