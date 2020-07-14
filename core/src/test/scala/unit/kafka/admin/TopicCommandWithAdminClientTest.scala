@@ -56,11 +56,16 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     zkConnect = zkConnect,
     rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3"),
     numPartitions = numPartitions,
-    defaultReplicationFactor = defaultReplicationFactor
+    defaultReplicationFactor = defaultReplicationFactor,
+    replicaFetchMaxBytes = replicaFetchMaxBytes(),
   ).map(KafkaConfig.fromProps)
 
   private val numPartitions = 1
   private val defaultReplicationFactor = 1.toShort
+
+  private def replicaFetchMaxBytes() =
+    if (testName.getMethodName == "testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress") Some(1)
+    else None
 
   private var topicService: AdminClientTopicService = _
   private var adminClient: Admin = _
@@ -672,11 +677,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(configMap))).all().get()
     waitForTopicCreated(testTopicName)
-    TestUtils.generateAndProduceMessages(servers, testTopicName, numMessages = 10, acks = -1)
+    TestUtils.generateAndProduceMessages(servers, testTopicName, numMessages = 1000, acks = -1)
 
     val brokerIds = servers.map(_.config.brokerId)
-    TestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp), throttleBytes = 1)
-
     val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
     val firstPartition = testTopicDesc.partitions().asScala.head
 
@@ -703,7 +706,10 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
     assertEquals(s"--under-replicated-partitions shouldn't return anything: '$underReplicatedOutput'", "", underReplicatedOutput)
 
-    TestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp))
+    // Verify reassignment is still ongoing.
+    val reassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().get(tp)
+    assertFalse(Option(reassignments).forall(_.addingReplicas().isEmpty))
+
     TestUtils.waitForAllReassignmentsToComplete(adminClient)
   }
 
