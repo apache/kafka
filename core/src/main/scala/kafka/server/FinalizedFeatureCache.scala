@@ -77,19 +77,6 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
   }
 
   /**
-   * Waits no more than timeoutMs for the cache to become empty.
-   *
-   * @param timeoutMs   the timeout (in milli seconds)
-   *
-   * @throws            TimeoutException if the cache's epoch has not become empty within timeoutMs.
-   */
-  def waitUntilEmptyOrThrow(timeoutMs: Long): Unit = {
-    waitUntilConditionOrThrow(
-      () => featuresAndEpoch.isEmpty,
-      timeoutMs)
-  }
-
-  /**
    * Clears all existing finalized features and epoch from the cache.
    */
   def clear(): Unit = {

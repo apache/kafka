@@ -404,20 +404,22 @@ class KafkaController(val config: KafkaConfig,
    * This status should be written by the controller to the FeatureZNode only when the broker
    * IBP config is less than KAFKA_2_7_IV0.
    *
-   * NOTE: when this method returns, existing finalized features (if any) will be cleared from the
-   * FeatureZNode.
+   * NOTE:
+   * 1. When this method returns, existing finalized features (if any) will be cleared from the
+   *    FeatureZNode.
+   * 2. This method, unlike enableFeatureVersioning() need not wait for the FinalizedFeatureCache
+   *    to be updated, because, such updates to the caceh (via FinalizedFeatureChangeListener)
+   *    are disabled when IBP config is < than KAFKA_2_7_IV0.
    */
   private def disableFeatureVersioning(): Unit = {
     val newNode = FeatureZNode(FeatureZNodeStatus.Disabled, Features.emptyFinalizedFeatures())
     val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
     if (version == ZkVersion.UnknownVersion) {
       createFeatureZNode(newNode)
-      featureCache.waitUntilEmptyOrThrow(config.zkConnectionTimeoutMs)
     } else {
       val existingFeatureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
       if (!existingFeatureZNode.status.equals(FeatureZNodeStatus.Disabled)) {
         updateFeatureZNode(newNode)
-        featureCache.waitUntilEmptyOrThrow(config.zkConnectionTimeoutMs)
       }
     }
   }
