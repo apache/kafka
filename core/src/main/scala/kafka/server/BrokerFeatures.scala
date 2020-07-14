@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
  *    higher than 1 (let's call this new_min_version_level). In doing so, the feature version levels
  *    in the closed range: [1, latest_min_version_level - 1] get deprecated by the controller logic
  *    that applies this map to persistent finalized feature state in ZK (this mutation happens
- *    during controller and during finalized feature updates via the
+ *    during controller election and during finalized feature updates via the
  *    APIKeys.UPDATE_FINALIZED_FEATURES api).
  *
  * This class also provides APIs to check for incompatibilities between the features supported by

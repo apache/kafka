@@ -3155,6 +3155,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       return Right(new ApiError(Errors.INVALID_REQUEST,
         "Can not provide empty FinalizedFeatureUpdates in the request."))
     }
+
     val latestFeatures = featureCache.get
     val newFeatures = scala.collection.mutable.Map[String, FinalizedVersionRange]()
     updates.asScala.foreach(
@@ -3229,7 +3230,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           // NOTE: if the finalized feature already exists, then, below we set the default minimum
           // version level. This can cause deprecation of all version levels in the closed range:
-          // [existingVersionRange.min(), defaultMinVersionLevel - 1]
+          // [existingVersionRange.min(), defaultMinVersionLevel - 1], unless it was previously
+          // deprecated.
           val defaultMinVersionLevel = brokerFeatures.defaultMinVersionLevel(update.name)
           newFeatures += (
             update.name -> new FinalizedVersionRange(
