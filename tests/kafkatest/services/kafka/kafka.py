@@ -226,9 +226,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                                     interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
                                     listener_security_config=self.listener_security_config,
                                     tls_version=self.tls_version)
-            for port in self.port_mappings.values():
-                if port.open:
-                    self._security_config.enable_security_protocol(port.security_protocol)
+        for port in self.port_mappings.values():
+            if port.open:
+                self._security_config.enable_security_protocol(port.security_protocol)
         if self.zk.zk_sasl:
             self._security_config.enable_sasl()
             self._security_config.zk_sasl = self.zk.zk_sasl
