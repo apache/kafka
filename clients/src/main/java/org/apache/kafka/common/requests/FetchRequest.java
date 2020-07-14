@@ -98,20 +98,14 @@ public class FetchRequest extends AbstractRequest {
     }
 
     private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics) {
-        Map<String, List<FetchRequestData.FetchTopic>> topicsByName = fetchableTopics.stream()
-            .collect(Collectors.groupingBy(FetchRequestData.FetchTopic::topic, LinkedHashMap::new, Collectors.toList()));
-
-        Map<TopicPartition, PartitionData> result = new LinkedHashMap<>();
-        topicsByName.forEach((topicName, groupedFetchableTopics) ->
-            groupedFetchableTopics.stream()
-                .flatMap(fetchableTopic -> fetchableTopic.partitions().stream())
-                .forEach(fetchPartition ->
-                    result.put(new TopicPartition(topicName, fetchPartition.partition()),
-                        new PartitionData(fetchPartition.fetchOffset(), fetchPartition.logStartOffset(),
-                            fetchPartition.partitionMaxBytes(), Optional.of(fetchPartition.currentLeaderEpoch())))
-                )
-        );
-
+       Map<TopicPartition, PartitionData> result = new LinkedHashMap<>();
+        fetchableTopics.forEach(fetchTopic -> fetchTopic.partitions().forEach(fetchPartition -> {
+            Optional<Integer> leaderEpoch = Optional.of(fetchPartition.currentLeaderEpoch())
+                .filter(epoch -> epoch != RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            result.put(new TopicPartition(fetchTopic.topic(), fetchPartition.partition()),
+                new PartitionData(fetchPartition.fetchOffset(), fetchPartition.logStartOffset(),
+                    fetchPartition.partitionMaxBytes(), leaderEpoch));
+        }));
         return Collections.unmodifiableMap(result);
     }
 
@@ -233,22 +227,25 @@ public class FetchRequest extends AbstractRequest {
                         .setPartitions(partitions.stream().map(TopicPartition::partition).collect(Collectors.toList())))
                 );
             fetchRequestData.setTopics(new ArrayList<>());
-            fetchData.entrySet().stream()
-                .collect(Collectors.groupingBy(entry -> entry.getKey().topic(), LinkedHashMap::new, Collectors.toList()))
-                .forEach((topic, entries) -> {
-                    FetchRequestData.FetchTopic fetchableTopic = new FetchRequestData.FetchTopic()
-                        .setTopic(topic)
-                        .setPartitions(new ArrayList<>());
-                    entries.forEach(entry ->
-                        fetchableTopic.partitions().add(
-                            new FetchRequestData.FetchPartition().setPartition(entry.getKey().partition())
-                                .setCurrentLeaderEpoch(entry.getValue().currentLeaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                                .setFetchOffset(entry.getValue().fetchOffset)
-                                .setLogStartOffset(entry.getValue().logStartOffset)
-                                .setPartitionMaxBytes(entry.getValue().maxBytes))
-                    );
-                    fetchRequestData.topics().add(fetchableTopic);
-                });
+
+            // We collect the partitions in a single FetchTopic only if they appear sequentially in the fetchData
+            FetchRequestData.FetchTopic fetchTopic = null;
+            for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
+                if (fetchTopic == null || !entry.getKey().topic().equals(fetchTopic.topic())) {
+                   fetchTopic = new FetchRequestData.FetchTopic()
+                                .setTopic(entry.getKey().topic())
+                                .setPartitions(new ArrayList<>());
+                    fetchRequestData.topics().add(fetchTopic);
+                }
+
+                fetchTopic.partitions().add(
+                    new FetchRequestData.FetchPartition().setPartition(entry.getKey().partition())
+                        .setCurrentLeaderEpoch(entry.getValue().currentLeaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                        .setFetchOffset(entry.getValue().fetchOffset)
+                        .setLogStartOffset(entry.getValue().logStartOffset)
+                        .setPartitionMaxBytes(entry.getValue().maxBytes));
+            }
+
             if (metadata != null) {
                 fetchRequestData.setSessionEpoch(metadata.epoch());
                 fetchRequestData.setSessionId(metadata.sessionId());
