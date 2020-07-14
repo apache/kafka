@@ -21,7 +21,6 @@ import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -485,7 +484,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected void handleFailure(RequestFuture<?> future, Timer timer) {
-        if (future.isRetriable() || future.exception() instanceof AuthorizationException)
+        if (future.isRetriable() || future.exception() instanceof GroupAuthorizationException)
             timer.sleep(rebalanceConfig.retryBackoffMs);
         if (!future.isRetriable())
             throw future.exception();
