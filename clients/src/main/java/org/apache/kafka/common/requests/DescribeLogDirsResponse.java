@@ -75,6 +75,11 @@ public class DescribeLogDirsResponse extends AbstractResponse {
      *
      * KAFKA_STORAGE_ERROR (56)
      * UNKNOWN (-1)
+     *
+     * @deprecated Deprecated Since Kafka 2.7.
+     * Use {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#descriptions()}
+     * and {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#allDescriptions()} to access the replacement
+     * class {@link org.apache.kafka.clients.admin.LogDirDescription}.
      */
     @Deprecated
     static public class LogDirInfo {
@@ -99,6 +104,13 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     }
 
     // Note this class is part of the public API, reachable from Admin.describeLogDirs()
+
+    /**
+     * @deprecated Deprecated Since Kafka 2.7.
+     * Use {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#descriptions()}
+     * and {@link org.apache.kafka.clients.admin.DescribeLogDirsResult#allDescriptions()} to access the replacement
+     * class {@link org.apache.kafka.clients.admin.ReplicaInfo}.
+     */
     @Deprecated
     static public class ReplicaInfo {
 
