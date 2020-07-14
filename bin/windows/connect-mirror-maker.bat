@@ -15,7 +15,7 @@ rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
 IF [%1] EQU [] (
-	echo USAGE: %0 [-daemon] mm2.properties
+	echo USAGE: %0 mm2.properties
 	EXIT /B 1
 )
 
