@@ -50,22 +50,19 @@ public class StreamThreadStateStoreProvider {
         final StreamThread.State state = streamThread.state();
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
             final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
-            final List<T> stores = new ArrayList<>();
             if (storeQueryParams.partition() != null) {
                 final Task streamTask = findStreamTask(tasks, storeName, storeQueryParams.partition());
                 if (streamTask == null) {
                     return Collections.emptyList();
                 }
                 final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
+                return store != null ? Collections.singletonList(store) : Collections.emptyList();
+            }
+            final List<T> stores = new ArrayList<>();
+            for (final Task streamTask : tasks.values()) {
+                final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
                 if (store != null) {
-                    return Collections.singletonList(store);
-                }
-            } else {
-                for (final Task streamTask : tasks.values()) {
-                    final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
-                    if (store != null) {
-                        stores.add(store);
-                    }
+                    stores.add(store);
                 }
             }
             return stores;
