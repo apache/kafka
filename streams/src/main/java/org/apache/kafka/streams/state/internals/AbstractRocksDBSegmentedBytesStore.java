@@ -67,7 +67,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> backwardFetch(Bytes key, long from, long to) {
+    public KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key,
+                                                         final long from,
+                                                         final long to) {
         return fetch(key, from, to, true);
     }
 
@@ -96,7 +98,10 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> backwardFetch(Bytes keyFrom, Bytes keyTo, long from, long to) {
+    public KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes keyFrom,
+                                                         final Bytes keyTo,
+                                                         final long from,
+                                                         final long to) {
         return fetch(keyFrom, keyTo, from, to, true);
     }
 

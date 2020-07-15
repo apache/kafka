@@ -114,7 +114,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> reverseRange(Bytes from, Bytes to) {
+    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
         return range(from, to, true);
     }
 

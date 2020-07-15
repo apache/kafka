@@ -82,7 +82,7 @@ public class RocksDBWindowStore
     }
 
     @Override
-    public WindowStoreIterator<byte[]> backwardFetch(Bytes key, Instant from, Instant to) throws IllegalArgumentException {
+    public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant from, final Instant to) {
         final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
         final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(key, timeFrom, timeTo);
@@ -100,7 +100,10 @@ public class RocksDBWindowStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(Bytes from, Bytes to, Instant fromTime, Instant toTime) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
+                                                                   final Bytes to,
+                                                                   final Instant fromTime,
+                                                                   final Instant toTime) {
         final long timeFrom = ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "from"));
         final long timeTo = ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "to"));
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().backwardFetch(from, to, timeFrom, timeTo);

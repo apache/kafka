@@ -188,7 +188,55 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void testPutGetRangeWithDefaultSerdes() {
+    public void testPutGetReverseRange() {
+        // Verify that the store reads and writes correctly ...
+        store.put(0, "zero");
+        store.put(1, "one");
+        store.put(2, "two");
+        store.put(4, "four");
+        store.put(5, "five");
+        assertEquals(5, driver.sizeOf(store));
+        assertEquals("zero", store.get(0));
+        assertEquals("one", store.get(1));
+        assertEquals("two", store.get(2));
+        assertNull(store.get(3));
+        assertEquals("four", store.get(4));
+        assertEquals("five", store.get(5));
+        // Flush now so that for caching store, we will not skip the deletion following an put
+        store.flush();
+        store.delete(5);
+        assertEquals(4, driver.sizeOf(store));
+
+        // Flush the store and verify all current entries were properly flushed ...
+        store.flush();
+        assertEquals("zero", driver.flushedEntryStored(0));
+        assertEquals("one", driver.flushedEntryStored(1));
+        assertEquals("two", driver.flushedEntryStored(2));
+        assertEquals("four", driver.flushedEntryStored(4));
+        assertNull(driver.flushedEntryStored(5));
+
+        assertFalse(driver.flushedEntryRemoved(0));
+        assertFalse(driver.flushedEntryRemoved(1));
+        assertFalse(driver.flushedEntryRemoved(2));
+        assertFalse(driver.flushedEntryRemoved(4));
+        assertTrue(driver.flushedEntryRemoved(5));
+
+        final HashMap<Integer, String> expectedContents = new HashMap<>();
+        expectedContents.put(2, "two");
+        expectedContents.put(4, "four");
+
+        // Check range iteration ...
+        assertEquals(expectedContents, getContents(store.reverseRange(2, 4)));
+        assertEquals(expectedContents, getContents(store.reverseRange(2, 6)));
+
+        // Check all iteration ...
+        expectedContents.put(0, "zero");
+        expectedContents.put(1, "one");
+        assertEquals(expectedContents, getContents(store.reverseAll()));
+    }
+
+    @Test
+    public void testPutGetWithDefaultSerdes() {
         // Verify that the store reads and writes correctly ...
         store.put(0, "zero");
         store.put(1, "one");
