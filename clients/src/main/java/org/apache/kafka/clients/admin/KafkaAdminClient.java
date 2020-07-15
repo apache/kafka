@@ -2296,7 +2296,7 @@ public class KafkaAdminClient extends AdminClient {
                     if (descriptions.size() > 0) {
                         future.complete(descriptions);
                     } else {
-                        // response/descriptions will be empty if and only if the user is not authorized to describe cluster resource.
+                        // descriptions will be empty if and only if the user is not authorized to describe cluster resource.
                         future.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
                     }
                 }
