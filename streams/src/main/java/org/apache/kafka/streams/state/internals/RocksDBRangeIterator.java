@@ -29,7 +29,8 @@ class RocksDBRangeIterator extends RocksDbIterator {
     // comparator to be pluggable, and the default is lexicographic, so it's
     // safe to just force lexicographic comparator here for now.
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-    private final byte[] rawToKey;
+    private final byte[] rawLastKey;
+    private final boolean reverse;
 
     RocksDBRangeIterator(final String storeName,
                          final RocksIterator iter,
@@ -38,15 +39,15 @@ class RocksDBRangeIterator extends RocksDbIterator {
                          final Bytes to,
                          final boolean reverse) {
         super(storeName, iter, openIterators, reverse);
+        this.reverse = reverse;
         if (reverse) {
-            iter.seek(to.get());
-            rawToKey = from.get();
-        }
-        else {
+            iter.seekForPrev(to.get());
+            rawLastKey = from.get();
+        } else {
             iter.seek(from.get());
-            rawToKey = to.get();
+            rawLastKey = to.get();
         }
-        if (rawToKey == null) {
+        if (rawLastKey == null) {
             throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
         }
     }
@@ -58,10 +59,18 @@ class RocksDBRangeIterator extends RocksDbIterator {
         if (next == null) {
             return allDone();
         } else {
-            if (comparator.compare(next.key.get(), rawToKey) <= 0) {
-                return next;
+            if (!reverse) {
+                if (comparator.compare(next.key.get(), rawLastKey) <= 0) {
+                    return next;
+                } else {
+                    return allDone();
+                }
             } else {
-                return allDone();
+                if (comparator.compare(next.key.get(), rawLastKey) >= 0) {
+                    return next;
+                } else {
+                    return allDone();
+                }
             }
         }
     }
