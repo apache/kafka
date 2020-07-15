@@ -52,11 +52,11 @@ public class StreamThreadStateStoreProvider {
             final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
             final List<T> stores = new ArrayList<>();
             if (storeQueryParams.partition() != null) {
-                final Task task = findTask(tasks, storeName, storeQueryParams.partition());
-                if (task == null) {
+                final Task streamTask = findStreamTask(tasks, storeName, storeQueryParams.partition());
+                if (streamTask == null) {
                     return Collections.emptyList();
                 }
-                final T store = validateAndListStores(task.getStore(storeName), queryableStoreType, storeName, task.id());
+                final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
                 if (store != null) {
                     return Collections.singletonList(store);
                 }
@@ -97,11 +97,10 @@ public class StreamThreadStateStoreProvider {
         }
     }
 
-    private Task findTask(final Map<TaskId, ? extends Task> tasks, final String storeName, final int partition) {
+    private Task findStreamTask(final Map<TaskId, ? extends Task> tasks, final String storeName, final int partition) {
         return tasks.entrySet().stream().
-                filter(entry ->
-                        entry.getKey().partition == partition && entry.getValue().getStore(storeName) != null).
-                filter(entry ->
+                filter(entry -> entry.getKey().partition == partition &&
+                        entry.getValue().getStore(storeName) != null &&
                         storeName.equals(entry.getValue().getStore(storeName).name())).
                 findFirst().
                 map(Map.Entry::getValue).
