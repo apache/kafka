@@ -1243,17 +1243,15 @@ public class KafkaAdminClientTest {
             String broker1log0 = "/var/data/kafka0";
             String broker1log1 = "/var/data/kafka1";
             String broker2log0 = "/var/data/kafka2";
+            int broker1Log0OffsetLag = 24;
+            int broker1Log0PartitionSize = 987654321;
+            int broker1Log1PartitionSize = 123456789;
+            int broker1Log1OffsetLag = 4321;
             env.kafkaClient().prepareResponseFrom(
                     new DescribeLogDirsResponse(
                             new DescribeLogDirsResponseData().setResults(asList(
-                                    new DescribeLogDirsResponseData.DescribeLogDirsResult()
-                                            .setErrorCode(Errors.NONE.code())
-                                            .setLogDir(broker1log0)
-                                            .setTopics(prepareDescribeLogDirsTopics(987654321, 12, tpr1.topic(), tpr1.partition(), false)),
-                                    new DescribeLogDirsResponseData.DescribeLogDirsResult()
-                                            .setErrorCode(Errors.NONE.code())
-                                            .setLogDir(broker1log1)
-                                            .setTopics(prepareDescribeLogDirsTopics(123456789, 4321, tpr1.topic(), tpr1.partition(), true))))),
+                                    prepareDescribeLogDirsResult(tpr1, broker1log0, broker1Log0PartitionSize, broker1Log0OffsetLag, false),
+                                    prepareDescribeLogDirsResult(tpr1, broker1log1, broker1Log1PartitionSize, broker1Log1OffsetLag, true)))),
                     env.cluster().nodeById(tpr1.brokerId()));
             env.kafkaClient().prepareResponseFrom(
                     prepareDescribeLogDirsResponse(Errors.KAFKA_STORAGE_ERROR, broker2log0),
@@ -1266,15 +1264,55 @@ public class KafkaAdminClientTest {
 
             assertNotNull(values.get(tpr1));
             assertEquals(broker1log0, values.get(tpr1).get().getCurrentReplicaLogDir());
-            assertEquals(12, values.get(tpr1).get().getCurrentReplicaOffsetLag());
+            assertEquals(broker1Log0OffsetLag, values.get(tpr1).get().getCurrentReplicaOffsetLag());
             assertEquals(broker1log1, values.get(tpr1).get().getFutureReplicaLogDir());
-            assertEquals(4321, values.get(tpr1).get().getFutureReplicaOffsetLag());
+            assertEquals(broker1Log1OffsetLag, values.get(tpr1).get().getFutureReplicaOffsetLag());
 
             assertNotNull(values.get(tpr2));
             assertNull(values.get(tpr2).get().getCurrentReplicaLogDir());
             assertEquals(-1, values.get(tpr2).get().getCurrentReplicaOffsetLag());
             assertNull(values.get(tpr2).get().getFutureReplicaLogDir());
             assertEquals(-1, values.get(tpr2).get().getFutureReplicaOffsetLag());
+        }
+    }
+
+    private DescribeLogDirsResponseData.DescribeLogDirsResult prepareDescribeLogDirsResult(TopicPartitionReplica tpr, String logDir, int partitionSize, int offsetLag, boolean isFuture) {
+        return new DescribeLogDirsResponseData.DescribeLogDirsResult()
+                .setErrorCode(Errors.NONE.code())
+                .setLogDir(logDir)
+                .setTopics(prepareDescribeLogDirsTopics(partitionSize, offsetLag, tpr.topic(), tpr.partition(), isFuture));
+    }
+
+    @Test
+    public void testDescribeReplicaLogDirsUnexpected() throws ExecutionException, InterruptedException {
+        TopicPartitionReplica expected = new TopicPartitionReplica("topic", 12, 1);
+        TopicPartitionReplica unexpected = new TopicPartitionReplica("topic", 12, 2);
+
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String broker1log0 = "/var/data/kafka0";
+            String broker1log1 = "/var/data/kafka1";
+            int broker1Log0PartitionSize = 987654321;
+            int broker1Log0OffsetLag = 24;
+            int broker1Log1PartitionSize = 123456789;
+            int broker1Log1OffsetLag = 4321;
+            env.kafkaClient().prepareResponseFrom(
+                    new DescribeLogDirsResponse(
+                            new DescribeLogDirsResponseData().setResults(asList(
+                                    prepareDescribeLogDirsResult(expected, broker1log0, broker1Log0PartitionSize, broker1Log0OffsetLag, false),
+                                    prepareDescribeLogDirsResult(unexpected, broker1log1, broker1Log1PartitionSize, broker1Log1OffsetLag, true)))),
+                    env.cluster().nodeById(expected.brokerId()));
+
+            DescribeReplicaLogDirsResult result = env.adminClient().describeReplicaLogDirs(asList(expected));
+
+            Map<TopicPartitionReplica, KafkaFuture<DescribeReplicaLogDirsResult.ReplicaLogDirInfo>> values = result.values();
+            assertEquals(TestUtils.toSet(asList(expected)), values.keySet());
+
+            assertNotNull(values.get(expected));
+            assertEquals(broker1log0, values.get(expected).get().getCurrentReplicaLogDir());
+            assertEquals(broker1Log0OffsetLag, values.get(expected).get().getCurrentReplicaOffsetLag());
+            assertEquals(broker1log1, values.get(expected).get().getFutureReplicaLogDir());
+            assertEquals(broker1Log1OffsetLag, values.get(expected).get().getFutureReplicaOffsetLag());
         }
     }
 
