@@ -22,7 +22,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.TokenBucket;
+import org.apache.kafka.common.metrics.stats.SampledTokenBucket;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
@@ -319,7 +319,7 @@ public class SensorTest {
             .timeWindow(1, TimeUnit.SECONDS)
             .samples(11));
         final MetricName metricName = metrics.metricName("rate", "test-group");
-        assertTrue(sensor.add(metricName, new Rate(new TokenBucket())));
+        assertTrue(sensor.add(metricName, new Rate(new SampledTokenBucket())));
         final KafkaMetric rateMetric = metrics.metric(metricName);
 
         // Recording a first value at T+0 to bring the avg rate to 3 which is already

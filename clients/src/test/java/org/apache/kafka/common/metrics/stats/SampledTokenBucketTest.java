@@ -26,7 +26,7 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
-public class TokenBucketTest {
+public class SampledTokenBucketTest {
     Time time;
 
     @Before
@@ -41,7 +41,7 @@ public class TokenBucketTest {
             .timeWindow(1, TimeUnit.SECONDS)
             .samples(11);
 
-        TokenBucket tk = new TokenBucket();
+        SampledTokenBucket tk = new SampledTokenBucket();
 
         // Record 6 at T
         tk.record(config, 6, time.milliseconds());
@@ -69,7 +69,7 @@ public class TokenBucketTest {
             .timeWindow(1, TimeUnit.SECONDS)
             .samples(11);
 
-        TokenBucket tk = new TokenBucket();
+        SampledTokenBucket tk = new SampledTokenBucket();
 
         // Record 20 at T
         tk.record(config, 20, time.milliseconds());
@@ -90,7 +90,7 @@ public class TokenBucketTest {
             .timeWindow(1, TimeUnit.SECONDS)
             .samples(11);
 
-        TokenBucket tk = new TokenBucket();
+        SampledTokenBucket tk = new SampledTokenBucket();
 
         // Record 50 (S1) at T
         tk.record(config, 50, time.milliseconds());
@@ -160,7 +160,7 @@ public class TokenBucketTest {
             .timeWindow(1, TimeUnit.SECONDS)
             .samples(11);
 
-        TokenBucket tk = new TokenBucket();
+        SampledTokenBucket tk = new SampledTokenBucket();
 
         // Record 2 at T
         tk.record(config, 2, time.milliseconds());
@@ -184,7 +184,7 @@ public class TokenBucketTest {
             .timeWindow(1, TimeUnit.SECONDS)
             .samples(11);
 
-        TokenBucket tk = new TokenBucket();
+        SampledTokenBucket tk = new SampledTokenBucket();
 
         // Record 50 at T
         tk.record(config, 50, time.milliseconds());

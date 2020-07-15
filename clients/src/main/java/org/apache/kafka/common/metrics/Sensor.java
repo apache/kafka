@@ -106,14 +106,14 @@ public final class Sensor {
         NONE,
 
         /**
-         * The quota is enforced before updating the sensor. An update
-         * is rejected if the quota is already exhausted.
+         * The check for quota violation is done prior to recording the value.
+         * If the quota is already exhausted, the value is not recorded into the sensor.
          */
         STRICT,
 
         /**
-         * The quota is enforced after updating the sensor. An update
-         * is always accepted even if the quota is already exhausted.
+         * The check for quota violation is done after recording the value.
+         * An update is always accepted even if the quota is already exhausted.
          */
         PERMISSIVE
     }
