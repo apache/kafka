@@ -90,6 +90,9 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.UserScramCredential;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
@@ -131,6 +134,7 @@ import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
@@ -4410,6 +4414,64 @@ public class KafkaAdminClientTest {
 
             TestUtils.assertFutureThrows(result.values().get(tpr1), ApiException.class);
             assertNull(result.values().get(tpr2).get());
+        }
+    }
+
+    @Test
+    public void testDescribeUserScramCredentials() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final String user0Name = "user0";
+            ScramMechanism user0ScramMechanism0 = ScramMechanism.HMAC_SHA_256;
+            int user0Iterations0 = 4096;
+            ScramMechanism user0ScramMechanism1 = ScramMechanism.HMAC_SHA_512;
+            int user0Iterations1 = 8192;
+
+            final CredentialInfo user0CredentialInfo0 = new CredentialInfo();
+            user0CredentialInfo0.setMechanism((byte) user0ScramMechanism0.ordinal());
+            user0CredentialInfo0.setIterations(user0Iterations0);
+            final CredentialInfo user0CredentialInfo1 = new CredentialInfo();
+            user0CredentialInfo1.setMechanism((byte) user0ScramMechanism1.ordinal());
+            user0CredentialInfo1.setIterations(user0Iterations1);
+            UserScramCredential user0 = new UserScramCredential();
+            user0.setName(user0Name);
+            user0.setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1));
+
+            final String user1Name = "user1";
+            ScramMechanism user1ScramMechanism = ScramMechanism.HMAC_SHA_256;
+            int user1Iterations = 4096;
+
+            final CredentialInfo user1CredentialInfo = new CredentialInfo();
+            user1CredentialInfo.setMechanism((byte) user1ScramMechanism.ordinal());
+            user1CredentialInfo.setIterations(user1Iterations);
+
+            UserScramCredential user1 = new UserScramCredential();
+            user1.setName(user1Name);
+            user1.setCredentialInfos(Arrays.asList(user1CredentialInfo));
+
+            DescribeUserScramCredentialsResponseData responseData = new DescribeUserScramCredentialsResponseData();
+            responseData.setUserScramCredentials(Arrays.asList(user0, user1));
+
+            env.kafkaClient().prepareResponse(new DescribeUserScramCredentialsResponse(responseData));
+
+            DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(Arrays.asList(user0Name, user1Name));
+            Map<String, UserScramCredentialsDescription> resultData = result.all().get();
+            assertEquals(resultData.size(), 2);
+            assertTrue(resultData.containsKey(user0Name) && resultData.containsKey(user1Name));
+            UserScramCredentialsDescription userScramCredentialsDescription0 = resultData.get(user0Name);
+            assertEquals(userScramCredentialsDescription0.getName(), user0Name);
+            assertEquals(userScramCredentialsDescription0.getInfos().size(), 2);
+            assertEquals(userScramCredentialsDescription0.getInfos().get(0).getMechanism(), user0ScramMechanism0);
+            assertEquals(userScramCredentialsDescription0.getInfos().get(0).getIterations(), user0Iterations0);
+            assertEquals(userScramCredentialsDescription0.getInfos().get(1).getMechanism(), user0ScramMechanism1);
+            assertEquals(userScramCredentialsDescription0.getInfos().get(1).getIterations(), user0Iterations1);
+
+            UserScramCredentialsDescription userScramCredentialsDescription1 = resultData.get(user1Name);
+            assertEquals(userScramCredentialsDescription1.getName(), user1Name);
+            assertEquals(userScramCredentialsDescription1.getInfos().size(), 1);
+            assertEquals(userScramCredentialsDescription1.getInfos().get(0).getMechanism(), user1ScramMechanism);
+            assertEquals(userScramCredentialsDescription1.getInfos().get(0).getIterations(), user1Iterations);
         }
     }
 

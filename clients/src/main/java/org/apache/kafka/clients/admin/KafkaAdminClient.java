@@ -76,6 +76,7 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterRepli
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
+import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.CreateAclsRequestData;
 import org.apache.kafka.common.message.CreateAclsRequestData.AclCreation;
 import org.apache.kafka.common.message.CreateAclsResponseData.AclCreationResult;
@@ -112,6 +113,8 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData.DescribableLogDirTopic;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
@@ -157,6 +160,8 @@ import org.apache.kafka.common.requests.AlterPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
+import org.apache.kafka.common.requests.AlterUserScramCredentialsRequest;
+import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -186,6 +191,8 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.DescribeUserScramCredentialsRequest;
+import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
@@ -4069,6 +4076,129 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
 
         return new AlterClientQuotasResult(Collections.unmodifiableMap(futures));
+    }
+
+    @Override
+    public DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options) {
+        final KafkaFutureImpl<Map<String, UserScramCredentialsDescription>> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        Call call = new Call("describeUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
+                new ControllerNodeProvider()) {
+            @Override
+            public DescribeUserScramCredentialsRequest.Builder createRequest(int timeoutMs) {
+                return new DescribeUserScramCredentialsRequest.Builder(
+                        new DescribeUserScramCredentialsRequestData().setUsers(users.stream().map(user ->
+                                new DescribeUserScramCredentialsRequestData.UserName().setName(user)).collect(Collectors.toList())));
+            }
+
+            @Override
+            public void handleResponse(AbstractResponse abstractResponse) {
+                DescribeUserScramCredentialsResponse response = (DescribeUserScramCredentialsResponse) abstractResponse;
+                // Check for controller change
+                for (Errors error : response.errorCounts().keySet()) {
+                    if (error == Errors.NOT_CONTROLLER) {
+                        metadataManager.clearController();
+                        metadataManager.requestUpdate();
+                        throw error.exception();
+                    }
+                }
+                DescribeUserScramCredentialsResponseData data = response.data();
+                Errors error = Errors.forCode(data.error());
+                if (error != Errors.NONE) {
+                    future.completeExceptionally(error.exception());
+                    return;
+                }
+                future.complete(data.userScramCredentials().stream().collect(Collectors.toMap(
+                    DescribeUserScramCredentialsResponseData.UserScramCredential::name,
+                    userScramCredential -> new UserScramCredentialsDescription(userScramCredential.name(),
+                            userScramCredential.credentialInfos().stream().map(credentialInfo -> new ScramCredentialInfo(
+                                    ScramMechanism.from(credentialInfo.mechanism()), credentialInfo.iterations())).collect(Collectors.toList())))));
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new DescribeUserScramCredentialsResult(future);
+    }
+
+    @Override
+    public AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
+                                                                     AlterUserScramCredentialsOptions options) {
+        final long now = time.milliseconds();
+        final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>();
+        for (UserScramCredentialAlteration alteration: alterations) {
+            futures.put(alteration.getUser(), new KafkaFutureImpl<>());
+        }
+
+        Call call = new Call("alterUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
+                new ControllerNodeProvider()) {
+            @Override
+            public AlterUserScramCredentialsRequest.Builder createRequest(int timeoutMs) {
+                return new AlterUserScramCredentialsRequest.Builder(
+                        new AlterUserScramCredentialsRequestData().setUpsertions(alterations.stream().
+                                filter(a -> a instanceof UserScramCredentialUpsertion).map(u ->
+                                getScramCredentialUpsertion((UserScramCredentialUpsertion) u)).collect(Collectors.toList()))
+                        .setDeletions(alterations.stream().
+                                filter(a -> a instanceof UserScramCredentialDeletion).map(d ->
+                                getScramCredentialDeletion((UserScramCredentialDeletion) d)).collect(Collectors.toList())));
+            }
+
+            @Override
+            public void handleResponse(AbstractResponse abstractResponse) {
+                AlterUserScramCredentialsResponse response = (AlterUserScramCredentialsResponse) abstractResponse;
+                // Check for controller change
+                for (Errors error : response.errorCounts().keySet()) {
+                    if (error == Errors.NOT_CONTROLLER) {
+                        metadataManager.clearController();
+                        metadataManager.requestUpdate();
+                        throw error.exception();
+                    }
+                }
+                response.data().results().forEach(result -> {
+                    KafkaFutureImpl<Void> future = futures.get(result.user());
+                    if (future == null) {
+                        log.warn("Server response mentioned unknown user {}", result.user());
+                    } else {
+                        Errors error = Errors.forCode(result.errorCode());
+                        if (error != Errors.NONE) {
+                            future.completeExceptionally(error.exception());
+                        } else {
+                            future.complete(null);
+                        }
+                    }
+                });
+                completeUnrealizedFutures(
+                    futures.entrySet().stream(),
+                    user -> "The broker response did not contain a result for user " + user);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(futures.values(), throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new AlterUserScramCredentialsResult(new HashMap<>(futures));
+    }
+
+    private static AlterUserScramCredentialsRequestData.ScramCredentialUpsertion getScramCredentialUpsertion(UserScramCredentialUpsertion u) {
+        AlterUserScramCredentialsRequestData.ScramCredentialUpsertion retval = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion();
+        return retval.setName(u.getUser())
+                .setMechanism((byte) u.getInfo().getMechanism().ordinal())
+                .setIterations(u.getInfo().getIterations())
+                .setSalt(u.getSalt())
+                .setSaltedPassword(getSaltedPasword(retval));
+    }
+
+    private static AlterUserScramCredentialsRequestData.ScramCredentialDeletion getScramCredentialDeletion(UserScramCredentialDeletion d) {
+        return new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(d.getUser()).setMechanism((byte) d.getMechanism().ordinal());
+    }
+
+    private static byte[] getSaltedPasword(AlterUserScramCredentialsRequestData.ScramCredentialUpsertion retval) {
+        return retval.salt(); // TODO: FIXME
     }
 
     /**

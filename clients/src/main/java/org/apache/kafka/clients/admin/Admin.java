@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -1213,6 +1214,60 @@ public interface Admin extends AutoCloseable {
      * @return the AlterClientQuotasResult containing the result
      */
     AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options);
+
+    /**
+     * <p>Describe all SASL/SCRAM credentials.
+     *
+     * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
+     *
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    default DescribeUserScramCredentialsResult describeUserScramCredentials() {
+        return describeUserScramCredentials(null, new DescribeUserScramCredentialsOptions());
+    }
+
+    /**
+     * <p>Describe SASL/SCRAM credentials for the given users.
+     *
+     * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
+     *
+     * @param users the users for which credentials are to be described; all users' credentials are described if null or empty
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    default DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users) {
+        return describeUserScramCredentials(users, new DescribeUserScramCredentialsOptions());
+    }
+
+    /**
+     * <p>Describe SASL/SCRAM credentials.
+     *
+     * @param users the users for which credentials are to be described; all users' credentials are described if null or empty
+     * @param options The options to use when describing the credentials
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options);
+
+    /**
+     * <p>Alter SASL/SCRAM credentials for the given users.
+     *
+     * <p>This is a convenience method for {@link #alterUserScramCredentials(List, AlterUserScramCredentialsOptions)}
+     *
+     * @param alterations the alterations to be applied
+     * @return The AlterUserScramCredentialsResult.
+     */
+    default AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations) {
+        return alterUserScramCredentials(alterations, new AlterUserScramCredentialsOptions());
+    }
+
+    /**
+     * <p>Alter SASL/SCRAM credentials.
+     *
+     * @param alterations the alterations to be applied
+     * @param options The options to use when altering the credentials
+     * @return The AlterUserScramCredentialsResult.
+     */
+    AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
+                                                              AlterUserScramCredentialsOptions options);
 
     /**
      * Get the metrics kept by the adminClient

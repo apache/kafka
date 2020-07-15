@@ -179,6 +179,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
         case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotasRequest(request)
+        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentialsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1417,7 +1419,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val states = if (listGroupsRequest.data.statesFilter == null)
       // Handle a null array the same as empty
       immutable.Set[String]()
-    else 
+    else
       listGroupsRequest.data.statesFilter.asScala.toSet
 
     def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
@@ -3005,6 +3007,34 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
+  }
+
+  def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
+    val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
+
+    if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
+      val result = adminManager.describeUserScramCredentials(
+        describeUserScramCredentialsRequest.data.users.asScala.map(_.name).toList)
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
+  }
+
+  def handleAlterUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
+    val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
+
+    if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+      val result = adminManager.alterUserScramCredentials(
+        alterUserScramCredentialsRequest.data.upsertions().asScala, alterUserScramCredentialsRequest.data.deletions().asScala)
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new AlterUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
   }
 

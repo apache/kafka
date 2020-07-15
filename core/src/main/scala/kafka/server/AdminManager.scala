@@ -36,7 +36,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
-import org.apache.kafka.common.message.DescribeConfigsResponseData
+import org.apache.kafka.common.message.{AlterUserScramCredentialsRequestData, AlterUserScramCredentialsResponseData, DescribeConfigsResponseData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -979,5 +979,14 @@ class AdminManager(val config: KafkaConfig,
       }
       entry.entity -> apiError
     }.toMap
+  }
+
+  def describeUserScramCredentials(users: Seq[String]): DescribeUserScramCredentialsResponseData = {
+    new DescribeUserScramCredentialsResponseData() // TODO: implementme
+  }
+
+  def alterUserScramCredentials(upsertions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion],
+                                deletions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialDeletion]): AlterUserScramCredentialsResponseData = {
+    new AlterUserScramCredentialsResponseData() // TODO: implementme
   }
 }
