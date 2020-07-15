@@ -20,7 +20,6 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -30,27 +29,21 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class StreamThreadStateStoreProvider {
 
     private final StreamThread streamThread;
-    private final InternalTopologyBuilder internalTopologyBuilder;
 
-    public StreamThreadStateStoreProvider(final StreamThread streamThread,
-                                          final InternalTopologyBuilder internalTopologyBuilder) {
+    public StreamThreadStateStoreProvider(final StreamThread streamThread) {
         this.streamThread = streamThread;
-        this.internalTopologyBuilder = internalTopologyBuilder;
     }
 
     @SuppressWarnings("unchecked")
     public <T> List<T> stores(final StoreQueryParameters storeQueryParams) {
         final String storeName = storeQueryParams.storeName();
         final QueryableStoreType<T> queryableStoreType = storeQueryParams.queryableStoreType();
-        final TaskId keyTaskId = createKeyTaskId(storeName, storeQueryParams.partition());
         if (streamThread.state() == StreamThread.State.DEAD) {
             return Collections.emptyList();
         }
@@ -58,12 +51,12 @@ public class StreamThreadStateStoreProvider {
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
             final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
             final List<T> stores = new ArrayList<>();
-            if (keyTaskId != null) {
-                final Task task = tasks.get(keyTaskId);
+            if (storeQueryParams.partition() != null) {
+                final Task task = findTask(tasks, storeName, storeQueryParams.partition());
                 if (task == null) {
                     return Collections.emptyList();
                 }
-                final T store = validateAndListStores(task.getStore(storeName), queryableStoreType, storeName, keyTaskId);
+                final T store = validateAndListStores(task.getStore(storeName), queryableStoreType, storeName, task.id());
                 if (store != null) {
                     return Collections.singletonList(store);
                 }
@@ -104,19 +97,14 @@ public class StreamThreadStateStoreProvider {
         }
     }
 
-    private TaskId createKeyTaskId(final String storeName, final Integer partition) {
-        if (partition == null) {
-            return null;
-        }
-        final List<String> sourceTopics = internalTopologyBuilder.stateStoreNameToSourceTopics().get(storeName);
-        final Set<String> sourceTopicsSet = new HashSet<>(sourceTopics);
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = internalTopologyBuilder.topicGroups();
-        for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> topicGroup : topicGroups.entrySet()) {
-            if (topicGroup.getValue().sourceTopics.containsAll(sourceTopicsSet)) {
-                return new TaskId(topicGroup.getKey(), partition);
-            }
-        }
-        throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the requested partition " +
-            partition + " is not available on this instance");
+    private Task findTask(final Map<TaskId, ? extends Task> tasks, final String storeName, final int partition) {
+        return tasks.entrySet().stream().
+                filter(entry ->
+                        entry.getKey().partition == partition && entry.getValue().getStore(storeName) != null).
+                filter(entry ->
+                        storeName.equals(entry.getValue().getStore(storeName).name())).
+                findFirst().
+                map(Map.Entry::getValue).
+                orElse(null);
     }
 }
