@@ -230,7 +230,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     }
 
     @Override
-    protected Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
+    public Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
         // Generate the Sends for the response fields and records
         ArrayDeque<Send> sends = new ArrayDeque<>();
         RecordsWriter writer = new RecordsWriter(dest, sends::add);

@@ -100,7 +100,7 @@ public class FetchRequest extends AbstractRequest {
     }
 
     private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics) {
-       Map<TopicPartition, PartitionData> result = new LinkedHashMap<>();
+        Map<TopicPartition, PartitionData> result = new LinkedHashMap<>();
         fetchableTopics.forEach(fetchTopic -> fetchTopic.partitions().forEach(fetchPartition -> {
             Optional<Integer> leaderEpoch = Optional.of(fetchPartition.currentLeaderEpoch())
                 .filter(epoch -> epoch != RecordBatch.NO_PARTITION_LEADER_EPOCH);
@@ -234,9 +234,9 @@ public class FetchRequest extends AbstractRequest {
             FetchRequestData.FetchTopic fetchTopic = null;
             for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
                 if (fetchTopic == null || !entry.getKey().topic().equals(fetchTopic.topic())) {
-                   fetchTopic = new FetchRequestData.FetchTopic()
-                                .setTopic(entry.getKey().topic())
-                                .setPartitions(new ArrayList<>());
+                    fetchTopic = new FetchRequestData.FetchTopic()
+                       .setTopic(entry.getKey().topic())
+                       .setPartitions(new ArrayList<>());
                     fetchRequestData.topics().add(fetchTopic);
                 }
 
