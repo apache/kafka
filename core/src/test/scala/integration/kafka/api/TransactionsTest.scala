@@ -662,6 +662,65 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
+  @Test
+  def testFailureToFenceEpoch(): Unit = {
+    val producer1 = transactionalProducers.head
+    val producer2 = createTransactionalProducer("transactional-producer", maxBlockMs = 1000)
+
+    producer1.initTransactions()
+
+    producer1.beginTransaction()
+    producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
+    producer1.commitTransaction()
+
+    val partitionLeader = TestUtils.waitUntilLeaderIsKnown(servers, new TopicPartition(topic1, 0))
+    var producerStateEntry =
+      servers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers.head._2
+    val producerId = producerStateEntry.producerId
+    val initialProducerEpoch = producerStateEntry.producerEpoch
+
+    // Kill two brokers to bring the transaction log under min-ISR
+    killBroker(0)
+    killBroker(1)
+
+    try {
+      producer2.initTransactions()
+    } catch {
+      case _: TimeoutException =>
+        // good!
+      case e: Exception =>
+        fail("Got an unexpected exception from initTransactions", e)
+    } finally {
+      producer2.close()
+    }
+
+    restartDeadBrokers()
+
+    // Because the epoch was bumped in memory, attempting to begin a transaction with producer 1 should fail
+    try {
+      producer1.beginTransaction()
+    } catch {
+      case _: ProducerFencedException =>
+        // good!
+      case e: Exception =>
+        fail("Got an unexpected exception from commitTransaction", e)
+    } finally {
+      producer1.close()
+    }
+
+    val producer3 = createTransactionalProducer("transactional-producer", maxBlockMs = 5000)
+    producer3.initTransactions()
+
+    producer3.beginTransaction()
+    producer3.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "4", "4", willBeCommitted = true))
+    producer3.commitTransaction()
+
+    // Check that the epoch only increased by 1
+    producerStateEntry =
+      servers(partitionLeader).logManager.getLog(new TopicPartition(topic1, 0)).get.producerStateManager.activeProducers(producerId)
+    assertEquals((initialProducerEpoch + 1).toShort, producerStateEntry.producerEpoch)
+  }
+
   private def sendTransactionalMessagesWithValueRange(producer: KafkaProducer[Array[Byte], Array[Byte]], topic: String,
                                                       start: Int, end: Int, willBeCommitted: Boolean): Unit = {
     for (i <- start until end) {
