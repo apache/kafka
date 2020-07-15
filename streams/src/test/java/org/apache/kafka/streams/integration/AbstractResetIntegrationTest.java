@@ -150,7 +150,7 @@ public abstract class AbstractResetIntegrationTest {
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT);
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(STREAMS_CONSUMER_TIMEOUT));
         streamsConfig.putAll(commonClientConfig);
     }
 
@@ -164,8 +164,8 @@ public abstract class AbstractResetIntegrationTest {
     private static final String INTERMEDIATE_USER_TOPIC = "userTopic";
     private static final String NON_EXISTING_TOPIC = "nonExistingTopic";
 
-    private static final long STREAMS_CONSUMER_TIMEOUT = 2000L;
-    private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
+    private static final int STREAMS_CONSUMER_TIMEOUT = 2000;
+    private static final int CLEANUP_CONSUMER_TIMEOUT = 2000;
     private static final int TIMEOUT_MULTIPLIER = 15;
 
     void prepareTest() throws Exception {
@@ -215,7 +215,7 @@ public abstract class AbstractResetIntegrationTest {
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -239,7 +239,7 @@ public abstract class AbstractResetIntegrationTest {
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(1, exitCode);
@@ -255,7 +255,7 @@ public abstract class AbstractResetIntegrationTest {
         };
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(1, exitCode);
@@ -264,7 +264,7 @@ public abstract class AbstractResetIntegrationTest {
     public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
         appID = testId + "-with-force-option";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
-        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + STREAMS_CONSUMER_TIMEOUT * 100);
+        streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(STREAMS_CONSUMER_TIMEOUT * 100));
 
         // Run
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
@@ -594,7 +594,7 @@ public abstract class AbstractResetIntegrationTest {
 
         final Properties cleanUpConfig = new Properties();
         cleanUpConfig.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 100);
-        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "" + CLEANUP_CONSUMER_TIMEOUT);
+        cleanUpConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(CLEANUP_CONSUMER_TIMEOUT));
 
         return new StreamsResetter().run(parameters, cleanUpConfig) == 0;
     }
