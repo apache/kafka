@@ -68,12 +68,14 @@
             <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler</a></li>
             <li><a class="reference internal" href="#default-key-serde" id="id8">default.key.serde</a></li>
             <li><a class="reference internal" href="#default-value-serde" id="id9">default.value.serde</a></li>
+            <li><a class="reference internal" href="#default-windowed-key-serde-inner" id="id32">default.windowed.key.serde.inner</a></li>
+            <li><a class="reference internal" href="#default-windowed-value-serde-inner" id="id33">default.windowed.value.serde.inner</a></li>
             <li><a class="reference internal" href="#max-task-idle-ms" id="id28">max.task.idle.ms</a></li>
             <li><a class="reference internal" href="#max-warmup-replicas" id="id29">max.warmup.replicas</a></li>
             <li><a class="reference internal" href="#num-standby-replicas" id="id10">num.standby.replicas</a></li>
             <li><a class="reference internal" href="#num-stream-threads" id="id11">num.stream.threads</a></li>
-            <li><a class="reference internal" href="#probing-rebalance-interval-ms" id="id30">probing.rebalance.interval.ms</a></li>
             <li><a class="reference internal" href="#partition-grouper" id="id12">partition.grouper</a></li>
+            <li><a class="reference internal" href="#probing-rebalance-interval-ms" id="id30">probing.rebalance.interval.ms</a></li>
             <li><a class="reference internal" href="#processing-guarantee" id="id25">processing.guarantee</a></li>
             <li><a class="reference internal" href="#replication-factor" id="id13">replication.factor</a></li>
             <li><a class="reference internal" href="#rocksdb-config-setter" id="id20">rocksdb.config.setter</a></li>
@@ -171,53 +173,68 @@
           </tr>
           </thead>
           <tbody valign="top">
-          <tr class="row-odd"><td>acceptable.recovery.lag</td>
+          <tr class="row-even"><td>acceptable.recovery.lag</td>
             <td>Medium</td>
             <td colspan="2">The maximum acceptable lag (number of offsets to catch up) for an instance to be considered caught-up and ready for the active task.</td>
             <td>10000</td>
           </tr>
-          <tr class="row-even"><td>application.server</td>
+          <tr class="row-odd"><td>application.server</td>
             <td>Low</td>
             <td colspan="2">A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of
               state stores within a single Kafka Streams application. The value of this must be different for each instance
               of the application.</td>
             <td>the empty string</td>
           </tr>
-          <tr class="row-odd"><td>buffered.records.per.partition</td>
+          <tr class="row-even"><td>buffered.records.per.partition</td>
             <td>Low</td>
             <td colspan="2">The maximum number of records to buffer per partition.</td>
             <td>1000</td>
           </tr>
-          <tr class="row-even"><td>cache.max.bytes.buffering</td>
+          <tr class="row-odd"><td>cache.max.bytes.buffering</td>
             <td>Medium</td>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
             <td>10485760 bytes</td>
           </tr>
-          <tr class="row-odd"><td>client.id</td>
+          <tr class="row-even"><td>client.id</td>
             <td>Medium</td>
             <td colspan="2">An ID string to pass to the server when making requests.
               (This setting is passed to the consumer/producer clients used internally by Kafka Streams.)</td>
             <td>the empty string</td>
           </tr>
-          <tr class="row-even"><td>commit.interval.ms</td>
+          <tr class="row-odd"><td>commit.interval.ms</td>
             <td>Low</td>
             <td colspan="2">The frequency with which to save the position (offsets in source topics) of tasks.</td>
             <td>30000 milliseconds</td>
           </tr>
-          <tr class="row-odd"><td>default.deserialization.exception.handler</td>
+          <tr class="row-even"><td>default.deserialization.exception.handler</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">LogAndContinueExceptionHandler</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>default.key.serde</td>
+            <td>Medium</td>
+            <td colspan="2">Default serializer/deserializer class for record keys, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also default.value.serde).</td>
+            <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
           </tr>
           <tr class="row-even"><td>default.production.exception.handler</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-odd"><td>key.serde</td>
+          <tr class="row-odd"><td>default.value.serde</td>
             <td>Medium</td>
-            <td colspan="2">Default serializer/deserializer class for record keys, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also value.serde).</td>
+            <td colspan="2">Default serializer/deserializer class for record values, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also default.key.serde).</td>
             <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
+          </tr>
+          <tr class="row-even"><td>default.windowed.key.serde.inner</td>
+            <td>Medium</td>
+            <td colspan="2">Default serializer/deserializer for the inner class of windowed keys, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
+            <td>null</td>
+          </tr>
+          <tr class="row-odd"><td>default.windowed.value.serde.inner</td>
+            <td>Medium</td>
+            <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
+            <td>null</td>
           </tr>
           <tr class="row-even"><td>max.task.idle.ms</td>
             <td>Medium</td>
@@ -326,12 +343,7 @@
             <td colspan="2">The version you are upgrading from during a rolling upgrade.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-upgrade-from"><span class="std std-ref">Upgrade From</span></a></td>
           </tr>
-          <tr class="row-odd"><td>value.serde</td>
-            <td>Medium</td>
-            <td colspan="2">Default serializer/deserializer class for record values, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also key.serde).</td>
-            <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
-          </tr>
-          <tr class="row-even"><td>windowstore.changelog.additional.retention.ms</td>
+          <tr class="row-odd"><td>windowstore.changelog.additional.retention.ms</td>
             <td>Low</td>
             <td colspan="2">Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift.</td>
             <td>86400000 milliseconds = 1 day</td>
@@ -465,6 +477,32 @@
               <p>This is discussed in more detail in <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data types and serialization</span></a>.</p>
             </div></blockquote>
         </div>
+        <div class="section" id="default-windowed-key-serde-inner">
+          <h4><a class="toc-backref" href="#id32">default.windowed.key.serde.inner</a><a class="headerlink" href="#default-windowed-key-serde-inner" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div><p>The default Serializer/Deserializer class for the inner class of windowed keys. Serialization and deserialization in Kafka Streams happens
+              whenever data needs to be materialized, for example:</p>
+              <blockquote>
+                <div><ul class="simple">
+                  <li>Whenever data is read from or written to a <em>Kafka topic</em> (e.g., via the <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code> and <code class="docutils literal"><span class="pre">KStream#to()</span></code> methods).</li>
+                  <li>Whenever data is read from or written to a <em>state store</em>.</li>
+                </ul>
+                  <p>This is discussed in more detail in <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data types and serialization</span></a>.</p>
+                </div></blockquote>
+            </div></blockquote>
+        </div>
+        <div class="section" id="default-windowed-value-serde-inner">
+          <h4><a class="toc-backref" href="#id33">default.windowed.value.serde.inner</a><a class="headerlink" href="#default-windowed-value-serde-inner" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div><p>The default Serializer/Deserializer class for the inner class of windowed values. Serialization and deserialization in Kafka Streams happens
+              happens whenever data needs to be materialized, for example:</p>
+              <ul class="simple">
+                <li>Whenever data is read from or written to a <em>Kafka topic</em> (e.g., via the <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code> and <code class="docutils literal"><span class="pre">KStream#to()</span></code> methods).</li>
+                <li>Whenever data is read from or written to a <em>state store</em>.</li>
+              </ul>
+              <p>This is discussed in more detail in <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data types and serialization</span></a>.</p>
+            </div></blockquote>
+        </div>
         <div class="section" id="max-task-idle-ms">
           <span id="streams-developer-guide-max-task-idle-ms"></span><h4><a class="toc-backref" href="#id28">max.task.idle.ms</a><a class="headerlink" href="#max-task-idle-ms" title="Permalink to this headline"></a></h4>
           <blockquote>
@@ -511,10 +549,13 @@
         <div class="section" id="partition-grouper">
           <span id="streams-developer-guide-partition-grouper"></span><h4><a class="toc-backref" href="#id12">partition.grouper</a><a class="headerlink" href="#partition-grouper" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div>A partition grouper creates a list of stream tasks from the partitions of source topics, where each created task is assigned with a group of source topic partitions.
+            <div>
+              <b>[DEPRECATED]</b> A partition grouper creates a list of stream tasks from the partitions of source topics, where each created task is assigned with a group of source topic partitions.
               The default implementation provided by Kafka Streams is <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/DefaultPartitionGrouper.html">DefaultPartitionGrouper</a>.
               It assigns each task with one partition for each of the source topic partitions. The generated number of tasks equals the largest
-              number of partitions among the input topics. Usually an application does not need to customize the partition grouper.</div></blockquote>
+              number of partitions among the input topics. Usually an application does not need to customize the partition grouper.
+            </div>
+          </blockquote>
         </div>
         <div class="section" id="probing-rebalance-interval-ms">
           <h4><a class="toc-backref" href="#id30">probing-rebalance.interval.ms</a><a class="headerlink" href="#probing-rebalance-interval-ms" title="Permalink to this headline"></a></h4>
