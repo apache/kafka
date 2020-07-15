@@ -27,10 +27,11 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class StreamThreadStateStoreProvider {
 
@@ -58,14 +59,10 @@ public class StreamThreadStateStoreProvider {
                 final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
                 return store != null ? Collections.singletonList(store) : Collections.emptyList();
             }
-            final List<T> stores = new ArrayList<>();
-            for (final Task streamTask : tasks.values()) {
-                final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
-                if (store != null) {
-                    stores.add(store);
-                }
-            }
-            return stores;
+            return tasks.values().stream().
+                    map(streamTask -> validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id())).
+                    filter(Objects::nonNull).
+                    collect(Collectors.toList());
         } else {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
                                                     state + ", not RUNNING" +
