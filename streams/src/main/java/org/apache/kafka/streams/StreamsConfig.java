@@ -360,11 +360,6 @@ public class StreamsConfig extends AbstractConfig {
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE + "</code>, the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 
-    /** {@code max.task.idle.ms} */
-    public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
-    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time a stream task will stay idle when not all of its partition buffers contain records," +
-        " to avoid potential out-of-order record processing across multiple input streams.";
-
     /** {@code connections.max.idle.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -413,6 +408,11 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
     private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
+
+    /** {@code max.task.idle.ms} */
+    public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
+    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time a stream task will stay idle when not all of its partition buffers contain records," +
+        " to avoid potential out-of-order record processing across multiple input streams.";
 
     /** {@code max.warmup.replicas} */
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";

@@ -63,17 +63,22 @@
           </ul>
           </li>
           <li><a class="reference internal" href="#optional-configuration-parameters" id="id6">Optional configuration parameters</a><ul>
+            <li><a class="reference internal" href="#acceptable-recovery-lag" id="id27">acceptable.recovery.lag</a></li>
             <li><a class="reference internal" href="#default-deserialization-exception-handler" id="id7">default.deserialization.exception.handler</a></li>
             <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler</a></li>
             <li><a class="reference internal" href="#default-key-serde" id="id8">default.key.serde</a></li>
             <li><a class="reference internal" href="#default-value-serde" id="id9">default.value.serde</a></li>
+            <li><a class="reference internal" href="#max-task-idle-ms" id="id28">max.task.idle.ms</a></li>
+            <li><a class="reference internal" href="#max-warmup-replicas" id="id29">max.warmup.replicas</a></li>
             <li><a class="reference internal" href="#num-standby-replicas" id="id10">num.standby.replicas</a></li>
             <li><a class="reference internal" href="#num-stream-threads" id="id11">num.stream.threads</a></li>
+            <li><a class="reference internal" href="#probing-rebalance-interval-ms" id="id30">probing.rebalance.interval.ms</a></li>
             <li><a class="reference internal" href="#partition-grouper" id="id12">partition.grouper</a></li>
             <li><a class="reference internal" href="#processing-guarantee" id="id25">processing.guarantee</a></li>
             <li><a class="reference internal" href="#replication-factor" id="id13">replication.factor</a></li>
             <li><a class="reference internal" href="#state-dir" id="id14">state.dir</a></li>
             <li><a class="reference internal" href="#timestamp-extractor" id="id15">timestamp.extractor</a></li>
+            <li><a class="reference internal" href="#topology-optimization" id="id31">topology.optimization</a></li>
           </ul>
           </li>
           <li><a class="reference internal" href="#kafka-consumers-and-producer-configuration-parameters" id="id16">Kafka consumers and producer configuration parameters</a><ul>
@@ -166,6 +171,11 @@
           </tr>
           </thead>
           <tbody valign="top">
+          <tr class="row-odd"><td>acceptable.recovery.lag</td>
+            <td>Medium</td>
+            <td colspan="2">The maximum acceptable lag (number of offsets to catch up) for an instance to be considered caught-up and ready for the active task.</td>
+            <td>10000</td>
+          </tr>
           <tr class="row-even"><td>application.server</td>
             <td>Low</td>
             <td colspan="2">A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of
@@ -209,6 +219,17 @@
             <td colspan="2">Default serializer/deserializer class for record keys, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also value.serde).</td>
             <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
           </tr>
+          <tr class="row-even"><td>max.task.idle.ms</td>
+            <td>Medium</td>
+            <td colspan="2">Maximum amount of time a stream task will stay idle while waiting for all partitions to contain data and avoid potential out-of-order record
+              processing across multiple input streams.</td>
+            <td>0 milliseconds</td>
+          </tr>
+          <tr class="row-odd"><td>max.warmup.replicas</td>
+            <td>Medium</td>
+            <td colspan="2">The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once.</td>
+            <td>2</td>
+          </tr>
           <tr class="row-even"><td>metric.reporters</td>
             <td>Low</td>
             <td colspan="2">A list of classes to use as metrics reporters.</td>
@@ -244,10 +265,15 @@
             <td colspan="2">Partition grouper class that implements the <code class="docutils literal"><span class="pre">PartitionGrouper</span></code> interface.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-partition-grouper"><span class="std std-ref">Partition Grouper</span></a></td>
           </tr>
+          <tr class="row-odd"><td>probing.rebalance.interval.ms</td>
+            <td>Low</td>
+            <td colspan="2">The maximum time to wait before triggering a rebalance to probe for warmup replicas that have sufficiently caught up.</td>
+            <td>600000 milliseconds</td>
+          </tr>
           <tr class="row-even"><td>processing.guarantee</td>
             <td>Medium</td>
             <td colspan="2">The processing mode. Can be either <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default),
-              <code class="docutils literal"><span class="pre">"exactly_once"</span></code>, or <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code>.
+              <code class="docutils literal"><span class="pre">"exactly_once"</span></code>, or <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code></td>.
             <td>See <a class="reference internal" href="#streams-developer-guide-processing-guarantedd"><span class="std std-ref">Processing Guarantee</span></a></td>
           </tr>
           <tr class="row-odd"><td>poll.ms</td>
@@ -260,7 +286,7 @@
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.</td>
             <td>1</td>
           </tr>
-          <tr class="row-even"><td>retries</td>
+          <tr class="row-odd"><td>retries</td>
               <td>Medium</td>
               <td colspan="2">The number of retries for broker requests that return a retryable error. </td>
               <td>0</td>
@@ -270,20 +296,25 @@
               <td colspan="2">The amount of time in milliseconds, before a request is retried. This applies if the <code class="docutils literal"><span class="pre">retries</span></code> parameter is configured to be greater than 0. </td>
               <td>100</td>
           </tr>
-          <tr class="row-even"><td>rocksdb.config.setter</td>
+          <tr class="row-odd"><td>rocksdb.config.setter</td>
             <td>Medium</td>
             <td colspan="2">The RocksDB configuration.</td>
             <td></td>
           </tr>
-          <tr class="row-odd"><td>state.cleanup.delay.ms</td>
+          <tr class="row-even"><td>state.cleanup.delay.ms</td>
             <td>Low</td>
             <td colspan="2">The amount of time in milliseconds to wait before deleting state when a partition has migrated.</td>
             <td>600000 milliseconds</td>
           </tr>
-          <tr class="row-even"><td>state.dir</td>
+          <tr class="row-odd"><td>state.dir</td>
             <td>High</td>
             <td colspan="2">Directory location for state stores.</td>
             <td><code class="docutils literal"><span class="pre">/tmp/kafka-streams</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>topology.optimization</td>
+            <td>Medium</td>
+            <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology</td>
+            <td>none</td>
           </tr>
           <tr class="row-odd"><td>timestamp.extractor</td>
             <td>Medium</td>
@@ -307,6 +338,15 @@
           </tr>
           </tbody>
         </table>
+        <div class="section" id="acceptable-recovery-lag">
+          <h4><a class="toc-backref" href="#id27">acceptable.recovery.lag</a><a class="headerlink" href="#acceptable-recovery-lag" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              The maximum acceptable lag (total number of offsets to catch up from the changelog) for an instance to be considered caught-up and able to receive an active task. Streams will only assign
+              stateful active tasks to instances whose state stores are within the acceptable recovery lag, if any exist, and assign warmup replicas to restore state in the background for instances
+              that are not yet caught up. Should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.
+            </div></blockquote>
+        </div>
         <div class="section" id="default-deserialization-exception-handler">
           <span id="streams-developer-guide-deh"></span><h4><a class="toc-backref" href="#id7">default.deserialization.exception.handler</a><a class="headerlink" href="#default-deserialization-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
@@ -425,6 +465,24 @@
               <p>This is discussed in more detail in <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data types and serialization</span></a>.</p>
             </div></blockquote>
         </div>
+        <div class="section" id="max-task-idle-ms">
+          <span id="streams-developer-guide-max-task-idle-ms"></span><h4><a class="toc-backref" href="#id28">max.task.idle.ms</a><a class="headerlink" href="#max-task-idle-ms" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              The maximum amount of time a task will idle without processing data when waiting for all of its input partition buffers to contain records. This can help avoid potential out-of-order
+              processing when the task has multiple input streams, as in a join, for example. Setting this to a nonzero value may increase latency but will improve time synchronization.
+            </div></blockquote>
+        </div>
+        <div class="section" id="max-warmup-replicas">
+          <span id="streams-developer-guide-max-warmup-replicas"></span><h4><a class="toc-backref" href="#id29">max.warmup.replicas</a><a class="headerlink" href="#max-warmup-replicas" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once for the purpose of keeping
+              the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker
+              traffic and cluster state can be used for high availability. Increasing this will allow Streams to warm up more tasks at once, speeding up the time
+              for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1.
+            </div></blockquote>
+        </div>
         <div class="section" id="num-standby-replicas">
           <span id="streams-developer-guide-standby-replicas"></span><h4><a class="toc-backref" href="#id10">num.standby.replicas</a><a class="headerlink" href="#num-standby-replicas" title="Permalink to this headline"></a></h4>
           <blockquote>
@@ -433,13 +491,15 @@
               Standby replicas are used to minimize the latency of task failover.  A task that was previously running on a failed instance is
               preferred to restart on an instance that has standby replicas so that the local state store restoration process from its
               changelog can be minimized.  Details about how Kafka Streams makes use of the standby replicas to minimize the cost of
-              resuming tasks on failover can be found in the <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">State</span></a> section.</div></blockquote>
+              resuming tasks on failover can be found in the <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">State</span></a> section.
             </div>
-            <div class="admonition note">
+          </blockquote>
+        </div>
+          <div class="admonition note">
               <p class="first admonition-title">Note</p>
               <p class="last">If you enable <cite>n</cite> standby tasks, you need to provision <cite>n+1</cite> <code class="docutils literal"><span class="pre">KafkaStreams</span></code>
               instances.</p>
-              </div>
+          </div>
         <div class="section" id="num-stream-threads">
           <h4><a class="toc-backref" href="#id11">num.stream.threads</a><a class="headerlink" href="#num-stream-threads" title="Permalink to this headline"></a></h4>
           <blockquote>
@@ -453,6 +513,15 @@
               The default implementation provided by Kafka Streams is <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/DefaultPartitionGrouper.html">DefaultPartitionGrouper</a>.
               It assigns each task with one partition for each of the source topic partitions. The generated number of tasks equals the largest
               number of partitions among the input topics. Usually an application does not need to customize the partition grouper.</div></blockquote>
+        </div>
+        <div class="section" id="probing-rebalance-interval-ms">
+          <h4><a class="toc-backref" href="#id30">probing-rebalance.interval.ms</a><a class="headerlink" href="#probing-rebalance-interval-ms" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              The maximum time to wait before triggering a rebalance to probe for warmup replicas that have restored enough to be considered caught up. Streams will only assign stateful active tasks to
+              instances that are caught up and within the <a class="reference internal" href="#acceptable-recovery-lag"><span class="std std-ref">acceptable.recovery.lag</span></a>, if any exist. Probing rebalances are used to query the latest total lag of warmup replicas and transition
+              them to active tasks if ready. They will continue to be triggered as long as there are warmup tasks, and until the assignment is balanced. Must be at least 1 minute.
+            </div></blockquote>
         </div>
         <div class="section" id="processing-guarantee">
           <span id="streams-developer-guide-processing-guarantee"></span><h4><a class="toc-backref" href="#id25">processing.guarantee</a><a class="headerlink" href="#processing-guarantee" title="Permalink to this headline"></a></h4>
@@ -637,6 +706,21 @@
 </pre></div>
               </div>
             </div></blockquote>
+        </div>
+        <div class="section" id="topology-optimization">
+          <h4><a class="toc-backref" href="#id31">topology.optimization</a><a class="headerlink" href="#topology-optimization" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              <p>
+                You can tell Streams to apply topology optimizations by setting this config. The optimizations are currently all or none and disabled by default.
+                These optimizations include moving/reducing repartition topics and reusing the source topic as the changelog for source KTables. It is recommended to enable this.
+              </p>
+              <p>
+                Note that as of 2.3, you need to do two things to enable optimizations. In addition to setting this config to <code>StreamsConfig.OPTIMIZE</code>, you'll need to pass in your
+                configuration properties when building your topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
+                For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
+              </p>
+          </div></blockquote>
         </div>
         <div class="section" id="upgrade-from">
           <h4><a class="toc-backref" href="#id14">upgrade.from</a><a class="headerlink" href="#upgrade-from" title="Permalink to this headline"></a></h4>
