@@ -398,6 +398,7 @@ class TransactionCoordinator(brokerId: Int,
                   isEpochFence = true
                   txnMetadata.pendingState = None
                   txnMetadata.producerEpoch = producerEpoch
+                  txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
                 }
 
                 Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, time.milliseconds()))
@@ -512,7 +513,8 @@ class TransactionCoordinator(brokerId: Int,
                     if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                       // This was attempted epoch fence that failed, so mark this state on the metadata
                       epochAndMetadata.transactionMetadata.hasFailedEpochFence = true
-                      warn("")
+                      warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
+                        s"with error $error. The epoch was increased to ${newMetadata.producerEpoch} but not returned to the client")
                     }
                 }
               }
