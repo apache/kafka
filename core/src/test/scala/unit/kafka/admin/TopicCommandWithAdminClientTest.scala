@@ -677,6 +677,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, partitions, replicationFactor).configs(configMap))).all().get()
     waitForTopicCreated(testTopicName)
+
+    // Produce multiple batches.
     TestUtils.generateAndProduceMessages(servers, testTopicName, numMessages = 10, acks = -1)
     Thread.sleep(10)
     TestUtils.generateAndProduceMessages(servers, testTopicName, numMessages = 10, acks = -1)
@@ -685,7 +687,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // throughput so the reassignment doesn't complete quickly.
     val brokerIds = servers.map(_.config.brokerId)
     TestUtils.setReplicationThrottleForPartitions(adminClient, brokerIds, Set(tp), throttleBytes = 1)
-   
+
     val testTopicDesc = adminClient.describeTopics(Collections.singleton(testTopicName)).all().get().get(testTopicName)
     val firstPartition = testTopicDesc.partitions().asScala.head
 
