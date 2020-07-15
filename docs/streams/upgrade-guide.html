@@ -104,7 +104,7 @@
     </p>
 
     <p>
-        For more highly available state stores, we've modified the task assignment algorithm to delay the movement of stateful active tasks to instances
+        For more highly available stateful applications, we've modified the task assignment algorithm to delay the movement of stateful active tasks to instances
         that aren't yet caught up with that task's state. Instead, to migrate a task from one instance to another (eg when scaling out),
         Streams will assign a warmup replica to the target instance so it can begin restoring the state while the active task stays available on an instance
         that already had the task. The instances warming up tasks will communicate their progress to the group so that, once ready, Streams can move active

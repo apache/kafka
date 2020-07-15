@@ -383,12 +383,16 @@ public class StreamsConfig extends AbstractConfig {
      */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
+    private static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed key. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /**
      * {@code default.windowed.value.serde.inner}
      */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
+    private static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
@@ -639,16 +643,16 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
-            .define(NUM_STANDBY_REPLICAS_CONFIG,
-                    Type.INT,
-                    0,
+            .define(DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
-                    NUM_STANDBY_REPLICAS_DOC)
-            .define(NUM_STREAM_THREADS_CONFIG,
-                    Type.INT,
-                    1,
+                    DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC)
+            .define(DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
-                    NUM_STREAM_THREADS_DOC)
+                    DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -660,6 +664,16 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(1),
                     Importance.MEDIUM,
                     MAX_WARMUP_REPLICAS_DOC)
+            .define(NUM_STANDBY_REPLICAS_CONFIG,
+                    Type.INT,
+                    0,
+                    Importance.MEDIUM,
+                    NUM_STANDBY_REPLICAS_DOC)
+            .define(NUM_STREAM_THREADS_CONFIG,
+                    Type.INT,
+                    1,
+                    Importance.MEDIUM,
+                    NUM_STREAM_THREADS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,
