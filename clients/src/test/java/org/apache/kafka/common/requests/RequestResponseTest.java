@@ -147,6 +147,9 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.quota.ClientQuotaAlteration;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -197,7 +200,8 @@ import static org.junit.Assert.fail;
 
 public class RequestResponseTest {
 
-    private UnknownServerException unknownServerException = new UnknownServerException("secret");
+    // Exception includes a message that we verify is not included in error responses
+    private final UnknownServerException unknownServerException = new UnknownServerException("secret");
 
     @Test
     public void testSerialization() throws Exception {
@@ -485,6 +489,13 @@ public class RequestResponseTest {
         checkRequest(createAlterReplicaLogDirsRequest(), true);
         checkErrorResponse(createAlterReplicaLogDirsRequest(), unknownServerException, true);
         checkResponse(createAlterReplicaLogDirsResponse(), 0, true);
+
+        checkRequest(createDescribeClientQuotasRequest(), true);
+        checkErrorResponse(createDescribeClientQuotasRequest(), unknownServerException, true);
+        checkResponse(createDescribeClientQuotasResponse(), 0, true);
+        checkRequest(createAlterClientQuotasRequest(), true);
+        checkErrorResponse(createAlterClientQuotasRequest(), unknownServerException, true);
+        checkResponse(createAlterClientQuotasResponse(), 0, true);
     }
 
     @Test
@@ -2333,4 +2344,25 @@ public class RequestResponseTest {
         return new AlterReplicaLogDirsResponse(data);
     }
 
+    private DescribeClientQuotasRequest createDescribeClientQuotasRequest() {
+        ClientQuotaFilter filter = ClientQuotaFilter.all();
+        return new DescribeClientQuotasRequest.Builder(filter).build((short) 0);
+    }
+
+    private DescribeClientQuotasResponse createDescribeClientQuotasResponse() {
+        ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
+        return new DescribeClientQuotasResponse(Collections.singletonMap(entity, Collections.singletonMap("request_percentage", 1.0)), 0);
+    }
+
+    private AlterClientQuotasRequest createAlterClientQuotasRequest() {
+        ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
+        ClientQuotaAlteration.Op op = new ClientQuotaAlteration.Op("request_percentage", 2.0);
+        ClientQuotaAlteration alteration = new ClientQuotaAlteration(entity, Collections.singleton(op));
+        return new AlterClientQuotasRequest.Builder(Collections.singleton(alteration), false).build((short) 0);
+    }
+
+    private AlterClientQuotasResponse createAlterClientQuotasResponse() {
+        ClientQuotaEntity entity = new ClientQuotaEntity(Collections.singletonMap(ClientQuotaEntity.USER, "user"));
+        return new AlterClientQuotasResponse(Collections.singletonMap(entity, ApiError.NONE), 0);
+    }
 }
