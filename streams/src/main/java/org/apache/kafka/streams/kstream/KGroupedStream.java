@@ -527,7 +527,7 @@ public interface KGroupedStream<K, V> {
      * @param <W>     the window type
      * @return an instance of {@link TimeWindowedKStream}
      */
-    <W extends Window> TimeWindowedKStream<K, V> windowedBy(final Windows<W> windows);
+    <W extends Window> TimeWindowedKStream<K, V> windowedBy(final FixedSizeWindowDefinition<W> windows);
 
     /**
      * Create a new {@link SessionWindowedKStream} instance that can be used to perform session windowed aggregations.

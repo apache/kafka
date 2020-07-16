@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
@@ -46,10 +47,10 @@ import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDU
 
 public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V> implements TimeWindowedKStream<K, V> {
 
-    private final Windows<W> windows;
+    private final FixedSizeWindowDefinition<W> windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
 
-    TimeWindowedKStreamImpl(final Windows<W> windows,
+    TimeWindowedKStreamImpl(final FixedSizeWindowDefinition<W> windows,
                             final InternalStreamsBuilder builder,
                             final Set<String> subTopologySourceNodes,
                             final String name,
@@ -225,27 +226,36 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                     false
                 );
 
-            } else {
+            } else if (windows instanceof Windows) {
                 // old style retention: use deprecated Windows retention/segmentInterval.
 
                 // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
                 // to be (windows.size() + windows.grace()). This will yield the same default behavior.
 
-                if ((windows.size() + windows.gracePeriodMs()) > windows.maintainMs()) {
+                if ((windows.size() + windows.gracePeriodMs()) > ((Windows<W>) windows).maintainMs()) {
                     throw new IllegalArgumentException("The retention period of the window store "
                                                            + name + " must be no smaller than its window size plus the grace period."
                                                            + " Got size=[" + windows.size() + "],"
                                                            + " grace=[" + windows.gracePeriodMs() + "],"
-                                                           + " retention=[" + windows.maintainMs() + "]");
+                                                           + " retention=[" + ((Windows<W>) windows).maintainMs() + "]");
                 }
 
                 supplier = new RocksDbWindowBytesStoreSupplier(
                     materialized.storeName(),
-                    windows.maintainMs(),
-                    Math.max(windows.maintainMs() / (windows.segments - 1), 60_000L),
+                    ((Windows<W>) windows).maintainMs(),
+                    Math.max(((Windows<W>) windows).maintainMs() / (((Windows<W>) windows).segments - 1), 60_000L),
                     windows.size(),
                     false,
                     true);
+            } else {
+                // no retention on store or window definition, so set it to the minimum
+                final long retentionPeriod = windows.size() + windows.gracePeriodMs();
+                supplier = Stores.persistentTimestampedWindowStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod),
+                    Duration.ofMillis(windows.size()),
+                    false
+                );
             }
         }
         final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(

@@ -21,8 +21,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -43,13 +43,13 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
-    private final Windows<W> windows;
+    private final FixedSizeWindowDefinition<W> windows;
     private final Initializer<Agg> initializer;
     private final Aggregator<? super K, ? super V, Agg> aggregator;
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(final Windows<W> windows,
+    public KStreamWindowAggregate(final FixedSizeWindowDefinition<W> windows,
                                   final String storeName,
                                   final Initializer<Agg> initializer,
                                   final Aggregator<? super K, ? super V, Agg> aggregator) {
@@ -64,7 +64,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         return new KStreamWindowAggregateProcessor();
     }
 
-    public Windows<W> windows() {
+    public FixedSizeWindowDefinition<W> windows() {
         return windows;
     }
 

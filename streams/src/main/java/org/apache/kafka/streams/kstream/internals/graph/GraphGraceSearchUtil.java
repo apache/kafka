@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
 import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -73,7 +73,7 @@ public final class GraphGraceSearchUtil {
             final ProcessorSupplier processorSupplier = ((StatefulProcessorNode) node).processorParameters().processorSupplier();
             if (processorSupplier instanceof KStreamWindowAggregate) {
                 final KStreamWindowAggregate kStreamWindowAggregate = (KStreamWindowAggregate) processorSupplier;
-                final Windows windows = kStreamWindowAggregate.windows();
+                final FixedSizeWindowDefinition windows = kStreamWindowAggregate.windows();
                 return windows.gracePeriodMs();
             } else if (processorSupplier instanceof KStreamSessionWindowAggregate) {
                 final KStreamSessionWindowAggregate kStreamSessionWindowAggregate = (KStreamSessionWindowAggregate) processorSupplier;
