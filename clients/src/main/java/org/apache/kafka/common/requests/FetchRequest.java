@@ -111,7 +111,7 @@ public class FetchRequest extends AbstractRequest {
         return Collections.unmodifiableMap(result);
     }
 
-    private List<TopicPartition> toForgottonTopicList(List<FetchRequestData.ForgottenTopic> forgottenTopics) {
+    private List<TopicPartition> toForgottenTopicList(List<FetchRequestData.ForgottenTopic> forgottenTopics) {
         List<TopicPartition> result = new ArrayList<>();
         forgottenTopics.forEach(forgottenTopic ->
             forgottenTopic.partitions().forEach(partitionId ->
@@ -279,7 +279,7 @@ public class FetchRequest extends AbstractRequest {
         super(ApiKeys.FETCH, version);
         this.data = fetchRequestData;
         this.fetchData = toPartitionDataMap(fetchRequestData.topics());
-        this.toForget = toForgottonTopicList(fetchRequestData.forgottenTopicsData());
+        this.toForget = toForgottenTopicList(fetchRequestData.forgottenTopicsData());
         this.metadata = new FetchMetadata(fetchRequestData.sessionId(), fetchRequestData.sessionEpoch());
     }
 

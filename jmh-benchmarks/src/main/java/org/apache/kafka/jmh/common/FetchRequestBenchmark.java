@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -49,43 +50,67 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class FetchRequestBenchmark {
-    @Param({"1000"})
+
+    @Param({"10", "500", "1000"})
     private int topicCount;
 
-    @Param({"20"})
+    @Param({"3", "10", "20"})
     private int partitionCount;
 
     Map<TopicPartition, FetchRequest.PartitionData> fetchData;
 
     RequestHeader header;
 
-    FetchRequest request;
+    FetchRequest consumerRequest;
 
+    FetchRequest replicaRequest;
 
     @Setup(Level.Trial)
     public void setup() {
         this.fetchData = new HashMap<>();
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
+            String topic = UUID.randomUUID().toString();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(
                     0, 0, 4096, Optional.empty());
-                fetchData.put(new TopicPartition(String.format("topic-%04d", topicIdx), partitionId), partitionData);
+                fetchData.put(new TopicPartition(topic, partitionId), partitionData);
             }
         }
 
         this.header = new RequestHeader(ApiKeys.FETCH, ApiKeys.FETCH.latestVersion(), "jmh-benchmark", 100);
-        this.request = FetchRequest.Builder.forConsumer(0, 0, fetchData).build(ApiKeys.FETCH.latestVersion());
+        this.consumerRequest = FetchRequest.Builder.forConsumer(0, 0, fetchData)
+            .build(ApiKeys.FETCH.latestVersion());
+        this.replicaRequest = FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
+            .build(ApiKeys.FETCH.latestVersion());
+
     }
 
     @Benchmark
-    public int testConstructFetchRequest() {
-        FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(0, 0, fetchData).build(ApiKeys.FETCH.latestVersion());
+    public int testFetchRequestForConsumer() {
+        FetchRequest fetchRequest = FetchRequest.Builder.forConsumer(0, 0, fetchData)
+            .build(ApiKeys.FETCH.latestVersion());
         return fetchRequest.fetchData().size();
     }
 
     @Benchmark
-    public int testSerializeFetchRequest() throws IOException {
-        Send send = request.toSend("dest", header);
+    public int testFetchRequestForReplica() {
+        FetchRequest fetchRequest = FetchRequest.Builder.forReplica(
+            ApiKeys.FETCH.latestVersion(), 1, 0, 0, fetchData)
+                .build(ApiKeys.FETCH.latestVersion());
+        return fetchRequest.fetchData().size();
+    }
+
+    @Benchmark
+    public int testSerializeFetchRequestForConsumer() throws IOException {
+        Send send = consumerRequest.toSend("dest", header);
+        ByteBufferChannel channel = new ByteBufferChannel(send.size());
+        send.writeTo(channel);
+        return channel.buffer().limit();
+    }
+
+    @Benchmark
+    public int testSerializeFetchRequestForReplica() throws IOException {
+        Send send = replicaRequest.toSend("dest", header);
         ByteBufferChannel channel = new ByteBufferChannel(send.size());
         send.writeTo(channel);
         return channel.buffer().limit();

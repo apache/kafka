@@ -45,6 +45,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @State(Scope.Benchmark)
@@ -54,10 +55,10 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class FetchResponseBenchmark {
-    @Param({"1000"})
+    @Param({"10", "500", "1000"})
     private int topicCount;
 
-    @Param({"20"})
+    @Param({"3", "10", "20"})
     private int partitionCount;
 
     LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseData;
@@ -75,10 +76,11 @@ public class FetchResponseBenchmark {
 
         this.responseData = new LinkedHashMap<>();
         for (int topicIdx = 0; topicIdx < topicCount; topicIdx++) {
+            String topic = UUID.randomUUID().toString();
             for (int partitionId = 0; partitionId < partitionCount; partitionId++) {
                 FetchResponse.PartitionData<MemoryRecords> partitionData = new FetchResponse.PartitionData<>(
                     Errors.NONE, 0, 0, 0, Optional.empty(), Collections.emptyList(), records);
-                responseData.put(new TopicPartition(String.format("topic-%04d", topicIdx), partitionId), partitionData);
+                responseData.put(new TopicPartition(topic, partitionId), partitionData);
             }
         }
 
