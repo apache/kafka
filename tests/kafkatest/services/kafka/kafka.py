@@ -478,7 +478,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%(kafka_topics_cmd)s %(connection_string)s --create --topic %(topic)s " % {
             'kafka_topics_cmd': self._kafka_topics_cmd(node, use_zk_connection),
-            'connection_string': self._connect_setting(node, use_zk_connection),
+            'connection_string': self._topic_command_connect_setting(node, use_zk_connection),
             'topic': topic_cfg.get("topic"),
         }
         if 'replica-assignment' in topic_cfg:
@@ -530,7 +530,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s %s --topic %s --describe %s" % \
               (self._kafka_topics_cmd(node=node, use_zk_connection=use_zk_to_describe_topic),
-               self._connect_setting(node=node, use_zk_connection=use_zk_to_describe_topic),
+               self._topic_command_connect_setting(node=node, use_zk_connection=use_zk_to_describe_topic),
                topic, self._kafka_topics_cmd_config(node=node, use_zk_connection=use_zk_to_describe_topic))
 
         self.logger.info("Running topic describe command...\n%s" % cmd)
@@ -545,7 +545,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s %s --list %s" % (self._kafka_topics_cmd(node, use_zk_to_list_topic),
-                                   self._connect_setting(node, use_zk_to_list_topic),
+                                   self._topic_command_connect_setting(node, use_zk_to_list_topic),
                                    self._kafka_topics_cmd_config(node, use_zk_to_list_topic))
         for line in node.account.ssh_capture(cmd):
             if not line.startswith("SLF4J"):
@@ -557,8 +557,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, msg_format_version)
+        cmd += "%s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
+              (self.path.script("kafka-configs.sh", node), self._connect_setting_kafka_configs(node), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -571,10 +571,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.logger.info("Disabling unclean leader election for topic %s", topic)
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, str(value).lower())
+        cmd += "%s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
+              (self.path.script("kafka-configs.sh", node), self._connect_setting_kafka_configs(node), topic, str(value).lower())
         self.logger.info("Running alter unclean leader command...\n%s" % cmd)
         node.account.ssh(cmd)
+
+    def _connect_setting_kafka_configs(self, node):
+        if node.version.kafka_configs_command_uses_bootstrap_server():
+            return "--bootstrap-server %s " % self.bootstrap_servers(self.security_protocol)
+        else:
+            return "--zookeeper %s %s" % self.zk_connect_setting(), self.zk.zkTlsConfigFileOption()
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
@@ -860,7 +866,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def zk_connect_setting(self):
         return self.zk.connect_setting(self.zk_chroot, self.zk_client_secure)
 
-    def _connect_setting(self, node, use_zk_connection=True):
+    def _topic_command_connect_setting(self, node, use_zk_connection=True):
         """
         Checks if --bootstrap-server config is supported, if yes then returns a string with
         bootstrap server, otherwise returns zookeeper connection string.
