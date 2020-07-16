@@ -66,10 +66,11 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
     }
 
     public DescribeClientQuotasResponse(int throttleTimeMs, Throwable e) {
+        ApiError apiError = ApiError.fromThrowable(e);
         this.data = new DescribeClientQuotasResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(Errors.forException(e).code())
-                .setErrorMessage(e.getMessage())
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message())
                 .setEntries(null);
     }
 

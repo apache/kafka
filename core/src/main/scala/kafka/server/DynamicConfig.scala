@@ -67,11 +67,20 @@ object DynamicConfig {
     def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true)
   }
 
-  object Client {
-    //Properties
+  object QuotaConfigs {
     val ProducerByteRateOverrideProp = "producer_byte_rate"
     val ConsumerByteRateOverrideProp = "consumer_byte_rate"
     val RequestPercentageOverrideProp = "request_percentage"
+    private val configNames = Set(ProducerByteRateOverrideProp, ConsumerByteRateOverrideProp, RequestPercentageOverrideProp)
+
+    def isQuotaConfig(name: String): Boolean = configNames.contains(name)
+  }
+
+  object Client {
+    //Properties
+    val ProducerByteRateOverrideProp = QuotaConfigs.ProducerByteRateOverrideProp
+    val ConsumerByteRateOverrideProp = QuotaConfigs.ConsumerByteRateOverrideProp
+    val RequestPercentageOverrideProp = QuotaConfigs.RequestPercentageOverrideProp
 
     //Defaults
     val DefaultProducerOverride = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
