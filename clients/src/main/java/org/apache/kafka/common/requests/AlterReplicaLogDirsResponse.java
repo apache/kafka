@@ -31,8 +31,7 @@ import org.apache.kafka.common.protocol.types.Struct;
  *
  * {@link Errors#LOG_DIR_NOT_FOUND}
  * {@link Errors#KAFKA_STORAGE_ERROR}
- * {@link Errors#REPLICA_NOT_AVAILABLE} from brokers with inter-broker protocol version < 2.7
- * {@link Errors#NOT_LEADER_OR_FOLLOWER} from brokers with inter-broker protocol version >= 2.7
+ * {@link Errors#REPLICA_NOT_AVAILABLE}
  * {@link Errors#UNKNOWN_SERVER_ERROR}
  */
 public class AlterReplicaLogDirsResponse extends AbstractResponse {

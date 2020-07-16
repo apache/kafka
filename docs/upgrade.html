@@ -21,9 +21,8 @@
 <h5><a id="upgrade_270_notable" href="#upgrade_270_notable">Notable changes in 2.7.0</a></h5>
 <ul>
     <li><code>NotLeaderForPartitionException</code> has been deprecated and replaced with <code>NotLeaderOrFollowerException</code>.
-        Fetch requests return NOT_LEADER_OR_FOLLOWER(6)  instead of REPLICA_NOT_AVAILABLE(9) if the broker is not the leader or follower,
+        Fetch requests return NOT_LEADER_OR_FOLLOWER(6) instead of REPLICA_NOT_AVAILABLE(9) if the broker is not the leader or follower,
         ensuring that this transient error during reassignments is handled by all clients as a retriable exception.
-        AlterLogDirs now returns NOT_LEADER_OR_FOLLOWER instead of REPLICA_NOT_AVAILABLE if <code<inter.broker.protocol.version</code> is >= 2.7.
     </li>
 </ul>
 

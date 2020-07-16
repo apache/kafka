@@ -2127,9 +2127,8 @@ class ReplicaManagerTest {
   @Test
   def testReplicaNotAvailable(): Unit = {
 
-    def createReplicaManager(ibpVersion: ApiVersion): ReplicaManager = {
+    def createReplicaManager(): ReplicaManager = {
       val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
-      props.put(KafkaConfig.InterBrokerProtocolVersionProp, ibpVersion.version)
       val config = KafkaConfig.fromProps(props)
       val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
       new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), mockLogMgr,
@@ -2141,19 +2140,14 @@ class ReplicaManagerTest {
       }
     }
 
-    def verifyAlterLogDirs(ibpVersion: ApiVersion, expectedError: Errors): Unit = {
-      val replicaManager = createReplicaManager(ibpVersion)
-      try {
-        val tp = new TopicPartition(topic, 0)
-        val dir = replicaManager.logManager.liveLogDirs.head.getAbsolutePath
-        val errors = replicaManager.alterReplicaLogDirs(Map(tp -> dir))
-        assertEquals(expectedError, errors(tp))
-      } finally {
-        replicaManager.shutdown(false)
-      }
+    val replicaManager = createReplicaManager()
+    try {
+      val tp = new TopicPartition(topic, 0)
+      val dir = replicaManager.logManager.liveLogDirs.head.getAbsolutePath
+      val errors = replicaManager.alterReplicaLogDirs(Map(tp -> dir))
+      assertEquals(Errors.REPLICA_NOT_AVAILABLE, errors(tp))
+    } finally {
+      replicaManager.shutdown(false)
     }
-
-    verifyAlterLogDirs(KAFKA_2_6_IV0, Errors.REPLICA_NOT_AVAILABLE)
-    verifyAlterLogDirs(KAFKA_2_7_IV0, Errors.NOT_LEADER_OR_FOLLOWER)
   }
 }
