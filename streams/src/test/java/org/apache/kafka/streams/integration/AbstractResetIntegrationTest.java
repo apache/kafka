@@ -45,6 +45,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
 
@@ -204,8 +205,8 @@ public abstract class AbstractResetIntegrationTest {
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.milliseconds());
         }
     }
-
-    void shouldNotAllowToResetWhileStreamsIsRunning() {
+ 
+    public void shouldNotAllowToResetWhileStreamsIsRunning() {
         appID = testId + "-not-reset-during-runtime";
         final String[] parameters = new String[] {
             "--application-id", appID,
@@ -261,6 +262,7 @@ public abstract class AbstractResetIntegrationTest {
         Assert.assertEquals(1, exitCode);
     }
 
+    @Test
     public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
         appID = testId + "-with-force-option";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
@@ -296,7 +298,8 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, "--force", null);
     }
 
-    void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
+    @Test
+    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
         appID = testId + "-from-scratch";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -327,7 +330,7 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, null, null);
     }
 
-    void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(final boolean useRepartitioned) throws Exception {
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(final boolean useRepartitioned) throws Exception {
         if (!useRepartitioned) {
             cluster.createTopic(INTERMEDIATE_USER_TOPIC);
         }
@@ -392,7 +395,8 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
-    void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
+    @Test
+    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
         appID = testId + "-from-file";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -432,7 +436,8 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, null, null);
     }
 
-    void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
+    @Test
+    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
         appID = testId + "-from-datetime";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -476,7 +481,8 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, null, null);
     }
 
-    void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
+    @Test
+    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
         appID = testId + "-from-duration";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 

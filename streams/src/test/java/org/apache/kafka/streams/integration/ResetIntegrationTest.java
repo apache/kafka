@@ -68,42 +68,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Test
-    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
-    }
-
-    @Test
-    public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
-        super.testResetWhenLongSessionTimeoutConfiguredWithForceOption();
-    }
-
-    @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
-    }
-
-    @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
-    }
-
-    @Test
-    public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromFileAfterResetWithoutIntermediateUserTopic();
-    }
-
-    @Test
-    public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic();
-    }
-
-    @Test
-    public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingByDurationAfterResetWithoutIntermediateUserTopic();
-    }
-
-    @Test
-    public void shouldNotAllowToResetWhileStreamsRunning() {
+    public void shouldNotAllowToResetWhileStreamsIsRunning() {
         super.shouldNotAllowToResetWhileStreamsIsRunning();
     }
 
@@ -116,4 +81,15 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
         super.shouldNotAllowToResetWhenIntermediateTopicAbsent();
     }
+
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
+    }
+
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
+    }
+
 }

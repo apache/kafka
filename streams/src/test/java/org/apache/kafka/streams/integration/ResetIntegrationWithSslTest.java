@@ -76,14 +76,9 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         prepareTest();
     }
 
-    @After
+    @After 
     public void after() throws Exception {
         cleanupTest();
-    }
-
-    @Test
-    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
     }
 
     @Test
@@ -95,4 +90,5 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
     public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
         super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
     }
+
 }
