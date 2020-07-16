@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 
 import java.util.Map;
 import java.util.HashMap;
@@ -229,8 +230,8 @@ public class MirrorConnectorConfig extends AbstractConfig {
         props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
-        props.put("enable.auto.commit", "false");
-        props.put("auto.offset.reset", "earliest");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         return props;
     }
 

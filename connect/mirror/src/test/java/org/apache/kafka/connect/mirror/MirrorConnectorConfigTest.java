@@ -110,6 +110,20 @@ public class MirrorConnectorConfigTest {
     }
 
     @Test
+    public void testConsumerRestOffsetLatestConfs() {
+        MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps("consumer.auto.offset.reset", "latest"));
+        Map<String, Object> sourceConf = config.sourceConsumerConfig();
+        assertEquals("latest", sourceConf.get("auto.offset.reset"));
+    }
+
+    @Test
+    public void testConsumerDefaultConfs() {
+        MirrorConnectorConfig config = new MirrorConnectorConfig(makeProps());
+        Map<String, Object> sourceConf = config.sourceConsumerConfig();
+        assertEquals("earliest", sourceConf.get("auto.offset.reset"));
+    }
+
+    @Test
     public void testNonMutationOfConfigDef() {
         Collection<String> taskSpecificProperties = Arrays.asList(
             MirrorConnectorConfig.TASK_TOPIC_PARTITIONS,
