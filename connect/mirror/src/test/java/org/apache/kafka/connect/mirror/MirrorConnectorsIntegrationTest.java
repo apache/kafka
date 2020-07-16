@@ -323,10 +323,12 @@ public class MirrorConnectorsIntegrationTest {
             throws InterruptedException {
         Admin backupClient = backup.kafka().createAdminClient();
         List<TopicPartition> tps = new ArrayList<>(NUM_PARTITIONS * topics.size());
-        IntStream.range(0, NUM_PARTITIONS).forEach(partitionInd -> {
-            for (String topic: topics) {
-                tps.add(new TopicPartition(topic, partitionInd));
-            }}
+        IntStream.range(0, NUM_PARTITIONS).forEach(
+            partitionInd -> {
+                for (String topic: topics) {
+                    tps.add(new TopicPartition(topic, partitionInd));
+                }
+            }
         );
         long expectedTotalOffsets = NUM_RECORDS_PRODUCED * topics.size();
 
@@ -336,7 +338,7 @@ public class MirrorConnectorsIntegrationTest {
             long consumerGroupOffsetTotal = consumerGroupOffsets.values().stream().mapToLong(metadata -> metadata.offset()).sum();
 
             Map<TopicPartition, Long> offsets = consumer.endOffsets(tps, Duration.ofMillis(500));
-            long totalOffsets = offsets.values().stream().mapToLong(l->l).sum();
+            long totalOffsets = offsets.values().stream().mapToLong(l -> l).sum();
 
             // make sure the consumer group offsets are synced to expected number
             return totalOffsets == expectedTotalOffsets && consumerGroupOffsetTotal > 0;
