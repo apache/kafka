@@ -27,11 +27,12 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class StreamThreadStateStoreProvider {
 
@@ -51,22 +52,19 @@ public class StreamThreadStateStoreProvider {
         final StreamThread.State state = streamThread.state();
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
             final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
-            final List<T> stores = new ArrayList<>();
             if (storeQueryParams.partition() != null) {
-                final Task streamTask = findStreamTask(tasks, storeName, storeQueryParams.partition());
-                if (streamTask != null) {
-                    final T store = validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id());
-                    if (store != null) {
-                        stores.add(store);
-                    }
-                }
+                return findStreamTask(tasks, storeName, storeQueryParams.partition()).
+                        map(streamTask ->
+                                validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id())).
+                        map(Collections::singletonList).
+                        orElse(Collections.emptyList());
             } else {
-                tasks.values().stream().
-                        map(streamTask -> validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id())).
+                return tasks.values().stream().
+                        map(streamTask ->
+                                validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id())).
                         filter(Objects::nonNull).
-                        forEach(stores::add);
+                        collect(Collectors.toList());
             }
-            return Collections.unmodifiableList(stores);
         } else {
             throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
                                                     state + ", not RUNNING" +
@@ -95,13 +93,12 @@ public class StreamThreadStateStoreProvider {
         }
     }
 
-    private Task findStreamTask(final Map<TaskId, ? extends Task> tasks, final String storeName, final int partition) {
+    private Optional<Task> findStreamTask(final Map<TaskId, ? extends Task> tasks, final String storeName, final int partition) {
         return tasks.entrySet().stream().
                 filter(entry -> entry.getKey().partition == partition &&
                         entry.getValue().getStore(storeName) != null &&
                         storeName.equals(entry.getValue().getStore(storeName).name())).
                 findFirst().
-                map(Map.Entry::getValue).
-                orElse(null);
+                map(Map.Entry::getValue);
     }
 }
