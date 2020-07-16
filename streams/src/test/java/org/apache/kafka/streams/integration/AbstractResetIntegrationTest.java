@@ -330,6 +330,16 @@ public abstract class AbstractResetIntegrationTest {
         cleanGlobal(false, null, null);
     }
 
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
+        testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
+    }
+
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
+        testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
+    }
+
     public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic(final boolean useRepartitioned) throws Exception {
         if (!useRepartitioned) {
             cluster.createTopic(INTERMEDIATE_USER_TOPIC);

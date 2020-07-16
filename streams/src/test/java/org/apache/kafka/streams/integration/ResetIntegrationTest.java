@@ -82,14 +82,4 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         super.shouldNotAllowToResetWhenIntermediateTopicAbsent();
     }
 
-    @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
-    }
-
-    @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
-    }
-
 }
