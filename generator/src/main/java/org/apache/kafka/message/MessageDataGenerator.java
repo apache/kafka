@@ -2021,7 +2021,7 @@ public final class MessageDataGenerator {
                         buffer.printf("_size += _bytesSize;%n");
                     }
                 } else if (field.type().isRecords()) {
-                    buffer.printf("int _bytesSize = %s.sizeInBytes();%n", field.camelCaseName());
+                    buffer.printf("_size += %s.sizeInBytes() + 4;%n", field.camelCaseName());
                 } else if (field.type().isStruct()) {
                     buffer.printf("int size = this.%s.size(_cache, _version);%n", field.camelCaseName());
                     if (tagged) {
