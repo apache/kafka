@@ -144,9 +144,8 @@ public class BackfillTokenBucket extends SampledStat {
         }
 
         public boolean isComplete(long timeMs, MetricConfig config) {
-            // TODO Handle time unit
             final double quota = config.quota().bound();
-            return value > quota * convert(config.timeWindowMs())
+            return value >= quota * convert(config.timeWindowMs())
                 && lastWindowMs + config.timeWindowMs() <= timeMs;
         }
 
