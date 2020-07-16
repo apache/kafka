@@ -50,6 +50,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   /**
     * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
     * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
+    *
+    * Note the replica fetch max bytes is set to `1` in order to throttle the rate of replication for test
+    * `testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress`.
     */
   override def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(
     numConfigs = 6,
@@ -57,15 +60,11 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3"),
     numPartitions = numPartitions,
     defaultReplicationFactor = defaultReplicationFactor,
-    replicaFetchMaxBytes = replicaFetchMaxBytes(),
+    replicaFetchMaxBytes = Some(1),
   ).map(KafkaConfig.fromProps)
 
   private val numPartitions = 1
   private val defaultReplicationFactor = 1.toShort
-
-  private def replicaFetchMaxBytes() =
-    if (testName.getMethodName == "testDescribeUnderReplicatedPartitionsWhenReassignmentIsInProgress") Some(1)
-    else None
 
   private var topicService: AdminClientTopicService = _
   private var adminClient: Admin = _
