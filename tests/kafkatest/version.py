@@ -62,6 +62,9 @@ class KafkaVersion(LooseVersion):
     def reassign_partitions_command_supports_bootstrap_server(self):
         return self >= V_2_5_0
 
+    def kafka_configs_command_uses_bootstrap_server(self):
+        return self >= V_2_6_0
+
 def get_version(node=None):
     """Return the version attached to the given node.
     Default to DEV_BRANCH if node or node.version is undefined (aka None)

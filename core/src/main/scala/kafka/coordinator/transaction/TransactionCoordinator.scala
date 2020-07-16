@@ -365,6 +365,7 @@ class TransactionCoordinator(brokerId: Int,
                              txnMarkerResult: TransactionResult,
                              isFromClient: Boolean,
                              responseCallback: EndTxnCallback): Unit = {
+    var isEpochFence = false
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
     else {
@@ -394,9 +395,10 @@ class TransactionCoordinator(brokerId: Int,
                 if (nextState == PrepareAbort && txnMetadata.pendingState.contains(PrepareEpochFence)) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
+                  isEpochFence = true
                   txnMetadata.pendingState = None
-                  txnMetadata.lastProducerEpoch = txnMetadata.producerEpoch
                   txnMetadata.producerEpoch = producerEpoch
+                  txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
                 }
 
                 Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, time.milliseconds()))
@@ -500,6 +502,22 @@ class TransactionCoordinator(brokerId: Int,
             } else {
               info(s"Aborting sending of transaction markers and returning $error error to client for $transactionalId's EndTransaction request of $txnMarkerResult, " +
                 s"since appending $newMetadata to transaction log with coordinator epoch $coordinatorEpoch failed")
+
+              if (isEpochFence) {
+                txnManager.getTransactionState(transactionalId).foreach {
+                  case None =>
+                    warn(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                      s"no metadata in the cache; this is not expected")
+
+                  case Some(epochAndMetadata) =>
+                    if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
+                      // This was attempted epoch fence that failed, so mark this state on the metadata
+                      epochAndMetadata.transactionMetadata.hasFailedEpochFence = true
+                      warn(s"The coordinator failed to write an epoch fence transition for producer $transactionalId to the transaction log " +
+                        s"with error $error. The epoch was increased to ${newMetadata.producerEpoch} but not returned to the client")
+                    }
+                }
+              }
 
               responseCallback(error)
             }

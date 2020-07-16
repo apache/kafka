@@ -492,8 +492,18 @@ public class ProducerConfig extends AbstractConfig {
         }
     }
 
+    /**
+     * @deprecated Since 2.7.0. This will be removed in a future major release.
+     */
+    @Deprecated
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
                                                             Serializer<?> keySerializer, Serializer<?> valueSerializer) {
+        return appendSerializerToConfig(configs, keySerializer, valueSerializer);
+    }
+
+    static Map<String, Object> appendSerializerToConfig(Map<String, Object> configs,
+            Serializer<?> keySerializer,
+            Serializer<?> valueSerializer) {
         Map<String, Object> newConfigs = new HashMap<>(configs);
         if (keySerializer != null)
             newConfigs.put(KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass());
@@ -502,6 +512,10 @@ public class ProducerConfig extends AbstractConfig {
         return newConfigs;
     }
 
+    /**
+     * @deprecated Since 2.7.0. This will be removed in a future major release.
+     */
+    @Deprecated
     public static Properties addSerializerToConfig(Properties properties,
                                                    Serializer<?> keySerializer,
                                                    Serializer<?> valueSerializer) {
