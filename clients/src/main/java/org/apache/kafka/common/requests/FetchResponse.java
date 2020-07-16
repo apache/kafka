@@ -39,7 +39,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -120,13 +119,28 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     }
 
     public static final class PartitionData<T extends BaseRecords> {
-        public final Errors error;
-        public final long highWatermark;
-        public final long lastStableOffset;
-        public final long logStartOffset;
-        public final Optional<Integer> preferredReadReplica;
-        public final List<AbortedTransaction> abortedTransactions;
-        public final T records;
+        private final FetchResponseData.FetchablePartitionResponse partitionResponse;
+
+        // Derived fields
+        private final Optional<Integer> preferredReplica;
+        private final List<AbortedTransaction> abortedTransactions;
+        private final Errors error;
+
+        public PartitionData(FetchResponseData.FetchablePartitionResponse partitionResponse) {
+            this.partitionResponse = partitionResponse;
+            this.preferredReplica = Optional.of(partitionResponse.partitionHeader().preferredReadReplica())
+                .filter(replicaId -> replicaId != INVALID_PREFERRED_REPLICA_ID);
+
+            if (partitionResponse.partitionHeader().abortedTransactions() == null) {
+                this.abortedTransactions = null;
+            } else {
+                this.abortedTransactions = partitionResponse.partitionHeader().abortedTransactions().stream()
+                    .map(AbortedTransaction::fromMessage)
+                    .collect(Collectors.toList());
+            }
+
+            this.error = Errors.forCode(partitionResponse.partitionHeader().errorCode());
+        }
 
         public PartitionData(Errors error,
                              long highWatermark,
@@ -135,13 +149,27 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              Optional<Integer> preferredReadReplica,
                              List<AbortedTransaction> abortedTransactions,
                              T records) {
-            this.error = error;
-            this.highWatermark = highWatermark;
-            this.lastStableOffset = lastStableOffset;
-            this.logStartOffset = logStartOffset;
-            this.preferredReadReplica = preferredReadReplica;
+            this.preferredReplica = preferredReadReplica;
             this.abortedTransactions = abortedTransactions;
-            this.records = records;
+            this.error = error;
+            FetchResponseData.PartitionHeader partitionHeader = new FetchResponseData.PartitionHeader();
+            partitionHeader.setErrorCode(error.code())
+                .setHighWatermark(highWatermark)
+                .setLastStableOffset(lastStableOffset)
+                .setLogStartOffset(logStartOffset);
+            if (abortedTransactions != null) {
+                partitionHeader.setAbortedTransactions(abortedTransactions.stream().map(
+                    aborted -> new FetchResponseData.AbortedTransaction()
+                        .setProducerId(aborted.producerId)
+                        .setFirstOffset(aborted.firstOffset))
+                    .collect(Collectors.toList()));
+            } else {
+                partitionHeader.setAbortedTransactions(null);
+            }
+            partitionHeader.setPreferredReadReplica(preferredReadReplica.orElse(INVALID_PREFERRED_REPLICA_ID));
+            this.partitionResponse = new FetchResponseData.FetchablePartitionResponse()
+                .setPartitionHeader(partitionHeader)
+                .setRecordSet(records);
         }
 
         public PartitionData(Errors error,
@@ -150,13 +178,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              long logStartOffset,
                              List<AbortedTransaction> abortedTransactions,
                              T records) {
-            this.error = error;
-            this.highWatermark = highWatermark;
-            this.lastStableOffset = lastStableOffset;
-            this.logStartOffset = logStartOffset;
-            this.preferredReadReplica = Optional.empty();
-            this.abortedTransactions = abortedTransactions;
-            this.records = records;
+            this(error, highWatermark, lastStableOffset, logStartOffset, Optional.empty(), abortedTransactions, records);
         }
 
         @Override
@@ -168,38 +190,53 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
             PartitionData that = (PartitionData) o;
 
-            return error == that.error &&
-                    highWatermark == that.highWatermark &&
-                    lastStableOffset == that.lastStableOffset &&
-                    logStartOffset == that.logStartOffset &&
-                    Objects.equals(preferredReadReplica, that.preferredReadReplica) &&
-                    Objects.equals(abortedTransactions, that.abortedTransactions) &&
-                    Objects.equals(records, that.records);
+            return this.partitionResponse.equals(that.partitionResponse);
         }
 
         @Override
         public int hashCode() {
-            int result = error != null ? error.hashCode() : 0;
-            result = 31 * result + Long.hashCode(highWatermark);
-            result = 31 * result + Long.hashCode(lastStableOffset);
-            result = 31 * result + Long.hashCode(logStartOffset);
-            result = 31 * result + Objects.hashCode(preferredReadReplica);
-            result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
-            result = 31 * result + (records != null ? records.hashCode() : 0);
-            return result;
+            return this.partitionResponse.hashCode();
         }
 
         @Override
         public String toString() {
-            return "(error=" + error +
-                    ", highWaterMark=" + highWatermark +
-                    ", lastStableOffset = " + lastStableOffset +
-                    ", logStartOffset = " + logStartOffset +
-                    ", preferredReadReplica = " + preferredReadReplica.map(Object::toString).orElse("absent") +
-                    ", abortedTransactions = " + abortedTransactions +
-                    ", recordsSizeInBytes=" + records.sizeInBytes() + ")";
+            return "(error=" + error() +
+                    ", highWaterMark=" + highWatermark() +
+                    ", lastStableOffset = " + lastStableOffset() +
+                    ", logStartOffset = " + logStartOffset() +
+                    ", preferredReadReplica = " + preferredReadReplica().map(Object::toString).orElse("absent") +
+                    ", abortedTransactions = " + abortedTransactions() +
+                    ", recordsSizeInBytes=" + records().sizeInBytes() + ")";
         }
 
+        public Errors error() {
+            return error;
+        }
+
+        public long highWatermark() {
+            return partitionResponse.partitionHeader().highWatermark();
+        }
+
+        public long lastStableOffset() {
+            return partitionResponse.partitionHeader().lastStableOffset();
+        }
+
+        public long logStartOffset() {
+            return partitionResponse.partitionHeader().logStartOffset();
+        }
+
+        public Optional<Integer> preferredReadReplica() {
+            return preferredReplica;
+        }
+
+        public List<AbortedTransaction> abortedTransactions() {
+            return abortedTransactions;
+        }
+
+        @SuppressWarnings("unchecked")
+        public T records() {
+            return (T) partitionResponse.recordSet();
+        }
     }
 
     /**
@@ -280,7 +317,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         responseDataMap.values().forEach(response ->
-            updateErrorCounts(errorCounts, response.error)
+            updateErrorCounts(errorCounts, response.error())
         );
         return errorCounts;
     }
@@ -300,28 +337,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             topicResponse.partitionResponses().forEach(partitionResponse -> {
                 FetchResponseData.PartitionHeader partitionHeader = partitionResponse.partitionHeader();
                 TopicPartition tp = new TopicPartition(topicResponse.topic(), partitionHeader.partition());
-
-                Optional<Integer> preferredReplica = Optional.of(partitionHeader.preferredReadReplica())
-                    .filter(replicaId -> replicaId != INVALID_PREFERRED_REPLICA_ID);
-
-                final List<AbortedTransaction> abortedTransactions;
-                if (partitionHeader.abortedTransactions() == null) {
-                    abortedTransactions = null;
-                } else {
-                    abortedTransactions = partitionHeader.abortedTransactions().stream()
-                            .map(AbortedTransaction::fromMessage)
-                            .collect(Collectors.toList());
-                }
-                PartitionData<T> partitionData = new PartitionData<>(
-                    Errors.forCode(partitionHeader.errorCode()),
-                      partitionHeader.highWatermark(),
-                      partitionHeader.lastStableOffset(),
-                      partitionHeader.logStartOffset(),
-                    preferredReplica,
-                    abortedTransactions,
-                    (T) partitionResponse.recordSet()
-                );
-
+                PartitionData<T> partitionData = new PartitionData<>(partitionResponse);
                 responseMap.put(tp, partitionData);
             });
         });
@@ -342,28 +358,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         topicsData.forEach(partitionDataTopicAndPartitionData -> {
             List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
             partitionDataTopicAndPartitionData.partitions.forEach((partitionId, partitionData) -> {
-                FetchResponseData.FetchablePartitionResponse partitionResponse =
-                    new FetchResponseData.FetchablePartitionResponse();
-                FetchResponseData.PartitionHeader partitionHeader = new FetchResponseData.PartitionHeader();
-                partitionHeader.setPartition(partitionId)
-                        .setErrorCode(partitionData.error.code()).setHighWatermark(partitionData.highWatermark)
-                        .setHighWatermark(partitionData.highWatermark)
-                        .setLastStableOffset(partitionData.lastStableOffset)
-                        .setLogStartOffset(partitionData.logStartOffset);
-                if (partitionData.abortedTransactions != null) {
-                    partitionHeader.setAbortedTransactions(partitionData.abortedTransactions.stream().map(
-                        aborted -> new FetchResponseData.AbortedTransaction()
-                                .setProducerId(aborted.producerId)
-                                .setFirstOffset(aborted.firstOffset))
-                        .collect(Collectors.toList()));
-                } else {
-                    partitionHeader.setAbortedTransactions(null);
-                }
-                partitionHeader
-                    .setPreferredReadReplica(partitionData.preferredReadReplica.orElse(INVALID_PREFERRED_REPLICA_ID));
-                partitionResponse.setPartitionHeader(partitionHeader);
-                partitionResponse.setRecordSet(partitionData.records);
-                partitionResponses.add(partitionResponse);
+                partitionData.partitionResponse.partitionHeader().setPartition(partitionId);
+                partitionResponses.add(partitionData.partitionResponse);
             });
             topicResponseList.add(new FetchResponseData.FetchableTopicResponse()
                 .setTopic(partitionDataTopicAndPartitionData.topic)
