@@ -140,12 +140,10 @@ class ControllerEventManagerTest {
     val metricName = "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs"
     val controllerStats = new ControllerStats
     val time = new MockTime()
-    val latch = new CountDownLatch(1)
     val processedEvents = new AtomicInteger()
 
     val eventProcessor = new ControllerEventProcessor {
       override def process(event: ControllerEvent): Unit = {
-        latch.await()
         processedEvents.incrementAndGet()
       }
       override def preempt(event: ControllerEvent): Unit = {}
@@ -157,7 +155,6 @@ class ControllerEventManagerTest {
 
     controllerEventManager.put(TopicChange)
     controllerEventManager.put(TopicChange)
-    latch.countDown()
 
     TestUtils.waitUntilTrue(() => processedEvents.get() == 2,
       "Timed out waiting for processing of all events")

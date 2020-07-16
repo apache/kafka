@@ -70,7 +70,7 @@ class ControllerEventManager(controllerId: Int,
                              processor: ControllerEventProcessor,
                              time: Time,
                              rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
-                             eventQueueTimeTimeoutMs: Long = 60000) extends KafkaMetricsGroup {
+                             eventQueueTimeTimeoutMs: Long = 300000) extends KafkaMetricsGroup {
   import ControllerEventManager._
 
   @volatile private var _state: ControllerState = ControllerState.Idle
