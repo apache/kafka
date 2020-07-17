@@ -33,8 +33,8 @@ def retryFlagsString(jobConfig) {
 }
 
 def downstreamBuildFailureOutput = ""
-def publishStep(String configSettings) {
-    withVaultFile([["gradle/artifactory_snapshots_settings", "settings_file", "${env.WORKSPACE}/init.gradle", "GRADLE_NEXUS_SETTINGS"]]) {
+def publishStep(String vaultSecret) {
+    withVaultFile([["gradle/${vaultSecret}", "settings_file", "${env.WORKSPACE}/init.gradle", "GRADLE_NEXUS_SETTINGS"]]) {
         sh "./gradlewAll --init-script ${GRADLE_NEXUS_SETTINGS} --no-daemon uploadArchives"
     }
 }
@@ -62,9 +62,9 @@ def job = {
     if (config.publish) {
       stage("Publish to artifactory") {
         if (config.isDevJob) {
-          publishStep('Gradle-Artifactory-Settings')
+          publishStep('artifactory_snapshots_settings')
         } else if (config.isPreviewJob) {
-          publishStep('Gradle-Artifactory-Preview-Release-Settings')
+          publishStep('artifactory_preview_release_settings')
         }
       }
     }
