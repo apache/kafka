@@ -870,7 +870,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(OptionalInt.empty(), transactionManager.lastAckedSequence(tp0));
 
-        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.NOT_LEADER_FOR_PARTITION, -1));
+        client.respondToRequest(firstClientRequest, produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, -1));
 
         sender.runOnce(); // receive response 0
 
@@ -1086,7 +1086,7 @@ public class SenderTest {
 
         assertEquals(2, client.inFlightRequestCount());
 
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
         sender.runOnce();  // receive first response
 
         Node node = metadata.fetch().nodes().get(0);
@@ -1142,7 +1142,7 @@ public class SenderTest {
 
         assertEquals(2, client.inFlightRequestCount());
 
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
         sender.runOnce();  // receive first response
 
         Node node = metadata.fetch().nodes().get(0);
@@ -1172,7 +1172,7 @@ public class SenderTest {
         // Send first ProduceRequest
         Future<RecordMetadata> request1 = appendToAccumulator(tp0, 0L, "key", "value");
         sender.runOnce();  // send request
-        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_FOR_PARTITION, -1);
+        sendIdempotentProducerResponse(0, tp0, Errors.NOT_LEADER_OR_FOLLOWER, -1);
 
         sender.runOnce();  // receive response
         assertEquals(1L, transactionManager.sequenceNumber(tp0).longValue());
@@ -1219,7 +1219,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
 
@@ -1260,7 +1260,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.initiateClose(); // initiate close
@@ -1293,7 +1293,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.runOnce(); // out of order sequence error triggers producer ID reset because epoch is maxed out
@@ -1327,7 +1327,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
 
         Map<TopicPartition, OffsetAndError> responses = new LinkedHashMap<>();
-        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_FOR_PARTITION));
+        responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
         responses.put(tp0, new OffsetAndError(-1, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER));
         client.respond(produceResponse(responses));
         sender.runOnce();
@@ -1338,7 +1338,7 @@ public class SenderTest {
 
         assertFalse(successfulResponse.isDone());
         // The response comes back with a retriable error.
-        client.respond(produceResponse(tp1, 0, Errors.NOT_LEADER_FOR_PARTITION, -1));
+        client.respond(produceResponse(tp1, 0, Errors.NOT_LEADER_OR_FOLLOWER, -1));
         sender.runOnce();
 
         // The response
@@ -2149,7 +2149,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         time.sleep(deliverTimeoutMs);
 
-        client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_FOR_PARTITION, -1)); // return a retriable error
+        client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_OR_FOLLOWER, -1)); // return a retriable error
 
         sender.runOnce();  // expire the batch
         assertTrue(request1.isDone());

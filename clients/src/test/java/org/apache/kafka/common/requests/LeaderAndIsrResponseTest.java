@@ -66,7 +66,7 @@ public class LeaderAndIsrResponseTest {
     @Test
     public void testErrorCountsWithTopLevelError() {
         List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
-            asList(Errors.NONE, Errors.NOT_LEADER_FOR_PARTITION));
+            asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
             .setPartitionErrors(partitions));
