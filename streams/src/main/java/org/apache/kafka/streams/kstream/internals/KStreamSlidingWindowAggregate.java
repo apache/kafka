@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -35,9 +34,6 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
@@ -124,49 +120,73 @@ public class KStreamSlidingWindowAggregate<K, V, Agg, W extends Window> implemen
             final long timestamp = context().timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
-            //BRANCH HERE IF DOING SLIDING/TIME IN SAME CLASS
 
-            TimeWindow leftWindow = new TimeWindow(timestamp-windows.size(), timestamp);
-            TimeWindow rightWindow = new TimeWindow(timestamp+1, timestamp+1+windows.size());
+            final TimeWindow leftWindow = new TimeWindow(timestamp - windows.size(), timestamp);
+            final TimeWindow rightWindow = new TimeWindow(timestamp + 1, timestamp + 1 + windows.size());
 
             Agg oldAgg = initializer.apply();
-            try(
+            try (
                     //fetch all might pull the wrong windows
                     final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetchAll(
-                            timestamp-windows.size(),
+                            timestamp - windows.size(),
                             timestamp
                     )
-            ){
-                while(iterator.hasNext()){
+            ) {
+                while (iterator.hasNext()) {
                     final Agg newAgg;
                     final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next = iterator.next();
                     oldAgg = getValueOrNull(next.value);
                     newAgg = aggregator.apply(key, value, oldAgg);
-                    windowStore.put(next.key, ValueAndTimestamp.make(newAgg, next.value.timestamp()), next.key);
+                    windowStore.put(next.key.key(),
+                            ValueAndTimestamp.make(newAgg, next.value.timestamp()),
+                            next.value.timestamp());
                     tupleForwarder.maybeForward(
-                            new Windowed<>(key, next.value),
+                            next.key,
                             newAgg,
                             sendOldValues ? oldAgg : null,
                             next.value.timestamp());
                 }
                 //check to see if new right windows exist? otherwise update?
                 final ValueAndTimestamp<Agg> rightWindowAggAndTimestamp = windowStore.fetch(key, rightWindow.start());
-                Agg recordAgg = getValueOrNull(rightWindowAggAndTimestamp);
-                if(recordAgg == null){
-                   recordAgg = initializer.apply();
-                   recordAgg = aggregator.apply(key, value, recordAgg);
-
-                   windowStore.put(key,
-                           ValueAndTimestamp.make(recordAgg, rightWindowAggAndTimestamp.timestamp()),
-                           rightWindow.start());
+                final Agg recordAgg = getValueOrNull(rightWindowAggAndTimestamp);
+                if (recordAgg == null && timestamp != observedStreamTime) {
+                    windowStore.put(key,
+                            ValueAndTimestamp.make(oldAgg, rightWindowAggAndTimestamp.timestamp()),
+                            rightWindow.start());
                     tupleForwarder.maybeForward(
-                            new Windowed<>(key, entry.getValue()),
-                            newAgg,
-                            sendOldValues ? oldAgg : null,
-                            newTimestamp);
+                            new Windowed<K>(key, rightWindow),
+                            oldAgg,
+                            sendOldValues ? null : null,
+                            rightWindowAggAndTimestamp.timestamp());
 
                 }
 
+            }
+
+            //need to have a check for if the windwos are supposed to stay empty
+            try (
+                    //fetch all might pull the wrong windows
+                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetchAll(
+                            timestamp - windows.size() - windows.size(),
+                            timestamp - windows.size()
+                    )
+            ) {
+                Agg storedAgg = initializer.apply();
+                while (iterator.hasNext()) {
+                    final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next = iterator.next();
+                    storedAgg = getValueOrNull(next.value);
+                }
+                //We've found an updated value for the new window
+                if (storedAgg != initializer.apply()) {
+                    windowStore.put(key,
+                            ValueAndTimestamp.make(storedAgg, leftWindow.start()),
+                            leftWindow.start());
+                    tupleForwarder.maybeForward(
+                            new Windowed<K>(key, leftWindow),
+                            storedAgg,
+                            sendOldValues ? null : null,
+                            leftWindow.start());
+                }
             }
 
 

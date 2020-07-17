@@ -95,7 +95,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        if (windows instanceof SlidingWindows){
+        if (windows instanceof SlidingWindows) {
             return aggregateBuilder.build(
                     new NamedInternal(aggregateName),
                     materialize(materializedInternal),
@@ -103,15 +103,16 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                     materializedInternal.queryableStoreName(),
                     materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                     materializedInternal.valueSerde());
-        }
-        else
+        } else {
             return aggregateBuilder.build(
-                new NamedInternal(aggregateName),
-                materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
-                materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                materializedInternal.valueSerde());
+                    new NamedInternal(aggregateName),
+                    materialize(materializedInternal),
+                    new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+                    materializedInternal.queryableStoreName(),
+                    materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+                    materializedInternal.valueSerde());
+        }
+
     }
 
     @Override
@@ -150,7 +151,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        if (windows instanceof SlidingWindows){
+        if (windows instanceof SlidingWindows) {
             return aggregateBuilder.build(
                     new NamedInternal(aggregateName),
                     materialize(materializedInternal),
@@ -158,8 +159,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                     materializedInternal.queryableStoreName(),
                     materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                     materializedInternal.valueSerde());
-        }
-        else{
+        } else {
             return aggregateBuilder.build(
                     new NamedInternal(aggregateName),
                     materialize(materializedInternal),
@@ -206,7 +206,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
-        if (windows instanceof SlidingWindows){
+        if (windows instanceof SlidingWindows) {
             return aggregateBuilder.build(
                     new NamedInternal(reduceName),
                     materialize(materializedInternal),
@@ -214,8 +214,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                     materializedInternal.queryableStoreName(),
                     materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
                     materializedInternal.valueSerde());
-        }
-        else{
+        } else {
             return aggregateBuilder.build(
                     new NamedInternal(reduceName),
                     materialize(materializedInternal),

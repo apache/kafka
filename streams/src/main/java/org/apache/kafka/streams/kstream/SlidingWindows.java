@@ -19,15 +19,12 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.time.Duration;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
-import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 /**
  * The fixed-size sliding window specifications used for aggregations.
@@ -63,7 +60,7 @@ public final class SlidingWindows extends Windows<TimeWindow> {
 
     }
 
-    public static SlidingWindows of(final Duration size) throws IllegalArgumentException{
+    public static SlidingWindows of(final Duration size) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
         final long sizeMs = ApiUtils.validateMillisecondDuration(size, msgPrefix);
         if (sizeMs <= 0) {
