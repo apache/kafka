@@ -40,17 +40,17 @@ object GetOffsetShell {
                            .withRequiredArg
                            .describedAs("hostname:port,...,hostname:port")
                            .ofType(classOf[String])
-    val topicPartitionOpt = parser.accepts("topic-partitions", "Comma separated list of topic-partition specifications to get the offsets for, with the format of topic:partition. The 'topic' part can be a regex or may be omitted to only specify the partitions, and query all topics." +
+    val topicPartitionOpt = parser.accepts("topic-partitions", "Comma separated list of topic-partition specifications to get the offsets for, with the format of topic:partition. The 'topic' part can be a regex or may be omitted to only specify the partitions, and query all authorized topics." +
                                             " The 'partition' part can be: a number, a range in the format of 'NUMBER-NUMBER' (lower inclusive, upper exclusive), an inclusive lower bound in the format of 'NUMBER-', an exclusive upper bound in the format of '-NUMBER' or may be omitted to accept all partitions of the specified topic.")
                            .withRequiredArg
                            .describedAs("topic:partition,...,topic:partition")
                            .ofType(classOf[String])
                            .defaultsTo("")
-    val topicOpt = parser.accepts("topic", s"The topic to get the offsets for. It also accepts a regular expression. If not present, all topics are queried. Ignored if $topicPartitionOpt is present.")
+    val topicOpt = parser.accepts("topic", s"The topic to get the offsets for. It also accepts a regular expression. If not present, all authorized topics are queried. Ignored if $topicPartitionOpt is present.")
                            .withRequiredArg
                            .describedAs("topic")
                            .ofType(classOf[String])
-    val partitionOpt = parser.accepts("partitions", s"Comma separated list of partition ids to get the offsets for. If not present, all partitions of the topics are queried. Ignored if $topicPartitionOpt is present.")
+    val partitionOpt = parser.accepts("partitions", s"Comma separated list of partition ids to get the offsets for. If not present, all partitions of the authorized topics are queried. Ignored if $topicPartitionOpt is present.")
                            .withRequiredArg
                            .describedAs("partition ids")
                            .ofType(classOf[String])
