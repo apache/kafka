@@ -126,7 +126,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         private final List<AbortedTransaction> abortedTransactions;
         private final Errors error;
 
-        public PartitionData(FetchResponseData.FetchablePartitionResponse partitionResponse) {
+        private PartitionData(FetchResponseData.FetchablePartitionResponse partitionResponse) {
+            // We partially construct FetchablePartitionResponse since we don't know the partition ID at this point
+            // When we convert the PartitionData (and other fields) into FetchResponseData down in toMessage, we
+            // set the partition IDs.
             this.partitionResponse = partitionResponse;
             this.preferredReplica = Optional.of(partitionResponse.partitionHeader().preferredReadReplica())
                 .filter(replicaId -> replicaId != INVALID_PREFERRED_REPLICA_ID);
@@ -358,6 +361,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         topicsData.forEach(partitionDataTopicAndPartitionData -> {
             List<FetchResponseData.FetchablePartitionResponse> partitionResponses = new ArrayList<>();
             partitionDataTopicAndPartitionData.partitions.forEach((partitionId, partitionData) -> {
+                // Since PartitionData alone doesn't know the partition ID, we set it here
                 partitionData.partitionResponse.partitionHeader().setPartition(partitionId);
                 partitionResponses.add(partitionData.partitionResponse);
             });
