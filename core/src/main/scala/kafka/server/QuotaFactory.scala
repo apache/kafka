@@ -20,7 +20,6 @@ import kafka.server.QuotaType._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.metrics.Sensor.QuotaEnforcementType
 import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaType
@@ -77,10 +76,8 @@ object QuotaFactory extends Logging {
     val clientQuotaCallback = Option(cfg.getConfiguredInstance(KafkaConfig.ClientQuotaCallbackClassProp,
       classOf[ClientQuotaCallback]))
     QuotaManagers(
-      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, QuotaEnforcementType.PERMISSIVE, time,
-        threadNamePrefix, clientQuotaCallback),
-      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, QuotaEnforcementType.PERMISSIVE, time,
-        threadNamePrefix, clientQuotaCallback),
+      new ClientQuotaManager(clientFetchConfig(cfg), metrics, Fetch, time, threadNamePrefix, clientQuotaCallback),
+      new ClientQuotaManager(clientProduceConfig(cfg), metrics, Produce, time, threadNamePrefix, clientQuotaCallback),
       new ClientRequestQuotaManager(clientRequestConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallback),
       new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time,
         threadNamePrefix, clientQuotaCallback),

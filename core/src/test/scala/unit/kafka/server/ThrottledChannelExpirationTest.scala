@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.server
-
 
 import java.net.InetAddress
 import java.util
@@ -28,7 +26,6 @@ import kafka.network.RequestChannel.{EndThrottlingResponse, Response, StartThrot
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.MetricConfig
-import org.apache.kafka.common.metrics.Sensor.QuotaEnforcementType
 import org.apache.kafka.common.network.ClientInformation
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -77,7 +74,7 @@ class ThrottledChannelExpirationTest {
 
   @Test
   def testCallbackInvocationAfterExpiration(): Unit = {
-    val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, QuotaEnforcementType.PERMISSIVE, time, "")
+    val clientMetrics = new ClientQuotaManager(ClientQuotaManagerConfig(), metrics, QuotaType.Produce, time, "")
 
     val delayQueue = new DelayQueue[ThrottledChannel]()
     val reaper = new clientMetrics.ThrottledChannelReaper(delayQueue, "")

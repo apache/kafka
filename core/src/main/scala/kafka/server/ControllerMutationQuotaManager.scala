@@ -140,13 +140,37 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
                                      private val time: Time,
                                      private val threadNamePrefix: String,
                                      private val quotaCallback: Option[ClientQuotaCallback])
-    extends ClientQuotaManager(config, metrics, QuotaType.ControllerMutation, QuotaEnforcementType.STRICT,
-      time, threadNamePrefix, quotaCallback) {
+    extends ClientQuotaManager(config, metrics, QuotaType.ControllerMutation, time, threadNamePrefix, quotaCallback) {
 
   override protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
     metrics.metricName("mutation-rate", QuotaType.ControllerMutation.toString,
       "Tracking mutation-rate per user/client-id",
       quotaMetricTags.asJava)
+  }
+
+  /**
+   * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
+   * the specified time, returns throttle time in milliseconds. The implementation use the STRICT
+   * enforcement type.
+   *
+   * @param session The session from which the user is extracted
+   * @param clientId The client id
+   * @param value The value to accumulate
+   * @param timeMs The time at which to accumulate the value
+   * @return The throttle time in milliseconds defines as the time to wait until the average
+   *         rate gets back to the defined quota
+   */
+  override def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
+    val clientSensors = getOrCreateQuotaSensors(session, clientId)
+    try {
+      clientSensors.quotaSensor.record(value, timeMs, QuotaEnforcementType.STRICT)
+      0
+    } catch {
+      case e: QuotaViolationException =>
+        val throttleTimeMs = throttleTime(e, timeMs).toInt
+        debug(s"Quota violated for sensor (${clientSensors.quotaSensor.name}). Delay time: ($throttleTimeMs)")
+        throttleTimeMs
+    }
   }
 
   /**

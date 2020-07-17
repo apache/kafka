@@ -180,8 +180,6 @@ object ClientQuotaManager {
  * @param config @ClientQuotaManagerConfig quota configs
  * @param metrics @Metrics Metrics instance
  * @param quotaType Quota type of this quota manager
- * @param quotaEnforcementType Quota enforcement type of this quota manager. Refers to the
- *                             documentation of {recordAndGetThrottleTimeMs} for details
  * @param time @Time object to use
  * @param threadNamePrefix The thread prefix to use
  * @param clientQuotaCallback An optional @ClientQuotaCallback
@@ -189,7 +187,6 @@ object ClientQuotaManager {
 class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val quotaType: QuotaType,
-                         private val quotaEnforcementType: QuotaEnforcementType,
                          private val time: Time,
                          private val threadNamePrefix: String,
                          private val clientQuotaCallback: Option[ClientQuotaCallback] = None) extends Logging {
@@ -267,14 +264,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   /**
    * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
-   * the specified time, returns throttle time in milliseconds. Depending on the {QuotaEnforcementType}
-   * used, the behavior of this method changes:
-   * - QuotaEnforcementType.Strict verifies the quota is not violated before accumulating the
-   *   provided value. If it is, the value is not accumulated and the throttle time represents
-   *   the time to wait before the quota comes back to the defined limit.
-   * - QuotaEnforcementType.PERMISSIVE verifies the quota is not violated after accumulating the
-   *   provided value. If it is, the value is still accumulated and the throttle time represents
-   *   the time to wait before the quota comes back to the defined limit.
+   * the specified time, returns throttle time in milliseconds. The implementation use the PERMISSIVE
+   * enforcement type that verifies the quota is not violated after accumulating the provided value.
+   * If it is, the value is still accumulated and the throttle time represents the time to wait before
+   * the quota comes back to the defined limit.
    *
    * @param session The session from which the user is extracted
    * @param clientId The client id
@@ -286,7 +279,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
     try {
-      clientSensors.quotaSensor.record(value, timeMs, quotaEnforcementType)
+      clientSensors.quotaSensor.record(value, timeMs, QuotaEnforcementType.PERMISSIVE)
       0
     } catch {
       case e: QuotaViolationException =>
