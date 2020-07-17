@@ -193,7 +193,6 @@
           <tr class="row-even"><td>cache.max.bytes.buffering</td>
             <td>Medium</td>
             <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
-            <td colspan="2">Maximum number of memory bytes to be used for record caches across all threads.</td>
             <td>10485760 bytes</td>
           </tr>
           <tr class="row-odd"><td>client.id</td>
@@ -355,10 +354,17 @@
           <h4><a class="toc-backref" href="#id27">acceptable.recovery.lag</a><a class="headerlink" href="#acceptable-recovery-lag" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div>
+              <p>
               The maximum acceptable lag (total number of offsets to catch up from the changelog) for an instance to be considered caught-up and able to receive an active task. Streams will only assign
               stateful active tasks to instances whose state stores are within the acceptable recovery lag, if any exist, and assign warmup replicas to restore state in the background for instances
               that are not yet caught up. Should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.
-            </div></blockquote>
+              </p>
+              <p>
+                Note: if you set this to <code>Long.MAX_VALUE</code> it effectively disables the warmup replicas and task high availability, allowing Streams to immediately produce a balanced
+                assignment and migrate tasks to a new instance without first warming them up.
+              </p>
+            </div>
+          </blockquote>
         </div>
         <div class="section" id="default-deserialization-exception-handler">
           <span id="streams-developer-guide-deh"></span><h4><a class="toc-backref" href="#id7">default.deserialization.exception.handler</a><a class="headerlink" href="#default-deserialization-exception-handler" title="Permalink to this headline"></a></h4>

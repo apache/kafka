@@ -112,7 +112,7 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
                   <p>For more information, see <a class="reference internal" href="config-streams.html#num-standby-replicas"><span class="std std-ref">Standby Replicas</span></a>.</p>
                   <p>
                       As of version 2.6, Streams will now do most of a task's restoration in the background through warmup replicas. These will be assigned to instances that need to restore a lot of state for a task.
-                      A stateful active task will only be assigned to an instance once it's state is within the configured
+                      A stateful active task will only be assigned to an instance once its state is within the configured
                       <a class="reference internal" href="config-streams.html#acceptable-recovery-lag"><span class="std std-ref"><code>acceptable.recovery.lag</code></span></a>, if one exists. This means that
                       most of the time, a task migration will <b>not</b> result in downtime for that task. It will remain active on the instance that's already caught up, while the instance that it's being
                       migrated to works on restoring the state. Streams will <a class="reference internal" href="config-streams.html#probing-rebalance-interval-ms"><span class="std std-ref">regularly probe</span></a> for warmup tasks that have finished restoring and transition them to active tasks when ready.
