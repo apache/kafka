@@ -17,27 +17,31 @@
 package org.apache.kafka.common.errors;
 
 /**
- * This server is not the leader for the given partition.
- * @deprecated since 2.7. Use {@link NotLeaderOrFollowerException}.
+ * Broker returns this error if a request could not be processed because the broker is not the leader
+ * or follower for a topic partition. This could be a transient exception during leader elections and
+ * reassignments. For `Produce` and other requests which are intended only for the leader, this exception
+ * indicates that the broker is not the current leader. For consumer `Fetch` requests which may be
+ * satisfied by a leader or follower, this exception indicates that the broker is not a replica
+ * of the topic partition.
  */
-@Deprecated
-public class NotLeaderForPartitionException extends InvalidMetadataException {
+@SuppressWarnings("deprecation")
+public class NotLeaderOrFollowerException extends NotLeaderForPartitionException {
 
     private static final long serialVersionUID = 1L;
 
-    public NotLeaderForPartitionException() {
+    public NotLeaderOrFollowerException() {
         super();
     }
 
-    public NotLeaderForPartitionException(String message) {
+    public NotLeaderOrFollowerException(String message) {
         super(message);
     }
 
-    public NotLeaderForPartitionException(Throwable cause) {
+    public NotLeaderOrFollowerException(Throwable cause) {
         super(cause);
     }
 
-    public NotLeaderForPartitionException(String message, Throwable cause) {
+    public NotLeaderOrFollowerException(String message, Throwable cause) {
         super(message, cause);
     }
 

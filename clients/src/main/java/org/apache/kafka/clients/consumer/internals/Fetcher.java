@@ -1043,7 +1043,7 @@ public class Fetcher<K, V> implements Closeable {
                     log.debug("Cannot search by timestamp for partition {} because the message format version " +
                                   "is before 0.10.0", topicPartition);
                     break;
-                case NOT_LEADER_FOR_PARTITION:
+                case NOT_LEADER_OR_FOLLOWER:
                 case REPLICA_NOT_AVAILABLE:
                 case KAFKA_STORAGE_ERROR:
                 case OFFSET_NOT_AVAILABLE:
@@ -1274,7 +1274,7 @@ public class Fetcher<K, V> implements Closeable {
                 }
 
                 nextCompletedFetch.initialized = true;
-            } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
+            } else if (error == Errors.NOT_LEADER_OR_FOLLOWER ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
                        error == Errors.KAFKA_STORAGE_ERROR ||
                        error == Errors.FENCED_LEADER_EPOCH ||

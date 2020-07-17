@@ -128,7 +128,33 @@
     </ul>
 
     <p>
-	Note, that the describe default behavior can be changed in the Processor API by assigning timestamps to output records explicitly when calling <code>#forward()</code>.
+        You can change the default behavior in the Processor API by assigning
+        timestamps to output records explicitly when calling <code>#forward()</code>.
+    </p>
+
+    <p>
+        For aggregations and joins, timestamps are computed by using the
+        following rules. 
+    </p>
+
+    <p>
+        <ul>
+            <li>For joins (stream-stream, table-table) that have left and right
+                input records, the timestamp of the output record is assigned
+                <code>max(left.ts, right.ts)</code>.</li>
+            <li>For stream-table joins, the output record is assigned the timestamp
+                from the stream record.</li>
+            <li>For aggregations, Kafka Streams also computes the <code>max</code>
+                timestamp over all records, per key, either globally (for non-windowed)
+                or per-window.</li>
+            <li>For stateless operations, the input record timestamp is passed through.
+                For <code>flatMap</code> and siblings that emit multiple records, all
+                output records inherit the timestamp from the corresponding input record.</li>
+        </ul>
+    </p>
+    
+    <p>
+
     </p>
 
     <h3><a id="streams_concepts_duality" href="#streams-concepts-duality">Duality of Streams and Tables</a></h3>

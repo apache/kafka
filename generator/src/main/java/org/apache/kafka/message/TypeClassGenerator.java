@@ -14,31 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
 
-/**
- * This server is not the leader for the given partition.
- * @deprecated since 2.7. Use {@link NotLeaderOrFollowerException}.
- */
-@Deprecated
-public class NotLeaderForPartitionException extends InvalidMetadataException {
+package org.apache.kafka.message;
 
-    private static final long serialVersionUID = 1L;
+import java.io.BufferedWriter;
+import java.io.IOException;
 
-    public NotLeaderForPartitionException() {
-        super();
-    }
+public interface TypeClassGenerator {
+    /**
+     * The short name of the type class file we are generating. For example,
+     * ApiMessageType.java.
+     */
+    String outputName();
 
-    public NotLeaderForPartitionException(String message) {
-        super(message);
-    }
+    /**
+     * Registers a message spec with the generator.
+     *
+     * @param spec      The spec to register.
+     */
+    void registerMessageType(MessageSpec spec);
 
-    public NotLeaderForPartitionException(Throwable cause) {
-        super(cause);
-    }
-
-    public NotLeaderForPartitionException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
+    /**
+     * Generate the type, and then write it out.
+     *
+     * @param writer    The writer to write out the state to.
+     */
+    void generateAndWrite(BufferedWriter writer) throws IOException;
 }

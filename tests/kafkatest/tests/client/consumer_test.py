@@ -254,7 +254,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.await_members(conflict_consumer, num_conflict_consumers)
             self.await_members(consumer, len(consumer.nodes) - num_conflict_consumers)
 
-            assert len(consumer.dead_nodes()) == num_conflict_consumers
+            wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
+                       timeout_sec=10,
+                       err_msg="Timed out waiting for the fenced consumers to stop")
         else:
             consumer.start()
             conflict_consumer.start()

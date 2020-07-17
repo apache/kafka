@@ -77,9 +77,10 @@ public class SaslAuthenticateRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        ApiError apiError = ApiError.fromThrowable(e);
         SaslAuthenticateResponseData response = new SaslAuthenticateResponseData()
-                .setErrorCode(ApiError.fromThrowable(e).error().code())
-                .setErrorMessage(e.getMessage());
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message());
         return new SaslAuthenticateResponse(response);
     }
 

@@ -72,7 +72,7 @@ import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
-import org.apache.kafka.common.errors.NotLeaderForPartitionException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -139,13 +139,15 @@ public enum Errors {
             InvalidFetchSizeException::new),
     LEADER_NOT_AVAILABLE(5, "There is no leader for this topic-partition as we are in the middle of a leadership election.",
             LeaderNotAvailableException::new),
-    NOT_LEADER_FOR_PARTITION(6, "This server is not the leader for that topic-partition.",
-            NotLeaderForPartitionException::new),
+    NOT_LEADER_OR_FOLLOWER(6, "For requests intended only for the leader, this error indicates that the broker is not the current leader. " +
+            "For requests intended for any replica, this error indicates that the broker is not a replica of the topic partition.",
+            NotLeaderOrFollowerException::new),
     REQUEST_TIMED_OUT(7, "The request timed out.",
             TimeoutException::new),
     BROKER_NOT_AVAILABLE(8, "The broker is not available.",
             BrokerNotAvailableException::new),
-    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition.",
+    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition. Produce/Fetch requests and other requests " +
+            "intended only for the leader or follower return NOT_LEADER_OR_FOLLOWER if the broker is not a replica of the topic-partition.",
             ReplicaNotAvailableException::new),
     MESSAGE_TOO_LARGE(10, "The request included a message larger than the max message size the server will accept.",
             RecordTooLargeException::new),

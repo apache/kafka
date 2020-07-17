@@ -27,7 +27,7 @@ import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
+import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{Before, Test}
@@ -150,16 +150,16 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     causeLogDirFailure(failureType, leaderServer, partition)
 
-    // send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
+    // send() should fail due to either KafkaStorageException or NotLeaderOrFollowerException
     try {
       producer.send(record).get(6000, TimeUnit.MILLISECONDS)
-      fail("send() should fail with either KafkaStorageException or NotLeaderForPartitionException")
+      fail("send() should fail with either KafkaStorageException or NotLeaderOrFollowerException")
     } catch {
       case e: ExecutionException =>
         e.getCause match {
           case t: KafkaStorageException =>
-          case t: NotLeaderForPartitionException => // This may happen if ProduceRequest version <= 3
-          case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderForPartitionException instead of ${t.toString}")
+          case t: NotLeaderOrFollowerException => // This may happen if ProduceRequest version <= 3
+          case t: Throwable => fail(s"send() should fail with either KafkaStorageException or NotLeaderOrFollowerException instead of ${t.toString}")
         }
     }
   }

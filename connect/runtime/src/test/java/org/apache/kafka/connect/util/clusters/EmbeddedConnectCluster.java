@@ -112,7 +112,6 @@ public class EmbeddedConnectCluster {
             log.warn(exitMessage);
             throw new UngracefulShutdownException(exitMessage);
         }
-        Exit.exit(0, message);
     };
 
     /**
@@ -124,7 +123,6 @@ public class EmbeddedConnectCluster {
             log.warn(haltMessage);
             throw new UngracefulShutdownException(haltMessage);
         }
-        Exit.halt(0, message);
     };
 
     /**
