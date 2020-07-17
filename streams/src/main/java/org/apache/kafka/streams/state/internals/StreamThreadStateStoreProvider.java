@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class StreamThreadStateStoreProvider {
 
@@ -51,15 +52,19 @@ public class StreamThreadStateStoreProvider {
         }
         final StreamThread.State state = streamThread.state();
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
-            final Map<TaskId, ? extends Task> tasks = storeQueryParams.staleStoresEnabled() ? streamThread.allTasks() : streamThread.activeTaskMap();
+            final Stream<Map.Entry<TaskId, Task>> taskStream = storeQueryParams.staleStoresEnabled() ?
+                    streamThread.allTasks().entrySet().stream() :
+                    streamThread.allTasks().entrySet().stream().filter(entry -> entry.getValue().isActive());
+
             if (storeQueryParams.partition() != null) {
-                return findStreamTask(tasks, storeName, storeQueryParams.partition()).
+                return findStreamTask(taskStream, storeName, storeQueryParams.partition()).
                         map(streamTask ->
                                 validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id())).
                         map(Collections::singletonList).
                         orElse(Collections.emptyList());
             } else {
-                return tasks.values().stream().
+                return taskStream.
+                        map(Map.Entry::getValue).
                         map(streamTask ->
                                 validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id())).
                         filter(Objects::nonNull).
@@ -93,8 +98,8 @@ public class StreamThreadStateStoreProvider {
         }
     }
 
-    private Optional<Task> findStreamTask(final Map<TaskId, ? extends Task> tasks, final String storeName, final int partition) {
-        return tasks.entrySet().stream().
+    private Optional<Task> findStreamTask(final Stream<Map.Entry<TaskId, Task>> taskStream, final String storeName, final int partition) {
+        return taskStream.
                 filter(entry -> entry.getKey().partition == partition &&
                         entry.getValue().getStore(storeName) != null &&
                         storeName.equals(entry.getValue().getStore(storeName).name())).
