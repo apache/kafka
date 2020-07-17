@@ -17,8 +17,10 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.slf4j.Logger;
 
 /**
  * A helper class for managing the heartbeat to the coordinator
@@ -30,6 +32,7 @@ public final class Heartbeat {
     private final Timer heartbeatTimer;
     private final Timer sessionTimer;
     private final Timer pollTimer;
+    private final Logger log;
 
     private volatile long lastHeartbeatSend = 0L;
     private volatile boolean heartbeatInFlight = false;
@@ -44,6 +47,9 @@ public final class Heartbeat {
         this.sessionTimer = time.timer(config.sessionTimeoutMs);
         this.maxPollIntervalMs = config.rebalanceTimeoutMs;
         this.pollTimer = time.timer(maxPollIntervalMs);
+
+        final LogContext logContext = new LogContext("[Heartbeat groupID=" + config.groupId + "] ");
+        this.log = logContext.logger(getClass());
     }
 
     private void update(long now) {
@@ -66,12 +72,16 @@ public final class Heartbeat {
         heartbeatInFlight = true;
         update(now);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
+
+        log.error("Heartbeat sent with timer remaining {}", heartbeatTimer.remainingMs());
     }
 
     void failHeartbeat() {
         update(time.milliseconds());
         heartbeatInFlight = false;
         heartbeatTimer.reset(rebalanceConfig.retryBackoffMs);
+
+        log.error("Heartbeat fail with timer remaining {}", heartbeatTimer.remainingMs());
     }
 
     void receiveHeartbeat() {
@@ -91,7 +101,11 @@ public final class Heartbeat {
 
     long timeToNextHeartbeat(long now) {
         update(now);
-        return heartbeatTimer.remainingMs();
+
+        final long timeToNextHeartbeat = heartbeatTimer.remainingMs();
+        log.error("Returning timer remaining {}", timeToNextHeartbeat);
+
+        return timeToNextHeartbeat;
     }
 
     boolean sessionTimeoutExpired(long now) {
@@ -104,6 +118,8 @@ public final class Heartbeat {
         sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
         pollTimer.reset(maxPollIntervalMs);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
+
+        log.error("Heartbeat reset with remaining {}", heartbeatTimer.remainingMs());
     }
 
     void resetSessionTimeout() {
