@@ -587,7 +587,7 @@ public class KafkaConsumerTest {
         client.prepareResponse(
             body -> {
                 ListOffsetRequest request = (ListOffsetRequest) body;
-                Map<TopicPartition, ListOffsetRequest.PartitionData> timestamps = request.partitionTimestamps();
+                Map<TopicPartition, ListOffsetRequest.PartitionData> timestamps = request.partitionsData();
                 return timestamps.get(tp0).timestamp == ListOffsetRequest.LATEST_TIMESTAMP &&
                         timestamps.get(tp1).timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP;
             }, listOffsetsResponse(Collections.singletonMap(tp0, 50L),

@@ -27,7 +27,9 @@
   // Version 4 adds the leader epoch, which is used for fencing.
   //
   // Version 5 adds a new error code, OFFSET_NOT_AVAILABLE.
-  "validVersions": "0-5",
+  //
+  // Version 6 is the same as version 5.
+  "validVersions": "0-6",
   "flexibleVersions": "none",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "2+", "ignorable": true,

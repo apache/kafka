@@ -2510,7 +2510,7 @@ public class FetcherTest {
                     expectedTopicPartitions.put(tp1, new ListOffsetRequest.PartitionData(
                         fetchTimestamp, Optional.empty()));
 
-                    return request.partitionTimestamps().equals(expectedTopicPartitions);
+                    return request.partitionsData().equals(expectedTopicPartitions);
                 } else {
                     return false;
                 }
@@ -2531,7 +2531,7 @@ public class FetcherTest {
                 if (isListOffsetRequest) {
                     ListOffsetRequest request = (ListOffsetRequest) body;
 
-                    return request.partitionTimestamps().equals(
+                    return request.partitionsData().equals(
                         Collections.singletonMap(tp1, new ListOffsetRequest.PartitionData(
                             fetchTimestamp, Optional.of(newLeaderEpoch))));
                 } else {
@@ -2592,7 +2592,7 @@ public class FetcherTest {
         MockClient.RequestMatcher matcher = body -> {
             if (body instanceof ListOffsetRequest) {
                 ListOffsetRequest offsetRequest = (ListOffsetRequest) body;
-                Optional<Integer> epoch = offsetRequest.partitionTimestamps().get(tp0).currentLeaderEpoch;
+                Optional<Integer> epoch = offsetRequest.partitionsData().get(tp0).currentLeaderEpoch;
                 assertTrue("Expected Fetcher to set leader epoch in request", epoch.isPresent());
                 assertEquals("Expected leader epoch to match epoch from metadata update", epoch.get().longValue(), 99);
                 return true;
@@ -4280,7 +4280,7 @@ public class FetcherTest {
         // matches any list offset request with the provided timestamp
         return body -> {
             ListOffsetRequest req = (ListOffsetRequest) body;
-            return req.partitionTimestamps().equals(Collections.singletonMap(
+            return req.partitionsData().equals(Collections.singletonMap(
                 tp0, new ListOffsetRequest.PartitionData(timestamp, leaderEpoch)));
         };
     }
@@ -4289,7 +4289,7 @@ public class FetcherTest {
         // matches any list offset request with the provided timestamp
         return body -> {
             ListOffsetRequest req = (ListOffsetRequest) body;
-            return req.partitionTimestamps().equals(Collections.singletonMap(
+            return req.partitionsData().equals(Collections.singletonMap(
                     tp0, new ListOffsetRequest.PartitionData(timestamp, Optional.of(leaderEpoch))));
         };
     }

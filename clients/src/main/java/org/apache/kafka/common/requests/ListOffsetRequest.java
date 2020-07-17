@@ -43,6 +43,7 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 public class ListOffsetRequest extends AbstractRequest {
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
+    public static final long ANY_OFFSET = -1L;
 
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
@@ -69,6 +70,8 @@ public class ListOffsetRequest extends AbstractRequest {
             "The target timestamp for the partition.");
     private static final Field.Int32 MAX_NUM_OFFSETS = new Field.Int32("max_num_offsets",
             "Maximum offsets to return.");
+    private static final Field.Int64 OFFSET = new Field.Int64("offset",
+            "The target offset for the partition.");
 
     private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID,
@@ -123,20 +126,36 @@ public class ListOffsetRequest extends AbstractRequest {
     // V5 bump to include new possible error code (OFFSET_NOT_AVAILABLE)
     private static final Schema LIST_OFFSET_REQUEST_V5 = LIST_OFFSET_REQUEST_V4;
 
+    // V6 adds offset to partition
+    private static final Field PARTITIONS_V6 = PARTITIONS.withFields(
+            PARTITION_ID,
+            CURRENT_LEADER_EPOCH,
+            TIMESTAMP,
+            OFFSET);
+
+    private static final Field TOPICS_V6 = TOPICS.withFields(
+        TOPIC_NAME,
+        PARTITIONS_V6);
+
+    private static final Schema LIST_OFFSET_REQUEST_V6 = new Schema(
+        REPLICA_ID,
+        ISOLATION_LEVEL,
+        TOPICS_V6);
+
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_REQUEST_V0, LIST_OFFSET_REQUEST_V1, LIST_OFFSET_REQUEST_V2,
-            LIST_OFFSET_REQUEST_V3, LIST_OFFSET_REQUEST_V4, LIST_OFFSET_REQUEST_V5};
+            LIST_OFFSET_REQUEST_V3, LIST_OFFSET_REQUEST_V4, LIST_OFFSET_REQUEST_V5, LIST_OFFSET_REQUEST_V6};
     }
 
     private final int replicaId;
     private final IsolationLevel isolationLevel;
-    private final Map<TopicPartition, PartitionData> partitionTimestamps;
+    private final Map<TopicPartition, PartitionData> partitionsData;
     private final Set<TopicPartition> duplicatePartitions;
 
     public static class Builder extends AbstractRequest.Builder<ListOffsetRequest> {
         private final int replicaId;
         private final IsolationLevel isolationLevel;
-        private Map<TopicPartition, PartitionData> partitionTimestamps = new HashMap<>();
+        private Map<TopicPartition, PartitionData> partitionsData = new HashMap<>();
 
         public static Builder forReplica(short allowedVersion, int replicaId) {
             return new Builder((short) 0, allowedVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
@@ -160,14 +179,14 @@ public class ListOffsetRequest extends AbstractRequest {
             this.isolationLevel = isolationLevel;
         }
 
-        public Builder setTargetTimes(Map<TopicPartition, PartitionData> partitionTimestamps) {
-            this.partitionTimestamps = partitionTimestamps;
+        public Builder setTargetTimes(Map<TopicPartition, PartitionData> partitionsData) {
+            this.partitionsData = partitionsData;
             return this;
         }
 
         @Override
         public ListOffsetRequest build(short version) {
-            return new ListOffsetRequest(replicaId, partitionTimestamps, isolationLevel, version);
+            return new ListOffsetRequest(replicaId, partitionsData, isolationLevel, version);
         }
 
         @Override
@@ -175,8 +194,8 @@ public class ListOffsetRequest extends AbstractRequest {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=ListOffsetRequest")
                .append(", replicaId=").append(replicaId);
-            if (partitionTimestamps != null) {
-                bld.append(", partitionTimestamps=").append(partitionTimestamps);
+            if (partitionsData != null) {
+                bld.append(", partitionsData=").append(partitionsData);
             }
             bld.append(", isolationLevel=").append(isolationLevel);
             bld.append(")");
@@ -188,20 +207,27 @@ public class ListOffsetRequest extends AbstractRequest {
         public final long timestamp;
         public final int maxNumOffsets; // only supported in v0
         public final Optional<Integer> currentLeaderEpoch;
+        public final long offset; // only supported in v6
 
-        private PartitionData(long timestamp, int maxNumOffsets, Optional<Integer> currentLeaderEpoch) {
+        private PartitionData(long timestamp, int maxNumOffsets, Optional<Integer> currentLeaderEpoch, long offset) {
             this.timestamp = timestamp;
             this.maxNumOffsets = maxNumOffsets;
             this.currentLeaderEpoch = currentLeaderEpoch;
+            this.offset = offset;
         }
 
         // For V0
         public PartitionData(long timestamp, int maxNumOffsets) {
-            this(timestamp, maxNumOffsets, Optional.empty());
+            this(timestamp, maxNumOffsets, Optional.empty(), ANY_OFFSET);
+        }
+
+        // For V6
+        public PartitionData(long offset) {
+            this(EARLIEST_TIMESTAMP, 1, Optional.empty(), offset);
         }
 
         public PartitionData(long timestamp, Optional<Integer> currentLeaderEpoch) {
-            this(timestamp, 1, currentLeaderEpoch);
+            this(timestamp, 1, currentLeaderEpoch, ANY_OFFSET);
         }
 
         @Override
@@ -209,12 +235,13 @@ public class ListOffsetRequest extends AbstractRequest {
             if (!(obj instanceof PartitionData)) return false;
             PartitionData other = (PartitionData) obj;
             return this.timestamp == other.timestamp &&
-                this.currentLeaderEpoch.equals(other.currentLeaderEpoch);
+                this.currentLeaderEpoch.equals(other.currentLeaderEpoch) &&
+                this.offset == other.offset;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(timestamp, currentLeaderEpoch);
+            return Objects.hash(timestamp, currentLeaderEpoch, offset);
         }
 
         @Override
@@ -223,6 +250,7 @@ public class ListOffsetRequest extends AbstractRequest {
             bld.append("{timestamp: ").append(timestamp).
                     append(", maxNumOffsets: ").append(maxNumOffsets).
                     append(", currentLeaderEpoch: ").append(currentLeaderEpoch).
+                    append(", offset: ").append(offset).
                     append("}");
             return bld.toString();
         }
@@ -232,13 +260,13 @@ public class ListOffsetRequest extends AbstractRequest {
      * Private constructor with a specified version.
      */
     private ListOffsetRequest(int replicaId,
-                              Map<TopicPartition, PartitionData> targetTimes,
+                              Map<TopicPartition, PartitionData> partitionsData,
                               IsolationLevel isolationLevel,
                               short version) {
         super(ApiKeys.LIST_OFFSETS, version);
         this.replicaId = replicaId;
         this.isolationLevel = isolationLevel;
-        this.partitionTimestamps = targetTimes;
+        this.partitionsData = partitionsData;
         this.duplicatePartitions = Collections.emptySet();
     }
 
@@ -249,7 +277,7 @@ public class ListOffsetRequest extends AbstractRequest {
         isolationLevel = struct.hasField(ISOLATION_LEVEL) ?
                 IsolationLevel.forId(struct.get(ISOLATION_LEVEL)) :
                 IsolationLevel.READ_UNCOMMITTED;
-        partitionTimestamps = new HashMap<>();
+        partitionsData = new HashMap<>();
         for (Object topicResponseObj : struct.get(TOPICS)) {
             Struct topicResponse = (Struct) topicResponseObj;
             String topic = topicResponse.get(TOPIC_NAME);
@@ -257,12 +285,13 @@ public class ListOffsetRequest extends AbstractRequest {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.get(PARTITION_ID);
                 long timestamp = partitionResponse.get(TIMESTAMP);
+                long offset = partitionResponse.getOrElse(OFFSET, ANY_OFFSET);
                 TopicPartition tp = new TopicPartition(topic, partition);
 
                 int maxNumOffsets = partitionResponse.getOrElse(MAX_NUM_OFFSETS, 1);
                 Optional<Integer> currentLeaderEpoch = RequestUtils.getLeaderEpoch(partitionResponse, CURRENT_LEADER_EPOCH);
-                PartitionData partitionData = new PartitionData(timestamp, maxNumOffsets, currentLeaderEpoch);
-                if (partitionTimestamps.put(tp, partitionData) != null)
+                PartitionData partitionData = new PartitionData(timestamp, maxNumOffsets, currentLeaderEpoch, offset);
+                if (partitionsData.put(tp, partitionData) != null)
                     duplicatePartitions.add(tp);
             }
         }
@@ -278,7 +307,7 @@ public class ListOffsetRequest extends AbstractRequest {
         ListOffsetResponse.PartitionData partitionError = versionId == 0 ?
                 new ListOffsetResponse.PartitionData(Errors.forException(e), Collections.emptyList()) :
                 new ListOffsetResponse.PartitionData(Errors.forException(e), -1L, -1L, Optional.empty());
-        for (TopicPartition partition : partitionTimestamps.keySet()) {
+        for (TopicPartition partition : partitionsData.keySet()) {
             responseData.put(partition, partitionError);
         }
 
@@ -293,8 +322,8 @@ public class ListOffsetRequest extends AbstractRequest {
         return isolationLevel;
     }
 
-    public Map<TopicPartition, PartitionData> partitionTimestamps() {
-        return partitionTimestamps;
+    public Map<TopicPartition, PartitionData> partitionsData() {
+        return partitionsData;
     }
 
     public Set<TopicPartition> duplicatePartitions() {
@@ -309,7 +338,7 @@ public class ListOffsetRequest extends AbstractRequest {
     protected Struct toStruct() {
         short version = version();
         Struct struct = new Struct(ApiKeys.LIST_OFFSETS.requestSchema(version));
-        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(partitionTimestamps);
+        Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupPartitionDataByTopic(partitionsData);
 
         struct.set(REPLICA_ID, replicaId);
         struct.setIfExists(ISOLATION_LEVEL, isolationLevel.id());
@@ -321,13 +350,14 @@ public class ListOffsetRequest extends AbstractRequest {
             List<Struct> partitionArray = new ArrayList<>();
             for (Map.Entry<Integer, PartitionData> partitionEntry : topicEntry.getValue().entrySet()) {
                 PartitionData offsetPartitionData = partitionEntry.getValue();
-                Struct partitionData = topicData.instance(PARTITIONS);
-                partitionData.set(PARTITION_ID, partitionEntry.getKey());
-                partitionData.set(TIMESTAMP, offsetPartitionData.timestamp);
-                partitionData.setIfExists(MAX_NUM_OFFSETS, offsetPartitionData.maxNumOffsets);
-                RequestUtils.setLeaderEpochIfExists(partitionData, CURRENT_LEADER_EPOCH,
+                Struct partitionsData = topicData.instance(PARTITIONS);
+                partitionsData.set(PARTITION_ID, partitionEntry.getKey());
+                partitionsData.set(TIMESTAMP, offsetPartitionData.timestamp);
+                partitionsData.setIfExists(OFFSET, offsetPartitionData.offset);
+                partitionsData.setIfExists(MAX_NUM_OFFSETS, offsetPartitionData.maxNumOffsets);
+                RequestUtils.setLeaderEpochIfExists(partitionsData, CURRENT_LEADER_EPOCH,
                         offsetPartitionData.currentLeaderEpoch);
-                partitionArray.add(partitionData);
+                partitionArray.add(partitionsData);
             }
             topicData.set(PARTITIONS, partitionArray.toArray());
             topicArray.add(topicData);

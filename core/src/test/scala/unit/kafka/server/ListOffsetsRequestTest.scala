@@ -157,7 +157,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   private def assertResponseError(error: Errors, brokerId: Int, request: ListOffsetRequest): Unit = {
     val response = sendRequest(brokerId, request)
-    assertEquals(request.partitionTimestamps.size, response.responseData.size)
+    assertEquals(request.partitionsData.size, response.responseData.size)
     response.responseData.asScala.values.foreach { partitionData =>
       assertEquals(error, partitionData.error)
     }

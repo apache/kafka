@@ -923,9 +923,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetRequest]
 
-    val partitionTimestamps = offsetRequest.partitionTimestamps.asScala
+    val partitionsData = offsetRequest.partitionsData.asScala
     val (authorizedRequestInfo, unauthorizedRequestInfo) = partitionMapByAuthorized(request.context,
-      DESCRIBE, TOPIC, partitionTimestamps)(_.topic)
+      DESCRIBE, TOPIC, partitionsData)(_.topic)
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.map { case (k, _) =>
       k -> new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED, Seq.empty[JLong].asJava)
@@ -963,7 +963,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetRequest = request.body[ListOffsetRequest]
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = partitionMapByAuthorized(request.context,
-      DESCRIBE, TOPIC, offsetRequest.partitionTimestamps.asScala)(_.topic)
+      DESCRIBE, TOPIC, offsetRequest.partitionsData.asScala)(_.topic)
 
     val unauthorizedResponseStatus = unauthorizedRequestInfo.map { case (k, _) =>
       k -> new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
