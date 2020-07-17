@@ -126,21 +126,18 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a strict quota, we
       // expect the first topic to be created and the second to be rejected.
-      // Theoretically, the throttle time should be bellow or equal to:
+      // Theoretically, the throttle time should be below or equal to:
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
       assertTrue((5000 - throttleTimeMs1) < 1000)
       assertEquals(Seq(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
 
-      // The implementation of the Rate has NOT been changed yet so we have to wait past
-      // the window in order to get the avg rate bellow the quota.
-      Thread.sleep(11000) // Thread.sleep(throttleTimeMs1)
-
-      // Retry the second topic after the throttling delay is passed. It should
-      // succeed and the throttle time should be zero.
-      val (throttleTimeMs2, errors2) = createTopics(TopicsWith30Partitions.drop(1), StrictCreateTopicsRequestVersion)
-      assertEquals(0, throttleTimeMs2)
-      assertEquals(Seq(Errors.NONE), errors2)
+      // Retry the second topic. It should succeed after the throttling delay is passed and the
+      // throttle time should be zero.
+      TestUtils.waitUntilTrue(() => {
+        val (throttleTimeMs2, errors2) = createTopics(TopicsWith30Partitions.drop(1), StrictCreateTopicsRequestVersion)
+        throttleTimeMs2 == 0 && errors2 == Seq(Errors.NONE)
+      }, "Failed to create topics after having been throttled")
     }
   }
 
@@ -149,7 +146,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
-      // Theoretically, the throttle time should be bellow or equal to:
+      // Theoretically, the throttle time should be below or equal to:
       // ((60 / 10) - 2) / 2 * 10 = 20s
       val (throttleTimeMs, errors) = createTopics(TopicsWith30Partitions, PermissiveCreateTopicsRequestVersion)
       assertTrue((20000 - throttleTimeMs) < 1000)
@@ -177,21 +174,18 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     asPrincipal(ThrottledPrincipal) {
       // Delete two topics worth of 30 partitions each. As we use a strict quota, we
       // expect the first topic to be deleted and the second to be rejected.
-      // Theoretically, the throttle time should be bellow or equal to:
+      // Theoretically, the throttle time should be below or equal to:
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = deleteTopics(TopicsWith30Partitions, StrictDeleteTopicsRequestVersion)
       assertTrue((5000 - throttleTimeMs1) < 1000)
       assertEquals(Seq(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
 
-      // The implementation of the Rate has NOT been changed yet so we have to wait past
-      // the window in order to get the avg rate bellow the quota.
-      Thread.sleep(11000) // Thread.sleep(throttleTimeMs1)
-
-      // Retry the second topic after the throttling delay is passed. It should
-      // succeed and the throttle time should be zero.
-      val (throttleTimeMs2, errors2) = deleteTopics(TopicsWith30Partitions.drop(1), StrictDeleteTopicsRequestVersion)
-      assertEquals(0, throttleTimeMs2)
-      assertEquals(Seq(Errors.NONE), errors2)
+      // Retry the second topic. It should succeed after the throttling delay is passed and the
+      // throttle time should be zero.
+      TestUtils.waitUntilTrue(() => {
+        val (throttleTimeMs2, errors2) = deleteTopics(TopicsWith30Partitions.drop(1), StrictDeleteTopicsRequestVersion)
+        throttleTimeMs2 == 0 && errors2 == Seq(Errors.NONE)
+      }, "Failed to delete topics after having been throttled")
     }
   }
 
@@ -204,7 +198,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     asPrincipal(ThrottledPrincipal) {
       // Delete two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be deleted.
-      // Theoretically, the throttle time should be bellow or equal to:
+      // Theoretically, the throttle time should be below or equal to:
       // ((60 / 10) - 2) / 2 * 10 = 20s
       val (throttleTimeMs, errors) = deleteTopics(TopicsWith30Partitions, PermissiveDeleteTopicsRequestVersion)
       assertTrue((20000 - throttleTimeMs) < 1000)
@@ -234,21 +228,18 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     asPrincipal(ThrottledPrincipal) {
       // Add 30 partitions to each topic. As we use a strict quota, we
       // expect the first topic to be extended and the second to be rejected.
-      // Theoretically, the throttle time should be bellow or equal to:
+      // Theoretically, the throttle time should be below or equal to:
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = createPartitions(TopicsWith31Partitions, StrictCreatePartitionsRequestVersion)
       assertTrue((5000 - throttleTimeMs1) < 1000)
       assertEquals(Seq(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
 
-      // The implementation of the Rate has NOT been changed yet so we have to wait past
-      // the window in order to get the avg rate bellow the quota.
-      Thread.sleep(11000) // Thread.sleep(throttleTimeMs1)
-
-      // Retry the second topic after the throttling delay is passed. It should
-      // succeed and the throttle time should be zero.
-      val (throttleTimeMs2, errors2) = deleteTopics(TopicsWith31Partitions.drop(1), StrictCreatePartitionsRequestVersion)
-      assertEquals(0, throttleTimeMs2)
-      assertEquals(Seq(Errors.NONE), errors2)
+      // Retry the second topic. It should succeed after the throttling delay is passed and the
+      // throttle time should be zero.
+      TestUtils.waitUntilTrue(() => {
+        val (throttleTimeMs2, errors2) = createPartitions(TopicsWith30Partitions.drop(1), StrictCreatePartitionsRequestVersion)
+        throttleTimeMs2 == 0 && errors2 == Seq(Errors.NONE)
+      }, "Failed to create partitions after having been throttled")
     }
   }
 
@@ -261,7 +252,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
-      // Theoretically, the throttle time should be bellow or equal to:
+      // Theoretically, the throttle time should be below or equal to:
       // ((60 / 10) - 2) / 2 * 10 = 20s
       val (throttleTimeMs, errors) = createPartitions(TopicsWith31Partitions, PermissiveCreatePartitionsRequestVersion)
       assertTrue((20000 - throttleTimeMs) < 1000)
@@ -276,7 +267,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
       // Create two topics worth of 30 partitions each. As we use an user without quota, we
       // expect both topics to be created. The throttle time should be equal to 0.
-      val (throttleTimeMs, errors) = deleteTopics(TopicsWith31Partitions, StrictCreatePartitionsRequestVersion)
+      val (throttleTimeMs, errors) = createPartitions(TopicsWith31Partitions, StrictCreatePartitionsRequestVersion)
       assertEquals(0, throttleTimeMs)
       assertEquals(Seq(Errors.NONE, Errors.NONE), errors)
     }

@@ -825,7 +825,7 @@ object TestUtils extends Logging {
   }
 
   /**
-    *  Wait until the given condition is true or throw an exception if the given wait time elapses.
+    * Wait until the given condition is true or throw an exception if the given wait time elapses.
     *
     * @param condition condition to check
     * @param msg error message
@@ -855,7 +855,7 @@ object TestUtils extends Logging {
     * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
     */
   def computeUntilTrue[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
-                    predicate: T => Boolean): (T, Boolean) = {
+                          predicate: T => Boolean): (T, Boolean) = {
     val startTime = System.currentTimeMillis()
     while (true) {
       val result = compute

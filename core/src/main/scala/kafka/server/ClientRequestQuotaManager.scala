@@ -30,6 +30,8 @@ import scala.jdk.CollectionConverters._
 object ClientRequestQuotaManager {
   val QuotaRequestPercentDefault = Int.MaxValue.toDouble
   val NanosToPercentagePerSecond = 100.0 / TimeUnit.SECONDS.toNanos(1)
+
+  private val ExemptSensorName = "exempt-" + QuotaType.Request
 }
 
 class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
@@ -43,9 +45,8 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
   private val exemptMetricName = metrics.metricName("exempt-request-time",
     QuotaType.Request.toString, "Tracking exempt-request-time utilization percentage")
-  private val exemptSensorName = "exempt-" + QuotaType.Request
 
-  lazy val exemptSensor: Sensor = getOrCreateSensor(exemptSensorName, exemptMetricName)
+  lazy val exemptSensor: Sensor = getOrCreateSensor(ClientRequestQuotaManager.ExemptSensorName, exemptMetricName)
 
   def recordExempt(value: Double): Unit = {
     exemptSensor.record(value)

@@ -343,7 +343,6 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @param request client request
    * @param throttleTimeMs Duration in milliseconds for which the channel is to be muted.
    * @param channelThrottlingCallback Callback for channel throttling
-   * @return ThrottledChannel object
    */
   def throttle(request: RequestChannel.Request, throttleTimeMs: Int, channelThrottlingCallback: Response => Unit): Unit = {
     if (throttleTimeMs > 0) {

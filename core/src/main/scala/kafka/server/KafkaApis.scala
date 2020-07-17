@@ -1685,9 +1685,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTopicsRequest(request: RequestChannel.Request): Unit = {
-    // Since version 6 of the API, the quota is strictly enforced. Any topic creation
-    // above the quota is not allowed and rejected with a THROTTLING_QUOTA_EXCEEDED error.
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, 6)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
 
     def sendResponseCallback(results: CreatableTopicResultCollection): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
@@ -1699,7 +1697,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           s"${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, None)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
@@ -1768,9 +1766,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
-    // Since version 3 of the API, the quota is strictly enforced. Any partition creation
-    // above the quota is not allowed and rejected with a THROTTLING_QUOTA_EXCEEDED error.
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, 3)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
 
     def sendResponseCallback(results: Map[String, ApiError]): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
@@ -1787,7 +1783,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           s"client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, None)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
     if (!controller.isActive) {
@@ -1823,9 +1819,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteTopicsRequest(request: RequestChannel.Request): Unit = {
-    // Since version 5 of the API, the quota is strictly enforced. Any topic deletion
-    // above the quota is not allowed and rejected with a THROTTLING_QUOTA_EXCEEDED error.
-    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, 5)
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
 
     def sendResponseCallback(results: DeletableTopicResultCollection): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
@@ -1836,7 +1830,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, None)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
@@ -3108,8 +3102,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /**
-   * Throttle the channel if the controller mutations quota (via the RateLimiter) or the request
-   * quota have been violated. Regardless of throttling, send the response immediately.
+   * Throttle the channel if the controller mutations quota or the request quota have been violated.
+   * Regardless of throttling, send the response immediately.
    */
   private def sendResponseMaybeThrottle(controllerMutationQuota: ControllerMutationQuota,
                                         request: RequestChannel.Request,

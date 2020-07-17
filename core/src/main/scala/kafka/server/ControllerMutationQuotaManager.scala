@@ -37,7 +37,7 @@ import scala.jdk.CollectionConverters._
  */
 trait ControllerMutationQuota {
   def isExceeded: Boolean
-  def accept(permits: Double): Unit
+  def record(permits: Double): Unit
   def throttleTime: Int
 }
 
@@ -46,8 +46,32 @@ trait ControllerMutationQuota {
  */
 object UnboundedControllerMutationQuota extends ControllerMutationQuota {
   override def isExceeded: Boolean = false
-  override def accept(permits: Double): Unit = ()
+  override def record(permits: Double): Unit = ()
   override def throttleTime: Int = 0
+}
+
+/**
+ * The AbstractControllerMutationQuota is the base class of StrictControllerMutationQuota and
+ * PermissiveControllerMutationQuota.
+ *
+ * @param time @Time object to use
+ */
+abstract class AbstractControllerMutationQuota(private val time: Time) extends ControllerMutationQuota {
+  protected var lastThrottleTimeMs = 0L
+  protected var lastRecordedTimeMs = 0L
+
+  protected def updateThrottleTime(e: QuotaViolationException, timeMs: Long): Unit = {
+    lastThrottleTimeMs = ClientQuotaManager.throttleTime(e, timeMs)
+    lastRecordedTimeMs = timeMs
+  }
+
+  override def throttleTime: Int = {
+    // If a throttle time has been recorded, we adjust it by deducting the time elapsed
+    // between the recording and now. We do this because `throttleTime` may be called
+    // long after having recorded it, especially when a request waits in the purgatory.
+    val deltaTimeMs = time.milliseconds - lastRecordedTimeMs
+    Math.max(0, lastThrottleTimeMs - deltaTimeMs).toInt
+  }
 }
 
 /**
@@ -59,32 +83,21 @@ object UnboundedControllerMutationQuota extends ControllerMutationQuota {
  * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
  */
 class StrictControllerMutationQuota(private val time: Time,
-                                    private val quotaSensor: Sensor) extends ControllerMutationQuota {
-
-  private var lastThrottleTimeMs = 0L
-  private var lastRecordedTimeMs = 0L
+                                    private val quotaSensor: Sensor)
+    extends AbstractControllerMutationQuota(time) {
 
   override def isExceeded: Boolean = lastThrottleTimeMs > 0
 
-  override def accept(permits: Double): Unit = {
+  override def record(permits: Double): Unit = {
     val timeMs = time.milliseconds
     try {
       quotaSensor.record(permits, timeMs, QuotaEnforcementType.STRICT)
     } catch {
       case e: QuotaViolationException =>
-        lastThrottleTimeMs = ClientQuotaManager.throttleTime(e, timeMs)
-        lastRecordedTimeMs = timeMs
+        updateThrottleTime(e, timeMs)
         throw new ThrottlingQuotaExceededException(lastThrottleTimeMs.toInt,
           Errors.THROTTLING_QUOTA_EXCEEDED.message)
     }
-  }
-
-  override def throttleTime: Int = {
-    // If a throttle time has been recorded, we adjust it by deducting the time elapsed
-    // between the recording and now. We do this because `throttleTime` may be called
-    // long after having recorded it (e.g. when creating topics).
-    val deltaTimeMs = time.milliseconds - lastRecordedTimeMs
-    Math.max(0, lastThrottleTimeMs - deltaTimeMs).toInt
   }
 }
 
@@ -96,30 +109,19 @@ class StrictControllerMutationQuota(private val time: Time,
  * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
  */
 class PermissiveControllerMutationQuota(private val time: Time,
-                                        private val quotaSensor: Sensor) extends ControllerMutationQuota {
-
-  private var lastThrottleTimeMs = 0L
-  private var lastRecordedTimeMs = 0L
+                                        private val quotaSensor: Sensor)
+    extends AbstractControllerMutationQuota(time) {
 
   override def isExceeded: Boolean = false
 
-  override def accept(permits: Double): Unit = {
+  override def record(permits: Double): Unit = {
     val timeMs = time.milliseconds
     try {
       quotaSensor.record(permits, timeMs, QuotaEnforcementType.PERMISSIVE)
     } catch {
       case e: QuotaViolationException =>
-        lastThrottleTimeMs = ClientQuotaManager.throttleTime(e, timeMs)
-        lastRecordedTimeMs = timeMs
+        updateThrottleTime(e, timeMs)
     }
-  }
-
-  override def throttleTime: Int = {
-    // If a throttle time has been recorded, we adjust it by deducting the time elapsed
-    // between the recording and now. We do this because `throttleTime` may be called
-    // long after having recorded it (e.g. when creating topics).
-    val deltaTimeMs = time.milliseconds - lastRecordedTimeMs
-    Math.max(0, lastThrottleTimeMs - deltaTimeMs).toInt
   }
 }
 
@@ -191,6 +193,9 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
    * Returns a ControllerMutationQuota based on `strictSinceVersion`. It returns a strict
    * quota if the version is equal to or above of the `strictSinceVersion`, a permissive
    * quota if the version is bellow, and a unbounded quota if the quota is disabled.
+   *
+   * When the quota is strictly enforced. Any operation above the quota is not allowed
+   * and rejected with a THROTTLING_QUOTA_EXCEEDED error.
    *
    * @param request The request to extract the session and the clientId from
    * @param strictSinceVersion The version since quota is strict

@@ -47,19 +47,19 @@ class StrictControllerMutationQuotaTest {
 
     // Recording a first value at T to bring the avg rate to 9. Value is accepted
     // because the quota is not exhausted yet.
-    quota.accept(90)
+    quota.record(90)
     assertFalse(quota.isExceeded)
     assertEquals(0, quota.throttleTime)
 
     // Recording a second value at T to bring the avg rate to 18. Value is accepted
-    quota.accept(90)
+    quota.record(90)
     assertFalse(quota.isExceeded)
     assertEquals(0, quota.throttleTime)
 
     // Recording a third value at T is rejected immediately and rate is not updated
     // because the quota is exhausted.
     assertThrows(classOf[ThrottlingQuotaExceededException],
-      () => quota.accept(90))
+      () => quota.record(90))
     assertTrue(quota.isExceeded)
     assertEquals(8000, quota.throttleTime)
 
@@ -88,18 +88,18 @@ class PermissiveControllerMutationQuotaTest {
 
     // Recording a first value at T to bring the avg rate to 9. Value is accepted
     // because the quota is not exhausted yet.
-    quota.accept(90)
+    quota.record(90)
     assertFalse(quota.isExceeded)
     assertEquals(0, quota.throttleTime)
 
     // Recording a second value at T to bring the avg rate to 18. Value is accepted
-    quota.accept(90)
+    quota.record(90)
     assertFalse(quota.isExceeded)
     assertEquals(8000, quota.throttleTime)
 
     // Recording a second value at T to bring the avg rate to 27. Value is accepted
     // and rate is updated even though the quota is exhausted.
-    quota.accept(90)
+    quota.record(90)
     assertFalse(quota.isExceeded) // quota is never exceeded
     assertEquals(17000, quota.throttleTime)
 

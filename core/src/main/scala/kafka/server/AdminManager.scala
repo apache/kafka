@@ -187,7 +187,7 @@ class AdminManager(val config: KafkaConfig,
         if (validateOnly) {
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         } else {
-          controllerMutationQuota.accept(assignments.size)
+          controllerMutationQuota.record(assignments.size)
           adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false)
           CreatePartitionsMetadata(topic.name, assignments.keySet)
         }
@@ -242,7 +242,7 @@ class AdminManager(val config: KafkaConfig,
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
         try {
-          controllerMutationQuota.accept(metadataCache.numPartitions(topic))
+          controllerMutationQuota.record(metadataCache.numPartitions(topic))
           adminZkClient.deleteTopic(topic)
           DeleteTopicMetadata(topic, Errors.NONE)
         } catch {
@@ -338,7 +338,7 @@ class AdminManager(val config: KafkaConfig,
         if (validateOnly) {
           CreatePartitionsMetadata(topic, (existingAssignment ++ assignmentForNewPartitions).keySet)
         } else {
-          controllerMutationQuota.accept(numPartitionsIncrement)
+          controllerMutationQuota.record(numPartitionsIncrement)
           val updatedReplicaAssignment = adminZkClient.createPartitionsWithAssignment(
             topic, existingAssignment, assignmentForNewPartitions)
           CreatePartitionsMetadata(topic, updatedReplicaAssignment.keySet)
