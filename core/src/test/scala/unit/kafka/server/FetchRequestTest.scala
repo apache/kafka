@@ -209,7 +209,7 @@ class FetchRequestTest extends BaseRequestTest {
       Seq(topicPartition))).build()
     val fetchResponse = sendFetchRequest(nonReplicaId, fetchRequest)
     val partitionData = fetchResponse.responseData.get(topicPartition)
-    assertEquals(Errors.REPLICA_NOT_AVAILABLE, partitionData.error)
+    assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, partitionData.error)
   }
 
   @Test

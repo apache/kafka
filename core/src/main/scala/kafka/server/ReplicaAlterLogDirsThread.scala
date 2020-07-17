@@ -146,12 +146,12 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
-    val partition = replicaMgr.getPartitionOrException(topicPartition, expectLeader = false)
+    val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.localLogOrException.logStartOffset
   }
 
   override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, leaderEpoch: Int): Long = {
-    val partition = replicaMgr.getPartitionOrException(topicPartition, expectLeader = false)
+    val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.localLogOrException.logEndOffset
   }
 
@@ -166,7 +166,7 @@ class ReplicaAlterLogDirsThread(name: String,
         val endOffset = if (epochData.leaderEpoch == UNDEFINED_EPOCH) {
           new EpochEndOffset(UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
         } else {
-          val partition = replicaMgr.getPartitionOrException(tp, expectLeader = false)
+          val partition = replicaMgr.getPartitionOrException(tp)
           partition.lastOffsetForLeaderEpoch(
             currentLeaderEpoch = epochData.currentLeaderEpoch,
             leaderEpoch = epochData.leaderEpoch,
@@ -198,12 +198,12 @@ class ReplicaAlterLogDirsThread(name: String,
    * exchange with the current replica to truncate to the largest common log prefix for the topic partition
    */
   override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-    val partition = replicaMgr.getPartitionOrException(topicPartition, expectLeader = false)
+    val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.truncateTo(truncationState.offset, isFuture = true)
   }
 
   override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
-    val partition = replicaMgr.getPartitionOrException(topicPartition, expectLeader = false)
+    val partition = replicaMgr.getPartitionOrException(topicPartition)
     partition.truncateFullyAndStartAt(offset, isFuture = true)
   }
 

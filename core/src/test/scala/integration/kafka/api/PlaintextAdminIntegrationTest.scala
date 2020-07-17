@@ -698,7 +698,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         lowWatermark.contains(5L)
       } catch {
         case e: ExecutionException if e.getCause.isInstanceOf[LeaderNotAvailableException] ||
-          e.getCause.isInstanceOf[NotLeaderForPartitionException] => false
+          e.getCause.isInstanceOf[NotLeaderOrFollowerException] => false
         }
     }, s"Expected low watermark of the partition to be 5 but got ${lowWatermark.getOrElse("no response within the timeout")}")
   }
