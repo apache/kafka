@@ -95,6 +95,13 @@ allprojects {
       }
     }
     configurations {
+      all {
+        resolutionStrategy {
+          dependencySubstitution {
+            substitute module("log4j:log4j:1.2.17") because "we use a custom version with security patches" with module("io.confluent:confluent-log4j:1.2.17-cp1")
+          }
+        }
+      }
       runtime {
         resolutionStrategy {
           force(
