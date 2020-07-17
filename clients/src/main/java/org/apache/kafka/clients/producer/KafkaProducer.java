@@ -325,7 +325,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   KafkaClient kafkaClient,
                   ProducerInterceptors<K, V> interceptors,
                   Time time) {
-        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(configs, keySerializer,
+        ProducerConfig config = new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer,
                 valueSerializer));
         try {
             Map<String, Object> userProvidedConfigs = config.originals();

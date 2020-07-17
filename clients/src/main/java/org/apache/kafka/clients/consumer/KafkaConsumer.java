@@ -663,7 +663,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public KafkaConsumer(Map<String, Object> configs,
                          Deserializer<K> keyDeserializer,
                          Deserializer<V> valueDeserializer) {
-        ConsumerConfig config = new ConsumerConfig(ConsumerConfig.addDeserializerToConfig(configs, keyDeserializer, valueDeserializer));
+        ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer));
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
                     GroupRebalanceConfig.ProtocolType.CONSUMER);
