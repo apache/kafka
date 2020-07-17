@@ -969,16 +969,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             }
 
             log.info("Client {} per-consumer assignment:\n" +
-                            "\tprev owned active {}\n" +
-                            "\tprev owned standby {}\n" +
-                            "\tassigned active {}\n" +
-                            "\trevoking active {}" +
-                            "\tassigned standby {}\n", clientId,
-                    clientMetadata.state.prevOwnedActiveTasksByConsumer(),
-                    clientMetadata.state.prevOwnedStandbyByConsumer(),
-                    clientMetadata.state.assignedActiveTasksByConsumer(),
-                    clientMetadata.state.revokingActiveTasksByConsumer(),
-                    clientMetadata.state.assignedStandbyTasksByConsumer());
+                "\tprev owned active {}\n" +
+                "\tprev owned standby {}\n" +
+                "\tassigned active {}\n" +
+                "\trevoking active {}" +
+                "\tassigned standby {}\n",
+                clientId,
+                clientMetadata.state.prevOwnedActiveTasksByConsumer(),
+                clientMetadata.state.prevOwnedStandbyByConsumer(),
+                clientMetadata.state.assignedActiveTasksByConsumer(),
+                clientMetadata.state.revokingActiveTasksByConsumer(),
+                clientMetadata.state.assignedStandbyTasksByConsumer());
         }
 
         if (rebalanceRequired) {

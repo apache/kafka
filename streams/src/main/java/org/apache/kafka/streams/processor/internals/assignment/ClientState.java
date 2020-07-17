@@ -43,22 +43,23 @@ public class ClientState {
     private static final Logger LOG = LoggerFactory.getLogger(ClientState.class);
     public static final Comparator<TopicPartition> TOPIC_PARTITION_COMPARATOR = comparing(TopicPartition::topic).thenComparing(TopicPartition::partition);
 
-    private final Set<TaskId> activeTasks;
-    private final Set<TaskId> standbyTasks;
+    private final Set<TaskId> activeTasks = new TreeSet<>();
+    private final Set<TaskId> standbyTasks = new TreeSet<>();
     private final Set<TaskId> prevActiveTasks;
     private final Set<TaskId> prevStandbyTasks;
 
-    private final Map<String, Set<TaskId>> consumerToPreviousStatefulTaskIds;
-    // the following four maps are used only for logging purposes;
-    // TODO: we could consider merging them with other book-keeping maps
-    private final Map<String, Set<TaskId>> consumerToPreviousActiveTaskIds;
-    private final Map<String, Set<TaskId>> consumerToAssignedActiveTaskIds;
-    private final Map<String, Set<TaskId>> consumerToAssignedStandbyTaskIds;
-    private final Map<String, Set<TaskId>> consumerToRevokingActiveTaskIds;
-    private final Map<TopicPartition, String> ownedPartitions;
     private final Map<TaskId, Long> taskOffsetSums; // contains only stateful tasks we previously owned
     private final Map<TaskId, Long> taskLagTotals;  // contains lag for all stateful tasks in the app topology
+    private final Map<TopicPartition, String> ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
+    private final Map<String, Set<TaskId>> consumerToPreviousStatefulTaskIds = new TreeMap<>();
 
+    // the following four maps are used only for logging purposes;
+    // TODO KAFKA-10283: we could consider merging them with other book-keeping maps at client-levels
+    //                   so that they would not be inconsistent
+    private final Map<String, Set<TaskId>> consumerToPreviousActiveTaskIds = new TreeMap<>();
+    private final Map<String, Set<TaskId>> consumerToAssignedActiveTaskIds = new TreeMap<>();
+    private final Map<String, Set<TaskId>> consumerToAssignedStandbyTaskIds = new TreeMap<>();
+    private final Map<String, Set<TaskId>> consumerToRevokingActiveTaskIds = new TreeMap<>();
 
     private int capacity;
 
@@ -67,16 +68,8 @@ public class ClientState {
     }
 
     ClientState(final int capacity) {
-        activeTasks = new TreeSet<>();
-        standbyTasks = new TreeSet<>();
         prevActiveTasks = new TreeSet<>();
         prevStandbyTasks = new TreeSet<>();
-        consumerToPreviousStatefulTaskIds = new TreeMap<>();
-        consumerToPreviousActiveTaskIds = new TreeMap<>();
-        consumerToAssignedActiveTaskIds = new TreeMap<>();
-        consumerToAssignedStandbyTaskIds = new TreeMap<>();
-        consumerToRevokingActiveTaskIds = new TreeMap<>();
-        ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
         this.capacity = capacity;
@@ -87,16 +80,8 @@ public class ClientState {
                        final Set<TaskId> previousStandbyTasks,
                        final Map<TaskId, Long> taskLagTotals,
                        final int capacity) {
-        activeTasks = new TreeSet<>();
-        standbyTasks = new TreeSet<>();
         prevActiveTasks = unmodifiableSet(new TreeSet<>(previousActiveTasks));
         prevStandbyTasks = unmodifiableSet(new TreeSet<>(previousStandbyTasks));
-        consumerToPreviousStatefulTaskIds = new TreeMap<>();
-        consumerToPreviousActiveTaskIds = new TreeMap<>();
-        consumerToAssignedActiveTaskIds = new TreeMap<>();
-        consumerToAssignedStandbyTaskIds = new TreeMap<>();
-        consumerToRevokingActiveTaskIds = new TreeMap<>();
-        ownedPartitions = new TreeMap<>(TOPIC_PARTITION_COMPARATOR);
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
