@@ -19,7 +19,7 @@ package org.apache.kafka.common.errors;
 /**
  * The replica is not available for the requested topic partition. This may be
  * a transient exception during reassignments. From version 2.6 onwards, Fetch requests
- * and other requests intended only for the leader of the topic partition return
+ * and other requests intended only for the leader or follower of the topic partition return
  * {@link NotLeaderOrFollowerException} if the broker is a not a replica of the partition.
  */
 public class ReplicaNotAvailableException extends InvalidMetadataException {

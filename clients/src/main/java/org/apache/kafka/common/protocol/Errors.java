@@ -146,8 +146,8 @@ public enum Errors {
             TimeoutException::new),
     BROKER_NOT_AVAILABLE(8, "The broker is not available.",
             BrokerNotAvailableException::new),
-    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition. Fetch requests and other requests " +
-            "intended only for the leader return NOT_LEADER_OR_FOLLOWER if the broker is not a replica of the topic-partition.",
+    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition. Produce/Fetch requests and other requests " +
+            "intended only for the leader or follower return NOT_LEADER_OR_FOLLOWER if the broker is not a replica of the topic-partition.",
             ReplicaNotAvailableException::new),
     MESSAGE_TOO_LARGE(10, "The request included a message larger than the max message size the server will accept.",
             RecordTooLargeException::new),
