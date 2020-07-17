@@ -319,14 +319,14 @@ public class MirrorConnectorsIntegrationTest {
             backup.kafka().consume(NUM_RECORDS_PRODUCED, 2 * RECORD_TRANSFER_DURATION_MS, "primary.test-topic-2").count());
     }
 
-    private void waitForConsumerGroupOffsetSync(Consumer<byte[], byte[]> consumer, List<String> topics)
+    private void waitForConsumerGroupOffsetSync(Consumer<byte[], byte[]> consumer, List<String> topics, String consumerGroupId)
             throws InterruptedException {
         Admin backupClient = backup.kafka().createAdminClient();
         List<TopicPartition> tps = new ArrayList<>(NUM_PARTITIONS * topics.size());
         IntStream.range(0, NUM_PARTITIONS).forEach(
-            partitionInd -> {
+            partitionIndex -> {
                 for (String topic: topics) {
-                    tps.add(new TopicPartition(topic, partitionInd));
+                    tps.add(new TopicPartition(topic, partitionIndex));
                 }
             }
         );
@@ -334,7 +334,7 @@ public class MirrorConnectorsIntegrationTest {
 
         waitForCondition(() -> {
             Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
-                backupClient.listConsumerGroupOffsets("consumer-group-1").partitionsToOffsetAndMetadata().get();
+                backupClient.listConsumerGroupOffsets(consumerGroupId).partitionsToOffsetAndMetadata().get();
             long consumerGroupOffsetTotal = consumerGroupOffsets.values().stream().mapToLong(metadata -> metadata.offset()).sum();
 
             Map<TopicPartition, Long> offsets = consumer.endOffsets(tps, Duration.ofMillis(500));
@@ -369,7 +369,7 @@ public class MirrorConnectorsIntegrationTest {
         Consumer<byte[], byte[]> consumer = backup.kafka().createConsumerAndSubscribeTo(
             Collections.singletonMap("group.id", "consumer-group-1"), "primary.test-topic-1");
 
-        waitForConsumerGroupOffsetSync(consumer, Collections.singletonList("primary.test-topic-1"));
+        waitForConsumerGroupOffsetSync(consumer, Collections.singletonList("primary.test-topic-1"), "consumer-group-1");
 
         ConsumerRecords records = consumer.poll(Duration.ofMillis(500));
 
@@ -397,7 +397,7 @@ public class MirrorConnectorsIntegrationTest {
         consumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
             "group.id", "consumer-group-1"), "primary.test-topic-1", "primary.test-topic-2");
 
-        waitForConsumerGroupOffsetSync(consumer, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"));
+        waitForConsumerGroupOffsetSync(consumer, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"), "consumer-group-1");
 
         records = consumer.poll(Duration.ofMillis(500));
         // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
