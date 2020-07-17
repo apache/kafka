@@ -18,10 +18,11 @@ package org.apache.kafka.common.errors;
 
 /**
  * Broker returns this error if a request could not be processed because the broker is not the leader
- * or follower for a topic partition. For `Produce` requests which are intended only for the leader,
- * this exception indicates that the broker is not the current leader. For consumer `Fetch` requests which
- * may be satisfied by a leader or follower, this exception indicates that the broker is not a replica
- * of the topic partition. This could be a transient exception during reassignments.
+ * or follower for a topic partition. This could be a transient exception during leader elections and
+ * reassignments. For `Produce` and other requests which are intended only for the leader, this exception
+ * indicates that the broker is not the current leader. For consumer `Fetch` requests which may be
+ * satisfied by a leader or follower, this exception indicates that the broker is not a replica
+ * of the topic partition.
  */
 @SuppressWarnings("deprecation")
 public class NotLeaderOrFollowerException extends NotLeaderForPartitionException {

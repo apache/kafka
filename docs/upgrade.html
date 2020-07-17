@@ -18,13 +18,6 @@
 <script><!--#include virtual="js/templateData.js" --></script>
 
 <script id="upgrade-template" type="text/x-handlebars-template">
-<h5><a id="upgrade_270_notable" href="#upgrade_270_notable">Notable changes in 2.7.0</a></h5>
-<ul>
-    <li><code>NotLeaderForPartitionException</code> has been deprecated and replaced with <code>NotLeaderOrFollowerException</code>.
-        Fetch requests return NOT_LEADER_OR_FOLLOWER(6) instead of REPLICA_NOT_AVAILABLE(9) if the broker is not the leader or follower,
-        ensuring that this transient error during reassignments is handled by all clients as a retriable exception.
-    </li>
-</ul>
 
 <h5><a id="upgrade_260_notable" href="#upgrade_260_notable">Notable changes in 2.6.0</a></h5>
 <ul>
@@ -41,6 +34,10 @@
         attempt to connect to each IP in sequence until the connection is successfully established. See
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-602%3A+Change+default+value+for+client.dns.lookup">KIP-602</a>
         for more details.
+    </li>
+    <li><code>NotLeaderForPartitionException</code> has been deprecated and replaced with <code>NotLeaderOrFollowerException</code>.
+        Fetch requests as well as other requests intended only for the leader return NOT_LEADER_OR_FOLLOWER(6) instead of REPLICA_NOT_AVAILABLE(9)
+        if the broker is not the leader or follower, ensuring that this transient error during reassignments is handled by all clients as a retriable exception.
     </li>
 </ul>
 
