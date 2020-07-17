@@ -221,13 +221,12 @@ public class ListOffsetRequest extends AbstractRequest {
             this(timestamp, maxNumOffsets, Optional.empty(), ANY_OFFSET);
         }
 
-        // For V6
-        public PartitionData(long offset) {
-            this(EARLIEST_TIMESTAMP, 1, Optional.empty(), offset);
-        }
-
         public PartitionData(long timestamp, Optional<Integer> currentLeaderEpoch) {
             this(timestamp, 1, currentLeaderEpoch, ANY_OFFSET);
+        }
+
+        public PartitionData(long timestamp, long offset, Optional<Integer> currentLeaderEpoch) {
+            this(timestamp, 1, currentLeaderEpoch, offset);
         }
 
         @Override

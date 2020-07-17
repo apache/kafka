@@ -220,6 +220,36 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * Represents either a offset or a timestamp request
+     */
+    static interface OffsetOrTimestamp {
+    }
+
+    static class Offset implements OffsetOrTimestamp {
+        final long offset;
+
+        Offset(long offset) {
+            this.offset = offset;
+        }
+
+        public String toString() {
+            return "Offset(" + offset + ")";
+        }
+    }
+
+    static class Timestamp implements OffsetOrTimestamp {
+        final long timestamp;
+
+        Timestamp(long timestamp) {
+            this.timestamp = timestamp;
+        }
+
+        public String toString() {
+            return "Timestamp(" + timestamp + ")";
+        }
+    }
+
+    /**
      * Return whether we have any completed fetches pending return to the user. This method is thread-safe. Has
      * visibility for testing.
      * @return true if there are completed fetches, false otherwise
@@ -506,11 +536,15 @@ public class Fetcher<K, V> implements Closeable {
         metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
 
         try {
-            Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
+            Map<TopicPartition, OffsetOrTimestamp> toSearch = new HashMap<>(timestampsToSearch.size());
+            for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+                toSearch.put(entry.getKey(), new Timestamp(entry.getValue()));
+            }
+            Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsets(toSearch,
                     timer, true).fetchedOffsets;
 
-            HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
-            for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
+            HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(toSearch.size());
+            for (Map.Entry<TopicPartition, OffsetOrTimestamp> entry : toSearch.entrySet())
                 offsetsByTimes.put(entry.getKey(), null);
 
             for (Map.Entry<TopicPartition, ListOffsetData> entry : fetchedOffsets.entrySet()) {
@@ -527,14 +561,44 @@ public class Fetcher<K, V> implements Closeable {
         }
     }
 
-    private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
-                                                 Timer timer,
-                                                 boolean requireTimestamps) {
+    public Map<TopicPartition, OffsetAndTimestamp> timesForOffsets(Map<TopicPartition, Long> offsetsToSearch,
+                                                                   Timer timer) {
+        metadata.addTransientTopics(topicsForPartitions(offsetsToSearch.keySet()));
+
+        try {
+            Map<TopicPartition, OffsetOrTimestamp> toSearch = new HashMap<>(offsetsToSearch.size());
+            for (Map.Entry<TopicPartition, Long> entry : offsetsToSearch.entrySet()) {
+                toSearch.put(entry.getKey(), new Offset(entry.getValue()));
+            }
+            Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsets(toSearch,
+                    timer, true).fetchedOffsets;
+
+            HashMap<TopicPartition, OffsetAndTimestamp> timesByOffsets = new HashMap<>(toSearch.size());
+            for (Map.Entry<TopicPartition, OffsetOrTimestamp> entry : toSearch.entrySet())
+                timesByOffsets.put(entry.getKey(), null);
+
+            for (Map.Entry<TopicPartition, ListOffsetData> entry : fetchedOffsets.entrySet()) {
+                // 'entry.getValue().timestamp' will not be null since we are guaranteed
+                // to work with a v1 (or later) ListOffset request
+                ListOffsetData offsetData = entry.getValue();
+                timesByOffsets.put(entry.getKey(), new OffsetAndTimestamp(offsetData.offset, offsetData.timestamp,
+                        offsetData.leaderEpoch));
+            }
+
+            return timesByOffsets;
+        } finally {
+            metadata.clearTransientTopics();
+        }
+    }
+
+    private ListOffsetResult fetchOffsets(Map<TopicPartition, OffsetOrTimestamp> toSearch,
+                                          Timer timer,
+                                          boolean requireTimestamps) {
         ListOffsetResult result = new ListOffsetResult();
-        if (timestampsToSearch.isEmpty())
+        if (toSearch.isEmpty())
             return result;
 
-        Map<TopicPartition, Long> remainingToSearch = new HashMap<>(timestampsToSearch);
+        Map<TopicPartition, OffsetOrTimestamp> remainingToSearch = new HashMap<>(toSearch);
         do {
             RequestFuture<ListOffsetResult> future = sendListOffsetsRequests(remainingToSearch, requireTimestamps);
             client.poll(future, timer);
@@ -572,11 +636,11 @@ public class Fetcher<K, V> implements Closeable {
                                                            Timer timer) {
         metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
-            Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
+            Map<TopicPartition, OffsetOrTimestamp> timestampsToSearch = partitions.stream()
                     .distinct()
-                    .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
+                    .collect(Collectors.toMap(Function.identity(), tp -> new Timestamp(timestamp)));
 
-            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false);
+            ListOffsetResult result = fetchOffsets(timestampsToSearch, timer, false);
 
             return result.fetchedOffsets.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
@@ -728,8 +792,12 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
+        Map<TopicPartition, OffsetOrTimestamp> partitionResetTimestamps0 = new HashMap<>(partitionResetTimestamps.size());
+        for (Map.Entry<TopicPartition, Long> entry : partitionResetTimestamps.entrySet()) {
+            partitionResetTimestamps0.put(entry.getKey(), new Timestamp(entry.getValue()));
+        }
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
-                groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
+                groupListOffsetRequests(partitionResetTimestamps0, new HashSet<>());
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
             final Map<TopicPartition, ListOffsetRequest.PartitionData> resetTimestamps = entry.getValue();
@@ -870,35 +938,35 @@ public class Fetcher<K, V> implements Closeable {
     /**
      * Search the offsets by target times for the specified partitions.
      *
-     * @param timestampsToSearch the mapping between partitions and target time
+     * @param toSearch the mapping between partitions and target time or offset
      * @param requireTimestamps true if we should fail with an UnsupportedVersionException if the broker does
      *                         not support fetching precise timestamps for offsets
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
-    private RequestFuture<ListOffsetResult> sendListOffsetsRequests(final Map<TopicPartition, Long> timestampsToSearch,
+    private RequestFuture<ListOffsetResult> sendListOffsetsRequests(final Map<TopicPartition, OffsetOrTimestamp> toSearch,
                                                                     final boolean requireTimestamps) {
         final Set<TopicPartition> partitionsToRetry = new HashSet<>();
-        Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
-                groupListOffsetRequests(timestampsToSearch, partitionsToRetry);
-        if (timestampsToSearchByNode.isEmpty())
+        Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> toSearchByNode =
+                groupListOffsetRequests(toSearch, partitionsToRetry);
+        if (toSearchByNode.isEmpty())
             return RequestFuture.failure(new StaleMetadataException());
 
         final RequestFuture<ListOffsetResult> listOffsetRequestsFuture = new RequestFuture<>();
-        final Map<TopicPartition, ListOffsetData> fetchedTimestampOffsets = new HashMap<>();
-        final AtomicInteger remainingResponses = new AtomicInteger(timestampsToSearchByNode.size());
+        final Map<TopicPartition, ListOffsetData> fetchedOffsets = new HashMap<>();
+        final AtomicInteger remainingResponses = new AtomicInteger(toSearchByNode.size());
 
-        for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
+        for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : toSearchByNode.entrySet()) {
             RequestFuture<ListOffsetResult> future =
                 sendListOffsetRequest(entry.getKey(), entry.getValue(), requireTimestamps);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult partialResult) {
                     synchronized (listOffsetRequestsFuture) {
-                        fetchedTimestampOffsets.putAll(partialResult.fetchedOffsets);
+                        fetchedOffsets.putAll(partialResult.fetchedOffsets);
                         partitionsToRetry.addAll(partialResult.partitionsToRetry);
 
                         if (remainingResponses.decrementAndGet() == 0 && !listOffsetRequestsFuture.isDone()) {
-                            ListOffsetResult result = new ListOffsetResult(fetchedTimestampOffsets, partitionsToRetry);
+                            ListOffsetResult result = new ListOffsetResult(fetchedOffsets, partitionsToRetry);
                             listOffsetRequestsFuture.complete(result);
                         }
                     }
@@ -920,21 +988,23 @@ public class Fetcher<K, V> implements Closeable {
      * Groups timestamps to search by node for topic partitions in `timestampsToSearch` that have
      * leaders available. Topic partitions from `timestampsToSearch` that do not have their leader
      * available are added to `partitionsToRetry`
-     * @param timestampsToSearch The mapping from partitions ot the target timestamps
+     * @param toSearch The mapping from partitions to the target timestamps or offsets
      * @param partitionsToRetry A set of topic partitions that will be extended with partitions
      *                          that need metadata update or re-connect to the leader.
      */
     private Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupListOffsetRequests(
-            Map<TopicPartition, Long> timestampsToSearch,
+            Map<TopicPartition, OffsetOrTimestamp> toSearch,
             Set<TopicPartition> partitionsToRetry) {
         final Map<TopicPartition, ListOffsetRequest.PartitionData> partitionDataMap = new HashMap<>();
-        for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
+        for (Map.Entry<TopicPartition, OffsetOrTimestamp> entry: toSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
-            Long offset = entry.getValue();
+            OffsetOrTimestamp ot = entry.getValue();
+            long timestamp = (ot instanceof Timestamp) ? ((Timestamp) ot).timestamp : ListOffsetRequest.EARLIEST_TIMESTAMP;
+            long offset = (ot instanceof Offset) ? ((Offset) ot).offset : ListOffsetRequest.ANY_OFFSET;
             Metadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
 
             if (!leaderAndEpoch.leader.isPresent()) {
-                log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
+                log.debug("Leader for partition {} is unknown for fetching offset {}", tp, toSearch);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
             } else {
@@ -949,7 +1019,7 @@ public class Fetcher<K, V> implements Closeable {
                             leader, tp);
                     partitionsToRetry.add(tp);
                 } else {
-                    partitionDataMap.put(tp, new ListOffsetRequest.PartitionData(offset, leaderAndEpoch.epoch));
+                    partitionDataMap.put(tp, new ListOffsetRequest.PartitionData(timestamp, offset, leaderAndEpoch.epoch));
                 }
             }
         }

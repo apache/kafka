@@ -2129,6 +2129,65 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Look up the timestamps for the given partitions by offsets.
+     *
+     * This is a blocking call. The consumer does not have to be assigned the partitions.
+     * If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
+     * will be returned for that partition.
+     *
+     * @param offsetsToSearch the mapping from partition to the offset to look up.
+     *
+     * @return a mapping from partition to the timestamp and offset of the at the requested offset.
+     *         {@code null} will be returned for the partition if there is no message at this offset.
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
+     * @throws IllegalArgumentException if the target offset is negative
+     * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
+     *         the amount of time allocated by {@code default.api.timeout.ms} expires.
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
+     *         the timestamps by offsets
+     */
+    @Override
+    public Map<TopicPartition, OffsetAndTimestamp> timesForOffsets(Map<TopicPartition, Long> offsetsToSearch) {
+        return timesForOffsets(offsetsToSearch, Duration.ofMillis(defaultApiTimeoutMs));
+    }
+
+    /**
+     * Look up the timestamps for the given partitions by offsets.
+     *
+     * This is a blocking call. The consumer does not have to be assigned the partitions.
+     * If the message format version in a partition is before 0.10.0, i.e. the messages do not have timestamps, null
+     * will be returned for that partition.
+     *
+     * @param offsetsToSearch the mapping from partition to the offset to look up.
+     * @param timeout The maximum amount of time to await retrieval of the offsets
+     *
+     * @return a mapping from partition to the timestamp and offset of the at the requested offset.
+     *         {@code null} will be returned for the partition if there is no message at this offset.
+     * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
+     * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
+     * @throws IllegalArgumentException if the target offset is negative
+     * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
+     *         expiration of the passed timeout
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
+     *         the timestamps by offsets
+     */
+    @Override
+    public Map<TopicPartition, OffsetAndTimestamp> timesForOffsets(Map<TopicPartition, Long> offsetsToSearch, Duration timeout) {
+        acquireAndEnsureOpen();
+        try {
+            for (Map.Entry<TopicPartition, Long> entry : offsetsToSearch.entrySet()) {
+                if (entry.getValue() < 0)
+                    throw new IllegalArgumentException("The target offset for partition " + entry.getKey() + " is " +
+                            entry.getValue() + ". The target offset cannot be negative.");
+            }
+            return fetcher.timesForOffsets(offsetsToSearch, time.timer(timeout));
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * Get the first offset for the given partitions.
      * <p>
      * This method does not change the current consumer position of the partitions.

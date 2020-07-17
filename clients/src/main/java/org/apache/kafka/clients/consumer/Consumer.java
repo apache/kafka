@@ -224,6 +224,16 @@ public interface Consumer<K, V> extends Closeable {
     Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch, Duration timeout);
 
     /**
+     * @see KafkaConsumer#timesForOffsets(Map)
+     */
+    Map<TopicPartition, OffsetAndTimestamp> timesForOffsets(Map<TopicPartition, Long> offsetsToSearch);
+
+    /**
+     * @see KafkaConsumer#timesForOffsets(Map, Duration)
+     */
+    Map<TopicPartition, OffsetAndTimestamp> timesForOffsets(Map<TopicPartition, Long> offsetsToSearch, Duration timeout);
+
+    /**
      * @see KafkaConsumer#beginningOffsets(Collection)
      */
     Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions);

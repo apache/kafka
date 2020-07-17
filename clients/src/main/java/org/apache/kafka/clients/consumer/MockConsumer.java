@@ -410,6 +410,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public synchronized Map<TopicPartition, OffsetAndTimestamp> timesForOffsets(Map<TopicPartition, Long> offsetsToSearch) {
+        throw new UnsupportedOperationException("Not implemented yet.");
+    }
+
+    @Override
     public synchronized Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
         if (offsetsException != null) {
             RuntimeException exception = this.offsetsException;
@@ -529,6 +534,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
             Duration timeout) {
         return offsetsForTimes(timestampsToSearch);
+    }
+
+    @Override
+    public Map<TopicPartition, OffsetAndTimestamp> timesForOffsets(Map<TopicPartition, Long> offsetsToSearch,
+            Duration timeout) {
+        return timesForOffsets(offsetsToSearch);
     }
 
     @Override
