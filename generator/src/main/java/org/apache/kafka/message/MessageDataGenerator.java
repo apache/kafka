@@ -686,7 +686,16 @@ public final class MessageDataGenerator {
                 buffer.printf("%snewBytes%s", assignmentPrefix, assignmentSuffix);
             }
         } else if (type.isRecords()) {
-            buffer.printf("%s_readable.readRecords(%s)%s", assignmentPrefix, lengthVar, assignmentSuffix);
+            headerGenerator.addImport(MessageGenerator.RECORDS_READER_CLASS);
+            buffer.printf("if (_readable instanceof RecordsReader) {%n");
+            buffer.incrementIndent();
+            buffer.printf("%s((RecordsReader) _readable).readRecords(%s)%s", assignmentPrefix, lengthVar, assignmentSuffix);
+            buffer.decrementIndent();
+            buffer.printf("} else {%n");
+            buffer.incrementIndent();
+            buffer.printf("throw new RuntimeException(\"Cannot read records from reader of class: \" + _readable.getClass().getSimpleName());%n");
+            buffer.decrementIndent();
+            buffer.printf("}%n");
         } else if (type.isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
             if (isStructArrayWithKeys) {
@@ -1518,7 +1527,16 @@ public final class MessageDataGenerator {
                         buffer.printf("_writable.writeByteArray(%s);%n", name);
                     }
                 } else if (type.isRecords()) {
-                    buffer.printf("_writable.writeRecords(%s);%n", name);
+                    headerGenerator.addImport(MessageGenerator.RECORDS_WRITER_CLASS);
+                    buffer.printf("if (_writable instanceof RecordsWriter) {%n");
+                    buffer.incrementIndent();
+                    buffer.printf("((RecordsWriter) _writable).writeRecords(%s);%n", name);
+                    buffer.decrementIndent();
+                    buffer.printf("} else {%n");
+                    buffer.incrementIndent();
+                    buffer.printf("throw new RuntimeException(\"Cannot write records to writer of class: \" + _writable.getClass().getSimpleName());%n");
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
                 } else if (type.isArray()) {
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                     FieldType elementType = arrayType.elementType();

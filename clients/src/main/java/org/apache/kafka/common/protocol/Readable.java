@@ -18,7 +18,6 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.RawTaggedField;
-import org.apache.kafka.common.record.BaseRecords;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -35,10 +34,6 @@ public interface Readable {
     void readArray(byte[] arr);
     int readUnsignedVarint();
     ByteBuffer readByteBuffer(int length);
-
-    default BaseRecords readRecords(int length) {
-        throw new UnsupportedOperationException("Not implemented");
-    }
 
     default String readString(int length) {
         byte[] arr = new byte[length];

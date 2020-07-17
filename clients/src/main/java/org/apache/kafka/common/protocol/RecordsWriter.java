@@ -70,60 +70,76 @@ public class RecordsWriter implements Writable {
 
     @Override
     public void writeByte(byte val) {
-        writeQuietly(() -> output.writeByte(val));
-    }
-
-    @Override
-    public void writeShort(short val) {
-        writeQuietly(() -> output.writeShort(val));
-    }
-
-    @Override
-    public void writeInt(int val) {
-        writeQuietly(() -> output.writeInt(val));
-    }
-
-    @Override
-    public void writeLong(long val) {
-        writeQuietly(() -> output.writeLong(val));
-
-    }
-
-    @Override
-    public void writeDouble(double val) {
-        writeQuietly(() -> ByteUtils.writeDouble(val, output));
-
-    }
-
-    @Override
-    public void writeByteArray(byte[] arr) {
-        writeQuietly(() -> output.write(arr));
-    }
-
-    @Override
-    public void writeUnsignedVarint(int i) {
-        writeQuietly(() -> ByteUtils.writeUnsignedVarint(i, output));
-    }
-
-    @Override
-    public void writeByteBuffer(ByteBuffer src) {
-        writeQuietly(() -> output.write(src.array(), src.position(), src.remaining()));
-    }
-
-    @FunctionalInterface
-    private interface IOExceptionThrowingRunnable {
-        void run() throws IOException;
-    }
-
-    private void writeQuietly(IOExceptionThrowingRunnable runnable) {
         try {
-            runnable.run();
+            output.writeByte(val);
         } catch (IOException e) {
-            throw new RuntimeException("Writable encountered an IO error", e);
+            throw new RuntimeException("RecordsWriter encountered an IO error", e);
         }
     }
 
     @Override
+    public void writeShort(short val) {
+        try {
+            output.writeShort(val);
+        } catch (IOException e) {
+            throw new RuntimeException("RecordsWriter encountered an IO error", e);
+        }
+    }
+
+    @Override
+    public void writeInt(int val) {
+        try {
+            output.writeInt(val);
+        } catch (IOException e) {
+            throw new RuntimeException("RecordsWriter encountered an IO error", e);
+        }
+    }
+
+    @Override
+    public void writeLong(long val) {
+        try {
+            output.writeLong(val);
+        } catch (IOException e) {
+            throw new RuntimeException("RecordsWriter encountered an IO error", e);
+        }
+    }
+
+    @Override
+    public void writeDouble(double val) {
+        try {
+            ByteUtils.writeDouble(val, output);
+        } catch (IOException e) {
+            throw new RuntimeException("RecordsWriter encountered an IO error", e);
+        }
+    }
+
+    @Override
+    public void writeByteArray(byte[] arr) {
+        try {
+            output.write(arr);
+        } catch (IOException e) {
+            throw new RuntimeException("RecordsWriter encountered an IO error", e);
+        }
+    }
+
+    @Override
+    public void writeUnsignedVarint(int i) {
+        try {
+            ByteUtils.writeUnsignedVarint(i, output);
+        } catch (IOException e) {
+            throw new RuntimeException("RecordsWriter encountered an IO error", e);
+        }
+    }
+
+    @Override
+    public void writeByteBuffer(ByteBuffer src) {
+        try {
+            output.write(src.array(), src.position(), src.remaining());
+        } catch (IOException e) {
+            throw new RuntimeException("RecordsWriter encountered an IO error", e);
+        }
+    }
+
     public void writeRecords(BaseRecords records) {
         flush();
         sendConsumer.accept(records.toSend(dest));
@@ -133,8 +149,7 @@ public class RecordsWriter implements Writable {
      * Flush any pending bytes as a ByteBufferSend and reset the buffer
      */
     public void flush() {
-        ByteBufferSend send = new ByteBufferSend(dest,
-                ByteBuffer.wrap(byteArrayOutputStream.toByteArray()));
+        ByteBufferSend send = new ByteBufferSend(dest, ByteBuffer.wrap(byteArrayOutputStream.toByteArray()));
         sendConsumer.accept(send);
         byteArrayOutputStream.reset();
     }

@@ -51,7 +51,11 @@ public final class MessageGenerator {
 
     static final String READABLE_CLASS = "org.apache.kafka.common.protocol.Readable";
 
+    static final String RECORDS_READER_CLASS = "org.apache.kafka.common.protocol.RecordsReader";
+
     static final String WRITABLE_CLASS = "org.apache.kafka.common.protocol.Writable";
+
+    static final String RECORDS_WRITER_CLASS = "org.apache.kafka.common.protocol.RecordsWriter";
 
     static final String ARRAYS_CLASS = "java.util.Arrays";
 

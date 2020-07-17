@@ -342,13 +342,6 @@ public class FetchRequest extends AbstractRequest {
         return data.rackId();
     }
 
-    public static FetchRequest parse(ByteBuffer buffer, short version) {
-        ByteBufferAccessor accessor = new ByteBufferAccessor(buffer);
-        FetchRequestData message = new FetchRequestData();
-        message.read(accessor, version);
-        return new FetchRequest(message, version);
-    }
-
     @Override
     public ByteBuffer serialize(RequestHeader header) {
         // Unlike the custom FetchResponse#toSend, we don't include the buffer size here. This buffer is passed
