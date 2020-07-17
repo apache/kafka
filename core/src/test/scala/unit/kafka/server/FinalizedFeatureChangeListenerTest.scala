@@ -76,6 +76,8 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
   /**
    * Tests that the listener can be initialized, and that it can listen to ZK notifications
    * successfully from an "Enabled" FeatureZNode (the ZK data has no feature incompatibilities).
+   * Particularly the test checks if multiple notifications can be processed in ZK
+   * (i.e. whether the FeatureZNode watch can be re-established).
    */
   @Test
   def testInitSuccessAndNotificationSuccess(): Unit = {
@@ -84,18 +86,27 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
     val cache = new FinalizedFeatureCache(brokerFeatures)
     val listener = createListener(cache, Some(initialFinalizedFeatures))
 
-    val updatedFinalizedFeaturesMap = Map[String, FinalizedVersionRange](
-      "feature_1" -> new FinalizedVersionRange(2, 4))
-    val updatedFinalizedFeatures = Features.finalizedFeatures(updatedFinalizedFeaturesMap.asJava)
-    zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, updatedFinalizedFeatures))
-    val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertNotEquals(updatedVersion, ZkVersion.UnknownVersion)
-    assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
-    assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
+    def updateAndCheckCache(finalizedFeatures: Features[FinalizedVersionRange]): Unit = {
+      zkClient.updateFeatureZNode(FeatureZNode(FeatureZNodeStatus.Enabled, finalizedFeatures))
+      val (mayBeFeatureZNodeNewBytes, updatedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
+      assertNotEquals(updatedVersion, ZkVersion.UnknownVersion)
+      assertFalse(mayBeFeatureZNodeNewBytes.isEmpty)
+      assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
 
-    cache.waitUntilEpochOrThrow(updatedVersion, JTestUtils.DEFAULT_MAX_WAIT_MS)
-    assertEquals(FinalizedFeaturesAndEpoch(updatedFinalizedFeatures, updatedVersion), cache.get.get)
-    assertTrue(listener.isListenerInitiated)
+      cache.waitUntilEpochOrThrow(updatedVersion, JTestUtils.DEFAULT_MAX_WAIT_MS)
+      assertEquals(FinalizedFeaturesAndEpoch(finalizedFeatures, updatedVersion), cache.get.get)
+      assertTrue(listener.isListenerInitiated)
+    }
+
+    updateAndCheckCache(
+      Features.finalizedFeatures(
+        Map[String, FinalizedVersionRange](
+      "feature_1" -> new FinalizedVersionRange(2, 4)).asJava))
+    updateAndCheckCache(
+      Features.finalizedFeatures(
+        Map[String, FinalizedVersionRange](
+          "feature_1" -> new FinalizedVersionRange(2, 4),
+          "feature_2" -> new FinalizedVersionRange(1, 3)).asJava))
   }
 
   /**
