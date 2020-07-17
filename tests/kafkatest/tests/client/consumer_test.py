@@ -256,7 +256,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
             wait_until(lambda: len(consumer.dead_nodes()) == num_conflict_consumers,
                        timeout_sec=10,
-                       err_msg("Timed out waiting for the fenced consumers to stop"))
+                       err_msg="Timed out waiting for the fenced consumers to stop")
         else:
             consumer.start()
             conflict_consumer.start()
