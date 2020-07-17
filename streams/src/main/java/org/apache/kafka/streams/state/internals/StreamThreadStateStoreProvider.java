@@ -29,11 +29,10 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
+import java.util.Collection;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class StreamThreadStateStoreProvider {
 
@@ -52,19 +51,17 @@ public class StreamThreadStateStoreProvider {
         }
         final StreamThread.State state = streamThread.state();
         if (storeQueryParams.staleStoresEnabled() ? state.isAlive() : state == StreamThread.State.RUNNING) {
-            final Stream<Map.Entry<TaskId, Task>> taskStream = storeQueryParams.staleStoresEnabled() ?
-                    streamThread.allTasks().entrySet().stream() :
-                    streamThread.allTasks().entrySet().stream().filter(entry -> entry.getValue().isActive());
+            final Collection<Task> tasks = storeQueryParams.staleStoresEnabled() ?
+                    streamThread.allTasks().values() : streamThread.activeTasks();
 
             if (storeQueryParams.partition() != null) {
-                return findStreamTask(taskStream, storeName, storeQueryParams.partition()).
+                return findStreamTask(tasks, storeName, storeQueryParams.partition()).
                         map(streamTask ->
                                 validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id())).
                         map(Collections::singletonList).
                         orElse(Collections.emptyList());
             } else {
-                return taskStream.
-                        map(Map.Entry::getValue).
+                return tasks.stream().
                         map(streamTask ->
                                 validateAndListStores(streamTask.getStore(storeName), queryableStoreType, storeName, streamTask.id())).
                         filter(Objects::nonNull).
@@ -98,12 +95,11 @@ public class StreamThreadStateStoreProvider {
         }
     }
 
-    private Optional<Task> findStreamTask(final Stream<Map.Entry<TaskId, Task>> taskStream, final String storeName, final int partition) {
-        return taskStream.
-                filter(entry -> entry.getKey().partition == partition &&
-                        entry.getValue().getStore(storeName) != null &&
-                        storeName.equals(entry.getValue().getStore(storeName).name())).
-                findFirst().
-                map(Map.Entry::getValue);
+    private Optional<Task> findStreamTask(final Collection<Task> tasks, final String storeName, final int partition) {
+        return tasks.stream().
+                filter(streamTask -> streamTask.id().partition == partition &&
+                        streamTask.getStore(storeName) != null &&
+                        storeName.equals(streamTask.getStore(storeName).name())).
+                findFirst();
     }
 }
