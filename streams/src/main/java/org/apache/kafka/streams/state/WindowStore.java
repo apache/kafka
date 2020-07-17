@@ -88,7 +88,6 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * |   A   |     25     |    35    |
      * +--------------------------------
      * </pre>
-     * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
      * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest

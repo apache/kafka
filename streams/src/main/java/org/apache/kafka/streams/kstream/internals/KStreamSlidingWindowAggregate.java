@@ -18,6 +18,8 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
@@ -28,6 +30,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
@@ -40,7 +43,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
+public class KStreamSlidingWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
@@ -50,7 +53,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(final Windows<W> windows,
+    public KStreamSlidingWindowAggregate(final Windows<W> windows,
                                   final String storeName,
                                   final Initializer<Agg> initializer,
                                   final Aggregator<? super K, ? super V, Agg> aggregator) {
@@ -62,7 +65,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
     @Override
     public Processor<K, V> get() {
-        return new KStreamWindowAggregateProcessor();
+        return new KStreamSlidingWindowAggregateProcessor();
     }
 
     public Windows<W> windows() {
@@ -75,7 +78,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     }
 
 
-    private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
+    private class KStreamSlidingWindowAggregateProcessor extends AbstractProcessor<K, V> {
         private TimestampedWindowStore<K, Agg> windowStore;
         private TimestampedTupleForwarder<Windowed<K>, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
@@ -92,26 +95,26 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             metrics = internalProcessorContext.metrics();
             final String threadId = Thread.currentThread().getName();
             lateRecordDropSensor = droppedRecordsSensorOrLateRecordDropSensor(
-                threadId,
-                context.taskId().toString(),
-                internalProcessorContext.currentNode().name(),
-                metrics
+                    threadId,
+                    context.taskId().toString(),
+                    internalProcessorContext.currentNode().name(),
+                    metrics
             );
             droppedRecordsSensor = droppedRecordsSensorOrSkippedRecordsSensor(threadId, context.taskId().toString(), metrics);
             windowStore = (TimestampedWindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                windowStore,
-                context,
-                new TimestampedCacheFlushListener<>(context),
-                sendOldValues);
+                    windowStore,
+                    context,
+                    new TimestampedCacheFlushListener<>(context),
+                    sendOldValues);
         }
 
         @Override
         public void process(final K key, final V value) {
             if (key == null) {
                 log.warn(
-                    "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    value, context().topic(), context().partition(), context().offset()
+                        "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        value, context().topic(), context().partition(), context().offset()
                 );
                 droppedRecordsSensor.record();
                 return;
@@ -121,58 +124,55 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             final long timestamp = context().timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
-            final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
+            //BRANCH HERE IF DOING SLIDING/TIME IN SAME CLASS
 
-            // try update the window, and create the new window for the rest of unmatched window that do not exist yet
-            for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
-                final Long windowStart = entry.getKey();
-                final long windowEnd = entry.getValue().end();
-                if (windowEnd > closeTime) {
-                    final ValueAndTimestamp<Agg> oldAggAndTimestamp = windowStore.fetch(key, windowStart);
-                    Agg oldAgg = getValueOrNull(oldAggAndTimestamp);
+            TimeWindow leftWindow = new TimeWindow(timestamp-windows.size(), timestamp);
+            TimeWindow rightWindow = new TimeWindow(timestamp+1, timestamp+1+windows.size());
 
+            Agg oldAgg = initializer.apply();
+            try(
+                    //fetch all might pull the wrong windows
+                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetchAll(
+                            timestamp-windows.size(),
+                            timestamp
+                    )
+            ){
+                while(iterator.hasNext()){
                     final Agg newAgg;
-                    final long newTimestamp;
-
-                    if (oldAgg == null) {
-                        oldAgg = initializer.apply();
-                        newTimestamp = context().timestamp();
-                    } else {
-                        newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
-                    }
-
+                    final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next = iterator.next();
+                    oldAgg = getValueOrNull(next.value);
                     newAgg = aggregator.apply(key, value, oldAgg);
-
-                    // update the store with the new value
-                    windowStore.put(key, ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
+                    windowStore.put(next.key, ValueAndTimestamp.make(newAgg, next.value.timestamp()), next.key);
                     tupleForwarder.maybeForward(
-                        new Windowed<>(key, entry.getValue()),
-                        newAgg,
-                        sendOldValues ? oldAgg : null,
-                        newTimestamp);
-                } else {
-                    log.warn(
-                        "Skipping record for expired window. " +
-                            "key=[{}] " +
-                            "topic=[{}] " +
-                            "partition=[{}] " +
-                            "offset=[{}] " +
-                            "timestamp=[{}] " +
-                            "window=[{},{}) " +
-                            "expiration=[{}] " +
-                            "streamTime=[{}]",
-                        key,
-                        context().topic(),
-                        context().partition(),
-                        context().offset(),
-                        context().timestamp(),
-                        windowStart, windowEnd,
-                        closeTime,
-                        observedStreamTime
-                    );
-                    lateRecordDropSensor.record();
+                            new Windowed<>(key, next.value),
+                            newAgg,
+                            sendOldValues ? oldAgg : null,
+                            next.value.timestamp());
                 }
+                //check to see if new right windows exist? otherwise update?
+                final ValueAndTimestamp<Agg> rightWindowAggAndTimestamp = windowStore.fetch(key, rightWindow.start());
+                Agg recordAgg = getValueOrNull(rightWindowAggAndTimestamp);
+                if(recordAgg == null){
+                   recordAgg = initializer.apply();
+                   recordAgg = aggregator.apply(key, value, recordAgg);
+
+                   windowStore.put(key,
+                           ValueAndTimestamp.make(recordAgg, rightWindowAggAndTimestamp.timestamp()),
+                           rightWindow.start());
+                    tupleForwarder.maybeForward(
+                            new Windowed<>(key, entry.getValue()),
+                            newAgg,
+                            sendOldValues ? oldAgg : null,
+                            newTimestamp);
+
+                }
+
             }
+
+
+
+
+
         }
 
     }
