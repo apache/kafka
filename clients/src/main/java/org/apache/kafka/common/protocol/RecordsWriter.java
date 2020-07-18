@@ -20,9 +20,9 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.BaseRecords;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -58,14 +58,16 @@ import java.util.function.Consumer;
 public class RecordsWriter implements Writable {
     private final String dest;
     private final Consumer<Send> sendConsumer;
-    private final ByteArrayOutputStream byteArrayOutputStream;
+    private final ByteBufferOutputStream byteArrayOutputStream;
     private final DataOutput output;
+    private int mark;
 
     public RecordsWriter(String dest, Consumer<Send> sendConsumer) {
         this.dest = dest;
         this.sendConsumer = sendConsumer;
-        this.byteArrayOutputStream = new ByteArrayOutputStream();
+        this.byteArrayOutputStream = new ByteBufferOutputStream(32);
         this.output = new DataOutputStream(this.byteArrayOutputStream);
+        this.mark = 0;
     }
 
     @Override
@@ -149,8 +151,19 @@ public class RecordsWriter implements Writable {
      * Flush any pending bytes as a ByteBufferSend and reset the buffer
      */
     public void flush() {
-        ByteBufferSend send = new ByteBufferSend(dest, ByteBuffer.wrap(byteArrayOutputStream.toByteArray()));
-        sendConsumer.accept(send);
-        byteArrayOutputStream.reset();
+        ByteBuffer buf = byteArrayOutputStream.buffer();
+        int end = buf.position();
+        int len = end - mark;
+
+        if (len > 0) {
+            buf.position(mark);
+            ByteBuffer slice = buf.slice();
+            slice.limit(len);
+            ByteBufferSend send = new ByteBufferSend(dest, slice);
+            sendConsumer.accept(send);
+        }
+
+        buf.position(end);
+        mark = end;
     }
 }
