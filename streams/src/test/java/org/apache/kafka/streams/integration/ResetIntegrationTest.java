@@ -71,13 +71,17 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     }
 
     @Override
+    protected String getTestId() {
+        return TEST_ID;
+    }
+
+    @Override
     Map<String, Object> getClientSslConfig() {
         return null;
     }
 
     @Before
     public void before() throws Exception {
-        testId = TEST_ID;
         cluster = CLUSTER;
         prepareTest();
     }
@@ -89,7 +93,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhileStreamsIsRunning() {
-        appID = testId + "-not-reset-during-runtime";
+        final String appID = getTestId() + "-not-reset-during-runtime";
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
@@ -114,7 +118,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
-        appID = testId + "-not-reset-without-input-topic";
+        final String appID = getTestId() + "-not-reset-without-input-topic";
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
@@ -131,7 +135,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
-        appID = testId + "-not-reset-without-intermediate-topic";
+        final String appID = getTestId() + "-not-reset-without-intermediate-topic";
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
@@ -148,7 +152,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
-        appID = testId + "-with-force-option";
+        final String appID = getTestId() + "-with-force-option";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
         streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(STREAMS_CONSUMER_TIMEOUT * 100));
 
@@ -164,11 +168,11 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams.cleanUp();
 
         // Reset would fail since long session timeout has been configured
-        final boolean cleanResult = tryCleanGlobal(false, null, null);
+        final boolean cleanResult = tryCleanGlobal(false, null, null, appID);
         Assert.assertFalse(cleanResult);
 
         // Reset will success with --force, it will force delete active members on broker side
-        cleanGlobal(false, "--force", null);
+        cleanGlobal(false, "--force", null, appID);
         assertThat("Group is not empty after cleanGlobal", isEmptyConsumerGroup(adminClient, appID));
 
         assertInternalTopicsGotDeleted(null);
@@ -179,12 +183,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
-        cleanGlobal(false, "--force", null);
+        cleanGlobal(false, "--force", null, appID);
     }
 
     @Test
     public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
-        appID = testId + "-from-file";
+        final String appID = getTestId() + "-from-file";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -204,7 +208,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.cleanUp();
 
-        cleanGlobal(false, "--from-file", resetFile.getAbsolutePath());
+        cleanGlobal(false, "--from-file", resetFile.getAbsolutePath(), appID);
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         assertInternalTopicsGotDeleted(null);
@@ -220,12 +224,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertThat(resultRerun, equalTo(result));
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
-        cleanGlobal(false, null, null);
+        cleanGlobal(false, null, null, appID);
     }
 
     @Test
     public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
-        appID = testId + "-from-datetime";
+        final String appID = getTestId() + "-from-datetime";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -250,7 +254,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         final Calendar calendar = Calendar.getInstance();
         calendar.add(Calendar.DATE, -1);
 
-        cleanGlobal(false, "--to-datetime", format.format(calendar.getTime()));
+        cleanGlobal(false, "--to-datetime", format.format(calendar.getTime()), appID);
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         assertInternalTopicsGotDeleted(null);
@@ -265,12 +269,12 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertThat(resultRerun, equalTo(result));
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
-        cleanGlobal(false, null, null);
+        cleanGlobal(false, null, null, appID);
     }
 
     @Test
     public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
-        appID = testId + "-from-duration";
+        final String appID = getTestId() + "-from-duration";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -289,7 +293,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.cleanUp();
-        cleanGlobal(false, "--by-duration", "PT1M");
+        cleanGlobal(false, "--by-duration", "PT1M", appID);
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
@@ -305,7 +309,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         assertThat(resultRerun, equalTo(result));
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
-        cleanGlobal(false, null, null);
+        cleanGlobal(false, null, null, appID);
     }
 
 }

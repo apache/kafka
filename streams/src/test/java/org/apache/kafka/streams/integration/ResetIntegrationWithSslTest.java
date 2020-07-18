@@ -64,13 +64,17 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
     }
 
     @Override
+    protected String getTestId() {
+        return TEST_ID;
+    }
+
+    @Override
     Map<String, Object> getClientSslConfig() {
         return SSL_CONFIG;
     }
 
     @Before
     public void before() throws Exception {
-        testId = TEST_ID;
         cluster = CLUSTER;
         prepareTest();
     }

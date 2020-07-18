@@ -67,13 +67,13 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
 public abstract class AbstractResetIntegrationTest {
-    static String testId;
     static EmbeddedKafkaCluster cluster;
 
     private static MockTime mockTime;
     protected static KafkaStreams streams;
-    protected static Admin adminClient = null;
+    protected static Admin adminClient;
 
+    abstract protected String getTestId();
     abstract Map<String, Object> getClientSslConfig();
 
     @AfterClass
@@ -84,7 +84,6 @@ public abstract class AbstractResetIntegrationTest {
         }
     }
 
-    protected String appID = "abstract-reset-integration-test";
     protected Properties commonClientConfig;
     protected Properties streamsConfig;
     private Properties producerConfig;
@@ -134,7 +133,7 @@ public abstract class AbstractResetIntegrationTest {
         producerConfig.putAll(commonClientConfig);
 
         resultConsumerConfig = new Properties();
-        resultConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, testId + "-result-consumer");
+        resultConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, getTestId() + "-result-consumer");
         resultConsumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         resultConsumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
         resultConsumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
@@ -169,7 +168,7 @@ public abstract class AbstractResetIntegrationTest {
         prepareConfigs();
         prepareEnvironment();
 
-        waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
+        waitForEmptyConsumerGroup(adminClient, getTestId(), TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
 
         cluster.deleteAllTopicsAndWait(120000);
         cluster.createTopics(INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN);
@@ -204,7 +203,7 @@ public abstract class AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        appID = testId + "-from-scratch";
+        final String appID = getTestId() + "-from-scratch";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -218,7 +217,7 @@ public abstract class AbstractResetIntegrationTest {
         // RESET
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.cleanUp();
-        cleanGlobal(false, null, null);
+        cleanGlobal(false, null, null, appID);
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         assertInternalTopicsGotDeleted(null);
@@ -231,7 +230,7 @@ public abstract class AbstractResetIntegrationTest {
         assertThat(resultRerun, equalTo(result));
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
-        cleanGlobal(false, null, null);
+        cleanGlobal(false, null, null, appID);
     }
 
     @Test
@@ -249,7 +248,7 @@ public abstract class AbstractResetIntegrationTest {
             cluster.createTopic(INTERMEDIATE_USER_TOPIC);
         }
 
-        appID = testId + "-from-scratch-with-intermediate-topic";
+        final String appID = getTestId() + "-from-scratch-with-intermediate-topic";
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -277,7 +276,7 @@ public abstract class AbstractResetIntegrationTest {
         // RESET
         streams = new KafkaStreams(setupTopologyWithIntermediateTopic(useRepartitioned, OUTPUT_TOPIC_2_RERUN), streamsConfig);
         streams.cleanUp();
-        cleanGlobal(!useRepartitioned, null, null);
+        cleanGlobal(!useRepartitioned, null, null, appID);
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
 
         assertInternalTopicsGotDeleted(useRepartitioned ? null : INTERMEDIATE_USER_TOPIC);
@@ -292,7 +291,7 @@ public abstract class AbstractResetIntegrationTest {
         assertThat(resultRerun2, equalTo(result2));
 
         if (!useRepartitioned) {
-            final Properties props = TestUtils.consumerConfig(cluster.bootstrapServers(), testId + "-result-consumer", LongDeserializer.class, StringDeserializer.class, commonClientConfig);
+            final Properties props = TestUtils.consumerConfig(cluster.bootstrapServers(), getTestId() + "-result-consumer", LongDeserializer.class, StringDeserializer.class, commonClientConfig);
             final List<KeyValue<Long, String>> resultIntermediate = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(props, INTERMEDIATE_USER_TOPIC, 21);
 
             for (int i = 0; i < 10; i++) {
@@ -302,7 +301,7 @@ public abstract class AbstractResetIntegrationTest {
         }
 
         waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT);
-        cleanGlobal(!useRepartitioned, null, null);
+        cleanGlobal(!useRepartitioned, null, null, appID);
 
         if (!useRepartitioned) {
             cluster.deleteTopicAndWait(INTERMEDIATE_USER_TOPIC);
@@ -353,7 +352,8 @@ public abstract class AbstractResetIntegrationTest {
 
     protected boolean tryCleanGlobal(final boolean withIntermediateTopics,
                                    final String resetScenario,
-                                   final String resetScenarioArg) throws Exception {
+                                   final String resetScenarioArg,
+                                   final String appID) throws Exception {
         // leaving --zookeeper arg here to ensure tool works if users add it
         final List<String> parameterList = new ArrayList<>(
             Arrays.asList("--application-id", appID,
@@ -395,8 +395,9 @@ public abstract class AbstractResetIntegrationTest {
 
     protected void cleanGlobal(final boolean withIntermediateTopics,
                              final String resetScenario,
-                             final String resetScenarioArg) throws Exception {
-        final boolean cleanResult = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg);
+                             final String resetScenarioArg,
+                             final String appID) throws Exception {
+        final boolean cleanResult = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg, appID);
         Assert.assertTrue(cleanResult);
     }
 
