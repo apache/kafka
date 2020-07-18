@@ -2122,7 +2122,6 @@ public final class MessageDataGenerator {
                     field.camelCaseName(), field.camelCaseName());
             }
         } else if (field.type().isRecords()) {
-            // TODO is this valid for record instances?
             headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
             buffer.printf("if (!Objects.equals(this.%s, other.%s)) return false;%n",
                     field.camelCaseName(), field.camelCaseName());
@@ -2176,7 +2175,6 @@ public final class MessageDataGenerator {
                     field.camelCaseName());
             }
         } else if (field.type().isRecords()) {
-            // TODO is this valid for record instances?
             headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
             buffer.printf("hashCode = 31 * hashCode + Objects.hashCode(%s);%n",
                     field.camelCaseName());
@@ -2461,7 +2459,6 @@ public final class MessageDataGenerator {
                 return "Bytes.EMPTY";
             }
         } else if (field.type().isRecords()) {
-            // TODO should we use some special EmptyRecords class instead?
             return "null";
         } else if (field.type().isStruct()) {
             if (!field.defaultString().isEmpty()) {

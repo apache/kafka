@@ -363,6 +363,11 @@ public class FetchRequest extends AbstractRequest {
         return buffer;
     }
 
+    // For testing
+    public static FetchRequest parse(ByteBuffer buffer, short version) {
+        return new FetchRequest(new FetchRequestData(ApiKeys.FETCH.parseRequest(version, buffer), version), version);
+    }
+
     @Override
     protected Struct toStruct() {
         return data.toStruct(version());
