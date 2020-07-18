@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 /**
- * Indicates that the state store being queried is already closed. It could happen when Kafka Streams is in
+ * Indicates that the state store being queried is already closed. This could happen when Kafka Streams is in
  * {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} or
  * {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} or
  * {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR} state.

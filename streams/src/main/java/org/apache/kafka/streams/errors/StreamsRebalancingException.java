@@ -17,10 +17,9 @@
 package org.apache.kafka.streams.errors;
 
 /**
- * Indicate query a state store and stream thread state is not running when Kafka Streams state is
- * {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} or
- * {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
- * User can just retry and wait until rebalance finished.
+ * Indicates that Kafka Streams is in state {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING} and thus
+ * cannot be queried by default. You can retry to query after the rebalance finished. As an alternative, you can also query
+ * (potentially stale) state stores during a rebalance via {@link org.apache.kafka.streams.StoreQueryParameters#enableStaleStores()}.
  */
 public class StreamsRebalancingException extends InvalidStateStoreException {
 

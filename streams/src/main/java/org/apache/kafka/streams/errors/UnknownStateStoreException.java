@@ -17,7 +17,8 @@
 package org.apache.kafka.streams.errors;
 
 /**
- * Indicates that the state store being queried is invalid. Hence, it will be futile to retry again.
+ * Indicates that the state store being queried is unknown, i.e., the state store does either not exist in your topology
+ * or it is not queryable.
  */
 public class UnknownStateStoreException extends InvalidStateStoreException {
 

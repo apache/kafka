@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.streams.KafkaStreams;
+
 /**
  * Indicates that the specific state store being queried via
- * {@link org.apache.kafka.streams.StoreQueryParameters} used an invalid partition.
+ * {@link org.apache.kafka.streams.StoreQueryParameters} used a partitioning that is not assigned to this instance.
+ * You can use {@link KafkaStreams#allMetadata()} to discover the correct instance that hosts the requested partition.
  */
 public class InvalidStateStorePartitionException extends InvalidStateStoreException {
 

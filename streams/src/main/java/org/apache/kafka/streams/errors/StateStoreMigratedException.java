@@ -20,7 +20,7 @@ package org.apache.kafka.streams.errors;
  * Indicates that the state store being queried is closed although the Kafka Streams state is
  * {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} or
  * {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
- * It could happen because the partition moved to some other instance during a rebalance so
+ * This could happen because the store moved to some other instance during a rebalance so
  * rediscovery of the state store is required before retrying.
  */
 public class StateStoreMigratedException extends InvalidStateStoreException {

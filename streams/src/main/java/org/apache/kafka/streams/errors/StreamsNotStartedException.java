@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.streams.KafkaStreams;
+
 /**
- * Indicate query a state store when Kafka Streams state is {@link org.apache.kafka.streams.KafkaStreams.State#CREATED CREATED}.
- * User can just retry and wait until to {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING}
+ * Indicates that Kafka Streams is in state {@link KafkaStreams.State#CREATED CREATED} and thus state stores cannot be queries yet.
+ * To query state stores, it's required to first start Kafka Streams via {@link KafkaStreams#start()}.
+ * You can retry to query the state after the state transitioned to to {@link KafkaStreams.State#RUNNING RUNNING}
  */
 public class StreamsNotStartedException extends InvalidStateStoreException {
 
