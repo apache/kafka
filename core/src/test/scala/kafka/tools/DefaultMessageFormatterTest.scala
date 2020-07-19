@@ -92,12 +92,12 @@ object DefaultMessageFormatterTest {
         "print partition",
         consumerRecord(),
         Map("print.partition" -> "true", "print.value" -> "false"),
-        "9\n"),
+        "Partition:9\n"),
       Array(
         "print offset",
         consumerRecord(),
         Map("print.offset" -> "true", "print.value" -> "false"),
-        "9876\n"),
+        "Offset:9876\n"),
       Array(
         "print headers",
         consumerRecord(),
@@ -117,7 +117,7 @@ object DefaultMessageFormatterTest {
           "print.offset" -> "true",
           "print.headers" -> "true",
           "print.value" -> "true"),
-        "CreateTime:1234\tsomeKey\t9876\t9\th1:v1,h2:v2\tsomeValue\n"),
+        "CreateTime:1234\tPartition:9\tOffset:9876\th1:v1,h2:v2\tsomeKey\tsomeValue\n"),
       Array(
         "print all possible fields with custom delimiters",
         consumerRecord(),
@@ -131,7 +131,7 @@ object DefaultMessageFormatterTest {
           "print.offset" -> "true",
           "print.headers" -> "true",
           "print.value" -> "true"),
-        "CreateTime:1234|someKey|9876|9|h1:v1#h2:v2|someValue^"),
+        "CreateTime:1234|Partition:9|Offset:9876|h1:v1#h2:v2|someKey|someValue^"),
       Array(
         "print key with custom deserializer",
         consumerRecord(),
@@ -140,7 +140,7 @@ object DefaultMessageFormatterTest {
           "print.headers" -> "true",
           "print.value" -> "true",
           "key.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
-        "SOMEKEY\th1:v1,h2:v2\tsomeValue\n"),
+        "h1:v1,h2:v2\tSOMEKEY\tsomeValue\n"),
       Array(
         "print value with custom deserializer",
         consumerRecord(),
@@ -149,7 +149,7 @@ object DefaultMessageFormatterTest {
           "print.headers" -> "true",
           "print.value" -> "true",
           "value.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
-        "someKey\th1:v1,h2:v2\tSOMEVALUE\n"),
+        "h1:v1,h2:v2\tsomeKey\tSOMEVALUE\n"),
       Array(
         "print headers with custom deserializer",
         consumerRecord(),
@@ -158,7 +158,7 @@ object DefaultMessageFormatterTest {
           "print.headers" -> "true",
           "print.value" -> "true",
           "headers.deserializer" -> "unit.kafka.tools.UpperCaseDeserializer"),
-        "someKey\th1:V1,h2:V2\tsomeValue\n"),
+        "h1:V1,h2:V2\tsomeKey\tsomeValue\n"),
       Array(
         "print key and value",
         consumerRecord(),
@@ -168,7 +168,7 @@ object DefaultMessageFormatterTest {
         "print fields in the beginning, middle and the end",
         consumerRecord(),
         Map("print.key" -> "true", "print.value" -> "true", "print.partition" -> "true"),
-        "someKey\t9\tsomeValue\n")
+        "Partition:9\tsomeKey\tsomeValue\n")
     ).asJava
   }
 

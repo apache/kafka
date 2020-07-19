@@ -513,22 +513,19 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(utfBytes(s"$timestampType:$timestamp"))
       else
         output.write(utfBytes("NO_TIMESTAMP"))
-      writeSeparator(columnSeparator = printKey || printOffset || printPartition || printHeaders || printValue)
-    }
-
-    if (printKey) {
-      write(keyDeserializer, key, topic)
-      writeSeparator(columnSeparator = printOffset || printPartition || printHeaders || printValue)
-    }
-
-    if (printOffset) {
-      output.write(utfBytes(offset().toString))
-      writeSeparator(columnSeparator = printPartition || printHeaders || printValue)
+      writeSeparator(columnSeparator =  printOffset || printPartition || printHeaders || printKey || printValue)
     }
 
     if (printPartition) {
+      output.write(utfBytes("Partition:"))
       output.write(utfBytes(partition().toString))
-      writeSeparator(columnSeparator = printHeaders || printValue)
+      writeSeparator(columnSeparator = printOffset || printHeaders || printKey || printValue)
+    }
+
+    if (printOffset) {
+      output.write(utfBytes("Offset:"))
+      output.write(utfBytes(offset().toString))
+      writeSeparator(columnSeparator = printHeaders || printKey || printValue)
     }
 
     if (printHeaders) {
@@ -544,6 +541,11 @@ class DefaultMessageFormatter extends MessageFormatter {
       } else {
         output.write(utfBytes("NO_HEADERS"))
       }
+      writeSeparator(columnSeparator = printKey || printValue)
+    }
+
+    if (printKey) {
+      write(keyDeserializer, key, topic)
       writeSeparator(columnSeparator = printValue)
     }
 
