@@ -38,7 +38,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     super.setUp()
     quotaTestClients.alterClientQuotas(
       quotaTestClients.clientQuotaAlteration(
-        quotaTestClients.clientQuotaEntity(Some(null), None),
+        quotaTestClients.clientQuotaEntity(Some(QuotaTestClients.DefaultEntity), None),
         Some(defaultProducerQuota), Some(defaultConsumerQuota), Some(defaultRequestQuota)
       )
     )

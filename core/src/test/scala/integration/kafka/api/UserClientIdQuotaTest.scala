@@ -37,7 +37,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
     super.setUp()
     quotaTestClients.alterClientQuotas(
       quotaTestClients.clientQuotaAlteration(
-        quotaTestClients.clientQuotaEntity(Some(null), Some(null)),
+        quotaTestClients.clientQuotaEntity(Some(QuotaTestClients.DefaultEntity), Some(QuotaTestClients.DefaultEntity)),
         Some(defaultProducerQuota), Some(defaultConsumerQuota), Some(defaultRequestQuota)
       )
     )

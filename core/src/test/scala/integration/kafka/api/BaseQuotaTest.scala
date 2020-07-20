@@ -184,6 +184,8 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 }
 
 object QuotaTestClients {
+  val DefaultEntity: String = null
+
   def metricValue(metric: Metric): Double = metric.metricValue().asInstanceOf[Double]
 }
 
@@ -339,7 +341,6 @@ abstract class QuotaTestClients(topic: String,
       assertEquals("Should not have been throttled", 0.0, metricValue(maxMetric), 0.0)
   }
 
-  // Default is set by using Some(null) for either or both user and clientId
   def clientQuotaEntity(user: Option[String], clientId: Option[String]): ClientQuotaEntity = {
     var entries = Map.empty[String, String]
     user.foreach(user => entries = entries ++ Map(ClientQuotaEntity.USER -> user))
