@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.io.File;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -1056,6 +1057,55 @@ public class SslTransportLayerTest {
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
+    }
+
+    @Test
+    public void testServerKeystoreDynamicUpdateWithNewSubjectAltName() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
+            false, securityProtocol, config, null, null, time, new LogContext());
+        server = new NioEchoServer(listenerName, securityProtocol, config,
+            "localhost", serverChannelBuilder, null, time);
+        server.start();
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+
+        Selector selector = createSelector(sslClientConfigs);
+        String node1 = "1";
+        selector.connect(node1, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node1, 100, 10);
+        selector.close();
+
+        TestSslUtils.CertificateBuilder certBuilder = new TestSslUtils.CertificateBuilder().sanDnsNames("localhost", "*.example.com");
+        File truststoreFile = new File((String) sslClientConfigs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+        Map<String, Object> newConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, truststoreFile, "server", "server", certBuilder);
+        Map<String, Object> newKeystoreConfigs = new HashMap<>();
+        for (String propName : CertStores.KEYSTORE_PROPS) {
+            newKeystoreConfigs.put(propName, newConfigs.get(propName));
+        }
+        ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
+        reconfigurableBuilder.validateReconfiguration(newKeystoreConfigs);
+        reconfigurableBuilder.reconfigure(newKeystoreConfigs);
+
+        for (String propName : CertStores.TRUSTSTORE_PROPS) {
+            sslClientConfigs.put(propName, newConfigs.get(propName));
+        }
+        selector = createSelector(sslClientConfigs);
+        String node2 = "2";
+        selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
+
+        TestSslUtils.CertificateBuilder invalidBuilder = new TestSslUtils.CertificateBuilder().sanDnsNames("localhost");
+        Map<String, Object> invalidConfig = TestSslUtils.createSslConfig(false, false, Mode.SERVER, truststoreFile, "server", "server", invalidBuilder);
+        Map<String, Object> invalidKeystoreConfigs = new HashMap<>();
+        for (String propName : CertStores.KEYSTORE_PROPS) {
+            invalidKeystoreConfigs.put(propName, invalidConfig.get(propName));
+        }
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidKeystoreConfigs, "keystore without existing SubjectAltName");
+        String node3 = "3";
+        selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
     }
 
     /**
