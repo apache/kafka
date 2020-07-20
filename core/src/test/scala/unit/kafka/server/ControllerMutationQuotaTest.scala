@@ -129,7 +129,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Theoretically, the throttle time should be below or equal to:
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
-      assertThrottleTime(5000, throttleTimeMs1, 1000)
+      assertThrottleTime(5000, throttleTimeMs1)
       assertEquals(Seq(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
 
       // Retry the second topic. It should succeed after the throttling delay is passed and the
@@ -149,7 +149,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Theoretically, the throttle time should be below or equal to:
       // ((60 / 10) - 2) / 2 * 10 = 20s
       val (throttleTimeMs, errors) = createTopics(TopicsWith30Partitions, PermissiveCreateTopicsRequestVersion)
-      assertThrottleTime(20000, throttleTimeMs, 1000)
+      assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Seq(Errors.NONE, Errors.NONE), errors)
     }
   }
@@ -177,7 +177,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Theoretically, the throttle time should be below or equal to:
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = deleteTopics(TopicsWith30Partitions, StrictDeleteTopicsRequestVersion)
-      assertThrottleTime(5000, throttleTimeMs1, 1000)
+      assertThrottleTime(5000, throttleTimeMs1)
       assertEquals(Seq(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
 
       // Retry the second topic. It should succeed after the throttling delay is passed and the
@@ -201,7 +201,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Theoretically, the throttle time should be below or equal to:
       // ((60 / 10) - 2) / 2 * 10 = 20s
       val (throttleTimeMs, errors) = deleteTopics(TopicsWith30Partitions, PermissiveDeleteTopicsRequestVersion)
-      assertThrottleTime(20000, throttleTimeMs, 1000)
+      assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Seq(Errors.NONE, Errors.NONE), errors)
     }
   }
@@ -231,7 +231,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Theoretically, the throttle time should be below or equal to:
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = createPartitions(TopicsWith31Partitions, StrictCreatePartitionsRequestVersion)
-      assertThrottleTime(5000, throttleTimeMs1,1000)
+      assertThrottleTime(5000, throttleTimeMs1)
       assertEquals(Seq(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
 
       // Retry the second topic. It should succeed after the throttling delay is passed and the
@@ -255,7 +255,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Theoretically, the throttle time should be below or equal to:
       // ((60 / 10) - 2) / 2 * 10 = 20s
       val (throttleTimeMs, errors) = createPartitions(TopicsWith31Partitions, PermissiveCreatePartitionsRequestVersion)
-      assertThrottleTime(20000, throttleTimeMs, 1000)
+      assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Seq(Errors.NONE, Errors.NONE), errors)
     }
   }
@@ -273,10 +273,10 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def assertThrottleTime(expected: Int, actual: Int, delta: Int): Unit = {
+  private def assertThrottleTime(max: Int, actual: Int): Unit = {
     assertTrue(
-      s"Expected a throttle time between $expected and ${expected-delta} but got $actual",
-      (expected - actual) < delta)
+      s"Expected a throttle time between 0 and $max but got $actual",
+      (actual >= 0) && (actual <= max))
   }
 
   private def createTopics(topics: Seq[(String, Int)], version: Short): (Int, Seq[Errors]) = {
