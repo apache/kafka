@@ -23,7 +23,6 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.Sensor
-import org.apache.kafka.common.metrics.Sensor.QuotaEnforcementType
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaCallback
@@ -91,7 +90,10 @@ class StrictControllerMutationQuota(private val time: Time,
   override def record(permits: Double): Unit = {
     val timeMs = time.milliseconds
     try {
-      quotaSensor.record(permits, timeMs, QuotaEnforcementType.STRICT)
+      quotaSensor synchronized {
+        quotaSensor.checkQuotas(timeMs)
+        quotaSensor.record(permits, timeMs, false)
+      }
     } catch {
       case e: QuotaViolationException =>
         updateThrottleTime(e, timeMs)
@@ -117,7 +119,7 @@ class PermissiveControllerMutationQuota(private val time: Time,
   override def record(permits: Double): Unit = {
     val timeMs = time.milliseconds
     try {
-      quotaSensor.record(permits, timeMs, QuotaEnforcementType.PERMISSIVE)
+      quotaSensor.record(permits, timeMs, true)
     } catch {
       case e: QuotaViolationException =>
         updateThrottleTime(e, timeMs)
@@ -150,8 +152,8 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
 
   /**
    * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
-   * the specified time, returns throttle time in milliseconds. The implementation use the STRICT
-   * enforcement type.
+   * the specified time, returns throttle time in milliseconds. The quota is strict meaning that it
+   * does not accept any mutations once the quota is exhausted until it gets back to the defined rate.
    *
    * @param session The session from which the user is extracted
    * @param clientId The client id
@@ -162,13 +164,17 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
    */
   override def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
+    val quotaSensor = clientSensors.quotaSensor
     try {
-      clientSensors.quotaSensor.record(value, timeMs, QuotaEnforcementType.STRICT)
+      quotaSensor synchronized {
+        quotaSensor.checkQuotas(timeMs)
+        quotaSensor.record(value, timeMs, false)
+      }
       0
     } catch {
       case e: QuotaViolationException =>
         val throttleTimeMs = throttleTime(e, timeMs).toInt
-        debug(s"Quota violated for sensor (${clientSensors.quotaSensor.name}). Delay time: ($throttleTimeMs)")
+        debug(s"Quota violated for sensor (${quotaSensor.name}). Delay time: ($throttleTimeMs)")
         throttleTimeMs
     }
   }

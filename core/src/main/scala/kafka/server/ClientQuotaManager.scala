@@ -27,7 +27,6 @@ import kafka.utils.{Logging, ShutdownableThread}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.metrics.Sensor.QuotaEnforcementType
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
@@ -264,10 +263,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   /**
    * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
-   * the specified time, returns throttle time in milliseconds. The implementation use the PERMISSIVE
-   * enforcement type that verifies the quota is not violated after accumulating the provided value.
-   * If it is, the value is still accumulated and the throttle time represents the time to wait before
-   * the quota comes back to the defined limit.
+   * the specified time, returns throttle time in milliseconds.
    *
    * @param session The session from which the user is extracted
    * @param clientId The client id
@@ -279,7 +275,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
     try {
-      clientSensors.quotaSensor.record(value, timeMs, QuotaEnforcementType.PERMISSIVE)
+      clientSensors.quotaSensor.record(value, timeMs, true)
       0
     } catch {
       case e: QuotaViolationException =>
@@ -296,7 +292,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    */
   def recordNoThrottle(session: Session, clientId: String, value: Double): Unit = {
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
-    clientSensors.quotaSensor.record(value, time.milliseconds(), QuotaEnforcementType.NONE)
+    clientSensors.quotaSensor.record(value, time.milliseconds(), false)
   }
 
   /**
@@ -311,7 +307,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    */
   def unrecordQuotaSensor(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
     val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
-    clientSensors.quotaSensor.record(value * (-1), timeMs, QuotaEnforcementType.NONE)
+    clientSensors.quotaSensor.record(value * (-1), timeMs, false)
   }
 
   /**

@@ -30,7 +30,6 @@ import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.metrics.Sensor.QuotaEnforcementType
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
@@ -395,7 +394,7 @@ class TransactionStateManager(brokerId: Int,
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
       val endTimeMs = time.milliseconds()
       val totalLoadingTimeMs = endTimeMs - startTimeMs
-      partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, QuotaEnforcementType.NONE)
+      partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
       info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in " +
         s"$totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds was spent in the scheduler.")
 

@@ -99,25 +99,6 @@ public final class Sensor {
         }
     }
 
-    public enum QuotaEnforcementType {
-        /**
-         * The quota is not enforced.
-         */
-        NONE,
-
-        /**
-         * The check for quota violation is done prior to recording the value.
-         * If the quota is already exhausted, the value is not recorded into the sensor.
-         */
-        STRICT,
-
-        /**
-         * The check for quota violation is done after recording the value.
-         * An update is always accepted even if the quota is already exhausted.
-         */
-        PERMISSIVE
-    }
-
     private final RecordingLevel recordingLevel;
 
     Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time,
@@ -168,7 +149,7 @@ public final class Sensor {
      */
     public void record() {
         if (shouldRecord()) {
-            recordInternal(1.0d, time.milliseconds(), QuotaEnforcementType.PERMISSIVE);
+            recordInternal(1.0d, time.milliseconds(), true);
         }
     }
 
@@ -180,7 +161,7 @@ public final class Sensor {
      */
     public void record(double value) {
         if (shouldRecord()) {
-            recordInternal(value, time.milliseconds(), QuotaEnforcementType.PERMISSIVE);
+            recordInternal(value, time.milliseconds(), true);
         }
     }
 
@@ -194,7 +175,7 @@ public final class Sensor {
      */
     public void record(double value, long timeMs) {
         if (shouldRecord()) {
-            recordInternal(value, timeMs, QuotaEnforcementType.PERMISSIVE);
+            recordInternal(value, timeMs, true);
         }
     }
 
@@ -207,43 +188,25 @@ public final class Sensor {
      * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum
      *         bound
      */
-    @Deprecated
     public void record(double value, long timeMs, boolean checkQuotas) {
         if (shouldRecord()) {
-            recordInternal(value, timeMs, checkQuotas ? QuotaEnforcementType.PERMISSIVE : QuotaEnforcementType.NONE);
+            recordInternal(value, timeMs, checkQuotas);
         }
     }
 
-    /**
-     * Record a value at a known time. This method is slightly faster than {@link #record(double)} since it will reuse
-     * the time stamp.
-     * @param value The value we are recording
-     * @param timeMs The current POSIX time in milliseconds
-     * @param quotaEnforcementType The type of enforcement we are using to enforce the quota
-     * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum
-     *         bound
-     */
-    public void record(double value, long timeMs, QuotaEnforcementType quotaEnforcementType) {
-        if (shouldRecord()) {
-            recordInternal(value, timeMs, quotaEnforcementType);
-        }
-    }
-
-    private void recordInternal(double value, long timeMs, QuotaEnforcementType quotaEnforcementType) {
+    private void recordInternal(double value, long timeMs, boolean checkQuotas) {
         this.lastRecordTime = timeMs;
         synchronized (this) {
-            if (quotaEnforcementType == QuotaEnforcementType.STRICT)
-                checkQuotas(timeMs);
             synchronized (metricLock()) {
                 // increment all the stats
                 for (Stat stat : this.stats)
                     stat.record(config, value, timeMs);
             }
-            if (quotaEnforcementType == QuotaEnforcementType.PERMISSIVE)
+            if (checkQuotas)
                 checkQuotas(timeMs);
         }
         for (Sensor parent : parents)
-            parent.record(value, timeMs, quotaEnforcementType);
+            parent.record(value, timeMs, checkQuotas);
     }
 
     /**

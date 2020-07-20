@@ -17,7 +17,6 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.Sensor.QuotaEnforcementType;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.Meter;
@@ -165,7 +164,7 @@ public class SensorTest {
                         try {
                             assertTrue(latch.await(5, TimeUnit.SECONDS));
                             for (int j = 0; j != 20; ++j) {
-                                sensor.record(j * index, System.currentTimeMillis() + j, QuotaEnforcementType.NONE);
+                                sensor.record(j * index, System.currentTimeMillis() + j, false);
                                 sensor.checkQuotas();
                             }
                             return null;
@@ -210,72 +209,5 @@ public class SensorTest {
         );
 
         assertThat(sensor.hasMetrics(), is(true));
-    }
-
-    @Test
-    public void testStrictQuotaEnforcement() {
-        final Time time = new MockTime(0, 0, 0);
-        final Metrics metrics = new Metrics(time);
-        final Sensor sensor = metrics.sensor("sensor", new MetricConfig()
-            .quota(Quota.upperBound(10))
-            .timeWindow(1, TimeUnit.SECONDS)
-            .samples(11));
-        final MetricName metricName = metrics.metricName("rate", "test-group");
-        assertTrue(sensor.add(metricName, new Rate()));
-        final KafkaMetric rateMetric = metrics.metric(metricName);
-
-        // Recording a first value at T+0s to bring the avg rate to 9. Value is accepted
-        // because the quota is not exhausted yet.
-        sensor.record(90, time.milliseconds(), QuotaEnforcementType.STRICT);
-        assertEquals(9, rateMetric.measurableValue(time.milliseconds()), 0.1);
-
-        // Recording a second value at T+1s to bring the avg rate to 18. Value is accepted
-        // because the quota is not exhausted yet.
-        time.sleep(1000);
-        sensor.record(90, time.milliseconds(), QuotaEnforcementType.STRICT);
-        assertEquals(18, rateMetric.measurableValue(time.milliseconds()), 0.1);
-
-        // Recording a third value at T+2s is rejected immediately and rate is not updated
-        // because the quota is exhausted.
-        time.sleep(1000);
-        assertThrows(QuotaViolationException.class,
-            () -> sensor.record(90, time.milliseconds(), QuotaEnforcementType.STRICT));
-        assertEquals(18, rateMetric.measurableValue(time.milliseconds()), 0.1);
-
-        metrics.close();
-    }
-
-    @Test
-    public void testPermissiveQuotaEnforcement() {
-        final Time time = new MockTime(0, 0, 0);
-        final Metrics metrics = new Metrics(time);
-        final Sensor sensor = metrics.sensor("sensor", new MetricConfig()
-            .quota(Quota.upperBound(10))
-            .timeWindow(1, TimeUnit.SECONDS)
-            .samples(11));
-        final MetricName metricName = metrics.metricName("rate", "test-group");
-        assertTrue(sensor.add(metricName, new Rate()));
-        final KafkaMetric rateMetric = metrics.metric(metricName);
-
-        // Recording a first value at T+0s to bring the avg rate to 9. Value is accepted
-        // because the quota is not exhausted yet.
-        sensor.record(90, time.milliseconds(), QuotaEnforcementType.PERMISSIVE);
-        assertEquals(9, rateMetric.measurableValue(time.milliseconds()), 0.1);
-
-        // Recording a second value at T+1s to bring the avg rate to 18. Value is accepted
-        // and rate is updated even though the quota is exhausted.
-        time.sleep(1000);
-        assertThrows(QuotaViolationException.class,
-            () -> sensor.record(90, time.milliseconds(), QuotaEnforcementType.PERMISSIVE));
-        assertEquals(18, rateMetric.measurableValue(time.milliseconds()), 0.1);
-
-        // Recording a second value at T+1s to bring the avg rate to 27. Value is accepted
-        // and rate is updated even though the quota is exhausted.
-        time.sleep(1000);
-        assertThrows(QuotaViolationException.class,
-            () -> sensor.record(90, time.milliseconds(), QuotaEnforcementType.PERMISSIVE));
-        assertEquals(27, rateMetric.measurableValue(time.milliseconds()), 0.1);
-
-        metrics.close();
     }
 }
