@@ -242,7 +242,7 @@ class AdminManager(val config: KafkaConfig,
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
         try {
-          controllerMutationQuota.record(metadataCache.numPartitions(topic))
+          controllerMutationQuota.record(metadataCache.numPartitions(topic).getOrElse(0).toDouble)
           adminZkClient.deleteTopic(topic)
           DeleteTopicMetadata(topic, Errors.NONE)
         } catch {

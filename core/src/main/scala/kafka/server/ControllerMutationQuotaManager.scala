@@ -75,8 +75,9 @@ abstract class AbstractControllerMutationQuota(private val time: Time) extends C
 
 /**
  * The StrictControllerMutationQuota defines a strict quota for a given user/clientId pair. The
- * quota is strict meaning that it does not accept any mutations once the quota is exhausted until
- * it gets back to the defined rate.
+ * quota is strict meaning that 1) it does not accept any mutations once the quota is exhausted
+ * until it gets back to the defined rate; and 2) it does not throttle for any number of mutations
+ * if quota is not already exhausted.
  *
  * @param time @Time object to use
  * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
@@ -105,7 +106,8 @@ class StrictControllerMutationQuota(private val time: Time,
 
 /**
  * The PermissiveControllerMutationQuota defines a permissive quota for a given user/clientId pair.
- * The quota is permissive meaning that it does accept any mutations even if the quota is exhausted.
+ * The quota is permissive meaning that 1) it does accept any mutations even if the quota is
+ * exhausted; and 2) it does throttle as soon as the quota is exhausted.
  *
  * @param time @Time object to use
  * @param quotaSensor @Sensor object with a defined quota for a given user/clientId pair
@@ -180,7 +182,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
   }
 
   /**
-   * Returns a StrictControllerMutationQuota for the given session/clientId pair or
+   * Returns a StrictControllerMutationQuota for the given user/clientId pair or
    * a UnboundedControllerMutationQuota$ if the quota is disabled.
    *
    * @param session The session from which the user is extracted
@@ -200,7 +202,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
     newStrictQuotaFor(request.session, request.header.clientId)
 
   /**
-   * Returns a PermissiveControllerMutationQuota for the given session/clientId pair or
+   * Returns a PermissiveControllerMutationQuota for the given user/clientId pair or
    * a UnboundedControllerMutationQuota$ if the quota is disabled.
    *
    * @param session The session from which the user is extracted
@@ -222,12 +224,12 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
   /**
    * Returns a ControllerMutationQuota based on `strictSinceVersion`. It returns a strict
    * quota if the version is equal to or above of the `strictSinceVersion`, a permissive
-   * quota if the version is bellow, and a unbounded quota if the quota is disabled.
+   * quota if the version is below, and a unbounded quota if the quota is disabled.
    *
    * When the quota is strictly enforced. Any operation above the quota is not allowed
    * and rejected with a THROTTLING_QUOTA_EXCEEDED error.
    *
-   * @param request The request to extract the session and the clientId from
+   * @param request The request to extract the user and the clientId from
    * @param strictSinceVersion The version since quota is strict
    * @return
    */
