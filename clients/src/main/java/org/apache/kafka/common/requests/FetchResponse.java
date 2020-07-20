@@ -58,8 +58,8 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *
  * - {@link Errors#OFFSET_OUT_OF_RANGE} If the fetch offset is out of range for a requested partition
  * - {@link Errors#TOPIC_AUTHORIZATION_FAILED} If the user does not have READ access to a requested topic
- * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker which is not a replica
- * - {@link Errors#NOT_LEADER_FOR_PARTITION} If the broker is not a leader and either the provided leader epoch
+ * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker with version < 2.6 which is not a replica
+ * - {@link Errors#NOT_LEADER_OR_FOLLOWER} If the broker is not a leader or follower and either the provided leader epoch
  *     matches the known leader epoch on the broker or is empty
  * - {@link Errors#FENCED_LEADER_EPOCH} If the epoch is lower than the broker's epoch
  * - {@link Errors#UNKNOWN_LEADER_EPOCH} If the epoch is larger than the broker's epoch
@@ -190,7 +190,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
     // V6 bumped up to indicate that the client supports KafkaStorageException. The KafkaStorageException will
-    // be translated to NotLeaderForPartitionException in the response if version <= 5
+    // be translated to NotLeaderOrFollowerException in the response if version <= 5
     private static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
 
     // V7 added incremental fetch responses and a top-level error code.
@@ -549,9 +549,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
                 // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
                 // UnknownServerException which is not retriable. We can ensure that consumer will update metadata and retry
-                // by converting the KafkaStorageException to NotLeaderForPartitionException in the response if FetchRequest version <= 5
+                // by converting the KafkaStorageException to NotLeaderOrFollowerException in the response if FetchRequest version <= 5
                 if (errorCode == Errors.KAFKA_STORAGE_ERROR.code() && version <= 5)
-                    errorCode = Errors.NOT_LEADER_FOR_PARTITION.code();
+                    errorCode = Errors.NOT_LEADER_OR_FOLLOWER.code();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 Struct partitionDataHeader = partitionData.instance(PARTITION_HEADER_KEY_NAME);
                 partitionDataHeader.set(PARTITION_ID, partitionEntry.getKey());

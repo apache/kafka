@@ -121,8 +121,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private static class ClientMetadata {
 
         private final HostInfo hostInfo;
-        private final SortedSet<String> consumers;
         private final ClientState state;
+        private final SortedSet<String> consumers;
 
         ClientMetadata(final String endPoint) {
 
@@ -734,8 +734,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                    statefulTasks,
                                                                    assignmentConfigs);
 
-        log.info("Assigned tasks to clients as {}{}.",
-            Utils.NL, clientStates.entrySet().stream().map(Map.Entry::toString).collect(Collectors.joining(Utils.NL)));
+        log.info("Assigned tasks {} including stateful {} to clients as: \n{}.",
+                allTasks, statefulTasks, clientStates.entrySet().stream()
+                        .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
+                        .collect(Collectors.joining(Utils.NL)));
 
         return probingRebalanceNeeded;
     }
@@ -941,7 +943,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 state
             );
 
-            // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance
+            // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance,
+            // note once we pick the first consumer within the process to trigger probing rebalance, other consumer
+            // would not set to trigger any more.
             final boolean encodeNextProbingRebalanceTime = shouldTriggerProbingRebalance && clientId.equals(taskManager.processId());
 
             final boolean tasksRevoked = addClientAssignments(
@@ -963,6 +967,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 rebalanceRequired = true;
                 log.debug("Requested client {} to schedule a followup rebalance", clientId);
             }
+
+            log.info("Client {} per-consumer assignment:\n" +
+                "\tprev owned active {}\n" +
+                "\tprev owned standby {}\n" +
+                "\tassigned active {}\n" +
+                "\trevoking active {}" +
+                "\tassigned standby {}\n",
+                clientId,
+                clientMetadata.state.prevOwnedActiveTasksByConsumer(),
+                clientMetadata.state.prevOwnedStandbyByConsumer(),
+                clientMetadata.state.assignedActiveTasksByConsumer(),
+                clientMetadata.state.revokingActiveTasksByConsumer(),
+                clientMetadata.state.assignedStandbyTasksByConsumer());
         }
 
         if (rebalanceRequired) {
@@ -1036,14 +1053,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             if (!activeTasksRemovedPendingRevokation.isEmpty()) {
                 // TODO: once KAFKA-10078 is resolved we can leave it to the client to trigger this rebalance
-                log.info("Requesting followup rebalance be scheduled immediately due to tasks changing ownership.");
+                log.info("Requesting {} followup rebalance be scheduled immediately due to tasks changing ownership.", consumer);
                 info.setNextRebalanceTime(0L);
                 followupRebalanceRequiredForRevokedTasks = true;
                 // Don't bother to schedule a probing rebalance if an immediate one is already scheduled
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
                 final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
-                log.info("Requesting followup rebalance be scheduled for {} ms to probe for caught-up replica tasks.", nextRebalanceTimeMs);
+                log.info("Requesting {} followup rebalance be scheduled for {} ms to probe for caught-up replica tasks.",
+                        consumer, nextRebalanceTimeMs);
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
                 shouldEncodeProbingRebalance = false;
             }
@@ -1074,8 +1092,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final List<AssignedPartition> assignedPartitions = new ArrayList<>();
         final Set<TaskId> removedActiveTasks = new TreeSet<>();
 
-        // Build up list of all assigned partition-task pairs
         for (final TaskId taskId : activeTasksForConsumer) {
+            // Populate the consumer for assigned tasks without considering revocation,
+            // this is for debugging purposes only
+            clientState.assignActiveToConsumer(taskId, consumer);
+
             final List<AssignedPartition> assignedPartitionsForTask = new ArrayList<>();
             for (final TopicPartition partition : partitionsForTask.get(taskId)) {
                 final String oldOwner = clientState.previousOwnerForPartition(partition);
@@ -1090,6 +1111,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                         consumer
                     );
                     removedActiveTasks.add(taskId);
+
+                    clientState.revokeActiveFromConsumer(taskId, consumer);
 
                     // Clear the assigned partitions list for this task if any partition can not safely be assigned,
                     // so as not to encode a partial task
@@ -1126,19 +1149,23 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                                  final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                                                  final ClientState clientState) {
         final Map<TaskId, Set<TopicPartition>> standbyTaskMap = new HashMap<>();
+
         for (final TaskId task : standbyTasks) {
+            clientState.assignStandbyToConsumer(task, consumer);
             standbyTaskMap.put(task, partitionsForTask.get(task));
         }
+
         for (final TaskId task : revokedTasks) {
             if (allStatefulTasks.contains(task)) {
-                log.info("Adding removed stateful active task {} as a standby for {} before it is safely revoked in followup rebalance",
-                        task, consumer
-                );
-                standbyTaskMap.put(task, partitionsForTask.get(task));
+                log.info("Adding removed stateful active task {} as a standby for {} before it is revoked in followup rebalance",
+                        task, consumer);
 
                 // This has no effect on the assignment, as we'll never consult the ClientState again, but
                 // it does perform a useful assertion that the it's legal to assign this task as a standby to this instance
+                clientState.assignStandbyToConsumer(task, consumer);
                 clientState.assignStandby(task);
+
+                standbyTaskMap.put(task, partitionsForTask.get(task));
             }
         }
         return standbyTaskMap;
@@ -1262,7 +1289,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private static SortedSet<TaskId> getPreviousTasksByLag(final ClientState state, final String consumer) {
         final SortedSet<TaskId> prevTasksByLag = new TreeSet<>(comparingLong(state::lagFor).thenComparing(TaskId::compareTo));
-        prevTasksByLag.addAll(state.previousTasksForConsumer(consumer));
+        prevTasksByLag.addAll(state.prevOwnedStatefulTasksByConsumer(consumer));
         return prevTasksByLag;
     }
 
