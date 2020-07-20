@@ -18,6 +18,7 @@
 package kafka.controller
 
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
 import com.yammer.metrics.core.Timer
@@ -39,6 +40,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.Seq
 import scala.util.{Failure, Success, Try}
+import org.mockito.Mockito.{spy, verify, doAnswer}
+import org.mockito.invocation.InvocationOnMock
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -597,6 +600,38 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       otherBroker.replicaManager.metadataCache.getAllTopics().size == 1 &&
       otherBroker.replicaManager.metadataCache.getAliveBrokers.size == 2
     }, "Broker fail to initialize after restart")
+  }
+
+  @Test
+  def testPreemptionOnControllerShutdown(): Unit = {
+    servers = makeServers(1, enableControlledShutdown = false)
+    val controller = getController().kafkaController
+    val count = new AtomicInteger(2)
+    val latch = new CountDownLatch(1)
+    val spyThread = spy(controller.eventManager.thread)
+    controller.eventManager.setControllerEventThread(spyThread)
+    val processedEvent = new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = latch.await()
+      override def preempt(): Unit = {}
+    }
+    val preemptedEvent = new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = {}
+      override def preempt(): Unit = count.decrementAndGet()
+    }
+
+    controller.eventManager.put(processedEvent)
+    controller.eventManager.put(preemptedEvent)
+    controller.eventManager.put(preemptedEvent)
+
+    doAnswer((invocation: InvocationOnMock) => {
+      latch.countDown()
+    }).when(spyThread).awaitShutdown()
+    controller.shutdown()
+    TestUtils.waitUntilTrue(() => {
+      count.get() == 0
+    }, "preemption was not fully completed before shutdown")
+
+    verify(spyThread).awaitShutdown()
   }
 
   private def testControllerMove(fun: () => Unit): Unit = {

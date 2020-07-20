@@ -76,7 +76,7 @@ class ControllerEventManager(controllerId: Int,
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[QueuedEvent]
   // Visible for test
-  private[controller] val thread = new ControllerEventThread(ControllerEventThreadName)
+  private[controller] var thread = new ControllerEventThread(ControllerEventThreadName)
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
@@ -137,6 +137,11 @@ class ControllerEventManager(controllerId: Int,
           _state = ControllerState.Idle
       }
     }
+  }
+
+  // for testing
+  private[controller] def setControllerEventThread(thread: ControllerEventThread): Unit = {
+    this.thread = thread
   }
 
 }
