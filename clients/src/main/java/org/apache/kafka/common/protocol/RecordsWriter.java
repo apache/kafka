@@ -58,15 +58,15 @@ import java.util.function.Consumer;
 public class RecordsWriter implements Writable {
     private final String dest;
     private final Consumer<Send> sendConsumer;
-    private final ByteBufferOutputStream byteArrayOutputStream;
+    private final ByteBufferOutputStream byteBufferOutputStream;
     private final DataOutput output;
     private int mark;
 
     public RecordsWriter(String dest, Consumer<Send> sendConsumer) {
         this.dest = dest;
         this.sendConsumer = sendConsumer;
-        this.byteArrayOutputStream = new ByteBufferOutputStream(32);
-        this.output = new DataOutputStream(this.byteArrayOutputStream);
+        this.byteBufferOutputStream = new ByteBufferOutputStream(32);
+        this.output = new DataOutputStream(this.byteBufferOutputStream);
         this.mark = 0;
     }
 
@@ -148,22 +148,30 @@ public class RecordsWriter implements Writable {
     }
 
     /**
-     * Flush any pending bytes as a ByteBufferSend and reset the buffer
+     * Flush any pending bytes as a ByteBufferSend
      */
     public void flush() {
-        ByteBuffer buf = byteArrayOutputStream.buffer();
+        ByteBuffer buf = byteBufferOutputStream.buffer();
         int end = buf.position();
         int len = end - mark;
 
         if (len > 0) {
+            int limit = buf.limit();
+
+            // Set the desired absolute position and limit before slicing
             buf.position(mark);
+            buf.limit(end);
             ByteBuffer slice = buf.slice();
-            slice.limit(len);
+
+            // Restore absolute position and limit on original buffer
+            buf.limit(limit);
+            buf.position(end);
+
+            // Update the mark to the end of slice we just took
+            mark = end;
+
             ByteBufferSend send = new ByteBufferSend(dest, slice);
             sendConsumer.accept(send);
         }
-
-        buf.position(end);
-        mark = end;
     }
 }

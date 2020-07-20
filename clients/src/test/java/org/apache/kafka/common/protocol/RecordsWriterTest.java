@@ -52,5 +52,12 @@ public class RecordsWriterTest {
         send = (ByteBufferSend) sends.remove();
         Assert.assertEquals(send.size(), 400);
         Assert.assertEquals(send.remaining(), 400);
+
+        writer.writeByte((byte) 5);
+        writer.flush();
+        Assert.assertEquals(sends.size(), 1);
+        send = (ByteBufferSend) sends.remove();
+        Assert.assertEquals(send.size(), 1);
+        Assert.assertEquals(send.remaining(), 1);
     }
 }
