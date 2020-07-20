@@ -42,7 +42,7 @@
     <ul>
         <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade.</li>
         <li> bounce each instance of your application once </li>
-        <li> prepare your newly deployed {{fullDotVersion}} application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+        <li> prepare your newly deployed {{fullDotVersion}} application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.from</code> </li>
         <li> bounce each instance of your application once more to complete the upgrade </li>
     </ul>
     <p> As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.10.0.x to {{fullDotVersion}} in offline mode require the following steps: </p>
@@ -102,6 +102,21 @@
         new value <code>"exactly_once_beta"</code>.
         Note that you need brokers with version 2.5 or newer to use this feature.
     </p>
+
+    <p>
+        For more highly available stateful applications, we've modified the task assignment algorithm to delay the movement of stateful active tasks to instances
+        that aren't yet caught up with that task's state. Instead, to migrate a task from one instance to another (eg when scaling out),
+        Streams will assign a warmup replica to the target instance so it can begin restoring the state while the active task stays available on an instance
+        that already had the task. The instances warming up tasks will communicate their progress to the group so that, once ready, Streams can move active
+        tasks to their new owners in the background. Check out <a href="https://cwiki.apache.org/confluence/x/0i4lBg">KIP-441</a>
+        for full details, including several new configs for control over this new feature.
+    </p>
+
+    <p>
+        New end-to-end latency metrics have been added. These task-level metrics will be logged at the INFO level and report the min and max end-to-end latency of a record at the beginning/source node(s)
+        and end/terminal node(s) of a task. See <a href="https://cwiki.apache.org/confluence/x/gBkRCQ">KIP-613</a> for more information.
+    </p>
+
     <p>
         As of 2.6.0 Kafka Streams deprecates <code>KStream.through()<code> if favor of the new <code>KStream.repartition()</code> operator
         (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-221%3A+Enhance+DSL+with+Connecting+Topic+Creation+and+Repartition+Hint">KIP-221</a>).

@@ -360,40 +360,31 @@ public class StreamsConfig extends AbstractConfig {
         " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE + "</code>, the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
         " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
 
-    /** {@code max.task.idle.ms} */
-    public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
-    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time a stream task will stay idle when not all of its partition buffers contain records," +
-        " to avoid potential out-of-order record processing across multiple input streams.";
-
     /** {@code connections.max.idle.ms} */
     @SuppressWarnings("WeakerAccess")
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
 
-    /**
-     * {@code default.deserialization.exception.handler}
-     */
+    /** {@code default.deserialization.exception.handler} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
     private static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
-    /**
-     * {@code default.production.exception.handler}
-     */
+    /** {@code default.production.exception.handler} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.production.exception.handler";
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
-    /**
-     * {@code default.windowed.key.serde.inner}
-     */
+    /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
+    private static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed key. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
-    /**
-     * {@code default.windowed.value.serde.inner}
-     */
+    /** {@code default.windowed.value.serde.inner} */
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
+    private static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
+        "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
@@ -413,6 +404,11 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
     private static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
+
+    /** {@code max.task.idle.ms} */
+    public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
+    private static final String MAX_TASK_IDLE_MS_DOC = "Maximum amount of time a stream task will stay idle when not all of its partition buffers contain records," +
+        " to avoid potential out-of-order record processing across multiple input streams.";
 
     /** {@code max.warmup.replicas} */
     public static final String MAX_WARMUP_REPLICAS_CONFIG = "max.warmup.replicas";
@@ -639,16 +635,16 @@ public class StreamsConfig extends AbstractConfig {
                     Serdes.ByteArraySerde.class.getName(),
                     Importance.MEDIUM,
                     DEFAULT_VALUE_SERDE_CLASS_DOC)
-            .define(NUM_STANDBY_REPLICAS_CONFIG,
-                    Type.INT,
-                    0,
+            .define(DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
-                    NUM_STANDBY_REPLICAS_DOC)
-            .define(NUM_STREAM_THREADS_CONFIG,
-                    Type.INT,
-                    1,
+                    DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC)
+            .define(DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
-                    NUM_STREAM_THREADS_DOC)
+                    DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -660,6 +656,16 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(1),
                     Importance.MEDIUM,
                     MAX_WARMUP_REPLICAS_DOC)
+            .define(NUM_STANDBY_REPLICAS_CONFIG,
+                    Type.INT,
+                    0,
+                    Importance.MEDIUM,
+                    NUM_STANDBY_REPLICAS_DOC)
+            .define(NUM_STREAM_THREADS_CONFIG,
+                    Type.INT,
+                    1,
+                    Importance.MEDIUM,
+                    NUM_STREAM_THREADS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
                     AT_LEAST_ONCE,

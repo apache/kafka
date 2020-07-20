@@ -63,24 +63,31 @@
           </ul>
           </li>
           <li><a class="reference internal" href="#optional-configuration-parameters" id="id6">Optional configuration parameters</a><ul>
+            <li><a class="reference internal" href="#acceptable-recovery-lag" id="id27">acceptable.recovery.lag</a></li>
             <li><a class="reference internal" href="#default-deserialization-exception-handler" id="id7">default.deserialization.exception.handler</a></li>
-            <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler</a></li>
             <li><a class="reference internal" href="#default-key-serde" id="id8">default.key.serde</a></li>
+            <li><a class="reference internal" href="#default-production-exception-handler" id="id24">default.production.exception.handler</a></li>
+            <li><a class="reference internal" href="#timestamp-extractor" id="id15">default.timestamp.extractor</a></li>
             <li><a class="reference internal" href="#default-value-serde" id="id9">default.value.serde</a></li>
+            <li><a class="reference internal" href="#default-windowed-key-serde-inner" id="id32">default.windowed.key.serde.inner</a></li>
+            <li><a class="reference internal" href="#default-windowed-value-serde-inner" id="id33">default.windowed.value.serde.inner</a></li>
+            <li><a class="reference internal" href="#max-task-idle-ms" id="id28">max.task.idle.ms</a></li>
+            <li><a class="reference internal" href="#max-warmup-replicas" id="id29">max.warmup.replicas</a></li>
             <li><a class="reference internal" href="#num-standby-replicas" id="id10">num.standby.replicas</a></li>
             <li><a class="reference internal" href="#num-stream-threads" id="id11">num.stream.threads</a></li>
             <li><a class="reference internal" href="#partition-grouper" id="id12">partition.grouper</a></li>
+            <li><a class="reference internal" href="#probing-rebalance-interval-ms" id="id30">probing.rebalance.interval.ms</a></li>
             <li><a class="reference internal" href="#processing-guarantee" id="id25">processing.guarantee</a></li>
             <li><a class="reference internal" href="#replication-factor" id="id13">replication.factor</a></li>
+            <li><a class="reference internal" href="#rocksdb-config-setter" id="id20">rocksdb.config.setter</a></li>
             <li><a class="reference internal" href="#state-dir" id="id14">state.dir</a></li>
-            <li><a class="reference internal" href="#timestamp-extractor" id="id15">timestamp.extractor</a></li>
+            <li><a class="reference internal" href="#topology-optimization" id="id31">topology.optimization</a></li>
           </ul>
           </li>
           <li><a class="reference internal" href="#kafka-consumers-and-producer-configuration-parameters" id="id16">Kafka consumers and producer configuration parameters</a><ul>
             <li><a class="reference internal" href="#naming" id="id17">Naming</a></li>
             <li><a class="reference internal" href="#default-values" id="id18">Default Values</a></li>
             <li><a class="reference internal" href="#enable-auto-commit" id="id19">enable.auto.commit</a></li>
-            <li><a class="reference internal" href="#rocksdb-config-setter" id="id20">rocksdb.config.setter</a></li>
           </ul>
           </li>
           <li><a class="reference internal" href="#recommended-configuration-parameters-for-resiliency" id="id21">Recommended configuration parameters for resiliency</a><ul>
@@ -166,6 +173,11 @@
           </tr>
           </thead>
           <tbody valign="top">
+          <tr class="row-odd"><td>acceptable.recovery.lag</td>
+            <td>Medium</td>
+            <td colspan="2">The maximum acceptable lag (number of offsets to catch up) for an instance to be considered caught-up and ready for the active task.</td>
+            <td>10000</td>
+          </tr>
           <tr class="row-even"><td>application.server</td>
             <td>Low</td>
             <td colspan="2">A host:port pair pointing to an embedded user defined endpoint that can be used for discovering the locations of
@@ -199,15 +211,46 @@
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">DeserializationExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">LogAndContinueExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-even"><td>default.production.exception.handler</td>
+          <tr class="row-even"><td>default.key.serde</td>
+            <td>Medium</td>
+            <td colspan="2">Default serializer/deserializer class for record keys, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also default.value.serde).</td>
+            <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>default.production.exception.handler</td>
             <td>Medium</td>
             <td colspan="2">Exception handling class that implements the <code class="docutils literal"><span class="pre">ProductionExceptionHandler</span></code> interface.</td>
             <td><code class="docutils literal"><span class="pre">DefaultProductionExceptionHandler</span></code></td>
           </tr>
-          <tr class="row-odd"><td>key.serde</td>
+          <tr class="row-even"><td>default.timestamp.extractor</td>
             <td>Medium</td>
-            <td colspan="2">Default serializer/deserializer class for record keys, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also value.serde).</td>
+            <td colspan="2">Timestamp extractor class that implements the <code class="docutils literal"><span class="pre">TimestampExtractor</span></code> interface.</td>
+            <td>See <a class="reference internal" href="#streams-developer-guide-timestamp-extractor"><span class="std std-ref">Timestamp Extractor</span></a></td>
+          </tr>
+          <tr class="row-odd"><td>default.value.serde</td>
+            <td>Medium</td>
+            <td colspan="2">Default serializer/deserializer class for record values, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also default.key.serde).</td>
             <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
+          </tr>
+          <tr class="row-even"><td>default.windowed.key.serde.inner</td>
+            <td>Medium</td>
+            <td colspan="2">Default serializer/deserializer for the inner class of windowed keys, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
+            <td>null</td>
+          </tr>
+          <tr class="row-odd"><td>default.windowed.value.serde.inner</td>
+            <td>Medium</td>
+            <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
+            <td>null</td>
+          </tr>
+          <tr class="row-even"><td>max.task.idle.ms</td>
+            <td>Medium</td>
+            <td colspan="2">Maximum amount of time a stream task will stay idle while waiting for all partitions to contain data and avoid potential out-of-order record
+              processing across multiple input streams.</td>
+            <td>0 milliseconds</td>
+          </tr>
+          <tr class="row-odd"><td>max.warmup.replicas</td>
+            <td>Medium</td>
+            <td colspan="2">The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once.</td>
+            <td>2</td>
           </tr>
           <tr class="row-even"><td>metric.reporters</td>
             <td>Low</td>
@@ -244,10 +287,15 @@
             <td colspan="2">Partition grouper class that implements the <code class="docutils literal"><span class="pre">PartitionGrouper</span></code> interface.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-partition-grouper"><span class="std std-ref">Partition Grouper</span></a></td>
           </tr>
+          <tr class="row-odd"><td>probing.rebalance.interval.ms</td>
+            <td>Low</td>
+            <td colspan="2">The maximum time to wait before triggering a rebalance to probe for warmup replicas that have sufficiently caught up.</td>
+            <td>600000 milliseconds (10 minutes)</td>
+          </tr>
           <tr class="row-even"><td>processing.guarantee</td>
             <td>Medium</td>
             <td colspan="2">The processing mode. Can be either <code class="docutils literal"><span class="pre">"at_least_once"</span></code> (default),
-              <code class="docutils literal"><span class="pre">"exactly_once"</span></code>, or <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code>.
+              <code class="docutils literal"><span class="pre">"exactly_once"</span></code>, or <code class="docutils literal"><span class="pre">"exactly_once_beta"</span></code></td>.
             <td>See <a class="reference internal" href="#streams-developer-guide-processing-guarantedd"><span class="std std-ref">Processing Guarantee</span></a></td>
           </tr>
           <tr class="row-odd"><td>poll.ms</td>
@@ -260,7 +308,7 @@
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.</td>
             <td>1</td>
           </tr>
-          <tr class="row-even"><td>retries</td>
+          <tr class="row-odd"><td>retries</td>
               <td>Medium</td>
               <td colspan="2">The number of retries for broker requests that return a retryable error. </td>
               <td>0</td>
@@ -270,35 +318,30 @@
               <td colspan="2">The amount of time in milliseconds, before a request is retried. This applies if the <code class="docutils literal"><span class="pre">retries</span></code> parameter is configured to be greater than 0. </td>
               <td>100</td>
           </tr>
-          <tr class="row-even"><td>rocksdb.config.setter</td>
+          <tr class="row-odd"><td>rocksdb.config.setter</td>
             <td>Medium</td>
             <td colspan="2">The RocksDB configuration.</td>
             <td></td>
           </tr>
-          <tr class="row-odd"><td>state.cleanup.delay.ms</td>
+          <tr class="row-even"><td>state.cleanup.delay.ms</td>
             <td>Low</td>
             <td colspan="2">The amount of time in milliseconds to wait before deleting state when a partition has migrated.</td>
             <td>600000 milliseconds</td>
           </tr>
-          <tr class="row-even"><td>state.dir</td>
+          <tr class="row-odd"><td>state.dir</td>
             <td>High</td>
             <td colspan="2">Directory location for state stores.</td>
             <td><code class="docutils literal"><span class="pre">/tmp/kafka-streams</span></code></td>
           </tr>
-          <tr class="row-odd"><td>timestamp.extractor</td>
+          <tr class="row-even"><td>topology.optimization</td>
             <td>Medium</td>
-            <td colspan="2">Timestamp extractor class that implements the <code class="docutils literal"><span class="pre">TimestampExtractor</span></code> interface.</td>
-            <td>See <a class="reference internal" href="#streams-developer-guide-timestamp-extractor"><span class="std std-ref">Timestamp Extractor</span></a></td>
+            <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology</td>
+            <td>none</td>
           </tr>
-          <tr class="row-even"><td>upgrade.from</td>
+          <tr class="row-odd"><td>upgrade.from</td>
             <td>Medium</td>
             <td colspan="2">The version you are upgrading from during a rolling upgrade.</td>
             <td>See <a class="reference internal" href="#streams-developer-guide-upgrade-from"><span class="std std-ref">Upgrade From</span></a></td>
-          </tr>
-          <tr class="row-odd"><td>value.serde</td>
-            <td>Medium</td>
-            <td colspan="2">Default serializer/deserializer class for record values, implements the <code class="docutils literal"><span class="pre">Serde</span></code> interface (see also key.serde).</td>
-            <td><code class="docutils literal"><span class="pre">Serdes.ByteArray().getClass().getName()</span></code></td>
           </tr>
           <tr class="row-even"><td>windowstore.changelog.additional.retention.ms</td>
             <td>Low</td>
@@ -307,6 +350,22 @@
           </tr>
           </tbody>
         </table>
+        <div class="section" id="acceptable-recovery-lag">
+          <h4><a class="toc-backref" href="#id27">acceptable.recovery.lag</a><a class="headerlink" href="#acceptable-recovery-lag" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              <p>
+              The maximum acceptable lag (total number of offsets to catch up from the changelog) for an instance to be considered caught-up and able to receive an active task. Streams will only assign
+              stateful active tasks to instances whose state stores are within the acceptable recovery lag, if any exist, and assign warmup replicas to restore state in the background for instances
+              that are not yet caught up. Should correspond to a recovery time of well under a minute for a given workload. Must be at least 0.
+              </p>
+              <p>
+                Note: if you set this to <code>Long.MAX_VALUE</code> it effectively disables the warmup replicas and task high availability, allowing Streams to immediately produce a balanced
+                assignment and migrate tasks to a new instance without first warming them up.
+              </p>
+            </div>
+          </blockquote>
+        </div>
         <div class="section" id="default-deserialization-exception-handler">
           <span id="streams-developer-guide-deh"></span><h4><a class="toc-backref" href="#id7">default.deserialization.exception.handler</a><a class="headerlink" href="#default-deserialization-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
@@ -399,6 +458,95 @@
                          IgnoreRecordTooLargeHandler.class);</pre></div>
           </blockquote>
         </div>
+        <div class="section" id="timestamp-extractor">
+          <span id="streams-developer-guide-timestamp-extractor"></span><h4><a class="toc-backref" href="#id15">default.timestamp.extractor</a><a class="headerlink" href="#timestamp-extractor" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div><p>A timestamp extractor pulls a timestamp from an instance of <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/clients/consumer/ConsumerRecord.html">ConsumerRecord</a>.
+              Timestamps are used to control the progress of streams.</p>
+              <p>The default extractor is
+                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/FailOnInvalidTimestamp.html">FailOnInvalidTimestamp</a>.
+                This extractor retrieves built-in timestamps that are automatically embedded into Kafka messages by the Kafka producer
+                client since
+                <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-32+-+Add+timestamps+to+Kafka+message">Kafka version 0.10</a>.
+                Depending on the setting of Kafka&#8217;s server-side <code class="docutils literal"><span class="pre">log.message.timestamp.type</span></code> broker and <code class="docutils literal"><span class="pre">message.timestamp.type</span></code> topic parameters,
+                this extractor provides you with:</p>
+              <ul class="simple">
+                <li><strong>event-time</strong> processing semantics if <code class="docutils literal"><span class="pre">log.message.timestamp.type</span></code> is set to <code class="docutils literal"><span class="pre">CreateTime</span></code> aka &#8220;producer time&#8221;
+                  (which is the default).  This represents the time when a Kafka producer sent the original message.  If you use Kafka&#8217;s
+                  official producer client, the timestamp represents milliseconds since the epoch.</li>
+                <li><strong>ingestion-time</strong> processing semantics if <code class="docutils literal"><span class="pre">log.message.timestamp.type</span></code> is set to <code class="docutils literal"><span class="pre">LogAppendTime</span></code> aka &#8220;broker
+                  time&#8221;.  This represents the time when the Kafka broker received the original message, in milliseconds since the epoch.</li>
+              </ul>
+              <p>The <code class="docutils literal"><span class="pre">FailOnInvalidTimestamp</span></code> extractor throws an exception if a record contains an invalid (i.e. negative) built-in
+                timestamp, because Kafka Streams would not process this record but silently drop it.  Invalid built-in timestamps can
+                occur for various reasons:  if for example, you consume a topic that is written to by pre-0.10 Kafka producer clients
+                or by third-party producer clients that don&#8217;t support the new Kafka 0.10 message format yet;  another situation where
+                this may happen is after upgrading your Kafka cluster from <code class="docutils literal"><span class="pre">0.9</span></code> to <code class="docutils literal"><span class="pre">0.10</span></code>, where all the data that was generated
+                with <code class="docutils literal"><span class="pre">0.9</span></code> does not include the <code class="docutils literal"><span class="pre">0.10</span></code> message timestamps.</p>
+              <p>If you have data with invalid timestamps and want to process it, then there are two alternative extractors available.
+                Both work on built-in timestamps, but handle invalid timestamps differently.</p>
+              <ul class="simple">
+                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/LogAndSkipOnInvalidTimestamp.html">LogAndSkipOnInvalidTimestamp</a>:
+                  This extractor logs a warn message and returns the invalid timestamp to Kafka Streams, which will not process but
+                  silently drop the record.
+                  This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records with an
+                  invalid built-in timestamp in your input data.</li>
+                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/UsePartitionTimeOnInvalidTimestamp.html">UsePartitionTimeOnInvalidTimestamp</a>.
+                  This extractor returns the record&#8217;s built-in timestamp if it is valid (i.e. not negative).  If the record does not
+                  have a valid built-in timestamps, the extractor returns the previously extracted valid timestamp from a record of the
+                  same topic partition as the current record as a timestamp estimation.  In case that no timestamp can be estimated, it
+                  throws an exception.</li>
+              </ul>
+              <p>Another built-in extractor is
+                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/WallclockTimestampExtractor.html">WallclockTimestampExtractor</a>.
+                This extractor does not actually &#8220;extract&#8221; a timestamp from the consumed record but rather returns the current time in
+                milliseconds from the system clock (think: <code class="docutils literal"><span class="pre">System.currentTimeMillis()</span></code>), which effectively means Streams will operate
+                on the basis of the so-called <strong>processing-time</strong> of events.</p>
+              <p>You can also provide your own timestamp extractors, for instance to retrieve timestamps embedded in the payload of
+                messages.  If you cannot extract a valid timestamp, you can either throw an exception, return a negative timestamp, or
+                estimate a timestamp.  Returning a negative timestamp will result in data loss &#8211; the corresponding record will not be
+                processed but silently dropped.  If you want to estimate a new timestamp, you can use the value provided via
+                <code class="docutils literal"><span class="pre">previousTimestamp</span></code> (i.e., a Kafka Streams timestamp estimation).  Here is an example of a custom
+                <code class="docutils literal"><span class="pre">TimestampExtractor</span></code> implementation:</p>
+              <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.clients.consumer.ConsumerRecord</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.processor.TimestampExtractor</span><span class="o">;</span>
+
+<span class="c1">// Extracts the embedded timestamp of a record (giving you &quot;event-time&quot; semantics).</span>
+<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyEventTimeExtractor</span> <span class="kd">implements</span> <span class="n">TimestampExtractor</span> <span class="o">{</span>
+
+  <span class="nd">@Override</span>
+  <span class="kd">public</span> <span class="kt">long</span> <span class="nf">extract</span><span class="o">(</span><span class="kd">final</span> <span class="n">ConsumerRecord</span><span class="o">&lt;</span><span class="n">Object</span><span class="o">,</span> <span class="n">Object</span><span class="o">&gt;</span> <span class="n">record</span><span class="o">,</span> <span class="kd">final</span> <span class="kt">long</span> <span class="n">previousTimestamp</span><span class="o">)</span> <span class="o">{</span>
+    <span class="c1">// `Foo` is your own custom class, which we assume has a method that returns</span>
+    <span class="c1">// the embedded timestamp (milliseconds since midnight, January 1, 1970 UTC).</span>
+    <span class="kt">long</span> <span class="n">timestamp</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="o">;</span>
+    <span class="kd">final</span> <span class="n">Foo</span> <span class="n">myPojo</span> <span class="o">=</span> <span class="o">(</span><span class="n">Foo</span><span class="o">)</span> <span class="n">record</span><span class="o">.</span><span class="na">value</span><span class="o">();</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">myPojo</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
+      <span class="n">timestamp</span> <span class="o">=</span> <span class="n">myPojo</span><span class="o">.</span><span class="na">getTimestampInMillis</span><span class="o">();</span>
+    <span class="o">}</span>
+    <span class="k">if</span> <span class="o">(</span><span class="n">timestamp</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+      <span class="c1">// Invalid timestamp!  Attempt to estimate a new timestamp,</span>
+      <span class="c1">// otherwise fall back to wall-clock time (processing-time).</span>
+      <span class="k">if</span> <span class="o">(</span><span class="n">previousTimestamp</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">previousTimestamp</span><span class="o">;</span>
+      <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
+        <span class="k">return</span> <span class="n">System</span><span class="o">.</span><span class="na">currentTimeMillis</span><span class="o">();</span>
+      <span class="o">}</span>
+    <span class="o">}</span>
+  <span class="o">}</span>
+
+<span class="o">}</span>
+</pre></div>
+              </div>
+              <p>You would then define the custom timestamp extractor in your Streams configuration as follows:</p>
+              <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.Properties</span><span class="o">;</span>
+<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="o">;</span>
+
+<span class="n">Properties</span> <span class="n">streamsConfiguration</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
+<span class="n">streamsConfiguration</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG</span><span class="o">,</span> <span class="n">MyEventTimeExtractor</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+</pre></div>
+              </div>
+            </div></blockquote>
+        </div>
         <div class="section" id="default-key-serde">
           <h4><a class="toc-backref" href="#id8">default.key.serde</a><a class="headerlink" href="#default-key-serde" title="Permalink to this headline"></a></h4>
           <blockquote>
@@ -425,6 +573,52 @@
               <p>This is discussed in more detail in <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data types and serialization</span></a>.</p>
             </div></blockquote>
         </div>
+        <div class="section" id="default-windowed-key-serde-inner">
+          <h4><a class="toc-backref" href="#id32">default.windowed.key.serde.inner</a><a class="headerlink" href="#default-windowed-key-serde-inner" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div><p>The default Serializer/Deserializer class for the inner class of windowed keys. Serialization and deserialization in Kafka Streams happens
+              whenever data needs to be materialized, for example:</p>
+              <blockquote>
+                <div><ul class="simple">
+                  <li>Whenever data is read from or written to a <em>Kafka topic</em> (e.g., via the <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code> and <code class="docutils literal"><span class="pre">KStream#to()</span></code> methods).</li>
+                  <li>Whenever data is read from or written to a <em>state store</em>.</li>
+                </ul>
+                  <p>This is discussed in more detail in <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data types and serialization</span></a>.</p>
+                </div></blockquote>
+            </div></blockquote>
+        </div>
+        <div class="section" id="default-windowed-value-serde-inner">
+          <h4><a class="toc-backref" href="#id33">default.windowed.value.serde.inner</a><a class="headerlink" href="#default-windowed-value-serde-inner" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div><p>The default Serializer/Deserializer class for the inner class of windowed values. Serialization and deserialization in Kafka Streams happens
+              happens whenever data needs to be materialized, for example:</p>
+              <ul class="simple">
+                <li>Whenever data is read from or written to a <em>Kafka topic</em> (e.g., via the <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code> and <code class="docutils literal"><span class="pre">KStream#to()</span></code> methods).</li>
+                <li>Whenever data is read from or written to a <em>state store</em>.</li>
+              </ul>
+              <p>This is discussed in more detail in <a class="reference internal" href="datatypes.html#streams-developer-guide-serdes"><span class="std std-ref">Data types and serialization</span></a>.</p>
+            </div></blockquote>
+        </div>
+        <div class="section" id="max-task-idle-ms">
+          <span id="streams-developer-guide-max-task-idle-ms"></span><h4><a class="toc-backref" href="#id28">max.task.idle.ms</a><a class="headerlink" href="#max-task-idle-ms" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              The maximum amount of time a task will idle without processing data when waiting for all of its input partition buffers to contain records. This can help avoid potential out-of-order
+              processing when the task has multiple input streams, as in a join, for example. Setting this to a nonzero value may increase latency but will improve time synchronization.
+            </div>
+          </blockquote>
+        </div>
+        <div class="section" id="max-warmup-replicas">
+          <span id="streams-developer-guide-max-warmup-replicas"></span><h4><a class="toc-backref" href="#id29">max.warmup.replicas</a><a class="headerlink" href="#max-warmup-replicas" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once for the purpose of keeping
+              the task available on one instance while it is warming up on another instance it has been reassigned to. Used to throttle how much extra broker
+              traffic and cluster state can be used for high availability. Increasing this will allow Streams to warm up more tasks at once, speeding up the time
+              for the reassigned warmups to restore sufficient state for them to be transitioned to active tasks. Must be at least 1.
+            </div>
+          </blockquote>
+        </div>
         <div class="section" id="num-standby-replicas">
           <span id="streams-developer-guide-standby-replicas"></span><h4><a class="toc-backref" href="#id10">num.standby.replicas</a><a class="headerlink" href="#num-standby-replicas" title="Permalink to this headline"></a></h4>
           <blockquote>
@@ -433,13 +627,15 @@
               Standby replicas are used to minimize the latency of task failover.  A task that was previously running on a failed instance is
               preferred to restart on an instance that has standby replicas so that the local state store restoration process from its
               changelog can be minimized.  Details about how Kafka Streams makes use of the standby replicas to minimize the cost of
-              resuming tasks on failover can be found in the <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">State</span></a> section.</div></blockquote>
+              resuming tasks on failover can be found in the <a class="reference internal" href="../architecture.html#streams_architecture_state"><span class="std std-ref">State</span></a> section.
             </div>
-            <div class="admonition note">
+          </blockquote>
+        </div>
+          <div class="admonition note">
               <p class="first admonition-title">Note</p>
               <p class="last">If you enable <cite>n</cite> standby tasks, you need to provision <cite>n+1</cite> <code class="docutils literal"><span class="pre">KafkaStreams</span></code>
               instances.</p>
-              </div>
+          </div>
         <div class="section" id="num-stream-threads">
           <h4><a class="toc-backref" href="#id11">num.stream.threads</a><a class="headerlink" href="#num-stream-threads" title="Permalink to this headline"></a></h4>
           <blockquote>
@@ -449,10 +645,22 @@
         <div class="section" id="partition-grouper">
           <span id="streams-developer-guide-partition-grouper"></span><h4><a class="toc-backref" href="#id12">partition.grouper</a><a class="headerlink" href="#partition-grouper" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div>A partition grouper creates a list of stream tasks from the partitions of source topics, where each created task is assigned with a group of source topic partitions.
+            <div>
+              <b>[DEPRECATED]</b> A partition grouper creates a list of stream tasks from the partitions of source topics, where each created task is assigned with a group of source topic partitions.
               The default implementation provided by Kafka Streams is <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/DefaultPartitionGrouper.html">DefaultPartitionGrouper</a>.
               It assigns each task with one partition for each of the source topic partitions. The generated number of tasks equals the largest
-              number of partitions among the input topics. Usually an application does not need to customize the partition grouper.</div></blockquote>
+              number of partitions among the input topics. Usually an application does not need to customize the partition grouper.
+            </div>
+          </blockquote>
+        </div>
+        <div class="section" id="probing-rebalance-interval-ms">
+          <h4><a class="toc-backref" href="#id30">probing-rebalance.interval.ms</a><a class="headerlink" href="#probing-rebalance-interval-ms" title="Permalink to this headline"></a></h4>
+          <blockquote>
+            <div>
+              The maximum time to wait before triggering a rebalance to probe for warmup replicas that have restored enough to be considered caught up. Streams will only assign stateful active tasks to
+              instances that are caught up and within the <a class="reference internal" href="#acceptable-recovery-lag"><span class="std std-ref">acceptable.recovery.lag</span></a>, if any exist. Probing rebalances are used to query the latest total lag of warmup replicas and transition
+              them to active tasks if ready. They will continue to be triggered as long as there are warmup tasks, and until the assignment is balanced. Must be at least 1 minute.
+            </div></blockquote>
         </div>
         <div class="section" id="processing-guarantee">
           <span id="streams-developer-guide-processing-guarantee"></span><h4><a class="toc-backref" href="#id25">processing.guarantee</a><a class="headerlink" href="#processing-guarantee" title="Permalink to this headline"></a></h4>
@@ -549,94 +757,20 @@
               this path must be unique for each such instance.</div>
           </blockquote>
         </div>
-        <div class="section" id="timestamp-extractor">
-          <span id="streams-developer-guide-timestamp-extractor"></span><h4><a class="toc-backref" href="#id15">timestamp.extractor</a><a class="headerlink" href="#timestamp-extractor" title="Permalink to this headline"></a></h4>
+        <div class="section" id="topology-optimization">
+          <h4><a class="toc-backref" href="#id31">topology.optimization</a><a class="headerlink" href="#topology-optimization" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>A timestamp extractor pulls a timestamp from an instance of <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/clients/consumer/ConsumerRecord.html">ConsumerRecord</a>.
-              Timestamps are used to control the progress of streams.</p>
-              <p>The default extractor is
-                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/FailOnInvalidTimestamp.html">FailOnInvalidTimestamp</a>.
-                This extractor retrieves built-in timestamps that are automatically embedded into Kafka messages by the Kafka producer
-                client since
-                <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-32+-+Add+timestamps+to+Kafka+message">Kafka version 0.10</a>.
-                Depending on the setting of Kafka&#8217;s server-side <code class="docutils literal"><span class="pre">log.message.timestamp.type</span></code> broker and <code class="docutils literal"><span class="pre">message.timestamp.type</span></code> topic parameters,
-                this extractor provides you with:</p>
-              <ul class="simple">
-                <li><strong>event-time</strong> processing semantics if <code class="docutils literal"><span class="pre">log.message.timestamp.type</span></code> is set to <code class="docutils literal"><span class="pre">CreateTime</span></code> aka &#8220;producer time&#8221;
-                  (which is the default).  This represents the time when a Kafka producer sent the original message.  If you use Kafka&#8217;s
-                  official producer client, the timestamp represents milliseconds since the epoch.</li>
-                <li><strong>ingestion-time</strong> processing semantics if <code class="docutils literal"><span class="pre">log.message.timestamp.type</span></code> is set to <code class="docutils literal"><span class="pre">LogAppendTime</span></code> aka &#8220;broker
-                  time&#8221;.  This represents the time when the Kafka broker received the original message, in milliseconds since the epoch.</li>
-              </ul>
-              <p>The <code class="docutils literal"><span class="pre">FailOnInvalidTimestamp</span></code> extractor throws an exception if a record contains an invalid (i.e. negative) built-in
-                timestamp, because Kafka Streams would not process this record but silently drop it.  Invalid built-in timestamps can
-                occur for various reasons:  if for example, you consume a topic that is written to by pre-0.10 Kafka producer clients
-                or by third-party producer clients that don&#8217;t support the new Kafka 0.10 message format yet;  another situation where
-                this may happen is after upgrading your Kafka cluster from <code class="docutils literal"><span class="pre">0.9</span></code> to <code class="docutils literal"><span class="pre">0.10</span></code>, where all the data that was generated
-                with <code class="docutils literal"><span class="pre">0.9</span></code> does not include the <code class="docutils literal"><span class="pre">0.10</span></code> message timestamps.</p>
-              <p>If you have data with invalid timestamps and want to process it, then there are two alternative extractors available.
-                Both work on built-in timestamps, but handle invalid timestamps differently.</p>
-              <ul class="simple">
-                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/LogAndSkipOnInvalidTimestamp.html">LogAndSkipOnInvalidTimestamp</a>:
-                  This extractor logs a warn message and returns the invalid timestamp to Kafka Streams, which will not process but
-                  silently drop the record.
-                  This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records with an
-                  invalid built-in timestamp in your input data.</li>
-                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/UsePartitionTimeOnInvalidTimestamp.html">UsePartitionTimeOnInvalidTimestamp</a>.
-                  This extractor returns the record&#8217;s built-in timestamp if it is valid (i.e. not negative).  If the record does not
-                  have a valid built-in timestamps, the extractor returns the previously extracted valid timestamp from a record of the
-                  same topic partition as the current record as a timestamp estimation.  In case that no timestamp can be estimated, it
-                  throws an exception.</li>
-              </ul>
-              <p>Another built-in extractor is
-                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/WallclockTimestampExtractor.html">WallclockTimestampExtractor</a>.
-                This extractor does not actually &#8220;extract&#8221; a timestamp from the consumed record but rather returns the current time in
-                milliseconds from the system clock (think: <code class="docutils literal"><span class="pre">System.currentTimeMillis()</span></code>), which effectively means Streams will operate
-                on the basis of the so-called <strong>processing-time</strong> of events.</p>
-              <p>You can also provide your own timestamp extractors, for instance to retrieve timestamps embedded in the payload of
-                messages.  If you cannot extract a valid timestamp, you can either throw an exception, return a negative timestamp, or
-                estimate a timestamp.  Returning a negative timestamp will result in data loss &#8211; the corresponding record will not be
-                processed but silently dropped.  If you want to estimate a new timestamp, you can use the value provided via
-                <code class="docutils literal"><span class="pre">previousTimestamp</span></code> (i.e., a Kafka Streams timestamp estimation).  Here is an example of a custom
-                <code class="docutils literal"><span class="pre">TimestampExtractor</span></code> implementation:</p>
-              <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.clients.consumer.ConsumerRecord</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.processor.TimestampExtractor</span><span class="o">;</span>
-
-<span class="c1">// Extracts the embedded timestamp of a record (giving you &quot;event-time&quot; semantics).</span>
-<span class="kd">public</span> <span class="kd">class</span> <span class="nc">MyEventTimeExtractor</span> <span class="kd">implements</span> <span class="n">TimestampExtractor</span> <span class="o">{</span>
-
-  <span class="nd">@Override</span>
-  <span class="kd">public</span> <span class="kt">long</span> <span class="nf">extract</span><span class="o">(</span><span class="kd">final</span> <span class="n">ConsumerRecord</span><span class="o">&lt;</span><span class="n">Object</span><span class="o">,</span> <span class="n">Object</span><span class="o">&gt;</span> <span class="n">record</span><span class="o">,</span> <span class="kd">final</span> <span class="kt">long</span> <span class="n">previousTimestamp</span><span class="o">)</span> <span class="o">{</span>
-    <span class="c1">// `Foo` is your own custom class, which we assume has a method that returns</span>
-    <span class="c1">// the embedded timestamp (milliseconds since midnight, January 1, 1970 UTC).</span>
-    <span class="kt">long</span> <span class="n">timestamp</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="o">;</span>
-    <span class="kd">final</span> <span class="n">Foo</span> <span class="n">myPojo</span> <span class="o">=</span> <span class="o">(</span><span class="n">Foo</span><span class="o">)</span> <span class="n">record</span><span class="o">.</span><span class="na">value</span><span class="o">();</span>
-    <span class="k">if</span> <span class="o">(</span><span class="n">myPojo</span> <span class="o">!=</span> <span class="kc">null</span><span class="o">)</span> <span class="o">{</span>
-      <span class="n">timestamp</span> <span class="o">=</span> <span class="n">myPojo</span><span class="o">.</span><span class="na">getTimestampInMillis</span><span class="o">();</span>
-    <span class="o">}</span>
-    <span class="k">if</span> <span class="o">(</span><span class="n">timestamp</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
-      <span class="c1">// Invalid timestamp!  Attempt to estimate a new timestamp,</span>
-      <span class="c1">// otherwise fall back to wall-clock time (processing-time).</span>
-      <span class="k">if</span> <span class="o">(</span><span class="n">previousTimestamp</span> <span class="o">&gt;=</span> <span class="mi">0</span><span class="o">)</span> <span class="o">{</span>
-        <span class="k">return</span> <span class="n">previousTimestamp</span><span class="o">;</span>
-      <span class="o">}</span> <span class="k">else</span> <span class="o">{</span>
-        <span class="k">return</span> <span class="n">System</span><span class="o">.</span><span class="na">currentTimeMillis</span><span class="o">();</span>
-      <span class="o">}</span>
-    <span class="o">}</span>
-  <span class="o">}</span>
-
-<span class="o">}</span>
-</pre></div>
-              </div>
-              <p>You would then define the custom timestamp extractor in your Streams configuration as follows:</p>
-              <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.Properties</span><span class="o">;</span>
-<span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="o">;</span>
-
-<span class="n">Properties</span> <span class="n">streamsConfiguration</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
-<span class="n">streamsConfiguration</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG</span><span class="o">,</span> <span class="n">MyEventTimeExtractor</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
-</pre></div>
-              </div>
-            </div></blockquote>
+            <div>
+              <p>
+                You can tell Streams to apply topology optimizations by setting this config. The optimizations are currently all or none and disabled by default.
+                These optimizations include moving/reducing repartition topics and reusing the source topic as the changelog for source KTables. It is recommended to enable this.
+              </p>
+              <p>
+                Note that as of 2.3, you need to do two things to enable optimizations. In addition to setting this config to <code>StreamsConfig.OPTIMIZE</code>, you'll need to pass in your
+                configuration properties when building your topology by using the overloaded <code>StreamsBuilder.build(Properties)</code> method.
+                For example <code>KafkaStreams myStream = new KafkaStreams(streamsBuilder.build(properties), properties)</code>.
+              </p>
+          </div></blockquote>
         </div>
         <div class="section" id="upgrade-from">
           <h4><a class="toc-backref" href="#id14">upgrade.from</a><a class="headerlink" href="#upgrade-from" title="Permalink to this headline"></a></h4>
