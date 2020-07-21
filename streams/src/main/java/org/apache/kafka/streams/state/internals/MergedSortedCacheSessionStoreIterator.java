@@ -32,8 +32,9 @@ class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheSto
 
     MergedSortedCacheSessionStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                           final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator,
-                                          final SegmentedCacheFunction cacheFunction) {
-        super(cacheIterator, storeIterator);
+                                          final SegmentedCacheFunction cacheFunction,
+                                          final boolean reverse) {
+        super(cacheIterator, storeIterator, reverse);
         this.cacheFunction = cacheFunction;
     }
 

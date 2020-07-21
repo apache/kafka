@@ -135,7 +135,8 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
             storeIterator,
             new StateSerdes<>("name", Serdes.Bytes(), Serdes.ByteArray()),
             WINDOW_SIZE,
-            SINGLE_SEGMENT_CACHE_FUNCTION
+            SINGLE_SEGMENT_CACHE_FUNCTION,
+            false
         );
     }
 }

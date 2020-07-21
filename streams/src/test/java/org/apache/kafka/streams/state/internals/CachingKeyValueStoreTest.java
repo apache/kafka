@@ -283,10 +283,33 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldReverseIterateAllStoredItems() {
+        final int items = addItemsToCache();
+        final KeyValueIterator<Bytes, byte[]> all = store.reverseAll();
+        final List<Bytes> results = new ArrayList<>();
+        while (all.hasNext()) {
+            results.add(all.next().key);
+        }
+        assertEquals(items, results.size());
+    }
+
+    @Test
     public void shouldIterateOverRange() {
         final int items = addItemsToCache();
         final KeyValueIterator<Bytes, byte[]> range =
             store.range(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
+        final List<Bytes> results = new ArrayList<>();
+        while (range.hasNext()) {
+            results.add(range.next().key);
+        }
+        assertEquals(items, results.size());
+    }
+
+    @Test
+    public void shouldReverseIterateOverRange() {
+        final int items = addItemsToCache();
+        final KeyValueIterator<Bytes, byte[]> range =
+            store.reverseRange(bytesKey(String.valueOf(0)), bytesKey(String.valueOf(items)));
         final List<Bytes> results = new ArrayList<>();
         while (range.hasNext()) {
             results.add(range.next().key);
@@ -300,7 +323,9 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         store.delete(bytesKey("a"));
         assertNull(store.get(bytesKey("a")));
         assertFalse(store.range(bytesKey("a"), bytesKey("b")).hasNext());
+        assertFalse(store.reverseRange(bytesKey("a"), bytesKey("b")).hasNext());
         assertFalse(store.all().hasNext());
+        assertFalse(store.reverseAll().hasNext());
     }
 
     @Test
@@ -310,7 +335,9 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         store.delete(bytesKey("a"));
         assertNull(store.get(bytesKey("a")));
         assertFalse(store.range(bytesKey("a"), bytesKey("b")).hasNext());
+        assertFalse(store.reverseRange(bytesKey("a"), bytesKey("b")).hasNext());
         assertFalse(store.all().hasNext());
+        assertFalse(store.reverseAll().hasNext());
     }
 
     @Test
@@ -340,9 +367,21 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToDoReverseRangeQueryOnClosedCachingStore() {
+        store.close();
+        store.reverseRange(bytesKey("a"), bytesKey("b"));
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowIfTryingToDoAllQueryOnClosedCachingStore() {
         store.close();
         store.all();
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToDoReverseAllQueryOnClosedCachingStore() {
+        store.close();
+        store.reverseAll();
     }
 
     @Test(expected = InvalidStateStoreException.class)

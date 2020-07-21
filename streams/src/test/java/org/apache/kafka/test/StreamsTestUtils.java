@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -121,7 +122,7 @@ public final class StreamsTestUtils {
     }
 
     public static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<KeyValue<K, V>> results = new HashSet<>();
+        final Set<KeyValue<K, V>> results = new LinkedHashSet<>();
 
         while (iterator.hasNext()) {
             results.add(iterator.next());

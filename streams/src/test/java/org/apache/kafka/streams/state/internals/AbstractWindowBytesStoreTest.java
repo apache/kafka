@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -64,6 +65,7 @@ import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -269,9 +271,27 @@ public abstract class AbstractWindowBytesStoreTest {
         final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
         final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
 
-        assertEquals(
-            new HashSet<>(asList(zero, one, two, four, five)),
-            toSet(windowStore.all())
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(zero, one, two, four, five)).toArray(),
+            toSet(windowStore.all()).toArray()
+        );
+    }
+
+    @Test
+    public void shouldGetBackwardAll() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        putFirstBatch(windowStore, startTime, context);
+
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(five, four, two, one, zero)).toArray(),
+            toSet(windowStore.backwardAll()).toArray()
         );
     }
 
@@ -287,17 +307,43 @@ public abstract class AbstractWindowBytesStoreTest {
         final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
         final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
 
-        assertEquals(
-            new HashSet<>(asList(one, two, four)),
-            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 4)))
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(one, two, four)).toArray(),
+            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 4))).toArray()
         );
-        assertEquals(
-            new HashSet<>(asList(zero, one, two)),
-            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 0), ofEpochMilli(startTime + 3)))
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(zero, one, two)).toArray(),
+            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 0), ofEpochMilli(startTime + 3))).toArray()
         );
-        assertEquals(
-            new HashSet<>(asList(one, two, four, five)),
-            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 5)))
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(one, two, four, five)).toArray(),
+            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 5))).toArray()
+        );
+    }
+
+    @Test
+    public void shouldBackwardFetchAllInTimeRange() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        putFirstBatch(windowStore, startTime, context);
+
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(four, two, one)).toArray(),
+            toSet(windowStore.backwardFetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 4))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(two, one, zero)).toArray(),
+            toSet(windowStore.backwardFetchAll(ofEpochMilli(startTime + 0), ofEpochMilli(startTime + 3))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(five, four, two, one)).toArray(),
+            toSet(windowStore.backwardFetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 5))).toArray()
         );
     }
 
@@ -313,69 +359,147 @@ public abstract class AbstractWindowBytesStoreTest {
         final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
         final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
 
-        assertEquals(
-            new HashSet<>(asList(zero, one)),
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(zero, one)).toArray(),
             toSet(windowStore.fetch(
                 0,
                 1,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
         );
-        assertEquals(
-            new HashSet<>(Collections.singletonList(one)),
+        assertArrayEquals(
+            new LinkedHashSet<>(Collections.singletonList(one)).toArray(),
             toSet(windowStore.fetch(
                 1,
                 1,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
         );
-        assertEquals(
-            new HashSet<>(asList(one, two)),
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(one, two)).toArray(),
             toSet(windowStore.fetch(
                 1,
                 3,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
         );
-        assertEquals(
-            new HashSet<>(asList(zero, one, two)),
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(zero, one, two)).toArray(),
             toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
         );
-        assertEquals(
-            new HashSet<>(asList(zero, one, two, four, five)),
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(zero, one, two, four, five)).toArray(),
             toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L))).toArray()
         );
-        assertEquals(
-            new HashSet<>(asList(two, four, five)),
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(two, four, five)).toArray(),
             toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 2L),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L)))
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L))).toArray()
         );
-        assertEquals(
-            new HashSet<>(Collections.emptyList()),
+        assertArrayEquals(
+            new LinkedHashSet<>(Collections.emptyList()).toArray(),
             toSet(windowStore.fetch(
                 4,
                 5,
                 ofEpochMilli(startTime + 2L),
-                ofEpochMilli(startTime + WINDOW_SIZE)))
+                ofEpochMilli(startTime + WINDOW_SIZE))).toArray()
         );
-        assertEquals(
-            new HashSet<>(Collections.emptyList()),
+        assertArrayEquals(
+            new LinkedHashSet<>(Collections.emptyList()).toArray(),
             toSet(windowStore.fetch(
                 0,
                 3,
                 ofEpochMilli(startTime + 3L),
-                ofEpochMilli(startTime + WINDOW_SIZE + 5)))
+                ofEpochMilli(startTime + WINDOW_SIZE + 5))).toArray()
+        );
+    }
+
+    @Test
+    public void testBackwardFetchRange() {
+        final long startTime = SEGMENT_INTERVAL - 4L;
+
+        putFirstBatch(windowStore, startTime, context);
+
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(one, zero)).toArray(),
+            toSet(windowStore.backwardFetch(
+                0,
+                1,
+                ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(Collections.singletonList(one)).toArray(),
+            toSet(windowStore.backwardFetch(
+                1,
+                1,
+                ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(two, one)).toArray(),
+            toSet(windowStore.backwardFetch(
+                1,
+                3,
+                ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(two, one, zero)).toArray(),
+            toSet(windowStore.backwardFetch(
+                0,
+                5,
+                ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(five, four, two, one, zero)).toArray(),
+            toSet(windowStore.backwardFetch(
+                0,
+                5,
+                ofEpochMilli(startTime + 0L - WINDOW_SIZE),
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(asList(five, four, two)).toArray(),
+            toSet(windowStore.backwardFetch(
+                0,
+                5,
+                ofEpochMilli(startTime + 2L),
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(Collections.emptyList()).toArray(),
+            toSet(windowStore.backwardFetch(
+                4,
+                5,
+                ofEpochMilli(startTime + 2L),
+                ofEpochMilli(startTime + WINDOW_SIZE))).toArray()
+        );
+        assertArrayEquals(
+            new LinkedHashSet<>(Collections.emptyList()).toArray(),
+            toSet(windowStore.backwardFetch(
+                0,
+                3,
+                ofEpochMilli(startTime + 3L),
+                ofEpochMilli(startTime + WINDOW_SIZE + 5))).toArray()
         );
     }
 

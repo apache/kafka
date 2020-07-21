@@ -28,8 +28,9 @@ class MergedSortedCacheKeyValueBytesStoreIterator extends AbstractMergedSortedCa
 
 
     MergedSortedCacheKeyValueBytesStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                                final KeyValueIterator<Bytes, byte[]> storeIterator) {
-        super(cacheIterator, storeIterator);
+                                                final KeyValueIterator<Bytes, byte[]> storeIterator,
+                                                final boolean reverse) {
+        super(cacheIterator, storeIterator, reverse);
     }
 
     @Override

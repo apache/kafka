@@ -210,7 +210,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                            final Instant toTime) {
         final long timeFrom = ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
         final long timeTo = ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
-        return fetch(from, to, timeFrom, timeTo, false);
+        return fetch(from, to, timeFrom, timeTo, true);
     }
 
     KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
@@ -253,7 +253,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant from, final Instant to) {
         final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
         final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetchAll(timeFrom, timeTo, false);
+        return fetchAll(timeFrom, timeTo, true);
     }
 
     KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo, final boolean backward) {

@@ -104,7 +104,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator =
             new DelegatingPeekingKeyValueIterator<>("cache", new KeyValueIteratorStub<>(cacheKvs));
-        return new MergedSortedCacheSessionStoreIterator(cacheIterator, storeIterator, SINGLE_SEGMENT_CACHE_FUNCTION);
+        return new MergedSortedCacheSessionStoreIterator(cacheIterator, storeIterator, SINGLE_SEGMENT_CACHE_FUNCTION, false);
     }
 
 }

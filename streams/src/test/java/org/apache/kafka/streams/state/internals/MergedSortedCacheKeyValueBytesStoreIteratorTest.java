@@ -51,12 +51,13 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
             cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));
         }
 
-        final Bytes from = Bytes.wrap(new byte[]{2});
-        final Bytes to = Bytes.wrap(new byte[]{9});
+        final Bytes from = Bytes.wrap(new byte[] {2});
+        final Bytes to = Bytes.wrap(new byte[] {9});
         final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.range(from, to));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
-        final MergedSortedCacheKeyValueBytesStoreIterator iterator = new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator =
+            new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, false);
         final byte[][] values = new byte[8][];
         int index = 0;
         int bytesIndex = 2;
@@ -160,9 +161,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
         final MergedSortedCacheKeyValueBytesStoreIterator iterator =
-                new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator,
-                                                                storeIterator
-                );
+            new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, false);
         final byte[][] values = new byte[8][];
         int index = 0;
         int bytesIndex = 2;
@@ -178,6 +177,6 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     private MergedSortedCacheKeyValueBytesStoreIterator createIterator() {
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(namespace);
         final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.all());
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, false);
     }
 }

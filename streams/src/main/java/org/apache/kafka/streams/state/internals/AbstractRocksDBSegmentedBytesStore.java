@@ -86,7 +86,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             searchSpace.iterator(),
             keySchema.hasNextCondition(key, key, from, to),
             binaryFrom,
-            binaryTo);
+            binaryTo,
+            backward);
     }
 
     @Override
@@ -126,7 +127,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             searchSpace.iterator(),
             keySchema.hasNextCondition(keyFrom, keyTo, from, to),
             binaryFrom,
-            binaryTo);
+            binaryTo,
+            backward);
     }
 
     @Override
@@ -137,7 +139,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             searchSpace.iterator(),
             keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
             null,
-            null);
+            null,
+            false);
     }
 
     @Override
@@ -148,7 +151,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             searchSpace.iterator(),
             keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
             null,
-            null);
+            null,
+            true);
     }
 
     @Override
@@ -160,7 +164,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             searchSpace.iterator(),
             keySchema.hasNextCondition(null, null, timeFrom, timeTo),
             null,
-            null);
+            null,
+            false);
     }
 
     @Override
@@ -172,7 +177,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             searchSpace.iterator(),
             keySchema.hasNextCondition(null, null, timeFrom, timeTo),
             null,
-            null);
+            null,
+            true);
     }
 
     @Override

@@ -72,7 +72,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         );
 
         final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(
-            cacheIterator, storeIterator
+            cacheIterator, storeIterator, false
         );
         int index = 0;
         while (iterator.hasNext()) {
@@ -95,7 +95,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
             namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(fromBytes), SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(toBytes)
         );
         final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(
-            cacheIterator, storeIterator
+            cacheIterator, storeIterator, false
         );
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();
@@ -111,7 +111,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
         final Bytes toBytes = WindowKeySchema.toStoreKeyBinary("a", 100, 0, stateSerdes);
         final KeyValueIterator<Long, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(windowStoreKvPairs.iterator()));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(fromBytes), SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(toBytes));
-        final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(cacheIterator, storeIterator);
+        final MergedSortedCacheWindowStoreIterator iterator = new MergedSortedCacheWindowStoreIterator(cacheIterator, storeIterator, false);
         assertThat(iterator.peekNextKey(), equalTo(0L));
         iterator.next();
         assertThat(iterator.peekNextKey(), equalTo(10L));

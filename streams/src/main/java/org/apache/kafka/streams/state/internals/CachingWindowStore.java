@@ -205,7 +205,7 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(key, timeFrom, timeTo) :
+            new CacheIteratorWrapper(key, timeFrom, timeTo, false) :
             context.cache().range(name,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
@@ -216,7 +216,7 @@ class CachingWindowStore
             cacheIterator, hasNextCondition, cacheFunction
         );
 
-        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator);
+        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, false);
     }
 
     @Override
@@ -235,18 +235,17 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(key, timeFrom, timeTo) :
+            new CacheIteratorWrapper(key, timeFrom, timeTo, true) :
             context.cache().reverseRange(name,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
             );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(
-            cacheIterator, hasNextCondition, cacheFunction
-        );
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
+            new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
-        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator);
+        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, true);
     }
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
@@ -273,7 +272,7 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(from, to, timeFrom, timeTo) :
+            new CacheIteratorWrapper(from, to, timeFrom, timeTo, false) :
             context.cache().range(name,
                 cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
                 cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
@@ -287,7 +286,8 @@ class CachingWindowStore
             underlyingIterator,
             bytesSerdes,
             windowSize,
-            cacheFunction
+            cacheFunction,
+            false
         );
     }
 
@@ -317,7 +317,7 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(from, to, timeFrom, timeTo) :
+            new CacheIteratorWrapper(from, to, timeFrom, timeTo, true) :
             context.cache().reverseRange(name,
                 cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
                 cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
@@ -331,7 +331,8 @@ class CachingWindowStore
             underlyingIterator,
             bytesSerdes,
             windowSize,
-            cacheFunction
+            cacheFunction,
+            true
         );
     }
 
@@ -352,7 +353,8 @@ class CachingWindowStore
             underlyingIterator,
             bytesSerdes,
             windowSize,
-            cacheFunction
+            cacheFunction,
+            false
         );
     }
 
@@ -375,7 +377,8 @@ class CachingWindowStore
             underlyingIterator,
             bytesSerdes,
             windowSize,
-            cacheFunction
+            cacheFunction,
+            true
         );
     }
 
@@ -391,7 +394,8 @@ class CachingWindowStore
             underlyingIterator,
             bytesSerdes,
             windowSize,
-            cacheFunction
+            cacheFunction,
+            false
         );
     }
 
@@ -407,7 +411,8 @@ class CachingWindowStore
             underlyingIterator,
             bytesSerdes,
             windowSize,
-            cacheFunction
+            cacheFunction,
+            true
         );
     }
 
@@ -448,14 +453,16 @@ class CachingWindowStore
 
         private CacheIteratorWrapper(final Bytes key,
                                      final long timeFrom,
-                                     final long timeTo) {
-            this(key, key, timeFrom, timeTo);
+                                     final long timeTo,
+                                     final boolean reverse) {
+            this(key, key, timeFrom, timeTo, reverse);
         }
 
         private CacheIteratorWrapper(final Bytes keyFrom,
                                      final Bytes keyTo,
                                      final long timeFrom,
-                                     final long timeTo) {
+                                     final long timeTo,
+                                     final boolean reverse) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.timeTo = timeTo;
@@ -466,7 +473,8 @@ class CachingWindowStore
 
             setCacheKeyRange(timeFrom, currentSegmentLastTime());
 
-            this.current = context.cache().range(name, cacheKeyFrom, cacheKeyTo);
+            if (reverse) this.current = context.cache().reverseRange(name, cacheKeyFrom, cacheKeyTo);
+            else this.current = context.cache().range(name, cacheKeyFrom, cacheKeyTo);
         }
 
         @Override

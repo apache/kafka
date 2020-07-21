@@ -249,7 +249,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().range(cacheName, from, to);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, false);
     }
 
     @Override
@@ -265,7 +265,7 @@ public class CachingKeyValueStore
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().reverseRange(from, to);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseRange(cacheName, from, to);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
     }
 
     @Override
@@ -274,7 +274,7 @@ public class CachingKeyValueStore
         final KeyValueIterator<Bytes, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().all(cacheName);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, false);
     }
 
     @Override
@@ -283,7 +283,7 @@ public class CachingKeyValueStore
         final KeyValueIterator<Bytes, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().reverseAll());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseAll(cacheName);
-        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
     }
 
     @Override
