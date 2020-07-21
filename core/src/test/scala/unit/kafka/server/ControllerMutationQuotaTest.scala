@@ -287,9 +287,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
     val request = new CreateTopicsRequest.Builder(data).build(version)
     val response = connectAndReceive[CreateTopicsResponse](request)
-    // We assume that order of topics is preserved
-    response.data.throttleTimeMs -> response.data.topics.asScala
-      .map(topic => Errors.forCode(topic.errorCode)).toSeq
+    val errorByTopics = response.data.topics.asScala
+      .map(topic => topic.name -> Errors.forCode(topic.errorCode)).toMap
+    response.data.throttleTimeMs -> topics.map(_._1).map(errorByTopics)
   }
 
   private def deleteTopics(topics: Seq[(String, Int)], version: Short): (Int, Seq[Errors]) = {
@@ -298,9 +298,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       .setTopicNames(topics.map(_._1).asJava)
     val request = new DeleteTopicsRequest.Builder(data).build(version)
     val response = connectAndReceive[DeleteTopicsResponse](request)
-    // We assume that order of topics is preserved
-    response.data.throttleTimeMs -> response.data.responses.asScala
-      .map(topic => Errors.forCode(topic.errorCode)).toSeq
+    val errorByTopics = response.data.responses.asScala
+      .map(topic => topic.name -> Errors.forCode(topic.errorCode)).toMap
+    response.data.throttleTimeMs -> topics.map(_._1).map(errorByTopics)
   }
 
   private def createPartitions(topics: Seq[(String, Int)], version: Short): (Int, Seq[Errors]) = {
@@ -311,9 +311,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
     val request = new CreatePartitionsRequest.Builder(data).build(version)
     val response = connectAndReceive[CreatePartitionsResponse](request)
-    // We assume that order of topics is preserved
-    response.data.throttleTimeMs -> response.data.results.asScala
-      .map(topic => Errors.forCode(topic.errorCode)).toSeq
+    val errorByTopics = response.data.results.asScala
+      .map(topic => topic.name -> Errors.forCode(topic.errorCode)).toMap
+    response.data.throttleTimeMs -> topics.map(_._1).map(errorByTopics)
   }
 
   private def defineUserQuota(user: String, quota: Option[Double]): Unit = {
