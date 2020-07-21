@@ -196,6 +196,26 @@ public class TimestampedSegmentsTest {
     }
 
     @Test
+    public void shouldGetSegmentsWithinBackwardTimeRange() {
+        updateStreamTimeAndCreateSegment(0);
+        updateStreamTimeAndCreateSegment(1);
+        updateStreamTimeAndCreateSegment(2);
+        updateStreamTimeAndCreateSegment(3);
+        final long streamTime = updateStreamTimeAndCreateSegment(4);
+        segments.getOrCreateSegmentIfLive(0, context, streamTime);
+        segments.getOrCreateSegmentIfLive(1, context, streamTime);
+        segments.getOrCreateSegmentIfLive(2, context, streamTime);
+        segments.getOrCreateSegmentIfLive(3, context, streamTime);
+        segments.getOrCreateSegmentIfLive(4, context, streamTime);
+
+        final List<TimestampedSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
+        assertEquals(3, segments.size());
+        assertEquals(0, segments.get(2).id);
+        assertEquals(1, segments.get(1).id);
+        assertEquals(2, segments.get(0).id);
+    }
+
+    @Test
     public void shouldGetSegmentsWithinTimeRangeOutOfOrder() {
         updateStreamTimeAndCreateSegment(4);
         updateStreamTimeAndCreateSegment(2);
@@ -208,6 +228,21 @@ public class TimestampedSegmentsTest {
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
         assertEquals(2, segments.get(2).id);
+    }
+
+    @Test
+    public void shouldGetSegmentsWithinBackwardTimeRangeOutOfOrder() {
+        updateStreamTimeAndCreateSegment(4);
+        updateStreamTimeAndCreateSegment(2);
+        updateStreamTimeAndCreateSegment(0);
+        updateStreamTimeAndCreateSegment(1);
+        updateStreamTimeAndCreateSegment(3);
+
+        final List<TimestampedSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
+        assertEquals(3, segments.size());
+        assertEquals(0, segments.get(2).id);
+        assertEquals(1, segments.get(1).id);
+        assertEquals(2, segments.get(0).id);
     }
 
     @Test

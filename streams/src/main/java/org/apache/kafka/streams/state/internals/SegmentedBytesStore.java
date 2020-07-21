@@ -40,6 +40,14 @@ public interface SegmentedBytesStore extends StateStore {
      */
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to);
 
+    /**
+     * Fetch all records from the segmented store with the provided key and time range
+     * from all existing segments in backward order (from latest to earliest)
+     * @param key       the key to match
+     * @param from      earliest time to match
+     * @param to        latest time to match
+     * @return  an iterator over key-value pairs
+     */
     KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key, final long from, final long to);
 
     /**
@@ -53,6 +61,15 @@ public interface SegmentedBytesStore extends StateStore {
      */
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to);
 
+    /**
+     * Fetch all records from the segmented store in the provided key range and time range
+     * from all existing segments in backward order (from latest to earliest)
+     * @param keyFrom   The first key that could be in the range
+     * @param keyTo     The last key that could be in the range
+     * @param from      earliest time to match
+     * @param to        latest time to match
+     * @return  an iterator over key-value pairs
+     */
     KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to);
 
     /**
@@ -63,6 +80,12 @@ public interface SegmentedBytesStore extends StateStore {
      */
     KeyValueIterator<Bytes, byte[]> all();
 
+    /**
+     * Gets all the key-value pairs in the existing windows in backward order (from latest to earliest).
+     *
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @throws InvalidStateStoreException if the store is not initialized
+     */
     KeyValueIterator<Bytes, byte[]> backwardAll();
 
     /**
