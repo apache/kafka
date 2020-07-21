@@ -65,7 +65,7 @@ public class RecordsWriter implements Writable {
     public RecordsWriter(String dest, Consumer<Send> sendConsumer) {
         this.dest = dest;
         this.sendConsumer = sendConsumer;
-        this.byteBufferOutputStream = new ByteBufferOutputStream(32);
+        this.byteBufferOutputStream = new ByteBufferOutputStream(ByteBuffer.allocate(64), 2.0f);
         this.output = new DataOutputStream(this.byteBufferOutputStream);
         this.mark = 0;
     }
