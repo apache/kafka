@@ -219,22 +219,22 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     producerConfig.put(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, ScramLoginModule(user, password).toString)
-    val producer = createProducer()
 
     consumerConfig.put(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
     consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, s"$user-group")
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, ScramLoginModule(user, password).toString)
-    val consumer = createConsumer()
 
-    GroupedUser(user, userGroup, topic, servers(leader), producerClientId, consumerClientId, producer, consumer)
+    GroupedUser(user, userGroup, topic, servers(leader), producerClientId, consumerClientId,
+      createProducer(), createConsumer(), createAdminClient())
   }
 
   case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: KafkaServer,
                          producerClientId: String, consumerClientId: String,
                          override val producer: KafkaProducer[Array[Byte], Array[Byte]],
-                         override val consumer: KafkaConsumer[Array[Byte], Array[Byte]]) extends
-    QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer) {
+                         override val consumer: KafkaConsumer[Array[Byte], Array[Byte]],
+                         override val adminClient: Admin) extends
+    QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer, adminClient) {
 
     override def userPrincipal: KafkaPrincipal = GroupedUserPrincipal(user, userGroup)
 
@@ -247,12 +247,21 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     }
 
     override def removeQuotaOverrides(): Unit = {
-      adminZkClient.changeUserOrUserClientIdConfig(quotaEntityName(userGroup), new Properties)
+      alterClientQuotas(
+        clientQuotaAlteration(
+          clientQuotaEntity(Some(quotaEntityName(userGroup)), None),
+          None, None, None
+        )
+      )
     }
 
     def configureQuota(userGroup: String, producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit = {
-      val quotaProps = quotaProperties(producerQuota, consumerQuota, requestQuota)
-      adminZkClient.changeUserOrUserClientIdConfig(quotaEntityName(userGroup), quotaProps)
+      alterClientQuotas(
+        clientQuotaAlteration(
+          clientQuotaEntity(Some(quotaEntityName(userGroup)), None),
+          Some(producerQuota), Some(consumerQuota), Some(requestQuota)
+        )
+      )
     }
 
     def configureAndWaitForQuota(produceQuota: Long, fetchQuota: Long, divisor: Int = 1,
