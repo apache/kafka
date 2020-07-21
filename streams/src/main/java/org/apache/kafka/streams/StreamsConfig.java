@@ -496,7 +496,7 @@ public class StreamsConfig extends AbstractConfig {
     /**
      * {@code retries}
      * <p>
-     * This config is ignored.
+     * This config is ignored by Kafka Streams. Note, that the internal clients (producer, admin) are still impacted by this config.
      *
      * @deprecated since 2.7
      */
