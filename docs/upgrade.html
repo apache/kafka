@@ -19,6 +19,16 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h5><a id="upgrade_270_notable" href="#upgrade_270_notable">Notable changes in 2.7.0</a></h5>
+<ul>
+    <li>The configuration parameter <code>retries</code> is deprecated for the producer, admin, and Kafka Streams clients
+        via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-572%3A+Improve+timeouts+and+retries+in+Kafka+Streams">KIP-572</a>.
+        You should use the producer's <code>delivery.timeout.ms</code>, admin's <code>default.api.timeout.ms</code>, and
+        Kafka Streams' new <code>task.timeout.ms</code> parameters instead.
+        Note that parameter <code>retry.backoff.ms</code> is not impacted by this change.
+    </li>
+</ul>
+
 <h5><a id="upgrade_260_notable" href="#upgrade_260_notable">Notable changes in 2.6.0</a></h5>
 <ul>
     <li>Kafka Streams adds a new processing mode (requires broker 2.5 or newer) that improves application

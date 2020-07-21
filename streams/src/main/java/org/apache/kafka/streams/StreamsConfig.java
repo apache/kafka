@@ -44,6 +44,7 @@ import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
@@ -488,8 +489,15 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
 
-    /** {@code retries} */
+    /**
+     * {@code retries}
+     * <p>
+     * This config is ignored by Kafka Streams. Note, that the internal clients (producer, admin) are still impacted by this config.
+     *
+     * @deprecated since 2.7
+     */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
 
     /** {@code retry.backoff.ms} */
@@ -518,6 +526,12 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String STATE_DIR_CONFIG = "state.dir";
     private static final String STATE_DIR_DOC = "Directory location for state store. This path must be unique for each streams instance sharing the same underlying filesystem.";
+
+    /** {@code task.timeout.ms} */
+    public static final String TASK_TIMEOUT_MS_CONFIG = "task.timeout.ms";
+    public static final String TASK_TIMEOUT_MS_DOC = "Max amount of time a task might stall due to internal errors and retries until an error is raised. " +
+        "For a timeout of 0ms, a task would raise an error for the first internal error. " +
+        "For any timeout larger than 0ms, a task will retry at least once before an error is raised.";
 
     /** {@code topology.optimization} */
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
@@ -677,6 +691,12 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+            .define(TASK_TIMEOUT_MS_CONFIG,
+                    Type.LONG,
+                    Duration.ofSeconds(5L).toMillis(),
+                    atLeast(0L),
+                    Importance.MEDIUM,
+                    TASK_TIMEOUT_MS_DOC)
             .define(TOPOLOGY_OPTIMIZATION_CONFIG,
                     Type.STRING,
                     NO_OPTIMIZATION,
@@ -999,6 +1019,9 @@ public class StreamsConfig extends AbstractConfig {
         eosEnabled = StreamThread.eosEnabled(this);
         if (props.containsKey(PARTITION_GROUPER_CLASS_CONFIG)) {
             log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", PARTITION_GROUPER_CLASS_CONFIG);
+        }
+        if (props.containsKey(RETRIES_CONFIG)) {
+            log.warn("Configuration parameter `{}` is deprecated and will be removed in 3.0.0 release.", RETRIES_CONFIG);
         }
     }
 

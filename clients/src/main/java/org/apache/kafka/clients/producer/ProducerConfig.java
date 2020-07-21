@@ -126,7 +126,7 @@ public class ProducerConfig extends AbstractConfig {
             + "after a call to <code>send()</code> returns. This limits the total time that a record will be delayed "
             + "prior to sending, the time to await acknowledgement from the broker (if expected), and the time allowed "
             + "for retriable send failures. The producer may report failure to send a record earlier than this config if "
-            + "either an unrecoverable error is encountered, the retries have been exhausted, "
+            + "either an unrecoverable error is encountered, the retries have been exhausted (deprecated), "
             + "or the record is added to a batch which reached an earlier delivery expiration deadline. "
             + "The value of this config should be greater than or equal to the sum of <code>" + REQUEST_TIMEOUT_MS_CONFIG + "</code> "
             + "and <code>" + LINGER_MS_CONFIG + "</code>.";
@@ -203,9 +203,13 @@ public class ProducerConfig extends AbstractConfig {
                                                                             + " Note that if this setting is set to be greater than 1 and there are failed sends, there is a risk of"
                                                                             + " message re-ordering due to retries (i.e., if retries are enabled).";
 
-    /** <code>retries</code> */
+    /**
+     * <code>retries</code>
+     * @deprecated since 2.7
+     */
+    @Deprecated
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
-    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
+    private static final String RETRIES_DOC = "(Deprecated) Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
             + " Note that this retry is no different than if the client resent the record upon receiving the error."
             + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
             + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
@@ -247,7 +251,7 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. "
                                                         + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be less than or equal to 5, "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> to be greater than 0 and <code>" + ACKS_CONFIG + "</code> must be 'all'. If these values "
+                                                        + "<code>" + RETRIES_CONFIG + "</code> (deprecated) to be greater than 0 and <code>" + ACKS_CONFIG + "</code> must be 'all'. If these values "
                                                         + "are not explicitly set by the user, suitable values will be chosen. If incompatible values are set, "
                                                         + "a <code>ConfigException</code> will be thrown.";
 
@@ -435,6 +439,7 @@ public class ProducerConfig extends AbstractConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         CommonClientConfigs.warnIfDeprecatedDnsLookupValue(this);
+        CommonClientConfigs.warnIfDeprecatedRetriesValue(this);
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideEnableIdempotence(refinedConfigs);
         maybeOverrideClientId(refinedConfigs);

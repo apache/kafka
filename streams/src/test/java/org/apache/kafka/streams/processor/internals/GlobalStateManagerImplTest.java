@@ -388,7 +388,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore(store1.name()) {
+        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
             @Override
             public void flush() {
                 throw new RuntimeException("KABOOM!");
@@ -416,7 +416,7 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore(store1.name()) {
+        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
             @Override
             public void close() {
                 throw new RuntimeException("KABOOM!");
@@ -454,7 +454,7 @@ public class GlobalStateManagerImplTest {
     public void shouldNotCloseStoresIfCloseAlreadyCalled() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore("t1-store") {
+        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>("t1-store") {
             @Override
             public void close() {
                 if (!isOpen()) {
@@ -472,7 +472,7 @@ public class GlobalStateManagerImplTest {
     public void shouldAttemptToCloseAllStoresEvenWhenSomeException() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        final NoOpReadOnlyStore store = new NoOpReadOnlyStore("t1-store") {
+        final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<Object, Object>("t1-store") {
             @Override
             public void close() {
                 super.close();
@@ -612,6 +612,7 @@ public class GlobalStateManagerImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     @Test
     public void shouldRetryWhenEndOffsetsThrowsTimeoutException() {
         final int retries = 2;
@@ -645,6 +646,7 @@ public class GlobalStateManagerImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     @Test
     public void shouldRetryWhenPartitionsForThrowsTimeoutException() {
         final int retries = 2;
@@ -716,7 +718,7 @@ public class GlobalStateManagerImplTest {
         }
     }
 
-    private class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
+    private static class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
         ConverterStore(final String name,
                        final boolean rocksdbStore) {
             super(name, rocksdbStore);
