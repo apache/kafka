@@ -155,13 +155,10 @@ class CachingSessionStore
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
             );
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
-            earliestSessionEndTime,
-            latestSessionStartTime);
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
-            key,
-            earliestSessionEndTime,
-            latestSessionStartTime);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
+            wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+        final HasNextCondition hasNextCondition =
+            keySchema.hasNextCondition(key, key, earliestSessionEndTime, latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, false);
@@ -213,10 +210,8 @@ class CachingSessionStore
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
         );
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
-            keyTo,
-            earliestSessionEndTime,
-            latestSessionStartTime);
+        final HasNextCondition hasNextCondition =
+            keySchema.hasNextCondition(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, false);

@@ -206,7 +206,8 @@ class CachingWindowStore
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(key, timeFrom, timeTo, false) :
-            context.cache().range(name,
+            context.cache().range(
+                name,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
             );
@@ -236,7 +237,8 @@ class CachingWindowStore
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(key, timeFrom, timeTo, true) :
-            context.cache().reverseRange(name,
+            context.cache().reverseRange(
+                name,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
             );
@@ -273,7 +275,8 @@ class CachingWindowStore
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(from, to, timeFrom, timeTo, false) :
-            context.cache().range(name,
+            context.cache().range(
+                name,
                 cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
                 cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
             );
@@ -318,7 +321,8 @@ class CachingWindowStore
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(from, to, timeFrom, timeTo, true) :
-            context.cache().reverseRange(name,
+            context.cache().reverseRange(
+                name,
                 cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
                 cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
             );
