@@ -600,6 +600,10 @@ public class Selector implements Selectable, AutoCloseable {
                 if (!key.isValid())
                     close(channel, CloseMode.GRACEFUL);
 
+            } catch (IllegalTransportLayerStateException e) {
+                channel.state(ChannelState.LOCAL_CLOSE);
+                close(channel, CloseMode.DISCARD_NO_NOTIFY);
+                throw e;
             } catch (Exception e) {
                 String desc = channel.socketDescription();
                 if (e instanceof IOException) {

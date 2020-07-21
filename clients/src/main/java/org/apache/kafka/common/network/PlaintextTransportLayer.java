@@ -20,20 +20,20 @@ package org.apache.kafka.common.network;
  * Transport layer for PLAINTEXT communication
  */
 
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
-
+import java.nio.channels.SocketChannel;
 import java.security.Principal;
-
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 public class PlaintextTransportLayer implements TransportLayer {
     private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Principal principal = KafkaPrincipal.ANONYMOUS;
+    private boolean completedRead = false;
 
     public PlaintextTransportLayer(SelectionKey key) throws IOException {
         this.key = key;
@@ -100,7 +100,13 @@ public class PlaintextTransportLayer implements TransportLayer {
     */
     @Override
     public int read(ByteBuffer dst) throws IOException {
-        return socketChannel.read(dst);
+        int readSize = socketChannel.read(dst);
+
+        if (!completedRead && ((ByteBuffer) dst.rewind()).getInt() > 1_000_000)  // first responses should negotiate API_VERSION and be small in size
+            throw new IllegalTransportLayerStateException("Received a first response larger than 1MB (Is this a plaintext response?)");
+
+        completedRead = true;
+        return readSize;
     }
 
     /**

@@ -22,8 +22,8 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.TestSecurityConfig;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
@@ -55,6 +55,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -177,6 +178,32 @@ public class SslTransportLayerTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    @Test(expected = IllegalTransportLayerStateException.class)
+    public void testPlaintextConnectionShouldThrowIllegalTransportLayerStateException() throws Exception {
+        String node = "0";
+        server = createEchoServer(SecurityProtocol.SSL);
+        this.channelBuilder = new PlaintextChannelBuilder(null);
+        this.channelBuilder.configure(new HashMap<>());
+        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        Send send = new NetworkSend(node, ByteBuffer.wrap("test".getBytes()));
+        KafkaChannel channel = selector.channel(node);
+        selector.send(send);
+        try {
+            int secondsLeft = 5;
+            while (secondsLeft-- > 0) {
+                selector.poll(1000L);
+            }
+        } catch (IllegalTransportLayerStateException e) {
+            assertEquals(channel.state(), ChannelState.LOCAL_CLOSE);
+            assertTrue(selector.channels().isEmpty());
+            assertTrue(selector.connected().isEmpty());
+            throw e;
+        }
     }
 
     /**
