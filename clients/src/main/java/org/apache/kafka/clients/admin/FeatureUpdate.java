@@ -18,14 +18,13 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
 import java.util.Set;
-import org.apache.kafka.common.message.UpdateFinalizedFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 
 /**
  * Encapsulates details about an update to a finalized feature. This is particularly useful to
- * define each feature update in the
- * {@link Admin#updateFinalizedFeatures(Set, UpdateFinalizedFeaturesOptions)} API request.
+ * define each feature update in the {@link Admin#updateFeatures(Set, UpdateFeaturesOptions)} API.
  */
-public class FinalizedFeatureUpdate {
+public class FeatureUpdate {
     private final String featureName;
     private final short maxVersionLevel;
     private final boolean allowDowngrade;
@@ -40,8 +39,7 @@ public class FinalizedFeatureUpdate {
      *                            maximum version level of the finalized feature.
      *                          - false, otherwise.
      */
-    public FinalizedFeatureUpdate(
-        final String featureName, final short maxVersionLevel, final boolean allowDowngrade) {
+    public FeatureUpdate(final String featureName, final short maxVersionLevel, final boolean allowDowngrade) {
         Objects.requireNonNull(featureName, "Provided feature name can not be null.");
         if (maxVersionLevel < 1 && !allowDowngrade) {
             throw new IllegalArgumentException(
@@ -54,50 +52,36 @@ public class FinalizedFeatureUpdate {
         this.allowDowngrade = allowDowngrade;
     }
 
-    /**
-     * @return   the name of the finalized feature to be updated.
-     */
     public String featureName() {
         return featureName;
     }
 
-    /**
-     * @return   the new maximum version level for the finalized feature.
-     */
     public short maxVersionLevel() {
         return maxVersionLevel;
     }
 
-    /**
-     * @return   - true, if this feature update was meant to downgrade the maximum version level of
-     *             the finalized feature.
-     *           - false, otherwise.
-     */
     public boolean allowDowngrade() {
         return allowDowngrade;
     }
 
     /**
-     * Helper function that creates {@link UpdateFinalizedFeaturesRequestData} from a set of
-     * {@link FinalizedFeatureUpdate}.
+     * Helper function that creates {@link UpdateFeaturesRequestData} from a set of {@link FeatureUpdate}.
      *
-     * @param updates   the set of {@link FinalizedFeatureUpdate}
+     * @param updates   the set of {@link FeatureUpdate}
      *
-     * @return          a newly constructed UpdateFinalizedFeaturesRequestData object
+     * @return          a newly constructed UpdateFeaturesRequestData object
      */
-    public static UpdateFinalizedFeaturesRequestData createRequest(Set<FinalizedFeatureUpdate> updates) {
-        final UpdateFinalizedFeaturesRequestData.FinalizedFeatureUpdateKeyCollection items
-            = new UpdateFinalizedFeaturesRequestData.FinalizedFeatureUpdateKeyCollection();
-        for (FinalizedFeatureUpdate update : updates) {
-            final UpdateFinalizedFeaturesRequestData.FinalizedFeatureUpdateKey item =
-                new UpdateFinalizedFeaturesRequestData.FinalizedFeatureUpdateKey();
+    public static UpdateFeaturesRequestData createRequest(Set<FeatureUpdate> updates) {
+        final UpdateFeaturesRequestData.FeatureUpdateKeyCollection items
+            = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+        for (FeatureUpdate update : updates) {
+            final UpdateFeaturesRequestData.FeatureUpdateKey item =
+                new UpdateFeaturesRequestData.FeatureUpdateKey();
             item.setName(update.featureName());
             item.setMaxVersionLevel(update.maxVersionLevel());
             item.setAllowDowngrade(update.allowDowngrade());
             items.add(item);
         }
-        final UpdateFinalizedFeaturesRequestData data = new UpdateFinalizedFeaturesRequestData();
-        data.setFinalizedFeatureUpdates(items);
-        return data;
+        return new UpdateFeaturesRequestData().setFeatureUpdates(items);
     }
 }

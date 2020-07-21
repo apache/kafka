@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-public class UpdateFinalizedFeaturesResult {
-    private final KafkaFuture<Void> future;
-
-    public UpdateFinalizedFeaturesResult(KafkaFuture<Void> future) {
-        this.future = future;
-    }
-
-    public KafkaFuture<Void> result() {
-        return future;
+@InterfaceStability.Evolving
+public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
+    /**
+     * Sets the timeout in milliseconds for this operation or {@code null} if the default API
+     * timeout for the AdminClient should be used.
+     */
+    public UpdateFeaturesOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
     }
 }

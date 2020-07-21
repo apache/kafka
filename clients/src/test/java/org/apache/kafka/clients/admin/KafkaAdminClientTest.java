@@ -115,7 +115,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
-import org.apache.kafka.common.message.UpdateFinalizedFeaturesResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -159,8 +159,8 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
-import org.apache.kafka.common.requests.UpdateFinalizedFeaturesRequest;
-import org.apache.kafka.common.requests.UpdateFinalizedFeaturesResponse;
+import org.apache.kafka.common.requests.UpdateFeaturesRequest;
+import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -484,10 +484,10 @@ public class KafkaAdminClientTest {
         return data;
     }
 
-    private static UpdateFinalizedFeaturesResponse prepareUpdateFinalizedFeaturesResponse(Errors error) {
-        final UpdateFinalizedFeaturesResponseData data = new UpdateFinalizedFeaturesResponseData();
+    private static UpdateFeaturesResponse prepareUpdateFeaturesResponse(Errors error) {
+        final UpdateFeaturesResponseData data = new UpdateFeaturesResponseData();
         data.setErrorCode(error.code());
-        return new UpdateFinalizedFeaturesResponse(data);
+        return new UpdateFeaturesResponse(data);
     }
 
     private static FeatureMetadata getDefaultFeatureMetadata() {
@@ -514,7 +514,7 @@ public class KafkaAdminClientTest {
                 ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys(),
                 getDefaultFeatureMetadata().supportedFeatures(),
                 getDefaultFeatureMetadata().finalizedFeatures(),
-                getDefaultFeatureMetadata().finalizedFeaturesEpoch()));
+                getDefaultFeatureMetadata().finalizedFeaturesEpoch().orElse(-1)));
         }
         final ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setErrorCode(error.code());
@@ -3932,33 +3932,33 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testUpdateFinalizedFeaturesDuringSuccess() throws Exception {
-        testUpdateFinalizedFeaturesDuringError(Errors.NONE);
+    public void testUpdateFeaturesDuringSuccess() throws Exception {
+        testUpdateFeaturesDuringError(Errors.NONE);
     }
 
     @Test
-    public void testUpdateFinalizedFeaturesInvalidRequestError() throws Exception {
-        testUpdateFinalizedFeaturesDuringError(Errors.INVALID_REQUEST);
+    public void testUpdateFeaturesInvalidRequestError() throws Exception {
+        testUpdateFeaturesDuringError(Errors.INVALID_REQUEST);
     }
 
     @Test
-    public void testUpdateFinalizedFeaturesUpdateFailedError() throws Exception {
-        testUpdateFinalizedFeaturesDuringError(Errors.FINALIZED_FEATURE_UPDATE_FAILED);
+    public void testUpdateFeaturesUpdateFailedError() throws Exception {
+        testUpdateFeaturesDuringError(Errors.FEATURE_UPDATE_FAILED);
     }
 
-    private void testUpdateFinalizedFeaturesDuringError(Errors error) throws Exception {
+    private void testUpdateFeaturesDuringError(Errors error) throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
-                body -> body instanceof UpdateFinalizedFeaturesRequest,
-                prepareUpdateFinalizedFeaturesResponse(error));
-            final KafkaFuture<Void> future = env.adminClient().updateFinalizedFeatures(
+                body -> body instanceof UpdateFeaturesRequest,
+                prepareUpdateFeaturesResponse(error));
+            final KafkaFuture<Void> future = env.adminClient().updateFeatures(
                 new HashSet<>(
                     Arrays.asList(
-                        new FinalizedFeatureUpdate(
+                        new FeatureUpdate(
                             "test_feature_1", (short) 2, false),
-                        new FinalizedFeatureUpdate(
+                        new FeatureUpdate(
                             "test_feature_2", (short) 3, true))),
-                new UpdateFinalizedFeaturesOptions().timeoutMs(10000)).result();
+                new UpdateFeaturesOptions().timeoutMs(10000)).result();
             if (error.exception() == null) {
                 future.get();
             } else {
@@ -3970,26 +3970,26 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testUpdateFinalizedFeaturesHandleNotControllerException() throws Exception {
+    public void testUpdateFeaturesHandleNotControllerException() throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponseFrom(
-                prepareUpdateFinalizedFeaturesResponse(Errors.NOT_CONTROLLER),
+                prepareUpdateFeaturesResponse(Errors.NOT_CONTROLLER),
                 env.cluster().nodeById(0));
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
                 env.cluster().clusterResource().clusterId(),
                 1,
                 Collections.<MetadataResponse.TopicMetadata>emptyList()));
             env.kafkaClient().prepareResponseFrom(
-                prepareUpdateFinalizedFeaturesResponse(Errors.NONE),
+                prepareUpdateFeaturesResponse(Errors.NONE),
                 env.cluster().nodeById(1));
-            final KafkaFuture<Void> future = env.adminClient().updateFinalizedFeatures(
+            final KafkaFuture<Void> future = env.adminClient().updateFeatures(
                 new HashSet<>(
                     Arrays.asList(
-                        new FinalizedFeatureUpdate(
+                        new FeatureUpdate(
                             "test_feature_1", (short) 2, false),
-                        new FinalizedFeatureUpdate(
+                        new FeatureUpdate(
                             "test_feature_2", (short) 3, true))),
-                new UpdateFinalizedFeaturesOptions().timeoutMs(10000)).result();
+                new UpdateFeaturesOptions().timeoutMs(10000)).result();
             future.get();
         }
     }

@@ -37,6 +37,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -1308,8 +1309,9 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Describes finalized as well as supported features. By default, the request is issued to any
-     * broker, but it can be optionally directed only to the controller via DescribeFeaturesOptions
-     * parameter.
+     * broker. It can be optionally directed only to the controller via DescribeFeaturesOptions
+     * parameter. This is particularly useful if the user requires strongly consistent reads of
+     * finalized features.
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the future from the
      * returned {@link DescribeFeaturesResult}:
@@ -1330,22 +1332,22 @@ public interface Admin extends AutoCloseable {
      * updates are carried out. This request is issued only to the controller since the API is
      * only served by the controller.
      * <p>
-     * The API takes as input a set of FinalizedFeatureUpdate that need to be applied. Each such
-     * update specifies the finalized feature to be added or updated or deleted, along with the new
-     * max feature version level value.
+     * The API takes in a set of feature updates that need to be applied. Each such update specifies
+     * the finalized feature to be added or updated or deleted, along with the new max feature
+     * version level value.
      * <ul>
      * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
      * in the controller if the feature update has the allowDowngrade flag set - setting this flag
      * conveys user intent to attempt downgrade of a feature max version level. Note that despite
      * the allowDowngrade flag being set, certain downgrades may be rejected by the controller if it
      * is deemed impossible.</li>
-     * <li>Deletion of a finalized feature version is not a regular operation/intent. It is allowed
-     * only if the allowDowngrade flag is set in the feature update, and, if the max version level
-     * is set to a value less than 1.</li>
+     * <li>Deletion of a finalized feature version is not a regular operation/intent. It could be
+     * done by setting the allowDowngrade flag to true in the feature update, and, setting the
+     * max version level to be less than 1.</li>
      * </ul>
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures
-     * obtained from the returned {@link UpdateFinalizedFeaturesResult}:
+     * obtained from the returned {@link UpdateFeaturesResult}:
      * <ul>
      *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      *   If the authenticated user didn't have alter access to the cluster.</li>
@@ -1355,7 +1357,7 @@ public interface Admin extends AutoCloseable {
      *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
      *   If the request timed out before the updates could finish. It cannot be guaranteed whether
      *   the updates succeeded or not.</li>
-     *   <li>{@link org.apache.kafka.common.errors.FinalizedFeatureUpdateFailedException}
+     *   <li>{@link FeatureUpdateFailedException}
      *   If the updates could not be applied on the controller, despite the request being valid.
      *   This may be a temporary problem.</li>
      * </ul>
@@ -1365,10 +1367,9 @@ public interface Admin extends AutoCloseable {
      * @param featureUpdates   the set of finalized feature updates
      * @param options          the options to use
      *
-     * @return                 the UpdateFinalizedFeaturesResult containing the result
+     * @return                 the {@link UpdateFeaturesResult} containing the result
      */
-    UpdateFinalizedFeaturesResult updateFinalizedFeatures(
-        Set<FinalizedFeatureUpdate> featureUpdates, UpdateFinalizedFeaturesOptions options);
+    UpdateFeaturesResult updateFeatures(Set<FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
     /**
      * Get the metrics kept by the adminClient

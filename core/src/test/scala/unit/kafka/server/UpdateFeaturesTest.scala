@@ -11,13 +11,13 @@ import kafka.api.KAFKA_2_7_IV0
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureMetadata, FinalizedFeatureUpdate, UpdateFinalizedFeaturesOptions, UpdateFinalizedFeaturesResult}
+import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureMetadata, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.feature.FinalizedVersionRange
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
-import org.apache.kafka.common.message.UpdateFinalizedFeaturesRequestData
+import org.apache.kafka.common.message.UpdateFeaturesRequestData
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{UpdateFinalizedFeaturesRequest, UpdateFinalizedFeaturesResponse}
+import org.apache.kafka.common.requests.{UpdateFeaturesRequest, UpdateFeaturesResponse}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Test
 import org.junit.Assert.{assertEquals, assertNotEquals, assertNotNull, assertTrue}
@@ -26,7 +26,7 @@ import org.scalatest.Assertions.{assertThrows, intercept}
 import scala.reflect.ClassTag
 import scala.util.matching.Regex
 
-class UpdateFinalizedFeaturesTest extends BaseRequestTest {
+class UpdateFeaturesTest extends BaseRequestTest {
 
   override def brokerCount = 3
 
@@ -100,8 +100,8 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
   }
 
   private def checkException[ExceptionType <: Throwable](
-    result: UpdateFinalizedFeaturesResult,
-    exceptionMsgPattern: Regex
+                                                          result: UpdateFeaturesResult,
+                                                          exceptionMsgPattern: Regex
   )(implicit tag: ClassTag[ExceptionType]): Unit = {
     val exception = intercept[ExecutionException] {
       result.result().get()
@@ -116,12 +116,12 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
    * and raises the ExceptionType on the client side as expected.
    *
    * @param invalidUpdate         the invalid feature update to be sent in the
-   *                              updateFinalizedFeatures request to the server
+   *                              updateFeatures request to the server
    * @param exceptionMsgPattern   a pattern for the expected exception message
    */
   private def testWithInvalidFeatureUpdate[ExceptionType <: Throwable](
-    invalidUpdate: FinalizedFeatureUpdate,
-    exceptionMsgPattern: Regex
+                                                                        invalidUpdate: FeatureUpdate,
+                                                                        exceptionMsgPattern: Regex
   )(implicit tag: ClassTag[ExceptionType]): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
 
@@ -131,8 +131,8 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
     val adminClient = createAdminClient()
     val nodeBefore = getFeatureZNode()
 
-    val result = adminClient.updateFinalizedFeatures(
-      new HashSet[FinalizedFeatureUpdate](Collections.singletonList(invalidUpdate)), new UpdateFinalizedFeaturesOptions())
+    val result = adminClient.updateFeatures(
+      new HashSet[FeatureUpdate](Collections.singletonList(invalidUpdate)), new UpdateFeaturesOptions())
 
     checkException[ExceptionType](result, exceptionMsgPattern)
     checkFeatures(
@@ -149,14 +149,14 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
     val versionBefore = updateFeatureZNode(defaultFinalizedFeatures())
 
     val nodeBefore = getFeatureZNode()
-    val requestData = FinalizedFeatureUpdate.createRequest(
-      new util.HashSet[FinalizedFeatureUpdate](
-        Collections.singletonList(new FinalizedFeatureUpdate("feature_1",
+    val requestData = FeatureUpdate.createRequest(
+      new util.HashSet[FeatureUpdate](
+        Collections.singletonList(new FeatureUpdate("feature_1",
           defaultSupportedFeatures().get("feature_1").max(),
         false))))
 
-    val response = connectAndReceive[UpdateFinalizedFeaturesResponse](
-      new UpdateFinalizedFeaturesRequest.Builder(requestData).build(), notControllerSocketServer)
+    val response = connectAndReceive[UpdateFeaturesResponse](
+      new UpdateFeaturesRequest.Builder(requestData).build(), notControllerSocketServer)
 
     assertEquals(Errors.NOT_CONTROLLER, response.error())
     checkFeatures(
@@ -167,7 +167,7 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
 
   @Test
   def testShouldFailRequestForInvalidFeatureName(): Unit = {
-    testWithInvalidFeatureUpdate[InvalidRequestException](new FinalizedFeatureUpdate(
+    testWithInvalidFeatureUpdate[InvalidRequestException](new FeatureUpdate(
       "",
       defaultSupportedFeatures().get("feature_1").max(),
       false),
@@ -176,7 +176,7 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
 
   @Test
   def testShouldFailRequestWhenDowngradeFlagIsNotSetDuringDowngrade(): Unit = {
-    testWithInvalidFeatureUpdate[InvalidRequestException](new FinalizedFeatureUpdate(
+    testWithInvalidFeatureUpdate[InvalidRequestException](new FeatureUpdate(
       "feature_1",
       (defaultFinalizedFeatures().get("feature_1").max() - 1).asInstanceOf[Short],
       false),
@@ -186,7 +186,7 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
   @Test
   def testShouldFailRequestWhenDowngradeToHigherVersionLevelIsAttempted(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
-      new FinalizedFeatureUpdate(
+      new FeatureUpdate(
         "feature_1",
         defaultSupportedFeatures().get("feature_1").max(),
         true),
@@ -196,7 +196,7 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
   @Test
   def testShouldFailRequestInClientWhenDowngradeFlagIsNotSetDuringDeletion(): Unit = {
     assertThrows[IllegalArgumentException] {
-      new FinalizedFeatureUpdate("feature_1", 0, false)
+      new FeatureUpdate("feature_1", 0, false)
     }
   }
 
@@ -211,17 +211,17 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
     val nodeBefore = getFeatureZNode()
 
     val featureUpdates
-      = new UpdateFinalizedFeaturesRequestData.FinalizedFeatureUpdateKeyCollection();
-    val featureUpdate = new UpdateFinalizedFeaturesRequestData.FinalizedFeatureUpdateKey();
+      = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+    val featureUpdate = new UpdateFeaturesRequestData.FeatureUpdateKey();
     featureUpdate.setName("feature_1")
     featureUpdate.setMaxVersionLevel(0)
     featureUpdate.setAllowDowngrade(false)
     featureUpdates.add(featureUpdate);
-    val requestData = new UpdateFinalizedFeaturesRequestData()
-    requestData.setFinalizedFeatureUpdates(featureUpdates);
+    val requestData = new UpdateFeaturesRequestData()
+    requestData.setFeatureUpdates(featureUpdates);
 
-    val response = connectAndReceive[UpdateFinalizedFeaturesResponse](
-      new UpdateFinalizedFeaturesRequest.Builder(requestData).build(), controllerSocketServer)
+    val response = connectAndReceive[UpdateFeaturesResponse](
+      new UpdateFeaturesRequest.Builder(requestData).build(), controllerSocketServer)
 
     assertEquals(Errors.INVALID_REQUEST, response.error)
     val exceptionMsgPattern = ".*Can not delete feature: 'feature_1'.*allowDowngrade.*".r
@@ -235,14 +235,14 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
   @Test
   def testShouldFailRequestDuringDeletionOfNonExistingFeature(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
-      new FinalizedFeatureUpdate("feature_non_existing", 0, true),
+      new FeatureUpdate("feature_non_existing", 0, true),
       ".*Can not delete non-existing finalized feature: 'feature_non_existing'.*".r)
   }
 
   @Test
   def testShouldFailRequestWhenUpgradingToSameVersionLevel(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
-      new FinalizedFeatureUpdate(
+      new FeatureUpdate(
         "feature_1", defaultFinalizedFeatures().get("feature_1").max(), false),
       ".*Can not upgrade a finalized feature: 'feature_1'.*to the same value.*".r)
   }
@@ -258,13 +258,13 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
       Utils.mkMap(Utils.mkEntry("feature_1", new FinalizedVersionRange(minVersionLevel, 2))))
     val versionBefore = updateFeatureZNode(initialFinalizedFeatures)
 
-    val update = new FinalizedFeatureUpdate(
+    val update = new FeatureUpdate(
       "feature_1", (minVersionLevel - 1).asInstanceOf[Short], true)
     val adminClient = createAdminClient()
     val nodeBefore = getFeatureZNode()
 
-    val result = adminClient.updateFinalizedFeatures(
-      new HashSet[FinalizedFeatureUpdate](Collections.singletonList(update)), new UpdateFinalizedFeaturesOptions())
+    val result = adminClient.updateFeatures(
+      new HashSet[FeatureUpdate](Collections.singletonList(update)), new UpdateFeaturesOptions())
 
     checkException[InvalidRequestException](
       result, ".*Can not downgrade finalized feature: 'feature_1' to maxVersionLevel:1.*existing minVersionLevel:2.*".r)
@@ -298,13 +298,13 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
 
     val versionBefore = updateFeatureZNode(defaultFinalizedFeatures())
 
-    val invalidUpdate = new FinalizedFeatureUpdate(
+    val invalidUpdate = new FeatureUpdate(
       "feature_1", defaultSupportedFeatures().get("feature_1").max(), false)
     val nodeBefore = getFeatureZNode()
     val adminClient = createAdminClient()
-    val result = adminClient.updateFinalizedFeatures(
-      new HashSet[FinalizedFeatureUpdate](Collections.singletonList(invalidUpdate)),
-      new UpdateFinalizedFeaturesOptions())
+    val result = adminClient.updateFeatures(
+      new HashSet[FeatureUpdate](Collections.singletonList(invalidUpdate)),
+      new UpdateFeaturesOptions())
 
     checkException[InvalidRequestException](
       result, ".*1 broker.*incompatible.*".r)
@@ -334,9 +334,9 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
       Utils.mkMap(
         Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
         Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
-    val update1 = new FinalizedFeatureUpdate(
+    val update1 = new FeatureUpdate(
       "feature_1", targetFinalizedFeatures.get("feature_1").max(), false)
-    val update2 = new FinalizedFeatureUpdate(
+    val update2 = new FeatureUpdate(
       "feature_2", targetFinalizedFeatures.get("feature_2").max(), true)
 
     val expected = new FeatureMetadata(
@@ -348,9 +348,9 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
           Utils.mkEntry("feature_2", new SupportedVersionRange(2, 5)))))
 
     val adminClient = createAdminClient()
-    adminClient.updateFinalizedFeatures(
-      new HashSet[FinalizedFeatureUpdate](Arrays.asList(update1, update2)),
-      new UpdateFinalizedFeaturesOptions()).result().get()
+    adminClient.updateFeatures(
+      new HashSet[FeatureUpdate](Arrays.asList(update1, update2)),
+      new UpdateFeaturesOptions()).result().get()
 
     checkFeatures(
       adminClient,
@@ -378,16 +378,16 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
       Utils.mkMap(
         Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
         Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
-    val validUpdate = new FinalizedFeatureUpdate(
+    val validUpdate = new FeatureUpdate(
       "feature_1", targetFinalizedFeatures.get("feature_1").max(), false)
-    val invalidUpdate = new FinalizedFeatureUpdate(
+    val invalidUpdate = new FeatureUpdate(
       "feature_2", targetFinalizedFeatures.get("feature_2").max(), false)
 
     val nodeBefore = getFeatureZNode()
     val adminClient = createAdminClient()
-    val result = adminClient.updateFinalizedFeatures(
-      new HashSet[FinalizedFeatureUpdate](Arrays.asList(validUpdate, invalidUpdate)),
-      new UpdateFinalizedFeaturesOptions())
+    val result = adminClient.updateFeatures(
+      new HashSet[FeatureUpdate](Arrays.asList(validUpdate, invalidUpdate)),
+      new UpdateFeaturesOptions())
 
     checkException[InvalidRequestException](
       result, ".*Can not downgrade finalized feature: 'feature_2'.*allowDowngrade.*".r)
@@ -430,16 +430,16 @@ class UpdateFinalizedFeaturesTest extends BaseRequestTest {
       Utils.mkMap(
         Utils.mkEntry("feature_1", new FinalizedVersionRange(1, 3)),
         Utils.mkEntry("feature_2", new FinalizedVersionRange(2, 3))))
-    val invalidUpdate = new FinalizedFeatureUpdate(
+    val invalidUpdate = new FeatureUpdate(
       "feature_1", targetFinalizedFeatures.get("feature_1").max(), false)
-    val validUpdate = new FinalizedFeatureUpdate(
+    val validUpdate = new FeatureUpdate(
       "feature_2", targetFinalizedFeatures.get("feature_2").max(), true)
 
     val nodeBefore = getFeatureZNode()
     val adminClient = createAdminClient()
-    val result = adminClient.updateFinalizedFeatures(
-      new HashSet[FinalizedFeatureUpdate](Arrays.asList(invalidUpdate, validUpdate)),
-      new UpdateFinalizedFeaturesOptions())
+    val result = adminClient.updateFeatures(
+      new HashSet[FeatureUpdate](Arrays.asList(invalidUpdate, validUpdate)),
+      new UpdateFeaturesOptions())
 
     checkException[InvalidRequestException](result, ".*1 broker.*incompatible.*".r)
     checkFeatures(

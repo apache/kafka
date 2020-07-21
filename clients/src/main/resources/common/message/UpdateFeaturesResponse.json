@@ -16,7 +16,7 @@
 {
   "apiKey": 50,
   "type": "response",
-  "name": "UpdateFinalizedFeaturesResponse",
+  "name": "UpdateFeaturesResponse",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [

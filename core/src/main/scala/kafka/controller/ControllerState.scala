@@ -110,7 +110,7 @@ object ControllerState {
     override protected def hasRateAndTimeMetric: Boolean = false
   }
 
-  case object UpdateFinalizedFeatures extends ControllerState {
+  case object UpdateFeatures extends ControllerState {
     def value = 17
   }
 
@@ -118,5 +118,5 @@ object ControllerState {
     AlterPartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange,
     LeaderAndIsrResponseReceived, LogDirChange, ControllerShutdown, UncleanLeaderElectionEnable,
     TopicUncleanLeaderElectionEnable, ListPartitionReassignment, UpdateMetadataResponseReceived,
-    UpdateFinalizedFeatures)
+    UpdateFeatures)
 }

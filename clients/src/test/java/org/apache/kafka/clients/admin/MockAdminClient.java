@@ -842,7 +842,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public UpdateFinalizedFeaturesResult updateFinalizedFeatures(Set<FinalizedFeatureUpdate> featureUpdates, UpdateFinalizedFeaturesOptions options) {
+    public UpdateFeaturesResult updateFeatures(Set<FeatureUpdate> featureUpdates, UpdateFeaturesOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

@@ -18,26 +18,35 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
-import org.apache.kafka.common.message.UpdateFinalizedFeaturesResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
-public class UpdateFinalizedFeaturesResponse extends AbstractResponse {
 
-    public final UpdateFinalizedFeaturesResponseData data;
+/**
+ * Possible error codes:
+ *
+ *   - {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
+ *   - {@link Errors#NOT_CONTROLLER}
+ *   - {@link Errors#INVALID_REQUEST}
+ *   - {@link Errors#FEATURE_UPDATE_FAILED}
+ */
+public class UpdateFeaturesResponse extends AbstractResponse {
 
-    public UpdateFinalizedFeaturesResponse(UpdateFinalizedFeaturesResponseData data) {
+    public final UpdateFeaturesResponseData data;
+
+    public UpdateFeaturesResponse(UpdateFeaturesResponseData data) {
         this.data = data;
     }
 
-    public UpdateFinalizedFeaturesResponse(Struct struct) {
-        final short latestVersion = (short) (UpdateFinalizedFeaturesResponseData.SCHEMAS.length - 1);
-        this.data = new UpdateFinalizedFeaturesResponseData(struct, latestVersion);
+    public UpdateFeaturesResponse(Struct struct) {
+        final short latestVersion = (short) (UpdateFeaturesResponseData.SCHEMAS.length - 1);
+        this.data = new UpdateFeaturesResponseData(struct, latestVersion);
     }
 
-    public UpdateFinalizedFeaturesResponse(Struct struct, short version) {
-        this.data = new UpdateFinalizedFeaturesResponseData(struct, version);
+    public UpdateFeaturesResponse(Struct struct, short version) {
+        this.data = new UpdateFeaturesResponseData(struct, version);
     }
 
     public Errors error() {
@@ -59,11 +68,11 @@ public class UpdateFinalizedFeaturesResponse extends AbstractResponse {
         return data.toString();
     }
 
-    public UpdateFinalizedFeaturesResponseData data() {
+    public UpdateFeaturesResponseData data() {
         return data;
     }
 
-    public static UpdateFinalizedFeaturesResponse parse(ByteBuffer buffer, short version) {
-        return new UpdateFinalizedFeaturesResponse(ApiKeys.UPDATE_FINALIZED_FEATURES.parseResponse(version, buffer), version);
+    public static UpdateFeaturesResponse parse(ByteBuffer buffer, short version) {
+        return new UpdateFeaturesResponse(ApiKeys.UPDATE_FEATURES.parseResponse(version, buffer), version);
     }
 }

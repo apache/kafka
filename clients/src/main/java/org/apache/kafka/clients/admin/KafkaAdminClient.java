@@ -228,8 +228,8 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
-import org.apache.kafka.common.requests.UpdateFinalizedFeaturesRequest;
-import org.apache.kafka.common.requests.UpdateFinalizedFeaturesResponse;
+import org.apache.kafka.common.requests.UpdateFeaturesRequest;
+import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
@@ -4342,6 +4342,7 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
+
         Call callViaLeastLoadedNode = new Call("describeFeatures", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -4371,39 +4372,50 @@ public class KafkaAdminClient extends AdminClient {
             }
         };
 
-        Call call = callViaLeastLoadedNode;
+        Call callViaControllerNode = new Call("describeFeatures", calcDeadlineMs(now, options.timeoutMs()),
+            new ControllerNodeProvider()) {
+
+            @Override
+            ApiVersionsRequest.Builder createRequest(int timeoutMs) {
+                return new ApiVersionsRequest.Builder();
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
+                if (apiVersionsResponse.data.errorCode() == Errors.NONE.code()) {
+                    future.complete(
+                        new FeatureMetadata(
+                            apiVersionsResponse.finalizedFeatures(),
+                            apiVersionsResponse.finalizedFeaturesEpoch(),
+                            apiVersionsResponse.supportedFeatures()));
+                } else if (apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
+                    handleNotControllerError(Errors.NOT_CONTROLLER);
+                } else {
+                    future.completeExceptionally(
+                        Errors.forCode(apiVersionsResponse.data.errorCode()).exception());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(Collections.singletonList(future), throwable);
+            }
+        };
+
+        Call call;
         if (options.sendRequestToController()) {
-            call = new Call("describeFeatures", calcDeadlineMs(now, options.timeoutMs()),
-                new ControllerNodeProvider()) {
-
-                @Override
-                ApiVersionsRequest.Builder createRequest(int timeoutMs) {
-                    return (ApiVersionsRequest.Builder) callViaLeastLoadedNode.createRequest(timeoutMs);
-                }
-
-                @Override
-                void handleResponse(AbstractResponse response) {
-                    final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
-                    if (apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
-                        handleNotControllerError(Errors.NOT_CONTROLLER);
-                    } else {
-                        callViaLeastLoadedNode.handleResponse(response);
-                    }
-                }
-
-                @Override
-                void handleFailure(Throwable throwable) {
-                    callViaLeastLoadedNode.handleFailure(throwable);
-                }
-            };
+            call = callViaControllerNode;
+        } else {
+            call = callViaLeastLoadedNode;
         }
         runnable.call(call, now);
         return new DescribeFeaturesResult(future);
     }
 
     @Override
-    public UpdateFinalizedFeaturesResult updateFinalizedFeatures(
-        final Set<FinalizedFeatureUpdate> featureUpdates, final UpdateFinalizedFeaturesOptions options) {
+    public UpdateFeaturesResult updateFeatures(
+        final Set<FeatureUpdate> featureUpdates, final UpdateFeaturesOptions options) {
         final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
 
@@ -4411,14 +4423,14 @@ public class KafkaAdminClient extends AdminClient {
             new ControllerNodeProvider()) {
 
             @Override
-            UpdateFinalizedFeaturesRequest.Builder createRequest(int timeoutMs) {
-                return new UpdateFinalizedFeaturesRequest.Builder(FinalizedFeatureUpdate.createRequest(featureUpdates));
+            UpdateFeaturesRequest.Builder createRequest(int timeoutMs) {
+                return new UpdateFeaturesRequest.Builder(FeatureUpdate.createRequest(featureUpdates));
             }
 
             @Override
             void handleResponse(AbstractResponse response) {
-                final UpdateFinalizedFeaturesResponse featuresResponse =
-                    (UpdateFinalizedFeaturesResponse) response;
+                final UpdateFeaturesResponse featuresResponse =
+                    (UpdateFeaturesResponse) response;
                 final Errors error = Errors.forCode(featuresResponse.data().errorCode());
                 if (error == Errors.NONE) {
                     future.complete(null);
@@ -4436,7 +4448,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         };
         runnable.call(call, now);
-        return new UpdateFinalizedFeaturesResult(future);
+        return new UpdateFeaturesResult(future);
     }
 
     /**

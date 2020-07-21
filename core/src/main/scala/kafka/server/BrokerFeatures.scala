@@ -35,12 +35,12 @@ import scala.jdk.CollectionConverters._
  *    in the closed range: [1, latest_min_version_level - 1] get deprecated by the controller logic
  *    that applies this map to persistent finalized feature state in ZK (this mutation happens
  *    during controller election and during finalized feature updates via the
- *    APIKeys.UPDATE_FINALIZED_FEATURES api).
+ *    ApiKeys.UPDATE_FINALIZED_FEATURES api). This will automatically mean clients have to stop
+ *    using the finalized min version levels that have been deprecated.
  *
  * This class also provides APIs to check for incompatibilities between the features supported by
- * the Broker and finalized features.
- *
- * NOTE: the update*() and clear*() APIs of this class should be used only for testing purposes.
+ * the Broker and finalized features. The class is generally immutable. It provides few APIs to
+ * mutate state only for the purpose of testing.
  */
 class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange],
                               @volatile var defaultFeatureMinVersionLevels: Map[String, Short]) {
@@ -101,7 +101,7 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    *                    is empty, it means there were no feature incompatibilities found.
    */
   def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Features[FinalizedVersionRange] = {
-    BrokerFeatures.incompatibleFeatures(supportedFeatures, finalized, true)
+    BrokerFeatures.incompatibleFeatures(supportedFeatures, finalized, logIncompatibilities = true)
   }
 }
 
@@ -131,8 +131,8 @@ object BrokerFeatures extends Logging {
   private def incompatibleFeatures(supportedFeatures: Features[SupportedVersionRange],
                                    finalizedFeatures: Features[FinalizedVersionRange],
                                    logIncompatibilities: Boolean): Features[FinalizedVersionRange] = {
-    val incompatibilities = finalizedFeatures.features.asScala.map {
-      case (feature, versionLevels) => {
+    val incompatibleFeaturesInfo = finalizedFeatures.features.asScala.map {
+      case (feature, versionLevels) =>
         val supportedVersions = supportedFeatures.get(feature)
         if (supportedVersions == null) {
           (feature, versionLevels, "{feature=%s, reason='Unsupported feature'}".format(feature))
@@ -142,15 +142,14 @@ object BrokerFeatures extends Logging {
         } else {
           (feature, versionLevels, null)
         }
-      }
     }.filter{ case(_, _, errorReason) => errorReason != null}.toList
 
-    if (logIncompatibilities && incompatibilities.nonEmpty) {
+    if (logIncompatibilities && incompatibleFeaturesInfo.nonEmpty) {
       warn(
-        "Feature incompatibilities seen: " + incompatibilities.map{
+        "Feature incompatibilities seen: " + incompatibleFeaturesInfo.map {
           case(_, _, errorReason) => errorReason })
     }
-    Features.finalizedFeatures(incompatibilities.map{
+    Features.finalizedFeatures(incompatibleFeaturesInfo.map {
       case(feature, versionLevels, _) => (feature, versionLevels) }.toMap.asJava)
   }
 
@@ -169,12 +168,11 @@ object BrokerFeatures extends Logging {
     featureMinVersionLevels: Map[String, Short]
   ): Boolean = {
     featureMinVersionLevels.forall {
-      case(featureName, minVersionLevel) => {
+      case(featureName, minVersionLevel) =>
         val supportedFeature = supportedFeatures.get(featureName)
         (supportedFeature != null) &&
           new FinalizedVersionRange(minVersionLevel, supportedFeature.max())
             .isCompatibleWith(supportedFeature)
-      }
     }
   }
 }

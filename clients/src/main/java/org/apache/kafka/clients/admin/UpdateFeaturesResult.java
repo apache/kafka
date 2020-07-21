@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.clients.admin;
 
-public class FinalizedFeatureUpdateFailedException extends ApiException {
-    private static final long serialVersionUID = 1L;
+import org.apache.kafka.common.KafkaFuture;
 
-    public FinalizedFeatureUpdateFailedException(String message) {
-        super(message);
+public class UpdateFeaturesResult {
+    private final KafkaFuture<Void> future;
+
+    public UpdateFeaturesResult(KafkaFuture<Void> future) {
+        this.future = future;
     }
 
-    public FinalizedFeatureUpdateFailedException(String message, Throwable cause) {
-        super(message, cause);
+    public KafkaFuture<Void> result() {
+        return future;
     }
 }

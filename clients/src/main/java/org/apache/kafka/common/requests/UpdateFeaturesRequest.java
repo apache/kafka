@@ -17,25 +17,25 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
-import org.apache.kafka.common.message.UpdateFinalizedFeaturesResponseData;
-import org.apache.kafka.common.message.UpdateFinalizedFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
-public class UpdateFinalizedFeaturesRequest extends AbstractRequest {
+public class UpdateFeaturesRequest extends AbstractRequest {
 
-    public static class Builder extends AbstractRequest.Builder<UpdateFinalizedFeaturesRequest> {
+    public static class Builder extends AbstractRequest.Builder<UpdateFeaturesRequest> {
 
-        private final UpdateFinalizedFeaturesRequestData data;
+        private final UpdateFeaturesRequestData data;
 
-        public Builder(UpdateFinalizedFeaturesRequestData data) {
-            super(ApiKeys.UPDATE_FINALIZED_FEATURES);
+        public Builder(UpdateFeaturesRequestData data) {
+            super(ApiKeys.UPDATE_FEATURES);
             this.data = data;
         }
 
         @Override
-        public UpdateFinalizedFeaturesRequest build(short version) {
-            return new UpdateFinalizedFeaturesRequest(data, version);
+        public UpdateFeaturesRequest build(short version) {
+            return new UpdateFeaturesRequest(data, version);
         }
 
         @Override
@@ -44,23 +44,23 @@ public class UpdateFinalizedFeaturesRequest extends AbstractRequest {
         }
     }
 
-    public final UpdateFinalizedFeaturesRequestData data;
+    public final UpdateFeaturesRequestData data;
 
-    public UpdateFinalizedFeaturesRequest(UpdateFinalizedFeaturesRequestData data, short version) {
-        super(ApiKeys.UPDATE_FINALIZED_FEATURES, version);
+    public UpdateFeaturesRequest(UpdateFeaturesRequestData data, short version) {
+        super(ApiKeys.UPDATE_FEATURES, version);
         this.data = data;
     }
 
-    public UpdateFinalizedFeaturesRequest(Struct struct, short version) {
-        super(ApiKeys.UPDATE_FINALIZED_FEATURES, version);
-        this.data = new UpdateFinalizedFeaturesRequestData(struct, version);
+    public UpdateFeaturesRequest(Struct struct, short version) {
+        super(ApiKeys.UPDATE_FEATURES, version);
+        this.data = new UpdateFeaturesRequestData(struct, version);
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMsIgnored, Throwable e) {
         final ApiError apiError = ApiError.fromThrowable(e);
-        return new UpdateFinalizedFeaturesResponse(
-            new UpdateFinalizedFeaturesResponseData()
+        return new UpdateFeaturesResponse(
+            new UpdateFeaturesResponseData()
                 .setErrorCode(apiError.error().code())
                 .setErrorMessage(apiError.message()));
     }
@@ -70,16 +70,16 @@ public class UpdateFinalizedFeaturesRequest extends AbstractRequest {
         return data.toStruct(version());
     }
 
-    public UpdateFinalizedFeaturesRequestData data() {
+    public UpdateFeaturesRequestData data() {
         return data;
     }
 
-    public static UpdateFinalizedFeaturesRequest parse(ByteBuffer buffer, short version) {
-        return new UpdateFinalizedFeaturesRequest(
-            ApiKeys.UPDATE_FINALIZED_FEATURES.parseRequest(version, buffer), version);
+    public static UpdateFeaturesRequest parse(ByteBuffer buffer, short version) {
+        return new UpdateFeaturesRequest(
+            ApiKeys.UPDATE_FEATURES.parseRequest(version, buffer), version);
     }
 
-    public static boolean isDeleteRequest(UpdateFinalizedFeaturesRequestData.FinalizedFeatureUpdateKey update) {
+    public static boolean isDeleteRequest(UpdateFeaturesRequestData.FeatureUpdateKey update) {
         return update.maxVersionLevel() < 1;
     }
 }

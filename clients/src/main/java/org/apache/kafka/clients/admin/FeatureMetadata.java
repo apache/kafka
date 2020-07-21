@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Objects;
+import java.util.Optional;
 import org.apache.kafka.common.feature.Features;
 import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
@@ -29,7 +30,7 @@ public class FeatureMetadata {
 
     private final Features<FinalizedVersionRange> finalizedFeatures;
 
-    private final int finalizedFeaturesEpoch;
+    private final Optional<Integer> finalizedFeaturesEpoch;
 
     private final Features<SupportedVersionRange> supportedFeatures;
 
@@ -41,7 +42,11 @@ public class FeatureMetadata {
         Objects.requireNonNull(finalizedFeatures, "Provided finalizedFeatures can not be null.");
         Objects.requireNonNull(supportedFeatures, "Provided supportedFeatures can not be null.");
         this.finalizedFeatures = finalizedFeatures;
-        this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
+        if (finalizedFeaturesEpoch >= 0) {
+            this.finalizedFeaturesEpoch = Optional.of(finalizedFeaturesEpoch);
+        } else {
+            this.finalizedFeaturesEpoch = Optional.empty();
+        }
         this.supportedFeatures = supportedFeatures;
     }
 
@@ -55,9 +60,9 @@ public class FeatureMetadata {
 
     /**
      * The epoch for the finalized features.
-     * Valid values are >= 0. A value < 0 means the finalized features are absent/unavailable.
+     * If the returned value is empty, it means the finalized features are absent/unavailable.
      */
-    public int finalizedFeaturesEpoch() {
+    public Optional<Integer> finalizedFeaturesEpoch() {
         return finalizedFeaturesEpoch;
     }
 

@@ -14,18 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+public class FeatureUpdateFailedException extends ApiException {
+    private static final long serialVersionUID = 1L;
 
-@InterfaceStability.Evolving
-public class UpdateFinalizedFeaturesOptions extends AbstractOptions<UpdateFinalizedFeaturesOptions> {
-    /**
-     * Sets the timeout in milliseconds for this operation or {@code null} if the default API
-     * timeout for the AdminClient should be used.
-     */
-    public UpdateFinalizedFeaturesOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
+    public FeatureUpdateFailedException(String message) {
+        super(message);
+    }
+
+    public FeatureUpdateFailedException(String message, Throwable cause) {
+        super(message, cause);
     }
 }
