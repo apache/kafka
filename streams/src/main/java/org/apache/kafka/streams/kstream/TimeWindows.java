@@ -52,10 +52,11 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see SessionWindows
  * @see UnlimitedWindows
  * @see JoinWindows
- * @see KGroupedStream#windowedBy(Windows)
+ * @see KGroupedStream#windowedBy(FixedSizeWindowDefinition)
  * @see TimestampExtractor
  */
-public final class TimeWindows extends Windows<TimeWindow> {
+@SuppressWarnings("deprecation") // Remove this suppression when Windows is removed
+public final class TimeWindows extends Windows<TimeWindow> implements FixedSizeWindowDefinition<TimeWindow> {
 
     private final long maintainDurationMs;
 

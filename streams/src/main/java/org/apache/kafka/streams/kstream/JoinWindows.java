@@ -68,6 +68,7 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see TimestampExtractor
  */
+@SuppressWarnings("deprecation") // Remove this suppression when Windows is removed
 public final class JoinWindows extends Windows<Window> {
 
     private final long maintainDurationMs;

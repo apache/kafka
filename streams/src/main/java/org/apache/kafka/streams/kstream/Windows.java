@@ -39,7 +39,9 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see JoinWindows
  * @see SessionWindows
  * @see TimestampExtractor
+ * @deprecated since 2.7 Implement FixedSizeWindowDefinition instead.
  */
+@Deprecated
 public abstract class Windows<W extends Window> implements FixedSizeWindowDefinition<W> {
 
     private long maintainDurationMs = DEFAULT_RETENTION_MS;

@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -27,21 +28,20 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 
+import static org.apache.kafka.streams.kstream.internals.DeprecatedWindowsUtils.isDeprecatedWindows;
+import static org.apache.kafka.streams.kstream.internals.DeprecatedWindowsUtils.supplierFromDeprecatedWindows;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
@@ -226,27 +226,8 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                     false
                 );
 
-            } else if (windows instanceof Windows) {
-                // old style retention: use deprecated Windows retention/segmentInterval.
-
-                // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
-                // to be (windows.size() + windows.grace()). This will yield the same default behavior.
-
-                if ((windows.size() + windows.gracePeriodMs()) > ((Windows<W>) windows).maintainMs()) {
-                    throw new IllegalArgumentException("The retention period of the window store "
-                                                           + name + " must be no smaller than its window size plus the grace period."
-                                                           + " Got size=[" + windows.size() + "],"
-                                                           + " grace=[" + windows.gracePeriodMs() + "],"
-                                                           + " retention=[" + ((Windows<W>) windows).maintainMs() + "]");
-                }
-
-                supplier = new RocksDbWindowBytesStoreSupplier(
-                    materialized.storeName(),
-                    ((Windows<W>) windows).maintainMs(),
-                    Math.max(((Windows<W>) windows).maintainMs() / (((Windows<W>) windows).segments - 1), 60_000L),
-                    windows.size(),
-                    false,
-                    true);
+            } else if (isDeprecatedWindows(windows)) {
+                supplier = supplierFromDeprecatedWindows(name, windows, materialized);
             } else {
                 // no retention on store or window definition, so set it to the minimum
                 final long retentionPeriod = windows.size() + windows.gracePeriodMs();

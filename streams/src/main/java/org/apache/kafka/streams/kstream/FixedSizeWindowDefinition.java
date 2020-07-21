@@ -44,7 +44,8 @@ public interface FixedSizeWindowDefinition<W extends Window> {
 
 
     /**
-     * Create all windows that contain the provided timestamp, indexed by non-negative window start timestamps.
+     * List all possible windows that contain the provided timestamp,
+     * indexed by non-negative window start timestamps.
      *
      * @param timestamp the timestamp window should get created for
      * @return a map of {@code windowStartTimestamp -> Window} entries
