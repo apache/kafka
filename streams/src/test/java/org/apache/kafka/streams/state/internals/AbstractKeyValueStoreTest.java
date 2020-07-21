@@ -419,7 +419,25 @@ public abstract class AbstractKeyValueStoreTest {
             allReturned.add(iterator.next());
         }
         assertThat(allReturned, equalTo(expectedReturned));
+    }
 
+    @Test
+    public void shouldPutReverseAll() {
+        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "one"));
+        entries.add(new KeyValue<>(2, "two"));
+
+        store.putAll(entries);
+
+        final List<KeyValue<Integer, String>> allReturned = new ArrayList<>();
+        final List<KeyValue<Integer, String>> expectedReturned =
+            Arrays.asList(KeyValue.pair(2, "two"), KeyValue.pair(1, "one"));
+        final Iterator<KeyValue<Integer, String>> iterator = store.reverseAll();
+
+        while (iterator.hasNext()) {
+            allReturned.add(iterator.next());
+        }
+        assertThat(allReturned, equalTo(expectedReturned));
     }
 
     @Test
@@ -440,6 +458,21 @@ public abstract class AbstractKeyValueStoreTest {
         store.putAll(entries);
 
         final Iterator<KeyValue<Integer, String>> iterator = store.range(2, 2);
+
+        assertEquals(iterator.next().value, store.get(2));
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldReturnSameResultsForGetAndReverseRangeWithEqualKeys() {
+        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "one"));
+        entries.add(new KeyValue<>(2, "two"));
+        entries.add(new KeyValue<>(3, "three"));
+
+        store.putAll(entries);
+
+        final Iterator<KeyValue<Integer, String>> iterator = store.reverseRange(2, 2);
 
         assertEquals(iterator.next().value, store.get(2));
         assertFalse(iterator.hasNext());
@@ -470,6 +503,21 @@ public abstract class AbstractKeyValueStoreTest {
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }
+    }
 
+    @Test
+    public void shouldNotThrowInvalidReverseRangeExceptionWithNegativeFromKey() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            final KeyValueIterator<Integer, String> iterator = store.reverseRange(-1, 1);
+            assertFalse(iterator.hasNext());
+
+            final List<String> messages = appender.getMessages();
+            assertThat(
+                messages,
+                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+            );
+        }
     }
 }

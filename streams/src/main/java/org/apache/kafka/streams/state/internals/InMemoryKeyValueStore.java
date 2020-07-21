@@ -126,26 +126,23 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        if (reverse) return new DelegatingPeekingKeyValueIterator<>(
+        return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).descendingKeySet()));
-        else return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet()));
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet(), reverse));
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.keySet()));
+            new InMemoryKeyValueIterator(map.keySet(), false));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.descendingKeySet()));
+            new InMemoryKeyValueIterator(map.keySet(), true));
     }
 
     @Override
@@ -168,8 +165,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> iter;
 
-        private InMemoryKeyValueIterator(final Set<Bytes> keySet) {
-            this.iter = new TreeSet<>(keySet).iterator();
+        private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean reverse) {
+            if (reverse) this.iter = new TreeSet<>(keySet).descendingIterator();
+            else this.iter = new TreeSet<>(keySet).iterator();
         }
 
         @Override

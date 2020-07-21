@@ -55,6 +55,16 @@ public interface ReadOnlyKeyValueStore<K, V> {
      */
     KeyValueIterator<K, V> range(K from, K to);
 
+    /**
+     * Get an reverse iterator over a given range of keys. This iterator must be closed after use.
+     * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
+     * and must not return null values. No ordering guarantees are provided.
+     * @param from The last key that could be in the range
+     * @param to The first key that could be in the range
+     * @return The reverse iterator for this range.
+     * @throws NullPointerException If null is used for from or to.
+     * @throws InvalidStateStoreException if the store is not initialized
+     */
     default KeyValueIterator<K, V> reverseRange(K from, K to) {
         throw new UnsupportedOperationException();
     }
@@ -68,6 +78,13 @@ public interface ReadOnlyKeyValueStore<K, V> {
      */
     KeyValueIterator<K, V> all();
 
+    /**
+     * Return an reverse iterator over all keys in this store. This iterator must be closed after use.
+     * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
+     * and must not return null values. No ordering guarantees are provided.
+     * @return An reverse iterator of all key/value pairs in the store.
+     * @throws InvalidStateStoreException if the store is not initialized
+     */
     default KeyValueIterator<K, V> reverseAll() {
         throw new UnsupportedOperationException();
     }
