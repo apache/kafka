@@ -44,8 +44,6 @@ import org.apache.kafka.common.requests.ListOffsetResponse
 import org.apache.kafka.common.ConsumerGroupState
 import joptsimple.OptionException
 
-import scala.annotation.nowarn
-
 object ConsumerGroupCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
@@ -568,7 +566,6 @@ object ConsumerGroupCommand extends Logging {
     /**
       * Returns the state of the specified consumer group and partition assignment states
       */
-    @nowarn("cat=optimizer")
     def collectGroupOffsets(groupId: String): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
       collectGroupsOffsets(List(groupId)).getOrElse(groupId, (None, None))
     }
@@ -718,7 +715,7 @@ object ConsumerGroupCommand extends Logging {
       options.timeoutMs(t)
     }
 
-    private def parseTopicPartitionsToReset(groupId: String, topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {
+    private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {
       case topicArg if topicArg.contains(":") =>
         val topicPartitions = topicArg.split(":")
         val topic = topicPartitions(0)
@@ -741,7 +738,7 @@ object ConsumerGroupCommand extends Logging {
         getCommittedOffsets(groupId).keys.toSeq
       } else if (opts.options.has(opts.topicOpt)) {
         val topics = opts.options.valuesOf(opts.topicOpt).asScala
-        parseTopicPartitionsToReset(groupId, topics)
+        parseTopicPartitionsToReset(topics)
       } else {
         if (opts.options.has(opts.resetFromFileOpt))
           Nil

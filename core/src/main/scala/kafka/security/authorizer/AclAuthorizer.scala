@@ -39,7 +39,6 @@ import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -287,7 +286,6 @@ class AclAuthorizer extends Authorizer with Logging {
     }.map(CompletableFuture.completedFuture[AclDeleteResult]).asJava
   }
 
-  @nowarn("cat=optimizer")
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
       val aclBindings = new util.ArrayList[AclBinding]()
       aclCache.foreach { case (resource, versionedAcls) =>
@@ -367,8 +365,6 @@ class AclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  @nowarn("cat=deprecation")
-  @nowarn("cat=optimizer")
   private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSeqs = {
     // this code is performance sensitive, make sure to run AclAuthorizerBenchmark after any changes
 
@@ -384,8 +380,8 @@ class AclAuthorizer extends Authorizer with Logging {
 
     val prefixed = new ArrayBuffer[AclEntry]
     aclCacheSnapshot
-      .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
-      .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
+      .rangeFrom(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
+      .rangeTo(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
       .foreach { case (resource, acls) =>
         if (resourceName.startsWith(resource.name)) prefixed ++= acls.acls
       }
@@ -539,7 +535,6 @@ class AclAuthorizer extends Authorizer with Logging {
     }
   }
 
-  @nowarn("cat=optimizer")
   private def getAclsFromCache(resource: ResourcePattern): VersionedAcls = {
     aclCache.getOrElse(resource, throw new IllegalArgumentException(s"ACLs do not exist in the cache for resource $resource"))
   }

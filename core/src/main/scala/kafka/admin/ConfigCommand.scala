@@ -29,7 +29,7 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncod
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -40,7 +40,6 @@ import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, S
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
 import org.apache.zookeeper.client.ZKClientConfig
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection._
 
@@ -235,7 +234,7 @@ object ConfigCommand extends Config {
 
   private def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
-    val describeAllUsers = configEntity.root.entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
+    val describeAllUsers = configEntity.root.entityType == ConfigType.User && configEntity.root.sanitizedName.isEmpty && configEntity.child.isEmpty
     val entities = configEntity.getAllEntities(zkClient)
     for (entity <- entities) {
       val configs = adminZkClient.fetchEntityConfig(entity.root.entityType, entity.fullSanitizedName)
@@ -304,7 +303,6 @@ object ConfigCommand extends Config {
     }
   }
 
-  @nowarn("cat=deprecation")
   private[admin] def alterConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
     val entityTypes = opts.entityTypes
     val entityNames = opts.entityNames
@@ -344,11 +342,14 @@ object ConfigCommand extends Config {
         val sensitiveEntries = newEntries.filter(_._2.value == null)
         if (sensitiveEntries.nonEmpty)
           throw new InvalidConfigurationException(s"All sensitive broker config entries must be specified for --alter, missing entries: ${sensitiveEntries.keySet}")
-        val newConfig = new JConfig(newEntries.asJava.values)
+
+        val alterLogLevelEntries = (newEntries.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
+          ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
+          ).asJavaCollection
 
         val configResource = new ConfigResource(ConfigResource.Type.BROKER, entityNameHead)
         val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-        adminClient.alterConfigs(Map(configResource -> newConfig).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+        adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case BrokerLoggerConfigType =>
         val validLoggers = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = true, describeAll = false).map(_.name)
@@ -379,12 +380,10 @@ object ConfigCommand extends Config {
         if (invalidConfigs.nonEmpty)
           throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-        val alterEntityTypes = entityTypes.map { entType =>
-          entType match {
-            case ConfigType.User => ClientQuotaEntity.USER
-            case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
-            case _ => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
-          }
+        val alterEntityTypes = entityTypes.map {
+          case ConfigType.User => ClientQuotaEntity.USER
+          case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
+          case entType => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
         }
         val alterEntityNames = entityNames.map(en => if (en.nonEmpty) en else null)
 

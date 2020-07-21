@@ -24,7 +24,6 @@ import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 
-import kafka.consumer.BaseConsumerRecord
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.clients.consumer._
@@ -36,9 +35,8 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
-import scala.annotation.nowarn
+import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import scala.util.{Failure, Success, Try}
 
@@ -61,12 +59,12 @@ import scala.util.{Failure, Success, Try}
  */
 object MirrorMaker extends Logging with KafkaMetricsGroup {
 
-  private[tools] var producer: MirrorMakerProducer = null
-  private var mirrorMakerThreads: Seq[MirrorMakerThread] = null
+  private[tools] var producer: MirrorMakerProducer = _
+  private var mirrorMakerThreads: Seq[MirrorMakerThread] = _
   private val isShuttingDown: AtomicBoolean = new AtomicBoolean(false)
   // Track the messages not successfully sent by mirror maker.
   private val numDroppedMessages: AtomicInteger = new AtomicInteger(0)
-  private var messageHandler: MirrorMakerMessageHandler = null
+  private var messageHandler: MirrorMakerMessageHandler = _
   private var offsetCommitIntervalMs = 0
   private var abortOnSendFailure: Boolean = true
   @volatile private var exitingOnSendFailure: Boolean = false
@@ -191,17 +189,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     setName(threadName)
 
-    @nowarn("cat=deprecation")
-    private def toBaseConsumerRecord(record: ConsumerRecord[Array[Byte], Array[Byte]]): BaseConsumerRecord =
-      BaseConsumerRecord(record.topic,
-        record.partition,
-        record.offset,
-        record.timestamp,
-        record.timestampType,
-        record.key,
-        record.value,
-        record.headers)
-
     override def run(): Unit = {
       info(s"Starting mirror maker thread $threadName")
       try {
@@ -217,7 +204,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
               } else {
                 trace("Sending message with null value and offset %d.".format(data.offset))
               }
-              val records = messageHandler.handle(toBaseConsumerRecord(data))
+              val records = messageHandler.handle(data)
               records.forEach(producer.send)
               maybeFlushAndCommitOffsets()
             }
@@ -299,7 +286,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     // We manually maintain the consumed offsets for historical reasons and it could be simplified
     // Visible for testing
-    private[tools] val offsets = new HashMap[TopicPartition, Long]()
+    private[tools] val offsets = new mutable.HashMap[TopicPartition, Long]()
 
     def init(): Unit = {
       debug("Initiating consumer")
@@ -414,13 +401,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
    * If message.handler.args is specified. A constructor that takes in a String as argument must exist.
    */
   trait MirrorMakerMessageHandler {
-    @nowarn("cat=deprecation")
-    def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
+    def handle(record: ConsumerRecord[Array[Byte], Array[Byte]]): util.List[ProducerRecord[Array[Byte], Array[Byte]]]
   }
 
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
-    @nowarn("cat=deprecation")
-    override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
+    override def handle(record: ConsumerRecord[Array[Byte], Array[Byte]]): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       val timestamp: java.lang.Long = if (record.timestamp == RecordBatch.NO_TIMESTAMP) null else record.timestamp
       Collections.singletonList(new ProducerRecord(record.topic, null, timestamp, record.key, record.value, record.headers))
     }
