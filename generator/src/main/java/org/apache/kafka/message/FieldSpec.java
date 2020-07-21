@@ -46,6 +46,8 @@ public final class FieldSpec {
 
     private final boolean ignorable;
 
+    private final boolean optional;
+
     private final EntityType entityType;
 
     private final String about;
@@ -67,6 +69,7 @@ public final class FieldSpec {
                      @JsonProperty("nullableVersions") String nullableVersions,
                      @JsonProperty("default") String fieldDefault,
                      @JsonProperty("ignorable") boolean ignorable,
+                     @JsonProperty("optional") boolean optional,
                      @JsonProperty("entityType") EntityType entityType,
                      @JsonProperty("about") String about,
                      @JsonProperty("taggedVersions") String taggedVersions,
@@ -97,6 +100,8 @@ public final class FieldSpec {
         }
         this.fieldDefault = fieldDefault == null ? "" : fieldDefault;
         this.ignorable = ignorable;
+        this.optional = optional;
+
         this.entityType = (entityType == null) ? EntityType.UNKNOWN : entityType;
         this.entityType.verifyTypeMatches(name, this.type);
 
@@ -229,6 +234,11 @@ public final class FieldSpec {
     @JsonProperty("ignorable")
     public boolean ignorable() {
         return ignorable;
+    }
+
+    @JsonProperty("optional")
+    public boolean optional() {
+        return optional;
     }
 
     @JsonProperty("entityType")
