@@ -520,6 +520,38 @@ public class ConnectorsResourceTest {
     }
 
     @Test
+    public void testGetTasksConfig() throws Throwable {
+
+        final Map<ConnectorTaskId, Map<String, String>> expectedTasksConfig = new HashMap<>();
+        final ConnectorTaskId task0 = new ConnectorTaskId(CONNECTOR_NAME, 0);
+        expectedTasksConfig.put(task0, Collections.singletonMap("sample_task_config", "task_config"));
+
+        final Capture<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb = Capture.newInstance();
+        herder.tasksConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
+        expectAndCallbackResult(cb, expectedTasksConfig);
+
+        PowerMock.replayAll();
+
+        Map<ConnectorTaskId, Map<String, String>> tasksConfig = connectorsResource.getTasksConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+        assertEquals(expectedTasksConfig, tasksConfig);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test(expected = NotFoundException.class)
+    public void testGetTasksConfigConnectorNotFound() throws Throwable {
+        final Capture<Callback<Map<ConnectorTaskId, Map<String, String>>>> cb = Capture.newInstance();
+        herder.tasksConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.capture(cb));
+        expectAndCallbackException(cb, new NotFoundException("not found"));
+
+        PowerMock.replayAll();
+
+        connectorsResource.getTasksConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testPutConnectorConfig() throws Throwable {
         final Capture<Callback<Herder.Created<ConnectorInfo>>> cb = Capture.newInstance();
         herder.putConnectorConfig(EasyMock.eq(CONNECTOR_NAME), EasyMock.eq(CONNECTOR_CONFIG), EasyMock.eq(true), EasyMock.capture(cb));
