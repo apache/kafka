@@ -18,12 +18,23 @@
   "type": "response",
   "name": "BeginQuorumEpochResponse",
   "validVersions": "0",
-  "flexibleVersions": "0+",
   "fields": [
-    {"name": "ErrorCode", "type": "int16", "versions": "0+"},
-    {"name": "LeaderId", "type": "int32", "versions": "0+",
-      "about": "The ID of the current leader or -1 if the leader is unknown."},
-    {"name": "LeaderEpoch", "type": "int32", "versions": "0+",
-      "about": "The latest known leader epoch"}
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The top level error code."},
+    { "name": "Topics", "type": "[]TopicData",
+      "versions": "0+", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]PartitionData",
+        "versions": "0+", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "ErrorCode", "type": "int16", "versions": "0+"},
+        { "name": "LeaderId", "type": "int32", "versions": "0+",
+          "about": "The ID of the current leader or -1 if the leader is unknown."},
+        { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+          "about": "The latest known leader epoch"}
+      ]}
+    ]}
   ]
 }

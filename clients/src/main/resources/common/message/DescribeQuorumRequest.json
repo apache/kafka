@@ -20,11 +20,11 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "Topics", "type": "[]DescribeQuorumTopicRequest",
+    { "name": "Topics", "type": "[]TopicData",
       "versions": "0+", "fields": [
       { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "Partitions", "type": "[]DescribeQuorumPartitionRequest",
+      { "name": "Partitions", "type": "[]PartitionData",
         "versions": "0+", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index." }

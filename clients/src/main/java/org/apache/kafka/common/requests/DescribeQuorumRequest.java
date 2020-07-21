@@ -18,11 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
-import org.apache.kafka.common.message.DescribeQuorumRequestData.DescribeQuorumPartitionRequest;
-import org.apache.kafka.common.message.DescribeQuorumRequestData.DescribeQuorumTopicRequest;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.DescribeQuorumPartitionResponse;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.DescribeQuorumTopicResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -71,10 +67,10 @@ public class DescribeQuorumRequest extends AbstractRequest {
     public static DescribeQuorumRequestData singletonRequest(TopicPartition topicPartition) {
         return new DescribeQuorumRequestData()
             .setTopics(Collections.singletonList(
-                new DescribeQuorumTopicRequest()
+                new DescribeQuorumRequestData.TopicData()
                     .setTopicName(topicPartition.topic())
                     .setPartitions(Collections.singletonList(
-                        new DescribeQuorumPartitionRequest()
+                        new DescribeQuorumRequestData.PartitionData()
                             .setPartitionIndex(topicPartition.partition()))
             )));
     }
@@ -92,13 +88,13 @@ public class DescribeQuorumRequest extends AbstractRequest {
     public static DescribeQuorumResponseData getPartitionLevelErrorResponse(DescribeQuorumRequestData data, Errors error) {
         short errorCode = error.code();
 
-        List<DescribeQuorumTopicResponse> topicResponses = new ArrayList<>();
-        for (DescribeQuorumTopicRequest topic : data.topics()) {
+        List<DescribeQuorumResponseData.TopicData> topicResponses = new ArrayList<>();
+        for (DescribeQuorumRequestData.TopicData topic : data.topics()) {
             topicResponses.add(
-                new DescribeQuorumTopicResponse()
+                new DescribeQuorumResponseData.TopicData()
                     .setTopicName(topic.topicName())
                     .setPartitions(topic.partitions().stream().map(
-                        requestPartition -> new DescribeQuorumPartitionResponse()
+                        requestPartition -> new DescribeQuorumResponseData.PartitionData()
                                                 .setPartitionIndex(requestPartition.partitionIndex())
                                                 .setErrorCode(errorCode)
                     ).collect(Collectors.toList())));

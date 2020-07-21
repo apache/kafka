@@ -71,10 +71,10 @@ public class VoteResponse extends AbstractResponse {
         return new VoteResponseData()
             .setErrorCode(topLevelError.code())
             .setTopics(Collections.singletonList(
-                new VoteResponseData.VoteTopicResponse()
+                new VoteResponseData.TopicData()
                     .setTopicName(topicPartition.topic())
                     .setPartitions(Collections.singletonList(
-                        new VoteResponseData.VotePartitionResponse()
+                        new VoteResponseData.PartitionData()
                             .setErrorCode(partitionLevelError.code())
                             .setLeaderId(leaderId)
                             .setLeaderEpoch(leaderEpoch)
@@ -90,8 +90,8 @@ public class VoteResponse extends AbstractResponse {
             errors.put(topLevelError, 1);
         }
 
-        for (VoteResponseData.VoteTopicResponse topicResponse : data.topics()) {
-            for (VoteResponseData.VotePartitionResponse partitionResponse : topicResponse.partitions()) {
+        for (VoteResponseData.TopicData topicResponse : data.topics()) {
+            for (VoteResponseData.PartitionData partitionResponse : topicResponse.partitions()) {
                 errors.compute(Errors.forCode(partitionResponse.errorCode()),
                     (error, count) -> count == null ? 1 : count + 1);
             }

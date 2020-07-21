@@ -92,10 +92,10 @@ public class VoteRequest extends AbstractRequest {
         return new VoteRequestData()
                    .setClusterId(clusterId)
                    .setTopics(Collections.singletonList(
-                       new VoteRequestData.VoteTopicRequest()
+                       new VoteRequestData.TopicData()
                            .setTopicName(topicPartition.topic())
                            .setPartitions(Collections.singletonList(
-                               new VoteRequestData.VotePartitionRequest()
+                               new VoteRequestData.PartitionData()
                                    .setPartitionIndex(topicPartition.partition())
                                    .setCandidateEpoch(candidateEpoch)
                                    .setCandidateId(candidateId)
@@ -106,13 +106,13 @@ public class VoteRequest extends AbstractRequest {
 
     public static VoteResponseData getPartitionLevelErrorResponse(VoteRequestData data, Errors error) {
         short errorCode = error.code();
-        List<VoteResponseData.VoteTopicResponse> topicResponses = new ArrayList<>();
-        for (VoteRequestData.VoteTopicRequest topic : data.topics()) {
+        List<VoteResponseData.TopicData> topicResponses = new ArrayList<>();
+        for (VoteRequestData.TopicData topic : data.topics()) {
             topicResponses.add(
-                new VoteResponseData.VoteTopicResponse()
+                new VoteResponseData.TopicData()
                     .setTopicName(topic.topicName())
                     .setPartitions(topic.partitions().stream().map(
-                        requestPartition -> new VoteResponseData.VotePartitionResponse()
+                        requestPartition -> new VoteResponseData.PartitionData()
                                                 .setPartitionIndex(requestPartition.partitionIndex())
                                                 .setErrorCode(errorCode)
                     ).collect(Collectors.toList())));

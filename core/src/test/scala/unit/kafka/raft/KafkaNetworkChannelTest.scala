@@ -24,9 +24,9 @@ import java.util.concurrent.atomic.AtomicReference
 import org.apache.kafka.clients.MockClient
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.message.{BeginQuorumEpochRequestData, BeginQuorumEpochResponseData, EndQuorumEpochRequestData, EndQuorumEpochResponseData, FetchQuorumRecordsRequestData, FetchQuorumRecordsResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchQuorumRecordsRequestData, FetchQuorumRecordsResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, RequestHeader, VoteRequest, VoteResponse}
+import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, EndQuorumEpochRequest, RequestHeader, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.raft.{RaftRequest, RaftResponse}
 import org.junit.Assert._
@@ -155,22 +155,20 @@ class KafkaNetworkChannelTest {
   }
 
   private def buildTestRequest(key: ApiKeys): ApiMessage = {
+    val leaderEpoch = 5
+    val leaderId = 1
     key match {
       case ApiKeys.BEGIN_QUORUM_EPOCH =>
-        new BeginQuorumEpochRequestData()
-          .setClusterId(clusterId)
-          .setLeaderEpoch(5)
-          .setLeaderId(1)
+        BeginQuorumEpochRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId)
 
       case ApiKeys.END_QUORUM_EPOCH =>
-        new EndQuorumEpochRequestData()
-          .setClusterId(clusterId)
-          .setLeaderEpoch(5)
-          .setReplicaId(1)
-          .setLeaderId(1)
+        val replicaId = 1
+        EndQuorumEpochRequest.singletonRequest(topicPartition, clusterId, replicaId,
+          leaderId, leaderEpoch, Collections.singletonList(2))
 
       case ApiKeys.VOTE =>
-        VoteRequest.singletonRequest(topicPartition, clusterId, 5, 1, 4, 329)
+        val lastEpoch = 4
+        VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329)
 
       case ApiKeys.FETCH_QUORUM_RECORDS =>
         new FetchQuorumRecordsRequestData()

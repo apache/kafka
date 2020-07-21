@@ -18,8 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.DescribeQuorumPartitionResponse;
-import org.apache.kafka.common.message.DescribeQuorumResponseData.DescribeQuorumTopicResponse;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -67,8 +65,8 @@ public class DescribeQuorumResponse extends AbstractResponse {
             errors.put(topLevelError, 1);
         }
 
-        for (DescribeQuorumTopicResponse topicResponse : data.topics()) {
-            for (DescribeQuorumPartitionResponse partitionResponse : topicResponse.partitions()) {
+        for (DescribeQuorumResponseData.TopicData topicResponse : data.topics()) {
+            for (DescribeQuorumResponseData.PartitionData partitionResponse : topicResponse.partitions()) {
                 errors.compute(Errors.forCode(partitionResponse.errorCode()),
                     (error, count) -> count == null ? 1 : count + 1);
             }
@@ -83,9 +81,9 @@ public class DescribeQuorumResponse extends AbstractResponse {
                                                                List<ReplicaState> voterStates,
                                                                List<ReplicaState> observerStates) {
         return new DescribeQuorumResponseData()
-            .setTopics(Collections.singletonList(new DescribeQuorumTopicResponse()
+            .setTopics(Collections.singletonList(new DescribeQuorumResponseData.TopicData()
                 .setTopicName(topicPartition.topic())
-                .setPartitions(Collections.singletonList(new DescribeQuorumPartitionResponse()
+                .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
                     .setErrorCode(Errors.NONE.code())
                     .setLeaderId(leaderId)
                     .setLeaderEpoch(leaderEpoch)

@@ -17,8 +17,10 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
+import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
 import org.apache.kafka.common.message.FindQuorumResponseData;
@@ -30,6 +32,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
+import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.VoteRequest;
 
 import java.io.IOException;
@@ -68,15 +72,9 @@ public class RaftUtil {
             case VOTE:
                 return VoteRequest.getTopLevelErrorResponse(error);
             case BEGIN_QUORUM_EPOCH:
-                return new BeginQuorumEpochResponseData()
-                    .setErrorCode(error.code())
-                    .setLeaderEpoch(epoch)
-                    .setLeaderId(leaderId);
+                return BeginQuorumEpochRequest.getTopLevelErrorResponse(error);
             case END_QUORUM_EPOCH:
-                return new EndQuorumEpochResponseData()
-                    .setErrorCode(error.code())
-                    .setLeaderEpoch(epoch)
-                    .setLeaderId(leaderId);
+                return EndQuorumEpochRequest.getTopLevelErrorResponse(error);
             case FETCH_QUORUM_RECORDS:
                 return new FetchQuorumRecordsResponseData()
                     .setErrorCode(error.code())
@@ -102,6 +100,34 @@ public class RaftUtil {
     }
 
     static boolean hasValidTopicPartition(VoteRequestData data, TopicPartition topicPartition) {
+        return data.topics().size() == 1 &&
+                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+                   data.topics().get(0).partitions().size() == 1 &&
+                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
+
+    static boolean hasValidTopicPartition(BeginQuorumEpochRequestData data, TopicPartition topicPartition) {
+        return data.topics().size() == 1 &&
+                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+                   data.topics().get(0).partitions().size() == 1 &&
+                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
+
+    static boolean hasValidTopicPartition(BeginQuorumEpochResponseData data, TopicPartition topicPartition) {
+        return data.topics().size() == 1 &&
+                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+                   data.topics().get(0).partitions().size() == 1 &&
+                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
+
+    static boolean hasValidTopicPartition(EndQuorumEpochRequestData data, TopicPartition topicPartition) {
+        return data.topics().size() == 1 &&
+                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+                   data.topics().get(0).partitions().size() == 1 &&
+                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
+
+    static boolean hasValidTopicPartition(EndQuorumEpochResponseData data, TopicPartition topicPartition) {
         return data.topics().size() == 1 &&
                    data.topics().get(0).topicName().equals(topicPartition.topic()) &&
                    data.topics().get(0).partitions().size() == 1 &&

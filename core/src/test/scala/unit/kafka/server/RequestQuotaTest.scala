@@ -572,17 +572,11 @@ class RequestQuotaTest extends BaseRequestTest {
           new VoteRequest.Builder(VoteRequest.singletonRequest(tp, 1, 2, 0, 10))
 
         case ApiKeys.BEGIN_QUORUM_EPOCH =>
-          new BeginQuorumEpochRequest.Builder(new BeginQuorumEpochRequestData()
-            .setLeaderId(5)
-            .setLeaderEpoch(2)
-            .setClusterId("cluster"))
+          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, 2, 5))
 
         case ApiKeys.END_QUORUM_EPOCH =>
-          new EndQuorumEpochRequest.Builder(new EndQuorumEpochRequestData()
-            .setLeaderId(5)
-            .setLeaderEpoch(2)
-            .setClusterId("cluster")
-            .setReplicaId(10))
+          new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
+            tp, 10, 2, 5, Collections.singletonList(3)))
 
         case ApiKeys.FETCH_QUORUM_RECORDS =>
           new FetchQuorumRecordsRequest.Builder(new FetchQuorumRecordsRequestData()

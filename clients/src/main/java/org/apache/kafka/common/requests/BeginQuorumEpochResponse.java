@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -24,8 +25,22 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Possible error codes.
+ *
+ * Top level errors:
+ * - {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
+ * - {@link Errors#BROKER_NOT_AVAILABLE}
+ *
+ * Partition level errors:
+ * - {@link Errors#FENCED_LEADER_EPOCH}
+ * - {@link Errors#INVALID_REQUEST}
+ * - {@link Errors#INCONSISTENT_VOTER_SET}
+ * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
+ */
 public class BeginQuorumEpochResponse extends AbstractResponse {
     public final BeginQuorumEpochResponseData data;
 
@@ -42,6 +57,27 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
         this.data = new BeginQuorumEpochResponseData(struct, latestVersion);
     }
 
+    public static BeginQuorumEpochResponseData singletonResponse(
+        Errors topLevelError,
+        TopicPartition topicPartition,
+        Errors partitionLevelError,
+        int leaderEpoch,
+        int leaderId
+    ) {
+        return new BeginQuorumEpochResponseData()
+                   .setErrorCode(topLevelError.code())
+                   .setTopics(Collections.singletonList(
+                       new BeginQuorumEpochResponseData.TopicData()
+                           .setTopicName(topicPartition.topic())
+                           .setPartitions(Collections.singletonList(
+                               new BeginQuorumEpochResponseData.PartitionData()
+                                   .setErrorCode(partitionLevelError.code())
+                                   .setLeaderId(leaderId)
+                                   .setLeaderEpoch(leaderEpoch)
+                           )))
+                   );
+    }
+
     @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);
@@ -49,7 +85,20 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
+        Map<Errors, Integer> errors = new HashMap<>();
+
+        Errors topLevelError = Errors.forCode(data.errorCode());
+        if (topLevelError != Errors.NONE) {
+            errors.put(topLevelError, 1);
+        }
+
+        for (BeginQuorumEpochResponseData.TopicData topicResponse : data.topics()) {
+            for (BeginQuorumEpochResponseData.PartitionData partitionResponse : topicResponse.partitions()) {
+                errors.compute(Errors.forCode(partitionResponse.errorCode()),
+                    (error, count) -> count == null ? 1 : count + 1);
+            }
+        }
+        return errors;
     }
 
     public static BeginQuorumEpochResponse parse(ByteBuffer buffer, short version) {

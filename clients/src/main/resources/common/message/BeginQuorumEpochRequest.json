@@ -18,12 +18,21 @@
   "type": "request",
   "name": "BeginQuorumEpochRequest",
   "validVersions": "0",
-  "flexibleVersions": "0+",
   "fields": [
-    {"name": "ClusterId", "type": "string", "versions": "0+"},
-    {"name": "LeaderId", "type": "int32", "versions": "0+",
-      "about": "The ID of the newly elected leader"},
-    {"name": "LeaderEpoch", "type": "int32", "versions": "0+",
-      "about": "The epoch of the newly elected leader"}
+    { "name": "ClusterId", "type": "string", "versions": "0+"},
+    { "name": "Topics", "type": "[]TopicData",
+      "versions": "0+", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]PartitionData",
+        "versions": "0+", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "LeaderId", "type": "int32", "versions": "0+",
+          "about": "The ID of the newly elected leader"},
+        { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+          "about": "The epoch of the newly elected leader"}
+      ]}
+    ]}
   ]
 }
