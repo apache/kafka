@@ -39,8 +39,6 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
 
-    private static final String TEST_ID = "reset-with-ssl-integration-test";
-
     private static final Map<String, Object> SSL_CONFIG;
 
     static {
@@ -61,11 +59,6 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         }
 
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
-    }
-
-    @Override
-    protected String getTestId() {
-        return TEST_ID;
     }
 
     @Override

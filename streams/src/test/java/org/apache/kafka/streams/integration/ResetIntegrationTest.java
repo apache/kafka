@@ -59,8 +59,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
 
-    private static final String TEST_ID = "reset-integration-test";
-
     static {
         final Properties brokerProps = new Properties();
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
@@ -68,11 +66,6 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         // very long sleep times
         brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
-    }
-
-    @Override
-    protected String getTestId() {
-        return TEST_ID;
     }
 
     @Override
@@ -93,7 +86,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhileStreamsIsRunning() {
-        final String appID = getTestId() + "-not-reset-during-runtime";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
@@ -118,7 +111,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenInputTopicAbsent() throws Exception {
-        final String appID = getTestId() + "-not-reset-without-input-topic";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
@@ -135,7 +128,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void shouldNotAllowToResetWhenIntermediateTopicAbsent() throws Exception {
-        final String appID = getTestId() + "-not-reset-without-intermediate-topic";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         final String[] parameters = new String[] {
             "--application-id", appID,
             "--bootstrap-servers", cluster.bootstrapServers(),
@@ -152,7 +145,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testResetWhenLongSessionTimeoutConfiguredWithForceOption() throws Exception {
-        final String appID = getTestId() + "-with-force-option";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
         streamsConfig.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Integer.toString(STREAMS_CONSUMER_TIMEOUT * 100));
 
@@ -188,7 +181,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromFileAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = getTestId() + "-from-file";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -229,7 +222,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromDateTimeAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = getTestId() + "-from-datetime";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -274,7 +267,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingByDurationAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = getTestId() + "-from-duration";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN

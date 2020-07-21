@@ -48,6 +48,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
+import org.junit.rules.TestName;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -73,8 +74,10 @@ public abstract class AbstractResetIntegrationTest {
     protected static KafkaStreams streams;
     protected static Admin adminClient;
 
-    abstract protected String getTestId();
     abstract Map<String, Object> getClientSslConfig();
+
+    @Rule
+    public final TestName testName = new TestName(); 
 
     @AfterClass
     public static void afterClassCleanup() {
@@ -115,7 +118,7 @@ public abstract class AbstractResetIntegrationTest {
         return currentTimeSet;
     }
 
-    private void prepareConfigs() {
+    private void prepareConfigs(final String appID) {
         commonClientConfig = new Properties();
         commonClientConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
 
@@ -133,7 +136,7 @@ public abstract class AbstractResetIntegrationTest {
         producerConfig.putAll(commonClientConfig);
 
         resultConsumerConfig = new Properties();
-        resultConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, getTestId() + "-result-consumer");
+        resultConsumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, appID + "-result-consumer");
         resultConsumerConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         resultConsumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
         resultConsumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, LongDeserializer.class);
@@ -165,10 +168,11 @@ public abstract class AbstractResetIntegrationTest {
     protected static final int TIMEOUT_MULTIPLIER = 15;
 
     void prepareTest() throws Exception {
-        prepareConfigs();
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        prepareConfigs(appID);
         prepareEnvironment();
 
-        waitForEmptyConsumerGroup(adminClient, getTestId(), TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
+        waitForEmptyConsumerGroup(adminClient, appID, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT);
 
         cluster.deleteAllTopicsAndWait(120000);
         cluster.createTopics(INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN);
@@ -203,7 +207,7 @@ public abstract class AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = getTestId() + "-from-scratch";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -248,7 +252,7 @@ public abstract class AbstractResetIntegrationTest {
             cluster.createTopic(INTERMEDIATE_USER_TOPIC);
         }
 
-        final String appID = getTestId() + "-from-scratch-with-intermediate-topic";
+        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -291,7 +295,7 @@ public abstract class AbstractResetIntegrationTest {
         assertThat(resultRerun2, equalTo(result2));
 
         if (!useRepartitioned) {
-            final Properties props = TestUtils.consumerConfig(cluster.bootstrapServers(), getTestId() + "-result-consumer", LongDeserializer.class, StringDeserializer.class, commonClientConfig);
+            final Properties props = TestUtils.consumerConfig(cluster.bootstrapServers(), appID + "-result-consumer", LongDeserializer.class, StringDeserializer.class, commonClientConfig);
             final List<KeyValue<Long, String>> resultIntermediate = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(props, INTERMEDIATE_USER_TOPIC, 21);
 
             for (int i = 0; i < 10; i++) {
