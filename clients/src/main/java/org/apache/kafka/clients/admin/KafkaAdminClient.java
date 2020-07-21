@@ -1483,7 +1483,7 @@ public class KafkaAdminClient extends AdminClient {
                         ApiError error = new ApiError(result.errorCode(), result.errorMessage());
                         if (error.isFailure()) {
                             if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
-                                if (options.shouldRetryQuotaViolatedException()) {
+                                if (options.shouldRetryOnQuotaViolation()) {
                                     retryTopics.add(topics.find(result.name()).duplicate());
                                 } else {
                                     future.completeExceptionally(new ThrottlingQuotaExceededException(
@@ -1596,7 +1596,7 @@ public class KafkaAdminClient extends AdminClient {
                         ApiError error = new ApiError(result.errorCode(), result.errorMessage());
                         if (error.isFailure()) {
                             if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
-                                if (options.shouldRetryQuotaViolatedException()) {
+                                if (options.shouldRetryOnQuotaViolation()) {
                                     retryTopics.add(result.name());
                                 } else {
                                     future.completeExceptionally(new ThrottlingQuotaExceededException(
@@ -2500,7 +2500,7 @@ public class KafkaAdminClient extends AdminClient {
                         ApiError error = new ApiError(result.errorCode(), result.errorMessage());
                         if (error.isFailure()) {
                             if (error.is(Errors.THROTTLING_QUOTA_EXCEEDED)) {
-                                if (options.shouldRetryQuotaViolatedException()) {
+                                if (options.shouldRetryOnQuotaViolation()) {
                                     retryTopics.add(topics.find(result.name()).duplicate());
                                 } else {
                                     future.completeExceptionally(new ThrottlingQuotaExceededException(

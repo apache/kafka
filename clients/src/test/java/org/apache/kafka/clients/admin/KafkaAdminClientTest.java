@@ -294,6 +294,10 @@ public class KafkaAdminClientTest {
         return new AdminClientUnitTestEnv(mockCluster(3, 0), configVals);
     }
 
+    private static AdminClientUnitTestEnv mockClientEnv(Time time, String... configVals) {
+        return new AdminClientUnitTestEnv(time, mockCluster(3, 0), configVals);
+    }
+
     @Test
     public void testCloseAdminClient() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -664,7 +668,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(
                 expectCreateTopicsRequestWithTopics("topic2"),
-                prepareCreateTopicsResponse(1000,
+                prepareCreateTopicsResponse(0,
                     creatableTopicResult("topic2", Errors.NONE)));
 
             CreateTopicsResult result = env.adminClient().createTopics(
@@ -672,11 +676,57 @@ public class KafkaAdminClientTest {
                     new NewTopic("topic1", 1, (short) 1),
                     new NewTopic("topic2", 1, (short) 1),
                     new NewTopic("topic3", 1, (short) 1)),
-                new CreateTopicsOptions().retryQuotaViolatedException(true));
+                new CreateTopicsOptions().retryOnQuotaViolation(true));
 
             assertNull(result.values().get("topic1").get());
             assertNull(result.values().get("topic2").get());
-            TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testCreateTopicsRetryThrottlingExceptionWhenEnabledUntilRequestTimeOut() throws Exception {
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareCreateTopicsResponse(1000,
+                    creatableTopicResult("topic1", Errors.NONE),
+                    creatableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    creatableTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("topic2"),
+                prepareCreateTopicsResponse(1000,
+                    creatableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            CreateTopicsResult result = env.adminClient().createTopics(
+                asList(
+                    new NewTopic("topic1", 1, (short) 1),
+                    new NewTopic("topic2", 1, (short) 1),
+                    new NewTopic("topic3", 1, (short) 1)),
+                new CreateTopicsOptions().retryOnQuotaViolation(true));
+
+            // Wait until the prepared attempts have consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting CreateTopics requests");
+
+            // Wait until the next request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting next CreateTopics request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
+
+            assertNull(result.values().get("topic1").get());
+            TestUtils.assertFutureThrows(result.values().get("topic2"), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
         }
     }
 
@@ -697,11 +747,13 @@ public class KafkaAdminClientTest {
                     new NewTopic("topic1", 1, (short) 1),
                     new NewTopic("topic2", 1, (short) 1),
                     new NewTopic("topic3", 1, (short) 1)),
-                new CreateTopicsOptions().retryQuotaViolatedException(false));
+                new CreateTopicsOptions().retryOnQuotaViolation(false));
 
             assertNull(result.values().get("topic1").get());
-            TestUtils.assertFutureError(result.values().get("topic2"), ThrottlingQuotaExceededException.class);
-            TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+                ThrottlingQuotaExceededException.class);
+            assertEquals(1000, e.throttleTimeMs());
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
         }
     }
 
@@ -784,16 +836,59 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(
                 expectDeleteTopicsRequestWithTopics("topic2"),
-                prepareDeleteTopicsResponse(1000,
+                prepareDeleteTopicsResponse(0,
                     deletableTopicResult("topic2", Errors.NONE)));
 
             DeleteTopicsResult result = env.adminClient().deleteTopics(
                 asList("topic1", "topic2", "topic3"),
-                new DeleteTopicsOptions().retryQuotaViolatedException(true));
+                new DeleteTopicsOptions().retryOnQuotaViolation(true));
 
             assertNull(result.values().get("topic1").get());
             assertNull(result.values().get("topic2").get());
-            TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteTopicsRetryThrottlingExceptionWhenEnabledUntilRequestTimeOut() throws Exception {
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareDeleteTopicsResponse(1000,
+                    deletableTopicResult("topic1", Errors.NONE),
+                    deletableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    deletableTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("topic2"),
+                prepareDeleteTopicsResponse(1000,
+                    deletableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            DeleteTopicsResult result = env.adminClient().deleteTopics(
+                asList("topic1", "topic2", "topic3"),
+                new DeleteTopicsOptions().retryOnQuotaViolation(true));
+
+            // Wait until the prepared attempts have consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting DeleteTopics requests");
+
+            // Wait until the next request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting next DeleteTopics request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
+
+            assertNull(result.values().get("topic1").get());
+            TestUtils.assertFutureThrows(result.values().get("topic2"), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
         }
     }
 
@@ -811,10 +906,12 @@ public class KafkaAdminClientTest {
 
             DeleteTopicsResult result = env.adminClient().deleteTopics(
                 asList("topic1", "topic2", "topic3"),
-                new DeleteTopicsOptions().retryQuotaViolatedException(false));
+                new DeleteTopicsOptions().retryOnQuotaViolation(false));
 
             assertNull(result.values().get("topic1").get());
-            TestUtils.assertFutureError(result.values().get("topic2"), ThrottlingQuotaExceededException.class);
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+                ThrottlingQuotaExceededException.class);
+            assertEquals(1000, e.throttleTimeMs());
             TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
         }
     }
@@ -1306,7 +1403,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(
                 expectCreatePartitionsRequestWithTopics("topic2"),
-                prepareCreatePartitionsResponse(1000,
+                prepareCreatePartitionsResponse(0,
                     createPartitionsTopicResult("topic2", Errors.NONE)));
 
             Map<String, NewPartitions> counts = new HashMap<>();
@@ -1315,11 +1412,58 @@ public class KafkaAdminClientTest {
             counts.put("topic3", NewPartitions.increaseTo(3));
 
             CreatePartitionsResult result = env.adminClient().createPartitions(
-                counts, new CreatePartitionsOptions().retryQuotaViolatedException(true));
+                counts, new CreatePartitionsOptions().retryOnQuotaViolation(true));
 
             assertNull(result.values().get("topic1").get());
             assertNull(result.values().get("topic2").get());
-            TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testCreatePartitionsRetryThrottlingExceptionWhenEnabledUntilRequestTimeOut() throws Exception {
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareCreatePartitionsResponse(1000,
+                    createPartitionsTopicResult("topic1", Errors.NONE),
+                    createPartitionsTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    createPartitionsTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("topic2"),
+                prepareCreatePartitionsResponse(1000,
+                    createPartitionsTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            Map<String, NewPartitions> counts = new HashMap<>();
+            counts.put("topic1", NewPartitions.increaseTo(1));
+            counts.put("topic2", NewPartitions.increaseTo(2));
+            counts.put("topic3", NewPartitions.increaseTo(3));
+
+            CreatePartitionsResult result = env.adminClient().createPartitions(
+                counts, new CreatePartitionsOptions().retryOnQuotaViolation(true));
+
+            // Wait until the prepared attempts have consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting CreatePartitions requests");
+
+            // Wait until the next request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting next CreatePartitions request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
+
+            assertNull(result.values().get("topic1").get());
+            TestUtils.assertFutureThrows(result.values().get("topic2"), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
         }
     }
 
@@ -1341,11 +1485,13 @@ public class KafkaAdminClientTest {
             counts.put("topic3", NewPartitions.increaseTo(3));
 
             CreatePartitionsResult result = env.adminClient().createPartitions(
-                counts, new CreatePartitionsOptions().retryQuotaViolatedException(false));
+                counts, new CreatePartitionsOptions().retryOnQuotaViolation(false));
 
             assertNull(result.values().get("topic1").get());
-            TestUtils.assertFutureError(result.values().get("topic2"), ThrottlingQuotaExceededException.class);
-            TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+                ThrottlingQuotaExceededException.class);
+            assertEquals(1000, e.throttleTimeMs());
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
         }
     }
 

@@ -30,7 +30,7 @@ import java.util.Collection;
 public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
 
     private boolean validateOnly = false;
-    private boolean retryQuotaViolatedException = true;
+    private boolean retryOnQuotaViolation = true;
 
     /**
      * Set the timeout in milliseconds for this operation or {@code null} if the default api timeout for the
@@ -58,20 +58,19 @@ public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
         return validateOnly;
     }
 
+
     /**
-     * Set the retry QuotaViolatedException to indicate whether QuotaViolatedException
-     * should be automatically retried or not.
+     * Set to true if quota violation should be automatically retried.
      */
-    public CreateTopicsOptions retryQuotaViolatedException(boolean retryQuotaViolatedException) {
-        this.retryQuotaViolatedException = retryQuotaViolatedException;
+    public CreateTopicsOptions retryOnQuotaViolation(boolean retryOnQuotaViolation) {
+        this.retryOnQuotaViolation = retryOnQuotaViolation;
         return this;
     }
 
     /**
-     * Returns true if the QuotaViolatedException should be automatically retried
-     * by the AdminClient.
+     * Returns true if quota violation should be automatically retried.
      */
-    public boolean shouldRetryQuotaViolatedException() {
-        return retryQuotaViolatedException;
+    public boolean shouldRetryOnQuotaViolation() {
+        return retryOnQuotaViolation;
     }
 }
