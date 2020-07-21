@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.Errors
 
 import org.junit.{After, Test}
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 
 class AdminManagerTest {
 
@@ -60,6 +61,23 @@ class AdminManagerTest {
       .setConfigurationKeys(null))
     val adminManager = createAdminManager()
     val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
-    assertEquals(results.head.errorCode(), Errors.NONE.code)
+    assertEquals(Errors.NONE.code, results.head.errorCode())
+    assertFalse("Should return configs", results.head.configs().isEmpty)
+  }
+
+  @Test
+  def testDescribeConfigsWithEmptyConfigurationKeys(): Unit = {
+    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
+
+    EasyMock.replay(zkClient, metadataCache)
+
+    val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
+      .setResourceName(topic)
+      .setResourceType(ConfigResource.Type.TOPIC.id))
+    val adminManager = createAdminManager()
+    val results: List[DescribeConfigsResponseData.DescribeConfigsResult] = adminManager.describeConfigs(resources, true, true)
+    assertEquals(Errors.NONE.code, results.head.errorCode())
+    assertFalse("Should return configs", results.head.configs().isEmpty)
   }
 }
