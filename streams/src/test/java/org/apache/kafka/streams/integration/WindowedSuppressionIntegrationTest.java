@@ -27,21 +27,14 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.*;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Named;
-import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -91,16 +84,23 @@ public class WindowedSuppressionIntegrationTest {
         mkEntry(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
     ));
 
-    final Properties consumerConfig = mkProperties(mkMap(
+    final Properties consumerConfigString = mkProperties(mkMap(
         mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
         mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
         mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
         mkEntry(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     ));
 
+    final Properties consumerConfigDouble = mkProperties(mkMap(
+        mkEntry(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+        mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName()),
+        mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, DoubleDeserializer.class.getName()),
+        mkEntry(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    ));
+
     final Producer<String, String> producer = new KafkaProducer<>(producerConfig);
-    final Consumer<Object, Object> outputConsumer = new KafkaConsumer<>(consumerConfig);
-    final Consumer<Object, Object> lateArrivedConsumer = new KafkaConsumer<>(consumerConfig);
+    final Consumer<Object, Object> outputConsumer = new KafkaConsumer<>(consumerConfigDouble);
+    final Consumer<Object, Object> lateArrivedConsumer = new KafkaConsumer<>(consumerConfigString);
 
     private final String inputTopic = "inputTopic-" + WindowedSuppressionIntegrationTest.class.getSimpleName();
     private final String outputTopic = "outputTopic-" + WindowedSuppressionIntegrationTest.class.getSimpleName();
@@ -132,63 +132,60 @@ public class WindowedSuppressionIntegrationTest {
 
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> inputStream = builder.stream(inputTopic);
+        final KStream<String, String> inputStream = builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
 
         inputStream
             .groupByKey()
             .windowedBy(TimeWindows.of(ofMillis(windowSize)).grace(ofMillis(windowSize)))
             .aggregate(
-                () -> "",
-                (key, value, aggregate) -> value,
+                () -> 0.0,
+                (key, value, aggregate) -> Double.parseDouble(value),
                 Named.as("aggregation" + appId),
-                Materialized.<String, String>as(Stores.inMemoryWindowStore("store" + appId, Duration.ofMillis(windowSize), Duration.ofMillis(windowSize), true))
+                Materialized.<String, Double>as(Stores.inMemoryWindowStore("store" + appId, Duration.ofMillis(windowSize), Duration.ofMillis(windowSize), true))
                     .withKeySerde(Serdes.String())
-                    .withValueSerde(Serdes.String()),
+                    .withValueSerde(Serdes.Double()),
                 lateArrived
             )
             .suppress(untilWindowCloses(Suppressed.BufferConfig.unbounded()))
             .toStream()
             .selectKey((k, v) -> k.key())
-            .to(outputTopic);
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.Double()));
 
         final Properties streamsConfig = getStreamsConfig(appId);
-        streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-        streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
-
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
             produceSynchronously(
                 inputTopic,
                 asList(
-                    new KeyValueTimestamp<>("k1", "v0", 0L),
-                    new KeyValueTimestamp<>("k1", "v/3", windowSize / 3),
-                    new KeyValueTimestamp<>("k1", "v/2", windowSize / 2),
-                    new KeyValueTimestamp<>("k1", "v-1", windowSize - 1),
-                    new KeyValueTimestamp<>("k1", "v1.5", windowSize + windowSize / 2),
-                    new KeyValueTimestamp<>("k1", "v2", windowSize * 2),
-                    new KeyValueTimestamp<>("k1", "v3", windowSize * 3)
+                    new KeyValueTimestamp<>("k1", "0", 0L),
+                    new KeyValueTimestamp<>("k1", "0.3", windowSize / 3),
+                    new KeyValueTimestamp<>("k1", "0.5", windowSize / 2),
+                    new KeyValueTimestamp<>("k1", "0.9", windowSize - 1),
+                    new KeyValueTimestamp<>("k1", "1.5", windowSize + windowSize / 2),
+                    new KeyValueTimestamp<>("k1", "2", windowSize * 2),
+                    new KeyValueTimestamp<>("k1", "3", windowSize * 3)
                 )
             );
 
             final List<ConsumerRecord<Object, Object>> windows01And12 = waitForRecords(outputConsumer);
             assertThat(windows01And12.size(), is(2));
-            assertThat(windows01And12.get(0).value(), is("v-1"));
-            assertThat(windows01And12.get(1).value(), is("v1.5"));
+            assertThat(windows01And12.get(0).value(), is(0.9));
+            assertThat(windows01And12.get(1).value(), is(1.5));
 
             produceSynchronously(
                 inputTopic,
                 asList(
-                    new KeyValueTimestamp<>("k1", "v/2+1", windowSize / 2 + 1), //late
-                    new KeyValueTimestamp<>("k1", "v4", windowSize * 4)
+                    new KeyValueTimestamp<>("k1", "2.1", windowSize / 2 + 1), //late
+                    new KeyValueTimestamp<>("k1", "4", windowSize * 4)
                 )
             );
             final List<ConsumerRecord<Object, Object>> windows23 = waitForRecords(outputConsumer);
             assertThat(windows23.size(), is(1));
-            assertThat(windows23.get(0).value(), is("v2"));
+            assertThat(windows23.get(0).value(), is(2.0));
 
             final List<ConsumerRecord<Object, Object>> lateArrival = waitForRecords(lateArrivedConsumer);
             assertThat(lateArrival.size(), is(1));
-            assertThat(lateArrival.get(0).value(), is("v/2+1"));
+            assertThat(lateArrival.get(0).value(), is("2.1"));
 
         } finally {
             driver.close();
