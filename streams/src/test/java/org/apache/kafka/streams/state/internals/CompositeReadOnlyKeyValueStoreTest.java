@@ -107,6 +107,16 @@ public class CompositeReadOnlyKeyValueStoreTest {
         theStore.range("from", null);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnReverseRangeNullFromKey() {
+        theStore.reverseRange(null, "to");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnReverseRangeNullToKey() {
+        theStore.reverseRange("from", null);
+    }
+
     @Test
     public void shouldReturnValueIfExists() {
         stubOneUnderlying.put("key", "value");
@@ -151,6 +161,17 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     @Test
+    public void shouldThrowUnsupportedOperationExceptionWhileReverseRange() {
+        stubOneUnderlying.put("a", "1");
+        stubOneUnderlying.put("b", "1");
+        final KeyValueIterator<String, String> keyValueIterator = theStore.reverseRange("a", "b");
+        try {
+            keyValueIterator.remove();
+            fail("Should have thrown UnsupportedOperationException");
+        } catch (final UnsupportedOperationException e) { }
+    }
+
+    @Test
     public void shouldThrowUnsupportedOperationExceptionWhileRange() {
         stubOneUnderlying.put("a", "1");
         stubOneUnderlying.put("b", "1");
@@ -186,6 +207,18 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     @Test
+    public void shouldSupportReverseRange() {
+        stubOneUnderlying.put("a", "a");
+        stubOneUnderlying.put("b", "b");
+        stubOneUnderlying.put("c", "c");
+
+        final List<KeyValue<String, String>> results = toList(theStore.reverseRange("a", "b"));
+        assertTrue(results.contains(new KeyValue<>("a", "a")));
+        assertTrue(results.contains(new KeyValue<>("b", "b")));
+        assertEquals(2, results.size());
+    }
+
+    @Test
     public void shouldSupportRangeAcrossMultipleKVStores() {
         final KeyValueStore<String, String> cache = newStoreInstance();
         stubProviderTwo.addStore(storeName, cache);
@@ -199,6 +232,27 @@ public class CompositeReadOnlyKeyValueStoreTest {
         cache.put("x", "x");
 
         final List<KeyValue<String, String>> results = toList(theStore.range("a", "e"));
+        assertTrue(results.contains(new KeyValue<>("a", "a")));
+        assertTrue(results.contains(new KeyValue<>("b", "b")));
+        assertTrue(results.contains(new KeyValue<>("c", "c")));
+        assertTrue(results.contains(new KeyValue<>("d", "d")));
+        assertEquals(4, results.size());
+    }
+
+    @Test
+    public void shouldSupportReverseRangeAcrossMultipleKVStores() {
+        final KeyValueStore<String, String> cache = newStoreInstance();
+        stubProviderTwo.addStore(storeName, cache);
+
+        stubOneUnderlying.put("a", "a");
+        stubOneUnderlying.put("b", "b");
+        stubOneUnderlying.put("z", "z");
+
+        cache.put("c", "c");
+        cache.put("d", "d");
+        cache.put("x", "x");
+
+        final List<KeyValue<String, String>> results = toList(theStore.reverseRange("a", "e"));
         assertTrue(results.contains(new KeyValue<>("a", "a")));
         assertTrue(results.contains(new KeyValue<>("b", "b")));
         assertTrue(results.contains(new KeyValue<>("c", "c")));
@@ -229,6 +283,29 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertEquals(6, results.size());
     }
 
+    @Test
+    public void shouldSupportReverseAllAcrossMultipleStores() {
+        final KeyValueStore<String, String> cache = newStoreInstance();
+        stubProviderTwo.addStore(storeName, cache);
+
+        stubOneUnderlying.put("a", "a");
+        stubOneUnderlying.put("b", "b");
+        stubOneUnderlying.put("z", "z");
+
+        cache.put("c", "c");
+        cache.put("d", "d");
+        cache.put("x", "x");
+
+        final List<KeyValue<String, String>> results = toList(theStore.reverseAll());
+        assertTrue(results.contains(new KeyValue<>("a", "a")));
+        assertTrue(results.contains(new KeyValue<>("b", "b")));
+        assertTrue(results.contains(new KeyValue<>("c", "c")));
+        assertTrue(results.contains(new KeyValue<>("d", "d")));
+        assertTrue(results.contains(new KeyValue<>("x", "x")));
+        assertTrue(results.contains(new KeyValue<>("z", "z")));
+        assertEquals(6, results.size());
+    }
+
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionDuringRebalance() {
         rebalancing().get("anything");
@@ -245,8 +322,18 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionOnReverseRangeDuringRebalance() {
+        rebalancing().reverseRange("anything", "something");
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStoreExceptionOnAllDuringRebalance() {
         rebalancing().all();
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowInvalidStoreExceptionOnReverseAllDuringRebalance() {
+        rebalancing().reverseAll();
     }
 
     @Test
