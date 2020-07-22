@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,7 +73,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
 
     @Override
     public S getOrCreateSegmentIfLive(final long segmentId,
-                                      final InternalProcessorContext context,
+                                      final ProcessorContext context,
                                       final long streamTime) {
         final long minLiveTimestamp = streamTime - retentionPeriod;
         final long minLiveSegment = segmentId(minLiveTimestamp);
@@ -91,7 +91,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public void openExisting(final InternalProcessorContext context, final long streamTime) {
+    public void openExisting(final ProcessorContext context, final long streamTime) {
         try {
             final File dir = new File(context.stateDir(), name);
             if (dir.exists()) {

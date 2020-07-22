@@ -101,11 +101,10 @@ public class InternalTopicIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsProp);
     }
 
-    private void produceData(final List<String> inputValues) throws Exception {
+    private void produceData(final List<String> inputValues) {
         final Properties producerProp = new Properties();
         producerProp.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerProp.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerProp.put(ProducerConfig.RETRIES_CONFIG, 0);
         producerProp.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerProp.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
@@ -137,7 +136,7 @@ public class InternalTopicIntegrationTest {
     }
 
     @Test
-    public void shouldCompactTopicsForKeyValueStoreChangelogs() throws Exception {
+    public void shouldCompactTopicsForKeyValueStoreChangelogs() {
         final String appID = APP_ID + "-compact";
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
@@ -174,7 +173,7 @@ public class InternalTopicIntegrationTest {
     }
 
     @Test
-    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs() throws Exception {
+    public void shouldCompactAndDeleteTopicsForWindowStoreChangelogs() {
         final String appID = APP_ID + "-compact-delete";
         streamsProp.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 

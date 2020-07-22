@@ -159,6 +159,7 @@ public class StreamsConfigTest {
         assertNull(returnedProps.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
     }
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     @Test
     public void consumerConfigMustContainStreamPartitionAssignorConfig() {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 42);
@@ -190,6 +191,7 @@ public class StreamsConfigTest {
         assertEquals(100, returnedProps.get(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)));
     }
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     @Test
     public void consumerConfigShouldContainAdminClientConfigsForRetriesAndRetryBackOffMsWithAdminPrefix() {
         props.put(StreamsConfig.adminClientPrefix(StreamsConfig.RETRIES_CONFIG), 20);
@@ -372,10 +374,10 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSupportNonPrefixedAdminConfigs() {
-        props.put(AdminClientConfig.RETRIES_CONFIG, 10);
+        props.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, 10);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> configs = streamsConfig.getAdminConfigs(clientId);
-        assertEquals(10, configs.get(AdminClientConfig.RETRIES_CONFIG));
+        assertEquals(10, configs.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG));
     }
 
     @Test(expected = StreamsException.class)
@@ -710,18 +712,21 @@ public class StreamsConfigTest {
         assertThat(producerConfigs.get(ProducerConfig.TRANSACTIONAL_ID_CONFIG), is(nullValue()));
     }
 
+    @Deprecated
     @Test
     public void shouldNotOverrideUserConfigRetriesIfExactlyAlphaOnceEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
         shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled();
     }
 
+    @Deprecated
     @Test
     public void shouldNotOverrideUserConfigRetriesIfExactlyBetaOnceEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE_BETA);
         shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled();
     }
 
+    @Deprecated
     private void shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled() {
         final int numberOfRetries = 42;
         props.put(ProducerConfig.RETRIES_CONFIG, numberOfRetries);
@@ -929,6 +934,23 @@ public class StreamsConfigTest {
             assertThat(
                 appender.getMessages(),
                 hasItem("Configuration parameter `" + StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG +
+                    "` is deprecated and will be removed in 3.0.0 release.")
+            );
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldLogWarningWhenRetriesIsUsed() {
+        props.put(StreamsConfig.RETRIES_CONFIG, 0);
+
+        LogCaptureAppender.setClassLoggerToDebug(StreamsConfig.class);
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StreamsConfig.class)) {
+            new StreamsConfig(props);
+
+            assertThat(
+                appender.getMessages(),
+                hasItem("Configuration parameter `" + StreamsConfig.RETRIES_CONFIG +
                     "` is deprecated and will be removed in 3.0.0 release.")
             );
         }

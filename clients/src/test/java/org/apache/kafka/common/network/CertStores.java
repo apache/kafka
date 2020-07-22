@@ -46,7 +46,7 @@ public class CertStores {
     }
 
     public CertStores(boolean server, String commonName, String sanHostName) throws Exception {
-        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsName(sanHostName));
+        this(server, commonName, new TestSslUtils.CertificateBuilder().sanDnsNames(sanHostName));
     }
 
     public CertStores(boolean server, String commonName, InetAddress hostAddress) throws Exception {

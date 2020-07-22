@@ -83,17 +83,17 @@ public class OffsetSync {
         return buffer;
     }
 
-    static OffsetSync deserializeRecord(ConsumerRecord<byte[], byte[]> record) {
+    public static OffsetSync deserializeRecord(ConsumerRecord<byte[], byte[]> record) {
         Struct keyStruct = KEY_SCHEMA.read(ByteBuffer.wrap(record.key()));
         String topic = keyStruct.getString(TOPIC_KEY);
         int partition = keyStruct.getInt(PARTITION_KEY);
-        
+
         Struct valueStruct = VALUE_SCHEMA.read(ByteBuffer.wrap(record.value()));
         long upstreamOffset = valueStruct.getLong(UPSTREAM_OFFSET_KEY);
         long downstreamOffset = valueStruct.getLong(DOWNSTREAM_OFFSET_KEY);
-        
+
         return new OffsetSync(new TopicPartition(topic, partition), upstreamOffset, downstreamOffset);
-    } 
+    }
 
     private Struct valueStruct() {
         Struct struct = new Struct(VALUE_SCHEMA);
@@ -116,5 +116,5 @@ public class OffsetSync {
     byte[] recordValue() {
         return serializeValue().array();
     }
-};
+}
 

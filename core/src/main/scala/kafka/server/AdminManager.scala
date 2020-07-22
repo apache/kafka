@@ -23,6 +23,7 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.AlterConfigOp
@@ -354,10 +355,12 @@ class AdminManager(val config: KafkaConfig,
       }
       def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
-        val filteredConfigPairs = configs.filter { case (configName, _) =>
-          /* Always returns true if configNames is None */
-          resource.configurationKeys.asScala.forall(_.contains(configName))
-        }.toBuffer
+        val filteredConfigPairs = if (resource.configurationKeys == null)
+          configs.toBuffer
+        else
+          configs.filter { case (configName, _) =>
+            resource.configurationKeys.asScala.forall(_.contains(configName))
+          }.toBuffer
 
         val configEntries = filteredConfigPairs.map { case (name, value) => createConfigEntry(name, value) }
         new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.NONE.code)
@@ -882,19 +885,20 @@ class AdminManager(val config: KafkaConfig,
         !name.isDefined || !strict
     }
 
-    def fromProps(props: Properties): Map[String, Double] = {
-      props.asScala.map { case (key, value) =>
+    def fromProps(props: Map[String, String]): Map[String, Double] = {
+      props.map { case (key, value) =>
         val doubleValue = try value.toDouble catch {
           case _: NumberFormatException =>
-            throw new IllegalStateException(s"Unexpected client quota configuration value: ${key} -> ${value}")
+            throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
         }
         key -> doubleValue
       }
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).map { case ((u, c), p) =>
-      if (!p.isEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
-        Some(userClientIdToEntity(u, c) -> fromProps(p))
+      val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isQuotaConfig(key) }
+      if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
+        Some(userClientIdToEntity(u, c) -> fromProps(quotaProps))
       else
         None
     }.flatten.toMap

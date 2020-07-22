@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -25,7 +27,6 @@ import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
@@ -49,7 +50,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
-    final Map<String, String> storeToChangelogTopic = new HashMap<>();
+    private final ProcessorStateManager stateManager;
+
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
     public ProcessorContextImpl(final TaskId id,
@@ -57,7 +59,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                 final ProcessorStateManager stateMgr,
                                 final StreamsMetricsImpl metrics,
                                 final ThreadCache cache) {
-        super(id, config, metrics, stateMgr, cache);
+        super(id, config, metrics, cache);
+        stateManager = stateMgr;
     }
 
     @Override
@@ -96,15 +99,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    public ProcessorStateManager stateManager() {
-        return (ProcessorStateManager) stateManager;
-    }
-
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-        storeToChangelogTopic.put(store.name(), ProcessorStateManager.storeChangelogTopic(applicationId(), store.name()));
-        super.register(store, stateRestoreCallback);
+    public ProcessorStateManager stateManager() {
+        return stateManager;
     }
 
     @Override
@@ -118,16 +115,20 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                           final byte[] value,
                           final long timestamp) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
+
+        final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
+
         // Sending null headers to changelog topics (KIP-244)
         collector.send(
-            storeToChangelogTopic.get(storeName),
+            changelogPartition.topic(),
             key,
             value,
             null,
-            taskId().partition,
+            changelogPartition.partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
-            BYTEARRAY_VALUE_SERIALIZER);
+            BYTEARRAY_VALUE_SERIALIZER
+        );
     }
 
     /**

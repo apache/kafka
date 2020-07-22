@@ -491,6 +491,8 @@ public class KafkaAdminClient extends AdminClient {
                 config.getInt(AdminClientConfig.SEND_BUFFER_CONFIG),
                 config.getInt(AdminClientConfig.RECEIVE_BUFFER_CONFIG),
                 (int) TimeUnit.HOURS.toMillis(1),
+                config.getLong(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+                config.getLong(AdminClientConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
                 ClientDnsLookup.forConfig(config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                 time,
                 true,
@@ -529,6 +531,7 @@ public class KafkaAdminClient extends AdminClient {
         return new LogContext("[AdminClient clientId=" + clientId + "] ");
     }
 
+    @SuppressWarnings("deprecation")
     private KafkaAdminClient(AdminClientConfig config,
                              String clientId,
                              Time time,
@@ -1947,7 +1950,8 @@ public class KafkaAdminClient extends AdminClient {
                             .map(config ->
                                 new DescribeConfigsRequestData.DescribeConfigsResource()
                                     .setResourceName(config.name())
-                                    .setResourceType(config.type().id()))
+                                    .setResourceType(config.type().id())
+                                    .setConfigurationKeys(null))
                             .collect(Collectors.toList()))
                         .setIncludeSynonyms(options.includeSynonyms())
                         .setIncludeDocumentation(options.includeDocumentation()));
@@ -2253,7 +2257,12 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 @Override
                 void handleFailure(Throwable throwable) {
-                    completeAllExceptionally(futures.values(), throwable);
+                    // Only completes the futures of brokerId
+                    completeAllExceptionally(
+                        futures.entrySet().stream()
+                            .filter(entry -> entry.getKey().brokerId() == brokerId)
+                            .map(Entry::getValue),
+                        throwable);
                 }
             }, now);
         }
@@ -2265,12 +2274,11 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers, DescribeLogDirsOptions options) {
         final Map<Integer, KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>>> futures = new HashMap<>(brokers.size());
 
-        for (Integer brokerId: brokers) {
-            futures.put(brokerId, new KafkaFutureImpl<>());
-        }
-
         final long now = time.milliseconds();
-        for (final Integer brokerId: brokers) {
+        for (final Integer brokerId : brokers) {
+            KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future = new KafkaFutureImpl<>();
+            futures.put(brokerId, future);
+
             runnable.call(new Call("describeLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
 
@@ -2283,7 +2291,6 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
-                    KafkaFutureImpl<Map<String, DescribeLogDirsResponse.LogDirInfo>> future = futures.get(brokerId);
                     if (response.logDirInfos().size() > 0) {
                         future.complete(response.logDirInfos());
                     } else {
@@ -2293,7 +2300,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 @Override
                 void handleFailure(Throwable throwable) {
-                    completeAllExceptionally(futures.values(), throwable);
+                    future.completeExceptionally(throwable);
                 }
             }, now);
         }

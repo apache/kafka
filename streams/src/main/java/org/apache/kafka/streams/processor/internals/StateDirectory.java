@@ -47,10 +47,10 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHEC
 public class StateDirectory {
 
     private static final Pattern PATH_NAME = Pattern.compile("\\d+_\\d+");
-
-    static final String LOCK_FILE_NAME = ".lock";
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
+    static final String LOCK_FILE_NAME = ".lock";
 
+    private final Object taskDirCreationLock = new Object();
     private final Time time;
     private final String appId;
     private final File stateDir;
@@ -107,9 +107,17 @@ public class StateDirectory {
      */
     public File directoryForTask(final TaskId taskId) {
         final File taskDir = new File(stateDir, taskId.toString());
-        if (hasPersistentStores && !taskDir.exists() && !taskDir.mkdir()) {
-            throw new ProcessorStateException(
-                String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
+        if (hasPersistentStores && !taskDir.exists()) {
+            synchronized (taskDirCreationLock) {
+                // to avoid a race condition, we need to check again if the directory does not exist:
+                // otherwise, two threads might pass the outer `if` (and enter the `then` block),
+                // one blocks on `synchronized` while the other creates the directory,
+                // and the blocking one fails when trying to create it after it's unblocked
+                if (!taskDir.exists() && !taskDir.mkdir()) {
+                    throw new ProcessorStateException(
+                        String.format("task directory [%s] doesn't exist and couldn't be created", taskDir.getPath()));
+                }
+            }
         }
         return taskDir;
     }

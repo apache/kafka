@@ -67,6 +67,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
@@ -94,12 +95,14 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -1175,6 +1178,108 @@ public class StreamThreadTest {
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
         assertEquals(1, thread.activeTasks().size());
+    }
+
+    @Test
+    public void shouldReinitializeRevivedTasksInAnyState() {
+        final StreamThread thread = createStreamThread(CLIENT_ID, new StreamsConfig(configProps(false)), false);
+
+        final String storeName = "store";
+        final String storeChangelog = "stream-thread-test-store-changelog";
+        final TopicPartition storeChangelogTopicPartition = new TopicPartition(storeChangelog, 1);
+
+        internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
+        final AtomicBoolean shouldThrow = new AtomicBoolean(false);
+        final AtomicBoolean processed = new AtomicBoolean(false);
+        internalTopologyBuilder.addProcessor("proc", new ProcessorSupplier<Object, Object>() {
+            @Override
+            public Processor<Object, Object> get() {
+                return new Processor<Object, Object>() {
+                    private ProcessorContext context;
+
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        this.context = context;
+                    }
+
+                    @Override
+                    public void process(final Object key, final Object value) {
+                        if (shouldThrow.get()) {
+                            throw new TaskCorruptedException(singletonMap(task1, new HashSet<TopicPartition>(singleton(storeChangelogTopicPartition))));
+                        } else {
+                            processed.set(true);
+                        }
+                    }
+
+                    @Override
+                    public void close() {
+
+                    }
+                };
+            }
+        }, "name");
+        internalTopologyBuilder.addStateStore(
+            Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore(storeName),
+                Serdes.String(),
+                Serdes.String()
+            ),
+            "proc"
+        );
+
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
+
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final List<TopicPartition> assignedPartitions = new ArrayList<>();
+
+        // assign single partition
+        assignedPartitions.add(t1p1);
+        activeTasks.put(task1, Collections.singleton(t1p1));
+
+        thread.taskManager().handleAssignment(activeTasks, emptyMap());
+
+        final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
+        mockConsumer.assign(assignedPartitions);
+        mockConsumer.updateBeginningOffsets(mkMap(
+            mkEntry(t1p1, 0L)
+        ));
+
+        final MockConsumer<byte[], byte[]> restoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer();
+        restoreConsumer.updateBeginningOffsets(mkMap(
+            mkEntry(storeChangelogTopicPartition, 0L)
+        ));
+        final MockAdminClient admin = (MockAdminClient) thread.adminClient();
+        admin.updateEndOffsets(singletonMap(storeChangelogTopicPartition, 0L));
+
+        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
+
+
+        // the first iteration completes the restoration
+        thread.runOnce();
+        assertThat(thread.activeTasks().size(), equalTo(1));
+
+        // the second transits to running and unpause the input
+        thread.runOnce();
+
+        // the third actually polls, processes the record, and throws the corruption exception
+        addRecord(mockConsumer, 0L);
+        shouldThrow.set(true);
+        final TaskCorruptedException taskCorruptedException = assertThrows(TaskCorruptedException.class, thread::runOnce);
+
+        // Now, we can handle the corruption
+        thread.taskManager().handleCorruption(taskCorruptedException.corruptedTaskWithChangelogs());
+
+        // again, complete the restoration
+        thread.runOnce();
+        // transit to running and unpause
+        thread.runOnce();
+        // process the record
+        addRecord(mockConsumer, 0L);
+        shouldThrow.set(false);
+        assertThat(processed.get(), is(false));
+        thread.runOnce();
+        assertThat(processed.get(), is(true));
     }
 
     @Test

@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.util.Map;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
-interface StateManager {
+public interface StateManager {
     File baseDir();
 
     /**
@@ -47,6 +47,8 @@ interface StateManager {
     void close() throws IOException;
 
     TaskType taskType();
+
+    String changelogFor(final String storeName);
 
     // TODO: we can remove this when consolidating global state manager into processor state manager
     StateStore getGlobalStore(final String name);

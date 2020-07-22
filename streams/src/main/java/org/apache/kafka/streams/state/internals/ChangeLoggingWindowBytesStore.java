@@ -46,6 +46,11 @@ class ChangeLoggingWindowBytesStore
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
+        if (!(context instanceof InternalProcessorContext)) {
+            throw new IllegalArgumentException(
+                "Change logging requires internal features of KafkaStreams and must be disabled for unit tests."
+            );
+        }
         this.context = (InternalProcessorContext) context;
         super.init(context, root);
     }

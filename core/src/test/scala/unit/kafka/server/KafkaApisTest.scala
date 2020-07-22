@@ -775,8 +775,8 @@ class KafkaApisTest {
   }
 
   @Test
-  def testLeaderReplicaIfLocalRaisesNotLeaderForPartition(): Unit = {
-    testListOffsetFailedGetLeaderReplica(Errors.NOT_LEADER_FOR_PARTITION)
+  def testLeaderReplicaIfLocalRaisesNotLeaderOrFollower(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.NOT_LEADER_OR_FOLLOWER)
   }
 
   @Test

@@ -148,6 +148,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         this.statusTopic = statusTopic;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void configure(final WorkerConfig config) {
         this.statusTopic = config.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG);
