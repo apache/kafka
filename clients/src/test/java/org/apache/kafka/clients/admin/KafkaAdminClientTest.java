@@ -53,6 +53,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -60,6 +61,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -73,6 +75,7 @@ import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartit
 import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResultCollection;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResult;
@@ -80,6 +83,7 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResultCollection;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
@@ -112,6 +116,7 @@ import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
@@ -162,7 +167,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -290,6 +294,10 @@ public class KafkaAdminClientTest {
         return new AdminClientUnitTestEnv(mockCluster(3, 0), configVals);
     }
 
+    private static AdminClientUnitTestEnv mockClientEnv(Time time, String... configVals) {
+        return new AdminClientUnitTestEnv(time, mockCluster(3, 0), configVals);
+    }
+
     @Test
     public void testCloseAdminClient() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
@@ -349,16 +357,61 @@ public class KafkaAdminClientTest {
 
     private static CreateTopicsResponse prepareCreateTopicsResponse(String topicName, Errors error) {
         CreateTopicsResponseData data = new CreateTopicsResponseData();
-        data.topics().add(new CreatableTopicResult().
-            setName(topicName).setErrorCode(error.code()));
+        data.topics().add(new CreatableTopicResult()
+            .setName(topicName)
+            .setErrorCode(error.code()));
         return new CreateTopicsResponse(data);
+    }
+
+    public static CreateTopicsResponse prepareCreateTopicsResponse(int throttleTimeMs, CreatableTopicResult... topics) {
+        CreateTopicsResponseData data = new CreateTopicsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setTopics(new CreatableTopicResultCollection(Arrays.stream(topics).iterator()));
+        return new CreateTopicsResponse(data);
+    }
+
+    public static CreatableTopicResult creatableTopicResult(String name, Errors error) {
+        return new CreatableTopicResult()
+            .setName(name)
+            .setErrorCode(error.code());
+    }
+
+    public static DeleteTopicsResponse prepareDeleteTopicsResponse(int throttleTimeMs, DeletableTopicResult... topics) {
+        DeleteTopicsResponseData data = new DeleteTopicsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setResponses(new DeletableTopicResultCollection(Arrays.stream(topics).iterator()));
+        return new DeleteTopicsResponse(data);
+    }
+
+    public static DeletableTopicResult deletableTopicResult(String topicName, Errors error) {
+        return new DeletableTopicResult()
+            .setName(topicName)
+            .setErrorCode(error.code());
+    }
+
+    public static CreatePartitionsResponse prepareCreatePartitionsResponse(int throttleTimeMs, CreatePartitionsTopicResult... topics) {
+        CreatePartitionsResponseData data = new CreatePartitionsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setResults(Arrays.asList(topics));
+        return new CreatePartitionsResponse(data);
+    }
+
+    public static CreatePartitionsTopicResult createPartitionsTopicResult(String name, Errors error) {
+        return createPartitionsTopicResult(name, error, null);
+    }
+
+    public static CreatePartitionsTopicResult createPartitionsTopicResult(String name, Errors error, String errorMessage) {
+        return new CreatePartitionsTopicResult()
+            .setName(name)
+            .setErrorCode(error.code())
+            .setErrorMessage(errorMessage);
     }
 
     private static DeleteTopicsResponse prepareDeleteTopicsResponse(String topicName, Errors error) {
         DeleteTopicsResponseData data = new DeleteTopicsResponseData();
         data.responses().add(new DeletableTopicResult()
-                .setName(topicName)
-                .setErrorCode(error.code()));
+            .setName(topicName)
+            .setErrorCode(error.code()));
         return new DeleteTopicsResponse(data);
     }
 
@@ -502,8 +555,9 @@ public class KafkaAdminClientTest {
     public void testCreateTopics() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
-                    prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("myTopic"),
+                prepareCreateTopicsResponse("myTopic", Errors.NONE));
             KafkaFuture<Void> future = env.adminClient().createTopics(
                     Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
                     new CreateTopicsOptions().timeoutMs(10000)).all();
@@ -515,8 +569,9 @@ public class KafkaAdminClientTest {
     public void testCreateTopicsPartialResponse() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
-                    prepareCreateTopicsResponse("myTopic", Errors.NONE));
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("myTopic", "myTopic2"),
+                prepareCreateTopicsResponse("myTopic", Errors.NONE));
             CreateTopicsResult topicsResult = env.adminClient().createTopics(
                     asList(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2))),
                            new NewTopic("myTopic2", Collections.singletonMap(0, asList(0, 1, 2)))),
@@ -552,12 +607,12 @@ public class KafkaAdminClientTest {
             }, prepareCreateTopicsResponse("myTopic", Errors.NONE));
 
             KafkaFuture<Void> future = env.adminClient().createTopics(
-                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(10000)).all();
+                Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
+                new CreateTopicsOptions().timeoutMs(10000)).all();
 
             // Wait until the first attempt has failed, then advance the time
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1,
-                    "Failed awaiting CreateTopics first request failure");
+                "Failed awaiting CreateTopics first request failure");
 
             // Wait until the retry call added to the queue in AdminClient
             TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,
@@ -588,10 +643,132 @@ public class KafkaAdminClientTest {
                 prepareCreateTopicsResponse("myTopic", Errors.NONE),
                 env.cluster().nodeById(1));
             KafkaFuture<Void> future = env.adminClient().createTopics(
-                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
-                    new CreateTopicsOptions().timeoutMs(10000)).all();
+                Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(0, asList(0, 1, 2)))),
+                new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
         }
+    }
+
+    @Test
+    public void testCreateTopicsRetryThrottlingExceptionWhenEnabled() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareCreateTopicsResponse(1000,
+                    creatableTopicResult("topic1", Errors.NONE),
+                    creatableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    creatableTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("topic2"),
+                prepareCreateTopicsResponse(1000,
+                    creatableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("topic2"),
+                prepareCreateTopicsResponse(0,
+                    creatableTopicResult("topic2", Errors.NONE)));
+
+            CreateTopicsResult result = env.adminClient().createTopics(
+                asList(
+                    new NewTopic("topic1", 1, (short) 1),
+                    new NewTopic("topic2", 1, (short) 1),
+                    new NewTopic("topic3", 1, (short) 1)),
+                new CreateTopicsOptions().retryOnQuotaViolation(true));
+
+            assertNull(result.values().get("topic1").get());
+            assertNull(result.values().get("topic2").get());
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testCreateTopicsRetryThrottlingExceptionWhenEnabledUntilRequestTimeOut() throws Exception {
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareCreateTopicsResponse(1000,
+                    creatableTopicResult("topic1", Errors.NONE),
+                    creatableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    creatableTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("topic2"),
+                prepareCreateTopicsResponse(1000,
+                    creatableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            CreateTopicsResult result = env.adminClient().createTopics(
+                asList(
+                    new NewTopic("topic1", 1, (short) 1),
+                    new NewTopic("topic2", 1, (short) 1),
+                    new NewTopic("topic3", 1, (short) 1)),
+                new CreateTopicsOptions().retryOnQuotaViolation(true));
+
+            // Wait until the prepared attempts have consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting CreateTopics requests");
+
+            // Wait until the next request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting next CreateTopics request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
+
+            assertNull(result.values().get("topic1").get());
+            TestUtils.assertFutureThrows(result.values().get("topic2"), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testCreateTopicsDontRetryThrottlingExceptionWhenDisabled() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectCreateTopicsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareCreateTopicsResponse(1000,
+                    creatableTopicResult("topic1", Errors.NONE),
+                    creatableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    creatableTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            CreateTopicsResult result = env.adminClient().createTopics(
+                asList(
+                    new NewTopic("topic1", 1, (short) 1),
+                    new NewTopic("topic2", 1, (short) 1),
+                    new NewTopic("topic3", 1, (short) 1)),
+                new CreateTopicsOptions().retryOnQuotaViolation(false));
+
+            assertNull(result.values().get("topic1").get());
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+                ThrottlingQuotaExceededException.class);
+            assertEquals(1000, e.throttleTimeMs());
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    private MockClient.RequestMatcher expectCreateTopicsRequestWithTopics(final String... topics) {
+        return body -> {
+            if (body instanceof CreateTopicsRequest) {
+                CreateTopicsRequest request = (CreateTopicsRequest) body;
+                for (String topic : topics) {
+                    if (request.data().topics().find(topic) == null)
+                        return false;
+                }
+                return topics.length == request.data().topics().size();
+            }
+            return false;
+        };
     }
 
     @Test
@@ -599,22 +776,25 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
-                    prepareDeleteTopicsResponse("myTopic", Errors.NONE));
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("myTopic"),
+                prepareDeleteTopicsResponse("myTopic", Errors.NONE));
             KafkaFuture<Void> future = env.adminClient().deleteTopics(singletonList("myTopic"),
-                    new DeleteTopicsOptions()).all();
-            future.get();
+                new DeleteTopicsOptions()).all();
+            assertNull(future.get());
 
-            env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
-                    prepareDeleteTopicsResponse("myTopic", Errors.TOPIC_DELETION_DISABLED));
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("myTopic"),
+                prepareDeleteTopicsResponse("myTopic", Errors.TOPIC_DELETION_DISABLED));
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
-                    new DeleteTopicsOptions()).all();
+                new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
 
-            env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
-                    prepareDeleteTopicsResponse("myTopic", Errors.UNKNOWN_TOPIC_OR_PARTITION));
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("myTopic"),
+                prepareDeleteTopicsResponse("myTopic", Errors.UNKNOWN_TOPIC_OR_PARTITION));
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
-                    new DeleteTopicsOptions()).all();
+                new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
         }
     }
@@ -624,14 +804,126 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
-                    prepareDeleteTopicsResponse("myTopic", Errors.NONE));
-            Map<String, KafkaFuture<Void>> values = env.adminClient().deleteTopics(asList("myTopic", "myOtherTopic"),
-                    new DeleteTopicsOptions()).values();
-            values.get("myTopic").get();
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("myTopic", "myOtherTopic"),
+                prepareDeleteTopicsResponse(1000,
+                    deletableTopicResult("myTopic", Errors.NONE)));
 
-            TestUtils.assertFutureThrows(values.get("myOtherTopic"), ApiException.class);
+            DeleteTopicsResult result = env.adminClient().deleteTopics(
+                asList("myTopic", "myOtherTopic"), new DeleteTopicsOptions());
+
+            result.values().get("myTopic").get();
+            TestUtils.assertFutureThrows(result.values().get("myOtherTopic"), ApiException.class);
         }
+    }
+
+    @Test
+    public void testDeleteTopicsRetryThrottlingExceptionWhenEnabled() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareDeleteTopicsResponse(1000,
+                    deletableTopicResult("topic1", Errors.NONE),
+                    deletableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    deletableTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("topic2"),
+                prepareDeleteTopicsResponse(1000,
+                    deletableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("topic2"),
+                prepareDeleteTopicsResponse(0,
+                    deletableTopicResult("topic2", Errors.NONE)));
+
+            DeleteTopicsResult result = env.adminClient().deleteTopics(
+                asList("topic1", "topic2", "topic3"),
+                new DeleteTopicsOptions().retryOnQuotaViolation(true));
+
+            assertNull(result.values().get("topic1").get());
+            assertNull(result.values().get("topic2").get());
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteTopicsRetryThrottlingExceptionWhenEnabledUntilRequestTimeOut() throws Exception {
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareDeleteTopicsResponse(1000,
+                    deletableTopicResult("topic1", Errors.NONE),
+                    deletableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    deletableTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("topic2"),
+                prepareDeleteTopicsResponse(1000,
+                    deletableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            DeleteTopicsResult result = env.adminClient().deleteTopics(
+                asList("topic1", "topic2", "topic3"),
+                new DeleteTopicsOptions().retryOnQuotaViolation(true));
+
+            // Wait until the prepared attempts have consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting DeleteTopics requests");
+
+            // Wait until the next request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting next DeleteTopics request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
+
+            assertNull(result.values().get("topic1").get());
+            TestUtils.assertFutureThrows(result.values().get("topic2"), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteTopicsDontRetryThrottlingExceptionWhenDisabled() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectDeleteTopicsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareDeleteTopicsResponse(1000,
+                    deletableTopicResult("topic1", Errors.NONE),
+                    deletableTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    deletableTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            DeleteTopicsResult result = env.adminClient().deleteTopics(
+                asList("topic1", "topic2", "topic3"),
+                new DeleteTopicsOptions().retryOnQuotaViolation(false));
+
+            assertNull(result.values().get("topic1").get());
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+                ThrottlingQuotaExceededException.class);
+            assertEquals(1000, e.throttleTimeMs());
+            TestUtils.assertFutureError(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    private MockClient.RequestMatcher expectDeleteTopicsRequestWithTopics(final String... topics) {
+        return body -> {
+            if (body instanceof DeleteTopicsRequest) {
+                DeleteTopicsRequest request = (DeleteTopicsRequest) body;
+                return request.data().topicNames().equals(Arrays.asList(topics));
+            }
+            return false;
+        };
     }
 
     @Test
@@ -1063,20 +1355,14 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            List<CreatePartitionsTopicResult> createPartitionsResult = new LinkedList<>();
-            createPartitionsResult.add(new CreatePartitionsTopicResult()
-                    .setName("my_topic")
-                    .setErrorCode(Errors.NONE.code()));
-            createPartitionsResult.add(new CreatePartitionsTopicResult()
-                    .setName("other_topic")
-                    .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code())
-                    .setErrorMessage("some detailed reason"));
-            CreatePartitionsResponseData data = new CreatePartitionsResponseData()
-                    .setThrottleTimeMs(42)
-                    .setResults(createPartitionsResult);
-
             // Test a call where one filter has an error.
-            env.kafkaClient().prepareResponse(new CreatePartitionsResponse(data));
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("my_topic", "other_topic"),
+                prepareCreatePartitionsResponse(1000,
+                    createPartitionsTopicResult("my_topic", Errors.NONE),
+                    createPartitionsTopicResult("other_topic", Errors.INVALID_TOPIC_EXCEPTION,
+                        "some detailed reason")));
+
 
             Map<String, NewPartitions> counts = new HashMap<>();
             counts.put("my_topic", NewPartitions.increaseTo(3));
@@ -1096,6 +1382,131 @@ public class KafkaAdminClientTest {
                 assertEquals("some detailed reason", e.getMessage());
             }
         }
+    }
+
+    @Test
+    public void testCreatePartitionsRetryThrottlingExceptionWhenEnabled() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareCreatePartitionsResponse(1000,
+                    createPartitionsTopicResult("topic1", Errors.NONE),
+                    createPartitionsTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    createPartitionsTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("topic2"),
+                prepareCreatePartitionsResponse(1000,
+                    createPartitionsTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("topic2"),
+                prepareCreatePartitionsResponse(0,
+                    createPartitionsTopicResult("topic2", Errors.NONE)));
+
+            Map<String, NewPartitions> counts = new HashMap<>();
+            counts.put("topic1", NewPartitions.increaseTo(1));
+            counts.put("topic2", NewPartitions.increaseTo(2));
+            counts.put("topic3", NewPartitions.increaseTo(3));
+
+            CreatePartitionsResult result = env.adminClient().createPartitions(
+                counts, new CreatePartitionsOptions().retryOnQuotaViolation(true));
+
+            assertNull(result.values().get("topic1").get());
+            assertNull(result.values().get("topic2").get());
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testCreatePartitionsRetryThrottlingExceptionWhenEnabledUntilRequestTimeOut() throws Exception {
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareCreatePartitionsResponse(1000,
+                    createPartitionsTopicResult("topic1", Errors.NONE),
+                    createPartitionsTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    createPartitionsTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("topic2"),
+                prepareCreatePartitionsResponse(1000,
+                    createPartitionsTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED)));
+
+            Map<String, NewPartitions> counts = new HashMap<>();
+            counts.put("topic1", NewPartitions.increaseTo(1));
+            counts.put("topic2", NewPartitions.increaseTo(2));
+            counts.put("topic3", NewPartitions.increaseTo(3));
+
+            CreatePartitionsResult result = env.adminClient().createPartitions(
+                counts, new CreatePartitionsOptions().retryOnQuotaViolation(true));
+
+            // Wait until the prepared attempts have consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting CreatePartitions requests");
+
+            // Wait until the next request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting next CreatePartitions request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
+
+            assertNull(result.values().get("topic1").get());
+            TestUtils.assertFutureThrows(result.values().get("topic2"), TimeoutException.class);
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    @Test
+    public void testCreatePartitionsDontRetryThrottlingExceptionWhenDisabled() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(
+                expectCreatePartitionsRequestWithTopics("topic1", "topic2", "topic3"),
+                prepareCreatePartitionsResponse(1000,
+                    createPartitionsTopicResult("topic1", Errors.NONE),
+                    createPartitionsTopicResult("topic2", Errors.THROTTLING_QUOTA_EXCEEDED),
+                    createPartitionsTopicResult("topic3", Errors.TOPIC_ALREADY_EXISTS)));
+
+            Map<String, NewPartitions> counts = new HashMap<>();
+            counts.put("topic1", NewPartitions.increaseTo(1));
+            counts.put("topic2", NewPartitions.increaseTo(2));
+            counts.put("topic3", NewPartitions.increaseTo(3));
+
+            CreatePartitionsResult result = env.adminClient().createPartitions(
+                counts, new CreatePartitionsOptions().retryOnQuotaViolation(false));
+
+            assertNull(result.values().get("topic1").get());
+            ThrottlingQuotaExceededException e = TestUtils.assertFutureThrows(result.values().get("topic2"),
+                ThrottlingQuotaExceededException.class);
+            assertEquals(1000, e.throttleTimeMs());
+            TestUtils.assertFutureThrows(result.values().get("topic3"), TopicExistsException.class);
+        }
+    }
+
+    private MockClient.RequestMatcher expectCreatePartitionsRequestWithTopics(final String... topics) {
+        return body -> {
+            if (body instanceof CreatePartitionsRequest) {
+                CreatePartitionsRequest request = (CreatePartitionsRequest) body;
+                for (String topic : topics) {
+                    if (request.data().topics().find(topic) == null)
+                        return false;
+                }
+                return topics.length == request.data().topics().size();
+            }
+            return false;
+        };
     }
 
     @Test
