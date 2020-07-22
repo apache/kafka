@@ -775,6 +775,24 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyMarkPartitionsForTruncation()
   }
 
+  @Test
+  def testDefaultValueRestoredAfterDeleteDynamicConfig(): Unit = {
+    val newProps = new Properties
+    newProps.put(KafkaConfig.LogRetentionTimeMillisProp, "100000")
+    newProps.put(KafkaConfig.LogFlushIntervalMsProp, "10000")
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, newProps, perBrokerConfig = false).all.get
+    newProps.put(KafkaConfig.LogFlushIntervalMsProp, "20000")
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, newProps, perBrokerConfig = true).all.get
+    waitForConfigOnServer(servers.head, KafkaConfig.LogFlushIntervalMsProp, "20000")
+
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, newProps, perBrokerConfig = true, opType = OpType.DELETE).all.get
+    waitForConfigOnServer(servers.head, KafkaConfig.LogFlushIntervalMsProp, "10000")
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, newProps, perBrokerConfig = false, opType = OpType.DELETE).all.get
+    waitForConfigOnServer(servers.head, KafkaConfig.LogFlushIntervalMsProp, null)
+    assertEquals(servers.head.logManager.initialDefaultConfig.flushMs, servers.head.logManager.currentDefaultConfig.flushMs)
+    assertEquals(servers.head.logManager.initialDefaultConfig.retentionMs, servers.head.logManager.currentDefaultConfig.retentionMs)
+  }
+
   private def isProcessorMetric(metricName: MetricName): Boolean = {
     val mbeanName = metricName.getMBeanName
     mbeanName.contains(s"${Processor.NetworkProcessorMetricTag}=") || mbeanName.contains(s"${RequestChannel.ProcessorMetricTag}=")
