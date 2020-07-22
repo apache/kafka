@@ -413,6 +413,12 @@ public class TopologyTestDriverTest {
     }
 
     @Test
+    public void shouldNotRequireParameters() {
+        new TopologyTestDriver(setupSingleProcessorTopology(), new Properties());
+        // should not throw exceptions
+    }
+
+    @Test
     public void shouldInitProcessor() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
         assertTrue(mockProcessors.get(0).initialized);
