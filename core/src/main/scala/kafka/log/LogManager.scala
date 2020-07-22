@@ -978,6 +978,7 @@ class LogManager(logDirs: Seq[File],
         checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
         checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
       }
+      removedLog.removeLogMetrics()
       addLogToBeDeleted(removedLog)
       info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
     } else if (offlineLogDirs.nonEmpty) {

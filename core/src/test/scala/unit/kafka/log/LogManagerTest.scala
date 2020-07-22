@@ -20,6 +20,7 @@ package kafka.log
 import java.io._
 import java.util.{Collections, Properties}
 
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{FetchDataInfo, FetchLogEnd}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
@@ -33,6 +34,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{doAnswer, spy}
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}
 
 class LogManagerTest {
@@ -562,5 +564,40 @@ class LogManagerTest {
     logManager.brokerConfigUpdated()
     logManager.topicConfigUpdated("test-topic")
     assertTrue(logManager.partitionsInitializing.isEmpty)
+  }
+
+  @Test
+  def testMetricsExistWhenLogIsRecreatedBeforeDeletion(): Unit = {
+    val topicName = "metric-test"
+    def logMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala.
+      filter(_.getType == "Log").filter(_.getScope.contains(topicName))
+
+    val tp = new TopicPartition(topicName, 0)
+    logManager.getOrCreateLog(tp, () => logConfig)
+
+    val metricTag = s"topic=${tp.topic},partition=${tp.partition}"
+
+    assertEquals(LogMetricNames.allMetricNames.size, logMetrics.size)
+    logMetrics.foreach { metric =>
+      assertTrue(metric.getMBeanName.contains(metricTag))
+    }
+
+    logManager.asyncDelete(tp)
+
+    assertTrue(logMetrics.isEmpty)
+
+    logManager.getOrCreateLog(tp, () => logConfig)
+
+    assertEquals(LogMetricNames.allMetricNames.size, logMetrics.size)
+    logMetrics.foreach { metric =>
+      assertTrue(metric.getMBeanName.contains(metricTag))
+    }
+
+    time.sleep(logConfig.fileDeleteDelayMs + 1)
+
+    assertEquals(LogMetricNames.allMetricNames.size, logMetrics.size)
+    logMetrics.foreach { metric =>
+      assertTrue(metric.getMBeanName.contains(metricTag))
+    }
   }
 }
