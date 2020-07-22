@@ -521,7 +521,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
-    public void shouldIterateAcrossWindowsBackward() {
+    public void shouldIterateBackwardAcrossWindows() {
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
 
@@ -545,7 +545,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
-    public void shouldIterateCacheBackwardAndStore() {
+    public void shouldIterateBackwardCacheAndStore() {
         final Bytes key = Bytes.wrap("1".getBytes());
         bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
@@ -576,7 +576,7 @@ public class CachingWindowStoreTest {
     }
 
     @Test
-    public void shouldIterateCacheAndStoreKeyRangeBackward() {
+    public void shouldIterateBackwardCacheAndStoreKeyRange() {
         final Bytes key = Bytes.wrap("1".getBytes());
         bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);

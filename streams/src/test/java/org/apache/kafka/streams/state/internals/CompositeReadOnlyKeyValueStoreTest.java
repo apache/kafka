@@ -41,6 +41,7 @@ import java.util.NoSuchElementException;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -213,9 +214,12 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubOneUnderlying.put("c", "c");
 
         final List<KeyValue<String, String>> results = toList(theStore.reverseRange("a", "b"));
-        assertTrue(results.contains(new KeyValue<>("a", "a")));
-        assertTrue(results.contains(new KeyValue<>("b", "b")));
-        assertEquals(2, results.size());
+        assertArrayEquals(
+            asList(
+                new KeyValue<>("b", "b"),
+                new KeyValue<>("a", "a")
+            ).toArray(),
+            results.toArray());
     }
 
     @Test
@@ -232,11 +236,14 @@ public class CompositeReadOnlyKeyValueStoreTest {
         cache.put("x", "x");
 
         final List<KeyValue<String, String>> results = toList(theStore.range("a", "e"));
-        assertTrue(results.contains(new KeyValue<>("a", "a")));
-        assertTrue(results.contains(new KeyValue<>("b", "b")));
-        assertTrue(results.contains(new KeyValue<>("c", "c")));
-        assertTrue(results.contains(new KeyValue<>("d", "d")));
-        assertEquals(4, results.size());
+        assertArrayEquals(
+            asList(
+                new KeyValue<>("a", "a"),
+                new KeyValue<>("b", "b"),
+                new KeyValue<>("c", "c"),
+                new KeyValue<>("d", "d")
+            ).toArray(),
+            results.toArray());
     }
 
     @Test
@@ -258,6 +265,15 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertTrue(results.contains(new KeyValue<>("c", "c")));
         assertTrue(results.contains(new KeyValue<>("d", "d")));
         assertEquals(4, results.size());
+        //FIXME: order does not hold between stores, how to validate order here?
+//        assertArrayEquals(
+//            asList(
+//                new KeyValue<>("d", "d"),
+//                new KeyValue<>("c", "c"),
+//                new KeyValue<>("b", "b"),
+//                new KeyValue<>("a", "a")
+//            ).toArray(),
+//            results.toArray());
     }
 
     @Test
