@@ -162,6 +162,7 @@ public class StreamsResetter {
             consumerConfig.putAll(properties);
             exitCode = maybeResetInputAndSeekToEndIntermediateTopicOffsets(consumerConfig, dryRun);
             maybeDeleteInternalTopics(adminClient, dryRun);
+
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
             System.err.println("ERROR: " + e);
