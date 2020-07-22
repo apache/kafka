@@ -29,18 +29,19 @@ import kafka.utils.TestUtils
 import kafka.zk._
 import org.junit.{After, Before, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.log4j.Level
 import kafka.utils.LogCaptureAppender
 import org.apache.kafka.common.metrics.KafkaMetric
+import org.apache.kafka.common.protocol.Errors
 import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.Seq
 import scala.util.{Failure, Success, Try}
-import org.mockito.Mockito.{spy, verify, doAnswer}
+import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
@@ -623,15 +624,63 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     controller.eventManager.put(preemptedEvent)
     controller.eventManager.put(preemptedEvent)
 
-    doAnswer((invocation: InvocationOnMock) => {
+    doAnswer((_: InvocationOnMock) => {
       latch.countDown()
-    }).when(spyThread).awaitShutdown()
+    }).doCallRealMethod().when(spyThread).awaitShutdown()
     controller.shutdown()
     TestUtils.waitUntilTrue(() => {
       count.get() == 0
     }, "preemption was not fully completed before shutdown")
 
     verify(spyThread).awaitShutdown()
+  }
+
+  @Test
+  def testPreemptionWithCallbacks(): Unit = {
+    servers = makeServers(1, enableControlledShutdown = false)
+    val controller = getController().kafkaController
+    val latch = new CountDownLatch(1)
+    val spyThread = spy(controller.eventManager.thread)
+    controller.eventManager.setControllerEventThread(spyThread)
+    val processedEvent = new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = latch.await()
+      override def preempt(): Unit = {}
+    }
+    val tp0 = new TopicPartition("t", 0)
+    val tp1 = new TopicPartition("t", 1)
+    val partitions = Set(tp0, tp1)
+    val event1 = ReplicaLeaderElection(Some(partitions), ElectionType.PREFERRED, ZkTriggered, partitionsMap => {
+      for (partition <- partitionsMap) {
+        partition._2 match {
+          case Left(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
+          case Right(_) => fail("replica leader election should error")
+        }
+      }
+    })
+    val event2 = ControlledShutdown(0, 0, {
+      case Success(_) => fail("controlled shutdown should error")
+      case Failure(e) =>
+        assertEquals(classOf[ControllerMovedException], e.getClass)
+    })
+    val event3  = ApiPartitionReassignment(Map(tp0 -> None, tp1 -> None), {
+      case Left(_) => fail("api partition reassignment should error")
+      case Right(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
+    })
+    val event4 = ListPartitionReassignments(Some(partitions), {
+      case Left(_) => fail("api partition reassignment should error")
+      case Right(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
+    })
+
+    controller.eventManager.put(processedEvent)
+    controller.eventManager.put(event1)
+    controller.eventManager.put(event2)
+    controller.eventManager.put(event3)
+    controller.eventManager.put(event4)
+
+    doAnswer((_: InvocationOnMock) => {
+      latch.countDown()
+    }).doCallRealMethod().when(spyThread).awaitShutdown()
+    controller.shutdown() 
   }
 
   private def testControllerMove(fun: () => Unit): Unit = {
