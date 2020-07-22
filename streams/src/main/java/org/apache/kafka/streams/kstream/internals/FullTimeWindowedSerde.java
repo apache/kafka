@@ -20,13 +20,16 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 
+import java.util.function.Function;
+
 class FullTimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
-    FullTimeWindowedSerde(final Serde<T> inner, final long windowSize) {
+    FullTimeWindowedSerde(final Serde<T> inner, final Function<Long, Window> windowEndForStartFunction) {
         super(
             new TimeWindowedSerializer<>(inner.serializer()),
-            new TimeWindowedDeserializer<>(inner.deserializer(), windowSize)
+            new TimeWindowedDeserializer<>(inner.deserializer(), windowEndForStartFunction)
         );
     }
 }

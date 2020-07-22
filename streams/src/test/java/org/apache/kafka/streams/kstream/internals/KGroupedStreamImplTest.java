@@ -28,7 +28,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
+import org.apache.kafka.streams.kstream.EnumerableWindowDefinition;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
@@ -101,7 +101,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsWithWindowedReduce() {
-        groupedStream.windowedBy((FixedSizeWindowDefinition<?>) null);
+        groupedStream.windowedBy((EnumerableWindowDefinition<?>) null);
     }
 
     @Test(expected = TopologyException.class)
@@ -145,7 +145,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsOnWindowedAggregate() {
-        groupedStream.windowedBy((FixedSizeWindowDefinition<?>) null);
+        groupedStream.windowedBy((EnumerableWindowDefinition<?>) null);
     }
 
     @Test(expected = TopologyException.class)

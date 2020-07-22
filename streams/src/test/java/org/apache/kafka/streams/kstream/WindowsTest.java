@@ -32,7 +32,7 @@ public class WindowsTest {
         }
 
         @Override
-        public long size() {
+        public long maxSize() {
             return 0;
         }
 

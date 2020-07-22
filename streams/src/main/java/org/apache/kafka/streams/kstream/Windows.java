@@ -42,7 +42,7 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @deprecated since 2.7 Implement FixedSizeWindowDefinition instead.
  */
 @Deprecated
-public abstract class Windows<W extends Window> implements FixedSizeWindowDefinition<W> {
+public abstract class Windows<W extends Window> implements EnumerableWindowDefinition<W> {
 
     private long maintainDurationMs = DEFAULT_RETENTION_MS;
     @Deprecated public int segments = 3;
@@ -117,7 +117,7 @@ public abstract class Windows<W extends Window> implements FixedSizeWindowDefini
      *
      * @return the size of the specified windows
      */
-    public abstract long size();
+    public abstract long maxSize();
 
     /**
      * Return the window grace period (the time to admit

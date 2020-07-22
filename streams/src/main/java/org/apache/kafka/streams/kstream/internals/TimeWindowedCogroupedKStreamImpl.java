@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
+import org.apache.kafka.streams.kstream.EnumerableWindowDefinition;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -33,7 +33,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Map;
@@ -46,11 +45,11 @@ import static org.apache.kafka.streams.kstream.internals.DeprecatedWindowsUtils.
 public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V>
         implements TimeWindowedCogroupedKStream<K, V> {
 
-    private final FixedSizeWindowDefinition<W> windows;
+    private final EnumerableWindowDefinition<W> windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
 
-    TimeWindowedCogroupedKStreamImpl(final FixedSizeWindowDefinition<W> windows,
+    TimeWindowedCogroupedKStreamImpl(final EnumerableWindowDefinition<W> windows,
                                      final InternalStreamsBuilder builder,
                                      final Set<String> subTopologySourceNodes,
                                      final String name,
@@ -99,7 +98,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
             new NamedInternal(named),
             materialize(materializedInternal),
             materializedInternal.keySerde() != null ?
-                    new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
+                    new FullTimeWindowedSerde<>(materializedInternal.keySerde(), start -> windows.windowsFor(start).get(start))
                     : null,
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
@@ -118,11 +117,11 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                 // new style retention: use Materialized retention and default segmentInterval
                 final long retentionPeriod = materialized.retention().toMillis();
 
-                if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
+                if ((windows.maxSize() + windows.gracePeriodMs()) > retentionPeriod) {
                     throw new IllegalArgumentException("The retention period of the window store "
                                                        + name
                                                        + " must be no smaller than its window size plus the grace period."
-                                                       + " Got size=[" + windows.size() + "],"
+                                                       + " Got size=[" + windows.maxSize() + "],"
                                                        + " grace=[" + windows.gracePeriodMs()
                                                        + "],"
                                                        + " retention=[" + retentionPeriod
@@ -132,7 +131,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                 supplier = Stores.persistentTimestampedWindowStore(
                     materialized.storeName(),
                     Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
+                    Duration.ofMillis(windows.maxSize()),
                     false
                 );
 
@@ -140,11 +139,11 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
                 supplier = supplierFromDeprecatedWindows(name, windows, materialized);
             } else {
                 // no retention on store or window definition, so set it to the minimum
-                final long retentionPeriod = windows.size() + windows.gracePeriodMs();
+                final long retentionPeriod = windows.maxSize() + windows.gracePeriodMs();
                 supplier = Stores.persistentTimestampedWindowStore(
                     materialized.storeName(),
                     Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
+                    Duration.ofMillis(windows.maxSize()),
                     false
                 );
             }

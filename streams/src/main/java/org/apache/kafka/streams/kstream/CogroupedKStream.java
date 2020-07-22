@@ -269,11 +269,11 @@ public interface CogroupedKStream<K, VOut> {
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
      * aggregations.
      *
-     * @param windows the specification of the aggregation {@link FixedSizeWindowDefinition}
+     * @param windows the specification of the aggregation {@link EnumerableWindowDefinition}
      * @param <W>     the window type
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
-    <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final FixedSizeWindowDefinition<W> windows);
+    <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final EnumerableWindowDefinition<W> windows);
 
     /**
      * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session

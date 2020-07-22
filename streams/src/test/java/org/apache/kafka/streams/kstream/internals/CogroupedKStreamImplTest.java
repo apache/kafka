@@ -35,7 +35,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
+import org.apache.kafka.streams.kstream.EnumerableWindowDefinition;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
@@ -137,7 +137,7 @@ public class CogroupedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowOnWindowedByTime() {
-        cogroupedStream.windowedBy((FixedSizeWindowDefinition<? extends Window>) null);
+        cogroupedStream.windowedBy((EnumerableWindowDefinition<? extends Window>) null);
     }
 
     @Test(expected = NullPointerException.class)

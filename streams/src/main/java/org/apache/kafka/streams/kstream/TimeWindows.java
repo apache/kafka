@@ -52,11 +52,11 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see SessionWindows
  * @see UnlimitedWindows
  * @see JoinWindows
- * @see KGroupedStream#windowedBy(FixedSizeWindowDefinition)
+ * @see KGroupedStream#windowedBy(EnumerableWindowDefinition)
  * @see TimestampExtractor
  */
 @SuppressWarnings("deprecation") // Remove this suppression when Windows is removed
-public final class TimeWindows extends Windows<TimeWindow> implements FixedSizeWindowDefinition<TimeWindow> {
+public final class TimeWindows extends Windows<TimeWindow> implements EnumerableWindowDefinition<TimeWindow> {
 
     private final long maintainDurationMs;
 
@@ -184,7 +184,7 @@ public final class TimeWindows extends Windows<TimeWindow> implements FixedSizeW
     }
 
     @Override
-    public long size() {
+    public long maxSize() {
         return sizeMs;
     }
 
@@ -215,7 +215,7 @@ public final class TimeWindows extends Windows<TimeWindow> implements FixedSizeW
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - size) if you want to be super accurate.
-        return graceMs != -1 ? graceMs : maintainMs() - size();
+        return graceMs != -1 ? graceMs : maintainMs() - this.maxSize();
     }
 
     /**

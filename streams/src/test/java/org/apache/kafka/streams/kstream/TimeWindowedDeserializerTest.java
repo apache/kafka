@@ -32,7 +32,7 @@ import static org.junit.Assert.assertTrue;
 
 public class TimeWindowedDeserializerTest {
     private final long windowSize = 5000000;
-    private final TimeWindowedDeserializer<?> timeWindowedDeserializer = new TimeWindowedDeserializer<>(null, windowSize);
+    private final TimeWindowedDeserializer<?> timeWindowedDeserializer = new TimeWindowedDeserializer<>(null, null);
     private final Map<String, String> props = new HashMap<>();
 
     @Before

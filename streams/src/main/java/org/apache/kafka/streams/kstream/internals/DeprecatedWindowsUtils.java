@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
+import org.apache.kafka.streams.kstream.EnumerableWindowDefinition;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
@@ -29,7 +29,7 @@ final class DeprecatedWindowsUtils {
     @SuppressWarnings("deprecation")
     static <K, VR, W extends Window> RocksDbWindowBytesStoreSupplier supplierFromDeprecatedWindows(
         final String name,
-        final FixedSizeWindowDefinition<W> windows,
+        final EnumerableWindowDefinition<W> windows,
         final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
 
         // old style retention: use deprecated Windows retention/segmentInterval.
@@ -38,11 +38,12 @@ final class DeprecatedWindowsUtils {
         // to be (windows.size() + windows.grace()). This will yield the same default behavior.
 
         final long maintainMs = ((org.apache.kafka.streams.kstream.Windows<W>) windows).maintainMs();
-        if ((windows.size() + windows.gracePeriodMs()) > maintainMs) {
+        final long size = ((org.apache.kafka.streams.kstream.Windows<W>) windows).maxSize();
+        if ((size + windows.gracePeriodMs()) > maintainMs) {
             throw new IllegalArgumentException(
                 "The retention period of the window store "
                     + name + " must be no smaller than its window size plus the grace period."
-                    + " Got size=[" + windows.size() + "],"
+                    + " Got size=[" + size + "],"
                     + " grace=[" + windows.gracePeriodMs() + "],"
                     + " retention=[" + maintainMs + "]");
         }
@@ -53,13 +54,13 @@ final class DeprecatedWindowsUtils {
                 maintainMs / (((org.apache.kafka.streams.kstream.Windows<W>) windows).segments - 1),
                 60_000L
             ),
-            windows.size(),
+            size,
             false,
             true);
     }
 
     @SuppressWarnings("deprecation")
-    static <W extends Window> boolean isDeprecatedWindows(final FixedSizeWindowDefinition<W> windows) {
+    static <W extends Window> boolean isDeprecatedWindows(final EnumerableWindowDefinition<W> windows) {
         return windows instanceof org.apache.kafka.streams.kstream.Windows;
     }
 }

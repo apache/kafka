@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -455,10 +456,6 @@ public class KTableSuppressProcessorTest {
     }
 
     private static <K> Serde<Windowed<K>> timeWindowedSerdeFrom(final Class<K> rawType, final long windowSize) {
-        final Serde<K> kSerde = Serdes.serdeFrom(rawType);
-        return new Serdes.WrapperSerde<>(
-            new TimeWindowedSerializer<>(kSerde.serializer()),
-            new TimeWindowedDeserializer<>(kSerde.deserializer(), windowSize)
-        );
+        return WindowedSerdes.timeWindowedSerdeFrom(rawType, windowSize);
     }
 }

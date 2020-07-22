@@ -32,7 +32,7 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * 
  * @param <W> type of the window instance
  */
-public interface FixedSizeWindowDefinition<W extends Window> {
+public interface EnumerableWindowDefinition<W extends Window> {
 
 
     /**
@@ -49,7 +49,7 @@ public interface FixedSizeWindowDefinition<W extends Window> {
      *
      * @return the size of the specified windows
      */
-    long size();
+    long maxSize();
 
     /**
      * Return the window grace period (the time to admit

@@ -31,7 +31,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.FixedSizeWindowDefinition;
+import org.apache.kafka.streams.kstream.EnumerableWindowDefinition;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -55,7 +55,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                        final Serde<KR> keySerde,
                                                        final Serde<VOut> valueSerde,
                                                        final String queryableName,
-                                                       final FixedSizeWindowDefinition<W> windows,
+                                                       final EnumerableWindowDefinition<W> windows,
                                                        final SessionWindows sessionWindows,
                                                        final Merger<? super K, VOut> sessionMerger) {
 
@@ -131,7 +131,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                                                     final String processorName,
                                                                                     final boolean stateCreated,
                                                                                     final StoreBuilder<?> storeBuilder,
-                                                                                    final FixedSizeWindowDefinition<W> windows,
+                                                                                    final EnumerableWindowDefinition<W> windows,
                                                                                     final SessionWindows sessionWindows,
                                                                                     final Merger<? super K, VOut> sessionMerger) {
 

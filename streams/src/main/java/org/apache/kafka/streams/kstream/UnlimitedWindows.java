@@ -39,11 +39,11 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * @see TimeWindows
  * @see SessionWindows
  * @see JoinWindows
- * @see KGroupedStream#windowedBy(FixedSizeWindowDefinition)
+ * @see KGroupedStream#windowedBy(EnumerableWindowDefinition)
  * @see TimestampExtractor
  */
 @SuppressWarnings("deprecation") // Remove this suppression when Windows is removed
-public final class UnlimitedWindows extends Windows<UnlimitedWindow> implements FixedSizeWindowDefinition<UnlimitedWindow> {
+public final class UnlimitedWindows extends Windows<UnlimitedWindow> implements EnumerableWindowDefinition<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP_MS = 0L;
 
@@ -109,7 +109,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> implements 
      * @return the size of the specified windows which is {@link Long#MAX_VALUE}
      */
     @Override
-    public long size() {
+    public long maxSize() {
         return Long.MAX_VALUE;
     }
 
