@@ -312,6 +312,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           quotas.fetch.updateQuotaMetricConfigs()
           quotas.produce.updateQuotaMetricConfigs()
           quotas.request.updateQuotaMetricConfigs()
+          quotas.controllerMutation.updateQuotaMetricConfigs()
         }
       }
       if (replicaManager.hasDelayedElectionOperations) {
@@ -1684,25 +1685,27 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTopicsRequest(request: RequestChannel.Request): Unit = {
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
+
     def sendResponseCallback(results: CreatableTopicResultCollection): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseData = new CreateTopicsResponseData().
-          setThrottleTimeMs(requestThrottleMs).
-          setTopics(results)
+        val responseData = new CreateTopicsResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setTopics(results)
         val responseBody = new CreateTopicsResponse(responseData)
         trace(s"Sending create topics response $responseData for correlation id " +
           s"${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottle(request, createResponse)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
     val results = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
     if (!controller.isActive) {
       createTopicsRequest.data.topics.forEach { topic =>
-        results.add(new CreatableTopicResult().setName(topic.name).
-          setErrorCode(Errors.NOT_CONTROLLER.code))
+        results.add(new CreatableTopicResult().setName(topic.name)
+          .setErrorCode(Errors.NOT_CONTROLLER.code))
       }
       sendResponseCallback(results)
     } else {
@@ -1718,7 +1721,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val authorizedForDescribeConfigs = filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
         topics, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
 
-      results.forEach(topic => {
+      results.forEach { topic =>
         if (results.findAll(topic.name).size > 1) {
           topic.setErrorCode(Errors.INVALID_REQUEST.code)
           topic.setErrorMessage("Found multiple entries for this topic.")
@@ -1729,7 +1732,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (!authorizedForDescribeConfigs.contains(topic.name)) {
           topic.setTopicConfigErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
         }
-      })
+      }
       val toCreate = mutable.Map[String, CreatableTopic]()
       createTopicsRequest.data.topics.forEach { topic =>
         if (results.find(topic.name).errorCode == Errors.NONE.code) {
@@ -1746,21 +1749,24 @@ class KafkaApis(val requestChannel: RequestChannel,
             result.setConfigs(List.empty.asJava)
               .setNumPartitions(-1)
               .setReplicationFactor(-1)
-              .setTopicConfigErrorCode(0.toShort)
+              .setTopicConfigErrorCode(Errors.NONE.code)
           }
         }
         sendResponseCallback(results)
       }
-      adminManager.createTopics(createTopicsRequest.data.timeoutMs,
-          createTopicsRequest.data.validateOnly,
-          toCreate,
-          authorizedForDescribeConfigs,
-          handleCreateTopicsResults)
+      adminManager.createTopics(
+        createTopicsRequest.data.timeoutMs,
+        createTopicsRequest.data.validateOnly,
+        toCreate,
+        authorizedForDescribeConfigs,
+        controllerMutationQuota,
+        handleCreateTopicsResults)
     }
   }
 
   def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
     val createPartitionsRequest = request.body[CreatePartitionsRequest]
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
 
     def sendResponseCallback(results: Map[String, ApiError]): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
@@ -1777,7 +1783,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           s"client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottle(request, createResponse)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
     if (!controller.isActive) {
@@ -1803,14 +1809,18 @@ class KafkaApis(val requestChannel: RequestChannel,
         unauthorized.map(_.name -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "The topic authorization is failed.")) ++
         queuedForDeletion.map(_.name -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is queued for deletion."))
 
-      adminManager.createPartitions(createPartitionsRequest.data.timeoutMs,
+      adminManager.createPartitions(
+        createPartitionsRequest.data.timeoutMs,
         valid,
         createPartitionsRequest.data.validateOnly,
-        request.context.listenerName, result => sendResponseCallback(result ++ errors))
+        controllerMutationQuota,
+        result => sendResponseCallback(result ++ errors))
     }
   }
 
   def handleDeleteTopicsRequest(request: RequestChannel.Request): Unit = {
+    val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
+
     def sendResponseCallback(results: DeletableTopicResultCollection): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val responseData = new DeleteTopicsResponseData()
@@ -1820,7 +1830,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottle(request, createResponse)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
@@ -1872,6 +1882,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         adminManager.deleteTopics(
           deleteTopicRequest.data.timeoutMs,
           toDelete,
+          controllerMutationQuota,
           handleDeleteTopicsResults
         )
       }
@@ -3088,6 +3099,30 @@ class KafkaApis(val requestChannel: RequestChannel,
     val throttleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds())
     request.apiThrottleTimeMs = throttleTimeMs
     throttleTimeMs
+  }
+
+  /**
+   * Throttle the channel if the controller mutations quota or the request quota have been violated.
+   * Regardless of throttling, send the response immediately.
+   */
+  private def sendResponseMaybeThrottle(controllerMutationQuota: ControllerMutationQuota,
+                                        request: RequestChannel.Request,
+                                        createResponse: Int => AbstractResponse,
+                                        onComplete: Option[Send => Unit]): Unit = {
+    val timeMs = time.milliseconds
+    val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
+    val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
+    val maxThrottleTimeMs = Math.max(controllerThrottleTimeMs, requestThrottleTimeMs)
+    if (maxThrottleTimeMs > 0) {
+      request.apiThrottleTimeMs = maxThrottleTimeMs
+      if (controllerThrottleTimeMs > requestThrottleTimeMs) {
+        quotas.controllerMutation.throttle(request, controllerThrottleTimeMs, requestChannel.sendResponse)
+      } else {
+        quotas.request.throttle(request, requestThrottleTimeMs, requestChannel.sendResponse)
+      }
+    }
+
+    sendResponse(request, Some(createResponse(maxThrottleTimeMs)), onComplete)
   }
 
   private def sendResponseExemptThrottle(request: RequestChannel.Request,

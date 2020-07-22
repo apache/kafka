@@ -222,6 +222,10 @@ class MetadataCache(brokerId: Int) extends Logging {
     metadataSnapshot.partitionStates.get(topic).flatMap(_.get(partitionId))
   }
 
+  def numPartitions(topic: String): Option[Int] = {
+    metadataSnapshot.partitionStates.get(topic).map(_.size)
+  }
+
   // if the leader is not known, return None;
   // if the leader is known and corresponding node is available, return Some(node)
   // if the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)

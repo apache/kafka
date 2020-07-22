@@ -14,14 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.quota;
+package org.apache.kafka.common.errors;
 
 /**
- * Types of quotas that may be configured on brokers for client requests.
+ * Exception thrown if an operation on a resource exceeds the throttling quota.
  */
-public enum ClientQuotaType {
-    PRODUCE,
-    FETCH,
-    REQUEST,
-    CONTROLLER_MUTATION
+public class ThrottlingQuotaExceededException extends RetriableException {
+    private int throttleTimeMs = 0;
+
+    public ThrottlingQuotaExceededException(String message) {
+        super(message);
+    }
+
+    public ThrottlingQuotaExceededException(int throttleTimeMs, String message) {
+        super(message);
+        this.throttleTimeMs = throttleTimeMs;
+    }
+
+    public int throttleTimeMs() {
+        return this.throttleTimeMs;
+    }
 }

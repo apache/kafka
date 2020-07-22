@@ -28,7 +28,6 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
@@ -327,28 +326,24 @@ public class RequestResponseTest {
         checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 2, true);
         checkResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE, 3, true);
 
-        checkRequest(createCreateTopicRequest(0), true);
-        checkErrorResponse(createCreateTopicRequest(0), unknownServerException, true);
-        checkResponse(createCreateTopicResponse(), 0, true);
-        checkRequest(createCreateTopicRequest(1), true);
-        checkErrorResponse(createCreateTopicRequest(1), unknownServerException, true);
-        checkResponse(createCreateTopicResponse(), 1, true);
-        checkRequest(createCreateTopicRequest(2), true);
-        checkErrorResponse(createCreateTopicRequest(2), unknownServerException, true);
-        checkResponse(createCreateTopicResponse(), 2, true);
-        checkRequest(createCreateTopicRequest(3), true);
-        checkErrorResponse(createCreateTopicRequest(3), unknownServerException, true);
-        checkResponse(createCreateTopicResponse(), 3, true);
-        checkRequest(createCreateTopicRequest(4), true);
-        checkErrorResponse(createCreateTopicRequest(4), unknownServerException, true);
-        checkResponse(createCreateTopicResponse(), 4, true);
-        checkRequest(createCreateTopicRequest(5), true);
-        checkErrorResponse(createCreateTopicRequest(5), unknownServerException, true);
-        checkResponse(createCreateTopicResponse(), 5, true);
+        for (int v = ApiKeys.CREATE_TOPICS.oldestVersion(); v <= ApiKeys.CREATE_TOPICS.latestVersion(); v++) {
+            checkRequest(createCreateTopicRequest(v), true);
+            checkErrorResponse(createCreateTopicRequest(v), unknownServerException, true);
+            checkResponse(createCreateTopicResponse(), v, true);
+        }
 
-        checkRequest(createDeleteTopicsRequest(), true);
-        checkErrorResponse(createDeleteTopicsRequest(), unknownServerException, true);
-        checkResponse(createDeleteTopicsResponse(), 0, true);
+        for (int v = ApiKeys.DELETE_TOPICS.oldestVersion(); v <= ApiKeys.DELETE_TOPICS.latestVersion(); v++) {
+            checkRequest(createDeleteTopicsRequest(v), true);
+            checkErrorResponse(createDeleteTopicsRequest(v), unknownServerException, true);
+            checkResponse(createDeleteTopicsResponse(), v, true);
+        }
+
+        for (int v = ApiKeys.CREATE_PARTITIONS.oldestVersion(); v <= ApiKeys.CREATE_PARTITIONS.latestVersion(); v++) {
+            checkRequest(createCreatePartitionsRequest(v), true);
+            checkRequest(createCreatePartitionsRequestWithAssignments(v), false);
+            checkErrorResponse(createCreatePartitionsRequest(v), unknownServerException, true);
+            checkResponse(createCreatePartitionsResponse(), v, true);
+        }
 
         checkRequest(createInitPidRequest(), true);
         checkErrorResponse(createInitPidRequest(), unknownServerException, true);
@@ -454,10 +449,6 @@ public class RequestResponseTest {
         checkErrorResponse(createDescribeConfigsRequest(1), unknownServerException, true);
         checkResponse(createDescribeConfigsResponse((short) 1), 1, false);
         checkDescribeConfigsResponseVersions();
-        checkRequest(createCreatePartitionsRequest(), true);
-        checkRequest(createCreatePartitionsRequestWithAssignments(), false);
-        checkErrorResponse(createCreatePartitionsRequest(), new InvalidTopicException(), true);
-        checkResponse(createCreatePartitionsResponse(), 0, true);
         checkRequest(createCreateTokenRequest(), true);
         checkErrorResponse(createCreateTokenRequest(), unknownServerException, true);
         checkResponse(createCreateTokenResponse(), 0, true);
@@ -1602,23 +1593,23 @@ public class RequestResponseTest {
     }
 
     private CreateTopicsRequest createCreateTopicRequest(int version, boolean validateOnly) {
-        CreateTopicsRequestData data = new CreateTopicsRequestData().
-            setTimeoutMs(123).
-            setValidateOnly(validateOnly);
-        data.topics().add(new CreatableTopic().
-            setNumPartitions(3).
-            setReplicationFactor((short) 5));
+        CreateTopicsRequestData data = new CreateTopicsRequestData()
+            .setTimeoutMs(123)
+            .setValidateOnly(validateOnly);
+        data.topics().add(new CreatableTopic()
+            .setNumPartitions(3)
+            .setReplicationFactor((short) 5));
 
         CreatableTopic topic2 = new CreatableTopic();
         data.topics().add(topic2);
-        topic2.assignments().add(new CreatableReplicaAssignment().
-            setPartitionIndex(0).
-            setBrokerIds(Arrays.asList(1, 2, 3)));
-        topic2.assignments().add(new CreatableReplicaAssignment().
-            setPartitionIndex(1).
-            setBrokerIds(Arrays.asList(2, 3, 4)));
-        topic2.configs().add(new CreateableTopicConfig().
-            setName("config1").setValue("value1"));
+        topic2.assignments().add(new CreatableReplicaAssignment()
+            .setPartitionIndex(0)
+            .setBrokerIds(Arrays.asList(1, 2, 3)));
+        topic2.assignments().add(new CreatableReplicaAssignment()
+            .setPartitionIndex(1)
+            .setBrokerIds(Arrays.asList(2, 3, 4)));
+        topic2.configs().add(new CreateableTopicConfig()
+            .setName("config1").setValue("value1"));
 
         return new CreateTopicsRequest.Builder(data).build((short) version);
     }
@@ -1644,21 +1635,23 @@ public class RequestResponseTest {
         return new CreateTopicsResponse(data);
     }
 
-    private DeleteTopicsRequest createDeleteTopicsRequest() {
-        return new DeleteTopicsRequest.Builder(
-                new DeleteTopicsRequestData()
-                .setTopicNames(Arrays.asList("my_t1", "my_t2"))
-                .setTimeoutMs(1000)).build();
+    private DeleteTopicsRequest createDeleteTopicsRequest(int version) {
+        return new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
+            .setTopicNames(Arrays.asList("my_t1", "my_t2"))
+            .setTimeoutMs(1000)
+        ).build((short) version);
     }
 
     private DeleteTopicsResponse createDeleteTopicsResponse() {
         DeleteTopicsResponseData data = new DeleteTopicsResponseData();
         data.responses().add(new DeletableTopicResult()
-                .setName("t1")
-                .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code()));
+            .setName("t1")
+            .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code())
+            .setErrorMessage("Error Message"));
         data.responses().add(new DeletableTopicResult()
-                .setName("t2")
-                .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()));
+            .setName("t2")
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())
+            .setErrorMessage("Error Message"));
         return new DeleteTopicsResponse(data);
     }
 
@@ -2019,7 +2012,7 @@ public class RequestResponseTest {
         return new AlterConfigsResponse(data);
     }
 
-    private CreatePartitionsRequest createCreatePartitionsRequest() {
+    private CreatePartitionsRequest createCreatePartitionsRequest(int version) {
         List<CreatePartitionsTopic> topics = new LinkedList<>();
         topics.add(new CreatePartitionsTopic()
                 .setName("my_topic")
@@ -2034,10 +2027,11 @@ public class RequestResponseTest {
                 .setTimeoutMs(0)
                 .setValidateOnly(false)
                 .setTopics(topics);
-        return new CreatePartitionsRequest(data, (short) 0);
+
+        return new CreatePartitionsRequest(data, (short) version);
     }
 
-    private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments() {
+    private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments(int version) {
         List<CreatePartitionsTopic> topics = new LinkedList<>();
         CreatePartitionsAssignment myTopicAssignment = new CreatePartitionsAssignment()
                 .setBrokerIds(Collections.singletonList(2));
@@ -2060,7 +2054,8 @@ public class RequestResponseTest {
                 .setTimeoutMs(0)
                 .setValidateOnly(false)
                 .setTopics(topics);
-        return new CreatePartitionsRequest(data, (short) 0);
+
+        return new CreatePartitionsRequest(data, (short) version);
     }
 
     private CreatePartitionsResponse createCreatePartitionsResponse() {
