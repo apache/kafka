@@ -18,7 +18,6 @@ package org.apache.kafka.streams.test.wordcount;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.api.MockProcessorContext;
 import org.apache.kafka.streams.processor.api.MockProcessorContext.CapturedForward;
@@ -89,15 +88,11 @@ public class WindowedWordCountProcessorTest {
 
     @Test
     public void shouldWorkWithPersistentStore() throws IOException {
-        final Properties properties = new Properties();
-        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "");
-        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-
         final File stateDir = TestUtils.tempDirectory();
 
         try {
             final MockProcessorContext<String, String> context = new MockProcessorContext<>(
-                properties,
+                new Properties(),
                 new TaskId(0, 0),
                 stateDir
             );

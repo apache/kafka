@@ -24,13 +24,13 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
@@ -41,6 +41,7 @@ import org.junit.Test;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -77,8 +78,6 @@ public class KTableAggregateTest {
             final TopologyTestDriver driver = new TopologyTestDriver(
                 builder.build(),
                 mkProperties(mkMap(
-                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
-                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
                 Instant.ofEpochMilli(0L))) {
@@ -144,8 +143,6 @@ public class KTableAggregateTest {
             final TopologyTestDriver driver = new TopologyTestDriver(
                 builder.build(),
                 mkProperties(mkMap(
-                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
-                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
                 Instant.ofEpochMilli(0L))) {
@@ -182,8 +179,6 @@ public class KTableAggregateTest {
             final TopologyTestDriver driver = new TopologyTestDriver(
                 builder.build(),
                 mkProperties(mkMap(
-                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
-                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
                 Instant.ofEpochMilli(0L))) {
@@ -265,8 +260,6 @@ public class KTableAggregateTest {
             final TopologyTestDriver driver = new TopologyTestDriver(
                 builder.build(),
                 mkProperties(mkMap(
-                    mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
-                    mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test"),
                     mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())
                 )),
                 Instant.ofEpochMilli(0L))) {

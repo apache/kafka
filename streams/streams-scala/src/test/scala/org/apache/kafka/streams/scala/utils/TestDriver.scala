@@ -19,22 +19,17 @@
 package org.apache.kafka.streams.scala.utils
 
 import java.time.Instant
-import java.util.{Properties, UUID}
+import java.util.Properties
 
 import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.scala.StreamsBuilder
-import org.apache.kafka.streams.{StreamsConfig, TestInputTopic, TestOutputTopic, TopologyTestDriver}
+import org.apache.kafka.streams.{TestInputTopic, TestOutputTopic, TopologyTestDriver}
 import org.scalatest.Suite
 
 trait TestDriver { this: Suite =>
 
-  def createTestDriver(builder: StreamsBuilder, initialWallClockTime: Instant = Instant.now()): TopologyTestDriver = {
-    val config = new Properties()
-    config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test")
-    config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
-    config.put(StreamsConfig.STATE_DIR_CONFIG, s"out/state-store-${UUID.randomUUID()}")
-    new TopologyTestDriver(builder.build(), config, initialWallClockTime)
-  }
+  def createTestDriver(builder: StreamsBuilder, initialWallClockTime: Instant = Instant.now()): TopologyTestDriver =
+    new TopologyTestDriver(builder.build(), new Properties(), initialWallClockTime)
 
   implicit class TopologyTestDriverOps(inner: TopologyTestDriver) {
     def createInput[K, V](topic: String)(implicit serdeKey: Serde[K], serdeValue: Serde[V]): TestInputTopic[K, V] =
