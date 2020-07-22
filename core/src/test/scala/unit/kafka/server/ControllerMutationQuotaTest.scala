@@ -76,9 +76,9 @@ object ControllerMutationQuotaTest {
 
   val Topic1 = "topic-1"
   val Topic2 = "topic-2"
-  val TopicsWithOnePartition = Seq(Topic1 ->  1, Topic2 ->  1)
-  val TopicsWith30Partitions = Seq(Topic1 -> 30, Topic2 -> 30)
-  val TopicsWith31Partitions = Seq(Topic1 -> 31, Topic2 -> 31)
+  val TopicsWithOnePartition = Map(Topic1 ->  1, Topic2 ->  1)
+  val TopicsWith30Partitions = Map(Topic1 -> 30, Topic2 -> 30)
+  val TopicsWith31Partitions = Map(Topic1 -> 31, Topic2 -> 31)
 
   val ControllerMutationRate = 2.0
 }
@@ -127,18 +127,21 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   def testStrictCreateTopicsRequest(): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a strict quota, we
-      // expect the first topic to be created and the second to be rejected.
+      // expect one to be created and one to be rejected.
       // Theoretically, the throttle time should be below or equal to:
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
-      assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
+      // Ordering is not guaranteed so we only check the errors
+      assertEquals(Set(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1.values.toSet)
 
-      // Retry the second topic. It should succeed after the throttling delay is passed and the
+      // Retry the rejected topic. It should succeed after the throttling delay is passed and the
       // throttle time should be zero.
+      val rejectedTopicName = errors1.filter(_._2 == Errors.THROTTLING_QUOTA_EXCEEDED).keys.head
+      val rejectedTopicSpec = TopicsWith30Partitions.filter(_._1 == rejectedTopicName)
       TestUtils.waitUntilTrue(() => {
-        val (throttleTimeMs2, errors2) = createTopics(TopicsWith30Partitions.drop(1), StrictCreateTopicsRequestVersion)
-        throttleTimeMs2 == 0 && errors2 == Map(Topic2 -> Errors.NONE)
+        val (throttleTimeMs2, errors2) = createTopics(rejectedTopicSpec, StrictCreateTopicsRequestVersion)
+        throttleTimeMs2 == 0 && errors2 == Map(rejectedTopicName -> Errors.NONE)
       }, "Failed to create topics after having been throttled")
     }
   }
@@ -180,13 +183,16 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = deleteTopics(TopicsWith30Partitions, StrictDeleteTopicsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
-      assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
+      // Ordering is not guaranteed so we only check the errors
+      assertEquals(Set(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1.values.toSet)
 
-      // Retry the second topic. It should succeed after the throttling delay is passed and the
+      // Retry the rejected topic. It should succeed after the throttling delay is passed and the
       // throttle time should be zero.
+      val rejectedTopicName = errors1.filter(_._2 == Errors.THROTTLING_QUOTA_EXCEEDED).keys.head
+      val rejectedTopicSpec = TopicsWith30Partitions.filter(_._1 == rejectedTopicName)
       TestUtils.waitUntilTrue(() => {
-        val (throttleTimeMs2, errors2) = deleteTopics(TopicsWith30Partitions.drop(1), StrictDeleteTopicsRequestVersion)
-        throttleTimeMs2 == 0 && errors2 == Map(Topic2 -> Errors.NONE)
+        val (throttleTimeMs2, errors2) = deleteTopics(rejectedTopicSpec, StrictDeleteTopicsRequestVersion)
+        throttleTimeMs2 == 0 && errors2 == Map(rejectedTopicName -> Errors.NONE)
       }, "Failed to delete topics after having been throttled")
     }
   }
@@ -234,13 +240,16 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // ((30 / 10) - 2) / 2 * 10 = 5s
       val (throttleTimeMs1, errors1) = createPartitions(TopicsWith31Partitions, StrictCreatePartitionsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
-      assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.THROTTLING_QUOTA_EXCEEDED), errors1)
+      // Ordering is not guaranteed so we only check the errors
+      assertEquals(Set(Errors.NONE, Errors.THROTTLING_QUOTA_EXCEEDED), errors1.values.toSet)
 
-      // Retry the second topic. It should succeed after the throttling delay is passed and the
+      // Retry the rejected topic. It should succeed after the throttling delay is passed and the
       // throttle time should be zero.
+      val rejectedTopicName = errors1.filter(_._2 == Errors.THROTTLING_QUOTA_EXCEEDED).keys.head
+      val rejectedTopicSpec = TopicsWith30Partitions.filter(_._1 == rejectedTopicName)
       TestUtils.waitUntilTrue(() => {
-        val (throttleTimeMs2, errors2) = createPartitions(TopicsWith30Partitions.drop(1), StrictCreatePartitionsRequestVersion)
-        throttleTimeMs2 == 0 && errors2 == Map(Topic2 -> Errors.NONE)
+        val (throttleTimeMs2, errors2) = createPartitions(rejectedTopicSpec, StrictCreatePartitionsRequestVersion)
+        throttleTimeMs2 == 0 && errors2 == Map(rejectedTopicName -> Errors.NONE)
       }, "Failed to create partitions after having been throttled")
     }
   }
@@ -281,7 +290,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       (actual >= 0) && (actual <= max))
   }
 
-  private def createTopics(topics: Seq[(String, Int)], version: Short): (Int, Map[String, Errors]) = {
+  private def createTopics(topics: Map[String, Int], version: Short): (Int, Map[String, Errors]) = {
     val data = new CreateTopicsRequestData()
     topics.foreach { case (topic, numPartitions) =>
       data.topics.add(new CreatableTopic()
@@ -293,17 +302,17 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       .map(topic => topic.name -> Errors.forCode(topic.errorCode)).toMap
   }
 
-  private def deleteTopics(topics: Seq[(String, Int)], version: Short): (Int, Map[String, Errors]) = {
+  private def deleteTopics(topics: Map[String, Int], version: Short): (Int, Map[String, Errors]) = {
     val data = new DeleteTopicsRequestData()
       .setTimeoutMs(60000)
-      .setTopicNames(topics.map(_._1).asJava)
+      .setTopicNames(topics.keys.toSeq.asJava)
     val request = new DeleteTopicsRequest.Builder(data).build(version)
     val response = connectAndReceive[DeleteTopicsResponse](request)
     response.data.throttleTimeMs -> response.data.responses.asScala
       .map(topic => topic.name -> Errors.forCode(topic.errorCode)).toMap
   }
 
-  private def createPartitions(topics: Seq[(String, Int)], version: Short): (Int, Map[String, Errors]) = {
+  private def createPartitions(topics: Map[String, Int], version: Short): (Int, Map[String, Errors]) = {
     val data = new CreatePartitionsRequestData().setTimeoutMs(60000)
     topics.foreach { case (topic, numPartitions) =>
       data.topics.add(new CreatePartitionsTopic()
