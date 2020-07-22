@@ -18,7 +18,7 @@ package org.apache.kafka.common.errors;
 
 /**
  * This server is not the leader for the given partition.
- * @deprecated since 2.7. Use {@link NotLeaderOrFollowerException}.
+ * @deprecated since 2.6. Use {@link NotLeaderOrFollowerException}.
  */
 @Deprecated
 public class NotLeaderForPartitionException extends InvalidMetadataException {
