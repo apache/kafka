@@ -162,6 +162,7 @@ if (file('.git').exists()) {
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
+        'connect/transforms/src/test/resources/blns.txt',
         'streams/quickstart/java/src/test/resources/projects/basic/goal.txt',
         'streams/streams-scala/logs/*',
         '**/generated/**'
