@@ -21,7 +21,7 @@ import org.apache.kafka.common.KafkaFuture;
 public class UpdateFeaturesResult {
     private final KafkaFuture<Void> future;
 
-    public UpdateFeaturesResult(KafkaFuture<Void> future) {
+    public UpdateFeaturesResult(final KafkaFuture<Void> future) {
         this.future = future;
     }
 

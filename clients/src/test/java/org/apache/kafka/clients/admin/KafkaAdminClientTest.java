@@ -516,9 +516,7 @@ public class KafkaAdminClientTest {
                 getDefaultFeatureMetadata().finalizedFeatures(),
                 getDefaultFeatureMetadata().finalizedFeaturesEpoch().orElse(-1)));
         }
-        final ApiVersionsResponseData data = new ApiVersionsResponseData();
-        data.setErrorCode(error.code());
-        return new ApiVersionsResponse(data);
+        return new ApiVersionsResponse(new ApiVersionsResponseData().setErrorCode(error.code()));
     }
 
     /**

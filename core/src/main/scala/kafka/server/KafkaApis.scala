@@ -3169,9 +3169,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       update => {
         if (update.name.isEmpty) {
           // Rule #1) Check that the feature name is not empty.
-          Some(
-            new ApiError(Errors.INVALID_REQUEST,
-              "Can not contain empty feature name in the request."))
+          Some(new ApiError(Errors.INVALID_REQUEST,
+                   "Can not contain empty feature name in the request."))
         } else {
           val cacheEntry = latestFeatures.map(lf => lf.features.get(update.name)).orNull
 
@@ -3179,15 +3178,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (UpdateFeaturesRequest.isDeleteRequest(update)) {
             if (!update.allowDowngrade) {
               // Rule #2) Disallow deletion of a finalized feature without allowDowngrade flag set.
-              Some(
-                new ApiError(Errors.INVALID_REQUEST,
-                  s"Can not delete feature: '${update.name}' without setting the" +
-                    " allowDowngrade flag to true in the request."))
+              Some(new ApiError(Errors.INVALID_REQUEST,
+                                s"Can not delete feature: '${update.name}' without setting the" +
+                                " allowDowngrade flag to true in the request."))
             } else if (cacheEntry == null) {
               // Rule #3) Disallow deletion of a non-existing finalized feature.
-              Some(
-                new ApiError(Errors.INVALID_REQUEST,
-                  s"Can not delete non-existing finalized feature: '${update.name}'"))
+              Some(new ApiError(Errors.INVALID_REQUEST,
+                       s"Can not delete non-existing finalized feature: '${update.name}'"))
             }
           } else {
             if (cacheEntry == null) {

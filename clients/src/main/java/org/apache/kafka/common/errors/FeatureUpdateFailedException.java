@@ -19,11 +19,11 @@ package org.apache.kafka.common.errors;
 public class FeatureUpdateFailedException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public FeatureUpdateFailedException(String message) {
+    public FeatureUpdateFailedException(final String message) {
         super(message);
     }
 
-    public FeatureUpdateFailedException(String message, Throwable cause) {
+    public FeatureUpdateFailedException(final String message, final Throwable cause) {
         super(message, cause);
     }
 }

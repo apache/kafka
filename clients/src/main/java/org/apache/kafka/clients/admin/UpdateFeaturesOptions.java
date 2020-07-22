@@ -24,7 +24,7 @@ public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions
      * Sets the timeout in milliseconds for this operation or {@code null} if the default API
      * timeout for the AdminClient should be used.
      */
-    public UpdateFeaturesOptions timeoutMs(Integer timeoutMs) {
+    public UpdateFeaturesOptions timeoutMs(final Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
     }
