@@ -3013,7 +3013,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
     val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
 
-    if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
+    if (!controller.isActive) {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
+    } else if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.describeUserScramCredentials(
         describeUserScramCredentialsRequest.data.users.asScala.map(_.name).toList)
       sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3027,7 +3030,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAlterUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
     val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
 
-    if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+    if (!controller.isActive) {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
+    } else if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.alterUserScramCredentials(
         alterUserScramCredentialsRequest.data.upsertions().asScala, alterUserScramCredentialsRequest.data.deletions().asScala)
       sendResponseMaybeThrottle(request, requestThrottleMs =>
