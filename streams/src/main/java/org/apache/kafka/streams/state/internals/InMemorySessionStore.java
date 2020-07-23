@@ -258,7 +258,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                              final Bytes keyTo,
                                                              final long latestSessionStartTime,
                                                              final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator) {
-        final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator, it -> openIterators.remove(it));
+        final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator, openIterators::remove);
         openIterators.add(iterator);
         return iterator;
     }
