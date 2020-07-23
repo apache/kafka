@@ -128,7 +128,7 @@ class PartitionLockTest extends Logging {
     val replicaToCheck = 3
     val firstReplicaSet = Seq[Integer](3, 4, 5).asJava
     val secondReplicaSet = Seq[Integer](1, 2, 3).asJava
-    def partitionState(replicas: java.util.List[Integer]): LeaderAndIsrPartitionState = new LeaderAndIsrPartitionState()
+    def partitionState(replicas: java.util.List[Integer]) = new LeaderAndIsrPartitionState()
       .setControllerEpoch(1)
       .setLeader(replicas.get(0))
       .setLeaderEpoch(1)
@@ -141,8 +141,8 @@ class PartitionLockTest extends Logging {
     partition.makeLeader(partitionState(secondReplicaSet), offsetCheckpoints)
     assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
 
-    var i = 0
     val future = executorService.submit((() => {
+      var i = 0
       // Flip assignment between two replica sets
       while (active.get) {
         val replicas = if (i % 2 == 0) {
@@ -158,8 +158,8 @@ class PartitionLockTest extends Logging {
       }
     }): Runnable)
 
-    val deadline = 5.seconds.fromNow
-    while(deadline.hasTimeLeft()) {
+    val deadline = 1.seconds.fromNow
+    while (deadline.hasTimeLeft()) {
       assertTrue(s"Expected replica $replicaToCheck to be defined", partition.getReplica(replicaToCheck).isDefined)
     }
     active.set(false)
