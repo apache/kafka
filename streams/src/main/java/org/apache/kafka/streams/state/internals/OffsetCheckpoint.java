@@ -59,8 +59,8 @@ public class OffsetCheckpoint {
     private static final int VERSION = 0;
 
     // Use a negative sentinel when we don't know the offset instead of skipping it to distinguish it from dirty state
-    // and use -3 as the -1 sentinel may be taken by some producer errors and -2 sentinel for an offset in the
-    // subscription means that the state is used by an active task and hence caught-up
+    // and use -3 as the -1 sentinel may be taken by some producer errors and -2 in the
+    // subscription means that the state is used by an active task and hence caught-up.
     public static final long OFFSET_UNKNOWN = -3;
 
     private final File file;
