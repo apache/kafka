@@ -683,7 +683,7 @@ class Partition(val topicPartition: TopicPartition,
 
     // due to code paths accessing remoteReplicasMap without a lock,
     // first add the new replicas and then remove the old ones
-    newRemoteReplicas.foreach(id => remoteReplicasMap.putIfNotExists(id, new Replica(id, topicPartition)))
+    newRemoteReplicas.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
     removedReplicas.foreach(remoteReplicasMap.remove)
 
     if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
