@@ -273,9 +273,14 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public Send toSend(String dest, ResponseHeader responseHeader, short apiVersion) {
         // Generate the Sends for the response fields and records
         ArrayDeque<Send> sends = new ArrayDeque<>();
-        RecordsWriter writer = new RecordsWriter(dest, sends::add);
         ObjectSerializationCache cache = new ObjectSerializationCache();
-        data.size(cache, apiVersion);
+        int totalRecordSize = data.responses().stream()
+                .flatMap(fetchableTopicResponse -> fetchableTopicResponse.partitionResponses().stream())
+                .mapToInt(fetchablePartitionResponse -> fetchablePartitionResponse.recordSet().sizeInBytes())
+                .sum();
+        int totalMessageSize = data.size(cache, apiVersion);
+
+        RecordsWriter writer = new RecordsWriter(dest, totalMessageSize - totalRecordSize, sends::add);
         data.write(writer, cache, apiVersion);
         writer.flush();
 

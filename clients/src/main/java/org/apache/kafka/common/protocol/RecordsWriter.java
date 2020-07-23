@@ -20,12 +20,9 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.record.BaseRecords;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 
 import java.io.DataOutput;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.function.Consumer;
 
@@ -58,88 +55,54 @@ import java.util.function.Consumer;
 public class RecordsWriter implements Writable {
     private final String dest;
     private final Consumer<Send> sendConsumer;
-    private final ByteBufferOutputStream byteBufferOutputStream;
-    private final DataOutput output;
+    private final ByteBuffer buffer;
     private int mark;
 
-    public RecordsWriter(String dest, Consumer<Send> sendConsumer) {
+    public RecordsWriter(String dest, int totalSize, Consumer<Send> sendConsumer) {
         this.dest = dest;
         this.sendConsumer = sendConsumer;
-        this.byteBufferOutputStream = new ByteBufferOutputStream(ByteBuffer.allocate(64), 2.0f);
-        this.output = new DataOutputStream(this.byteBufferOutputStream);
+        this.buffer = ByteBuffer.allocate(totalSize);
         this.mark = 0;
     }
 
     @Override
     public void writeByte(byte val) {
-        try {
-            output.writeByte(val);
-        } catch (IOException e) {
-            throw new RuntimeException("RecordsWriter encountered an IO error", e);
-        }
+        buffer.put(val);
     }
 
     @Override
     public void writeShort(short val) {
-        try {
-            output.writeShort(val);
-        } catch (IOException e) {
-            throw new RuntimeException("RecordsWriter encountered an IO error", e);
-        }
+        buffer.putShort(val);
     }
 
     @Override
     public void writeInt(int val) {
-        try {
-            output.writeInt(val);
-        } catch (IOException e) {
-            throw new RuntimeException("RecordsWriter encountered an IO error", e);
-        }
+        buffer.putInt(val);
     }
 
     @Override
     public void writeLong(long val) {
-        try {
-            output.writeLong(val);
-        } catch (IOException e) {
-            throw new RuntimeException("RecordsWriter encountered an IO error", e);
-        }
+        buffer.putLong(val);
     }
 
     @Override
     public void writeDouble(double val) {
-        try {
-            ByteUtils.writeDouble(val, output);
-        } catch (IOException e) {
-            throw new RuntimeException("RecordsWriter encountered an IO error", e);
-        }
+        ByteUtils.writeDouble(val, buffer);
     }
 
     @Override
     public void writeByteArray(byte[] arr) {
-        try {
-            output.write(arr);
-        } catch (IOException e) {
-            throw new RuntimeException("RecordsWriter encountered an IO error", e);
-        }
+        buffer.put(arr);
     }
 
     @Override
     public void writeUnsignedVarint(int i) {
-        try {
-            ByteUtils.writeUnsignedVarint(i, output);
-        } catch (IOException e) {
-            throw new RuntimeException("RecordsWriter encountered an IO error", e);
-        }
+        ByteUtils.writeUnsignedVarint(i, buffer);
     }
 
     @Override
     public void writeByteBuffer(ByteBuffer src) {
-        try {
-            output.write(src.array(), src.position(), src.remaining());
-        } catch (IOException e) {
-            throw new RuntimeException("RecordsWriter encountered an IO error", e);
-        }
+        buffer.put(src);
     }
 
     public void writeRecords(BaseRecords records) {
@@ -151,21 +114,20 @@ public class RecordsWriter implements Writable {
      * Flush any pending bytes as a ByteBufferSend
      */
     public void flush() {
-        ByteBuffer buf = byteBufferOutputStream.buffer();
-        int end = buf.position();
+        int end = buffer.position();
         int len = end - mark;
 
         if (len > 0) {
-            int limit = buf.limit();
+            int limit = buffer.limit();
 
             // Set the desired absolute position and limit before slicing
-            buf.position(mark);
-            buf.limit(end);
-            ByteBuffer slice = buf.slice();
+            buffer.position(mark);
+            buffer.limit(end);
+            ByteBuffer slice = buffer.slice();
 
             // Restore absolute position and limit on original buffer
-            buf.limit(limit);
-            buf.position(end);
+            buffer.limit(limit);
+            buffer.position(end);
 
             // Update the mark to the end of slice we just took
             mark = end;

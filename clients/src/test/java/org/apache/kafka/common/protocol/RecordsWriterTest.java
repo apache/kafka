@@ -29,7 +29,7 @@ public class RecordsWriterTest {
     @Test
     public void testBufferSlice() {
         Queue<Send> sends = new ArrayDeque<>();
-        RecordsWriter writer = new RecordsWriter("dest", sends::add);
+        RecordsWriter writer = new RecordsWriter("dest", 10000 /* enough for tests */, sends::add);
         for (int i = 0; i < 4; i++) {
             writer.writeInt(i);
         }

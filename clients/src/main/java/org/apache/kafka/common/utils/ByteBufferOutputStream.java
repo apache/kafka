@@ -34,11 +34,10 @@ import java.nio.ByteBuffer;
  */
 public class ByteBufferOutputStream extends OutputStream {
 
-    private static final float DEFAULT_REALLOCATION_FACTOR = 1.1f;
+    private static final float REALLOCATION_FACTOR = 1.1f;
 
     private final int initialCapacity;
     private final int initialPosition;
-    private final float reallocationFactor;
     private ByteBuffer buffer;
 
     /**
@@ -49,7 +48,9 @@ public class ByteBufferOutputStream extends OutputStream {
      * Prefer one of the constructors that allocate the internal buffer for clearer semantics.
      */
     public ByteBufferOutputStream(ByteBuffer buffer) {
-        this(buffer, DEFAULT_REALLOCATION_FACTOR);
+        this.buffer = buffer;
+        this.initialPosition = buffer.position();
+        this.initialCapacity = buffer.capacity();
     }
 
     public ByteBufferOutputStream(int initialCapacity) {
@@ -58,13 +59,6 @@ public class ByteBufferOutputStream extends OutputStream {
 
     public ByteBufferOutputStream(int initialCapacity, boolean directBuffer) {
         this(directBuffer ? ByteBuffer.allocateDirect(initialCapacity) : ByteBuffer.allocate(initialCapacity));
-    }
-
-    public ByteBufferOutputStream(ByteBuffer buffer, float reallocationFactor) {
-        this.buffer = buffer;
-        this.initialPosition = buffer.position();
-        this.initialCapacity = buffer.capacity();
-        this.reallocationFactor = reallocationFactor;
     }
 
     public void write(int b) {
@@ -124,7 +118,7 @@ public class ByteBufferOutputStream extends OutputStream {
     }
 
     private void expandBuffer(int remainingRequired) {
-        int expandSize = Math.max((int) (buffer.limit() * reallocationFactor), buffer.position() + remainingRequired);
+        int expandSize = Math.max((int) (buffer.limit() * REALLOCATION_FACTOR), buffer.position() + remainingRequired);
         ByteBuffer temp = ByteBuffer.allocate(expandSize);
         int limit = limit();
         buffer.flip();
