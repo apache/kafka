@@ -16,24 +16,23 @@
  */
 package org.apache.kafka.streams.errors;
 
+import org.apache.kafka.streams.KafkaStreams;
 
 /**
- * Indicates that there was a problem when trying to access a {@link org.apache.kafka.streams.processor.StateStore StateStore}.
- * {@code InvalidStateStoreException} is not thrown directly but only its following sub-classes.
+ * Indicates that the specific state store being queried via
+ * {@link org.apache.kafka.streams.StoreQueryParameters} used a partitioning that is not assigned to this instance.
+ * You can use {@link KafkaStreams#allMetadata()} to discover the correct instance that hosts the requested partition.
  */
-public class InvalidStateStoreException extends StreamsException {
+public class InvalidStateStorePartitionException extends InvalidStateStoreException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-    public InvalidStateStoreException(final String message) {
+    public InvalidStateStorePartitionException(final String message) {
         super(message);
     }
 
-    public InvalidStateStoreException(final String message, final Throwable throwable) {
+    public InvalidStateStorePartitionException(final String message, final Throwable throwable) {
         super(message, throwable);
     }
 
-    public InvalidStateStoreException(final Throwable throwable) {
-        super(throwable);
-    }
 }

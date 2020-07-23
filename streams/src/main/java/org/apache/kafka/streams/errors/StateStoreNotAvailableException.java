@@ -16,24 +16,22 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 /**
- * Indicates that there was a problem when trying to access a {@link org.apache.kafka.streams.processor.StateStore StateStore}.
- * {@code InvalidStateStoreException} is not thrown directly but only its following sub-classes.
+ * Indicates that the state store being queried is already closed. This could happen when Kafka Streams is in
+ * {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} or
+ * {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} or
+ * {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR} state.
  */
-public class InvalidStateStoreException extends StreamsException {
+public class StateStoreNotAvailableException extends InvalidStateStoreException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-    public InvalidStateStoreException(final String message) {
+    public StateStoreNotAvailableException(final String message) {
         super(message);
     }
 
-    public InvalidStateStoreException(final String message, final Throwable throwable) {
+    public StateStoreNotAvailableException(final String message, final Throwable throwable) {
         super(message, throwable);
     }
 
-    public InvalidStateStoreException(final Throwable throwable) {
-        super(throwable);
-    }
 }

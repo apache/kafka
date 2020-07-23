@@ -16,24 +16,20 @@
  */
 package org.apache.kafka.streams.errors;
 
-
 /**
- * Indicates that there was a problem when trying to access a {@link org.apache.kafka.streams.processor.StateStore StateStore}.
- * {@code InvalidStateStoreException} is not thrown directly but only its following sub-classes.
+ * Indicates that the state store being queried is unknown, i.e., the state store does either not exist in your topology
+ * or it is not queryable.
  */
-public class InvalidStateStoreException extends StreamsException {
+public class UnknownStateStoreException extends InvalidStateStoreException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-    public InvalidStateStoreException(final String message) {
+    public UnknownStateStoreException(final String message) {
         super(message);
     }
 
-    public InvalidStateStoreException(final String message, final Throwable throwable) {
+    public UnknownStateStoreException(final String message, final Throwable throwable) {
         super(message, throwable);
     }
 
-    public InvalidStateStoreException(final Throwable throwable) {
-        super(throwable);
-    }
 }
