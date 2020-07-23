@@ -304,7 +304,7 @@ subprojects {
   }
 
   test {
-    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors() as int
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -327,7 +327,7 @@ subprojects {
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
-    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors() as int
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -355,7 +355,7 @@ subprojects {
   }
 
   task unitTest(type: Test, dependsOn: compileJava) {
-    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors() as int
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -389,7 +389,7 @@ subprojects {
   }
 
   task srcJar(type: Jar) {
-    classifier = 'sources'
+    archiveClassifier = 'sources' as Property<String>
     from "$rootDir/LICENSE"
     from "$rootDir/NOTICE"
     from sourceSets.main.allSource
@@ -419,14 +419,14 @@ subprojects {
 
   if(!sourceSets.test.allSource.isEmpty()) {
     task testJar(type: Jar) {
-      classifier = 'test'
+      archiveClassifier = 'test' as Property<String>
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
       from sourceSets.test.output
     }
 
     task testSrcJar(type: Jar, dependsOn: testJar) {
-      classifier = 'test-sources'
+      archiveClassifier = 'test-sources' as Property<String>
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
       from sourceSets.test.allSource
@@ -445,7 +445,7 @@ subprojects {
     }
 
     task scaladocJar(type:Jar) {
-      classifier = 'scaladoc'
+      archiveClassifier = 'scaladoc' as Property<String>
       from "$rootDir/LICENSE"
       from "$rootDir/NOTICE"
       from scaladoc.destinationDir
@@ -556,8 +556,8 @@ subprojects {
       xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
       html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
     }
-    maxHeapSize = defaultMaxHeapSize
-    jvmArgs = defaultJvmArgs
+    maxHeapSize = defaultMaxHeapSize as Property<String>
+    jvmArgs = defaultJvmArgs as ListProperty<String>
   }
 
   // Ignore core since its a scala project
@@ -874,7 +874,7 @@ project(':core') {
                                ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
                                ':connect:runtime:genConnectMetricsDocs'], type: Tar) {
-    classifier = 'site-docs'
+    archiveClassifier = 'site-docs' as Property<String>
     compression = Compression.GZIP
     from project.file("$rootDir/docs")
     into 'site-docs'
@@ -1523,9 +1523,9 @@ project(':jmh-benchmarks') {
   apply plugin: 'com.github.johnrengelman.shadow'
 
   shadowJar {
-    baseName = 'kafka-jmh-benchmarks-all'
-    classifier = null
-    version = null
+    archiveBaseName = 'kafka-jmh-benchmarks-all' as Property<String>
+    archiveClassifer = null
+    archiveVersion = null
   }
 
   dependencies {
