@@ -678,11 +678,13 @@ class Partition(val topicPartition: TopicPartition,
                              isr: Set[Int],
                              addingReplicas: Seq[Int],
                              removingReplicas: Seq[Int]): Unit = {
-    remoteReplicasMap.clear()
+    val replicaSet = assignment.toSet
+    val removedReplicas = remoteReplicasMap.keys -- replicaSet
+
     assignment
       .filter(_ != localBrokerId)
       .foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition)))
-
+    removedReplicas.foreach(remoteReplicasMap.remove)
     if (addingReplicas.nonEmpty || removingReplicas.nonEmpty)
       assignmentState = OngoingReassignmentState(addingReplicas, removingReplicas, assignment)
     else
