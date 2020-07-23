@@ -402,7 +402,7 @@ class LogManagerTest {
     val txnIndexName = activeSegment.txnIndex.file.getName
     val indexFilesOnDiskBeforeDelete = activeSegment.log.file.getParentFile.listFiles.filter(_.getName.endsWith("index"))
 
-    val removedLog = logManager.asyncDelete(new TopicPartition(name, 0))
+    val removedLog = logManager.asyncDelete(new TopicPartition(name, 0)).get
     val removedSegment = removedLog.activeSegment
     val indexFilesAfterDelete = Seq(removedSegment.lazyOffsetIndex.file, removedSegment.lazyTimeIndex.file,
       removedSegment.txnIndex.file)
@@ -588,7 +588,7 @@ class LogManagerTest {
     verifyMetrics()
 
     // Trigger the deletion and assert that the metrics have been removed
-    val removedLog = logManager.asyncDelete(tp)
+    val removedLog = logManager.asyncDelete(tp).get
     assertTrue(logMetrics.isEmpty)
 
     // Recreate the Log and assert that the metrics are present
