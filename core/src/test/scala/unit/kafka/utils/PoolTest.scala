@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package unit.kafka.utils
+package kafka.utils
 
-import kafka.utils.Pool
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
