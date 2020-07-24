@@ -125,7 +125,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                 log.info("Deleting global task directory after detecting corruption.");
                 Utils.delete(stateMgr.baseDir());
             } catch (final IOException e) {
-                log.error("Failed to wiping state stores for global task.", e);
+                log.error("Failed to delete global task directory after detecting corruption.", e);
             }
         }
     }
