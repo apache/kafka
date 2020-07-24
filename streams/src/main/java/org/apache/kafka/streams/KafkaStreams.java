@@ -41,6 +41,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.KStream;
@@ -155,6 +156,7 @@ public class KafkaStreams implements AutoCloseable {
     private final QueryableStoreProvider queryableStoreProvider;
     private final Admin adminClient;
     private final StreamsMetricsImpl streamsMetrics;
+    private final Set<String> stateStoreNames;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -805,6 +807,8 @@ public class KafkaStreams implements AutoCloseable {
 
         maybeWarnAboutCodeInRocksDBConfigSetter(log, config);
         rocksDBMetricsRecordingService = maybeCreateRocksDBMetricsRecordingService(clientId, config);
+
+        stateStoreNames = internalTopologyBuilder.allStateStoreName();
     }
 
     private ScheduledExecutorService setupStateDirCleaner() {
@@ -1202,9 +1206,13 @@ public class KafkaStreams implements AutoCloseable {
      * @return A facade wrapping the local {@link StateStore} instances
      * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
      * {@code queryableStoreType} doesn't exist
+     * @throws UnknownStateStoreException if given state store name is unknown.
      */
     public <T> T store(final StoreQueryParameters<T> storeQueryParameters) {
         validateIsRunningOrRebalancing();
+        if (!stateStoreNames.contains(storeQueryParameters.storeName())) {
+            throw new UnknownStateStoreException("Unknown state store: " + storeQueryParameters.storeName());
+        }
         return queryableStoreProvider.getStore(storeQueryParameters);
     }
 

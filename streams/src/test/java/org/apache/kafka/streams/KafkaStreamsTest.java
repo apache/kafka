@@ -35,6 +35,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -48,6 +49,7 @@ import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -115,7 +117,7 @@ public class KafkaStreamsTest {
     private MockTime time;
 
     private Properties props;
-    
+
     @Mock
     private StateDirectory stateDirectory;
     @Mock
@@ -693,6 +695,16 @@ public class KafkaStreamsTest {
         streams.queryMetadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
     }
 
+    @Test(expected = UnknownStateStoreException.class)
+    public void shouldThrowUnknownStateStoreExceptionWhenStoreNotExist() throws Exception {
+        final KafkaStreams streams = new KafkaStreams(new StreamsBuilder().build(), props, supplier, time);
+        streams.start();
+        TestUtils.waitForCondition(
+            () -> streams.state().isRunningOrRebalancing(),
+            "Streams never started.");
+        streams.store(StoreQueryParameters.fromNameAndType("unknown-store", QueryableStoreTypes.keyValueStore()));
+    }
+
     @Test
     public void shouldReturnEmptyLocalStorePartitionLags() {
         // Mock all calls made to compute the offset lags,
@@ -977,7 +989,7 @@ public class KafkaStreamsTest {
             new MockProcessorSupplier<>());
         return topology;
     }
-    
+
     private StreamsBuilder getBuilderWithSource() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("source-topic");
