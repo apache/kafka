@@ -286,7 +286,7 @@ public class GlobalStreamThread extends Thread {
         } catch (final InvalidOffsetException recoverableException) {
             wipeStateStore = true;
             log.error(
-                "Updating global state failed. You can restart KafkaStreams to recover from this error.",
+                "Updating global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
                 recoverableException
             );
             throw new StreamsException(
