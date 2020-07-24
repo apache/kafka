@@ -482,11 +482,12 @@ public class ProcessorStateManager implements StateManager {
                 } catch (final RuntimeException exception) {
                     if (firstException == null) {
                         // do NOT wrap the error if it is actually caused by Streams itself
-                        if (exception instanceof StreamsException)
+                        if (exception instanceof StreamsException) {
                             firstException = exception;
-                        else
+                        } else {
                             firstException = new ProcessorStateException(
                                     format("%sFailed to flush cache of store %s", logPrefix, store.name()), exception);
+                        }
                     }
                     log.error("Failed to flush cache of store {}: ", store.name(), exception);
                 }
@@ -581,7 +582,7 @@ public class ProcessorStateManager implements StateManager {
     public void checkpoint(final Map<TopicPartition, Long> writtenOffsets) {
         // first update each state store's current offset, then checkpoint
         // those stores that are only logged and persistent to the checkpoint file
-        // TODO: we still need to keep it as part of the checkpoint for global tasks; this could be
+        // TODO: we still need to keep the input parameter as part of the checkpoint for global tasks; this could be
         //       removed though when we consolidate global tasks / state managers into this one
         if (!writtenOffsets.isEmpty())
             updateChangelogOffsets(writtenOffsets);
