@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -242,8 +243,8 @@ public class PageViewTypedDemo {
             latch.await();
         } catch (final Throwable e) {
             e.printStackTrace();
-            System.exit(1);
+            Exit.exit(1);
         }
-        System.exit(0);
+        Exit.exit(0);
     }
 }

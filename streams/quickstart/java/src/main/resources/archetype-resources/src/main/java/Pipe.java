@@ -60,8 +60,8 @@ public class Pipe {
             streams.start();
             latch.await();
         } catch (Throwable e) {
-            System.exit(1);
+            Exit.exit(1);
         }
-        System.exit(0);
+        Exit.exit(0);
     }
 }
