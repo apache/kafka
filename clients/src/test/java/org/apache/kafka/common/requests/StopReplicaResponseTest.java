@@ -59,7 +59,7 @@ public class StopReplicaResponseTest {
         List<StopReplicaPartitionError> errors = new ArrayList<>();
         errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(0));
         errors.add(new StopReplicaPartitionError().setTopicName("foo").setPartitionIndex(1)
-            .setErrorCode(Errors.NOT_LEADER_FOR_PARTITION.code()));
+            .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code()));
         StopReplicaResponse response = new StopReplicaResponse(new StopReplicaResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
             .setPartitionErrors(errors));

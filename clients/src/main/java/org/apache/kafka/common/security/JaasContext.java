@@ -62,12 +62,11 @@ public class JaasContext {
             throw new IllegalArgumentException("listenerName should not be null for SERVER");
         if (mechanism == null)
             throw new IllegalArgumentException("mechanism should not be null for SERVER");
-        String globalContextName = GLOBAL_CONTEXT_NAME_SERVER;
         String listenerContextName = listenerName.value().toLowerCase(Locale.ROOT) + "." + GLOBAL_CONTEXT_NAME_SERVER;
         Password dynamicJaasConfig = (Password) configs.get(mechanism.toLowerCase(Locale.ROOT) + "." + SaslConfigs.SASL_JAAS_CONFIG);
         if (dynamicJaasConfig == null && configs.get(SaslConfigs.SASL_JAAS_CONFIG) != null)
             LOG.warn("Server config {} should be prefixed with SASL mechanism name, ignoring config", SaslConfigs.SASL_JAAS_CONFIG);
-        return load(Type.SERVER, listenerContextName, globalContextName, dynamicJaasConfig);
+        return load(Type.SERVER, listenerContextName, GLOBAL_CONTEXT_NAME_SERVER, dynamicJaasConfig);
     }
 
     /**
@@ -79,9 +78,8 @@ public class JaasContext {
      *
      */
     public static JaasContext loadClientContext(Map<String, ?> configs) {
-        String globalContextName = GLOBAL_CONTEXT_NAME_CLIENT;
         Password dynamicJaasConfig = (Password) configs.get(SaslConfigs.SASL_JAAS_CONFIG);
-        return load(JaasContext.Type.CLIENT, null, globalContextName, dynamicJaasConfig);
+        return load(JaasContext.Type.CLIENT, null, GLOBAL_CONTEXT_NAME_CLIENT, dynamicJaasConfig);
     }
 
     static JaasContext load(JaasContext.Type contextType, String listenerContextName,

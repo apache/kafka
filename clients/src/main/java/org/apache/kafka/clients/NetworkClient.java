@@ -818,17 +818,15 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time
      */
     private void handleTimedOutConnections(List<ClientResponse> responses, long now) {
-        Set<String> connectingNodes = connectionStates.connectingNodes();
-        for (String nodeId : connectingNodes) {
-            if (connectionStates.isConnectionSetupTimeout(nodeId, now)) {
-                this.selector.close(nodeId);
-                log.debug(
-                    "Disconnecting from node {} due to socket connection setup timeout. " +
-                    "The timeout value is {} ms.",
-                    nodeId,
-                    connectionStates.connectionSetupTimeoutMs(nodeId));
-                processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
-            }
+        Set<String> nodes = connectionStates.nodesWithConnectionSetupTimeout(now);
+        for (String nodeId : nodes) {
+            this.selector.close(nodeId);
+            log.debug(
+                "Disconnecting from node {} due to socket connection setup timeout. " +
+                "The timeout value is {} ms.",
+                nodeId,
+                connectionStates.connectionSetupTimeoutMs(nodeId));
+            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
         }
     }
 

@@ -65,4 +65,8 @@ public class StateManagerStub implements StateManager {
         return null;
     }
 
+    @Override
+    public String changelogFor(final String storeName) {
+        return null;
+    }
 }

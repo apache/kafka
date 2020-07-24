@@ -2192,7 +2192,7 @@ public class TransactionManagerTest {
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
-        prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, producerId, epoch);
+        prepareProduceResponse(Errors.NOT_LEADER_OR_FOLLOWER, producerId, epoch);
         runUntil(() -> !client.hasPendingResponses());
 
         assertFalse(responseFuture.isDone());
@@ -2385,7 +2385,7 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.transactionContainsPartition(tp0));
         assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
 
-        prepareProduceResponse(Errors.NOT_LEADER_FOR_PARTITION, producerId, epoch);
+        prepareProduceResponse(Errors.NOT_LEADER_OR_FOLLOWER, producerId, epoch);
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(responseFuture.isDone());
 
@@ -2920,10 +2920,10 @@ public class TransactionManagerTest {
         sender.runOnce();
         assertEquals(1, accumulator.batches().get(tp1).size());
 
-        // Partition failover occurs and tp1 returns a NOT_LEADER_FOR_PARTITION error
+        // Partition failover occurs and tp1 returns a NOT_LEADER_OR_FOLLOWER error
         // Despite having the old epoch, the batch should retry
         ProduceResponse.PartitionResponse t1b2Response = new ProduceResponse.PartitionResponse(
-                Errors.NOT_LEADER_FOR_PARTITION, -1, -1, 600L);
+                Errors.NOT_LEADER_OR_FOLLOWER, -1, -1, 600L);
         assertTrue(transactionManager.canRetry(t1b2Response, tp1b2));
         accumulator.reenqueue(tp1b2, time.milliseconds());
 
@@ -3042,10 +3042,10 @@ public class TransactionManagerTest {
         sender.runOnce();
         assertEquals(1, accumulator.batches().get(tp1).size());
 
-        // Partition failover occurs and tp1 returns a NOT_LEADER_FOR_PARTITION error
+        // Partition failover occurs and tp1 returns a NOT_LEADER_OR_FOLLOWER error
         // Despite having the old epoch, the batch should retry
         ProduceResponse.PartitionResponse t1b2Response = new ProduceResponse.PartitionResponse(
-                Errors.NOT_LEADER_FOR_PARTITION, -1, -1, 600L);
+                Errors.NOT_LEADER_OR_FOLLOWER, -1, -1, 600L);
         assertTrue(transactionManager.canRetry(t1b2Response, tp1b2));
         accumulator.reenqueue(tp1b2, time.milliseconds());
 

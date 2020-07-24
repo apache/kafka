@@ -101,6 +101,10 @@ public interface Task {
 
     State state();
 
+    default boolean needsInitializationOrRestoration() {
+        return state() == State.CREATED || state() == State.RESTORING;
+    }
+
     boolean isActive();
 
     boolean isClosed();

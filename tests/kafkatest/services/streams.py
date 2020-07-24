@@ -223,6 +223,10 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
     def node(self):
         return self.nodes[0]
 
+    @property
+    def expectedMessage(self):
+        return 'StreamsTest instance started'
+
     def pids(self, node):
         try:
             pids = [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=str)]
@@ -308,7 +312,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Starting StreamsTest process on " + str(node.account))
         with node.account.monitor_log(self.STDOUT_FILE) as monitor:
             node.account.ssh(self.start_cmd(node))
-            monitor.wait_until('StreamsTest instance started', timeout_sec=60, err_msg="Never saw message indicating StreamsTest finished startup on " + str(node.account))
+            monitor.wait_until(self.expectedMessage, timeout_sec=60, err_msg="Never saw message indicating StreamsTest finished startup on " + str(node.account))
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -496,6 +500,45 @@ class StreamsStandbyTaskService(StreamsTestBaseService):
                                                         kafka,
                                                         "org.apache.kafka.streams.tests.StreamsStandByReplicaTest",
                                                         configs)
+
+class StreamsResetter(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, topic, applicationId):
+        super(StreamsResetter, self).__init__(test_context,
+                                              kafka,
+                                              "kafka.tools.StreamsResetter",
+                                              "")
+        self.topic = topic
+        self.applicationId = applicationId
+
+    @property
+    def expectedMessage(self):
+        return 'Done.'
+
+    def start_cmd(self, node):
+        args = self.args.copy()
+        args['bootstrap.servers'] = self.kafka.bootstrap_servers()
+        args['stdout'] = self.STDOUT_FILE
+        args['stderr'] = self.STDERR_FILE
+        args['pidfile'] = self.PID_FILE
+        args['log4j'] = self.LOG4J_CONFIG_FILE
+        args['application.id'] = self.applicationId
+        args['input.topics'] = self.topic
+        args['kafka_run_class'] = self.path.script("kafka-run-class.sh", node)
+
+        cmd = "(export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j)s\"; " \
+              "%(kafka_run_class)s %(streams_class_name)s " \
+              "--bootstrap-servers %(bootstrap.servers)s " \
+              "--force " \
+              "--application-id %(application.id)s " \
+              "--input-topics %(input.topics)s " \
+              "& echo $! >&3 ) " \
+              "1>> %(stdout)s " \
+              "2>> %(stderr)s " \
+              "3> %(pidfile)s "% args
+
+        self.logger.info("Executing: " + cmd)
+
+        return cmd
 
 
 class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):

@@ -119,4 +119,5 @@ public interface InternalProcessorContext extends ProcessorContext {
                    final byte[] value,
                    final long timestamp);
 
+    String changelogFor(final String storeName);
 }

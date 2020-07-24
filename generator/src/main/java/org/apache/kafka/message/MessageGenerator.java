@@ -149,10 +149,26 @@ public final class MessageGenerator {
         JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
     }
 
-    public static void processDirectories(String packageName, String outputDir, String inputDir) throws Exception {
+    private static TypeClassGenerator createTypeClassGenerator(String packageName,
+                                                               String type) {
+        switch (type) {
+            case "none":
+                return null;
+            case "ApiMessageTypeGenerator":
+                return new ApiMessageTypeGenerator(packageName);
+            default:
+                throw new RuntimeException("Unknown type class generator type '" + type + "'");
+        }
+    }
+
+    public static void processDirectories(String packageName,
+                                          String outputDir,
+                                          String inputDir,
+                                          String typeClassGeneratorType) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
         int numProcessed = 0;
-        ApiMessageTypeGenerator messageTypeGenerator = new ApiMessageTypeGenerator(packageName);
+        TypeClassGenerator typeClassGenerator =
+            createTypeClassGenerator(packageName, typeClassGeneratorType);
         HashSet<String> outputFileNames = new HashSet<>();
         try (DirectoryStream<Path> directoryStream = Files
                 .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
@@ -169,20 +185,20 @@ public final class MessageGenerator {
                         generator.write(writer);
                     }
                     numProcessed++;
-                    messageTypeGenerator.registerMessageType(spec);
+                    if (typeClassGenerator != null) {
+                        typeClassGenerator.registerMessageType(spec);
+                    }
                 } catch (Exception e) {
                     throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }
             }
         }
-        if (messageTypeGenerator.hasRegisteredTypes()) {
-            Path factoryOutputPath = Paths.get(outputDir, API_MESSAGE_TYPE_JAVA);
-            outputFileNames.add(API_MESSAGE_TYPE_JAVA);
+        if (typeClassGenerator != null) {
+            outputFileNames.add(typeClassGenerator.outputName());
+            Path factoryOutputPath = Paths.get(outputDir, typeClassGenerator.outputName());
             try (BufferedWriter writer = Files.newBufferedWriter(factoryOutputPath)) {
-                messageTypeGenerator.generate();
-                messageTypeGenerator.write(writer);
+                typeClassGenerator.generateAndWrite(writer);
             }
-            numProcessed++;
         }
         try (DirectoryStream<Path> directoryStream = Files.
                 newDirectoryStream(Paths.get(outputDir))) {
@@ -267,10 +283,10 @@ public final class MessageGenerator {
         if (args.length == 0) {
             System.out.println(USAGE);
             System.exit(0);
-        } else if (args.length != 3) {
+        } else if (args.length != 4) {
             System.out.println(USAGE);
             System.exit(1);
         }
-        processDirectories(args[0], args[1], args[2]);
+        processDirectories(args[0], args[1], args[2], args[3]);
     }
 }

@@ -537,6 +537,60 @@ public class WorkerSinkTaskTest {
     }
 
     @Test
+    public void testWakeupNotThrownDuringShutdown() throws Exception {
+        createTask(initialState);
+
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+        expectPollInitialAssignment();
+
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+            @Override
+            public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                // stop the task during its second iteration
+                workerTask.stop();
+                return new ConsumerRecords<>(Collections.emptyMap());
+            }
+        });
+        consumer.wakeup();
+        EasyMock.expectLastCall();
+
+        sinkTask.put(EasyMock.eq(Collections.emptyList()));
+        EasyMock.expectLastCall();
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        sinkTask.preCommit(offsets);
+        EasyMock.expectLastCall().andReturn(offsets);
+
+        sinkTask.close(EasyMock.anyObject());
+        PowerMock.expectLastCall();
+
+        // fail the first time
+        consumer.commitSync(EasyMock.eq(offsets));
+        EasyMock.expectLastCall().andThrow(new WakeupException());
+
+        // and succeed the second time
+        consumer.commitSync(EasyMock.eq(offsets));
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.execute();
+
+        assertEquals(0, workerTask.commitFailures());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testRequestCommit() throws Exception {
         createTask(initialState);
 

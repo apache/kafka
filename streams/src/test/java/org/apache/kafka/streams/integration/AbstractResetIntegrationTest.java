@@ -131,7 +131,6 @@ public abstract class AbstractResetIntegrationTest {
 
         producerConfig = new Properties();
         producerConfig.put(ProducerConfig.ACKS_CONFIG, "all");
-        producerConfig.put(ProducerConfig.RETRIES_CONFIG, 0);
         producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
         producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         producerConfig.putAll(commonClientConfig);
@@ -188,7 +187,7 @@ public abstract class AbstractResetIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
     }
 
-    private void add10InputElements() throws java.util.concurrent.ExecutionException, InterruptedException {
+    private void add10InputElements() {
         final List<KeyValue<Long, String>> records = Arrays.asList(KeyValue.pair(0L, "aaa"),
                                                                    KeyValue.pair(1L, "bbb"),
                                                                    KeyValue.pair(0L, "ccc"),
@@ -280,7 +279,7 @@ public abstract class AbstractResetIntegrationTest {
 
         // Reset would fail since long session timeout has been configured
         final boolean cleanResult = tryCleanGlobal(false, null, null);
-        Assert.assertEquals(false, cleanResult);
+        Assert.assertFalse(cleanResult);
 
         // Reset will success with --force, it will force delete active members on broker side
         cleanGlobal(false, "--force", null);
@@ -604,7 +603,7 @@ public abstract class AbstractResetIntegrationTest {
                              final String resetScenario,
                              final String resetScenarioArg) throws Exception {
         final boolean cleanResult = tryCleanGlobal(withIntermediateTopics, resetScenario, resetScenarioArg);
-        Assert.assertEquals(true, cleanResult);
+        Assert.assertTrue(cleanResult);
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {
