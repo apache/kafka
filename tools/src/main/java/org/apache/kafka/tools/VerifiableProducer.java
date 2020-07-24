@@ -20,13 +20,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
-
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
@@ -34,6 +32,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Exit;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -241,7 +240,7 @@ public class VerifiableProducer implements AutoCloseable {
         } else {
             parser.printHelp();
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
-            System.exit(0);
+            Exit.exit(0);
         }
 
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
@@ -530,7 +529,7 @@ public class VerifiableProducer implements AutoCloseable {
         if (args.length == 0) {
             parser.printHelp();
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
-            System.exit(0);
+            Exit.exit(0);
         }
 
         try {
@@ -558,7 +557,7 @@ public class VerifiableProducer implements AutoCloseable {
         } catch (ArgumentParserException e) {
             parser.handleError(e);
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
-            System.exit(1);
+            Exit.exit(1);
         }
     }
 

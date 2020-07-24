@@ -17,8 +17,14 @@
               files="(ApiMessageType).java|MessageDataGenerator.java"/>
     <suppress checks="MethodLength"
               files="MessageDataGenerator.java"/>
+    <suppress checks="Regexp"
+              files="MessageGenerator.java"
+              lines="285,288"/>
 
     <!-- Clients -->
+    <suppress checks="Regexp"
+              files="Exit.java"
+              lines="43"/>
     <suppress checks="ClassFanOutComplexity"
               files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|Utils|TransactionManager|TransactionManagerTest|KafkaAdminClient|NetworkClient|Admin).java"/>
     <suppress checks="ClassFanOutComplexity"
