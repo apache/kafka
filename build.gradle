@@ -320,6 +320,10 @@ subprojects {
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
+
     useJUnit {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
     }
@@ -338,6 +342,10 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
 
     if (it.project.name != 'generator') {
       useJUnit {
@@ -457,7 +465,7 @@ subprojects {
     // See https://www.lightbend.com/blog/scala-inliner-optimizer for more information about the optimizer.
     scalaCompileOptions.additionalParameters += ["-opt:l:inline"]
     scalaCompileOptions.additionalParameters += inlineFrom
-    
+
     // these options are valid for Scala versions < 2.13 only
     // Scala 2.13 removes them, see https://github.com/scala/scala/pull/6502 and https://github.com/scala/scala/pull/5969
     if (versions.baseScala == '2.12') {
@@ -1270,11 +1278,26 @@ project(':streams') {
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }
 
-  test {
-    // The suites are for running sets of tests in IDEs.
-    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
-    exclude '**/*Suite.class'
-  }
+  task testAll(
+    dependsOn: [
+            ':streams:test',
+            ':streams:test-utils:test',
+            ':streams:streams-scala:test',
+            ':streams:upgrade-system-tests-0100:test',
+            ':streams:upgrade-system-tests-0101:test',
+            ':streams:upgrade-system-tests-0102:test',
+            ':streams:upgrade-system-tests-0110:test',
+            ':streams:upgrade-system-tests-10:test',
+            ':streams:upgrade-system-tests-11:test',
+            ':streams:upgrade-system-tests-20:test',
+            ':streams:upgrade-system-tests-21:test',
+            ':streams:upgrade-system-tests-22:test',
+            ':streams:upgrade-system-tests-23:test',
+            ':streams:upgrade-system-tests-24:test',
+            ':streams:upgrade-system-tests-25:test',
+            ':streams:examples:test'
+    ]
+  )
 }
 
 project(':streams:streams-scala') {
