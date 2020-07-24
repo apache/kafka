@@ -30,6 +30,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -39,8 +41,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ClientUtils {
     private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
@@ -103,17 +103,18 @@ public class ClientUtils {
      * @throws StreamsException if the consumer throws an exception
      * @throws org.apache.kafka.common.errors.TimeoutException if the request times out
      */
-    public static Map<TopicPartition, Long> fetchCommittedOffsets(final Set<TopicPartition> partitions,
-                                                                  final Consumer<byte[], byte[]> consumer) {
+    public static Map<TopicPartition, OffsetLike> fetchCommittedOffsets(final Set<TopicPartition> partitions,
+                                                                        final Consumer<byte[], byte[]> consumer) {
         if (partitions.isEmpty()) {
             return Collections.emptyMap();
         }
 
-        final Map<TopicPartition, Long> committedOffsets;
+        final Map<TopicPartition, OffsetLike> committedOffsets;
         try {
             // those which do not have a committed offset would default to 0
             committedOffsets = consumer.committed(partitions).entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
+                .collect(Collectors.toMap(Map.Entry::getKey,
+                                          e -> OffsetLike.realValue(e.getValue() == null ? 0L : e.getValue().offset())));
         } catch (final TimeoutException e) {
             LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", e);
             throw e;

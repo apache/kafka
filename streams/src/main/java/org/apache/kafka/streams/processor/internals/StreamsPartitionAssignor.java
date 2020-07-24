@@ -49,6 +49,7 @@ import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -60,6 +61,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Queue;
@@ -70,9 +72,12 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.function.ToLongFunction;
 import java.util.stream.Collectors;
 
+import static java.util.Comparator.comparing;
 import static java.util.Comparator.comparingLong;
 import static java.util.UUID.randomUUID;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
@@ -80,7 +85,6 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndO
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.EARLIEST_PROBEABLE_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.UNKNOWN;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Configurable {
 
@@ -142,7 +146,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             state.addOwnedPartitions(ownedPartitions, consumerMemberId);
         }
 
-        void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, Long> taskOffsetSums) {
+        void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, OffsetLike> taskOffsetSums) {
             state.addPreviousTasksAndOffsetSums(consumerId, taskOffsetSums);
         }
 
@@ -773,7 +777,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                             final Set<String> newlyCreatedChangelogs,
                                             final Set<String> optimizedSourceChangelogs) {
         boolean fetchEndOffsetsSuccessful;
-        Map<TaskId, Long> allTaskEndOffsetSums;
+        Map<TaskId, OffsetLike> allTaskEndOffsetSums;
         try {
             final Collection<TopicPartition> allChangelogPartitions =
                 changelogsByStatefulTask.values().stream()
@@ -798,7 +802,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> endOffsetsFuture =
                 fetchEndOffsetsFuture(preexistingChangelogPartitions, adminClient);
 
-            final Map<TopicPartition, Long> sourceChangelogEndOffsets =
+            final Map<TopicPartition, OffsetLike> sourceChangelogEndOffsets =
                 fetchCommittedOffsets(preexistingSourceChangelogPartitions, taskManager.mainConsumer());
 
             final Map<TopicPartition, ListOffsetsResultInfo> endOffsets = ClientUtils.getEndOffsets(endOffsetsFuture);
@@ -810,7 +814,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 newlyCreatedChangelogPartitions);
             fetchEndOffsetsSuccessful = true;
         } catch (final StreamsException | TimeoutException e) {
-            allTaskEndOffsetSums = changelogsByStatefulTask.keySet().stream().collect(Collectors.toMap(t -> t, t -> UNKNOWN_OFFSET_SUM));
+            allTaskEndOffsetSums = changelogsByStatefulTask.keySet().stream().collect(Collectors.toMap(t -> t, t -> OffsetLike.unknownSentinel()));
             fetchEndOffsetsSuccessful = false;
         }
 
@@ -833,34 +837,34 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      *
      * @return Map from stateful task to its total end offset summed across all changelog partitions
      */
-    private Map<TaskId, Long> computeEndOffsetSumsByTask(final Map<TaskId, Set<TopicPartition>> changelogsByStatefulTask,
+    private Map<TaskId, OffsetLike> computeEndOffsetSumsByTask(final Map<TaskId, Set<TopicPartition>> changelogsByStatefulTask,
                                                          final Map<TopicPartition, ListOffsetsResultInfo> endOffsets,
-                                                         final Map<TopicPartition, Long> sourceChangelogEndOffsets,
+                                                         final Map<TopicPartition, OffsetLike> sourceChangelogEndOffsets,
                                                          final Collection<TopicPartition> newlyCreatedChangelogPartitions) {
-        final Map<TaskId, Long> taskEndOffsetSums = new HashMap<>();
+        final Map<TaskId, OffsetLike> taskEndOffsetSums = new HashMap<>();
         for (final Map.Entry<TaskId, Set<TopicPartition>> taskEntry : changelogsByStatefulTask.entrySet()) {
             final TaskId task = taskEntry.getKey();
             final Set<TopicPartition> changelogs = taskEntry.getValue();
 
-            taskEndOffsetSums.put(task, 0L);
+            taskEndOffsetSums.put(task, OffsetLike.realValue(0L));
             for (final TopicPartition changelog : changelogs) {
-                final long changelogEndOffset;
+                final OffsetLike changelogEndOffset;
                 if (newlyCreatedChangelogPartitions.contains(changelog)) {
-                    changelogEndOffset = 0L;
+                    changelogEndOffset = OffsetLike.realValue(0L);
                 } else if (sourceChangelogEndOffsets.containsKey(changelog)) {
                     changelogEndOffset = sourceChangelogEndOffsets.get(changelog);
                 } else if (endOffsets.containsKey(changelog)) {
-                    changelogEndOffset = endOffsets.get(changelog).offset();
+                    changelogEndOffset = OffsetLike.realValue(endOffsets.get(changelog).offset());
                 } else {
                     log.debug("Fetched offsets did not contain the changelog {} of task {}", changelog, task);
                     throw new IllegalStateException("Could not get end offset for " + changelog);
                 }
-                final long newEndOffsetSum = taskEndOffsetSums.get(task) + changelogEndOffset;
+                final long newEndOffsetSum = taskEndOffsetSums.get(task).realValue() + changelogEndOffset.realValue();
                 if (newEndOffsetSum < 0) {
-                    taskEndOffsetSums.put(task, Long.MAX_VALUE);
+                    taskEndOffsetSums.put(task, OffsetLike.maxValue());
                     break;
                 } else {
-                    taskEndOffsetSums.put(task, newEndOffsetSum);
+                    taskEndOffsetSums.put(task, OffsetLike.realValue(newEndOffsetSum));
                 }
             }
         }
@@ -1261,7 +1265,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private static SortedSet<TaskId> getPreviousTasksByLag(final ClientState state, final String consumer) {
-        final SortedSet<TaskId> prevTasksByLag = new TreeSet<>(comparingLong(state::lagFor).thenComparing(TaskId::compareTo));
+        final SortedSet<TaskId> prevTasksByLag =
+            new TreeSet<>(comparing(state::lagFor, new OffsetLike.CompareAsLags()).thenComparing(TaskId::compareTo));
         prevTasksByLag.addAll(state.previousTasksForConsumer(consumer));
         return prevTasksByLag;
     }

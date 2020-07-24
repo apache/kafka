@@ -158,7 +158,7 @@ public class StateDirectoryTest {
         final OffsetCheckpoint checkpointFile = new OffsetCheckpoint(new File(directory.directoryForTask(taskId), CHECKPOINT_FILE_NAME));
         assertTrue(directory.directoryForTaskIsEmpty(taskId));
 
-        checkpointFile.write(Collections.singletonMap(new TopicPartition("topic", 0), 0L));
+        checkpointFile.write(Collections.singletonMap(new TopicPartition("topic", 0), OffsetLike.realValue(0L)));
         assertTrue(directory.directoryForTaskIsEmpty(taskId));
 
         // if some store dir is created, it should not be empty

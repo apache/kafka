@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 
 import java.util.Collections;
@@ -87,7 +88,7 @@ public class MockRecordCollector implements RecordCollector {
     public void closeDirty() {}
 
     @Override
-    public Map<TopicPartition, Long> offsets() {
+    public Map<TopicPartition, OffsetLike> offsets() {
         return Collections.emptyMap();
     }
 

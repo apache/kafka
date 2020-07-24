@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
@@ -241,8 +242,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             final TreeSet<UUID> caughtUpClients = new TreeSet<>();
             for (final Map.Entry<UUID, ClientState> clientEntry : clientStates.entrySet()) {
                 final UUID client = clientEntry.getKey();
-                final long taskLag = clientEntry.getValue().lagFor(task);
-                if (activeRunning(taskLag) || unbounded(acceptableRecoveryLag) || acceptable(acceptableRecoveryLag, taskLag)) {
+                final OffsetLike taskLag = clientEntry.getValue().lagFor(task);
+                if (taskLag.isLatestSentinel() || unbounded(acceptableRecoveryLag) || acceptable(acceptableRecoveryLag, taskLag)) {
                     caughtUpClients.add(client);
                 }
             }
@@ -256,11 +257,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         return acceptableRecoveryLag == Long.MAX_VALUE;
     }
 
-    private static boolean acceptable(final long acceptableRecoveryLag, final long taskLag) {
-        return taskLag >= 0 && taskLag <= acceptableRecoveryLag;
-    }
-
-    private static boolean activeRunning(final long taskLag) {
-        return taskLag == Task.LATEST_OFFSET;
+    private static boolean acceptable(final long acceptableRecoveryLag, final OffsetLike taskLag) {
+        return taskLag.isRealValue() && taskLag.realValue() <= acceptableRecoveryLag;
     }
 }

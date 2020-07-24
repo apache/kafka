@@ -43,15 +43,15 @@ public class StateConsumerTest {
     private final TopicPartition topicTwo = new TopicPartition("topic-two", 1);
     private final MockTime time = new MockTime();
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-    private final Map<TopicPartition, Long> partitionOffsets = new HashMap<>();
+    private final Map<TopicPartition, OffsetLike> partitionOffsets = new HashMap<>();
     private final LogContext logContext = new LogContext("test ");
     private GlobalStreamThread.StateConsumer stateConsumer;
     private TaskStub stateMaintainer;
 
     @Before
     public void setUp() {
-        partitionOffsets.put(topicOne, 20L);
-        partitionOffsets.put(topicTwo, 30L);
+        partitionOffsets.put(topicOne, OffsetLike.realValue(20L));
+        partitionOffsets.put(topicTwo, OffsetLike.realValue(30L));
         stateMaintainer = new TaskStub(partitionOffsets);
         stateConsumer = new GlobalStreamThread.StateConsumer(logContext, consumer, stateMaintainer, time, Duration.ofMillis(10L), FLUSH_INTERVAL);
     }
@@ -122,17 +122,17 @@ public class StateConsumerTest {
 
 
     private static class TaskStub implements GlobalStateMaintainer {
-        private final Map<TopicPartition, Long> partitionOffsets;
+        private final Map<TopicPartition, OffsetLike> partitionOffsets;
         private final Map<TopicPartition, Integer> updatedPartitions = new HashMap<>();
         private boolean flushed;
         private boolean closed;
 
-        TaskStub(final Map<TopicPartition, Long> partitionOffsets) {
+        TaskStub(final Map<TopicPartition, OffsetLike> partitionOffsets) {
             this.partitionOffsets = partitionOffsets;
         }
 
         @Override
-        public Map<TopicPartition, Long> initialize() {
+        public Map<TopicPartition, OffsetLike> initialize() {
             return partitionOffsets;
         }
 

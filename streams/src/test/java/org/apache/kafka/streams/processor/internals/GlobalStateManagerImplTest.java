@@ -165,25 +165,25 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldReadCheckpointOffsets() throws IOException {
-        final Map<TopicPartition, Long> expected = writeCheckpoint();
+        final Map<TopicPartition, OffsetLike> expected = writeCheckpoint();
 
         stateManager.initialize();
-        final Map<TopicPartition, Long> offsets = stateManager.changelogOffsets();
+        final Map<TopicPartition, OffsetLike> offsets = stateManager.changelogOffsets();
         assertEquals(expected, offsets);
     }
 
     @Test
     public void shouldThrowStreamsExceptionForOldTopicPartitions() throws IOException {
-        final HashMap<TopicPartition, Long> expectedOffsets = new HashMap<>();
-        expectedOffsets.put(t1, 1L);
-        expectedOffsets.put(t2, 1L);
-        expectedOffsets.put(t3, 1L);
-        expectedOffsets.put(t4, 1L);
+        final HashMap<TopicPartition, OffsetLike> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, OffsetLike.realValue(1L));
+        expectedOffsets.put(t2, OffsetLike.realValue(1L));
+        expectedOffsets.put(t3, OffsetLike.realValue(1L));
+        expectedOffsets.put(t4, OffsetLike.realValue(1L));
 
         // add an old topic (a topic not associated with any global state store)
-        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>(expectedOffsets);
+        final HashMap<TopicPartition, OffsetLike> startOffsets = new HashMap<>(expectedOffsets);
         final TopicPartition tOld = new TopicPartition("oldTopic", 1);
-        startOffsets.put(tOld, 1L);
+        startOffsets.put(tOld, OffsetLike.realValue(1L));
 
         // start with a checkpoint file will all topic-partitions: expected and old (not
         // associated with any global state store).
@@ -361,7 +361,7 @@ public class GlobalStateManagerImplTest {
 
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 StateManagerUtil.CHECKPOINT_FILE_NAME));
-        offsetCheckpoint.write(Collections.singletonMap(t1, 5L));
+        offsetCheckpoint.write(Collections.singletonMap(t1, OffsetLike.realValue(5L)));
 
         stateManager.initialize();
         stateManager.registerStore(store1, stateRestoreCallback);
@@ -512,12 +512,12 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldCheckpointOffsets() throws IOException {
-        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
+        final Map<TopicPartition, OffsetLike> offsets = Collections.singletonMap(t1, OffsetLike.realValue(25L));
         stateManager.initialize();
 
         stateManager.checkpoint(offsets);
 
-        final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
+        final Map<TopicPartition, OffsetLike> result = readOffsetsCheckpoint();
         assertThat(result, equalTo(offsets));
         assertThat(stateManager.changelogOffsets(), equalTo(offsets));
     }
@@ -530,12 +530,12 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(20, 0, t2);
         stateManager.registerStore(store2, stateRestoreCallback);
 
-        final Map<TopicPartition, Long> initialCheckpoint = stateManager.changelogOffsets();
-        stateManager.checkpoint(Collections.singletonMap(t1, 101L));
+        final Map<TopicPartition, OffsetLike> initialCheckpoint = stateManager.changelogOffsets();
+        stateManager.checkpoint(Collections.singletonMap(t1, OffsetLike.realValue(101L)));
 
-        final Map<TopicPartition, Long> updatedCheckpoint = stateManager.changelogOffsets();
+        final Map<TopicPartition, OffsetLike> updatedCheckpoint = stateManager.changelogOffsets();
         assertThat(updatedCheckpoint.get(t2), equalTo(initialCheckpoint.get(t2)));
-        assertThat(updatedCheckpoint.get(t1), equalTo(101L));
+        assertThat(updatedCheckpoint.get(t1), equalTo(OffsetLike.realValue(101L)));
     }
 
     @Test
@@ -567,8 +567,8 @@ public class GlobalStateManagerImplTest {
         stateManager.checkpoint(Collections.emptyMap());
         stateManager.close();
 
-        final Map<TopicPartition, Long> checkpointMap = stateManager.changelogOffsets();
-        assertThat(checkpointMap, equalTo(Collections.singletonMap(t1, 10L)));
+        final Map<TopicPartition, OffsetLike> checkpointMap = stateManager.changelogOffsets();
+        assertThat(checkpointMap, equalTo(Collections.singletonMap(t1, OffsetLike.realValue(10L))));
         assertThat(readOffsetsCheckpoint(), equalTo(checkpointMap));
     }
 
@@ -582,7 +582,7 @@ public class GlobalStateManagerImplTest {
         assertThat(readOffsetsCheckpoint(), equalTo(Collections.emptyMap()));
     }
 
-    private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
+    private Map<TopicPartition, OffsetLike> readOffsetsCheckpoint() throws IOException {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 StateManagerUtil.CHECKPOINT_FILE_NAME));
         return offsetCheckpoint.read();
@@ -700,9 +700,9 @@ public class GlobalStateManagerImplTest {
         }
     }
 
-    private Map<TopicPartition, Long> writeCheckpoint() throws IOException {
+    private Map<TopicPartition, OffsetLike> writeCheckpoint() throws IOException {
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkpointFile);
-        final Map<TopicPartition, Long> expected = Collections.singletonMap(t1, 1L);
+        final Map<TopicPartition, OffsetLike> expected = Collections.singletonMap(t1, OffsetLike.realValue(1L));
         checkpoint.write(expected);
         return expected;
     }

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -71,8 +72,8 @@ public final class AssignmentTestUtils {
 
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
     public static final List<TaskId> EMPTY_TASK_LIST = emptyList();
-    public static final Map<TaskId, Long> EMPTY_TASK_OFFSET_SUMS = emptyMap();
-    public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
+    public static final Map<TaskId, OffsetLike> EMPTY_TASK_OFFSET_SUMS = emptyMap();
+    public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = emptyMap();
 
     private AssignmentTestUtils() {}
 

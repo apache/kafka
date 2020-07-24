@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -165,7 +166,7 @@ public class StandbyTaskEOSIntegrationTest {
             new StreamsConfig(props), new MockTime(), true);
 
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId), ".checkpoint"))
-            .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), 5L));
+            .write(Collections.singletonMap(new TopicPartition("unknown-topic", 0), OffsetLike.realValue(5L)));
 
         assertTrue(new File(stateDirectory.directoryForTask(taskId),
                             "rocksdb/KSTREAM-AGGREGATE-STATE-STORE-0000000001").mkdirs());

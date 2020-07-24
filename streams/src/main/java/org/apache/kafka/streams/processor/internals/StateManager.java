@@ -40,9 +40,9 @@ interface StateManager {
 
     void flush();
 
-    void checkpoint(final Map<TopicPartition, Long> offsets);
+    void checkpoint(final Map<TopicPartition, OffsetLike> offsets);
 
-    Map<TopicPartition, Long> changelogOffsets();
+    Map<TopicPartition, OffsetLike> changelogOffsets();
 
     void close() throws IOException;
 

@@ -44,6 +44,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -139,16 +140,16 @@ public class RestoreIntegrationTest {
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
-        final int offsetCheckpointed = 1000;
+        final long offsetCheckpointed = 1000;
         createStateForRestoration(inputStream, 0);
         setCommittedOffset(inputStream, offsetLimitDelta);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(inputStream, 0), (long) offsetCheckpointed - 1));
+                .write(Collections.singletonMap(new TopicPartition(inputStream, 0), OffsetLike.realValue(offsetCheckpointed - 1)));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(inputStream, 1), (long) offsetCheckpointed - 1));
+                .write(Collections.singletonMap(new TopicPartition(inputStream, 1), OffsetLike.realValue(offsetCheckpointed - 1)));
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
@@ -205,16 +206,16 @@ public class RestoreIntegrationTest {
         final Properties props = props();
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
-        final int offsetCheckpointed = 1000;
+        final long offsetCheckpointed = 1000;
         createStateForRestoration(changelog, 0);
         createStateForRestoration(inputStream, 10000);
 
         final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         // note here the checkpointed offset is the last processed record's offset, so without control message we should write this offset - 1
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(changelog, 0), (long) offsetCheckpointed - 1));
+                .write(Collections.singletonMap(new TopicPartition(changelog, 0), OffsetLike.realValue(offsetCheckpointed - 1)));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
-                .write(Collections.singletonMap(new TopicPartition(changelog, 1), (long) offsetCheckpointed - 1));
+                .write(Collections.singletonMap(new TopicPartition(changelog, 1), OffsetLike.realValue(offsetCheckpointed - 1)));
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);

@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
@@ -49,10 +50,10 @@ public class OffsetCheckpointTest {
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
         try {
-            final Map<TopicPartition, Long> offsets = new HashMap<>();
-            offsets.put(new TopicPartition(topic, 0), 0L);
-            offsets.put(new TopicPartition(topic, 1), 1L);
-            offsets.put(new TopicPartition(topic, 2), 2L);
+            final Map<TopicPartition, OffsetLike> offsets = new HashMap<>();
+            offsets.put(new TopicPartition(topic, 0), OffsetLike.realValue(0L));
+            offsets.put(new TopicPartition(topic, 1), OffsetLike.realValue(1L));
+            offsets.put(new TopicPartition(topic, 2), OffsetLike.realValue(2L));
 
             checkpoint.write(offsets);
             assertEquals(offsets, checkpoint.read());
@@ -60,7 +61,7 @@ public class OffsetCheckpointTest {
             checkpoint.delete();
             assertFalse(f.exists());
 
-            offsets.put(new TopicPartition(topic, 3), 3L);
+            offsets.put(new TopicPartition(topic, 3), OffsetLike.realValue(3L));
             checkpoint.write(offsets);
             assertEquals(offsets, checkpoint.read());
         } finally {
@@ -74,7 +75,7 @@ public class OffsetCheckpointTest {
         final File f = new File(TestUtils.tempDirectory().getAbsolutePath(), "kafka.tmp");
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
-        checkpoint.write(Collections.<TopicPartition, Long>emptyMap());
+        checkpoint.write(Collections.emptyMap());
 
         assertFalse(f.exists());
 
@@ -104,14 +105,14 @@ public class OffsetCheckpointTest {
     public void shouldReadAndWriteSentinelOffset() throws IOException {
         final File f = TestUtils.tempFile();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
-        final long sentinelOffset = -3L;
+        final OffsetLike sentinelOffset = OffsetLike.unknownSentinel();
 
         try {
-            final Map<TopicPartition, Long> offsetsToWrite = new HashMap<>();
+            final Map<TopicPartition, OffsetLike> offsetsToWrite = new HashMap<>();
             offsetsToWrite.put(new TopicPartition(topic, 1), sentinelOffset);
             checkpoint.write(offsetsToWrite);
 
-            final Map<TopicPartition, Long> readOffsets = checkpoint.read();
+            final Map<TopicPartition, OffsetLike> readOffsets = checkpoint.read();
             assertThat(readOffsets.get(new TopicPartition(topic, 1)), equalTo(sentinelOffset));
         } finally {
             checkpoint.delete();
@@ -124,10 +125,10 @@ public class OffsetCheckpointTest {
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
 
         try {
-            final Map<TopicPartition, Long> offsets = new HashMap<>();
-            offsets.put(new TopicPartition(topic, 0), 0L);
-            offsets.put(new TopicPartition(topic, 1), -1L); // invalid
-            offsets.put(new TopicPartition(topic, 2), 2L);
+            final Map<TopicPartition, OffsetLike> offsets = new HashMap<>();
+            offsets.put(new TopicPartition(topic, 0), OffsetLike.realValue(0L));
+            offsets.put(new TopicPartition(topic, 1), OffsetLike.fromSerialValue(-1L)); // invalid
+            offsets.put(new TopicPartition(topic, 2), OffsetLike.realValue(2L));
 
             assertThrows(IllegalStateException.class, () -> checkpoint.write(offsets));
         } finally {

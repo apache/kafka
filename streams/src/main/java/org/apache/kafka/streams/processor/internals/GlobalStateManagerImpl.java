@@ -49,7 +49,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 
@@ -72,7 +74,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Duration pollTime;
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final OffsetCheckpoint checkpointFile;
-    private final Map<TopicPartition, Long> checkpointFileCache;
+    private final Map<TopicPartition, OffsetLike> checkpointFileCache;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
@@ -185,12 +187,16 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
         log.info("Restoring state for global store {}", store.name());
         final List<TopicPartition> topicPartitions = topicPartitionsForStore(store);
-        Map<TopicPartition, Long> highWatermarks = null;
+        Map<TopicPartition, OffsetLike> highWatermarks = null;
 
         int attempts = 0;
         while (highWatermarks == null) {
             try {
-                highWatermarks = globalConsumer.endOffsets(topicPartitions);
+                highWatermarks = globalConsumer.endOffsets(topicPartitions)
+                                               .entrySet()
+                                               .stream()
+                                               .map(e -> mkEntry(e.getKey(), OffsetLike.realValue(e.getValue())))
+                                               .collect(Utils.entriesToMap(TreeMap::new));
             } catch (final TimeoutException retryableException) {
                 if (++attempts > retries) {
                     log.error("Failed to get end offsets for topic partitions of global store {} after {} retry attempts. " +
@@ -270,27 +276,27 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
                               final List<TopicPartition> topicPartitions,
-                              final Map<TopicPartition, Long> highWatermarks,
+                              final Map<TopicPartition, OffsetLike> highWatermarks,
                               final String storeName,
                               final RecordConverter recordConverter) {
         for (final TopicPartition topicPartition : topicPartitions) {
             globalConsumer.assign(Collections.singletonList(topicPartition));
-            final Long checkpoint = checkpointFileCache.get(topicPartition);
+            final OffsetLike checkpoint = checkpointFileCache.get(topicPartition);
             if (checkpoint != null) {
-                globalConsumer.seek(topicPartition, checkpoint);
+                globalConsumer.seek(topicPartition, checkpoint.realValue());
             } else {
                 globalConsumer.seekToBeginning(Collections.singletonList(topicPartition));
             }
 
-            long offset = globalConsumer.position(topicPartition);
-            final Long highWatermark = highWatermarks.get(topicPartition);
+            OffsetLike offset = OffsetLike.realValue(globalConsumer.position(topicPartition));
+            final OffsetLike highWatermark = highWatermarks.get(topicPartition);
             final RecordBatchingStateRestoreCallback stateRestoreAdapter =
                 StateRestoreCallbackAdapter.adapt(stateRestoreCallback);
 
-            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
+            stateRestoreListener.onRestoreStart(topicPartition, storeName, offset.realValue(), highWatermark.realValue());
             long restoreCount = 0L;
 
-            while (offset < highWatermark) {
+            while (offset.realValue() < highWatermark.realValue()) {
                 try {
                     final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
                     final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
@@ -299,9 +305,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                             restoreRecords.add(recordConverter.convert(record));
                         }
                     }
-                    offset = globalConsumer.position(topicPartition);
+                    offset = OffsetLike.realValue(globalConsumer.position(topicPartition));
                     stateRestoreAdapter.restoreBatch(restoreRecords);
-                    stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
+                    stateRestoreListener.onBatchRestored(topicPartition, storeName, offset.realValue(), restoreRecords.size());
                     restoreCount += restoreRecords.size();
                 } catch (final InvalidOffsetException recoverableException) {
                     log.warn("Restoring GlobalStore {} failed due to: {}. Deleting global store to recreate from scratch.",
@@ -373,13 +379,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+    public void checkpoint(final Map<TopicPartition, OffsetLike> offsets) {
         checkpointFileCache.putAll(offsets);
 
-        final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
+        final Map<TopicPartition, OffsetLike> filteredOffsets = new HashMap<>();
 
         // Skip non persistent store
-        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointFileCache.entrySet()) {
+        for (final Map.Entry<TopicPartition, OffsetLike> topicPartitionOffset : checkpointFileCache.entrySet()) {
             final String topic = topicPartitionOffset.getKey().topic();
             if (!globalNonPersistentStoresTopics.contains(topic)) {
                 filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
@@ -399,7 +405,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> changelogOffsets() {
+    public Map<TopicPartition, OffsetLike> changelogOffsets() {
         return Collections.unmodifiableMap(checkpointFileCache);
     }
 }

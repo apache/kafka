@@ -362,15 +362,15 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
         task.addRecords(partition1, asList(
-            getConsumerRecord(partition1, 10),
-            getConsumerRecord(partition1, 20),
-            getConsumerRecord(partition1, 30)
+            getConsumerRecord(partition1, OffsetLike.realValue(10)),
+            getConsumerRecord(partition1, OffsetLike.realValue(20)),
+            getConsumerRecord(partition1, OffsetLike.realValue(30))
         ));
 
         task.addRecords(partition2, asList(
-            getConsumerRecord(partition2, 25),
-            getConsumerRecord(partition2, 35),
-            getConsumerRecord(partition2, 45)
+            getConsumerRecord(partition2, OffsetLike.realValue(25)),
+            getConsumerRecord(partition2, OffsetLike.realValue(35)),
+            getConsumerRecord(partition2, OffsetLike.realValue(45))
         ));
 
         assertTrue(task.process(0L));
@@ -413,8 +413,8 @@ public class StreamTaskTest {
         assertThat(metric.metricValue(), equalTo(0.0));
 
         task.addRecords(partition1, asList(
-            getConsumerRecord(partition1, 10),
-            getConsumerRecord(partition1, 20)
+            getConsumerRecord(partition1, OffsetLike.realValue(10)),
+            getConsumerRecord(partition1, OffsetLike.realValue(20))
         ));
         task.recordProcessTimeRatioAndBufferSize(100L, time.milliseconds());
 
@@ -461,7 +461,7 @@ public class StreamTaskTest {
         final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
 
         // e2e latency = 100
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, OffsetLike.realValue(0L))));
         task.process(100L);
 
         assertThat(maxMetric.metricValue(), equalTo(100.0));
@@ -659,15 +659,15 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false, "100"), StreamsConfig.METRICS_LATEST);
 
         task.addRecords(partition1, asList(
-            getConsumerRecord(partition1, 10),
-            getConsumerRecord(partition1, 20)
+            getConsumerRecord(partition1, OffsetLike.realValue(10)),
+            getConsumerRecord(partition1, OffsetLike.realValue(20))
         ));
 
         task.addRecords(partition2, asList(
-            getConsumerRecord(partition2, 35),
-            getConsumerRecord(partition2, 45),
-            getConsumerRecord(partition2, 55),
-            getConsumerRecord(partition2, 65)
+            getConsumerRecord(partition2, OffsetLike.realValue(35)),
+            getConsumerRecord(partition2, OffsetLike.realValue(45)),
+            getConsumerRecord(partition2, OffsetLike.realValue(55)),
+            getConsumerRecord(partition2, OffsetLike.realValue(65))
         ));
 
         assertTrue(task.process(0L));
@@ -678,9 +678,9 @@ public class StreamTaskTest {
         assertTrue(consumer.paused().contains(partition2));
 
         task.addRecords(partition1, asList(
-            getConsumerRecord(partition1, 30),
-            getConsumerRecord(partition1, 40),
-            getConsumerRecord(partition1, 50)
+            getConsumerRecord(partition1, OffsetLike.realValue(30)),
+            getConsumerRecord(partition1, OffsetLike.realValue(40)),
+            getConsumerRecord(partition1, OffsetLike.realValue(50))
         ));
 
         assertEquals(2, consumer.paused().size());
@@ -715,17 +715,17 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.addRecords(partition1, asList(
-            getConsumerRecord(partition1, 20),
-            getConsumerRecord(partition1, 142),
-            getConsumerRecord(partition1, 155),
-            getConsumerRecord(partition1, 160)
+            getConsumerRecord(partition1, OffsetLike.realValue(20)),
+            getConsumerRecord(partition1, OffsetLike.realValue(142)),
+            getConsumerRecord(partition1, OffsetLike.realValue(155)),
+            getConsumerRecord(partition1, OffsetLike.realValue(160))
         ));
 
         task.addRecords(partition2, asList(
-            getConsumerRecord(partition2, 25),
-            getConsumerRecord(partition2, 145),
-            getConsumerRecord(partition2, 159),
-            getConsumerRecord(partition2, 161)
+            getConsumerRecord(partition2, OffsetLike.realValue(25)),
+            getConsumerRecord(partition2, OffsetLike.realValue(145)),
+            getConsumerRecord(partition2, OffsetLike.realValue(159)),
+            getConsumerRecord(partition2, OffsetLike.realValue(161))
         ));
 
         // st: -1
@@ -800,15 +800,15 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.addRecords(partition1, asList(
-            getConsumerRecord(partition1, 20),
-            getConsumerRecord(partition1, 30),
-            getConsumerRecord(partition1, 40)
+            getConsumerRecord(partition1, OffsetLike.realValue(20)),
+            getConsumerRecord(partition1, OffsetLike.realValue(30)),
+            getConsumerRecord(partition1, OffsetLike.realValue(40))
         ));
 
         task.addRecords(partition2, asList(
-            getConsumerRecord(partition2, 25),
-            getConsumerRecord(partition2, 35),
-            getConsumerRecord(partition2, 45)
+            getConsumerRecord(partition2, OffsetLike.realValue(25)),
+            getConsumerRecord(partition2, OffsetLike.realValue(35)),
+            getConsumerRecord(partition2, OffsetLike.realValue(45))
         ));
 
         assertFalse(task.maybePunctuateStreamTime());
@@ -855,7 +855,7 @@ public class StreamTaskTest {
 
         assertFalse(task.commitNeeded());
 
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, OffsetLike.realValue(0))));
         assertTrue(task.process(0L));
         assertTrue(task.commitNeeded());
 
@@ -892,9 +892,9 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.addRecords(partition1, Arrays.asList(
-            getConsumerRecord(partition1, 0L),
-            getConsumerRecord(partition1, 3L),
-            getConsumerRecord(partition1, 5L)));
+            getConsumerRecord(partition1, OffsetLike.realValue(0L)),
+            getConsumerRecord(partition1, OffsetLike.realValue(3L)),
+            getConsumerRecord(partition1, OffsetLike.realValue(5L))));
 
         task.process(0L);
         task.process(0L);
@@ -910,12 +910,12 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        consumer.addRecord(getConsumerRecord(partition1, 0L));
-        consumer.addRecord(getConsumerRecord(partition1, 1L));
-        consumer.addRecord(getConsumerRecord(partition1, 2L));
+        consumer.addRecord(getConsumerRecord(partition1, OffsetLike.realValue(0L)));
+        consumer.addRecord(getConsumerRecord(partition1, OffsetLike.realValue(1L)));
+        consumer.addRecord(getConsumerRecord(partition1, OffsetLike.realValue(2L)));
         consumer.poll(Duration.ZERO);
 
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0L)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, OffsetLike.realValue(0L))));
         task.process(0L);
         final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata = task.prepareCommit();
 
@@ -1192,14 +1192,14 @@ public class StreamTaskTest {
         task.completeRestoration();
 
         task.addRecords(partition1, asList(
-            getConsumerRecord(partition1, 10),
-            getConsumerRecord(partition1, 20),
-            getConsumerRecord(partition1, 30)
+            getConsumerRecord(partition1, OffsetLike.realValue(10)),
+            getConsumerRecord(partition1, OffsetLike.realValue(20)),
+            getConsumerRecord(partition1, OffsetLike.realValue(30))
         ));
         task.addRecords(partition2, asList(
-            getConsumerRecord(partition2, 5),  // this is the first record to process
-            getConsumerRecord(partition2, 35),
-            getConsumerRecord(partition2, 45)
+            getConsumerRecord(partition2, OffsetLike.realValue(5)),  // this is the first record to process
+            getConsumerRecord(partition2, OffsetLike.realValue(35)),
+            getConsumerRecord(partition2, OffsetLike.realValue(45))
         ));
 
         assertThrows(StreamsException.class, () -> task.process(0L));
@@ -1260,7 +1260,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointOffsetsOnCommit() {
-        final Long offset = 543L;
+        final OffsetLike offset = OffsetLike.realValue(543L);
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset)).anyTimes();
         stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(changelogPartition, offset)));
@@ -1411,15 +1411,15 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 5L)));
-        task.addRecords(repartition, singletonList(getConsumerRecord(repartition, 10L)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, OffsetLike.realValue(5L))));
+        task.addRecords(repartition, singletonList(getConsumerRecord(repartition, OffsetLike.realValue(10L))));
 
         assertTrue(task.process(0L));
         assertTrue(task.process(0L));
 
         task.prepareCommit();
 
-        final Map<TopicPartition, Long> map = task.purgeableOffsets();
+        final Map<TopicPartition, OffsetLike> map = task.purgeableOffsets();
 
         assertThat(map, equalTo(Collections.singletonMap(repartition, 11L)));
     }
@@ -1499,7 +1499,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointTheConsumedOffsetsForSuspendedRunningTaskWithCommitNeeded() {
-        final Map<TopicPartition, Long> checkpointableOffsets = singletonMap(partition1, 0L);
+        final Map<TopicPartition, OffsetLike> checkpointableOffsets = singletonMap(partition1, OffsetLike.realValue(0L));
         stateManager.checkpoint(EasyMock.eq(checkpointableOffsets));
         EasyMock.expect(recordCollector.offsets()).andReturn(checkpointableOffsets).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
@@ -1507,7 +1507,7 @@ public class StreamTaskTest {
         task = createStatefulTask(createConfig(false, "0"), true);
         task.initializeIfNeeded();
         task.completeRestoration();
-        task.addRecords(partition1, singleton(getConsumerRecord(partition1, 10)));
+        task.addRecords(partition1, singleton(getConsumerRecord(partition1, OffsetLike.realValue(10))));
         task.process(100L);
         assertTrue(task.commitNeeded());
 
@@ -1518,7 +1518,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldReturnStateManagerChangelogOffsets() {
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition1, 50L)).anyTimes();
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition1, OffsetLike.realValue(50L))).anyTimes();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition1)).anyTimes();
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
@@ -1531,7 +1531,7 @@ public class StreamTaskTest {
 
         task.completeRestoration();
 
-        assertEquals(Collections.singletonMap(partition1, Task.LATEST_OFFSET), task.changelogOffsets());
+        assertEquals(Collections.singletonMap(partition1, OffsetLike.latestSentinel()), task.changelogOffsets());
     }
 
     @Test
@@ -1615,8 +1615,8 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCheckpointOffsetsOnPostCommitIfCommitNeeded() {
-        final long offset = 543L;
-        final long consumedOffset = 345L;
+        final OffsetLike offset = OffsetLike.realValue(543L);
+        final OffsetLike consumedOffset = OffsetLike.realValue(345L);
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset)).anyTimes();
         EasyMock.expectLastCall();
@@ -1647,7 +1647,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldSwallowExceptionOnCloseCleanError() {
-        final long offset = 543L;
+        final OffsetLike offset = OffsetLike.realValue(543L);
 
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap()).anyTimes();
         stateManager.checkpoint(EasyMock.eq(Collections.singletonMap(partition1, offset)));
@@ -1684,7 +1684,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowOnCloseCleanFlushError() {
-        final long offset = 543L;
+        final OffsetLike offset = OffsetLike.realValue(543L);
 
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.singletonMap(changelogPartition, offset));
         stateManager.flush();
@@ -1715,7 +1715,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldThrowOnCloseCleanCheckpointError() {
-        final long offset = 543L;
+        final OffsetLike offset = OffsetLike.realValue(543L);
         EasyMock.expect(recordCollector.offsets()).andReturn(emptyMap());
         stateManager.checkpoint(Collections.singletonMap(partition1, offset));
         EasyMock.expectLastCall().andThrow(new ProcessorStateException("KABOOM!")).anyTimes();
@@ -1845,7 +1845,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, OffsetLike.realValue(0))));
         task.process(0L);
         assertTrue(task.commitNeeded());
 
@@ -1858,7 +1858,7 @@ public class StreamTaskTest {
         task.initializeIfNeeded();
         task.completeRestoration();
 
-        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 0)));
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, OffsetLike.realValue(0))));
         task.process(0L);
         assertTrue(task.commitNeeded());
 
@@ -2096,12 +2096,12 @@ public class StreamTaskTest {
             context);
     }
 
-    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final long offset) {
+    private ConsumerRecord<byte[], byte[]> getConsumerRecord(final TopicPartition topicPartition, final OffsetLike offset) {
         return new ConsumerRecord<>(
             topicPartition.topic(),
             topicPartition.partition(),
-            offset,
-            offset, // use the offset as the timestamp
+            offset.realValue(),
+            offset.realValue(), // use the offset as the timestamp
             TimestampType.CREATE_TIME,
             0L,
             0,

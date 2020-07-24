@@ -208,7 +208,7 @@ public class StandbyTaskTest {
         stateManager.flush();
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, OffsetLike.realValue(50L)));
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition)).anyTimes();
         EasyMock.replay(stateManager);
 
@@ -222,7 +222,7 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldReturnStateManagerChangelogOffsets() {
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, OffsetLike.realValue(50L)));
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();
@@ -281,7 +281,7 @@ public class StandbyTaskTest {
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
         EasyMock.expectLastCall();
-        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, 50L));
+        EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.singletonMap(partition, OffsetLike.realValue(50L)));
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition)).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
@@ -316,9 +316,9 @@ public class StandbyTaskTest {
     public void shouldOnlyNeedCommitWhenChangelogOffsetChanged() {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition)).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets())
-            .andReturn(Collections.singletonMap(partition, 50L))
-            .andReturn(Collections.singletonMap(partition, 50L))
-            .andReturn(Collections.singletonMap(partition, 60L)).anyTimes();
+            .andReturn(Collections.singletonMap(partition, OffsetLike.realValue(50L)))
+            .andReturn(Collections.singletonMap(partition, OffsetLike.realValue(50L)))
+            .andReturn(Collections.singletonMap(partition, OffsetLike.realValue(60L))).anyTimes();
         stateManager.flush();
         EasyMock.expectLastCall();
         stateManager.checkpoint(EasyMock.eq(Collections.emptyMap()));
@@ -368,7 +368,7 @@ public class StandbyTaskTest {
     public void shouldThrowOnCloseCleanCheckpointError() {
         EasyMock.expect(stateManager.changelogOffsets())
             .andReturn(Collections.emptyMap())
-            .andReturn(Collections.singletonMap(partition, 0L));
+            .andReturn(Collections.singletonMap(partition, OffsetLike.realValue(0L)));
         stateManager.checkpoint(EasyMock.anyObject());
         EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();

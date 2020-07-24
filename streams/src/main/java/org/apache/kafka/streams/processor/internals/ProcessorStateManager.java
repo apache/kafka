@@ -47,7 +47,6 @@ import static java.lang.String.format;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
-import static org.apache.kafka.streams.state.internals.OffsetCheckpoint.OFFSET_UNKNOWN;
 
 /**
  * ProcessorStateManager is the source of truth for the current offset for each state store,
@@ -87,7 +86,7 @@ public class ProcessorStateManager implements StateManager {
         //      update to the last restore record's offset
         //   3. when checkpointing with the given written offsets from record collector,
         //      update blindly with the given offset
-        private Long offset;
+        private OffsetLike offset;
 
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
@@ -98,7 +97,7 @@ public class ProcessorStateManager implements StateManager {
             this.recordConverter = null;
             this.changelogPartition = null;
             this.corrupted = false;
-            this.offset = null;
+            this.offset = OffsetLike.unknownSentinel();
         }
 
         private StateStoreMetadata(final StateStore stateStore,
@@ -113,15 +112,15 @@ public class ProcessorStateManager implements StateManager {
             this.changelogPartition = changelogPartition;
             this.restoreCallback = restoreCallback;
             this.recordConverter = recordConverter;
-            this.offset = null;
+            this.offset = OffsetLike.unknownSentinel();
         }
 
-        private void setOffset(final Long offset) {
+        private void setOffset(final OffsetLike offset) {
             this.offset = offset;
         }
 
         // the offset is exposed to the changelog reader to determine if restoration is completed
-        Long offset() {
+        OffsetLike offset() {
             return this.offset;
         }
 
@@ -217,7 +216,7 @@ public class ProcessorStateManager implements StateManager {
     // package-private for test only
     void initializeStoreOffsetsFromCheckpoint(final boolean storeDirIsEmpty) {
         try {
-            final Map<TopicPartition, Long> loadedCheckpoints = checkpointFile.read();
+            final Map<TopicPartition, OffsetLike> loadedCheckpoints = checkpointFile.read();
 
             log.trace("Loaded offsets from the checkpoint file: {}", loadedCheckpoints);
 
@@ -234,7 +233,7 @@ public class ProcessorStateManager implements StateManager {
                              store.changelogPartition, store.stateStore.name());
                 } else if (store.offset() == null) {
                     if (loadedCheckpoints.containsKey(store.changelogPartition)) {
-                        final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
+                        final OffsetLike offset = loadedCheckpoints.remove(store.changelogPartition);
                         store.setOffset(offset);
 
                         log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
@@ -360,16 +359,16 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> changelogOffsets() {
+    public Map<TopicPartition, OffsetLike> changelogOffsets() {
         // return the current offsets for those logged stores
-        final Map<TopicPartition, Long> changelogOffsets = new HashMap<>();
+        final Map<TopicPartition, OffsetLike> changelogOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
             if (storeMetadata.changelogPartition != null) {
                 // for changelog whose offset is unknown, use 0L indicating earliest offset
                 // otherwise return the current offset + 1 as the next offset to fetch
                 changelogOffsets.put(
                     storeMetadata.changelogPartition,
-                    storeMetadata.offset == null ? 0L : storeMetadata.offset + 1L);
+                    OffsetLike.realValue(storeMetadata.offset().isUnknown() ? 0L : storeMetadata.offset().serialValue() + 1L));
             }
         }
         return changelogOffsets;
@@ -408,7 +407,7 @@ public class ProcessorStateManager implements StateManager {
 
         if (!restoreRecords.isEmpty()) {
             // restore states from changelog records and update the snapshot offset as the batch end record's offset
-            final Long batchEndOffset = restoreRecords.get(restoreRecords.size() - 1).offset();
+            final OffsetLike batchEndOffset = OffsetLike.realValue(restoreRecords.get(restoreRecords.size() - 1).offset());
             final RecordBatchingStateRestoreCallback restoreCallback = adapt(storeMetadata.restoreCallback);
             final List<ConsumerRecord<byte[], byte[]>> convertedRecords = restoreRecords.stream()
                 .map(storeMetadata.recordConverter::convert)
@@ -529,10 +528,10 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> writtenOffsets) {
+    public void checkpoint(final Map<TopicPartition, OffsetLike> writtenOffsets) {
         // first update each state store's current offset, then checkpoint
         // those stores that are only logged and persistent to the checkpoint file
-        for (final Map.Entry<TopicPartition, Long> entry : writtenOffsets.entrySet()) {
+        for (final Map.Entry<TopicPartition, OffsetLike> entry : writtenOffsets.entrySet()) {
             final StateStoreMetadata store = findStore(entry.getKey());
 
             if (store != null) {
@@ -543,14 +542,14 @@ public class ProcessorStateManager implements StateManager {
             }
         }
 
-        final Map<TopicPartition, Long> checkpointingOffsets = new HashMap<>();
+        final Map<TopicPartition, OffsetLike> checkpointingOffsets = new HashMap<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
             // store is logged, persistent, not corrupted, and has a valid current offset
             if (storeMetadata.changelogPartition != null &&
                 storeMetadata.stateStore.persistent() &&
                 !storeMetadata.corrupted) {
 
-                final long checkpointableOffset = checkpointableOffsetFromChangelogOffset(storeMetadata.offset);
+                final OffsetLike checkpointableOffset = storeMetadata.offset();
                 checkpointingOffsets.put(storeMetadata.changelogPartition, checkpointableOffset);
             }
         }
@@ -587,15 +586,5 @@ public class ProcessorStateManager implements StateManager {
         }
 
         return found.isEmpty() ? null : found.get(0);
-    }
-
-    // Pass in a sentinel value to checkpoint when the changelog offset is not yet initialized/known
-    private long checkpointableOffsetFromChangelogOffset(final Long offset) {
-        return offset != null ? offset : OFFSET_UNKNOWN;
-    }
-
-    // Convert the written offsets in the checkpoint file back to the changelog offset
-    private Long changelogOffsetFromCheckpointedOffset(final long offset) {
-        return offset != OFFSET_UNKNOWN ? offset : null;
     }
 }

@@ -225,10 +225,10 @@ public class GlobalStreamThread extends Thread {
          * @throws StreamsException      if the store's change log does not contain the partition
          */
         void initialize() {
-            final Map<TopicPartition, Long> partitionOffsets = stateMaintainer.initialize();
+            final Map<TopicPartition, OffsetLike> partitionOffsets = stateMaintainer.initialize();
             globalConsumer.assign(partitionOffsets.keySet());
-            for (final Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
-                globalConsumer.seek(entry.getKey(), entry.getValue());
+            for (final Map.Entry<TopicPartition, OffsetLike> entry : partitionOffsets.entrySet()) {
+                globalConsumer.seek(entry.getKey(), entry.getValue().realValue());
             }
             lastFlush = time.milliseconds();
         }

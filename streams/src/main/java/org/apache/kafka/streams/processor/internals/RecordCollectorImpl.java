@@ -60,7 +60,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private final ProductionExceptionHandler productionExceptionHandler;
     private final Sensor droppedRecordsSensor;
     private final boolean eosEnabled;
-    private final Map<TopicPartition, Long> offsets;
+    private final Map<TopicPartition, OffsetLike> offsets;
 
     private final AtomicReference<KafkaException> sendException = new AtomicReference<>(null);
 
@@ -178,7 +178,7 @@ public class RecordCollectorImpl implements RecordCollector {
             if (exception == null) {
                 final TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                 if (metadata.offset() >= 0L) {
-                    offsets.put(tp, metadata.offset());
+                    offsets.put(tp, OffsetLike.realValue(metadata.offset()));
                 } else {
                     log.warn("Received offset={} in produce response for {}", metadata.offset(), tp);
                 }
@@ -278,7 +278,7 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     @Override
-    public Map<TopicPartition, Long> offsets() {
+    public Map<TopicPartition, OffsetLike> offsets() {
         return Collections.unmodifiableMap(new HashMap<>(offsets));
     }
 

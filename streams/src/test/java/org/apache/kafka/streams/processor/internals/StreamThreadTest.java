@@ -1510,7 +1510,7 @@ public class StreamThreadTest {
         restoreConsumer.updateBeginningOffsets(Collections.singletonMap(partition2, 0L));
         final OffsetCheckpoint checkpoint
             = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(task3), CHECKPOINT_FILE_NAME));
-        checkpoint.write(Collections.singletonMap(partition2, 5L));
+        checkpoint.write(Collections.singletonMap(partition2, OffsetLike.realValue(5L)));
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,11 +59,6 @@ public class OffsetCheckpoint {
 
     private static final int VERSION = 0;
 
-    // Use a negative sentinel when we don't know the offset instead of skipping it to distinguish it from dirty state
-    // and use -3 as the -1 sentinel may be taken by some producer errors and -2 in the
-    // subscription means that the state is used by an active task and hence caught-up.
-    public static final long OFFSET_UNKNOWN = -3L;
-
     private final File file;
     private final Object lock;
 
@@ -76,7 +72,7 @@ public class OffsetCheckpoint {
      *
      * @throws IOException if any file operation fails with an IO exception
      */
-    public void write(final Map<TopicPartition, Long> offsets) throws IOException {
+    public void write(final Map<TopicPartition, OffsetLike> offsets) throws IOException {
         // if there is no offsets, skip writing the file to save disk IOs
         if (offsets.isEmpty()) {
             return;
@@ -93,11 +89,11 @@ public class OffsetCheckpoint {
                 writeIntLine(writer, VERSION);
                 writeIntLine(writer, offsets.size());
 
-                for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
+                for (final Map.Entry<TopicPartition, OffsetLike> entry : offsets.entrySet()) {
                     final TopicPartition tp = entry.getKey();
-                    final Long offset = entry.getValue();
+                    final OffsetLike offset = entry.getValue();
                     if (isValid(offset)) {
-                        writeEntry(writer, tp, offset);
+                        writeEntry(writer, tp, offset.serialValue());
                     } else {
                         LOG.error("Received offset={} to write to checkpoint file for {}", offset, tp);
                         throw new IllegalStateException("Attempted to write a negative offset to the checkpoint file");
@@ -143,14 +139,14 @@ public class OffsetCheckpoint {
      * @throws IOException if any file operation fails with an IO exception
      * @throws IllegalArgumentException if the offset checkpoint version is unknown
      */
-    public Map<TopicPartition, Long> read() throws IOException {
+    public Map<TopicPartition, OffsetLike> read() throws IOException {
         synchronized (lock) {
             try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
                 final int version = readInt(reader);
                 switch (version) {
                     case 0:
                         int expectedSize = readInt(reader);
-                        final Map<TopicPartition, Long> offsets = new HashMap<>();
+                        final Map<TopicPartition, OffsetLike> offsets = new HashMap<>();
                         String line = reader.readLine();
                         while (line != null) {
                             final String[] pieces = WHITESPACE_MINIMUM_ONCE.split(line);
@@ -162,7 +158,7 @@ public class OffsetCheckpoint {
                             final String topic = pieces[0];
                             final int partition = Integer.parseInt(pieces[1]);
                             final TopicPartition tp = new TopicPartition(topic, partition);
-                            final long offset = Long.parseLong(pieces[2]);
+                            final OffsetLike offset = OffsetLike.fromSerialValue(Long.parseLong(pieces[2]));
                             if (isValid(offset)) {
                                 offsets.put(tp, offset);
                             } else {
@@ -210,8 +206,8 @@ public class OffsetCheckpoint {
         return file.getAbsolutePath();
     }
 
-    private boolean isValid(final long offset) {
-        return offset >= 0L || offset == OFFSET_UNKNOWN;
+    private boolean isValid(final OffsetLike offset) {
+        return offset.isRealValue() || offset.isUnknown();
     }
 
 }

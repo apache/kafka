@@ -146,7 +146,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         createMockTaskManager(getTaskOffsetSums(activeTasks));
     }
 
-    private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums) {
+    private void createMockTaskManager(final Map<TaskId, OffsetLike> taskOffsetSums) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
         expect(taskManager.builder()).andReturn(builder).anyTimes();
         expect(taskManager.getTaskOffsetSums()).andReturn(taskOffsetSums).anyTimes();
@@ -326,9 +326,9 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets
-    private static Map<TaskId, Long> getTaskOffsetSums(final Set<TaskId> activeTasks) {
-        final Map<TaskId, Long> taskOffsetSums = activeTasks.stream().collect(Collectors.toMap(t -> t, t -> Task.LATEST_OFFSET));
-        taskOffsetSums.putAll(EMPTY_TASKS.stream().collect(Collectors.toMap(t -> t, t -> 0L)));
+    private static Map<TaskId, OffsetLike> getTaskOffsetSums(final Set<TaskId> activeTasks) {
+        final Map<TaskId, OffsetLike> taskOffsetSums = activeTasks.stream().collect(Collectors.toMap(t -> t, t -> OffsetLike.latestSentinel()));
+        taskOffsetSums.putAll(EMPTY_TASKS.stream().collect(Collectors.toMap(t -> t, t -> OffsetLike.realValue(0L))));
         return taskOffsetSums;
     }
 

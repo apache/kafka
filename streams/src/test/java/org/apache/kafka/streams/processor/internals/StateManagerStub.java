@@ -53,12 +53,12 @@ public class StateManagerStub implements StateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> changelogOffsets() {
+    public Map<TopicPartition, OffsetLike> changelogOffsets() {
         return null;
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {}
+    public void checkpoint(final Map<TopicPartition, OffsetLike> offsets) {}
 
     @Override
     public TaskType taskType() {

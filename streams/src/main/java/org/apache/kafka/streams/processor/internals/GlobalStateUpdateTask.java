@@ -36,7 +36,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     private final ProcessorTopology topology;
     private final InternalProcessorContext processorContext;
-    private final Map<TopicPartition, Long> offsets = new HashMap<>();
+    private final Map<TopicPartition, OffsetLike> offsets = new HashMap<>();
     private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
@@ -59,7 +59,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
      * @throws StreamsException      If the store's change log does not contain the partition
      */
     @Override
-    public Map<TopicPartition, Long> initialize() {
+    public Map<TopicPartition, OffsetLike> initialize() {
         final Set<String> storeNames = stateMgr.initialize();
         final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
         for (final String storeName : storeNames) {
@@ -103,7 +103,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
             ((SourceNode<Object, Object>) sourceNodeAndDeserializer.sourceNode()).process(deserialized.key(), deserialized.value());
         }
 
-        offsets.put(new TopicPartition(record.topic(), record.partition()), record.offset() + 1);
+        offsets.put(new TopicPartition(record.topic(), record.partition()), OffsetLike.realValue(record.offset() + 1));
     }
 
     public void flushState() {

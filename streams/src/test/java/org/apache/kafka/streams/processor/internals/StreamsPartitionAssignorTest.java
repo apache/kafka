@@ -232,7 +232,7 @@ public class StreamsPartitionAssignorTest {
         createMockTaskManager(getTaskOffsetSums(activeTasks, standbyTasks), UUID_1);
     }
 
-    private void createMockTaskManager(final Map<TaskId, Long> taskOffsetSums,
+    private void createMockTaskManager(final Map<TaskId, OffsetLike> taskOffsetSums,
                                        final UUID processId) {
         taskManager = EasyMock.createNiceMock(TaskManager.class);
         expect(taskManager.builder()).andReturn(builder).anyTimes();
@@ -2093,15 +2093,15 @@ public class StreamsPartitionAssignorTest {
     }
 
     // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets
-    private static Map<TaskId, Long> getTaskOffsetSums(final Collection<TaskId> activeTasks, final Collection<TaskId> standbyTasks) {
-        final Map<TaskId, Long> taskOffsetSums = activeTasks.stream().collect(Collectors.toMap(t -> t, t -> Task.LATEST_OFFSET));
-        taskOffsetSums.putAll(standbyTasks.stream().collect(Collectors.toMap(t -> t, t -> 0L)));
+    private static Map<TaskId, OffsetLike> getTaskOffsetSums(final Collection<TaskId> activeTasks, final Collection<TaskId> standbyTasks) {
+        final Map<TaskId, OffsetLike> taskOffsetSums = activeTasks.stream().collect(Collectors.toMap(t -> t, t -> OffsetLike.latestSentinel()));
+        taskOffsetSums.putAll(standbyTasks.stream().collect(Collectors.toMap(t -> t, t -> OffsetLike.realValue(0L))));
         return taskOffsetSums;
     }
 
     // Stub end offsets sums for situations where we don't really care about computing exact lags
-    private static Map<TaskId, Long> getTaskEndOffsetSums(final Collection<TaskId> allStatefulTasks) {
-        return allStatefulTasks.stream().collect(Collectors.toMap(t -> t, t -> Long.MAX_VALUE));
+    private static Map<TaskId, OffsetLike> getTaskEndOffsetSums(final Collection<TaskId> allStatefulTasks) {
+        return allStatefulTasks.stream().collect(Collectors.toMap(t -> t, t -> OffsetLike.maxValue()));
     }
 
 }

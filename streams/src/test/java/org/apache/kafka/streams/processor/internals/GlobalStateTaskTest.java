@@ -64,7 +64,7 @@ public class GlobalStateTaskTest {
     private final MockProcessorNode<?, ?> processorOne = new MockProcessorNode<>();
     private final MockProcessorNode<?, ?> processorTwo = new MockProcessorNode<>();
 
-    private final Map<TopicPartition, Long> offsets = new HashMap<>();
+    private final Map<TopicPartition, OffsetLike> offsets = new HashMap<>();
     private final NoOpProcessorContext context = new NoOpProcessorContext();
 
     private ProcessorTopology topology;
@@ -86,15 +86,15 @@ public class GlobalStateTaskTest {
             Collections.emptyList(),
             storeToTopic);
 
-        offsets.put(t1, 50L);
-        offsets.put(t2, 100L);
+        offsets.put(t1, OffsetLike.realValue(50L));
+        offsets.put(t2, OffsetLike.realValue(100L));
         stateMgr = new GlobalStateManagerStub(storeNames, offsets);
         globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndFailExceptionHandler(), logContext);
     }
 
     @Test
     public void shouldInitializeStateManager() {
-        final Map<TopicPartition, Long> startingOffsets = globalStateTask.initialize();
+        final Map<TopicPartition, OffsetLike> startingOffsets = globalStateTask.initialize();
         assertTrue(stateMgr.initialized);
         assertEquals(offsets, startingOffsets);
     }

@@ -55,6 +55,7 @@ import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -1236,7 +1237,7 @@ public class KafkaStreams implements AutoCloseable {
     public Map<String, Map<Integer, LagInfo>> allLocalStorePartitionLags() {
         final Map<String, Map<Integer, LagInfo>> localStorePartitionLags = new TreeMap<>();
         final Collection<TopicPartition> allPartitions = new LinkedList<>();
-        final Map<TopicPartition, Long> allChangelogPositions = new HashMap<>();
+        final Map<TopicPartition, OffsetLike> allChangelogPositions = new HashMap<>();
 
         // Obtain the current positions, of all the active-restoring and standby tasks
         for (final StreamThread streamThread : threads) {
@@ -1261,10 +1262,10 @@ public class KafkaStreams implements AutoCloseable {
             // from zero instead of the real "earliest offset" for the changelog.
             // This will yield the correct relative order of lagginess for the tasks in the cluster,
             // but it is an over-estimate of how much work remains to restore the task from scratch.
-            final long earliestOffset = 0L;
-            final long changelogPosition = allChangelogPositions.getOrDefault(entry.getKey(), earliestOffset);
-            final long latestOffset = entry.getValue().offset();
-            final LagInfo lagInfo = new LagInfo(changelogPosition == Task.LATEST_OFFSET ? latestOffset : changelogPosition, latestOffset);
+            final OffsetLike earliestOffset = OffsetLike.realValue(0L);
+            final OffsetLike changelogPosition = allChangelogPositions.getOrDefault(entry.getKey(), earliestOffset);
+            final OffsetLike latestOffset = OffsetLike.realValue(entry.getValue().offset());
+            final LagInfo lagInfo = new LagInfo(changelogPosition.isLatestSentinel() ? latestOffset : changelogPosition, latestOffset);
             final String storeName = streamsMetadataState.getStoreForChangelogTopic(entry.getKey().topic());
             localStorePartitionLags.computeIfAbsent(storeName, ignored -> new TreeMap<>())
                 .put(entry.getKey().partition(), lagInfo);

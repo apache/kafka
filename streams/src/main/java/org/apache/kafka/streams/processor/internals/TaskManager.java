@@ -596,8 +596,8 @@ public class TaskManager {
      * lock for, which includes assigned and unassigned tasks we locked in {@link #tryToLockAllNonEmptyTaskDirectories()}.
      * Does not include stateless or non-logged tasks.
      */
-    public Map<TaskId, Long> getTaskOffsetSums() {
-        final Map<TaskId, Long> taskOffsetSums = new HashMap<>();
+    public Map<TaskId, OffsetLike> getTaskOffsetSums() {
+        final Map<TaskId, OffsetLike> taskOffsetSums = new HashMap<>();
 
         // Not all tasks will create directories, and there may be directories for tasks we don't currently own,
         // so we consider all tasks that are either owned or on disk. This includes stateless tasks, which should
@@ -605,7 +605,7 @@ public class TaskManager {
         for (final TaskId id : union(HashSet::new, lockedTaskDirectories, tasks.keySet())) {
             final Task task = tasks.get(id);
             if (task != null) {
-                final Map<TopicPartition, Long> changelogOffsets = task.changelogOffsets();
+                final Map<TopicPartition, OffsetLike> changelogOffsets = task.changelogOffsets();
                 if (changelogOffsets.isEmpty()) {
                     log.debug("Skipping to encode apparently stateless (or non-logged) offset sum for task {}", id);
                 } else {
@@ -685,30 +685,29 @@ public class TaskManager {
         }
     }
 
-    private long sumOfChangelogOffsets(final TaskId id, final Map<TopicPartition, Long> changelogOffsets) {
+    private OffsetLike sumOfChangelogOffsets(final TaskId id, final Map<TopicPartition, OffsetLike> changelogOffsets) {
         long offsetSum = 0L;
-        for (final Map.Entry<TopicPartition, Long> changelogEntry : changelogOffsets.entrySet()) {
-            final long offset = changelogEntry.getValue();
+        for (final Map.Entry<TopicPartition, OffsetLike> changelogEntry : changelogOffsets.entrySet()) {
+            final OffsetLike offset = changelogEntry.getValue();
 
-
-            if (offset == Task.LATEST_OFFSET) {
+            if (offset.isLatestSentinel()) {
                 // this condition can only be true for active tasks; never for standby
                 // for this case, the offset of all partitions is set to `LATEST_OFFSET`
                 // and we "forward" the sentinel value directly
-                return Task.LATEST_OFFSET;
-            } else if (offset != OffsetCheckpoint.OFFSET_UNKNOWN) {
-                if (offset < 0) {
-                    throw new IllegalStateException("Expected not to get a sentinel offset, but got: " + changelogEntry);
-                }
-                offsetSum += offset;
+                return OffsetLike.latestSentinel();
+            } else if (offset.isUnknown()) {
+                // if any component is unknown, then the sum must also be unknown.
+                return OffsetLike.unknownSentinel();
+            } else {
+                offsetSum += offset.realValue();
                 if (offsetSum < 0) {
                     log.warn("Sum of changelog offsets for task {} overflowed, pinning to Long.MAX_VALUE", id);
-                    return Long.MAX_VALUE;
+                    return OffsetLike.maxValue();
                 }
             }
         }
 
-        return offsetSum;
+        return OffsetLike.realValue(offsetSum);
     }
 
     private void closeTaskDirty(final Task task) {
@@ -1095,8 +1094,8 @@ public class TaskManager {
 
             final Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
             for (final Task task : activeTaskIterable()) {
-                for (final Map.Entry<TopicPartition, Long> entry : task.purgeableOffsets().entrySet()) {
-                    recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue()));
+                for (final Map.Entry<TopicPartition, OffsetLike> entry : task.purgeableOffsets().entrySet()) {
+                    recordsToDelete.put(entry.getKey(), RecordsToDelete.beforeOffset(entry.getValue().realValue()));
                 }
             }
             if (!recordsToDelete.isEmpty()) {

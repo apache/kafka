@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Test;
 
@@ -39,7 +40,7 @@ import static org.junit.Assert.fail;
 public class TaskAssignorConvergenceTest {
     private static final class Harness {
         private final Set<TaskId> statelessTasks;
-        private final Map<TaskId, Long> statefulTaskEndOffsetSums;
+        private final Map<TaskId, OffsetLike> statefulTaskEndOffsetSums;
         private final Map<UUID, ClientState> clientStates;
         private final Map<UUID, ClientState> droppedClientStates;
         private final StringBuilder history = new StringBuilder();
@@ -60,12 +61,12 @@ public class TaskAssignorConvergenceTest {
                 subtopology++;
             }
 
-            final Map<TaskId, Long> statefulTaskEndOffsetSums = new TreeMap<>();
+            final Map<TaskId, OffsetLike> statefulTaskEndOffsetSums = new TreeMap<>();
             int remainingStatefulTasks = numStatefulTasks;
             while (remainingStatefulTasks > 0) {
                 final int partitions = Math.min(remainingStatefulTasks, partitionCountSupplier.get());
                 for (int i = 0; i < partitions; i++) {
-                    statefulTaskEndOffsetSums.put(new TaskId(subtopology, i), 150000L);
+                    statefulTaskEndOffsetSums.put(new TaskId(subtopology, i), OffsetLike.realValue(150000L));
                     remainingStatefulTasks--;
                 }
                 subtopology++;
@@ -81,7 +82,7 @@ public class TaskAssignorConvergenceTest {
         }
 
         private Harness(final Set<TaskId> statelessTasks,
-                        final Map<TaskId, Long> statefulTaskEndOffsetSums,
+                        final Map<TaskId, OffsetLike> statefulTaskEndOffsetSums,
                         final Map<UUID, ClientState> clientStates) {
             this.statelessTasks = statelessTasks;
             this.statefulTaskEndOffsetSums = statefulTaskEndOffsetSums;
@@ -101,7 +102,7 @@ public class TaskAssignorConvergenceTest {
             clientStates.put(uuid, emptyInstance(uuid, statefulTaskEndOffsetSums));
         }
 
-        private static ClientState emptyInstance(final UUID uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
+        private static ClientState emptyInstance(final UUID uuid, final Map<TaskId, OffsetLike> allTaskEndOffsetSums) {
             final ClientState clientState = new ClientState(1);
             clientState.computeTaskLags(uuid, allTaskEndOffsetSums);
             return clientState;
@@ -172,7 +173,7 @@ public class TaskAssignorConvergenceTest {
                 final UUID uuid = entry.getKey();
                 final ClientState newClientState = new ClientState(1);
                 final ClientState clientState = entry.getValue();
-                final Map<TaskId, Long> taskOffsetSums = new TreeMap<>();
+                final Map<TaskId, OffsetLike> taskOffsetSums = new TreeMap<>();
                 for (final TaskId taskId : clientState.activeTasks()) {
                     if (statefulTaskEndOffsetSums.containsKey(taskId)) {
                         taskOffsetSums.put(taskId, statefulTaskEndOffsetSums.get(taskId));

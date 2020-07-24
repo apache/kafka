@@ -33,11 +33,6 @@ import java.util.Map;
 import java.util.Set;
 
 public interface Task {
-
-    // this must be negative to distinguish a running active task from other kinds of tasks
-    // which may be caught up to the same offsets
-    long LATEST_OFFSET = -2L;
-
     /*
      * <pre>
      *                 +-------------+
@@ -177,11 +172,11 @@ public interface Task {
      * @return the offsets of all the changelog partitions associated with this task,
      *         indicating the current positions of the logged state stores of the task.
      */
-    Map<TopicPartition, Long> changelogOffsets();
+    Map<TopicPartition, OffsetLike> changelogOffsets();
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions);
 
-    default Map<TopicPartition, Long> purgeableOffsets() {
+    default Map<TopicPartition, OffsetLike> purgeableOffsets() {
         return Collections.emptyMap();
     }
 

@@ -47,7 +47,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private final StreamsMetricsImpl streamsMetrics;
 
     private boolean checkpointNeededForSuspended = false;
-    private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit = new HashMap<>();
+    private Map<TopicPartition, OffsetLike> offsetSnapshotSinceLastCommit = new HashMap<>();
 
     /**
      * @param id             the ID of this task
@@ -296,7 +296,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public Map<TopicPartition, Long> changelogOffsets() {
+    public Map<TopicPartition, OffsetLike> changelogOffsets() {
         return Collections.unmodifiableMap(stateMgr.changelogOffsets());
     }
 

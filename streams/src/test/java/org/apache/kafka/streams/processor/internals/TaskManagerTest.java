@@ -249,39 +249,39 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReportLatestOffsetAsOffsetSumForRunningTask() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 0), Task.LATEST_OFFSET),
-            mkEntry(new TopicPartition("changelog", 1), Task.LATEST_OFFSET)
+        final Map<TopicPartition, OffsetLike> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), OffsetLike.latestSentinel()),
+            mkEntry(new TopicPartition("changelog", 1), OffsetLike.latestSentinel())
         );
-        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
+        final Map<TaskId, OffsetLike> expectedOffsetSums = mkMap(mkEntry(taskId00, OffsetLike.latestSentinel()));
 
         computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
 
     @Test
     public void shouldComputeOffsetSumForNonRunningActiveTask() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 0), 5L),
-            mkEntry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, OffsetLike> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), OffsetLike.realValue(5L)),
+            mkEntry(new TopicPartition("changelog", 1), OffsetLike.realValue(10L))
         );
-        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
+        final Map<TaskId, OffsetLike> expectedOffsetSums = mkMap(mkEntry(taskId00, OffsetLike.realValue(15L)));
 
         computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
 
     @Test
     public void shouldSkipUnknownOffsetsWhenComputingOffsetSum() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 0), OffsetCheckpoint.OFFSET_UNKNOWN),
-            mkEntry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, OffsetLike> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), OffsetLike.unknownSentinel()),
+            mkEntry(new TopicPartition("changelog", 1), OffsetLike.realValue(10L))
         );
-        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 10L));
+        final Map<TaskId, OffsetLike> expectedOffsetSums = mkMap(mkEntry(taskId00, OffsetLike.realValue(10L)));
 
         computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
 
-    private void computeOffsetSumAndVerify(final Map<TopicPartition, Long> changelogOffsets,
-                                           final Map<TaskId, Long> expectedOffsetSums) throws Exception {
+    private void computeOffsetSumAndVerify(final Map<TopicPartition, OffsetLike> changelogOffsets,
+                                           final Map<TaskId, OffsetLike> expectedOffsetSums) throws Exception {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         replay(stateDirectory);
@@ -299,11 +299,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldComputeOffsetSumForStandbyTask() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 0), 5L),
-            mkEntry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, OffsetLike> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), OffsetLike.realValue(5L)),
+            mkEntry(new TopicPartition("changelog", 1), OffsetLike.realValue(10L))
         );
-        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
+        final Map<TaskId, OffsetLike> expectedOffsetSums = mkMap(mkEntry(taskId00, OffsetLike.realValue(15L)));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -322,11 +322,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldComputeOffsetSumForUnassignedTaskWeCanLock() throws Exception {
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
-            mkEntry(new TopicPartition("changelog", 0), 5L),
-            mkEntry(new TopicPartition("changelog", 1), 10L)
+        final Map<TopicPartition, OffsetLike> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), OffsetLike.realValue(5L)),
+            mkEntry(new TopicPartition("changelog", 1), OffsetLike.realValue(10L))
         );
-        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
+        final Map<TaskId, OffsetLike> expectedOffsetSums = mkMap(mkEntry(taskId00, OffsetLike.realValue(15L)));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -363,13 +363,13 @@ public class TaskManagerTest {
 
     @Test
     public void shouldPinOffsetSumToLongMaxValueInCaseOfOverflow() throws Exception {
-        final long largeOffset = Long.MAX_VALUE / 2;
-        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+        final OffsetLike largeOffset = OffsetLike.realValue(Long.MAX_VALUE / 2);
+        final Map<TopicPartition, OffsetLike> changelogOffsets = mkMap(
             mkEntry(new TopicPartition("changelog", 1), largeOffset),
             mkEntry(new TopicPartition("changelog", 2), largeOffset),
             mkEntry(new TopicPartition("changelog", 3), largeOffset)
         );
-        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Long.MAX_VALUE));
+        final Map<TaskId, OffsetLike> expectedOffsetSums = mkMap(mkEntry(taskId00, OffsetLike.maxValue()));
 
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
@@ -1916,10 +1916,10 @@ public class TaskManagerTest {
             .andReturn(new DeleteRecordsResult(singletonMap(t1p1, completedFuture())));
         replay(adminClient);
 
-        final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
+        final Map<TopicPartition, OffsetLike> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> purgeableOffsets() {
+            public Map<TopicPartition, OffsetLike> purgeableOffsets() {
                 return purgableOffsets;
             }
         };
@@ -1935,10 +1935,10 @@ public class TaskManagerTest {
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
-        purgableOffsets.put(t1p1, 5L);
+        purgableOffsets.put(t1p1, OffsetLike.realValue(5L));
         taskManager.maybePurgeCommittedRecords();
 
-        purgableOffsets.put(t1p1, 17L);
+        purgableOffsets.put(t1p1, OffsetLike.realValue(17L));
         taskManager.maybePurgeCommittedRecords();
 
         verify(adminClient);
@@ -1952,10 +1952,10 @@ public class TaskManagerTest {
             .andReturn(new DeleteRecordsResult(singletonMap(t1p1, futureDeletedRecords)));
         replay(adminClient);
 
-        final Map<TopicPartition, Long> purgableOffsets = new HashMap<>();
+        final Map<TopicPartition, OffsetLike> purgableOffsets = new HashMap<>();
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public Map<TopicPartition, Long> purgeableOffsets() {
+            public Map<TopicPartition, OffsetLike> purgeableOffsets() {
                 return purgableOffsets;
             }
         };
@@ -1971,13 +1971,13 @@ public class TaskManagerTest {
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
-        purgableOffsets.put(t1p1, 5L);
+        purgableOffsets.put(t1p1, OffsetLike.realValue(5L));
         taskManager.maybePurgeCommittedRecords();
 
         // this call should be a no-op.
         // this is verified, as there is no expectation on adminClient for this second call,
         // so it would fail verification if we invoke the admin client again.
-        purgableOffsets.put(t1p1, 17L);
+        purgableOffsets.put(t1p1, OffsetLike.realValue(17L));
         taskManager.maybePurgeCommittedRecords();
 
         verify(adminClient);
@@ -2003,7 +2003,7 @@ public class TaskManagerTest {
 
         assertThat(task00.state(), is(Task.State.RUNNING));
 
-        task00.setPurgeableOffsets(singletonMap(t1p1, 5L));
+        task00.setPurgeableOffsets(singletonMap(t1p1, OffsetLike.realValue(5L)));
 
         taskManager.maybePurgeCommittedRecords();
         taskManager.maybePurgeCommittedRecords();
@@ -2642,7 +2642,7 @@ public class TaskManagerTest {
         expect(stateDirectory.listNonEmptyTaskDirectories()).andReturn(taskFolders).once();
     }
 
-    private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, Long> offsets) throws Exception {
+    private void writeCheckpointFile(final TaskId task, final Map<TopicPartition, OffsetLike> offsets) throws Exception {
         final File checkpointFile = getCheckpointFile(task);
         assertThat(checkpointFile.createNewFile(), is(true));
         new OffsetCheckpoint(checkpointFile).write(offsets);
@@ -2663,8 +2663,8 @@ public class TaskManagerTest {
         private boolean commitRequested = false;
         private boolean commitPrepared = false;
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
-        private Map<TopicPartition, Long> purgeableOffsets;
-        private Map<TopicPartition, Long> changelogOffsets = Collections.emptyMap();
+        private Map<TopicPartition, OffsetLike> purgeableOffsets;
+        private Map<TopicPartition, OffsetLike> changelogOffsets = Collections.emptyMap();
 
         private final Map<TopicPartition, LinkedList<ConsumerRecord<byte[], byte[]>>> queue = new HashMap<>();
 
@@ -2788,21 +2788,21 @@ public class TaskManagerTest {
             return active;
         }
 
-        void setPurgeableOffsets(final Map<TopicPartition, Long> purgeableOffsets) {
+        void setPurgeableOffsets(final Map<TopicPartition, OffsetLike> purgeableOffsets) {
             this.purgeableOffsets = purgeableOffsets;
         }
 
         @Override
-        public Map<TopicPartition, Long> purgeableOffsets() {
+        public Map<TopicPartition, OffsetLike> purgeableOffsets() {
             return purgeableOffsets;
         }
 
-        void setChangelogOffsets(final Map<TopicPartition, Long> changelogOffsets) {
+        void setChangelogOffsets(final Map<TopicPartition, OffsetLike> changelogOffsets) {
             this.changelogOffsets = changelogOffsets;
         }
 
         @Override
-        public Map<TopicPartition, Long> changelogOffsets() {
+        public Map<TopicPartition, OffsetLike> changelogOffsets() {
             return changelogOffsets;
         }
 

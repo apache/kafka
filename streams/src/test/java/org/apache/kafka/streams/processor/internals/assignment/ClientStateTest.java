@@ -18,7 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -35,7 +35,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
@@ -53,7 +52,7 @@ public class ClientStateTest {
         final ClientState clientState = new ClientState(
             mkSet(TASK_0_0, TASK_0_1),
             mkSet(TASK_0_2, TASK_0_3),
-            mkMap(mkEntry(TASK_0_0, 5L), mkEntry(TASK_0_2, -1L)),
+            mkMap(mkEntry(TASK_0_0, OffsetLike.realValue(5L)), mkEntry(TASK_0_2, OffsetLike.fromSerialValue(-1L))),
             4
         );
 
@@ -299,7 +298,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldAddTasksWithLatestOffsetToPrevActiveTasks() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET);
+        final Map<TaskId, OffsetLike> taskOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.latestSentinel());
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.initializePrevTasks(Collections.emptyMap());
         assertThat(client.prevActiveTasks(), equalTo(Collections.singleton(TASK_0_1)));
@@ -309,16 +308,16 @@ public class ClientStateTest {
 
     @Test
     public void shouldReturnPreviousStatefulTasksForConsumer() {
-        client.addPreviousTasksAndOffsetSums("c1", Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET));
-        client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, 0L));
+        client.addPreviousTasksAndOffsetSums("c1", Collections.singletonMap(TASK_0_1, OffsetLike.latestSentinel()));
+        client.addPreviousTasksAndOffsetSums("c2", Collections.singletonMap(TASK_0_2, OffsetLike.realValue(0L)));
         client.addPreviousTasksAndOffsetSums("c3", Collections.emptyMap());
 
         client.initializePrevTasks(Collections.emptyMap());
         client.computeTaskLags(
             UUID_1,
             mkMap(
-                mkEntry(TASK_0_1, 1_000L),
-                mkEntry(TASK_0_2, 1_000L)
+                mkEntry(TASK_0_1, OffsetLike.realValue(1_000L)),
+                mkEntry(TASK_0_2, OffsetLike.realValue(1_000L))
             )
         );
 
@@ -330,9 +329,9 @@ public class ClientStateTest {
     @Test
     public void shouldReturnPreviousTasksForConsumer() {
         client.addPreviousTasksAndOffsetSums("c1", mkMap(
-            mkEntry(TASK_0_1, 100L),
-            mkEntry(TASK_0_2, 0L),
-            mkEntry(TASK_0_3, Task.LATEST_OFFSET)
+            mkEntry(TASK_0_1, OffsetLike.realValue(100L)),
+            mkEntry(TASK_0_2, OffsetLike.realValue(0L)),
+            mkEntry(TASK_0_3, OffsetLike.latestSentinel())
         ));
 
         client.initializePrevTasks(Collections.emptyMap());
@@ -342,9 +341,9 @@ public class ClientStateTest {
 
     @Test
     public void shouldAddTasksInOffsetSumsMapToPrevStandbyTasks() {
-        final Map<TaskId, Long> taskOffsetSums = mkMap(
-            mkEntry(TASK_0_1, 0L),
-            mkEntry(TASK_0_2, 100L)
+        final Map<TaskId, OffsetLike> taskOffsetSums = mkMap(
+            mkEntry(TASK_0_1, OffsetLike.realValue(0L)),
+            mkEntry(TASK_0_2, OffsetLike.realValue(100L))
         );
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.initializePrevTasks(Collections.emptyMap());
@@ -355,13 +354,13 @@ public class ClientStateTest {
 
     @Test
     public void shouldComputeTaskLags() {
-        final Map<TaskId, Long> taskOffsetSums = mkMap(
-            mkEntry(TASK_0_1, 0L),
-            mkEntry(TASK_0_2, 100L)
+        final Map<TaskId, OffsetLike> taskOffsetSums = mkMap(
+            mkEntry(TASK_0_1, OffsetLike.realValue(0L)),
+            mkEntry(TASK_0_2, OffsetLike.realValue(100L))
         );
-        final Map<TaskId, Long> allTaskEndOffsetSums = mkMap(
-            mkEntry(TASK_0_1, 500L),
-            mkEntry(TASK_0_2, 100L)
+        final Map<TaskId, OffsetLike> allTaskEndOffsetSums = mkMap(
+            mkEntry(TASK_0_1, OffsetLike.realValue(500L)),
+            mkEntry(TASK_0_2, OffsetLike.realValue(100L))
         );
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
@@ -372,8 +371,8 @@ public class ClientStateTest {
 
     @Test
     public void shouldReturnEndOffsetSumForLagOfTaskWeDidNotPreviouslyOwn() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.emptyMap();
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
+        final Map<TaskId, OffsetLike> taskOffsetSums = Collections.emptyMap();
+        final Map<TaskId, OffsetLike> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(500L));
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
         assertThat(client.lagFor(TASK_0_1), equalTo(500L));
@@ -381,26 +380,26 @@ public class ClientStateTest {
 
     @Test
     public void shouldReturnLatestOffsetForLagOfPreviousActiveRunningTask() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, Task.LATEST_OFFSET);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
+        final Map<TaskId, OffsetLike> taskOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.latestSentinel());
+        final Map<TaskId, OffsetLike> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(500L));
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
-        assertThat(client.lagFor(TASK_0_1), equalTo(Task.LATEST_OFFSET));
+        assertThat(client.lagFor(TASK_0_1), equalTo(OffsetLike.latestSentinel()));
     }
 
     @Test
     public void shouldReturnUnknownOffsetSumForLagOfTaskWithUnknownOffset() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, UNKNOWN_OFFSET_SUM);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
+        final Map<TaskId, OffsetLike> taskOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.unknownSentinel());
+        final Map<TaskId, OffsetLike> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(500L));
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
-        assertThat(client.lagFor(TASK_0_1), equalTo(UNKNOWN_OFFSET_SUM));
+        assertThat(client.lagFor(TASK_0_1), equalTo(OffsetLike.unknownSentinel()));
     }
 
     @Test
     public void shouldReturnEndOffsetSumIfOffsetSumIsGreaterThanEndOffsetSum() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 5L);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 1L);
+        final Map<TaskId, OffsetLike> taskOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(5L));
+        final Map<TaskId, OffsetLike> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(1L));
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
         assertThat(client.lagFor(TASK_0_1), equalTo(1L));
@@ -408,16 +407,16 @@ public class ClientStateTest {
 
     @Test
     public void shouldThrowIllegalStateExceptionIfTaskLagsMapIsNotEmpty() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 5L);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 1L);
+        final Map<TaskId, OffsetLike> taskOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(5L));
+        final Map<TaskId, OffsetLike> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(1L));
         client.computeTaskLags(null, taskOffsetSums);
         assertThrows(IllegalStateException.class, () -> client.computeTaskLags(null, allTaskEndOffsetSums));
     }
 
     @Test
     public void shouldThrowIllegalStateExceptionOnLagForUnknownTask() {
-        final Map<TaskId, Long> taskOffsetSums = Collections.singletonMap(TASK_0_1, 0L);
-        final Map<TaskId, Long> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, 500L);
+        final Map<TaskId, OffsetLike> taskOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(0L));
+        final Map<TaskId, OffsetLike> allTaskEndOffsetSums = Collections.singletonMap(TASK_0_1, OffsetLike.realValue(500L));
         client.addPreviousTasksAndOffsetSums("c1", taskOffsetSums);
         client.computeTaskLags(null, allTaskEndOffsetSums);
         assertThrows(IllegalStateException.class, () -> client.lagFor(TASK_0_2));

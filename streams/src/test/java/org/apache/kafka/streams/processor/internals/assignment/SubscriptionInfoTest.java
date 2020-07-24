@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Map;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.junit.Test;
 
@@ -36,7 +37,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION;
-import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -50,12 +50,12 @@ public class SubscriptionInfoTest {
     private static final Set<TaskId> STANDBY_TASKS = new HashSet<>(Arrays.asList(
         TASK_1_1,
         TASK_2_0));
-    private static final Map<TaskId, Long> TASK_OFFSET_SUMS = mkMap(
-        mkEntry(TASK_0_0, Task.LATEST_OFFSET),
-        mkEntry(TASK_0_1, Task.LATEST_OFFSET),
-        mkEntry(TASK_1_0, Task.LATEST_OFFSET),
-        mkEntry(TASK_1_1, 0L),
-        mkEntry(TASK_2_0, 10L)
+    private static final Map<TaskId, OffsetLike> TASK_OFFSET_SUMS = mkMap(
+        mkEntry(TASK_0_0, OffsetLike.latestSentinel()),
+        mkEntry(TASK_0_1, OffsetLike.latestSentinel()),
+        mkEntry(TASK_1_0, OffsetLike.latestSentinel()),
+        mkEntry(TASK_1_1, OffsetLike.realValue(0L)),
+        mkEntry(TASK_2_0, OffsetLike.realValue(10L))
     );
 
     private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
@@ -320,12 +320,12 @@ public class SubscriptionInfoTest {
 
     @Test
     public void shouldConvertTaskSetsToTaskOffsetSumMapWithOlderSubscription() {
-        final Map<TaskId, Long> expectedOffsetSumsMap = mkMap(
-            mkEntry(new TaskId(0, 0), Task.LATEST_OFFSET),
-            mkEntry(new TaskId(0, 1), Task.LATEST_OFFSET),
-            mkEntry(new TaskId(1, 0), Task.LATEST_OFFSET),
-            mkEntry(new TaskId(1, 1), UNKNOWN_OFFSET_SUM),
-            mkEntry(new TaskId(2, 0), UNKNOWN_OFFSET_SUM)
+        final Map<TaskId, OffsetLike> expectedOffsetSumsMap = mkMap(
+            mkEntry(new TaskId(0, 0), OffsetLike.latestSentinel()),
+            mkEntry(new TaskId(0, 1), OffsetLike.latestSentinel()),
+            mkEntry(new TaskId(1, 0), OffsetLike.latestSentinel()),
+            mkEntry(new TaskId(1, 1), OffsetLike.unknownSentinel()),
+            mkEntry(new TaskId(2, 0), OffsetLike.unknownSentinel())
         );
 
         final SubscriptionInfo info = SubscriptionInfo.decode(

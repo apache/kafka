@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.streams.processor.internals.OffsetLike;
+
 import java.util.Objects;
 
 /**
@@ -24,16 +26,18 @@ import java.util.Objects;
  */
 public class LagInfo {
 
-    private final long currentOffsetPosition;
+    private final OffsetLike currentOffsetPosition;
 
-    private final long endOffsetPosition;
+    private final OffsetLike endOffsetPosition;
 
-    private final long offsetLag;
+    private final OffsetLike offsetLag;
 
-    LagInfo(final long currentOffsetPosition, final long endOffsetPosition) {
+    LagInfo(final OffsetLike currentOffsetPosition, final OffsetLike endOffsetPosition) {
         this.currentOffsetPosition = currentOffsetPosition;
         this.endOffsetPosition = endOffsetPosition;
-        this.offsetLag = Math.max(0, endOffsetPosition - currentOffsetPosition);
+        offsetLag = currentOffsetPosition.isUnknown()
+            ? currentOffsetPosition
+            : OffsetLike.realValue(endOffsetPosition.realValue() - currentOffsetPosition.realValue());
     }
 
     /**
@@ -43,7 +47,7 @@ public class LagInfo {
      * @return current consume offset for standby/restoring store partitions & simply endoffset for active store partition replicas
      */
     public long currentOffsetPosition() {
-        return this.currentOffsetPosition;
+        return currentOffsetPosition.serialValue();
     }
 
     /**
@@ -52,7 +56,7 @@ public class LagInfo {
      * @return last offset written to the changelog topic partition
      */
     public long endOffsetPosition() {
-        return this.endOffsetPosition;
+        return endOffsetPosition.serialValue();
     }
 
     /**
@@ -61,7 +65,7 @@ public class LagInfo {
      * @return lag as measured by message offsets
      */
     public long offsetLag() {
-        return this.offsetLag;
+        return offsetLag.serialValue();
     }
 
     @Override
@@ -72,7 +76,7 @@ public class LagInfo {
         final LagInfo other = (LagInfo) obj;
         return currentOffsetPosition == other.currentOffsetPosition
             && endOffsetPosition == other.endOffsetPosition
-            && this.offsetLag == other.offsetLag;
+            && offsetLag == other.offsetLag;
     }
 
     @Override

@@ -155,11 +155,11 @@ public class RecordCollectorTest {
         collector.send(topic, "999", "0", headers, 1, null, stringSerializer, stringSerializer);
         collector.send(topic, "999", "0", headers, 2, null, stringSerializer, stringSerializer);
 
-        Map<TopicPartition, Long> offsets = collector.offsets();
+        Map<TopicPartition, OffsetLike> offsets = collector.offsets();
 
-        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 0)));
-        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 1)));
-        assertEquals(0L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(OffsetLike.realValue(2L), offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(OffsetLike.realValue(1L), offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(OffsetLike.realValue(0L), offsets.get(new TopicPartition(topic, 2)));
         assertEquals(6, mockProducer.history().size());
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
@@ -168,9 +168,9 @@ public class RecordCollectorTest {
 
         offsets = collector.offsets();
 
-        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
-        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
-        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(OffsetLike.realValue(3L), offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(OffsetLike.realValue(2L), offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(OffsetLike.realValue(1L), offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
     }
 
@@ -188,16 +188,16 @@ public class RecordCollectorTest {
         collector.send(topic, "244", "0", headers, null, stringSerializer, stringSerializer, streamPartitioner);
         collector.send(topic, "245", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
 
-        final Map<TopicPartition, Long> offsets = collector.offsets();
+        final Map<TopicPartition, OffsetLike> offsets = collector.offsets();
 
-        assertEquals(4L, (long) offsets.get(new TopicPartition(topic, 0)));
-        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
-        assertEquals(0L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(OffsetLike.realValue(4L), offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(OffsetLike.realValue(2L), offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(OffsetLike.realValue(0L), offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
 
         // returned offsets should not be modified
         final TopicPartition topicPartition = new TopicPartition(topic, 0);
-        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, 50L));
+        assertThrows(UnsupportedOperationException.class, () -> offsets.put(topicPartition, OffsetLike.realValue(50L)));
     }
 
     @Test
@@ -214,18 +214,18 @@ public class RecordCollectorTest {
         collector.send(topic, "244", "0", headers, null, null, stringSerializer, stringSerializer);
         collector.send(topic, "245", "0", headers, null, null, stringSerializer, stringSerializer);
 
-        final Map<TopicPartition, Long> offsets = collector.offsets();
+        final Map<TopicPartition, OffsetLike> offsets = collector.offsets();
 
         // with mock producer without specific partition, we would use default producer partitioner with murmur hash
-        assertEquals(3L, (long) offsets.get(new TopicPartition(topic, 0)));
-        assertEquals(2L, (long) offsets.get(new TopicPartition(topic, 1)));
-        assertEquals(1L, (long) offsets.get(new TopicPartition(topic, 2)));
+        assertEquals(OffsetLike.realValue(3L), offsets.get(new TopicPartition(topic, 0)));
+        assertEquals(OffsetLike.realValue(2L), offsets.get(new TopicPartition(topic, 1)));
+        assertEquals(OffsetLike.realValue(1L), offsets.get(new TopicPartition(topic, 2)));
         assertEquals(9, mockProducer.history().size());
     }
 
     @Test
     public void shouldUpdateOffsetsUponCompletion() {
-        Map<TopicPartition, Long> offsets = collector.offsets();
+        Map<TopicPartition, OffsetLike> offsets = collector.offsets();
 
         collector.send(topic, "999", "0", null, 0, null, stringSerializer, stringSerializer);
         collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer);

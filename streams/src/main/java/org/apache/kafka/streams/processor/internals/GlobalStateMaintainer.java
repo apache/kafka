@@ -27,7 +27,7 @@ import java.util.Map;
  */
 interface GlobalStateMaintainer {
 
-    Map<TopicPartition, Long> initialize();
+    Map<TopicPartition, OffsetLike> initialize();
 
     void flushState();
 

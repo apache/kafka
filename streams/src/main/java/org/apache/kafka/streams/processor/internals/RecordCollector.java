@@ -71,7 +71,7 @@ public interface RecordCollector {
      *
      * @return an immutable map from TopicPartition to offset
      */
-    Map<TopicPartition, Long> offsets();
+    Map<TopicPartition, OffsetLike> offsets();
 
     /**
      * A supplier of a {@link RecordCollectorImpl} instance.

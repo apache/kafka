@@ -25,16 +25,18 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import java.io.File;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.kafka.streams.processor.internals.OffsetLike;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
 public class GlobalStateManagerStub implements GlobalStateManager {
 
     private final Set<String> storeNames;
-    private final Map<TopicPartition, Long> offsets;
+    private final Map<TopicPartition, OffsetLike> offsets;
     public boolean initialized;
     public boolean closed;
 
-    public GlobalStateManagerStub(final Set<String> storeNames, final Map<TopicPartition, Long> offsets) {
+    public GlobalStateManagerStub(final Set<String> storeNames, final Map<TopicPartition, OffsetLike> offsets) {
         this.storeNames = storeNames;
         this.offsets = offsets;
     }
@@ -65,7 +67,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+    public void checkpoint(final Map<TopicPartition, OffsetLike> offsets) {
         this.offsets.putAll(offsets);
     }
 
@@ -80,7 +82,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> changelogOffsets() {
+    public Map<TopicPartition, OffsetLike> changelogOffsets() {
         return offsets;
     }
 

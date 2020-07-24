@@ -86,7 +86,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final PartitionGroup partitionGroup;
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
-    private final Map<TopicPartition, Long> consumedOffsets;
+    private final Map<TopicPartition, OffsetLike> consumedOffsets;
     private final PunctuationQueue streamTimePunctuationQueue;
     private final PunctuationQueue systemTimePunctuationQueue;
     private final StreamsMetricsImpl streamsMetrics;
@@ -395,7 +395,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 final Map<TopicPartition, Long> partitionTimes = extractPartitionTimes();
 
                 committableOffsets = new HashMap<>(consumedOffsets.size());
-                for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+                for (final Map.Entry<TopicPartition, OffsetLike> entry : consumedOffsets.entrySet()) {
                     final TopicPartition partition = entry.getKey();
                     Long offset = partitionGroup.headRecordOffset(partition);
                     if (offset == null) {
@@ -681,7 +681,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.trace("Completed processing one record [{}]", record);
 
             // update the consumed offset map after processing is done
-            consumedOffsets.put(partition, record.offset());
+            consumedOffsets.put(partition, OffsetLike.realValue(record.offset()));
             commitNeeded = true;
 
             // after processing this record, if its partition queue's buffered size has been
@@ -779,9 +779,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * Return all the checkpointable offsets(written + consumed) to the state manager.
      * Currently only changelog topic offsets need to be checkpointed.
      */
-    private Map<TopicPartition, Long> checkpointableOffsets() {
-        final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>(recordCollector.offsets());
-        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+    private Map<TopicPartition, OffsetLike> checkpointableOffsets() {
+        final Map<TopicPartition, OffsetLike> checkpointableOffsets = new HashMap<>(recordCollector.offsets());
+        for (final Map.Entry<TopicPartition, OffsetLike> entry : consumedOffsets.entrySet()) {
             checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
         }
         return checkpointableOffsets;
@@ -828,12 +828,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public Map<TopicPartition, Long> purgeableOffsets() {
-        final Map<TopicPartition, Long> purgeableConsumedOffsets = new HashMap<>();
-        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+    public Map<TopicPartition, OffsetLike> purgeableOffsets() {
+        final Map<TopicPartition, OffsetLike> purgeableConsumedOffsets = new HashMap<>();
+        for (final Map.Entry<TopicPartition, OffsetLike> entry : consumedOffsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
             if (topology.isRepartitionTopic(tp.topic())) {
-                purgeableConsumedOffsets.put(tp, entry.getValue() + 1);
+                purgeableConsumedOffsets.put(tp, OffsetLike.realValue(entry.getValue().realValue() + 1));
             }
         }
 
@@ -1066,12 +1066,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     @Override
-    public Map<TopicPartition, Long> changelogOffsets() {
+    public Map<TopicPartition, OffsetLike> changelogOffsets() {
         if (state() == State.RUNNING) {
             // if we are in running state, just return the latest offset sentinel indicating
             // we should be at the end of the changelog
             return changelogPartitions().stream()
-                                        .collect(Collectors.toMap(Function.identity(), tp -> Task.LATEST_OFFSET));
+                                        .collect(Collectors.toMap(Function.identity(), tp -> OffsetLike.latestSentinel()));
         } else {
             return Collections.unmodifiableMap(stateMgr.changelogOffsets());
         }
