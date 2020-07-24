@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
@@ -316,21 +315,6 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRestoreRecordsUpToHighwatermark() {
         initializeConsumer(2, 0, t1);
-
-        stateManager.initialize();
-
-        stateManager.registerStore(store1, stateRestoreCallback);
-        assertEquals(2, stateRestoreCallback.restored.size());
-    }
-
-    @Test
-    public void shouldRecoverFromInvalidOffsetExceptionAndRestoreRecords() {
-        initializeConsumer(2, 0, t1);
-        consumer.setPollException(new InvalidOffsetException("Try Again!") {
-            public Set<TopicPartition> partitions() {
-                return Collections.singleton(t1);
-            }
-        });
 
         stateManager.initialize();
 

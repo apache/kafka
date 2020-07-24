@@ -32,9 +32,11 @@ import org.apache.kafka.test.GlobalStateManagerStub;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.NoOpProcessorContext;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -44,6 +46,7 @@ import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -65,6 +68,7 @@ public class GlobalStateTaskTest {
     private final MockProcessorNode<?, ?> processorTwo = new MockProcessorNode<>();
 
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
+    private File testDirectory = TestUtils.tempDirectory("global-store");
     private final NoOpProcessorContext context = new NoOpProcessorContext();
 
     private ProcessorTopology topology;
@@ -88,8 +92,14 @@ public class GlobalStateTaskTest {
 
         offsets.put(t1, 50L);
         offsets.put(t2, 100L);
-        stateMgr = new GlobalStateManagerStub(storeNames, offsets);
-        globalStateTask = new GlobalStateUpdateTask(topology, context, stateMgr, new LogAndFailExceptionHandler(), logContext);
+        stateMgr = new GlobalStateManagerStub(storeNames, offsets, testDirectory);
+        globalStateTask = new GlobalStateUpdateTask(
+            logContext,
+            topology,
+            context,
+            stateMgr,
+            new LogAndFailExceptionHandler()
+        );
     }
 
     @Test
@@ -171,11 +181,11 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotThrowStreamsExceptionWhenKeyDeserializationFailsWithSkipHandler() {
         final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
+            logContext,
             topology,
             context,
             stateMgr,
-            new LogAndContinueExceptionHandler(),
-            logContext
+            new LogAndContinueExceptionHandler()
         );
         final byte[] key = new LongSerializer().serialize(topic2, 1L);
         final byte[] recordValue = new IntegerSerializer().serialize(topic2, 10);
@@ -186,11 +196,11 @@ public class GlobalStateTaskTest {
     @Test
     public void shouldNotThrowStreamsExceptionWhenValueDeserializationFails() {
         final GlobalStateUpdateTask globalStateTask2 = new GlobalStateUpdateTask(
+            logContext,
             topology,
             context,
             stateMgr,
-            new LogAndContinueExceptionHandler(),
-            logContext
+            new LogAndContinueExceptionHandler()
         );
         final byte[] key = new IntegerSerializer().serialize(topic2, 1);
         final byte[] recordValue = new LongSerializer().serialize(topic2, 10L);
@@ -221,4 +231,10 @@ public class GlobalStateTaskTest {
         assertThat(stateMgr.changelogOffsets(), equalTo(expectedOffsets));
     }
 
+    @Test
+    public void shouldWipeGlobalStateDirectory() throws Exception {
+        assertTrue(stateMgr.baseDir().exists());
+        globalStateTask.close(true);
+        assertFalse(stateMgr.baseDir().exists());
+    }
 }
