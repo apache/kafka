@@ -325,6 +325,10 @@ subprojects {
     }
     logTestStdout.rehydrate(delegate, owner, this)()
 
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
+
     useJUnit {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
     }
@@ -343,6 +347,10 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
+    
+    // The suites are for running sets of tests in IDEs.
+    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
+    exclude '**/*Suite.class'
 
     if (it.project.name != 'generator') {
       useJUnit {
@@ -1261,11 +1269,24 @@ project(':streams') {
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }
 
-  test {
-    // The suites are for running sets of tests in IDEs.
-    // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
-    exclude '**/*Suite.class'
-  }
+  task testAll(
+    dependsOn: [
+            ':streams:test',
+            ':streams:test-utils:test',
+            ':streams:streams-scala:test',
+            ':streams:upgrade-system-tests-0100:test',
+            ':streams:upgrade-system-tests-0101:test',
+            ':streams:upgrade-system-tests-0102:test',
+            ':streams:upgrade-system-tests-0110:test',
+            ':streams:upgrade-system-tests-10:test',
+            ':streams:upgrade-system-tests-11:test',
+            ':streams:upgrade-system-tests-20:test',
+            ':streams:upgrade-system-tests-21:test',
+            ':streams:upgrade-system-tests-22:test',
+            ':streams:upgrade-system-tests-23:test',
+            ':streams:examples:test'
+    ]
+  )
 }
 
 project(':streams:streams-scala') {
