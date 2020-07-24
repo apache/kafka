@@ -396,7 +396,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
         ClientQuotaManager.InactiveSensorExpirationTimeSeconds,
         clientRateMetricName(metricTags),
         Some(getQuotaMetricConfig(metricTags)),
-        new Rate
+        getQuotaSensorRate
       ),
       sensorAccessor.getOrCreate(
         getThrottleTimeSensorName(metricTags),
@@ -423,6 +423,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private def getQuotaMetricConfig(metricTags: Map[String, String]): MetricConfig = {
     getQuotaMetricConfig(quotaLimit(metricTags.asJava))
   }
+
+  protected def getQuotaSensorRate: Rate = new Rate()
 
   private def getQuotaMetricConfig(quotaLimit: Double): MetricConfig = {
     new MetricConfig()

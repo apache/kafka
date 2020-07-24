@@ -23,6 +23,8 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.Sensor
+import org.apache.kafka.common.metrics.stats.Rate
+import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaCallback
@@ -151,6 +153,8 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
       "Tracking mutation-rate per user/client-id",
       quotaMetricTags.asJava)
   }
+
+  override protected def getQuotaSensorRate: Rate = new Rate(new TokenBucket())
 
   /**
    * Records that a user/clientId accumulated or would like to accumulate the provided amount at the

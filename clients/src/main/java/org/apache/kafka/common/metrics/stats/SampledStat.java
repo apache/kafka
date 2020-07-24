@@ -34,8 +34,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
  */
 public abstract class SampledStat implements MeasurableStat {
 
-    private double initialValue;
-    private int current = 0;
+    protected double initialValue;
+    protected int current = 0;
     protected List<Sample> samples;
 
     public SampledStat(double initialValue) {
@@ -52,7 +52,7 @@ public abstract class SampledStat implements MeasurableStat {
         sample.eventCount += 1;
     }
 
-    private Sample advance(MetricConfig config, long timeMs) {
+    protected Sample advance(MetricConfig config, long timeMs) {
         this.current = (this.current + 1) % config.samples();
         if (this.current >= samples.size()) {
             Sample sample = newSample(timeMs);
