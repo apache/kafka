@@ -351,7 +351,7 @@ public class GlobalStreamThread extends Thread {
                 stateConsumer.initialize();
             } catch (final InvalidOffsetException recoverableException) {
                 log.error(
-                    "Bootstrapping global state failed. You can restart KafkaStreams to recover from this error.",
+                    "Bootstrapping global state failed due to inconsistent local state. Will attempt to clean up the local state. You can restart KafkaStreams to recover from this error.",
                     recoverableException
                 );
 
