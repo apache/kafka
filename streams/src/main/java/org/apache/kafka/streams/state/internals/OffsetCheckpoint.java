@@ -61,7 +61,7 @@ public class OffsetCheckpoint {
     // Use a negative sentinel when we don't know the offset instead of skipping it to distinguish it from dirty state
     // and use -3 as the -1 sentinel may be taken by some producer errors and -2 in the
     // subscription means that the state is used by an active task and hence caught-up.
-    public static final long OFFSET_UNKNOWN = -3;
+    public static final long OFFSET_UNKNOWN = -3L;
 
     private final File file;
     private final Object lock;
