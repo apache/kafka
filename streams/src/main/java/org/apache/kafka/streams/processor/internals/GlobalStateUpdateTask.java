@@ -122,7 +122,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         stateMgr.close();
         if (wipeStateStore) {
             try {
-                log.error("Wiping state stores for global task.");
+                log.info("Deleting global task directory after detecting corruption.");
                 Utils.delete(stateMgr.baseDir());
             } catch (final IOException e) {
                 log.error("Failed to wiping state stores for global task.", e);
