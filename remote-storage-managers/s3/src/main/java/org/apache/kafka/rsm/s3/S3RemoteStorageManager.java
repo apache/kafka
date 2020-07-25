@@ -17,7 +17,6 @@
 package org.apache.kafka.rsm.s3;
 
 import org.apache.kafka.common.log.remote.storage.LogSegmentData;
-import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentContext;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.common.log.remote.storage.RemoteStorageException;
@@ -90,8 +89,8 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public RemoteLogSegmentContext copyLogSegment(final RemoteLogSegmentId remoteLogSegmentId,
-                                                  final LogSegmentData logSegmentData) throws RemoteStorageException {
+    public void copyLogSegment(final RemoteLogSegmentId remoteLogSegmentId,
+                               final LogSegmentData logSegmentData) throws RemoteStorageException {
         Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId must not be null");
         Objects.requireNonNull(logSegmentData, "logSegmentData must not be null");
 
@@ -114,7 +113,6 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
             offsetIndexFileUpload.waitForUploadResult();
             timeIndexFileUpload.waitForUploadResult();
 
-            return new S3RemoteLogSegmentContext(baseOffset);
         } catch (final Exception e) {
             final String message = "Error uploading remote log segment " + remoteLogSegmentId;
             log.error(message, e);
@@ -146,8 +144,7 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
             throw new IllegalArgumentException("endPosition must >= startPosition");
         }
 
-        final S3RemoteLogSegmentContext context = deserializeS3RemoteLogSegmentContext(remoteLogSegmentMetadata.remoteLogSegmentContext());
-        final String logFileKey = logFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), context.baseOffset());
+        final String logFileKey = logFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata.startOffset());
 
         try {
             final GetObjectRequest getObjectRequest;
@@ -167,8 +164,7 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
     public InputStream fetchOffsetIndex(final RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata must not be null");
 
-        final S3RemoteLogSegmentContext context = deserializeS3RemoteLogSegmentContext(remoteLogSegmentMetadata.remoteLogSegmentContext());
-        final String offsetIndexFileKey = offsetIndexFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), context.baseOffset());
+        final String offsetIndexFileKey = offsetIndexFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata.startOffset());
 
         try {
             final S3Object s3Object = s3Client.getObject(bucket, offsetIndexFileKey);
@@ -182,8 +178,7 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
     public InputStream fetchTimestampIndex(final RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata must not be null");
 
-        final S3RemoteLogSegmentContext context = deserializeS3RemoteLogSegmentContext(remoteLogSegmentMetadata.remoteLogSegmentContext());
-        final String timeIndexFileKey = timeIndexFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), context.baseOffset());
+        final String timeIndexFileKey = timeIndexFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata.startOffset());
 
         try {
             final S3Object s3Object = s3Client.getObject(bucket, timeIndexFileKey);
@@ -197,10 +192,9 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
     public void deleteLogSegment(final RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
         Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata must not be null");
 
-        final S3RemoteLogSegmentContext context = deserializeS3RemoteLogSegmentContext(remoteLogSegmentMetadata.remoteLogSegmentContext());
-        final String logFileKey = logFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), context.baseOffset());
-        final String offsetIndexFileKey = offsetIndexFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), context.baseOffset());
-        final String timeIndexFileKey = timeIndexFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), context.baseOffset());
+        final String logFileKey = logFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata.startOffset());
+        final String offsetIndexFileKey = offsetIndexFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata.startOffset());
+        final String timeIndexFileKey = timeIndexFileKey(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata.startOffset());
 
         try {
             final DeleteObjectsRequest deleteObjectsRequest = new DeleteObjectsRequest(bucket)

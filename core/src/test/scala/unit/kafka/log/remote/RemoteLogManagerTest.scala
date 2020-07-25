@@ -24,14 +24,14 @@ import java.util.{Collections, Optional, Properties}
 import java.{lang, util}
 
 import kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX
-import kafka.log.{AppendOrigin, CleanerConfig, Log, LogConfig, LogManager}
+import kafka.log._
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server._
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.log.remote.storage.{LogSegmentData, RemoteLogMetadataManager, RemoteLogSegmentContext, RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.common.log.remote.storage._
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record._
@@ -205,12 +205,7 @@ class MockRemoteStorageManager extends RemoteStorageManager {
   }
 
   override def copyLogSegment(remoteLogSegmentId: RemoteLogSegmentId,
-                              logSegmentData: LogSegmentData): RemoteLogSegmentContext = {
-    new RemoteLogSegmentContext {
-      override def asBytes(): Array[Byte] = {
-        Array.emptyByteArray
-      }
-    }
+                              logSegmentData: LogSegmentData): Unit = {
   }
 
   override def fetchLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata,
@@ -229,12 +224,8 @@ class MockRemoteStorageManager extends RemoteStorageManager {
 class MockRemoteLogMetadataManager extends RemoteLogMetadataManager {
   override def putRemoteLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {}
 
-  override def getRemoteLogSegmentId(topicPartition: TopicPartition,
-                                     offset: Long): RemoteLogSegmentId = {
-    null
-  }
-
-  override def getRemoteLogSegmentMetadata(remoteLogSegmentId: RemoteLogSegmentId): RemoteLogSegmentMetadata = {
+  override def remoteLogSegmentMetadata(topicPartition: TopicPartition,
+                                        offset: Long): RemoteLogSegmentMetadata = {
     null
   }
 

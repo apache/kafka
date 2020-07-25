@@ -29,10 +29,11 @@ import java.util.Set;
 
 /**
  * This interface provides storing and fetching remote log segment metadata with strongly consistent semantics.
- *
+ * <p>
  * When {@link #configure(Map)} is invoked on this instance, {@link #BROKER_ID}, {@link #CLUSTER_ID} properties are
- * passed which can be used by this instance if needed. These props can be used if there is a single storage used for
- * different clusters. For ex: MySQL storage can be used as metadata store for all the clusters across the org.
+ * passed which can be used by this instance if needed. These propertiess can be used if there is a single storage used
+ * for different clusters. For ex: MySQL storage can be used as metadata store for all the clusters across the org.
+ * <p>
  *
  * todo-tier cleanup the abstractions in this interface.
  */
@@ -40,70 +41,73 @@ import java.util.Set;
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
-     *
+     * Property name for broker id.
      */
     String BROKER_ID = "broker.id";
 
     /**
-     *
+     * Property name for cluster id.
      */
     String CLUSTER_ID = "cluster.id";
 
     /**
-     * Stores RemoteLogSegmentMetadata with the given RemoteLogSegmentId.
+     * Stores RemoteLogSegmentMetadata with the containing RemoteLogSegmentId into RemoteLogMetadataManager.
+     *
+     * RemoteLogSegmentMetadata is identified by RemoteLogSegmentId.
      *
      * @param remoteLogSegmentMetadata
-     * @throws IOException
+     * @throws RemoteStorageException
      */
-    void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException;
+    void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
-     * Fetches RemoteLogSegmentId for the given topic partition which contains the given offset.
+     * Fetches RemoteLogSegmentMetadata for the given topic partition and offset.
+     *
+     * This will evolve to refactor TopicPartition to TopicPartitionId which contains a unique identifier and TopicPartition.
      *
      * @param topicPartition
      * @param offset
      * @return
-     * @throws IOException
+     * @throws RemoteStorageException
      */
-    RemoteLogSegmentId getRemoteLogSegmentId(TopicPartition topicPartition, long offset) throws IOException;
+    RemoteLogSegmentMetadata remoteLogSegmentMetadata(TopicPartition topicPartition, long offset) throws RemoteStorageException;
 
     /**
-     * Fetches RemoteLogSegmentMetadata for the given RemoteLogSegmentId.
+     * Returns earliest log offset if there are segments in the remote storage for the given topic partition, else
+     * returns {@link Optional#empty()}.
      *
-     * @param remoteLogSegmentId
-     * @return
-     * @throws IOException
-     */
-    RemoteLogSegmentMetadata getRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException;
-
-    /**
-     * Earliest log offset if exists for the given topic partition in the remote storage. Return {@link Optional#empty()}
-     * if there are no segments in the remote storage.
+     * This is treated as the effective log-start-offset of the topic partition's log.
+     *
+     * todo check whether we need to pass leader-epoch.
      *
      * @param tp
      * @return
      */
-    Optional<Long> earliestLogOffset(TopicPartition tp) throws IOException;
+    Optional<Long> earliestLogOffset(TopicPartition tp) throws RemoteStorageException;
 
     /**
+     * Returns highest log offset of topic partition in remote storage.
      *
      * @param tp
      * @return
-     * @throws IOException
+     * @throws RemoteStorageException
      */
-    Optional<Long> highestLogOffset(TopicPartition tp) throws IOException;
+    Optional<Long> highestLogOffset(TopicPartition tp) throws RemoteStorageException;
 
     /**
      * Deletes the log segment metadata for the given remoteLogSegmentId.
      *
      * @param remoteLogSegmentId
-     * @throws IOException
+     * @throws RemoteStorageException
      */
-    void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException;
+    void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws RemoteStorageException;
 
     /**
      * List the remote log segment files of the given topicPartition.
      * The RemoteLogManager of a follower uses this method to find out the remote data for the given topic partition.
+     * <p>
+     * This is used in while deleting a given topic partition to fetch all the remote log segments for the given  topic
+     * partition and set a tombstone marker for them to be deleted.
      *
      * @return List of remote segments, sorted by baseOffset in ascending order.
      */
@@ -112,6 +116,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     }
 
     /**
+     * Returns list of remote segments, sorted by {@link RemoteLogSegmentMetadata#startOffset()} in ascending order
+     * which are >= the given min Offset.
+     *
      * @param topicPartition
      * @param minOffset
      * @return List of remote segments, sorted by baseOffset in ascending order.

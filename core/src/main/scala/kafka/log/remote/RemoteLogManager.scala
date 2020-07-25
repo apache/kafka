@@ -16,7 +16,7 @@
  */
 package kafka.log.remote
 
-import java.io.{Closeable, InputStream}
+import java.io.{Closeable, File, InputStream}
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
@@ -27,7 +27,7 @@ import java.util.function.{BiConsumer, Consumer, Function}
 import kafka.cluster.Partition
 import kafka.common.KafkaException
 import kafka.log.Log
-import kafka.server.{Defaults, FetchDataInfo, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
+import kafka.server.{Defaults, FetchDataInfo, FetchTxnCommitted, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
 import kafka.utils.Logging
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
@@ -37,6 +37,7 @@ import org.apache.kafka.common.log.remote.storage.{ClassLoaderAwareRemoteLogMeta
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RemoteLogInputStream}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.utils.{ChildFirstClassLoader, KafkaThread, Time, Utils}
 
 import scala.jdk.CollectionConverters._
@@ -353,14 +354,20 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                 //todo-tier double check on this
                 val endOffset = segment.readNextOffset - 1
                 remoteLogMetadataManager.putRemoteLogSegmentData(new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset, segment.maxTimestampSoFar,
-                                    leaderEpochVal, null))
+                                    leaderEpochVal, segment.log.sizeInBytes()))
 
+                // todo-tier get producerIdSnapshotIndex if it matches with the current segments file
+                val producerIdSnapshotFile =  log.producerStateManager.fetchSnapshot(endOffset + 1).orNull
+                // create a tmp file of cache till this offset by taking readlock
+                //val leaderEpochs = log.leaderEpochCache.map( x => x.epochEntries)
+                val leaderEpochs:File = null
                 val segmentData = new LogSegmentData(file, segment.lazyOffsetIndex.get.file,
-                  segment.lazyTimeIndex.get.file)
-                val remoteLogContext = remoteLogStorageManager.copyLogSegment(id, segmentData)
-
-                remoteLogMetadataManager.putRemoteLogSegmentData(new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset, segment.maxTimestampSoFar, leaderEpochVal, System.currentTimeMillis(), false, remoteLogContext.asBytes()))
-
+                  segment.lazyTimeIndex.get.file, segment.txnIndex.file, producerIdSnapshotFile, leaderEpochs)
+                remoteLogStorageManager.copyLogSegment(id, segmentData)
+                val remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset,
+                  segment.maxTimestampSoFar, leaderEpochVal, System.currentTimeMillis(), false,
+                  segment.log.sizeInBytes())
+                remoteLogMetadataManager.putRemoteLogSegmentData(remoteLogSegmentMetadata)
                 readOffset = endOffset
                 log.updateRemoteIndexHighestOffset(readOffset)
               }
@@ -446,6 +453,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     val tp = remoteStorageFetchInfo.topicPartition
     val fetchInfo: PartitionData = remoteStorageFetchInfo.fetchInfo
 
+    val includeAbortedTxns = remoteStorageFetchInfo.fetchIsolation == FetchTxnCommitted
+
     val offset = fetchInfo.fetchOffset
     val maxBytes = Math.min(fetchMaxBytes, fetchInfo.maxBytes)
     val rlsMetadata = getRemoteLogSegmentMetadata(tp, offset)
@@ -457,23 +466,32 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       remoteSegInputStream = remoteLogStorageManager.fetchLogSegmentData(rlsMetadata, startPos, Int.MaxValue)
       val remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream)
 
-      var firstBatch:RecordBatch = null
-      def nextBatch(): RecordBatch = {
-        firstBatch = remoteLogInputStream.nextBatch()
-        firstBatch
+      def findFirstBatch(): RecordBatch = {
+        var nextBatch: RecordBatch = null
+
+        def iterateNextBatch(): RecordBatch = {
+          nextBatch = remoteLogInputStream.nextBatch()
+          nextBatch
+        }
+        // Look for the batch which has the desired offset
+        // we will always have a batch in that segment as it is a non-compacted topic. For compacted topics, we may need
+        //to read from the subsequent segments if there is no batch available for the desired offset in the current
+        //segment. That means, desired offset is more than last offset of the current segment and immediate available
+        //offset exists in the next segment which can be higher than the desired offset.
+        while (iterateNextBatch() != null && nextBatch.lastOffset < offset) {
+        }
+        nextBatch
       }
-      // Look for the batch which has the desired offset
-      // we will always have a batch in that segment as it is a non-compacted topic. For compacted topics, we may need
-      //to read from the subsequent segments if there is no batch available for the desired offset in the current
-      //segment. That means, desired offset is more than last offset of the current segment and immediate available
-      //offset exists in the next segment which can be higher than the desired offset.
-      while (nextBatch() != null && firstBatch.lastOffset < offset) {
-      }
+
+      val firstBatch = findFirstBatch()
 
       if (firstBatch == null)
-        return FetchDataInfo(LogOffsetMetadata(offset), MemoryRecords.EMPTY)
+        return FetchDataInfo(LogOffsetMetadata(offset), MemoryRecords.EMPTY,
+          abortedTransactions = if(includeAbortedTxns) Some(List.empty) else None)
 
-      val updatedFetchSize = if (remoteStorageFetchInfo.minOneMessage && firstBatch.sizeInBytes() > maxBytes) firstBatch.sizeInBytes() else maxBytes
+      val updatedFetchSize =
+        if (remoteStorageFetchInfo.minOneMessage && firstBatch.sizeInBytes() > maxBytes) firstBatch.sizeInBytes()
+        else maxBytes
 
       val buffer = ByteBuffer.allocate(updatedFetchSize)
       var remainingBytes = updatedFetchSize
@@ -488,20 +506,22 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
       }
       buffer.flip()
 
-      val records = MemoryRecords.readableRecords(buffer)
-      FetchDataInfo(LogOffsetMetadata(offset), records)
+      val abortedTxns = if(includeAbortedTxns) Some(collectAbortedTransactions(rlsMetadata, firstBatch.baseOffset(), updatedFetchSize)) else None
+      FetchDataInfo(LogOffsetMetadata(offset), MemoryRecords.readableRecords(buffer), abortedTransactions = abortedTxns)
     } finally {
       Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream")
     }
   }
 
+  private def collectAbortedTransactions(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, offset:Long,
+                                         fetchSize:Int): List[AbortedTransaction] = {
+    // TxnIndexSearchResult will be useful whether to search through the next segments or not.
+    indexCache.collectAbortedTransaction(remoteLogSegmentMetadata, offset, fetchSize).abortedTransactions
+      .map(_.asAbortedTransaction)
+  }
+
   private def getRemoteLogSegmentMetadata(tp: TopicPartition, offset: Long): RemoteLogSegmentMetadata = {
-    val remoteLogSegmentId = remoteLogMetadataManager.getRemoteLogSegmentId(tp, offset)
-
-    if (remoteLogSegmentId == null) throw new OffsetOutOfRangeException(
-      s"Received request for offset $offset for partition $tp, which does not exist in remote tier")
-
-    val remoteLogSegmentMetadata = remoteLogMetadataManager.getRemoteLogSegmentMetadata(remoteLogSegmentId)
+    val remoteLogSegmentMetadata = remoteLogMetadataManager.remoteLogSegmentMetadata(tp, offset)
     if (remoteLogSegmentMetadata == null) throw new OffsetOutOfRangeException(
       s"Received request for offset $offset for partition $tp, which does not exist in remote tier")
 
@@ -670,6 +690,6 @@ object RemoteLogManager {
       config.remoteLogRetentionBytes, config.remoteLogRetentionMillis,
       config.remoteLogReaderThreads, config.remoteLogReaderMaxPendingTasks, rsmProps.toMap,
       config.remoteLogManagerThreadPoolSize, config.remoteLogManagerTaskIntervalMs, config.remoteLogMetadataManager,
-      config.remoteLogMetadataManagerClassPath)
+      config.remoteLogMetadataManagerClassPath, Option(config.remoteLogMetadataManagerListenerName))
   }
 }

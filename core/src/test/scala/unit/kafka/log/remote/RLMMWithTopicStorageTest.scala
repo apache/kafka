@@ -25,6 +25,7 @@ import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.log.remote.metadata.storage.RLMMWithTopicStorage
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata.remoteLogSegmentId
 import org.apache.kafka.common.log.remote.storage.{RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata}
 import org.junit.{Assert, Before, Test}
 
@@ -46,31 +47,31 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
 
   val allTopicPartitions: util.Set[TopicPartition] = Set(tp0, tp1, tp2, tp3).asJava
 
-  val context: Array[Byte] = "random".getBytes()
+  val segSize: Long = 1024 * 1024
 
   val rlSegIdTp0_0_100 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
-  val rlSegMetTp0_0_100 = new RemoteLogSegmentMetadata(rlSegIdTp0_0_100, 0L, 100L, -1L, 1, context)
+  val rlSegMetTp0_0_100 = new RemoteLogSegmentMetadata(rlSegIdTp0_0_100, 0L, 100L, -1L, 1, segSize)
 
   val rlSegIdTp0_101_200 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
-  val rlSegMetTp0_101_200 = new RemoteLogSegmentMetadata(rlSegIdTp0_101_200, 101L, 200L, -1L, 1, context)
+  val rlSegMetTp0_101_200 = new RemoteLogSegmentMetadata(rlSegIdTp0_101_200, 101L, 200L, -1L, 1, segSize)
 
   val rlSegIdTp1_101_300 = new RemoteLogSegmentId(tp1, UUID.randomUUID)
-  val rlSegMetTp1_101_300 = new RemoteLogSegmentMetadata(rlSegIdTp1_101_300, 101L, 300L, -1L, 1, context)
+  val rlSegMetTp1_101_300 = new RemoteLogSegmentMetadata(rlSegIdTp1_101_300, 101L, 300L, -1L, 1, segSize)
 
   val rlSegIdTp2_150_400 = new RemoteLogSegmentId(tp2, UUID.randomUUID)
-  val rlSegMetTp2_150_400 = new RemoteLogSegmentMetadata(rlSegIdTp2_150_400, 150L, 400L, -1L, 1, context)
+  val rlSegMetTp2_150_400 = new RemoteLogSegmentMetadata(rlSegIdTp2_150_400, 150L, 400L, -1L, 1, segSize)
 
   val rlSegIdTp2_401_700 = new RemoteLogSegmentId(tp2, UUID.randomUUID)
-  val rlSegMetTp2_401_700 = new RemoteLogSegmentMetadata(rlSegIdTp2_401_700, 401L, 700L, -1L, 1, context)
+  val rlSegMetTp2_401_700 = new RemoteLogSegmentMetadata(rlSegIdTp2_401_700, 401L, 700L, -1L, 1, segSize)
 
   val rlSegIdTp2_501_1000 = new RemoteLogSegmentId(tp2, UUID.randomUUID)
-  val rlSegMetTp2_501_1000 = new RemoteLogSegmentMetadata(rlSegIdTp2_501_1000, 501L, 1000L, -1L, 1, context)
+  val rlSegMetTp2_501_1000 = new RemoteLogSegmentMetadata(rlSegIdTp2_501_1000, 501L, 1000L, -1L, 1, segSize)
 
   val rlSegIdTp3_101_700 = new RemoteLogSegmentId(tp3, UUID.randomUUID)
-  val rlSegMetTp3_101 = new RemoteLogSegmentMetadata(rlSegIdTp3_101_700, 101L, 700L, -1L, 1, context)
+  val rlSegMetTp3_101 = new RemoteLogSegmentMetadata(rlSegIdTp3_101_700, 101L, 700L, -1L, 1, segSize)
 
   val rlSegIdTp3_701_1900 = new RemoteLogSegmentId(tp3, UUID.randomUUID)
-  val rlSegMetTp3_701_1900 = new RemoteLogSegmentMetadata(rlSegIdTp3_701_1900, 701L, 1900L, -1L, 1, context)
+  val rlSegMetTp3_701_1900 = new RemoteLogSegmentMetadata(rlSegIdTp3_701_1900, 701L, 1900L, -1L, 1, segSize)
 
   def tmpLogDirPathAsStr: String = tmpLogDirPath.toString
 
@@ -99,27 +100,27 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp1_101_300)
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp2_401_700)
 
-      val rlSegIdTp1_150 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp1, 150)
+      val rlSegIdTp1_150 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp1, 150))
       Assert.assertEquals(rlSegIdTp1_101_300, rlSegIdTp1_150)
 
       // this should return the RemoteLogSegmentId with offset containing 0, including startoffset and the first entry
-      val rlSegIdTp0_0 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 0)
+      val rlSegIdTp0_0 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 0))
       Assert.assertEquals(rlSegIdTp0_0_100, rlSegIdTp0_0)
 
       // this should return the RemoteLogSegmentId with offset containing 100, as last offset of the first entry
-      val rlSegIdTp0_100 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 100)
+      val rlSegIdTp0_100 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 100))
       Assert.assertEquals(rlSegIdTp0_0_100, rlSegIdTp0_100)
 
       // this should return the RemoteLogSegmentId with offset containing 101, including startoffset
-      val rlSegIdTp0_101 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 101)
+      val rlSegIdTp0_101 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 101))
       Assert.assertEquals(rlSegIdTp0_101_200, rlSegIdTp0_101)
 
       // this should return the RemoteLogSegmentId with offset containing 200, including endoffset and last entry.
-      val rlSegIdTp0_200 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 200)
+      val rlSegIdTp0_200 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 200))
       Assert.assertEquals(rlSegIdTp0_101_200, rlSegIdTp0_200)
 
       // this should return the RemoteLogSegmentId with highest offset as the target offset is beyond the highest.
-      val rlSegIdTp0_300 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 300)
+      val rlSegIdTp0_300 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 300))
       Assert.assertEquals(rlSegIdTp0_101_200, rlSegIdTp0_300)
     } finally {
       mayBeRlmmWithTopicStorage.foreach(x => x.close())
@@ -128,7 +129,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     // reload RLMM by reading from the data and committed offsets file.
     val rlmmWithTopicStorageReloaded = createRLMMWithTopicStorage(tmpLogDirPathAsStr)
     try {
-      val remoteLogSegmentId170 = rlmmWithTopicStorageReloaded.getRemoteLogSegmentId(tp0, 170)
+      val remoteLogSegmentId170 = remoteLogSegmentId(rlmmWithTopicStorageReloaded.remoteLogSegmentMetadata(tp0, 170))
       Assert.assertEquals(rlSegIdTp0_101_200, remoteLogSegmentId170)
     } finally {
       rlmmWithTopicStorageReloaded.close()
@@ -140,7 +141,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
   def testNonExistingOffsets(): Unit = {
 
     val rlSegIdTp0_10 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
-    val rlSegMetTp0_10 = new RemoteLogSegmentMetadata(rlSegIdTp0_10, 10L, 100L, -1L, 1, context)
+    val rlSegMetTp0_10 = new RemoteLogSegmentMetadata(rlSegIdTp0_10, 10L, 100L, -1L, 1, segSize)
     var mayBeRlmmWithTopicStorage: Option[RLMMWithTopicStorage] = None
     try {
       val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPathAsStr, 1)
@@ -149,11 +150,11 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp0_10)
 
       // get the non existing offset, below base offset
-      val rlSegIdTp0_2 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 2L)
+      val rlSegIdTp0_2 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 2L))
       Assert.assertNull(rlSegIdTp0_2)
 
       // get the non existing offset, above end offset. This should return the immediate floor entry.
-      val rlSegIdTp0_200 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 200L)
+      val rlSegIdTp0_200 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 200L))
       Assert.assertEquals(rlSegIdTp0_10, rlSegIdTp0_200)
     } finally {
       mayBeRlmmWithTopicStorage.foreach(x => x.close())
@@ -173,14 +174,14 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp0_0_100)
 
       // get the non existing offset, below base offset
-      val rlSegMetTp0_15 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 15L)
+      val rlSegMetTp0_15 = remoteLogSegmentId(rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 15L))
       Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_15)
 
       // delete the segment
       rlmmWithTopicStorage.deleteRemoteLogSegmentMetadata(rlSegIdTp0_0_100)
 
       // there should not be any entry as it is already deleted.
-      val rlSegMetTp0_15_2 = rlmmWithTopicStorage.getRemoteLogSegmentId(tp0, 15L)
+      val rlSegMetTp0_15_2 = rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 15L)
       Assert.assertNull(rlSegMetTp0_15_2)
 
     } finally {
@@ -206,12 +207,12 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     rlmmWithTopicStorage.onServerStarted(null)
   }
 
-  def waitTillReceiveExpected(fn: () => RemoteLogSegmentId, expected: RemoteLogSegmentId, waitTimeInMillis:Long = 30000): Boolean = {
+  def waitTillReceiveExpected(fn: () => RemoteLogSegmentId, expected: RemoteLogSegmentId, waitTimeInMillis: Long = 30000): Boolean = {
     var checkAgain = true
     val startTime = System.currentTimeMillis()
     while (checkAgain) {
       val result = fn()
-      if(!expected.equals(result)) {
+      if (!expected.equals(result)) {
         if (System.currentTimeMillis() - startTime < waitTimeInMillis) {
           info("Sleeping for 100 msecs to retry again")
           Thread.sleep(100)
@@ -261,14 +262,14 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmm1.putRemoteLogSegmentData(rlSegMetTp2_501_1000);
 
       // check whether the published events from rlmm1 are available.
-      val rlSegMetTp0_0_1 = rlmm1.getRemoteLogSegmentId(tp0, 10);
+      val rlSegMetTp0_0_1 = rlmm1.remoteLogSegmentMetadata(tp0, 10);
       Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_0_1);
-      val rlSegIdTp0_101_1 = rlmm1.getRemoteLogSegmentId(tp0, 190);
+      val rlSegIdTp0_101_1 = rlmm1.remoteLogSegmentMetadata(tp0, 190);
       Assert.assertEquals(rlSegIdTp0_101_200, rlSegIdTp0_101_1);
 
       // check whether these events are received in rlmm2 as it is a follower.
-      Assert.assertTrue(waitTillReceiveExpected(() => rlmm2.getRemoteLogSegmentId(tp0, 10), rlSegIdTp0_0_100))
-      Assert.assertTrue(waitTillReceiveExpected(() => rlmm2.getRemoteLogSegmentId(tp0, 190), rlSegIdTp0_101_200))
+      Assert.assertTrue(waitTillReceiveExpected(() => remoteLogSegmentId(rlmm2.remoteLogSegmentMetadata(tp0, 10)), rlSegIdTp0_0_100))
+      Assert.assertTrue(waitTillReceiveExpected(() => remoteLogSegmentId(rlmm2.remoteLogSegmentMetadata(tp0, 190)), rlSegIdTp0_101_200))
 
     } finally {
       mayBeRlmm1.foreach(x => x.close())
@@ -289,7 +290,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     //partition 0.
     class RLMMWithTopicStorageWithCustomPartitioner extends RLMMWithTopicStorage {
       override def metadataPartitionFor(tp: TopicPartition): Int = {
-        if(tp.equals(tp3)) 1 else 0
+        if (tp.equals(tp3)) 1 else 0
       }
     }
 
@@ -310,10 +311,10 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmm1.putRemoteLogSegmentData(rlSegMetTp0_101_200)
       rlmm1.putRemoteLogSegmentData(rlSegMetTp3_101)
 
-      val rlSegMetTp0_10 = rlmm1.getRemoteLogSegmentId(tp0, 10);
+      val rlSegMetTp0_10 = rlmm1.remoteLogSegmentMetadata(tp0, 10);
       Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_10);
 
-      val rlSegMetTp3_140 = rlmm1.getRemoteLogSegmentId(tp3, 140);
+      val rlSegMetTp3_140 = rlmm1.remoteLogSegmentMetadata(tp3, 140);
       Assert.assertEquals(rlSegIdTp3_101_700, rlSegMetTp3_140);
 
       val rlmm2 = new RLMMWithTopicStorageWithCustomPartitioner()
@@ -331,14 +332,14 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmm2.putRemoteLogSegmentData(rlSegMetTp2_150_400)
 
       // check for a few messages for tp1 and tp2 but not for tp0
-      val rlSegIdTp1_180 = rlmm2.getRemoteLogSegmentId(tp1, 180)
+      val rlSegIdTp1_180 = remoteLogSegmentId(rlmm2.remoteLogSegmentMetadata(tp1, 180))
       Assert.assertEquals(rlSegIdTp1_101_300, rlSegIdTp1_180)
 
-      val rlSegIdTp2_300 = rlmm2.getRemoteLogSegmentId(tp2, 300)
+      val rlSegIdTp2_300 = remoteLogSegmentId(rlmm2.remoteLogSegmentMetadata(tp2, 300))
       Assert.assertEquals(rlSegIdTp2_150_400, rlSegIdTp2_300)
 
       // check for tp3 messages in rlmm2, but it should not have received
-      Assert.assertFalse(waitTillReceiveExpected(() => rlmm2.getRemoteLogSegmentId(tp3, 170), rlSegIdTp3_101_700, 2000L));
+      Assert.assertFalse(waitTillReceiveExpected(() => remoteLogSegmentId(rlmm2.remoteLogSegmentMetadata(tp3, 170)), rlSegIdTp3_101_700, 2000L));
 
       // reassign tp3 from rlmm1 to rlmm2. rlmm1 should not receive any updates of tp3 as it should have been
       // unsubscribed fro remote log metadata partition 1. Because only tp3 notifications go to partition 1.
@@ -348,18 +349,18 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmm2.onPartitionLeadershipChanges(movedPartitions, Collections.emptySet())
 
       // rlmm2 should receive all notifications for tp3 as it is subscribed for.
-      Assert.assertTrue(waitTillReceiveExpected(() => rlmm2.getRemoteLogSegmentId(tp3, 170), rlSegIdTp3_101_700));
+      Assert.assertTrue(waitTillReceiveExpected(() => remoteLogSegmentId(rlmm2.remoteLogSegmentMetadata(tp3, 170)), rlSegIdTp3_101_700));
 
       // add a new segment notification for tp3
       rlmm2.putRemoteLogSegmentData(rlSegMetTp3_701_1900)
-      Assert.assertTrue(waitTillReceiveExpected(() => rlmm2.getRemoteLogSegmentId(tp3, 720), rlSegIdTp3_701_1900));
+      Assert.assertTrue(waitTillReceiveExpected(() => remoteLogSegmentId(rlmm2.remoteLogSegmentMetadata(tp3, 720)), rlSegIdTp3_701_1900));
 
       // rlmm1 should not receive latest tp3 segment notifications as it is not assigned for.
-      Assert.assertFalse(waitTillReceiveExpected(() => rlmm1.getRemoteLogSegmentId(tp3, 720), rlSegIdTp3_701_1900, 2000L));
+      Assert.assertFalse(waitTillReceiveExpected(() => remoteLogSegmentId(rlmm1.remoteLogSegmentMetadata(tp3, 720)), rlSegIdTp3_701_1900, 2000L));
 
       // add rlmm1 as follower for tp3 and it should receive the latest tp3 segment notification.
       rlmm1.onPartitionLeadershipChanges(Collections.emptySet(), movedPartitions)
-      Assert.assertTrue(waitTillReceiveExpected(() => rlmm1.getRemoteLogSegmentId(tp3, 720), rlSegIdTp3_701_1900));
+      Assert.assertTrue(waitTillReceiveExpected(() => remoteLogSegmentId(rlmm1.remoteLogSegmentMetadata(tp3, 720)), rlSegIdTp3_701_1900));
 
     } finally {
       mayBeRlmm1.foreach(x => x.close())

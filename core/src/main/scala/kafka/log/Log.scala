@@ -1635,7 +1635,7 @@ class Log(@volatile private var _dir: File,
       if (config.messageFormatVersion < KAFKA_0_10_0_IV0 &&
         targetTimestamp != ListOffsetRequest.EARLIEST_TIMESTAMP &&
         targetTimestamp != ListOffsetRequest.LATEST_TIMESTAMP &&
-        targetTimestamp != ListOffsetRequest.NEXT_LOCAL_TIMESTAMP
+        targetTimestamp != ListOffsetRequest.EARLIEST_LOCAL_TIMESTAMP
       )
         throw new UnsupportedForMessageFormatException(s"Cannot search offsets based on timestamp because message format version " +
           s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
@@ -1647,7 +1647,7 @@ class Log(@volatile private var _dir: File,
 
       // For the earliest and latest, we do not need to return the timestamp.
       if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP ||
-        (!remoteLogEnabled && targetTimestamp == ListOffsetRequest.NEXT_LOCAL_TIMESTAMP)) {
+        (!remoteLogEnabled && targetTimestamp == ListOffsetRequest.EARLIEST_LOCAL_TIMESTAMP)) {
         // If remote log is not enabled, NEXT_LOCAL_TIMESTAMP is same with EARLIEST_TIMESTAMP
         // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
         // it may not be true following a message format version bump as the epoch will not be available for
@@ -1658,11 +1658,11 @@ class Log(@volatile private var _dir: File,
           case _ => Optional.empty[Integer]()
         }
         return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
-      } else if (targetTimestamp == ListOffsetRequest.NEXT_LOCAL_TIMESTAMP) {
+      } else if (targetTimestamp == ListOffsetRequest.EARLIEST_LOCAL_TIMESTAMP) {
         // NEXT_LOCAL_TIMESTAMP is only used by follower brokers, to find out the offset that they
         // should start fetching from. Since the followers do not need the epoch, we can return
         // an empty epoch here to keep things simple.
-        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, highestOffsetWithRemoteIndex + 1, Optional.empty[Integer]()))
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, localLogStartOffset + 1, Optional.empty[Integer]()))
       } else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
         val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
         val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
@@ -1675,7 +1675,7 @@ class Log(@volatile private var _dir: File,
         val earlierSegs = segmentsCopy.takeWhile(_.largestTimestamp < targetTimestamp)
         // We need to search the first segment whose largest timestamp is greater than the target timestamp if there is one.
         if (earlierSegs.length < segmentsCopy.length) {
-          isFirstSegment = (earlierSegs.length == 0)
+          isFirstSegment = earlierSegs.isEmpty
           Some(segmentsCopy(earlierSegs.length))
         } else
           None

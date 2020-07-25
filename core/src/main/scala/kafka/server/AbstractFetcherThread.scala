@@ -20,7 +20,7 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{Future, TimeUnit}
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 
@@ -34,6 +34,7 @@ import kafka.utils.{DelayedItem, Pool, ShutdownableThread}
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.PartitionStates
+import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests.EpochEndOffset._
@@ -112,6 +113,8 @@ abstract class AbstractFetcherThread(name: String,
   override def doWork(): Unit = {
     maybeTruncate()
     maybeFetch()
+    //todo-tier implement RLSM Fetch
+//    mayBeRLSMFetch()
   }
 
   private def maybeFetch(): Unit = {
@@ -287,6 +290,13 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
+  def handleOffsetMovedToTieredStorage(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, requestEpoch: Option[Int]) = {
+    // todo this involves in getting the required state of the respective log segment for the requested fetch offset
+    //  1. the follower should fetch the respective remote log segment meta data
+    //  2. the follower should fetch producer-id snapshot till the fetch offset from the remote storage
+
+  }
+
   private def processFetchRequest(sessionPartitions: util.Map[TopicPartition, FetchRequest.PartitionData],
                                   fetchRequest: FetchRequest.Builder): Unit = {
     val partitionsWithError = mutable.Set[TopicPartition]()
@@ -366,7 +376,9 @@ abstract class AbstractFetcherThread(name: String,
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   if (handleOutOfRangeError(topicPartition, currentFetchState, requestEpoch))
                     partitionsWithError += topicPartition
-
+                case Errors.OFFSET_MOVED_TO_TIERED_STORAGE =>
+                  // no need to retry this as it indicates that the requested offset is moved to tiered storage.
+                  handleOffsetMovedToTieredStorage(topicPartition, currentFetchState, requestEpoch)
                 case Errors.UNKNOWN_LEADER_EPOCH =>
                   debug(s"Remote broker has a smaller leader epoch for partition $topicPartition than " +
                     s"this replica's current leader epoch of ${currentFetchState.currentLeaderEpoch}.")
@@ -759,6 +771,17 @@ sealed trait ReplicaState
 case object Truncating extends ReplicaState
 case object Fetching extends ReplicaState
 
+case class FetchingRemoteLogMetadata(rlsMetadata: Future[RemoteLogSegmentMetadata], previousState:ReplicaState) extends ReplicaState {
+
+}
+
+case class FetchingRemoteLogAuxiliaryState() extends ReplicaState {
+
+}
+
+class RemoteLogAuxiliaryState {
+
+}
 object PartitionFetchState {
   def apply(offset: Long, lag: Option[Long], currentLeaderEpoch: Int, state: ReplicaState): PartitionFetchState = {
     PartitionFetchState(offset, lag, currentLeaderEpoch, None, state)

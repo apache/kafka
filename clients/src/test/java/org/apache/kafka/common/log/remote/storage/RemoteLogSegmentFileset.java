@@ -86,8 +86,8 @@ public final class RemoteLogSegmentFileset {
          * Provides the name of the file of this type for the given UUID in the local tiered storage,
          * e.g. uuid-segment.
          */
-        public String toFilename(final UUID uuid, final int brokerId) {
-            return format("%s-%d-%s", uuid.toString(), brokerId, name().toLowerCase());
+        public String toFilename(final UUID uuid) {
+            return format("%s-%s", uuid.toString(), name().toLowerCase());
         }
 
         /**
@@ -142,15 +142,14 @@ public final class RemoteLogSegmentFileset {
      * @param id Remote log segment id assigned to a log segment in Kafka.
      * @return A new fileset instance.
      */
-    public static RemoteLogSegmentFileset openFileset(
-            final int brokerId, final File storageDir, final RemoteLogSegmentId id) {
+    public static RemoteLogSegmentFileset openFileset(final File storageDir, final RemoteLogSegmentId id) {
 
         final RemoteTopicPartitionDirectory tpDir = openTopicPartitionDirectory(id.topicPartition(), storageDir);
         final File partitionDirectory = tpDir.getDirectory();
         final UUID uuid = id.id();
 
         final Map<RemoteLogSegmentFileType, File> files = stream(RemoteLogSegmentFileType.values())
-                .collect(toMap(identity(), type -> new File(partitionDirectory, type.toFilename(uuid, brokerId))));
+                .collect(toMap(identity(), type -> new File(partitionDirectory, type.toFilename(uuid))));
 
         return new RemoteLogSegmentFileset(tpDir, id, files);
     }

@@ -1080,7 +1080,7 @@ class Partition(val topicPartition: TopicPartition,
           .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
       case ListOffsetRequest.EARLIEST_TIMESTAMP =>
         getOffsetByTimestamp
-      case ListOffsetRequest.NEXT_LOCAL_TIMESTAMP =>
+      case ListOffsetRequest.EARLIEST_LOCAL_TIMESTAMP =>
         getOffsetByTimestamp
       case _ =>
         getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)

@@ -1205,33 +1205,38 @@ class ReplicaManager(val config: KafkaConfig,
           // NotLeaderForPartitionException or ReplicaNotAvailableException.
           // If it is from a follower then send the offset metadata but not the records data as that can be fetched
           // from the remote store.
-          if (remoteLogManager.isDefined && log != null && !log.config.compact && !Request.isValidBrokerId(replicaId)) {
-            val highWatermark = log.highWatermark
-            val leaderLogStartOffset = log.logStartOffset
-            val leaderLogEndOffset = log.logEndOffset
-            val fetchTimeMs = time.milliseconds
-            val readSize = adjustedMaxBytes
-            val lastStableOffset = Some(log.lastStableOffset)
-            val fetchDataInfo = {
-              // create a dummy FetchDataInfo with the remote storage fetch information
-              // For the first topic-partition that needs remote data, we will use this information to read the data in another thread
-              // For the following topic-partitions, we return an empty record set
-              val logOffsetMetadata = LogOffsetMetadata(fetchInfo.fetchOffset,
-                relativePositionInSegment = LogOffsetMetadata.UnknownFilePosition)
-              FetchDataInfo(logOffsetMetadata, MemoryRecords.EMPTY,
-                delayedRemoteStorageFetch = Some(
-                  RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, fetchIsolation)))
-            }
+          if (remoteLogManager.isDefined && log != null && !log.config.compact) {
+            // For follower fetch requests, throw an error saying that this offset is moved to tiered storage.
+            if(Request.isValidBrokerId(replicaId)) {
+              createLogReadResult(new OffsetMovedToTieredStorageException("Given offset is moved to tiered storage"))
+            } else {
+              val highWatermark = log.highWatermark
+              val leaderLogStartOffset = log.logStartOffset
+              val leaderLogEndOffset = log.logEndOffset
+              val fetchTimeMs = time.milliseconds
+              val readSize = adjustedMaxBytes
+              val lastStableOffset = Some(log.lastStableOffset)
+              val fetchDataInfo = {
+                // create a dummy FetchDataInfo with the remote storage fetch information
+                // For the first topic-partition that needs remote data, we will use this information to read the data in another thread
+                // For the following topic-partitions, we return an empty record set
+                val logOffsetMetadata = LogOffsetMetadata(fetchInfo.fetchOffset,
+                  relativePositionInSegment = LogOffsetMetadata.UnknownFilePosition)
+                FetchDataInfo(logOffsetMetadata, MemoryRecords.EMPTY,
+                  delayedRemoteStorageFetch = Some(
+                    RemoteStorageFetchInfo(adjustedMaxBytes, minOneMessage, tp, fetchInfo, fetchIsolation)))
+              }
 
-            LogReadResult(checkFetchDataInfo(partition, fetchDataInfo),
-              highWatermark,
-              leaderLogStartOffset,
-              leaderLogEndOffset,
-              followerLogStartOffset,
-              fetchTimeMs,
-              readSize,
-              lastStableOffset,
-              exception = None)
+              LogReadResult(checkFetchDataInfo(partition, fetchDataInfo),
+                highWatermark,
+                leaderLogStartOffset,
+                leaderLogEndOffset,
+                followerLogStartOffset,
+                fetchTimeMs,
+                readSize,
+                lastStableOffset,
+                exception = None)
+            }
           } else {
             createLogReadResult(e)
           }

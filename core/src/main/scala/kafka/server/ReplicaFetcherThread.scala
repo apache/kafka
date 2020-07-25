@@ -221,7 +221,7 @@ class ReplicaFetcherThread(name: String,
 
   override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
     if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_6_IV0)
-      fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetRequest.NEXT_LOCAL_TIMESTAMP)
+      fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetRequest.EARLIEST_LOCAL_TIMESTAMP)
     else
       fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetRequest.EARLIEST_TIMESTAMP)
   }

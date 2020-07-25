@@ -55,38 +55,17 @@ public class RemoteLogSegmentMetadata implements Serializable {
     /**
      * Epoch time at which the remote log segment is copied to the remote tier storage.
      */
-    private long createdTimestamp;
+    private final long createdTimestamp;
+
+    /**
+     * Size of the segment in bytes.
+     */
+    private final long segmentSizeInBytes;
 
     /**
      * It indicates that this is marked for deletion.
      */
     private boolean markedForDeletion;
-
-    /**
-     * Any context returned by {@link RemoteStorageManager#copyLogSegment(RemoteLogSegmentId, LogSegmentData)} for
-     * the given remoteLogSegmentId
-     */
-    private final byte[] remoteLogSegmentContext;
-
-    /**
-     * @param remoteLogSegmentId      Universally unique remote log segment id.
-     * @param startOffset             Start offset of this segment.
-     * @param endOffset               End offset of this segment.
-     * @param maxTimeStampSoFar
-     * @param leaderEpoch             Leader epoch of the broker.
-     * @param remoteLogSegmentContext Any context returned by {@link RemoteStorageManager#copyLogSegment(RemoteLogSegmentId, LogSegmentData)} for
-     */
-    public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId, long startOffset, long endOffset,
-                                    long maxTimeStampSoFar, int leaderEpoch, byte[] remoteLogSegmentContext) {
-        this(remoteLogSegmentId,
-                startOffset,
-                endOffset,
-                maxTimeStampSoFar,
-                leaderEpoch,
-                0,
-                false,
-                remoteLogSegmentContext);
-    }
 
     /**
      * @param remoteLogSegmentId      Universally unique remote log segment id.
@@ -96,11 +75,11 @@ public class RemoteLogSegmentMetadata implements Serializable {
      * @param leaderEpoch             Leader epoch of the broker.
      * @param createdTimestamp        Epoch time at which the remote log segment is copied to the remote tier storage.
      * @param markedForDeletion       The respective segment of remoteLogSegmentId is marked fro deletion.
-     * @param remoteLogSegmentContext Any context returned by {@link RemoteStorageManager#copyLogSegment(RemoteLogSegmentId, LogSegmentData)}
+     * @param segmentSizeInBytes      size of this segment in bytes.
      */
     public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId, long startOffset, long endOffset,
                                     long maxTimestamp, int leaderEpoch, long createdTimestamp,
-                                    boolean markedForDeletion, byte[] remoteLogSegmentContext) {
+                                    boolean markedForDeletion, long segmentSizeInBytes) {
         this.remoteLogSegmentId = remoteLogSegmentId;
         this.startOffset = startOffset;
         this.endOffset = endOffset;
@@ -108,7 +87,27 @@ public class RemoteLogSegmentMetadata implements Serializable {
         this.maxTimestamp = maxTimestamp;
         this.createdTimestamp = createdTimestamp;
         this.markedForDeletion = markedForDeletion;
-        this.remoteLogSegmentContext = remoteLogSegmentContext;
+        this.segmentSizeInBytes = segmentSizeInBytes;
+    }
+
+    /**
+     * @param remoteLogSegmentId      Universally unique remote log segment id.
+     * @param startOffset             Start offset of this segment.
+     * @param endOffset               End offset of this segment.
+     * @param maxTimeStampSoFar
+     * @param leaderEpoch             Leader epoch of the broker.
+     * @param segmentSizeInBytes      size of this segment in bytes.
+     */
+    public RemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId, long startOffset, long endOffset,
+                                    long maxTimeStampSoFar, int leaderEpoch, long segmentSizeInBytes) {
+        this(remoteLogSegmentId,
+                startOffset,
+                endOffset,
+                maxTimeStampSoFar,
+                leaderEpoch,
+                0,
+                false,
+                segmentSizeInBytes);
     }
 
     public RemoteLogSegmentId remoteLogSegmentId() {
@@ -131,6 +130,10 @@ public class RemoteLogSegmentMetadata implements Serializable {
         return createdTimestamp;
     }
 
+    public long segmentSizeInBytes() {
+        return segmentSizeInBytes;
+    }
+
     public boolean isCreated() {
         return createdTimestamp > 0;
     }
@@ -143,14 +146,10 @@ public class RemoteLogSegmentMetadata implements Serializable {
         return maxTimestamp;
     }
 
-    public byte[] remoteLogSegmentContext() {
-        return remoteLogSegmentContext;
-    }
-
     public static RemoteLogSegmentMetadata markForDeletion(RemoteLogSegmentMetadata original) {
         return new RemoteLogSegmentMetadata(original.remoteLogSegmentId, original.startOffset, original.endOffset,
                 original.maxTimestamp, original.leaderEpoch, original.createdTimestamp, true,
-                original.remoteLogSegmentContext);
+                original.segmentSizeInBytes);
     }
 
     @Override
@@ -162,8 +161,8 @@ public class RemoteLogSegmentMetadata implements Serializable {
                 ", leaderEpoch=" + leaderEpoch +
                 ", maxTimestamp=" + maxTimestamp +
                 ", createdTimestamp=" + createdTimestamp +
+                ", segmentSizeInBytes=" + segmentSizeInBytes +
                 ", markedForDeletion=" + markedForDeletion +
-                ", remoteLogSegmentContext=" + Arrays.toString(remoteLogSegmentContext) +
                 '}';
     }
 
@@ -177,17 +176,19 @@ public class RemoteLogSegmentMetadata implements Serializable {
                 leaderEpoch == that.leaderEpoch &&
                 maxTimestamp == that.maxTimestamp &&
                 createdTimestamp == that.createdTimestamp &&
+                segmentSizeInBytes == that.segmentSizeInBytes &&
                 markedForDeletion == that.markedForDeletion &&
-                Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId) &&
-                Arrays.equals(remoteLogSegmentContext, that.remoteLogSegmentContext);
+                Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId);
     }
 
     @Override
     public int hashCode() {
-        int result = Objects.hash(remoteLogSegmentId, startOffset, endOffset, leaderEpoch, maxTimestamp,
-                createdTimestamp,
-                markedForDeletion);
-        result = 31 * result + Arrays.hashCode(remoteLogSegmentContext);
-        return result;
+        return Objects.hash(remoteLogSegmentId, startOffset, endOffset, leaderEpoch, maxTimestamp, createdTimestamp,
+                segmentSizeInBytes, markedForDeletion);
     }
+
+    public static RemoteLogSegmentId remoteLogSegmentId(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+        return remoteLogSegmentMetadata != null ? remoteLogSegmentMetadata.remoteLogSegmentId() : null;
+    }
+
 }

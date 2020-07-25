@@ -23,12 +23,18 @@ public class LogSegmentData {
     private final File logSegment;
     private final File offsetIndex;
     private final File timeIndex;
-    //todo add other required indexes like txnIndex
+    private final File txnIndex;
+    private final File producerIdSnapshotIndex;
+    private final File leaderEpochCache;
 
-    public LogSegmentData(File logSegment, File offsetIndex, File timeIndex) {
+    public LogSegmentData(File logSegment, File offsetIndex, File timeIndex, File txnIndex, File producerIdSnapshotIndex,
+                          File leaderEpochCache) {
         this.logSegment = logSegment;
         this.offsetIndex = offsetIndex;
         this.timeIndex = timeIndex;
+        this.txnIndex = txnIndex;
+        this.producerIdSnapshotIndex = producerIdSnapshotIndex;
+        this.leaderEpochCache = leaderEpochCache;
     }
 
     public File logSegment() {
@@ -41,5 +47,17 @@ public class LogSegmentData {
 
     public File timeIndex() {
         return timeIndex;
+    }
+
+    public File txnIndex() {
+        return txnIndex;
+    }
+
+    public File producerIdSnapshotIndex() {
+        return producerIdSnapshotIndex;
+    }
+
+    public File leaderEpochCache() {
+        return leaderEpochCache;
     }
 }

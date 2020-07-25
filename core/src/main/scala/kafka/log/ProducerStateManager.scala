@@ -662,6 +662,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
+  def fetchSnapshot(offset:Long): Option[File] = {
+    listSnapshotFiles.find(file => Log.offsetFromFileName(file.getName) == offset)
+  }
+
   /**
    * Get the last offset (exclusive) of the latest snapshot file.
    */

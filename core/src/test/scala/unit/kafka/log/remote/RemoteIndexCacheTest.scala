@@ -57,8 +57,7 @@ class RemoteIndexCacheTest {
     cache = new RemoteIndexCache(remoteStorageManager = rlsm, logDir = logDir)
 
     rlsMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(new TopicPartition("foo", 0),
-      UUID.randomUUID()), baseOffset, offsetIndex.lastOffset, -1L, 1, "foo".getBytes())
-
+      UUID.randomUUID()), baseOffset, offsetIndex.lastOffset, -1L, 1, 1024)
   }
 
   private def appendIndexEntries(): Unit = {

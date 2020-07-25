@@ -39,16 +39,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static java.lang.String.format;
 import static java.nio.file.Files.newInputStream;
 import static java.nio.file.StandardOpenOption.READ;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorage.LocalTieredStorageLogSegmentContext.fromBytes;
 import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_OFFSET_INDEX;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_TIME_INDEX;
-import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.OFFLOAD_SEGMENT;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.OFFSET_INDEX;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.SEGMENT;
-import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.TIME_INDEX;
+import static org.apache.kafka.common.log.remote.storage.LocalTieredStorageEvent.EventType.*;
+import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.RemoteLogSegmentFileType.*;
 import static org.apache.kafka.common.log.remote.storage.RemoteLogSegmentFileset.openFileset;
 import static org.apache.kafka.common.log.remote.storage.RemoteTopicPartitionDirectory.openExistingTopicPartitionDirectory;
 
@@ -66,27 +59,27 @@ import static org.apache.kafka.common.log.remote.storage.RemoteTopicPartitionDir
  * </p>
  * <p>
  * The local tiered storage keeps a simple structure of directories mimicking that of Apache Kafka.
- *
+ * <p>
  * The name of each of the files under the scope of a log segment (the log file, its indexes, etc.)
- * follows the structure UUID-BrokerId-FileType.
- *
+ * follows the structure UUID-FileType.
+ * <p>
  * Given the root directory of the storage, segments and associated files are organized as represented below.
  * </p>
  * <code>
- *  / storage-directory  / a-topic-0 / 9b8dd441-28af-4805-936f-f02db37f11b5-1-segment
- *                       .           . 9b8dd441-28af-4805-936f-f02db37f11b5-1-offset_index
- *                       .           . 9b8dd441-28af-4805-936f-f02db37f11b5-1-time_index
- *                       .           . 4674f230-d15b-41f7-a5a6-d874b794de42-1-segment
- *                       .           . 4674f230-d15b-41f7-a5a6-d874b794de42-1-offset_index
- *                       .           . 4674f230-d15b-41f7-a5a6-d874b794de42-1-segment
- *                       .
- *                       / a-topic-1 / 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-4-segment
- *                       .           . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-4-offset_index
- *                       .           . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-4-time_index
- *                       .
- *                       / b-topic-3 / df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-0-segment
- *                                   . df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-0-offset_index
- *                                   . df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-0-time_index
+ * / storage-directory  / a-topic-0 / 9b8dd441-28af-4805-936f-f02db37f11b5-segment
+ * .           . 9b8dd441-28af-4805-936f-f02db37f11b5-offset_index
+ * .           . 9b8dd441-28af-4805-936f-f02db37f11b5-time_index
+ * .           . 4674f230-d15b-41f7-a5a6-d874b794de42-segment
+ * .           . 4674f230-d15b-41f7-a5a6-d874b794de42-offset_index
+ * .           . 4674f230-d15b-41f7-a5a6-d874b794de42-segment
+ * .
+ * / a-topic-1 / 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-segment
+ * .           . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-offset_index
+ * .           . 82da091b-84f5-4d72-9ceb-3532a1f3a4c1-time_index
+ * .
+ * / b-topic-3 / df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-segment
+ * . df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-offset_index
+ * . df2bbd78-3bfd-438c-a4ff-29a45a4d4e9d-time_index
  * </code>
  */
 public final class LocalTieredStorage implements RemoteStorageManager {
@@ -151,14 +144,14 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
     /**
      * Walks through this storage and notify the traverser of every topic-partition, segment and record discovered.
-     *
+     * <p>
      * - The order of traversal of the topic-partition is not specified.
      * - The order of traversal of the segments within a topic-partition is in ascending order
-     *   of the modified timestamp of the segment file.
+     * of the modified timestamp of the segment file.
      * - The order of traversal of records within a segment corresponds to the insertion
-     *   order of these records in the original segment from which the segment in this storage
-     *   was transferred from.
-     *
+     * order of these records in the original segment from which the segment in this storage
+     * was transferred from.
+     * <p>
      * This method is NOT an atomic operation w.r.t the local tiered storage. This storage may change while
      * being traversed topic-partitions, segments and records are communicated to the traverser. There is
      * no guarantee updates to the storage which happens during traversal will be communicated to the traverser.
@@ -248,19 +241,18 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             }
         }
 
-        logger.info("Created local tiered storage manager [{}]", brokerId, storageDirectory.getName());
+        logger.info("Created local tiered storage manager [{}]:[{}]", brokerId, storageDirectory.getName());
     }
 
     @Override
-    public RemoteLogSegmentContext copyLogSegment(final RemoteLogSegmentId id, final LogSegmentData data)
+    public void copyLogSegment(final RemoteLogSegmentId id, final LogSegmentData data)
             throws RemoteStorageException {
-
-        return wrap(() -> {
+        Callable<Void> callable = () -> {
             final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(OFFLOAD_SEGMENT, id);
             RemoteLogSegmentFileset fileset = null;
 
             try {
-                fileset = openFileset(brokerId, storageDirectory, id);
+                fileset = openFileset(storageDirectory, id);
 
                 logger.info("Offloading log segment for {} from offset={}",
                         id.topicPartition(),
@@ -285,8 +277,10 @@ public final class LocalTieredStorage implements RemoteStorageManager {
                 throw e;
             }
 
-            return new LocalTieredStorageLogSegmentContext(brokerId);
-        });
+            return null;
+        };
+
+        wrap(callable);
     }
 
     @Override
@@ -304,9 +298,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             eventBuilder.withStartPosition(startPos).withEndPosition(endPos);
 
             try {
-                final int originBrokerId = fromBytes(metadata.remoteLogSegmentContext()).brokerId;
-                final RemoteLogSegmentFileset fileset = openFileset(
-                        originBrokerId, storageDirectory, metadata.remoteLogSegmentId());
+                final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata.remoteLogSegmentId());
 
                 final InputStream inputStream = newInputStream(fileset.getFile(SEGMENT).toPath(), READ);
                 inputStream.skip(startPos);
@@ -331,9 +323,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(FETCH_OFFSET_INDEX, metadata);
 
             try {
-                final int originBrokerId = fromBytes(metadata.remoteLogSegmentContext()).brokerId;
-                final RemoteLogSegmentFileset fileset = openFileset(
-                        originBrokerId, storageDirectory, metadata.remoteLogSegmentId());
+                final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata.remoteLogSegmentId());
 
                 final InputStream inputStream = newInputStream(fileset.getFile(OFFSET_INDEX).toPath(), READ);
 
@@ -354,9 +344,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             final LocalTieredStorageEvent.Builder eventBuilder = newEventBuilder(FETCH_TIME_INDEX, metadata);
 
             try {
-                final int originBrokerId = fromBytes(metadata.remoteLogSegmentContext()).brokerId;
-                final RemoteLogSegmentFileset fileset = openFileset(
-                        originBrokerId, storageDirectory, metadata.remoteLogSegmentId());
+                final RemoteLogSegmentFileset fileset = openFileset(storageDirectory, metadata.remoteLogSegmentId());
 
                 final InputStream inputStream = newInputStream(fileset.getFile(TIME_INDEX).toPath(), READ);
 
@@ -379,7 +367,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
             if (deleteEnabled) {
                 try {
                     final RemoteLogSegmentFileset fileset = openFileset(
-                            brokerId, storageDirectory, metadata.remoteLogSegmentId());
+                            storageDirectory, metadata.remoteLogSegmentId());
 
                     if (!fileset.delete()) {
                         throw new RemoteStorageException("Failed to delete remote log segment with id:" +
@@ -457,7 +445,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
     private LocalTieredStorageEvent.Builder newEventBuilder(final EventType type, final RemoteLogSegmentMetadata md) {
         return LocalTieredStorageEvent
-                .newBuilder(type, eventTimestamp.incrementAndGet(), brokerId,  md.remoteLogSegmentId())
+                .newBuilder(type, eventTimestamp.incrementAndGet(), brokerId, md.remoteLogSegmentId())
                 .withMetadata(md);
     }
 
@@ -470,15 +458,12 @@ public final class LocalTieredStorage implements RemoteStorageManager {
 
         try {
             return f.call();
-
         } catch (final RemoteStorageException rse) {
             throw rse;
 
         } catch (final FileNotFoundException | NoSuchFileException e) {
             throw new RemoteResourceNotFoundException(e);
-        }
-
-        catch (final Exception e) {
+        } catch (final Exception e) {
             throw new RemoteStorageException("Internal error in local remote storage", e);
         }
     }
@@ -489,20 +474,4 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         }
     }
 
-    public static final class LocalTieredStorageLogSegmentContext implements RemoteLogSegmentContext {
-        private final int brokerId;
-
-        LocalTieredStorageLogSegmentContext(final int brokerId) {
-            this.brokerId = brokerId;
-        }
-
-        @Override
-        public byte[] asBytes() {
-            return ByteBuffer.allocate(4).putInt(brokerId).array();
-        }
-
-        static LocalTieredStorageLogSegmentContext fromBytes(final byte[] bytes) {
-            return new LocalTieredStorageLogSegmentContext(ByteBuffer.wrap(bytes).getInt());
-        }
-    }
 }

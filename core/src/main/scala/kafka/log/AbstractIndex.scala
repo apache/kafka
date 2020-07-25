@@ -153,8 +153,6 @@ abstract class AbstractIndex[K, V](var indexFile: File, val baseOffset: Long,
    */
   def isFull: Boolean = _entries >= _maxEntries
 
-  def file: File = _file
-
   def maxEntries: Int = _maxEntries
 
   def entries: Int = _entries

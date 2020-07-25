@@ -32,6 +32,7 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
+import org.apache.kafka.common.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -115,7 +116,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException {
+    public void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
         // insert remote log metadata into the topic.
         publishMessageToPartition(remoteLogSegmentMetadata);
     }
@@ -172,7 +173,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public RemoteLogSegmentId getRemoteLogSegmentId(TopicPartition topicPartition, long offset) throws IOException {
+    public RemoteLogSegmentMetadata remoteLogSegmentMetadata(TopicPartition topicPartition, long offset) throws RemoteStorageException {
         ensureInitialized();
 
         NavigableMap<Long, RemoteLogSegmentId> remoteLogSegmentIdMap = partitionsWithSegmentIds.get(topicPartition);
@@ -198,18 +199,11 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
             remoteLogSegmentMetadata = idWithSegmentMetadata.get(entry.getValue());
         }
 
-        return remoteLogSegmentMetadata != null ? remoteLogSegmentMetadata.remoteLogSegmentId() : null;
+        return remoteLogSegmentMetadata;
     }
 
     @Override
-    public RemoteLogSegmentMetadata getRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId)
-            throws IOException {
-        ensureInitialized();
-        return idWithSegmentMetadata.get(remoteLogSegmentId);
-    }
-
-    @Override
-    public Optional<Long> earliestLogOffset(TopicPartition tp) throws IOException {
+    public Optional<Long> earliestLogOffset(TopicPartition tp) throws RemoteStorageException {
         ensureInitialized();
 
         NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(tp);
@@ -217,7 +211,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         return map == null || map.isEmpty() ? Optional.empty() : Optional.of(map.firstEntry().getKey());
     }
 
-    public Optional<Long> highestLogOffset(TopicPartition tp) throws IOException {
+    public Optional<Long> highestLogOffset(TopicPartition tp) throws RemoteStorageException {
         ensureInitialized();
 
         NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(tp);
@@ -226,7 +220,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws IOException {
+    public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws RemoteStorageException {
         ensureInitialized();
 
         RemoteLogSegmentMetadata metadata = idWithSegmentMetadata.get(remoteLogSegmentId);
@@ -339,6 +333,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
             log.info("configure is already invoked earlier.");
             return;
         }
+        log.info("RLMMWithTopicStorage is initializing with configs: {}", configs);
 
         this.configs = Collections.unmodifiableMap(configs);
 

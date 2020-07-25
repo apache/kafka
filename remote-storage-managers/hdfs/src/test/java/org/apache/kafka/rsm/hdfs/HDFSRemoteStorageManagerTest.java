@@ -42,12 +42,10 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -126,7 +124,7 @@ public class HDFSRemoteStorageManagerTest {
     }
 
     private LogSegmentData getLogSegmentData(LogSegment seg) {
-        return new LogSegmentData(seg.log().file(), seg.offsetIndex().file(), seg.timeIndex().file());
+        return new LogSegmentData(seg.log().file(), seg.offsetIndex().file(), seg.timeIndex().file(), , , leaderEpochCache);
     }
 
     private void assertFileEquals(InputStream is, File f) throws Exception {

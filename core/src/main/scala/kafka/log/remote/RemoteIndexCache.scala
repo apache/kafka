@@ -23,10 +23,10 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.function.{Consumer, Function}
 
-import kafka.log.{AbstractIndex, Log, OffsetIndex, OffsetPosition, TimeIndex}
+import kafka.log.{CleanableIndex, Log, OffsetIndex, OffsetPosition, TimeIndex, TransactionIndex, TxnIndexSearchResult}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata}
+import org.apache.kafka.common.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteStorageManager}
 import org.apache.kafka.common.utils.{KafkaThread, Utils}
 
 object RemoteIndexCache {
@@ -34,9 +34,10 @@ object RemoteIndexCache {
   val TmpFileSuffix = ".tmp"
   val OffsetIndexFileSuffix = ".oi"
   val TimeIndexFileSuffix = ".ti"
+  val TxnIndexFileSuffix = ".tx"
 }
 
-class Entry(offsetIndex: OffsetIndex, timeIndex: TimeIndex) {
+class Entry(val offsetIndex: OffsetIndex, val timeIndex: TimeIndex, val txnIndex: TransactionIndex) {
   private val closed = new AtomicBoolean(false)
 
   def lookupOffset(targetOffset: Long): OffsetPosition = {
@@ -53,20 +54,19 @@ class Entry(offsetIndex: OffsetIndex, timeIndex: TimeIndex) {
 
   def close(): Unit = {
     if (!closed.getAndSet(true)) {
-      offsetIndex.renameTo(new File(CoreUtils.replaceSuffix(offsetIndex.file.getPath, "", Log.DeletedFileSuffix)))
-      timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, "", Log.DeletedFileSuffix)))
+      Array(offsetIndex, timeIndex, txnIndex).foreach(x =>
+        x.renameTo(new File(CoreUtils.replaceSuffix(x.file.getPath, "", Log.DeletedFileSuffix))))
     }
   }
 
   def cleanup(): Unit = {
     close()
-    CoreUtils.tryAll(Seq(() => offsetIndex.deleteIfExists(), () => timeIndex.deleteIfExists()))
+    CoreUtils.tryAll(Seq(() => offsetIndex.deleteIfExists(), () => timeIndex.deleteIfExists(), () => txnIndex.deleteIfExists()))
   }
 }
 
 //todo-tier make maxSize configurable
-class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: org.apache.kafka.common.log.remote.storage.RemoteStorageManager,
-                       logDir: String) extends Logging {
+class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: RemoteStorageManager, logDir: String) extends Logging {
 
   val cacheDir = new File(logDir, "remote-log-index-cache")
   @volatile var closed = false;
@@ -123,7 +123,7 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: org.apache.kaf
   cleanerThread.start()
 
   def getIndexEntry(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Entry = {
-    def loadIndexFile[T <: AbstractIndex[_, _]](fileName: String, suffix: String,
+    def loadIndexFile[T <: CleanableIndex](fileName: String, suffix: String,
                                                 fetchRemoteIndex: RemoteLogSegmentMetadata => InputStream,
                                                 createIndex: File => T): T = {
       val indexFile = new File(cacheDir, fileName + suffix)
@@ -178,7 +178,15 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: org.apache.kaf
               index
             })
 
-          new Entry(offsetIndex, timeIndex)
+          val txnIndex:TransactionIndex = loadIndexFile(fileSuffix, RemoteIndexCache.TxnIndexFileSuffix,
+            rlsMetadata => remoteStorageManager.fetchTransactionIndex(rlsMetadata),
+            file => {
+              val index = new TransactionIndex(startOffset, file)
+              index.sanityCheck()
+              index
+            })
+
+          new Entry(offsetIndex, timeIndex, txnIndex)
         }
       })
     }
@@ -190,6 +198,16 @@ class RemoteIndexCache(maxSize: Int = 1024, remoteStorageManager: org.apache.kaf
 
   def lookupTimestamp(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, timestamp: Long, startingOffset: Long): Long = {
     getIndexEntry(remoteLogSegmentMetadata).lookupTimestamp(timestamp, startingOffset)
+  }
+
+  def collectAbortedTransaction(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, startOffset: Long,
+                                fetchSize: Int): TxnIndexSearchResult = {
+    val entry = getIndexEntry(remoteLogSegmentMetadata)
+    val maxOffset = entry.offsetIndex.fetchUpperBoundOffset(entry.offsetIndex.lookup(startOffset), fetchSize)
+      .map(_.offset)
+
+    maxOffset.map(x => entry.txnIndex.collectAbortedTxns(startOffset, x))
+      .getOrElse(TxnIndexSearchResult(List.empty, isComplete = false))
   }
 
   def close(): Unit = {

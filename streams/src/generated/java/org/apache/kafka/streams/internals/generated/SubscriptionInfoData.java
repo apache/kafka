@@ -129,10 +129,10 @@ public class SubscriptionInfoData implements ApiMessage {
         this.version = 0;
         this.latestSupportedVersion = -1;
         this.processId = MessageUtil.ZERO_UUID;
-        this.prevTasks = new ArrayList<TaskId>();
-        this.standbyTasks = new ArrayList<TaskId>();
+        this.prevTasks = new ArrayList<TaskId>(0);
+        this.standbyTasks = new ArrayList<TaskId>(0);
         this.userEndPoint = Bytes.EMPTY;
-        this.taskOffsetSums = new ArrayList<TaskOffsetSum>();
+        this.taskOffsetSums = new ArrayList<TaskOffsetSum>(0);
     }
     
     @Override
@@ -172,7 +172,7 @@ public class SubscriptionInfoData implements ApiMessage {
                 this.prevTasks = newCollection;
             }
         } else {
-            this.prevTasks = new ArrayList<TaskId>();
+            this.prevTasks = new ArrayList<TaskId>(0);
         }
         if (_version <= 6) {
             int arrayLength;
@@ -187,7 +187,7 @@ public class SubscriptionInfoData implements ApiMessage {
                 this.standbyTasks = newCollection;
             }
         } else {
-            this.standbyTasks = new ArrayList<TaskId>();
+            this.standbyTasks = new ArrayList<TaskId>(0);
         }
         if (_version >= 2) {
             int length;
@@ -215,7 +215,7 @@ public class SubscriptionInfoData implements ApiMessage {
                 this.taskOffsetSums = newCollection;
             }
         } else {
-            this.taskOffsetSums = new ArrayList<TaskOffsetSum>();
+            this.taskOffsetSums = new ArrayList<TaskOffsetSum>(0);
         }
         this._unknownTaggedFields = null;
     }
@@ -295,7 +295,7 @@ public class SubscriptionInfoData implements ApiMessage {
                 this.prevTasks.add(new TaskId((Struct) nestedObject, _version));
             }
         } else {
-            this.prevTasks = new ArrayList<TaskId>();
+            this.prevTasks = new ArrayList<TaskId>(0);
         }
         if (_version <= 6) {
             Object[] _nestedObjects = struct.getArray("standby_tasks");
@@ -304,7 +304,7 @@ public class SubscriptionInfoData implements ApiMessage {
                 this.standbyTasks.add(new TaskId((Struct) nestedObject, _version));
             }
         } else {
-            this.standbyTasks = new ArrayList<TaskId>();
+            this.standbyTasks = new ArrayList<TaskId>(0);
         }
         if (_version >= 2) {
             this.userEndPoint = struct.getByteArray("user_end_point");
@@ -318,7 +318,7 @@ public class SubscriptionInfoData implements ApiMessage {
                 this.taskOffsetSums.add(new TaskOffsetSum((Struct) nestedObject, _version));
             }
         } else {
-            this.taskOffsetSums = new ArrayList<TaskOffsetSum>();
+            this.taskOffsetSums = new ArrayList<TaskOffsetSum>(0);
         }
     }
     
@@ -413,7 +413,7 @@ public class SubscriptionInfoData implements ApiMessage {
             if (_version <= 6) {
                 throw new RuntimeException("SubscriptionInfoData: unable to locate field 'prevTasks', which is mandatory in version " + _version);
             } else {
-                this.prevTasks = new ArrayList<TaskId>();
+                this.prevTasks = new ArrayList<TaskId>(0);
             }
         } else {
             if (!_prevTasksNode.isArray()) {
@@ -429,7 +429,7 @@ public class SubscriptionInfoData implements ApiMessage {
             if (_version <= 6) {
                 throw new RuntimeException("SubscriptionInfoData: unable to locate field 'standbyTasks', which is mandatory in version " + _version);
             } else {
-                this.standbyTasks = new ArrayList<TaskId>();
+                this.standbyTasks = new ArrayList<TaskId>(0);
             }
         } else {
             if (!_standbyTasksNode.isArray()) {
@@ -455,7 +455,7 @@ public class SubscriptionInfoData implements ApiMessage {
             if (_version >= 7) {
                 throw new RuntimeException("SubscriptionInfoData: unable to locate field 'taskOffsetSums', which is mandatory in version " + _version);
             } else {
-                this.taskOffsetSums = new ArrayList<TaskOffsetSum>();
+                this.taskOffsetSums = new ArrayList<TaskOffsetSum>(0);
             }
         } else {
             if (!_taskOffsetSumsNode.isArray()) {
@@ -619,6 +619,31 @@ public class SubscriptionInfoData implements ApiMessage {
         hashCode = 31 * hashCode + Arrays.hashCode(userEndPoint);
         hashCode = 31 * hashCode + (taskOffsetSums == null ? 0 : taskOffsetSums.hashCode());
         return hashCode;
+    }
+    
+    @Override
+    public SubscriptionInfoData duplicate() {
+        SubscriptionInfoData _duplicate = new SubscriptionInfoData();
+        _duplicate.version = version;
+        _duplicate.latestSupportedVersion = latestSupportedVersion;
+        _duplicate.processId = processId;
+        ArrayList<TaskId> newPrevTasks = new ArrayList<TaskId>(prevTasks.size());
+        for (TaskId _element : prevTasks) {
+            newPrevTasks.add(_element.duplicate());
+        }
+        _duplicate.prevTasks = newPrevTasks;
+        ArrayList<TaskId> newStandbyTasks = new ArrayList<TaskId>(standbyTasks.size());
+        for (TaskId _element : standbyTasks) {
+            newStandbyTasks.add(_element.duplicate());
+        }
+        _duplicate.standbyTasks = newStandbyTasks;
+        _duplicate.userEndPoint = MessageUtil.duplicate(userEndPoint);
+        ArrayList<TaskOffsetSum> newTaskOffsetSums = new ArrayList<TaskOffsetSum>(taskOffsetSums.size());
+        for (TaskOffsetSum _element : taskOffsetSums) {
+            newTaskOffsetSums.add(_element.duplicate());
+        }
+        _duplicate.taskOffsetSums = newTaskOffsetSums;
+        return _duplicate;
     }
     
     @Override
@@ -851,6 +876,14 @@ public class SubscriptionInfoData implements ApiMessage {
         }
         
         @Override
+        public PartitionToOffsetSum duplicate() {
+            PartitionToOffsetSum _duplicate = new PartitionToOffsetSum();
+            _duplicate.partition = partition;
+            _duplicate.offsetSum = offsetSum;
+            return _duplicate;
+        }
+        
+        @Override
         public String toString() {
             return "PartitionToOffsetSum("
                 + "partition=" + partition
@@ -1044,6 +1077,14 @@ public class SubscriptionInfoData implements ApiMessage {
         }
         
         @Override
+        public TaskId duplicate() {
+            TaskId _duplicate = new TaskId();
+            _duplicate.topicGroupId = topicGroupId;
+            _duplicate.partition = partition;
+            return _duplicate;
+        }
+        
+        @Override
         public String toString() {
             return "TaskId("
                 + "topicGroupId=" + topicGroupId
@@ -1114,7 +1155,7 @@ public class SubscriptionInfoData implements ApiMessage {
         
         public TaskOffsetSum() {
             this.topicGroupId = 0;
-            this.partitionToOffsetSum = new ArrayList<PartitionToOffsetSum>();
+            this.partitionToOffsetSum = new ArrayList<PartitionToOffsetSum>(0);
         }
         
         
@@ -1271,6 +1312,18 @@ public class SubscriptionInfoData implements ApiMessage {
             hashCode = 31 * hashCode + topicGroupId;
             hashCode = 31 * hashCode + (partitionToOffsetSum == null ? 0 : partitionToOffsetSum.hashCode());
             return hashCode;
+        }
+        
+        @Override
+        public TaskOffsetSum duplicate() {
+            TaskOffsetSum _duplicate = new TaskOffsetSum();
+            _duplicate.topicGroupId = topicGroupId;
+            ArrayList<PartitionToOffsetSum> newPartitionToOffsetSum = new ArrayList<PartitionToOffsetSum>(partitionToOffsetSum.size());
+            for (PartitionToOffsetSum _element : partitionToOffsetSum) {
+                newPartitionToOffsetSum.add(_element.duplicate());
+            }
+            _duplicate.partitionToOffsetSum = newPartitionToOffsetSum;
+            return _duplicate;
         }
         
         @Override

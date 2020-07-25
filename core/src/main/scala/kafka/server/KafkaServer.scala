@@ -43,7 +43,6 @@ import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
@@ -376,10 +375,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         AppInfoParser.registerAppInfo(jmxPrefix, config.brokerId.toString, metrics, time.milliseconds())
 
         remoteLogManager.foreach ( rlm => {
-          val listener = remoteLogManagerConfig.listenerName.map(ListenerName.normalised)
-            .getOrElse(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-          val serverEndpoint = brokerInfo.broker.endPoint(listener)
-          rlm.onServerStarted(serverEndpoint.connectionString)
+//          val listener = remoteLogManagerConfig.listenerName.map(ListenerName.normalised)
+//            .getOrElse(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+//          val serverEndpoint = brokerInfo.broker.endPoint(listener)
+          rlm.onServerStarted(null)
         })
 
         info("started")
@@ -412,18 +411,23 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           log.updateLogStartOffsetFromRemoteTier(remoteLso)
         })
       }
+
       val ep = remoteLogManagerConfig.listenerName match {
         case Some(name) =>
+          info(s"### listener name matched with: $name")
           val matchedEndpoints = advertisedEndPoints.filter(ep => name.equals(ep.listenerName.value()))
           if(matchedEndpoints.isEmpty) {
             throw new IllegalArgumentException(s"Listener with name ${name} does not exist on this broker")
           }
           matchedEndpoints.head
-        case None => advertisedEndPoints.head
+        case None =>
+          info("### listener name did not match")
+          advertisedEndPoints.head
       }
       val serversStr: String =
         if (ep.host == null || ep.host.trim.isEmpty) InetAddress.getLocalHost.getCanonicalHostName + ":" + ep.port
         else ep.host + ":" + ep.port
+      info(s"#### serverStr: ${serversStr}")
       Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time, serversStr,
         config.brokerId, clusterId, config.logDirs.head))
     } else {

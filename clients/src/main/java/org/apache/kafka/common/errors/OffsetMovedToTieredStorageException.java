@@ -14,14 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.log.remote.storage;
+package org.apache.kafka.common.errors;
 
-/**
- * This is the contextual information about a specific remote log segment like protocol version of segment location
- * computation. This allows RemoteStorageManager to evolve the protocol as this object is received the context as part of {@link RemoteLogSegmentMetadata}.
- */
-public interface RemoteLogSegmentContext {
-    byte[] asBytes();
+public class OffsetMovedToTieredStorageException extends ApiException {
 
-    RemoteLogSegmentContext EMPTY_CONTEXT = () -> new byte[0];
+    private static final long serialVersionUID = 1L;
+
+    public OffsetMovedToTieredStorageException(String message) {
+        super(message);
+    }
+
+    public OffsetMovedToTieredStorageException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

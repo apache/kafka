@@ -25,7 +25,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.UUID;
 
@@ -34,7 +33,7 @@ public class RLSMSerDesTest {
     @Test
     public void testSerDes() throws Exception {
         final String topic = "foo";
-        
+
         // RLSM with context as non-null.
         RemoteLogSegmentMetadata rlsmWithNoContext = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(new TopicPartition("bar", 0), UUID.randomUUID()),
@@ -44,7 +43,7 @@ public class RLSMSerDesTest {
                 1,
                 System.currentTimeMillis(),
                 false,
-                null);
+                1000);
         doTestSerDes(topic, rlsmWithNoContext);
 
         // RLSM with context as non-null.
@@ -56,7 +55,7 @@ public class RLSMSerDesTest {
                 1,
                 System.currentTimeMillis(),
                 false,
-                "xyz".getBytes(StandardCharsets.UTF_8));
+                1000);
         doTestSerDes(topic, rlsmWithContext);
 
         //RLSM marked with deletion
@@ -68,7 +67,7 @@ public class RLSMSerDesTest {
                 1,
                 System.currentTimeMillis(),
                 true,
-                "xyz".getBytes(StandardCharsets.UTF_8));
+                1000);
         doTestSerDes(topic, rlsmMarkedDelete);
 
     }

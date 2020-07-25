@@ -41,7 +41,11 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class ListOffsetRequest extends AbstractRequest {
-    public static final long NEXT_LOCAL_TIMESTAMP = -3L;
+
+    /**
+     * It is used to represent the earliest message stored in the local log which is also called the local-log-start-offset
+     */
+    public static final long EARLIEST_LOCAL_TIMESTAMP = -3L;
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
 

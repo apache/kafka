@@ -30,7 +30,6 @@ import org.apache.kafka.common.log.remote.storage.RemoteStorageManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,7 +51,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private LRUCache readCache;
 
     @Override
-    public RemoteLogSegmentContext copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData) throws RemoteStorageException {
+    public void copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData) throws RemoteStorageException {
         try {
             String desDir = getSegmentRemoteDir(remoteLogSegmentId);
 
@@ -67,8 +66,6 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
             copyFile(fs, logFile, getPath(desDir, LOG_FILE_NAME));
             copyFile(fs, offsetIdxFile, getPath(desDir, OFFSET_INDEX_FILE_NAME));
             copyFile(fs, tsIdxFile, getPath(desDir, TIME_INDEX_FILE_NAME));
-
-            return RemoteLogSegmentContext.EMPTY_CONTEXT;
         } catch (Exception e) {
             throw new RemoteStorageException("Failed to copy log segment to remote storage", e);
         }
