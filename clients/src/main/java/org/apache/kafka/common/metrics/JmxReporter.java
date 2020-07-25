@@ -272,7 +272,7 @@ public class JmxReporter implements MetricsReporter {
             for (Map.Entry<String, KafkaMetric> entry : this.metrics.entrySet()) {
                 String attribute = entry.getKey();
                 KafkaMetric metric = entry.getValue();
-                String metricType = metric.metricValue() != null ? metric.metricValue().getClass().getName() : double.class.getName();
+                String metricType = metric.metricValue() != null ? metric.metricValue().getClass().getName() : null;
                 attrs[i] = new MBeanAttributeInfo(attribute,
                                                   metricType,
                                                   metric.metricName().description(),

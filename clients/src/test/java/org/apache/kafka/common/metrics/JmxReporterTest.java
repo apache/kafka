@@ -36,6 +36,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class JmxReporterTest {
@@ -207,17 +208,18 @@ public class JmxReporterTest {
         Metrics metrics = new Metrics(metricConfig, Time.SYSTEM);
         metrics.addReporter(reporter);
         try {
-            Gauge<String> stringGauge = (config, now) -> "testvalue";
-            metrics.addMetric(metrics.metricName("test1", "grp1"), stringGauge);
+            Gauge<String> testString = (config, now) -> "testvalue";
+            Gauge<String> nullString = (config, now) -> null;
+            metrics.addMetric(metrics.metricName("test1", "grp1"), testString);
             metrics.addMetric(metrics.metricName("test2", "grp1"), new Avg());
+            metrics.addMetric(metrics.metricName("test3", "grp1"), nullString);
             MBeanInfo info = server.getMBeanInfo(new ObjectName(":type=grp1"));
             MBeanAttributeInfo[] attributes = info.getAttributes();
             Arrays.sort(attributes, Comparator.comparing(MBeanFeatureInfo::getName));
-            assertEquals(attributes.length, 2);
-            MBeanAttributeInfo attr1 = attributes[0];
-            MBeanAttributeInfo attr2 = attributes[1];
-            assertEquals(String.class.getName(), attr1.getType());
-            assertEquals(Double.class.getName(), attr2.getType());
+            assertEquals(attributes.length, 3);
+            assertEquals(String.class.getName(), attributes[0].getType());
+            assertEquals(Double.class.getName(), attributes[1].getType());
+            assertNull(attributes[2].getType());
         } finally {
             metrics.close();
         }
