@@ -22,11 +22,15 @@ import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 
+import javax.management.MBeanAttributeInfo;
+import javax.management.MBeanFeatureInfo;
+import javax.management.MBeanInfo;
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -190,6 +194,30 @@ public class JmxReporterTest {
             Sensor sensor = metrics.sensor("my-sensor");
             sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
             assertEquals("my-prefix", server.getObjectInstance(new ObjectName("my-prefix:type=grp1")).getObjectName().getDomain());
+        } finally {
+            metrics.close();
+        }
+    }
+
+    @Test
+    public void testJmxRegistrationWithDifferentAttributeValueTypes() throws Exception {
+        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
+        MetricConfig metricConfig = new MetricConfig();
+        JmxReporter reporter = new JmxReporter();
+        Metrics metrics = new Metrics(metricConfig, Time.SYSTEM);
+        metrics.addReporter(reporter);
+        try {
+            Gauge<String> stringGauge = (config, now) -> "testvalue";
+            metrics.addMetric(metrics.metricName("test1", "grp1"), stringGauge);
+            metrics.addMetric(metrics.metricName("test2", "grp1"), new Avg());
+            MBeanInfo info = server.getMBeanInfo(new ObjectName(":type=grp1"));
+            MBeanAttributeInfo[] attributes = info.getAttributes();
+            Arrays.sort(attributes, Comparator.comparing(MBeanFeatureInfo::getName));
+            assertEquals(attributes.length, 2);
+            MBeanAttributeInfo attr1 = attributes[0];
+            MBeanAttributeInfo attr2 = attributes[1];
+            assertEquals(String.class.getName(), attr1.getType());
+            assertEquals(Double.class.getName(), attr2.getType());
         } finally {
             metrics.close();
         }
