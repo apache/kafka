@@ -365,12 +365,29 @@ object ConfigCommand extends Config {
         adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case ConfigType.User | ConfigType.Client =>
-        val nonQuotaConfigsToAdd = configsToBeAdded.keys.filterNot(QuotaConfigs.isQuotaConfig)
-        if (nonQuotaConfigsToAdd.nonEmpty)
-          throw new IllegalArgumentException(s"Only quota configs can be added for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $nonQuotaConfigsToAdd")
-        val nonQuotaConfigsToDelete = configsToBeDeleted.filterNot(QuotaConfigs.isQuotaConfig)
-        if (nonQuotaConfigsToDelete.nonEmpty)
-          throw new IllegalArgumentException(s"Only quota configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $nonQuotaConfigsToDelete")
+        val quotaConfigsToAdd = configsToBeAdded.keys.filter(QuotaConfigs.isQuotaConfig)
+        val scramConfigsToAdd = configsToBeAdded.keys.filter(ScramMechanism.isScram)
+        val unknownConfigsToAdd = configsToBeAdded.keys.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isQuotaConfig(key))
+        val quotaConfigsToDelete = configsToBeDeleted.filter(QuotaConfigs.isQuotaConfig)
+        val scramConfigsToDelete = configsToBeDeleted.filter(ScramMechanism.isScram)
+        val unknownConfigsToDelete = configsToBeDeleted.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isQuotaConfig(key))
+        if (entityTypeHead == ConfigType.Client) {
+          if (unknownConfigsToAdd.nonEmpty || scramConfigsToAdd.nonEmpty)
+            throw new IllegalArgumentException(s"Only quota configs can be added for '$entityTypeHead' using --bootstrap-server. Unexpected config names: ${unknownConfigsToAdd ++ scramConfigsToAdd}")
+          if (unknownConfigsToDelete.nonEmpty || scramConfigsToDelete.nonEmpty)
+            throw new IllegalArgumentException(s"Only quota configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: ${unknownConfigsToDelete ++ scramConfigsToDelete}")
+        } else { // ConfigType.User
+          if (unknownConfigsToAdd.nonEmpty)
+            throw new IllegalArgumentException(s"Only quota and SCRAM credential configs can be added for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $unknownConfigsToAdd")
+          if (unknownConfigsToDelete.nonEmpty)
+            throw new IllegalArgumentException(s"Only quota and SCRAM credential configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $unknownConfigsToDelete")
+          if (scramConfigsToAdd.nonEmpty || scramConfigsToDelete.nonEmpty) {
+            if (quotaConfigsToAdd.nonEmpty || quotaConfigsToDelete.nonEmpty)
+              throw new IllegalArgumentException(s"Cannot alter both quota and SCRAM credential configs simultaneously for '$entityTypeHead' using --bootstrap-server.")
+            if (entityTypes.size == 2)
+              throw new IllegalArgumentException(s"Only quota configs can be altered for '${ConfigType.Client}' using --bootstrap-server.")
+          }
+        }
 
 
         val oldConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)

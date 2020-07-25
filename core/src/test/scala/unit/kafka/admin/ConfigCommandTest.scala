@@ -486,7 +486,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldNotAlterNonQuotaClientConfigUsingBootstrapServer(): Unit = {
+  def shouldNotAlterNonQuotaNonScramUserOrClientConfigUsingBootstrapServer(): Unit = {
+    // when using --bootstrap-server, it should be illegal to alter anything that is not a quota and not a SCRAM credential
+    // for both user and client entities
     val node = new Node(1, "localhost", 9092)
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
 
@@ -504,6 +506,54 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     verifyCommand("clients", "--add-config", "some_config=10")
     verifyCommand("users", "--delete-config", "consumer_byte_rate=20000,some_config=10")
     verifyCommand("clients", "--delete-config", "some_config=10")
+  }
+
+  @Test
+  def shouldNotAlterScramClientConfigUsingBootstrapServer(): Unit = {
+    // when using --bootstrap-server, it should be illegal to alter SCRAM credentials for client entities
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
+
+    def verifyCommand(entityType: String, alterOpts: String*): Unit = {
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+        "--entity-type", entityType, "--entity-name", "admin",
+        "--alter") ++ alterOpts)
+      val e = intercept[IllegalArgumentException] {
+        ConfigCommand.alterConfig(mockAdminClient, opts)
+      }
+      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("SCRAM-SHA-256"))
+    }
+
+    verifyCommand("clients", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand("clients", "--delete-config", "SCRAM-SHA-256")
+  }
+
+  @Test
+  def shouldNotAlterUserScramCredentialAndClientQuotaConfigsUsingBootstrapServer(): Unit = {
+    // when using --bootstrap-server, it should be illegal to alter both SCRAM credentials and quotas for user entities
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
+
+    def verifyCommand(expectedMessage: String, alterOpts: String*): Unit = {
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092", "--alter",
+        "--entity-type", "users") ++ alterOpts)
+      val e = intercept[IllegalArgumentException] {
+        ConfigCommand.alterConfig(mockAdminClient, opts)
+      }
+      assertTrue(s"Unexpected exception: $e", e.getMessage.contains(expectedMessage))
+    }
+
+    val expectedMsg1 = "Cannot alter both quota and SCRAM credential configs simultaneously"
+    verifyCommand(expectedMsg1,"--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]",
+      "--entity-type", "clients", "--entity-name", "admin", "--delete-config", "consumer_byte_rate")
+    verifyCommand(expectedMsg1,"--entity-name", "admin", "--delete-config", "SCRAM-SHA-256",
+      "--entity-type", "clients", "--entity-name", "admin", "--add-config", "consumer_byte_rate=20000")
+
+    val expectedMsg2 = "Only quota configs can be altered for 'clients' using --bootstrap-server."
+    verifyCommand(expectedMsg2, "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]",
+      "--entity-type", "clients", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256")
+    verifyCommand(expectedMsg2,"--entity-name", "admin", "--delete-config", "SCRAM-SHA-256",
+      "--entity-type", "clients", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
   }
 
   @Test
