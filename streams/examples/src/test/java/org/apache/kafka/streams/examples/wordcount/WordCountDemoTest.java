@@ -28,6 +28,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -47,11 +48,11 @@ public class WordCountDemoTest {
     private TestOutputTopic<String, Long> outputTopic;
 
     @Before
-    public void setup() {
+    public void setup() throws IOException {
         final StreamsBuilder builder = new StreamsBuilder();
         //Create Actual Stream Processing pipeline
         WordCountDemo.createWordCountStream(builder);
-        testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.getStreamsConfig());
+        testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.getStreamsConfig(new String[] {}));
         inputTopic = testDriver.createInputTopic(WordCountDemo.INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         outputTopic = testDriver.createOutputTopic(WordCountDemo.OUTPUT_TOPIC, new StringDeserializer(), new LongDeserializer());
     }
