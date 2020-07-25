@@ -207,7 +207,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
     }
 
-    @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFindSessions(final Bytes keyFrom,
                                                                           final Bytes keyTo,
