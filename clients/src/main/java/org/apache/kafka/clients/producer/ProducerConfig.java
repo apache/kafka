@@ -94,7 +94,7 @@ public class ProducerConfig extends AbstractConfig {
                                            + " take effect (as the client won't generally know of any failures). The offset given back for each record will"
                                            + " always be set to <code>-1</code>."
                                            + " <li><code>acks=1</code> This will mean the leader will write the record to its local log but will respond"
-                                           + " without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after"
+                                           + " without awaiting full acknowledgement from all followers. In this case if the leader fail immediately after"
                                            + " acknowledging the record but before the followers have replicated it then the record will be lost."
                                            + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
