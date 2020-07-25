@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.Errors;
+
 public class Field {
     public final String name;
     public final String docString;
@@ -82,6 +84,16 @@ public class Field {
 
         public UUID(String name, String docString, UUID defaultValue) {
             super(name, Type.UUID, docString, true, defaultValue);
+        }
+    }
+
+    public static class Errors extends Field {
+        public Errors(String name, String docString) {
+            super(name, Type.ERRORS, docString, false, null);
+        }
+
+        public Errors(String name, String docString, org.apache.kafka.common.protocol.Errors defaultValue) {
+            super(name, Type.ERRORS, docString, true, defaultValue);
         }
     }
 

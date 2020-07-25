@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.protocol.types;
 
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
@@ -326,6 +327,43 @@ public abstract class Type {
         public String documentation() {
             return "Represents an integer between -2<sup>63</sup> and 2<sup>63</sup>-1 inclusive. " +
                     "The values are encoded using eight bytes in network byte order (big-endian).";
+        }
+    };
+
+    public static final DocumentedType ERRORS = new DocumentedType() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            Errors error = (Errors) o;
+            buffer.putShort(error.code());
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            return Errors.forCode(buffer.getShort());
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 2;
+        }
+
+        @Override
+        public String typeName() {
+            return "ERRORS";
+        }
+
+        @Override
+        public Errors validate(Object item) {
+            if (item instanceof Errors)
+                return (Errors) item;
+            else
+                throw new SchemaException(item + " is not an Errors.");
+        }
+
+        @Override
+        public String documentation() {
+            return "Represents a org.apache.kafka.common.protocol.Errors. " +
+                "The values are encoded using two bytes in network byte order (big-endian).";
         }
     };
 

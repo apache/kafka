@@ -34,4 +34,8 @@ public interface Writable {
         writeLong(uuid.getMostSignificantBits());
         writeLong(uuid.getLeastSignificantBits());
     }
+
+    default void writeErrors(Errors error) {
+        writeShort(error.code());
+    }
 }

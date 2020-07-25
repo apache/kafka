@@ -86,6 +86,8 @@ public final class MessageGenerator {
 
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
 
+    static final String ERRORS_CLASS = "org.apache.kafka.common.protocol.Errors";
+
     static final String UUID_CLASS = "java.util.UUID";
 
     static final String REQUEST_SUFFIX = "Request";

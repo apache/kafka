@@ -887,7 +887,7 @@ public class RequestResponseTest {
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         ApiVersionsResponse response = request.getErrorResponse(0, Errors.UNSUPPORTED_VERSION.exception());
 
-        assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data.errorCode());
+        assertEquals(Errors.UNSUPPORTED_VERSION, response.data.errorCode());
 
         ApiVersionsResponseKey apiVersion = response.data.apiKeys().find(ApiKeys.API_VERSIONS.id);
         assertNotNull(apiVersion);
@@ -901,7 +901,7 @@ public class RequestResponseTest {
         ApiVersionsRequest request = new ApiVersionsRequest.Builder().build();
         ApiVersionsResponse response = request.getErrorResponse(0, Errors.INVALID_REQUEST.exception());
 
-        assertEquals(response.data.errorCode(), Errors.INVALID_REQUEST.code());
+        assertEquals(response.data.errorCode(), Errors.INVALID_REQUEST);
         assertTrue(response.data.apiKeys().isEmpty());
     }
 
@@ -911,7 +911,7 @@ public class RequestResponseTest {
         ApiVersionsResponse response = ApiVersionsResponse.
             fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
 
-        assertEquals(Errors.NONE.code(), response.data.errorCode());
+        assertEquals(Errors.NONE, response.data.errorCode());
     }
 
     @Test(expected = SchemaException.class)
@@ -926,7 +926,7 @@ public class RequestResponseTest {
         ApiVersionsResponse response = ApiVersionsResponse.
             fromStruct(struct, ApiKeys.API_VERSIONS.latestVersion());
 
-        assertEquals(Errors.NONE.code(), response.data.errorCode());
+        assertEquals(Errors.NONE, response.data.errorCode());
     }
 
     @Test
@@ -1584,7 +1584,7 @@ public class RequestResponseTest {
             .setMaxVersion((short) 2));
 
         return new ApiVersionsResponse(new ApiVersionsResponseData()
-            .setErrorCode(Errors.NONE.code())
+            .setErrorCode(Errors.NONE)
             .setThrottleTimeMs(0)
             .setApiKeys(apiVersions));
     }

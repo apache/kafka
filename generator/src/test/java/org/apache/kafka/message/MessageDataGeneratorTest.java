@@ -74,6 +74,23 @@ public class MessageDataGeneratorTest {
     }
 
     @Test
+    public void testInvalidNullDefaultForError() throws Exception {
+        MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
+            "{",
+            "  \"type\": \"request\",",
+            "  \"name\": \"FooBar\",",
+            "  \"validVersions\": \"0-2\",",
+            "  \"fields\": [",
+            "    { \"name\": \"field1\", \"type\": \"error\", \"versions\": \"0+\", \"default\": \"null\" }",
+            "  ]",
+            "}")), MessageSpec.class);
+        assertStringContains("Invalid default for error",
+            assertThrows(RuntimeException.class, () -> {
+                new MessageDataGenerator("org.apache.kafka.common.message").generate(testMessageSpec);
+            }).getMessage());
+    }
+
+    @Test
     public void testInvalidNullDefaultForPotentiallyNonNullableArray() throws Exception {
         MessageSpec testMessageSpec = MessageGenerator.JSON_SERDE.readValue(String.join("", Arrays.asList(
                 "{",

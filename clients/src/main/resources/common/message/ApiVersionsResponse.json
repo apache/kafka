@@ -30,8 +30,8 @@
   "validVersions": "0-3",
   "flexibleVersions": "3+",
   "fields": [
-    { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The top-level error code." },
+    { "name": "ErrorCode", "type": "error", "versions": "0+",
+      "about": "The top-level error." },
     { "name": "ApiKeys", "type": "[]ApiVersionsResponseKey", "versions": "0+",
       "about": "The APIs supported by the broker.", "fields": [
       { "name": "ApiKey", "type": "int16", "versions": "0+", "mapKey": true,
