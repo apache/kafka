@@ -188,13 +188,12 @@ object TestUtils extends Logging {
     logDirCount: Int = 1,
     enableToken: Boolean = false,
     numPartitions: Int = 1,
-    defaultReplicationFactor: Short = 1,
-    replicaFetchMaxBytes: Option[Int] = None): Seq[Properties] = {
+    defaultReplicationFactor: Short = 1): Seq[Properties] = {
     (0 until numConfigs).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
         enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
-        numPartitions = numPartitions, defaultReplicationFactor = defaultReplicationFactor, replicaFetchMaxBytes = replicaFetchMaxBytes)
+        numPartitions = numPartitions, defaultReplicationFactor = defaultReplicationFactor)
     }
   }
 
@@ -252,8 +251,7 @@ object TestUtils extends Logging {
                          logDirCount: Int = 1,
                          enableToken: Boolean = false,
                          numPartitions: Int = 1,
-                         defaultReplicationFactor: Short = 1,
-                         replicaFetchMaxBytes: Option[Int] = None): Properties = {
+                         defaultReplicationFactor: Short = 1): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
     val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
@@ -315,7 +313,6 @@ object TestUtils extends Logging {
 
     props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
     props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
-    replicaFetchMaxBytes.foreach(value => props.put(KafkaConfig.ReplicaFetchMaxBytesProp, value.toString))
 
     props
   }
