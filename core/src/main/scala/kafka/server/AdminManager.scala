@@ -24,6 +24,8 @@ import kafka.log.LogConfig
 import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.DynamicConfig.QuotaConfigs
+import kafka.server.DynamicConfig.ClientConfigs
+import kafka.server.DynamicConfig.Client
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.AlterConfigOp
@@ -431,6 +433,26 @@ class AdminManager(val config: KafkaConfig,
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
+          case ConfigResource.Type.CLIENT =>
+            val clientId = resource.resourceName
+            val defaultProps = adminZkClient.fetchEntityConfig(ConfigType.Client, ConfigEntityName.Default)
+            val clientProps = adminZkClient.fetchEntityConfig(ConfigType.Client, if (clientId.isEmpty) ConfigEntityName.Default else clientId)
+            val overlayedProps = new Properties()
+            overlayedProps.putAll(defaultProps)
+            overlayedProps.putAll(clientProps)
+            val configMap = overlayedProps.stringPropertyNames.asScala
+              .filter(ClientConfigs.isClientConfig).map{key => (key -> overlayedProps.getProperty(key))}.toMap
+
+            // Resort to default dynamic client config if configs are not specified for the client-id
+            if (clientId.nonEmpty) {
+              createResponseConfig(configMap,
+                createClientConfigEntry(clientId, clientProps, defaultProps, perClientIdConfig = true, 
+                  includeSynonyms, includeDocumentation))
+            } else {
+              createResponseConfig(configMap,
+                createClientConfigEntry(clientId, clientProps, defaultProps, perClientIdConfig = false, 
+                  includeSynonyms, includeDocumentation))
+            }
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }
         configResult.setResourceName(resource.resourceName).setResourceType(resource.resourceType)
@@ -597,6 +619,15 @@ class AdminManager(val config: KafkaConfig,
             if (!validateOnly)
               alterLogLevelConfigs(alterConfigOps)
             resource -> ApiError.NONE
+          case ConfigResource.Type.CLIENT =>
+            val (configType, configKeys) = (ConfigType.Client, DynamicConfig.Client.configKeys)
+
+            val entityName = if (resource.name == null || resource.name.isEmpty) ConfigEntityName.Default else resource.name
+            val configProps = adminZkClient.fetchEntityConfig(configType, entityName)
+            info(s"Config: $configProps Entity: $entityName")
+            prepareIncrementalConfigs(alterConfigOps, configProps, configKeys.asScala)
+            adminZkClient.changeConfigs(configType, entityName, configProps)
+            resource -> ApiError.NONE
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
@@ -738,6 +769,37 @@ class AdminManager(val config: KafkaConfig,
     synonyms.foreach(maybeAddSynonym(dynamicConfig.staticBrokerConfigs, ConfigSource.STATIC_BROKER_CONFIG))
     synonyms.foreach(maybeAddSynonym(dynamicConfig.staticDefaultConfigs, ConfigSource.DEFAULT_CONFIG))
     allSynonyms.dropWhile(s => s.name != name).toList // e.g. drop listener overrides when describing base config
+  }
+
+  def createClientConfigEntry(clientId: String, dynamicProps: Properties, dynamicDefaultProps: Properties,
+                             perClientIdConfig: Boolean, includeSynonyms: Boolean, includeDocumentation: Boolean)
+                             (name: String, value: Any) = {
+    val allSynonyms = {
+      val list = mutable.Buffer[DescribeConfigsResponseData.DescribeConfigsSynonym]()
+      if (dynamicProps.containsKey(name) && perClientIdConfig) {
+        list += new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name)
+        .setValue(dynamicProps.getProperty(name).toString).setSource(ConfigSource.DYNAMIC_CLIENT_CONFIG.id)
+      } 
+      if (dynamicDefaultProps.containsKey(name)) {
+        list += new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name)
+        .setValue(dynamicDefaultProps.getProperty(name).toString).setSource(ConfigSource.DYNAMIC_DEFAULT_CLIENT_CONFIG.id)
+      }
+      list
+    }
+
+    // dynamic client-id config takes precedence over dynamic defaults
+    val source = if (dynamicProps.containsKey(name) && perClientIdConfig) ConfigSource.DYNAMIC_CLIENT_CONFIG.id 
+                 else ConfigSource.DYNAMIC_DEFAULT_CLIENT_CONFIG.id
+
+    val dataType = configResponseType(Client.typeOf(name))
+
+    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
+    new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
+    .setValue(value.toString)
+    .setConfigSource(source)
+    .setSynonyms(synonyms.asJava)
+    .setConfigType(dataType.id)
+
   }
 
   private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)

@@ -19,10 +19,12 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -118,6 +120,8 @@ public class Sender implements Runnable {
     // A per-partition queue of batches ordered by creation time for tracking the in-flight batches
     private final Map<TopicPartition, List<ProducerBatch>> inFlightBatches;
 
+    private DynamicProducerConfig dynamicConfig;
+
     public Sender(LogContext logContext,
                   KafkaClient client,
                   ProducerMetadata metadata,
@@ -132,6 +136,24 @@ public class Sender implements Runnable {
                   long retryBackoffMs,
                   TransactionManager transactionManager,
                   ApiVersions apiVersions) {
+        this(logContext, client, metadata, accumulator, guaranteeMessageOrder, maxRequestSize, acks, retries, metricsRegistry, time, requestTimeoutMs, retryBackoffMs, transactionManager, apiVersions, null);
+    }
+
+    public Sender(LogContext logContext,
+                  KafkaClient client,
+                  ProducerMetadata metadata,
+                  RecordAccumulator accumulator,
+                  boolean guaranteeMessageOrder,
+                  int maxRequestSize,
+                  short acks,
+                  int retries,
+                  SenderMetricsRegistry metricsRegistry,
+                  Time time,
+                  int requestTimeoutMs,
+                  long retryBackoffMs,
+                  TransactionManager transactionManager,
+                  ApiVersions apiVersions,
+                  ProducerConfig config) {
         this.log = logContext.logger(Sender.class);
         this.client = client;
         this.accumulator = accumulator;
@@ -148,6 +170,11 @@ public class Sender implements Runnable {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
+        if (config != null && config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG)) {
+            this.dynamicConfig = new DynamicProducerConfig(client, config, time, logContext, requestTimeoutMs);
+        } else {
+            this.dynamicConfig = null;
+        }
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {
@@ -321,11 +348,20 @@ public class Sender implements Runnable {
         }
 
         long currentTimeMs = time.milliseconds();
-        long pollTimeout = sendProducerData(currentTimeMs);
+        Short acks = this.acks;
+        if (dynamicConfig != null && !dynamicConfig.shouldDisable()) {
+            dynamicConfig.maybeFetchConfigs(currentTimeMs);
+            acks = dynamicConfig.getAcks();
+        } else if (dynamicConfig != null) {
+            log.info("Disabling DynamicProducerConfig");
+            dynamicConfig = null;
+        }
+        currentTimeMs = time.milliseconds();
+        long pollTimeout = sendProducerData(currentTimeMs, acks);
         client.poll(pollTimeout, currentTimeMs);
     }
 
-    private long sendProducerData(long now) {
+    private long sendProducerData(long now, short acks) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
@@ -402,7 +438,7 @@ public class Sender implements Runnable {
             // otherwise the select time will be the time difference between now and the metadata expiry time;
             pollTimeout = 0;
         }
-        sendProduceRequests(batches, now);
+        sendProduceRequests(batches, now, acks);
         return pollTimeout;
     }
 
@@ -695,7 +731,7 @@ public class Sender implements Runnable {
     /**
      * Transfer the record batches into a list of produce requests on a per-node basis
      */
-    private void sendProduceRequests(Map<Integer, List<ProducerBatch>> collated, long now) {
+    private void sendProduceRequests(Map<Integer, List<ProducerBatch>> collated, long now, short acks) {
         for (Map.Entry<Integer, List<ProducerBatch>> entry : collated.entrySet())
             sendProduceRequest(now, entry.getKey(), acks, requestTimeoutMs, entry.getValue());
     }

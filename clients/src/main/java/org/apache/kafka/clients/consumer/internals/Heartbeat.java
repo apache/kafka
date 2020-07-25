@@ -36,12 +36,10 @@ public final class Heartbeat {
 
     public Heartbeat(GroupRebalanceConfig config,
                      Time time) {
-        if (config.heartbeatIntervalMs >= config.sessionTimeoutMs)
-            throw new IllegalArgumentException("Heartbeat must be set lower than the session timeout");
         this.rebalanceConfig = config;
         this.time = time;
-        this.heartbeatTimer = time.timer(config.heartbeatIntervalMs);
-        this.sessionTimer = time.timer(config.sessionTimeoutMs);
+        this.heartbeatTimer = time.timer(config.getHeartbeatInterval());
+        this.sessionTimer = time.timer(config.getSessionTimout());
         this.maxPollIntervalMs = config.rebalanceTimeoutMs;
         this.pollTimer = time.timer(maxPollIntervalMs);
     }
@@ -65,7 +63,7 @@ public final class Heartbeat {
         lastHeartbeatSend = now;
         heartbeatInFlight = true;
         update(now);
-        heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
+        heartbeatTimer.reset(rebalanceConfig.getHeartbeatInterval());
     }
 
     void failHeartbeat() {
@@ -77,7 +75,7 @@ public final class Heartbeat {
     void receiveHeartbeat() {
         update(time.milliseconds());
         heartbeatInFlight = false;
-        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.getSessionTimout());
     }
 
     boolean shouldHeartbeat(long now) {
@@ -101,14 +99,14 @@ public final class Heartbeat {
 
     void resetTimeouts() {
         update(time.milliseconds());
-        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.getSessionTimout());
         pollTimer.reset(maxPollIntervalMs);
-        heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
+        heartbeatTimer.reset(rebalanceConfig.getHeartbeatInterval());
     }
 
     void resetSessionTimeout() {
         update(time.milliseconds());
-        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.getSessionTimout());
     }
 
     boolean pollTimeoutExpired(long now) {

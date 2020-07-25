@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.clients;
 
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-
-import java.util.Locale;
-import java.util.Optional;
 
 /**
  * Class to extract group rebalance related configs.
@@ -37,13 +38,18 @@ public class GroupRebalanceConfig {
         }
     }
 
-    public final int sessionTimeoutMs;
+    private int sessionTimeoutMs;
     public final int rebalanceTimeoutMs;
-    public final int heartbeatIntervalMs;
+    private int heartbeatIntervalMs;
     public final String groupId;
     public final Optional<String> groupInstanceId;
     public final long retryBackoffMs;
     public final boolean leaveGroupOnClose;
+
+    private Map<String, ?> originals;
+    public final String clientId;
+    private final boolean enableDynamicConfig;
+    private boolean updateCoordinatorSessionTimeout;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
@@ -57,6 +63,12 @@ public class GroupRebalanceConfig {
 
         this.heartbeatIntervalMs = config.getInt(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG);
         this.groupId = config.getString(CommonClientConfigs.GROUP_ID_CONFIG);
+        validateSessionAndHeartbeat(this.sessionTimeoutMs, this.heartbeatIntervalMs);
+        this.updateCoordinatorSessionTimeout = false;
+
+        this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+        this.enableDynamicConfig = config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG);
+        this.originals = config.values();
 
         // Static membership is only introduced in consumer API.
         if (protocolType == ProtocolType.CONSUMER) {
@@ -96,5 +108,53 @@ public class GroupRebalanceConfig {
         this.groupInstanceId = groupInstanceId;
         this.retryBackoffMs = retryBackoffMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
+        validateSessionAndHeartbeat(sessionTimeoutMs, heartbeatIntervalMs);
+        this.clientId = "";
+        this.enableDynamicConfig = false;
+    }
+
+    /**
+     * Validate the dynamic configs and then reconfigure
+     * @param configs dynamic configs
+     * @return true if the session timeout has been dynamically updated and a new join group request needs to be sent to broker
+     */
+    public void setDynamicConfigs(Map<String, String> configs) {
+        int newSessionTimeoutMs = Integer.parseInt(
+                configs.getOrDefault(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG, 
+                originals.get(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG).toString()));
+        int newHeartbeatIntervalMs = Integer.parseInt(
+                configs.getOrDefault(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG,
+                originals.get(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG).toString()));
+        validateSessionAndHeartbeat(newSessionTimeoutMs, newHeartbeatIntervalMs);
+        this.heartbeatIntervalMs = newHeartbeatIntervalMs;
+        if (newSessionTimeoutMs != sessionTimeoutMs) {
+            this.updateCoordinatorSessionTimeout = true;
+        }
+        this.sessionTimeoutMs = newSessionTimeoutMs;
+    }
+
+    public boolean coordinatorNeedsSessionTimeoutUpdate() {
+        return this.updateCoordinatorSessionTimeout;
+    }
+
+    public void coordinatorUpdated() {
+        this.updateCoordinatorSessionTimeout = false;
+    }
+
+    public int getSessionTimout() {
+        return this.sessionTimeoutMs;
+    }
+
+    public int getHeartbeatInterval() {
+        return this.heartbeatIntervalMs;
+    }
+
+    public boolean enableDynamicConfig() {
+        return this.enableDynamicConfig;
+    }
+
+    private void validateSessionAndHeartbeat(int sessionTimeoutMs, int heartbeatIntervalMs) {
+        if (heartbeatIntervalMs >= sessionTimeoutMs)
+            throw new IllegalArgumentException("Heartbeat must be set lower than the session timeout");
     }
 }

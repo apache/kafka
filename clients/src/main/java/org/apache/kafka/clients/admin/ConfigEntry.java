@@ -223,6 +223,8 @@ public class ConfigEntry {
      * Source of configuration entries.
      */
     public enum ConfigSource {
+        DYNAMIC_CLIENT_CONFIG,          // <--- dynamic client config configured for a specific client-id
+        DYNAMIC_DEFAULT_CLIENT_CONFIG,  // <--- dynamic client config configured as default for all clients
         DYNAMIC_TOPIC_CONFIG,           // dynamic topic config that is configured for a specific topic
         DYNAMIC_BROKER_LOGGER_CONFIG,   // dynamic broker logger config that is configured for a specific broker
         DYNAMIC_BROKER_CONFIG,          // dynamic broker config that is configured for a specific broker

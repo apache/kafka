@@ -137,6 +137,8 @@ public abstract class AbstractCoordinator implements Closeable {
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
 
+    private DynamicConsumerConfig dynamicConfig;
+
 
     /**
      * Initialize the coordination manager.
@@ -155,6 +157,12 @@ public abstract class AbstractCoordinator implements Closeable {
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
+        if (rebalanceConfig.enableDynamicConfig()) {
+            this.dynamicConfig = new DynamicConsumerConfig(client, this, rebalanceConfig, time, logContext);
+        } else {
+            this.dynamicConfig = null;
+        }
+       
     }
 
     /**
@@ -356,6 +364,10 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         startHeartbeatThreadIfNeeded();
+        if (dynamicConfig != null) {
+            // This will block if this is the first JoinGroupRequest being sent
+            dynamicConfig.maybeFetchInitialConfigs(timer);
+        }
         return joinGroupIfNeeded(timer);
     }
 
@@ -504,6 +516,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             log.info("Successfully joined group with generation {}", generation.generationId);
                             state = MemberState.STABLE;
                             rejoinNeeded = false;
+                            rebalanceConfig.coordinatorUpdated();
                             // record rebalance latency
                             lastRebalanceEndMs = time.milliseconds();
                             sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
@@ -554,7 +567,7 @@ public abstract class AbstractCoordinator implements Closeable {
         JoinGroupRequest.Builder requestBuilder = new JoinGroupRequest.Builder(
                 new JoinGroupRequestData()
                         .setGroupId(rebalanceConfig.groupId)
-                        .setSessionTimeoutMs(this.rebalanceConfig.sessionTimeoutMs)
+                        .setSessionTimeoutMs(this.rebalanceConfig.getSessionTimout())
                         .setMemberId(this.generation.memberId)
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                         .setProtocolType(protocolType())
@@ -1320,6 +1333,21 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         client.pollNoWakeup();
                         long now = time.milliseconds();
+                        if (dynamicConfig != null && !dynamicConfig.shouldDisable()) {
+                            dynamicConfig.maybeFetchConfigs(now);
+                            if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate() && joinFuture == null) {
+                                // Need to rejoin group so that the coordinator changes the session timeout in this 
+                                // group member's metadata
+                                // We also need to reset timers in HB thread with new interval and timeout.
+                                // 1. The heartbeat interval timer is reset below when sentHeartbeat is called.
+                                // 2. The session timeout timer is reset below when receiveHeartbeat is called.
+                                // These methods will use the dynamically updated values in rebalanceConfig to reset the timers.
+                                rejoinNeeded = true;
+                            }
+                        } else if (dynamicConfig != null) {
+                            log.info("Disabling DynamicConsumerConfig");
+                            dynamicConfig = null;
+                        }
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null || lookupCoordinator().failed())
