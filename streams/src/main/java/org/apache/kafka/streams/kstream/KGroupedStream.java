@@ -549,9 +549,9 @@ public interface KGroupedStream<K, V> {
      * is passed into {@link CogroupedKStream#aggregate(Initializer)}) and the record's value.
      *
      * @param aggregator an {@link Aggregator} that computes a new aggregate result
-     * @param <Vout> the type of the output values
+     * @param <VOut> the type of the output values
      * @return a {@link CogroupedKStream}
      */
-    <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator);
+    <VOut> CogroupedKStream<K, VOut> cogroup(final Aggregator<? super K, ? super V, VOut> aggregator);
 
 }
