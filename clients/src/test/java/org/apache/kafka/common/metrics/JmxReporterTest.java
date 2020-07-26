@@ -36,7 +36,6 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class JmxReporterTest {
@@ -219,7 +218,7 @@ public class JmxReporterTest {
             assertEquals(attributes.length, 3);
             assertEquals(String.class.getName(), attributes[0].getType());
             assertEquals(Double.class.getName(), attributes[1].getType());
-            assertNull(attributes[2].getType());
+            assertEquals(double.class.getName(), attributes[2].getType());
         } finally {
             metrics.close();
         }

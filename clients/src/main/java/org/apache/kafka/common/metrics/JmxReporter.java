@@ -272,12 +272,12 @@ public class JmxReporter implements MetricsReporter {
             for (Map.Entry<String, KafkaMetric> entry : this.metrics.entrySet()) {
                 String attribute = entry.getKey();
                 KafkaMetric metric = entry.getValue();
-                String metricType = null;
+                String metricType = double.class.getName();
 
                 try {
                     metricType = metric.metricValue().getClass().getName();
                 } catch (NullPointerException e) {
-                    log.debug("Could not determine metric value type for attribute {}", attribute);
+                    log.debug("Could not determine metric value type for attribute {}, falling back to double", attribute);
                 }
 
                 attrs[i] = new MBeanAttributeInfo(attribute,
