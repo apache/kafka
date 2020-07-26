@@ -184,7 +184,7 @@ public final class TimeWindows extends Windows<TimeWindow> implements Enumerable
     }
 
     @Override
-    public long maxSize() {
+    public long size() {
         return sizeMs;
     }
 
@@ -215,7 +215,7 @@ public final class TimeWindows extends Windows<TimeWindow> implements Enumerable
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - size) if you want to be super accurate.
-        return graceMs != -1 ? graceMs : maintainMs() - this.maxSize();
+        return graceMs != -1 ? graceMs : maintainMs() - this.size();
     }
 
     /**

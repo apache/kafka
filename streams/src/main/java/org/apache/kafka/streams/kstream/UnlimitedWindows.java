@@ -109,7 +109,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> implements 
      * @return the size of the specified windows which is {@link Long#MAX_VALUE}
      */
     @Override
-    public long maxSize() {
+    public long size() {
         return Long.MAX_VALUE;
     }
 

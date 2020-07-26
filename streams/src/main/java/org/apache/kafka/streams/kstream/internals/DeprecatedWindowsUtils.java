@@ -38,7 +38,7 @@ final class DeprecatedWindowsUtils {
         // to be (windows.size() + windows.grace()). This will yield the same default behavior.
 
         final long maintainMs = ((org.apache.kafka.streams.kstream.Windows<W>) windows).maintainMs();
-        final long size = ((org.apache.kafka.streams.kstream.Windows<W>) windows).maxSize();
+        final long size = ((org.apache.kafka.streams.kstream.Windows<W>) windows).size();
         if ((size + windows.gracePeriodMs()) > maintainMs) {
             throw new IllegalArgumentException(
                 "The retention period of the window store "

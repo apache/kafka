@@ -16,13 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
-
-import java.time.Duration;
 import java.util.Map;
-
-import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 /**
  * The window specification for fixed size windows that is used to define window boundaries and grace period.
@@ -45,7 +39,8 @@ public interface EnumerableWindowDefinition<W extends Window> {
     Map<Long, W> windowsFor(final long timestamp);
 
     /**
-     * Return the size of the specified windows in milliseconds.
+     * Return an upper bound on the size of windows in milliseconds.
+     * Used to determine the lower bound on store retention time.
      *
      * @return the size of the specified windows
      */

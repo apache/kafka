@@ -113,11 +113,23 @@ public abstract class Windows<W extends Window> implements EnumerableWindowDefin
     public abstract Map<Long, W> windowsFor(final long timestamp);
 
     /**
+     * Return an upper bound on the size of the specified windows in milliseconds.
+     * Used to determine the lower bound on store retention time.
+     *
+     * @return the size of the specified window
+     */
+    public long maxSize() {
+        return size();
+    }
+
+    /**
      * Return the size of the specified windows in milliseconds.
      *
      * @return the size of the specified windows
+     * @deprecated since 2.7 Override maxSize() instead.
      */
-    public abstract long maxSize();
+    @Deprecated
+    public abstract long size();
 
     /**
      * Return the window grace period (the time to admit
