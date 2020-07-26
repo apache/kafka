@@ -436,11 +436,11 @@ public class TopologyTestDriver implements Closeable {
             globalStateManager.setGlobalProcessorContext(globalProcessorContext);
 
             globalStateTask = new GlobalStateUpdateTask(
+                logContext,
                 globalTopology,
                 globalProcessorContext,
                 globalStateManager,
-                new LogAndContinueExceptionHandler(),
-                logContext
+                new LogAndContinueExceptionHandler()
             );
             globalStateTask.initialize();
             globalProcessorContext.setRecordContext(new ProcessorRecordContext(
@@ -1181,7 +1181,7 @@ public class TopologyTestDriver implements Closeable {
         }
         if (globalStateTask != null) {
             try {
-                globalStateTask.close();
+                globalStateTask.close(false);
             } catch (final IOException e) {
                 // ignore
             }
