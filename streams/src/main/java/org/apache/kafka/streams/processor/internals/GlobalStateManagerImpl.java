@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -291,27 +290,17 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             long restoreCount = 0L;
 
             while (offset < highWatermark) {
-                try {
-                    final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
-                    final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
-                    for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
-                        if (record.key() != null) {
-                            restoreRecords.add(recordConverter.convert(record));
-                        }
+                final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
+                final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
+                for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
+                    if (record.key() != null) {
+                        restoreRecords.add(recordConverter.convert(record));
                     }
-                    offset = globalConsumer.position(topicPartition);
-                    stateRestoreAdapter.restoreBatch(restoreRecords);
-                    stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
-                    restoreCount += restoreRecords.size();
-                } catch (final InvalidOffsetException recoverableException) {
-                    log.warn("Restoring GlobalStore {} failed due to: {}. Deleting global store to recreate from scratch.",
-                        storeName,
-                        recoverableException.toString());
-
-                    // TODO K9113: we remove the re-init logic and push it to be handled by the thread directly
-
-                    restoreCount = 0L;
                 }
+                offset = globalConsumer.position(topicPartition);
+                stateRestoreAdapter.restoreBatch(restoreRecords);
+                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
+                restoreCount += restoreRecords.size();
             }
             stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
             checkpointFileCache.put(topicPartition, offset);
