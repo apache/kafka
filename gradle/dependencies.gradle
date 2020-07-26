@@ -105,7 +105,7 @@ versions += [
   scalaJava8Compat : "0.9.1",
   scalatest: "3.0.8",
   scoverage: "1.4.2",
-  scoveragePlugin: "4.0.1",
+  scoveragePlugin: "4.0.2",
   shadowPlugin: "6.0.0",
   slf4j: "1.7.30",
   snappy: "1.1.7.6",
