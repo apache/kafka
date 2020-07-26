@@ -780,7 +780,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // we need to join if our subscription has changed since the last join
         if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription())) {
             log.info("Requesting to re-join the group and trigger rebalance since the subscription has changed from {} to {}",
-                    joinedSubscription, subscriptions.subscription());
+                joinedSubscription, subscriptions.subscription());
 
             requestRejoin();
             return true;
