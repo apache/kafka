@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.internals.ApiUtils;
+import org.apache.kafka.streams.kstream.BranchedKStream;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -452,6 +453,18 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                   final Predicate<? super K, ? super V>... predicates) {
         Objects.requireNonNull(named, "named can't be null");
         return doBranch(new NamedInternal(named), predicates);
+    }
+
+    @Override
+    public BranchedKStream<K, V> split() {
+        //TODO implement
+        return null;
+    }
+
+    @Override
+    public BranchedKStream<K, V> split(Named named) {
+        //TODO: implement
+        return null;
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
