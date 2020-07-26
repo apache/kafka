@@ -36,7 +36,7 @@ import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
-import scala.collection.Seq
+import scala.collection.{Seq, mutable}
 import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
 
@@ -404,6 +404,26 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.initTransactions()
 
     TestUtils.waitUntilTrue(() => offsetAndMetadata.equals(consumer.committed(Set(tp).asJava).get(tp)), "cannot read committed offset")
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testSendOffsetsToTransactionTimeout(): Unit = {
+    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 1000)
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
+
+    for (i <- 0 until servers.size)
+      killBroker(i)
+
+    val offsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]().asJava
+    offsets.put(new TopicPartition(topic1, 0), new OffsetAndMetadata(0))
+    try {
+      producer.sendOffsetsToTransaction(offsets, "test-group")
+      fail("Should raise a TimeoutException")
+    } finally {
+      producer.close(Duration.ZERO)
+    }
   }
 
   @Test
