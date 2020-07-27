@@ -95,7 +95,7 @@ public class StreamThread extends Thread {
      *          |      | Assigned (3)| <----+
      *          |      +-----+-------+      |
      *          |            |              |
-     *          |            |              |
+     *          |            |--------------+
      *          |            v              |
      *          |      +-----+-------+      |
      *          |      | Running (4) | ---->+
@@ -137,7 +137,7 @@ public class StreamThread extends Thread {
         STARTING(2, 3, 5),                // 1
         PARTITIONS_REVOKED(2, 3, 5),      // 2
         PARTITIONS_ASSIGNED(2, 3, 4, 5),  // 3
-        RUNNING(2, 3, 5),                 // 4
+        RUNNING(2, 3, 4, 5),              // 4
         PENDING_SHUTDOWN(6),              // 5
         DEAD;                             // 6
 
@@ -273,14 +273,12 @@ public class StreamThread extends Thread {
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
 
-    private final Admin adminClient;
     private final ChangelogReader changelogReader;
-
-    // package-private for testing
-    final ConsumerRebalanceListener rebalanceListener;
-    final Consumer<byte[], byte[]> mainConsumer;
-    final Consumer<byte[], byte[]> restoreConsumer;
-    final InternalTopologyBuilder builder;
+    private final ConsumerRebalanceListener rebalanceListener;
+    private final Consumer<byte[], byte[]> mainConsumer;
+    private final Consumer<byte[], byte[]> restoreConsumer;
+    private final Admin adminClient;
+    private final InternalTopologyBuilder builder;
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -309,6 +307,7 @@ public class StreamThread extends Thread {
             time,
             config,
             logContext,
+            adminClient,
             restoreConsumer,
             userStateRestoreListener
         );
@@ -341,7 +340,6 @@ public class StreamThread extends Thread {
             changelogReader,
             processId,
             logPrefix,
-            streamsMetrics,
             activeTaskCreator,
             standbyTaskCreator,
             builder,
@@ -361,9 +359,10 @@ public class StreamThread extends Thread {
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
         final AtomicLong nextScheduledRebalanceMs = new AtomicLong(Long.MAX_VALUE);
         consumerConfigs.put(StreamsConfig.InternalConfig.NEXT_SCHEDULED_REBALANCE_MS, nextScheduledRebalanceMs);
-        String originalReset = null;
-        if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
-            originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+
+        final String originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+        // If there are any overrides, we never fall through to the consumer, but only handle offset management ourselves.
+        if (!builder.latestResetTopicsPattern().pattern().isEmpty() || !builder.earliestResetTopicsPattern().pattern().isEmpty()) {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
@@ -387,6 +386,8 @@ public class StreamThread extends Thread {
             assignmentErrorCode,
             nextScheduledRebalanceMs
         );
+
+        taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
@@ -485,6 +486,7 @@ public class StreamThread extends Thread {
         this.numIterations = 1;
     }
 
+    @SuppressWarnings("deprecation")
     private static final class InternalConsumerConfig extends ConsumerConfig {
         private InternalConsumerConfig(final Map<String, Object> props) {
             super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
@@ -557,14 +559,6 @@ public class StreamThread extends Thread {
                 log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
                              "Will close the task as dirty and re-create and bootstrap from scratch.", e);
                 try {
-                    taskManager.commit(
-                        taskManager.tasks()
-                            .values()
-                            .stream()
-                            .filter(t -> t.state() == Task.State.RUNNING || t.state() == Task.State.RESTORING)
-                            .filter(t -> !e.corruptedTaskWithChangelogs().containsKey(t.id()))
-                            .collect(Collectors.toSet())
-                    );
                     taskManager.handleCorruption(e.corruptedTaskWithChangelogs());
                 } catch (final TaskMigratedException taskMigrated) {
                     handleTaskMigrated(taskMigrated);
@@ -658,7 +652,9 @@ public class StreamThread extends Thread {
 
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
-        if (state == State.PARTITIONS_ASSIGNED) {
+        if (state == State.PARTITIONS_ASSIGNED
+            || state == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
+
             // transit to restore active is idempotent so we can call it multiple times
             changelogReader.enforceRestoreActive();
 
@@ -770,17 +766,17 @@ public class StreamThread extends Thread {
         try {
             records = mainConsumer.poll(pollTime);
         } catch (final InvalidOffsetException e) {
-            resetInvalidOffsets(e);
+            resetOffsets(e.partitions(), e);
         }
 
         return records;
     }
 
-    private void resetInvalidOffsets(final InvalidOffsetException e) {
-        final Set<TopicPartition> partitions = e.partitions();
+    private void resetOffsets(final Set<TopicPartition> partitions, final Exception cause) {
         final Set<String> loggedTopics = new HashSet<>();
         final Set<TopicPartition> seekToBeginning = new HashSet<>();
         final Set<TopicPartition> seekToEnd = new HashSet<>();
+        final Set<TopicPartition> notReset = new HashSet<>();
 
         for (final TopicPartition partition : partitions) {
             if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
@@ -788,26 +784,44 @@ public class StreamThread extends Thread {
             } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
                 addToResetList(partition, seekToEnd, "Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
             } else {
-                if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                    final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
-                        " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                        "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))";
-                    throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), e);
-                }
-
-                if (originalReset.equals("earliest")) {
+                if ("earliest".equals(originalReset)) {
                     addToResetList(partition, seekToBeginning, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
-                } else { // can only be "latest"
+                } else if ("latest".equals(originalReset)) {
                     addToResetList(partition, seekToEnd, "No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
+                } else {
+                    notReset.add(partition);
                 }
             }
         }
 
-        if (!seekToBeginning.isEmpty()) {
-            mainConsumer.seekToBeginning(seekToBeginning);
-        }
-        if (!seekToEnd.isEmpty()) {
-            mainConsumer.seekToEnd(seekToEnd);
+        if (notReset.isEmpty()) {
+            if (!seekToBeginning.isEmpty()) {
+                mainConsumer.seekToBeginning(seekToBeginning);
+            }
+
+            if (!seekToEnd.isEmpty()) {
+                mainConsumer.seekToEnd(seekToEnd);
+            }
+        } else {
+            final String notResetString =
+                notReset.stream()
+                        .map(TopicPartition::topic)
+                        .distinct()
+                        .collect(Collectors.joining(","));
+
+            final String format = String.format(
+                "No valid committed offset found for input [%s] and no valid reset policy configured." +
+                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                    "policy via StreamsBuilder#stream(..., Consumed.with(Topology.AutoOffsetReset)) or " +
+                    "StreamsBuilder#table(..., Consumed.with(Topology.AutoOffsetReset))",
+                notResetString
+            );
+
+            if (cause == null) {
+                throw new StreamsException(format);
+            } else {
+                throw new StreamsException(format, cause);
+            }
         }
     }
 
@@ -1028,4 +1042,23 @@ public class StreamThread extends Thread {
         return numIterations;
     }
 
+    ConsumerRebalanceListener rebalanceListener() {
+        return rebalanceListener;
+    }
+
+    Consumer<byte[], byte[]> mainConsumer() {
+        return mainConsumer;
+    }
+
+    Consumer<byte[], byte[]> restoreConsumer() {
+        return restoreConsumer;
+    };
+
+    Admin adminClient() {
+        return adminClient;
+    }
+
+    InternalTopologyBuilder internalTopologyBuilder() {
+        return builder;
+    };
 }

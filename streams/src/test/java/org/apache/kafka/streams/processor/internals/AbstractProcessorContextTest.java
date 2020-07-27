@@ -92,6 +92,12 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
+    public void shouldNotThrowNullPointerExceptionOnTopicIfRecordContextTopicIsNull() {
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, null));
+        assertThat(context.topic(), nullValue());
+    }
+
+    @Test
     public void shouldReturnTopicFromRecordContext() {
         assertThat(context.topic(), equalTo(recordContext.topic()));
     }
@@ -196,7 +202,12 @@ public class AbstractProcessorContextTest {
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
-            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache(new LogContext("name "), 0, metrics));
+            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
+        }
+
+        @Override
+        protected StateManager stateManager() {
+            return new StateManagerStub();
         }
 
         @Override
@@ -253,6 +264,11 @@ public class AbstractProcessorContextTest {
 
         @Override
         public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        }
+
+        @Override
+        public String changelogFor(final String storeName) {
+            return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName);
         }
     }
 }

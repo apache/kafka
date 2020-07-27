@@ -57,7 +57,7 @@ public class ProduceResponse extends LegacyAbstractResponse {
      *
      * {@link Errors#CORRUPT_MESSAGE}
      * {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
-     * {@link Errors#NOT_LEADER_FOR_PARTITION}
+     * {@link Errors#NOT_LEADER_OR_FOLLOWER}
      * {@link Errors#MESSAGE_TOO_LARGE}
      * {@link Errors#INVALID_TOPIC_EXCEPTION}
      * {@link Errors#RECORD_LIST_TOO_LARGE}
@@ -127,7 +127,7 @@ public class ProduceResponse extends LegacyAbstractResponse {
     /**
      * The body of PRODUCE_RESPONSE_V4 is the same as PRODUCE_RESPONSE_V3.
      * The version number is bumped up to indicate that the client supports KafkaStorageException.
-     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
+     * The KafkaStorageException will be translated to NotLeaderOrFollowerException in the response if version <= 3
      */
     private static final Schema PRODUCE_RESPONSE_V4 = PRODUCE_RESPONSE_V3;
 
@@ -268,9 +268,9 @@ public class ProduceResponse extends LegacyAbstractResponse {
                 // If producer sends ProduceRequest V3 or earlier, the client library is not guaranteed to recognize the error code
                 // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
                 // UnknownServerException which is not retriable. We can ensure that producer will update metadata and retry
-                // by converting the KafkaStorageException to NotLeaderForPartitionException in the response if ProduceRequest version <= 3
+                // by converting the KafkaStorageException to NotLeaderOrFollowerException in the response if ProduceRequest version <= 3
                 if (errorCode == Errors.KAFKA_STORAGE_ERROR.code() && version <= 3)
-                    errorCode = Errors.NOT_LEADER_FOR_PARTITION.code();
+                    errorCode = Errors.NOT_LEADER_OR_FOLLOWER.code();
                 Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME)
                         .set(PARTITION_ID, partitionEntry.getKey())
                         .set(ERROR_CODE, errorCode)

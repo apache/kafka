@@ -1111,7 +1111,7 @@ object ReassignPartitionsCommand extends Logging {
     // Check for the presence of the legacy partition reassignment ZNode.  This actually
     // won't detect all rebalances... only ones initiated by the legacy method.
     // This is a limitation of the legacy ZK API.
-    val reassignPartitionsInProgress = zkClient.reassignPartitionsInProgress()
+    val reassignPartitionsInProgress = zkClient.reassignPartitionsInProgress
     if (reassignPartitionsInProgress) {
       // Note: older versions of this tool would modify the broker quotas here (but not
       // topic quotas, for some reason).  This behavior wasn't documented in the --execute

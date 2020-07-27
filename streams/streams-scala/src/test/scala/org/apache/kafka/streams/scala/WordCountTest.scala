@@ -188,7 +188,6 @@ class WordCountTest extends WordCountTestData {
     val p = new Properties()
     p.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     p.put(ProducerConfig.ACKS_CONFIG, "all")
-    p.put(ProducerConfig.RETRIES_CONFIG, "0")
     p.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p

@@ -2342,7 +2342,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
-        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
         assertEquals(100L, subscriptions.position(t1p).offset);
     }
@@ -2364,7 +2364,7 @@ public class ConsumerCoordinatorTest {
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         // Offset gets loaded, but requires validation
-        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertFalse(subscriptions.hasAllFetchPositions());
         assertTrue(subscriptions.awaitingValidation(t1p));
         assertEquals(subscriptions.position(t1p).offset, 100L);
@@ -2415,7 +2415,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
-        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
         assertEquals(100L, subscriptions.position(t1p).offset);
     }
@@ -2443,12 +2443,12 @@ public class ConsumerCoordinatorTest {
         subscriptions.assignFromUser(singleton(t1p));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.UNSTABLE_OFFSET_COMMIT, "", -1L));
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
-        assertEquals(Collections.singleton(t1p), subscriptions.missingFetchPositions());
+        assertEquals(Collections.singleton(t1p), subscriptions.initializingPartitions());
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(0L));
-        assertEquals(Collections.singleton(t1p), subscriptions.missingFetchPositions());
+        assertEquals(Collections.singleton(t1p), subscriptions.initializingPartitions());
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(0L));
 
-        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
         assertEquals(100L, subscriptions.position(t1p).offset);
     }
@@ -2474,7 +2474,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L));
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
-        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
         assertEquals(100L, subscriptions.position(t1p).offset);
     }
@@ -2488,7 +2488,7 @@ public class ConsumerCoordinatorTest {
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", -1L));
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
-        assertEquals(Collections.singleton(t1p), subscriptions.missingFetchPositions());
+        assertEquals(Collections.singleton(t1p), subscriptions.initializingPartitions());
         assertEquals(Collections.emptySet(), subscriptions.partitionsNeedingReset(time.milliseconds()));
         assertFalse(subscriptions.hasAllFetchPositions());
         assertNull(subscriptions.position(t1p));
@@ -2502,7 +2502,7 @@ public class ConsumerCoordinatorTest {
         subscriptions.seek(t1p, 500L);
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
-        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertTrue(subscriptions.hasAllFetchPositions());
         assertEquals(500L, subscriptions.position(t1p).offset);
         assertTrue(coordinator.coordinatorUnknown());
@@ -2516,7 +2516,7 @@ public class ConsumerCoordinatorTest {
         subscriptions.requestOffsetReset(t1p, OffsetResetStrategy.EARLIEST);
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
-        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertEquals(Collections.emptySet(), subscriptions.initializingPartitions());
         assertFalse(subscriptions.hasAllFetchPositions());
         assertEquals(Collections.singleton(t1p), subscriptions.partitionsNeedingReset(time.milliseconds()));
         assertEquals(OffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(t1p));

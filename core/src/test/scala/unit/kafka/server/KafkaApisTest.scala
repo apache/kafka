@@ -94,9 +94,10 @@ class KafkaApisTest {
   private val metadataCache = new MetadataCache(brokerId)
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
+  private val clientControllerQuotaManager: ControllerMutationQuotaManager = EasyMock.createNiceMock(classOf[ControllerMutationQuotaManager])
   private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
   private val quotas = QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
-    replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
+    clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
   private val fetchManager: FetchManager = EasyMock.createNiceMock(classOf[FetchManager])
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
@@ -256,17 +257,22 @@ class KafkaApisTest {
     expectNoThrottling()
 
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName)
-    val config = new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
     EasyMock.expect(adminManager.describeConfigs(anyObject(), EasyMock.eq(true), EasyMock.eq(false)))
-        .andReturn(Map(configResource -> config))
+        .andReturn(
+          List(new DescribeConfigsResponseData.DescribeConfigsResult()
+            .setResourceName(configResource.name)
+            .setResourceType(configResource.`type`.id)
+            .setErrorCode(Errors.NONE.code)
+            .setConfigs(Collections.emptyList())))
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, authorizer,
       adminManager)
 
-    val resourceToConfigNames = Map[ConfigResource, util.Collection[String]](
-      configResource -> Collections.emptyList[String])
-    val request = buildRequest(new DescribeConfigsRequest(requestHeader.apiVersion,
-      resourceToConfigNames.asJava, true))
+    val request = buildRequest(new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+      .setIncludeSynonyms(true)
+      .setResources(List(new DescribeConfigsRequestData.DescribeConfigsResource()
+        .setResourceName("topic-1")
+        .setResourceType(ConfigResource.Type.TOPIC.id)).asJava)).build(requestHeader.apiVersion))
     createKafkaApis(authorizer = Some(authorizer)).handleDescribeConfigsRequest(request)
 
     verify(authorizer, adminManager)
@@ -770,8 +776,8 @@ class KafkaApisTest {
   }
 
   @Test
-  def testLeaderReplicaIfLocalRaisesNotLeaderForPartition(): Unit = {
-    testListOffsetFailedGetLeaderReplica(Errors.NOT_LEADER_FOR_PARTITION)
+  def testLeaderReplicaIfLocalRaisesNotLeaderOrFollower(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.NOT_LEADER_OR_FOLLOWER)
   }
 
   @Test

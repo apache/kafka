@@ -80,7 +80,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                             topicPartition, epochEndOffset.endOffset(), epochEndOffset.leaderEpoch());
                     endOffsets.put(topicPartition, epochEndOffset);
                     break;
-                case NOT_LEADER_FOR_PARTITION:
+                case NOT_LEADER_OR_FOLLOWER:
                 case REPLICA_NOT_AVAILABLE:
                 case KAFKA_STORAGE_ERROR:
                 case OFFSET_NOT_AVAILABLE:

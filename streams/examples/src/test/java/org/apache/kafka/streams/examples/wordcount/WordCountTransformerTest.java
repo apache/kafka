@@ -40,7 +40,10 @@ public class WordCountTransformerTest {
         // Create and initialize the transformer under test; including its provided store
         final WordCountTransformerDemo.MyTransformerSupplier supplier = new WordCountTransformerDemo.MyTransformerSupplier();
         for (final StoreBuilder<?> storeBuilder : supplier.stores()) {
-            final StateStore store = storeBuilder.withLoggingDisabled().build(); // Changelog is not supported by MockProcessorContext.
+            final StateStore store = storeBuilder
+                .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
+                // Caching is disabled by default, but FYI: caching is also not supported by MockProcessorContext.
+                .build();
             store.init(context, store);
             context.register(store, null);
         }

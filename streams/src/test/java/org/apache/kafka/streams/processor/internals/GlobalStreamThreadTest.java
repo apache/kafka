@@ -31,8 +31,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
-import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -41,6 +41,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -63,12 +64,12 @@ public class GlobalStreamThreadTest {
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
     private GlobalStreamThread globalStreamThread;
     private StreamsConfig config;
+    private String baseDirectoryName;
 
     private final static String GLOBAL_STORE_TOPIC_NAME = "foo";
     private final static String GLOBAL_STORE_NAME = "bar";
     private final TopicPartition topicPartition = new TopicPartition(GLOBAL_STORE_TOPIC_NAME, 0);
 
-    @SuppressWarnings("unchecked")
     @Before
     public void before() {
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
@@ -97,10 +98,11 @@ public class GlobalStreamThreadTest {
             "processorName",
             new KTableSource<>(GLOBAL_STORE_NAME, GLOBAL_STORE_NAME));
 
+        baseDirectoryName = TestUtils.tempDirectory().getAbsolutePath();
         final HashMap<String, Object> properties = new HashMap<>();
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
-        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
-        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "testAppId");
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, baseDirectoryName);
         config = new StreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(
             builder.rewriteTopology(config).buildGlobalStateTopology(),
@@ -128,10 +130,9 @@ public class GlobalStreamThreadTest {
         assertFalse(globalStreamThread.stillRunning());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() {
-        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 throw new RuntimeException("KABOOM!");
@@ -186,7 +187,6 @@ public class GlobalStreamThreadTest {
         assertFalse(globalStore.isOpen());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldTransitionToDeadOnClose() throws Exception {
         initializeConsumer();
@@ -197,7 +197,6 @@ public class GlobalStreamThreadTest {
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldStayDeadAfterTwoCloses() throws Exception {
         initializeConsumer();
@@ -209,7 +208,6 @@ public class GlobalStreamThreadTest {
         assertEquals(GlobalStreamThread.State.DEAD, globalStreamThread.state());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldTransitionToRunningOnStart() throws Exception {
         initializeConsumer();
@@ -224,7 +222,28 @@ public class GlobalStreamThreadTest {
     }
 
     @Test
-    public void shouldDieOnInvalidOffsetException() throws Exception {
+    public void shouldDieOnInvalidOffsetExceptionDuringStartup() throws Exception {
+        initializeConsumer();
+        mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {
+            @Override
+            public Set<TopicPartition> partitions() {
+                return Collections.singleton(topicPartition);
+            }
+        });
+
+        globalStreamThread.start();
+
+        TestUtils.waitForCondition(
+            () -> globalStreamThread.state() == DEAD,
+            10 * 1000,
+            "GlobalStreamThread should have died."
+        );
+
+        assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
+    }
+
+    @Test
+    public void shouldDieOnInvalidOffsetExceptionWhileRunning() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
 
@@ -247,13 +266,14 @@ public class GlobalStreamThreadTest {
                 return Collections.singleton(topicPartition);
             }
         });
-        // feed first record for recovery
-        mockConsumer.addRecord(new ConsumerRecord<>(GLOBAL_STORE_TOPIC_NAME, 0, 0L, "K1".getBytes(), "V1".getBytes()));
 
         TestUtils.waitForCondition(
             () -> globalStreamThread.state() == DEAD,
             10 * 1000,
-            "GlobalStreamThread should have died.");
+            "GlobalStreamThread should have died."
+        );
+
+        assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
     }
 
     private void initializeConsumer() {

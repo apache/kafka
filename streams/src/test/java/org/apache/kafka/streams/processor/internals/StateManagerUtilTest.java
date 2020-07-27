@@ -288,6 +288,35 @@ public class StateManagerUtilTest {
     }
 
     @Test
+    public void  shouldStillWipeStateStoresIfCloseThrowsException() throws IOException {
+        final File randomFile = new File("/random/path");
+        mockStatic(Utils.class);
+
+        expect(stateManager.taskId()).andReturn(taskId);
+        expect(stateDirectory.lock(taskId)).andReturn(true);
+
+        stateManager.close();
+        expectLastCall().andThrow(new ProcessorStateException("Close failed"));
+
+        expect(stateManager.baseDir()).andReturn(randomFile);
+
+        Utils.delete(randomFile);
+
+        stateDirectory.unlock(taskId);
+        expectLastCall();
+
+        ctrl.checkOrder(true);
+        ctrl.replay();
+
+        replayAll();
+
+        assertThrows(ProcessorStateException.class, () ->
+            StateManagerUtil.closeStateManager(logger, "logPrefix:", false, true, stateManager, stateDirectory, TaskType.ACTIVE));
+
+        ctrl.verify();
+    }
+
+    @Test
     public void testCloseStateManagerWithStateStoreWipeOutRethrowWrappedIOException() throws IOException {
         final File unknownFile = new File("/unknown/path");
         mockStatic(Utils.class);

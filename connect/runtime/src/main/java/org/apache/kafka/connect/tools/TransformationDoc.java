@@ -76,18 +76,18 @@ public class TransformationDoc {
 
         out.println("<p/>");
 
-        out.println(docInfo.configDef.toHtml());
+        out.println(docInfo.configDef.toHtml(6, key -> docInfo.transformationName + "_"  + key));
 
         out.println("</div>");
     }
 
-    private static void printHtml(PrintStream out) throws NoSuchFieldException, IllegalAccessException, InstantiationException {
+    private static void printHtml(PrintStream out) {
         for (final DocInfo docInfo : TRANSFORMATIONS) {
             printTransformationHtml(out, docInfo);
         }
     }
 
-    public static void main(String... args) throws Exception {
+    public static void main(String... args) {
         printHtml(System.out);
     }
 

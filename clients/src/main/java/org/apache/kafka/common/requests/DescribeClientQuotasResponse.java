@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryData;

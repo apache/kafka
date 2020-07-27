@@ -57,7 +57,7 @@ import org.slf4j.Logger;
 public class SslTransportLayer implements TransportLayer {
     private enum State {
         // Initial state
-        NOT_INITALIZED,
+        NOT_INITIALIZED,
         // SSLEngine is in handshake mode
         HANDSHAKE,
         // SSL handshake failed, connection will be terminated
@@ -100,7 +100,7 @@ public class SslTransportLayer implements TransportLayer {
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
         this.sslEngine = sslEngine;
-        this.state = State.NOT_INITALIZED;
+        this.state = State.NOT_INITIALIZED;
         this.metadataRegistry = metadataRegistry;
 
         final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
@@ -109,7 +109,7 @@ public class SslTransportLayer implements TransportLayer {
 
     // Visible for testing
     protected void startHandshake() throws IOException {
-        if (state != State.NOT_INITALIZED)
+        if (state != State.NOT_INITIALIZED)
             throw new IllegalStateException("startHandshake() can only be called once, state " + state);
 
         this.netReadBuffer = ByteBuffer.allocate(netReadBufferSize());
@@ -178,7 +178,7 @@ public class SslTransportLayer implements TransportLayer {
         state = State.CLOSING;
         sslEngine.closeOutbound();
         try {
-            if (prevState != State.NOT_INITALIZED && isConnected()) {
+            if (prevState != State.NOT_INITIALIZED && isConnected()) {
                 if (!flush(netWriteBuffer)) {
                     throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
                 }
@@ -267,7 +267,7 @@ public class SslTransportLayer implements TransportLayer {
     */
     @Override
     public void handshake() throws IOException {
-        if (state == State.NOT_INITALIZED) {
+        if (state == State.NOT_INITIALIZED) {
             try {
                 startHandshake();
             } catch (SSLException e) {

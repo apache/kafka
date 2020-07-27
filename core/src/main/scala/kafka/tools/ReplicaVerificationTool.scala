@@ -334,14 +334,14 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: collection.Map[To
                       MessageInfo(replicaId, batch.lastOffset, batch.nextOffset, batch.checksum))
                   case Some(messageInfoFromFirstReplica) =>
                     if (messageInfoFromFirstReplica.offset != batch.lastOffset) {
-                      println(ReplicaVerificationTool.getCurrentTimeString + ": partition " + topicPartition
+                      println(ReplicaVerificationTool.getCurrentTimeString() + ": partition " + topicPartition
                         + ": replica " + messageInfoFromFirstReplica.replicaId + "'s offset "
                         + messageInfoFromFirstReplica.offset + " doesn't match replica "
                         + replicaId + "'s offset " + batch.lastOffset)
                       Exit.exit(1)
                     }
                     if (messageInfoFromFirstReplica.checksum != batch.checksum)
-                      println(ReplicaVerificationTool.getCurrentTimeString + ": partition "
+                      println(ReplicaVerificationTool.getCurrentTimeString() + ": partition "
                         + topicPartition + " has unmatched checksum at offset " + batch.lastOffset + "; replica "
                         + messageInfoFromFirstReplica.replicaId + "'s checksum " + messageInfoFromFirstReplica.checksum
                         + "; replica " + replicaId + "'s checksum " + batch.checksum)
@@ -479,6 +479,8 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       consumerConfig.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
       consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+      consumerConfig.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG),
+      consumerConfig.getLong(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG),
       ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       false,

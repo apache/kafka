@@ -335,10 +335,10 @@ class TopologyTest {
   def shouldBuildIdenticalTopologyInJavaNScalaProperties(): Unit = {
 
     val props = new Properties()
-    props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE)
+    props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE)
 
     val propsNoOptimization = new Properties()
-    propsNoOptimization.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.NO_OPTIMIZATION)
+    propsNoOptimization.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.NO_OPTIMIZATION)
 
     val AGGREGATION_TOPIC = "aggregationTopic"
     val REDUCE_TOPIC = "reduceTopic"
