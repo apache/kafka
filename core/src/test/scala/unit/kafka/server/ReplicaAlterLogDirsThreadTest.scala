@@ -92,7 +92,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(replicaManager.nonOfflinePartition(t1p0)).thenReturn(Some(partition))
-    when(replicaManager.getPartitionOrException(t1p0, expectLeader = false)).thenReturn(partition)
+    when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
 
     when(quotaManager.isQuotaExceeded).thenReturn(false)
 
@@ -181,7 +181,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(replicaManager.nonOfflinePartition(t1p0)).thenReturn(Some(partition))
-    when(replicaManager.getPartitionOrException(t1p0, expectLeader = false)).thenReturn(partition)
+    when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
 
     when(quotaManager.isQuotaExceeded).thenReturn(false)
 
@@ -266,13 +266,13 @@ class ReplicaAlterLogDirsThreadTest {
     val leoT1p1 = 232
 
     //Stubs
-    expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partitionT1p0)
     expect(partitionT1p0.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpochT1p0, fetchOnlyFromLeader = false))
       .andReturn(new EpochEndOffset(leaderEpochT1p0, leoT1p0))
       .anyTimes()
 
-    expect(replicaManager.getPartitionOrException(t1p1, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p1))
       .andStubReturn(partitionT1p1)
     expect(partitionT1p1.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpochT1p1, fetchOnlyFromLeader = false))
       .andReturn(new EpochEndOffset(leaderEpochT1p1, leoT1p1))
@@ -315,13 +315,13 @@ class ReplicaAlterLogDirsThreadTest {
     val leo = 13
 
     //Stubs
-    expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partitionT1p0)
     expect(partitionT1p0.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpoch, fetchOnlyFromLeader = false))
       .andReturn(new EpochEndOffset(leaderEpoch, leo))
       .anyTimes()
 
-    expect(replicaManager.getPartitionOrException(t1p1, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p1))
       .andThrow(new KafkaStorageException).once()
 
     replay(partitionT1p0, replicaManager)
@@ -375,9 +375,9 @@ class ReplicaAlterLogDirsThreadTest {
     val replicaT1p1LEO = 192
 
     //Stubs
-    expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partitionT1p0)
-    expect(replicaManager.getPartitionOrException(t1p1, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p1))
       .andStubReturn(partitionT1p1)
     expect(replicaManager.futureLocalLogOrException(t1p0)).andStubReturn(futureLogT1p0)
     expect(replicaManager.futureLogExists(t1p0)).andStubReturn(true)
@@ -452,7 +452,7 @@ class ReplicaAlterLogDirsThreadTest {
     val futureReplicaEpochEndOffset = 191
 
     //Stubs
-    expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partition)
     expect(replicaManager.futureLocalLogOrException(t1p0)).andStubReturn(futureLog)
     expect(replicaManager.futureLogExists(t1p0)).andStubReturn(true)
@@ -522,7 +522,7 @@ class ReplicaAlterLogDirsThreadTest {
     val initialFetchOffset = 100
 
     //Stubs
-    expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partition)
     expect(partition.truncateTo(capture(truncated), isFuture = EasyMock.eq(true))).anyTimes()
     expect(replicaManager.futureLocalLogOrException(t1p0)).andStubReturn(futureLog)
@@ -577,7 +577,7 @@ class ReplicaAlterLogDirsThreadTest {
     val replicaLEO = 300
 
     //Stubs
-    expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p0))
       .andStubReturn(partition)
     expect(partition.truncateTo(capture(truncated), isFuture = EasyMock.eq(true))).once()
 
@@ -655,7 +655,7 @@ class ReplicaAlterLogDirsThreadTest {
     val futureReplicaLEO = 190
     val replicaLEO = 213
 
-    expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))
+    expect(replicaManager.getPartitionOrException(t1p0))
         .andStubReturn(partition)
     expect(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
         .andReturn(new EpochEndOffset(leaderEpoch, replicaLEO))

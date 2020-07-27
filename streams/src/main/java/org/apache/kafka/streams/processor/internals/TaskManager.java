@@ -35,6 +35,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task.State;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
@@ -56,6 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.utils.Utils.intersection;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.processor.internals.StreamThread.ProcessingMode.EXACTLY_ONCE_BETA;
@@ -87,6 +89,7 @@ public class TaskManager {
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
+    private java.util.function.Consumer<Set<TopicPartition>> resetter;
 
     TaskManager(final ChangelogReader changelogReader,
                 final UUID processId,
@@ -192,6 +195,34 @@ public class TaskManager {
                 log.error("Error suspending corrupted task {} ", task.id(), swallow);
             }
             task.closeDirty();
+            if (task.isActive()) {
+                // Pause so we won't poll any more records for this task until it has been re-initialized
+                // Note, closeDirty already clears the partitiongroup for the task.
+                final Set<TopicPartition> currentAssignment = mainConsumer().assignment();
+                final Set<TopicPartition> taskInputPartitions = task.inputPartitions();
+                final Set<TopicPartition> assignedToPauseAndReset =
+                    intersection(HashSet::new, currentAssignment, taskInputPartitions);
+                if (!assignedToPauseAndReset.equals(taskInputPartitions)) {
+                    log.warn(
+                        "Expected the current consumer assignment {} to contain the input partitions {}. " +
+                            "Will proceed to recover.",
+                        currentAssignment,
+                        taskInputPartitions
+                    );
+                }
+
+                mainConsumer().pause(assignedToPauseAndReset);
+                final Map<TopicPartition, OffsetAndMetadata> committed = mainConsumer().committed(assignedToPauseAndReset);
+                for (final Map.Entry<TopicPartition, OffsetAndMetadata> committedEntry : committed.entrySet()) {
+                    final OffsetAndMetadata offsetAndMetadata = committedEntry.getValue();
+                    if (offsetAndMetadata != null) {
+                        mainConsumer().seek(committedEntry.getKey(), offsetAndMetadata);
+                        assignedToPauseAndReset.remove(committedEntry.getKey());
+                    }
+                }
+                // throws if anything has no configured reset policy
+                resetter.accept(assignedToPauseAndReset);
+            }
             task.revive();
         }
     }
@@ -242,9 +273,14 @@ public class TaskManager {
 
         for (final Task task : tasksToClose) {
             try {
-                if (!task.isActive()) {
-                    // Active tasks should have already been suspended and committed during handleRevocation, but
-                    // standbys must be suspended/committed/closed all here
+                if (task.isActive()) {
+                    // Active tasks are revoked and suspended/committed during #handleRevocation
+                    if (!task.state().equals(State.SUSPENDED)) {
+                        log.error("Active task {} should be suspended prior to attempting to close but was in {}",
+                                  task.id(), task.state());
+                        throw new IllegalStateException("Active task " + task.id() + " should have been suspended");
+                    }
+                } else {
                     task.suspend();
                     task.prepareCommit();
                     task.postCommit();
@@ -268,10 +304,19 @@ public class TaskManager {
             final Task newTask;
             try {
                 if (oldTask.isActive()) {
+                    if (!oldTask.state().equals(State.SUSPENDED)) {
+                        // Active tasks are revoked and suspended/committed during #handleRevocation
+                        log.error("Active task {} should be suspended prior to attempting to close but was in {}",
+                                  oldTask.id(), oldTask.state());
+                        throw new IllegalStateException("Active task " + oldTask.id() + " should have been suspended");
+                    }
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(oldTask.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) oldTask, partitions);
+                    cleanUpTaskProducer(oldTask, taskCloseExceptions);
                 } else {
-                    oldTask.suspend(); // Only need to suspend transitioning standbys, actives should be suspended already
+                    oldTask.suspend();
+                    oldTask.prepareCommit();
+                    oldTask.postCommit();
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(oldTask.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) oldTask, partitions, mainConsumer);
                 }
@@ -1124,5 +1169,13 @@ public class TaskManager {
         executeAndMaybeSwallow(clean, runnable, e -> {
             throw e; },
             e -> log.debug("Ignoring error in unclean {}", name));
+    }
+
+    boolean needsInitializationOrRestoration() {
+        return tasks().values().stream().anyMatch(Task::needsInitializationOrRestoration);
+    }
+
+    public void setPartitionResetter(final java.util.function.Consumer<Set<TopicPartition>> resetter) {
+        this.resetter = resetter;
     }
 }

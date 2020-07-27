@@ -104,11 +104,11 @@ public class ProcessorTopology {
     }
 
     public List<StateStore> globalStateStores() {
-        return globalStateStores;
+        return Collections.unmodifiableList(globalStateStores);
     }
 
     public Map<String, String> storeToChangelogTopic() {
-        return storeToChangelogTopic;
+        return Collections.unmodifiableMap(storeToChangelogTopic);
     }
 
     boolean isRepartitionTopic(final String topic) {

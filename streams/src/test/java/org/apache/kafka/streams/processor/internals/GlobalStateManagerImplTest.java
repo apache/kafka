@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
@@ -324,21 +323,6 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldRecoverFromInvalidOffsetExceptionAndRestoreRecords() {
-        initializeConsumer(2, 0, t1);
-        consumer.setPollException(new InvalidOffsetException("Try Again!") {
-            public Set<TopicPartition> partitions() {
-                return Collections.singleton(t1);
-            }
-        });
-
-        stateManager.initialize();
-
-        stateManager.registerStore(store1, stateRestoreCallback);
-        assertEquals(2, stateRestoreCallback.restored.size());
-    }
-
-    @Test
     public void shouldListenForRestoreEvents() {
         initializeConsumer(5, 1, t1);
         stateManager.initialize();
@@ -388,7 +372,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore(store1.name()) {
+        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
             @Override
             public void flush() {
                 throw new RuntimeException("KABOOM!");
@@ -416,7 +400,7 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore(store1.name()) {
+        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
             @Override
             public void close() {
                 throw new RuntimeException("KABOOM!");
@@ -454,7 +438,7 @@ public class GlobalStateManagerImplTest {
     public void shouldNotCloseStoresIfCloseAlreadyCalled() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore("t1-store") {
+        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>("t1-store") {
             @Override
             public void close() {
                 if (!isOpen()) {
@@ -472,7 +456,7 @@ public class GlobalStateManagerImplTest {
     public void shouldAttemptToCloseAllStoresEvenWhenSomeException() throws IOException {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        final NoOpReadOnlyStore store = new NoOpReadOnlyStore("t1-store") {
+        final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<Object, Object>("t1-store") {
             @Override
             public void close() {
                 super.close();
@@ -612,6 +596,7 @@ public class GlobalStateManagerImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     @Test
     public void shouldRetryWhenEndOffsetsThrowsTimeoutException() {
         final int retries = 2;
@@ -645,6 +630,7 @@ public class GlobalStateManagerImplTest {
         }
     }
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     @Test
     public void shouldRetryWhenPartitionsForThrowsTimeoutException() {
         final int retries = 2;
@@ -716,7 +702,7 @@ public class GlobalStateManagerImplTest {
         }
     }
 
-    private class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
+    private static class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
         ConverterStore(final String name,
                        final boolean rocksdbStore) {
             super(name, rocksdbStore);

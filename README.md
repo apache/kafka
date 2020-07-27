@@ -107,6 +107,10 @@ This is for `core`, `examples` and `clients`
     ./gradlew core:jar
     ./gradlew core:test
 
+Streams has multiple sub-projects, but you can run all the tests:
+
+    ./gradlew :streams:testAll
+
 ### Listing all gradle tasks ###
     ./gradlew tasks
 

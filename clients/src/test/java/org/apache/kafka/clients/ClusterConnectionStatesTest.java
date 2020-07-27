@@ -29,6 +29,7 @@ import java.lang.reflect.Method;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
+import java.util.Set;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -48,6 +49,7 @@ public class ClusterConnectionStatesTest {
     private final double connectionSetupTimeoutJitter = ClusterConnectionStates.CONNECTION_SETUP_TIMEOUT_JITTER;
     private final String nodeId1 = "1001";
     private final String nodeId2 = "2002";
+    private final String nodeId3 = "3003";
     private final String hostTwoIps = "kafka.apache.org";
 
     private ClusterConnectionStates connectionStates;
@@ -364,5 +366,48 @@ public class ClusterConnectionStatesTest {
                 connectionStates.connectionSetupTimeoutMs(nodeId1),
                 connectionSetupTimeoutMs * connectionSetupTimeoutJitter);
         assertTrue(connectionStates.connectingNodes().contains(nodeId1));
+    }
+
+    @Test
+    public void testTimedOutConnections() {
+        // Initiate two connections
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId2, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+
+        // Expect no timed out connections
+        assertEquals(0, connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).size());
+
+        // Advance time by half of the connection setup timeout
+        time.sleep(connectionSetupTimeoutMs / 2);
+
+        // Initiate a third connection
+        connectionStates.connecting(nodeId3, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+
+        // Advance time beyond the connection setup timeout (+ max jitter) for the first two connections
+        time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
+
+        // Expect two timed out connections.
+        Set<String> timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
+        assertEquals(2, timedOutConnections.size());
+        assertTrue(timedOutConnections.contains(nodeId1));
+        assertTrue(timedOutConnections.contains(nodeId2));
+
+        // Disconnect the first two connections
+        connectionStates.disconnected(nodeId1, time.milliseconds());
+        connectionStates.disconnected(nodeId2, time.milliseconds());
+
+        // Advance time beyond the connection setup timeout (+ max jitter) for the third connections
+        time.sleep((long) (connectionSetupTimeoutMs / 2 + connectionSetupTimeoutMs * connectionSetupTimeoutJitter));
+
+        // Expect one timed out connection
+        timedOutConnections = connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds());
+        assertEquals(1, timedOutConnections.size());
+        assertTrue(timedOutConnections.contains(nodeId3));
+
+        // Disconnect the third connection
+        connectionStates.disconnected(nodeId3, time.milliseconds());
+
+        // Expect no timed out connections
+        assertEquals(0, connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).size());
     }
 }

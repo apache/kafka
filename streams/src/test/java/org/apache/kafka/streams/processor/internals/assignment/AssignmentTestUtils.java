@@ -53,6 +53,13 @@ public final class AssignmentTestUtils {
     public static final UUID UUID_5 = uuidForInt(5);
     public static final UUID UUID_6 = uuidForInt(6);
 
+    public static final TopicPartition TP_0_0 = new TopicPartition("topic0", 0);
+    public static final TopicPartition TP_0_1 = new TopicPartition("topic0", 1);
+    public static final TopicPartition TP_0_2 = new TopicPartition("topic0", 2);
+    public static final TopicPartition TP_1_0 = new TopicPartition("topic1", 0);
+    public static final TopicPartition TP_1_1 = new TopicPartition("topic1", 1);
+    public static final TopicPartition TP_1_2 = new TopicPartition("topic1", 2);
+
     public static final TaskId TASK_0_0 = new TaskId(0, 0);
     public static final TaskId TASK_0_1 = new TaskId(0, 1);
     public static final TaskId TASK_0_2 = new TaskId(0, 2);
