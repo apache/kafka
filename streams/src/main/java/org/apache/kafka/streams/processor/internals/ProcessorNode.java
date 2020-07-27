@@ -53,6 +53,8 @@ public class ProcessorNode<K, V> {
     private Sensor destroySensor;
     private Sensor createSensor;
 
+    private boolean closed = false;
+
     public ProcessorNode(final String name) {
         this(name, null, null);
     }
@@ -134,10 +136,19 @@ public class ProcessorNode<K, V> {
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
         }
+
+        closed = true;
     }
 
+    protected void throwIfClosed() {
+        if (closed) {
+            throw new IllegalStateException("The processor is already closed");
+        }
+    }
 
     public void process(final K key, final V value) {
+        throwIfClosed();
+
         try {
             maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
         } catch (final ClassCastException e) {
