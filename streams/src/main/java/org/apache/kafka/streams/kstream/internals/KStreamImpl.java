@@ -455,18 +455,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return doBranch(new NamedInternal(named), predicates);
     }
 
-    @Override
-    public BranchedKStream<K, V> split() {
-        //TODO implement
-        return null;
-    }
-
-    @Override
-    public BranchedKStream<K, V> split(Named named) {
-        //TODO: implement
-        return null;
-    }
-
     @SuppressWarnings({"unchecked", "rawtypes"})
     private KStream<K, V>[] doBranch(final NamedInternal named,
                                      final Predicate<? super K, ? super V>... predicates) {
@@ -503,6 +491,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         }
 
         return branchChildren;
+    }
+
+    @Override
+    public BranchedKStream<K, V> split() {
+        return new BranchedKStreamImpl<>(this, NamedInternal.empty());
+    }
+
+    @Override
+    public BranchedKStream<K, V> split(Named named) {
+        return new BranchedKStreamImpl<>(this, new NamedInternal(named));
     }
 
     @Override
