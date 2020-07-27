@@ -16,11 +16,17 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class VoteRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<VoteRequest> {
@@ -60,10 +66,62 @@ public class VoteRequest extends AbstractRequest {
     }
 
     @Override
-    public VoteResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        VoteResponseData data = new VoteResponseData();
-        data.setErrorCode(Errors.forException(e).code());
-        return new VoteResponse(data);
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return new VoteResponse(getTopLevelErrorResponse(Errors.forException(e)));
     }
 
+    public static VoteRequestData singletonRequest(TopicPartition topicPartition,
+                                                   int candidateEpoch,
+                                                   int candidateId,
+                                                   int lastEpoch,
+                                                   long lastEpochEndOffset) {
+        return singletonRequest(topicPartition,
+            null,
+            candidateEpoch,
+            candidateId,
+            lastEpoch,
+            lastEpochEndOffset);
+    }
+
+    public static VoteRequestData singletonRequest(TopicPartition topicPartition,
+                                                   String clusterId,
+                                                   int candidateEpoch,
+                                                   int candidateId,
+                                                   int lastEpoch,
+                                                   long lastEpochEndOffset) {
+        return new VoteRequestData()
+                   .setClusterId(clusterId)
+                   .setTopics(Collections.singletonList(
+                       new VoteRequestData.VoteTopicRequest()
+                           .setTopicName(topicPartition.topic())
+                           .setPartitions(Collections.singletonList(
+                               new VoteRequestData.VotePartitionRequest()
+                                   .setPartitionIndex(topicPartition.partition())
+                                   .setCandidateEpoch(candidateEpoch)
+                                   .setCandidateId(candidateId)
+                                   .setLastOffsetEpoch(lastEpoch)
+                                   .setLastOffset(lastEpochEndOffset))
+                           )));
+    }
+
+    public static VoteResponseData getPartitionLevelErrorResponse(VoteRequestData data, Errors error) {
+        short errorCode = error.code();
+        List<VoteResponseData.VoteTopicResponse> topicResponses = new ArrayList<>();
+        for (VoteRequestData.VoteTopicRequest topic : data.topics()) {
+            topicResponses.add(
+                new VoteResponseData.VoteTopicResponse()
+                    .setTopicName(topic.topicName())
+                    .setPartitions(topic.partitions().stream().map(
+                        requestPartition -> new VoteResponseData.VotePartitionResponse()
+                                                .setPartitionIndex(requestPartition.partitionIndex())
+                                                .setErrorCode(errorCode)
+                    ).collect(Collectors.toList())));
+        }
+
+        return new VoteResponseData().setTopics(topicResponses);
+    }
+
+    public static VoteResponseData getTopLevelErrorResponse(Errors error) {
+        return new VoteResponseData().setErrorCode(error.code());
+    }
 }

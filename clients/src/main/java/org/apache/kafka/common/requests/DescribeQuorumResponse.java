@@ -31,6 +31,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Possible error codes.
+ *
+ * Top level errors:
+ * - {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
+ * - {@link Errors#BROKER_NOT_AVAILABLE}
+ *
+ * Partition level errors:
+ * - {@link Errors#INVALID_REQUEST}
+ * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
+ */
 public class DescribeQuorumResponse extends AbstractResponse {
     public final DescribeQuorumResponseData data;
 
@@ -50,6 +61,12 @@ public class DescribeQuorumResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errors = new HashMap<>();
+
+        Errors topLevelError = Errors.forCode(data.errorCode());
+        if (topLevelError != Errors.NONE) {
+            errors.put(topLevelError, 1);
+        }
+
         for (DescribeQuorumTopicResponse topicResponse : data.topics()) {
             for (DescribeQuorumPartitionResponse partitionResponse : topicResponse.partitions()) {
                 errors.compute(Errors.forCode(partitionResponse.errorCode()),

@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
+import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
 import org.apache.kafka.common.message.FindQuorumResponseData;
+import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
@@ -27,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.requests.VoteRequest;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -48,7 +52,8 @@ public class RaftUtil {
         }
     }
 
-    public static ApiMessage errorResponse(ApiKeys apiKey, Errors error) {
+    public static ApiMessage errorResponse(ApiKeys apiKey,
+                                           Errors error) {
         return errorResponse(apiKey, error, 0, OptionalInt.empty());
     }
 
@@ -61,11 +66,7 @@ public class RaftUtil {
         int leaderId = leaderIdOpt.orElse(-1);
         switch (apiKey) {
             case VOTE:
-                return new VoteResponseData()
-                    .setErrorCode(error.code())
-                    .setVoteGranted(false)
-                    .setLeaderEpoch(epoch)
-                    .setLeaderId(leaderId);
+                return VoteRequest.getTopLevelErrorResponse(error);
             case BEGIN_QUORUM_EPOCH:
                 return new BeginQuorumEpochResponseData()
                     .setErrorCode(error.code())
@@ -93,4 +94,24 @@ public class RaftUtil {
         }
     }
 
+    static boolean hasValidTopicPartition(VoteResponseData data, TopicPartition topicPartition) {
+        return data.topics().size() == 1 &&
+                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+                   data.topics().get(0).partitions().size() == 1 &&
+                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
+
+    static boolean hasValidTopicPartition(VoteRequestData data, TopicPartition topicPartition) {
+        return data.topics().size() == 1 &&
+                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+                   data.topics().get(0).partitions().size() == 1 &&
+                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
+
+    static boolean hasValidTopicPartition(DescribeQuorumRequestData data, TopicPartition topicPartition) {
+        return data.topics().size() == 1 &&
+                   data.topics().get(0).topicName().equals(topicPartition.topic()) &&
+                   data.topics().get(0).partitions().size() == 1 &&
+                   data.topics().get(0).partitions().get(0).partitionIndex() == topicPartition.partition();
+    }
 }

@@ -23,10 +23,10 @@ import java.util.concurrent.atomic.AtomicReference
 
 import org.apache.kafka.clients.MockClient
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.message.{BeginQuorumEpochRequestData, BeginQuorumEpochResponseData, EndQuorumEpochRequestData, EndQuorumEpochResponseData, FetchQuorumRecordsRequestData, FetchQuorumRecordsResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteRequestData, VoteResponseData}
+import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.message.{BeginQuorumEpochRequestData, BeginQuorumEpochResponseData, EndQuorumEpochRequestData, EndQuorumEpochResponseData, FetchQuorumRecordsRequestData, FetchQuorumRecordsResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
-import org.apache.kafka.common.requests.{AbstractResponse, RequestHeader}
+import org.apache.kafka.common.requests.{AbstractResponse, RequestHeader, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.raft.{RaftRequest, RaftResponse}
 import org.junit.Assert._
@@ -43,6 +43,7 @@ class KafkaNetworkChannelTest {
   private val requestTimeoutMs = 30000
   private val time = new MockTime()
   private val client = new MockClient(time, new StubMetadataUpdater)
+  private val topicPartition = new TopicPartition("topic", 0)
   private val channel = new KafkaNetworkChannel(time, client, clientId, retryBackoffMs, requestTimeoutMs)
 
   @Test
@@ -169,12 +170,7 @@ class KafkaNetworkChannelTest {
           .setLeaderId(1)
 
       case ApiKeys.VOTE =>
-        new VoteRequestData()
-          .setClusterId(clusterId)
-          .setCandidateEpoch(5)
-          .setCandidateId(1)
-          .setLastEpoch(4)
-          .setLastEpochEndOffset(329)
+        VoteRequest.singletonRequest(topicPartition, clusterId, 5, 1, 4, 329)
 
       case ApiKeys.FETCH_QUORUM_RECORDS =>
         new FetchQuorumRecordsRequestData()
@@ -207,8 +203,7 @@ class KafkaNetworkChannelTest {
           .setErrorCode(error.code)
 
       case ApiKeys.VOTE =>
-        new VoteResponseData()
-          .setErrorCode(error.code)
+        VoteResponse.singletonResponse(error, topicPartition, Errors.NONE, 1, 5, false);
 
       case ApiKeys.FETCH_QUORUM_RECORDS =>
         new FetchQuorumRecordsResponseData()

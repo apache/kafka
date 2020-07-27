@@ -30,7 +30,9 @@ import org.apache.kafka.common.message.FindQuorumResponseData;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.VoteRequestData;
+import org.apache.kafka.common.message.VoteRequestData.VotePartitionRequest;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.message.VoteResponseData.VotePartitionResponse;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -47,6 +49,8 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
+import org.apache.kafka.common.requests.VoteRequest;
+import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -73,6 +77,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -90,8 +95,8 @@ public class KafkaRaftClientTest {
     private final int requestTimeoutMs = 5000;
     private final int fetchMaxWaitMs = 0;
     private final MockTime time = new MockTime();
-    public static final TopicPartition METADATA_PARTITION = new TopicPartition("metadata", 0);
 
+    static final TopicPartition METADATA_PARTITION = new TopicPartition("metadata", 0);
     private final MockLog log = new MockLog(METADATA_PARTITION);
     private final MockNetworkChannel channel = new MockNetworkChannel();
     private final Random random = Mockito.spy(new Random());
@@ -1735,10 +1740,14 @@ public class KafkaRaftClientTest {
         RaftMessage raftMessage = sentMessages.get(0);
         assertTrue(raftMessage.data() instanceof VoteResponseData);
         VoteResponseData response = (VoteResponseData) raftMessage.data();
-        assertEquals(voteGranted, response.voteGranted());
-        assertEquals(error, Errors.forCode(response.errorCode()));
-        assertEquals(epoch, response.leaderEpoch());
-        assertEquals(leaderId.orElse(-1), response.leaderId());
+        assertTrue(hasValidTopicPartition(response, METADATA_PARTITION));
+
+        VotePartitionResponse partitionResponse = response.topics().get(0).partitions().get(0);
+
+        assertEquals(voteGranted, partitionResponse.voteGranted());
+        assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.leaderEpoch());
+        assertEquals(leaderId.orElse(-1), partitionResponse.leaderId());
     }
 
     private void assertSentEndQuorumEpochResponse(
@@ -1836,10 +1845,14 @@ public class KafkaRaftClientTest {
         for (RaftMessage raftMessage : channel.drainSendQueue()) {
             if (raftMessage.data() instanceof VoteRequestData) {
                 VoteRequestData request = (VoteRequestData) raftMessage.data();
-                assertEquals(epoch, request.candidateEpoch());
-                assertEquals(localId, request.candidateId());
-                assertEquals(lastEpoch, request.lastEpoch());
-                assertEquals(lastEpochOffset, request.lastEpochEndOffset());
+                assertTrue(hasValidTopicPartition(request, METADATA_PARTITION));
+
+                VotePartitionRequest partitionRequest = request.topics().get(0).partitions().get(0);
+
+                assertEquals(epoch, partitionRequest.candidateEpoch());
+                assertEquals(localId, partitionRequest.candidateId());
+                assertEquals(lastEpoch, partitionRequest.lastOffsetEpoch());
+                assertEquals(lastEpochOffset, partitionRequest.lastOffset());
                 voteRequests.add((RaftRequest.Outbound) raftMessage);
             }
         }
@@ -1940,19 +1953,24 @@ public class KafkaRaftClientTest {
     }
 
     private VoteResponseData voteResponse(boolean voteGranted, Optional<Integer> leaderId, int epoch) {
-        return new VoteResponseData()
-                .setVoteGranted(voteGranted)
-                .setLeaderId(leaderId.orElse(-1))
-                .setLeaderEpoch(epoch)
-                .setErrorCode(Errors.NONE.code());
+        return VoteResponse.singletonResponse(
+            Errors.NONE,
+            METADATA_PARTITION,
+            Errors.NONE,
+            epoch,
+            leaderId.orElse(-1),
+            voteGranted
+        );
     }
 
     private VoteRequestData voteRequest(int epoch, int candidateId, int lastEpoch, long lastEpochOffset) {
-        return new VoteRequestData()
-                .setCandidateEpoch(epoch)
-                .setCandidateId(candidateId)
-                .setLastEpoch(lastEpoch)
-                .setLastEpochEndOffset(lastEpochOffset);
+        return VoteRequest.singletonRequest(
+            METADATA_PARTITION,
+            epoch,
+            candidateId,
+            lastEpoch,
+            lastEpochOffset
+        );
     }
 
     private BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
