@@ -17,7 +17,8 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
+import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -38,6 +39,7 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
     private final AlterReplicaLogDirsResponseData data;
 
     public AlterReplicaLogDirsResponse(AlterReplicaLogDirsResponseData data) {
+        super(ApiKeys.ALTER_REPLICA_LOG_DIRS);
         this.data = data;
     }
 

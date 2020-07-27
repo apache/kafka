@@ -436,7 +436,7 @@ public class MetadataResponse extends AbstractResponse {
                                                    List<TopicMetadata> topicMetadataList,
                                                    int clusterAuthorizedOperations) {
         return prepareResponse(hasReliableLeaderEpochs(version), throttleTimeMs, brokers, clusterId, controllerId,
-            topicMetadataList, clusterAuthorizedOperations);
+            topicMetadataList, clusterAuthorizedOperations, version);
     }
 
     // Visible for testing
@@ -479,7 +479,7 @@ public class MetadataResponse extends AbstractResponse {
             }
             responseData.topics().add(metadataResponseTopic);
         });
-        return new MetadataResponse(responseData, hasReliableLeaderEpochs, responseVersion);
+        return new MetadataResponse(responseData, hasReliableLeaderEpochs);
     }
 
     public static MetadataResponse prepareResponse(int throttleTimeMs,
