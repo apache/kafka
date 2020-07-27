@@ -44,19 +44,15 @@ import java.util.Map;
 public class ConsumerProtocol {
     public static final String PROTOCOL_TYPE = "consumer";
 
-    // Use static objects to get the lowest and the highest versions
-    private static final ConsumerProtocolSubscriptionData SUBSCRIPTION_DATA =
-        new ConsumerProtocolSubscriptionData();
-    private static final ConsumerProtocolAssignmentData ASSIGNMENT_DATA =
-        new ConsumerProtocolAssignmentData();
-
     static {
         // Safety check to ensure that both parts of the consumer protocol remain in sync.
-        if (SUBSCRIPTION_DATA.lowestSupportedVersion() != ASSIGNMENT_DATA.lowestSupportedVersion())
+        if (ConsumerProtocolSubscriptionData.LOWEST_SUPPORTED_VERSION
+                != ConsumerProtocolAssignmentData.LOWEST_SUPPORTED_VERSION)
             throw new IllegalStateException("Subscription and Assignment schemas must have the " +
                 "same lowest version");
 
-        if (SUBSCRIPTION_DATA.highestSupportedVersion() != ASSIGNMENT_DATA.highestSupportedVersion())
+        if (ConsumerProtocolSubscriptionData.HIGHEST_SUPPORTED_VERSION
+                != ConsumerProtocolAssignmentData.HIGHEST_SUPPORTED_VERSION)
             throw new IllegalStateException("Subscription and Assignment schemas must have the " +
                 "same highest version");
     }
@@ -70,7 +66,7 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeSubscription(final Subscription subscription) {
-        return serializeSubscription(subscription, SUBSCRIPTION_DATA.highestSupportedVersion());
+        return serializeSubscription(subscription, ConsumerProtocolSubscriptionData.HIGHEST_SUPPORTED_VERSION);
     }
 
     public static ByteBuffer serializeSubscription(final Subscription subscription, short version) {
@@ -119,7 +115,7 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeAssignment(final Assignment assignment) {
-        return serializeAssignment(assignment, ASSIGNMENT_DATA.highestSupportedVersion());
+        return serializeAssignment(assignment, ConsumerProtocolAssignmentData.HIGHEST_SUPPORTED_VERSION);
     }
 
     public static ByteBuffer serializeAssignment(final Assignment assignment, short version) {
@@ -168,19 +164,19 @@ public class ConsumerProtocol {
     }
 
     private static short checkSubscriptionVersion(final short version) {
-        if (SUBSCRIPTION_DATA.lowestSupportedVersion() < 0)
+        if (version < ConsumerProtocolSubscriptionData.LOWEST_SUPPORTED_VERSION)
             throw new SchemaException("Unsupported subscription version: " + version);
-        else if (version > SUBSCRIPTION_DATA.highestSupportedVersion())
-            return SUBSCRIPTION_DATA.highestSupportedVersion();
+        else if (version > ConsumerProtocolSubscriptionData.HIGHEST_SUPPORTED_VERSION)
+            return ConsumerProtocolSubscriptionData.HIGHEST_SUPPORTED_VERSION;
         else
             return version;
     }
 
     private static short checkAssignmentVersion(final short version) {
-        if (ASSIGNMENT_DATA.lowestSupportedVersion() < 0)
+        if (version < ConsumerProtocolAssignmentData.LOWEST_SUPPORTED_VERSION)
             throw new SchemaException("Unsupported assignment version: " + version);
-        else if (version > ASSIGNMENT_DATA.highestSupportedVersion())
-            return ASSIGNMENT_DATA.highestSupportedVersion();
+        else if (version > ConsumerProtocolAssignmentData.HIGHEST_SUPPORTED_VERSION)
+            return ConsumerProtocolAssignmentData.HIGHEST_SUPPORTED_VERSION;
         else
             return version;
     }
