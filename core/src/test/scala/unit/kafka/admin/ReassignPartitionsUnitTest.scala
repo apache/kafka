@@ -30,7 +30,7 @@ import org.apache.kafka.common.{Node, TopicPartition, TopicPartitionInfo, TopicP
 import org.junit.Assert.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.function.ThrowingRunnable
 import org.junit.rules.Timeout
-import org.junit._
+import org.junit.{After, Assert, Before, Rule, Test}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
