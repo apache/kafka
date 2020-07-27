@@ -33,9 +33,9 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
             ? extends KStream<? extends K, ? extends V>> chainFunction;
     private final Consumer<? super KStream<? super K, ? super V>> chainConsumer;
 
-    private Branched(String name,
-                     Function<? super KStream<? super K, ? super V>, ? extends KStream<? extends K, ? extends V>> chainFunction,
-                     Consumer<? super KStream<? super K, ? super V>> chainConsumer) {
+    private Branched(final String name,
+                     final Function<? super KStream<? super K, ? super V>, ? extends KStream<? extends K, ? extends V>> chainFunction,
+                     final Consumer<? super KStream<? super K, ? super V>> chainConsumer) {
         this.name = name;
         this.chainFunction = chainFunction;
         this.chainConsumer = chainConsumer;
@@ -49,7 +49,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @return {@code this}
      */
     @Override
-    public Branched<K, V> withName(String name) {
+    public Branched<K, V> withName(final String name) {
         return new Branched<>(name, chainFunction, chainConsumer);
     }
 
@@ -62,7 +62,7 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @param <V>  value type
      * @return a new instance of {@link Branched}
      */
-    public static <K, V> Branched<K, V> as(String name) {
+    public static <K, V> Branched<K, V> as(final String name) {
         return new Branched<>(name, null, null);
     }
 
@@ -78,8 +78,9 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @param <V>   value type
      * @return a new instance of {@link Branched}
      */
+    @SuppressWarnings("overloads")
     public static <K, V> Branched<K, V> with(
-            Function<? super KStream<? super K, ? super V>,
+            final Function<? super KStream<? super K, ? super V>,
                     ? extends KStream<? extends K, ? extends V>> chain) {
         return new Branched<>(null, chain, null);
     }
@@ -96,7 +97,8 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @param <V>   value type
      * @return a new instance of {@link Branched}
      */
-    public static <K, V> Branched<K, V> with(Consumer<? super KStream<? super K, ? super V>> chain) {
+    @SuppressWarnings("overloads")
+    public static <K, V> Branched<K, V> with(final Consumer<? super KStream<? super K, ? super V>> chain) {
         return new Branched<>(null, null, chain);
     }
 
@@ -114,9 +116,10 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @param <V>   value type
      * @return a new instance of {@link Branched}
      */
+    @SuppressWarnings("overloads")
     public static <K, V> Branched<K, V> with(
-            Function<? super KStream<? super K, ? super V>,
-                    ? extends KStream<? extends K, ? extends V>> chain, String name) {
+            final Function<? super KStream<? super K, ? super V>,
+                    ? extends KStream<? extends K, ? extends V>> chain, final String name) {
         return new Branched<>(name, chain, null);
     }
 
@@ -134,7 +137,9 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @param <V>   value type
      * @return a new instance of {@link Branched}
      */
-    public static <K, V> Branched<K, V> with(Consumer<? super KStream<? super K, ? super V>> chain, String name) {
+    @SuppressWarnings("overloads")
+    public static <K, V> Branched<K, V> with(final Consumer<? super KStream<? super K, ? super V>> chain,
+                                             final String name) {
         return new Branched<>(name, null, chain);
     }
 }

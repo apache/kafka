@@ -644,7 +644,7 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     public void shouldUseSpecifiedNameForBranchOperation() {
         builder.stream(STREAM_TOPIC)
                .branch(Named.as("branch-processor"), (k, v) -> true, (k, v) -> false);

@@ -28,18 +28,18 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
     private final KStream<K, V> source;
     private final NamedInternal named;
 
-    BranchedKStreamImpl(KStream<K, V> source, NamedInternal named) {
+    BranchedKStreamImpl(final KStream<K, V> source, final NamedInternal named) {
         this.source = source;
         this.named = named;
     }
 
     @Override
-    public BranchedKStream branch(Predicate predicate) {
+    public BranchedKStream<K, V> branch(final Predicate predicate) {
         return null;
     }
 
     @Override
-    public BranchedKStream branch(Predicate predicate, Branched branched) {
+    public BranchedKStream<K, V> branch(final Predicate predicate, final Branched branched) {
         return null;
     }
 
@@ -49,7 +49,7 @@ public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
     }
 
     @Override
-    public Map<String, KStream<K, V>> defaultBranch(Branched<K, V> branched) {
+    public Map<String, KStream<K, V>> defaultBranch(final Branched<K, V> branched) {
         return null;
     }
 

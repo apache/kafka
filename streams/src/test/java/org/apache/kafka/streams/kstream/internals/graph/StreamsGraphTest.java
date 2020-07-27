@@ -111,8 +111,9 @@ public class StreamsGraphTest {
         builder.build(properties);
     }
 
-    @Test 
-    @SuppressWarnings("unchecked")
+    @Test
+    //TODO: rewrite this using split instead of branch
+    @SuppressWarnings({"unchecked", "deprecation"})
     // Topology in this test from https://issues.apache.org/jira/browse/KAFKA-9739
     public void shouldNotThrowNPEWithMergeNodes() {
         final Properties properties = new Properties();

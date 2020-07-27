@@ -441,12 +441,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             builder);
     }
 
+    @Deprecated
     @Override
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates) {
         return doBranch(NamedInternal.empty(), predicates);
     }
 
+    @Deprecated
     @Override
     @SuppressWarnings("unchecked")
     public KStream<K, V>[] branch(final Named named,
@@ -499,7 +501,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public BranchedKStream<K, V> split(Named named) {
+    public BranchedKStream<K, V> split(final Named named) {
         return new BranchedKStreamImpl<>(this, new NamedInternal(named));
     }
 
