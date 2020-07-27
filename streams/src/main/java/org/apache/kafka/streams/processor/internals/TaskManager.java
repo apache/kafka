@@ -249,9 +249,9 @@ public class TaskManager {
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
-        final Set<Task> tasksToRecycle = new HashSet<>();
-        final Set<Task> tasksToCloseClean = new HashSet<>();
-        final Set<Task> tasksToCloseDirty = new HashSet<>();
+        final List<Task> tasksToRecycle = new LinkedList<>();
+        final List<Task> tasksToCloseClean = new LinkedList<>();
+        final List<Task> tasksToCloseDirty = new LinkedList<>();
 
         // first rectify all existing tasks
         for (final Task task : tasks.values()) {
@@ -314,9 +314,9 @@ public class TaskManager {
         }
     }
 
-    private void handleCloseAndRecycle(final Set<Task> tasksToRecycle,
-                                       final Set<Task> tasksToCloseClean,
-                                       final Set<Task> tasksToCloseDirty,
+    private void handleCloseAndRecycle(final List<Task> tasksToRecycle,
+                                       final List<Task> tasksToCloseClean,
+                                       final List<Task> tasksToCloseDirty,
                                        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                        final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions) {
