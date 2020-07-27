@@ -80,7 +80,7 @@ public abstract class AbstractTask implements Task {
             // since there's no written offsets we can checkpoint with empty map,
             // and the state's current offset would be used to checkpoint
             stateMgr.flush();
-            stateMgr.checkpoint(Collections.emptyMap());
+            stateMgr.checkpoint();
             offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
         }
     }

@@ -47,6 +47,7 @@ public class StandbyTask extends AbstractTask implements Task {
     private final InternalProcessorContext processorContext;
     private final StreamsMetricsImpl streamsMetrics;
 
+    // we need a separate snapshot for standby task to determine when we need to commit
     private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit = null;
 
     /**
@@ -93,7 +94,6 @@ public class StandbyTask extends AbstractTask implements Task {
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
-            // initialize the snapshot with the current offsets as we don't need to commit then until they change
             initializeCheckpoint();
             offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
 

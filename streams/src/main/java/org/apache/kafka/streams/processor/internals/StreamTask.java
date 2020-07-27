@@ -265,6 +265,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 try {
                     // use try-catch to ensure state transition to SUSPENDED even if user code throws in `Processor#close()`
                     closeTopology();
+
+                    // we must clear the buffered records when suspending because upon resuming the consumer would
+                    // re-fetch those records starting from the committed position
+                    partitionGroup.clear();
                 } finally {
                     transitionTo(State.SUSPENDED);
                     log.info("Suspended running");
@@ -276,7 +280,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 log.info("Skip suspending since state is {}", state());
 
                 break;
-
 
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
@@ -431,13 +434,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case CREATED:
                 // We should never write a checkpoint for a CREATED task as we may overwrite an existing checkpoint
                 // with empty uninitialized offsets
-                log.debug("Skipped writing checkpoint for created task");
+                log.debug("Skipped writing checkpoint for {} task", state());
 
                 break;
 
             case RESTORING:
+            case SUSPENDED:
                 maybeWriteCheckpoint(enforceCheckpoint);
-                log.debug("Finalized commit for restoring task");
+                log.debug("Finalized commit for {} task", state());
 
                 break;
 
@@ -445,21 +449,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 if (!eosEnabled) {
                     maybeWriteCheckpoint(enforceCheckpoint);
                 }
-                log.debug("Finalized commit for running task");
-
-                break;
-
-            case SUSPENDED:
-                /*
-                 * We must clear the `PartitionGroup` only after committing, and not in `suspend()`,
-                 * because otherwise we lose the partition-time information.
-                 * We also must clear it when the task is revoked, and not in `close()`, as the consumer will clear
-                 * its internal buffer when the corresponding partition is revoked but the task may be reassigned
-                 */
-                partitionGroup.clear();
-
-                maybeWriteCheckpoint(enforceCheckpoint);
-                log.debug("Finalized commit for suspended task");
+                log.debug("Finalized commit for {} task", state());
 
                 break;
 
