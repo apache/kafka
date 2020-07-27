@@ -45,7 +45,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * @see TimestampExtractor
  */
 
-public final class SlidingWindows extends Windows<TimeWindow> {
+public final class SlidingWindows {
 
 
     /** The size of the windows in milliseconds. */
@@ -60,59 +60,40 @@ public final class SlidingWindows extends Windows<TimeWindow> {
 
     }
 
-    public static SlidingWindows of(final Duration size) throws IllegalArgumentException {
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
-        final long sizeMs = ApiUtils.validateMillisecondDuration(size, msgPrefix);
+    /**
+     * Return a window definition with the given window size and given window grace period
+     * Records that come after set grace period will be ignored
+     *
+     * @param size, The size of the window
+     * @param grace, The grace period to admit out-of-order events to a window
+     * @return a new window definition
+     * @throws IllegalArgumentException if the specified window size or grace is zero or negative or can't be represented as {@code long milliseconds}
+     */
+    public static SlidingWindows withSizeAndGrace(final Duration size, final Duration grace) throws IllegalArgumentException {
+        final String msgPrefixSize = prepareMillisCheckFailMsgPrefix(size, "size");
+        final long sizeMs = ApiUtils.validateMillisecondDuration(size, msgPrefixSize);
         if (sizeMs <= 0) {
             throw new IllegalArgumentException("Window size (size) must be larger than zero.");
         }
-        return new SlidingWindows(sizeMs, -1);
+        final String msgPrefixGrace = prepareMillisCheckFailMsgPrefix(grace, "afterWindowEnd");
+        final long graceMs = ApiUtils.validateMillisecondDuration(grace, msgPrefixGrace);
+        if (graceMs < 0) {
+            throw new IllegalArgumentException("Grace period must not be negative.");
+        }
 
+        return new SlidingWindows(sizeMs, graceMs);
     }
 
-    @Override
-    public Map<Long, TimeWindow> windowsFor(final long timestamp) {
-        //put 2 windows that could be created by a new timestamp
-        //potentially add 1+previous record
-        //aggregate other windows inside of process, use fetchAll(timestamp-sizeMs, timestamp+sizeMs)
-        //make sure process doesn't store windows w/nothing in them? or check that here...
-        //or, if we do store windows w nothing in them, wouldn't need to recompute later hmm
-        //but windows that are empty will likely be beyond our current record time for records coming in order
-        //add window with the new timestamp at the end of the window
-        //add window with the start 1ms after timestamp
-        throw new UnsupportedOperationException("windowsFor() is not supported by SlidingWindows.");
 
-    }
-
-    @Override
     public long size() {
         return sizeMs;
     }
 
 
-    /**
-     * Reject out-of-order events that arrive more than {@code millisAfterWindowEnd}
-     * after the end of its window.
-     * <p>
-     * Delay is defined as (stream_time - record_timestamp).
-     *
-     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
-     * @return this updated builder
-     * @throws IllegalArgumentException if {@code afterWindowEnd} is negative or can't be represented as {@code long milliseconds}
-     */
-    @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
-    public SlidingWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
-        final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
-        final long afterWindowEndMs = ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
-        if (afterWindowEndMs < 0) {
-            throw new IllegalArgumentException("Grace period must not be negative.");
-        }
 
-        return new SlidingWindows(sizeMs, afterWindowEndMs);
-    }
+
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    @Override
     public long gracePeriodMs() {
         return graceMs;
     }

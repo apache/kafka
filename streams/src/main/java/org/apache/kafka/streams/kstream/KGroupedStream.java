@@ -530,6 +530,13 @@ public interface KGroupedStream<K, V> {
     <W extends Window> TimeWindowedKStream<K, V> windowedBy(final Windows<W> windows);
 
     /**
+     * Create a new {@link TimeWindowedKStream} instance that can be used to perform sliding windowed aggregations.
+     * @param windows the specification of the aggregation {@link SlidingWindows}
+     * @return an instance of {@link TimeWindowedKStream}
+     */
+    TimeWindowedKStream<K, V> windowedBy(final SlidingWindows windows);
+
+    /**
      * Create a new {@link SessionWindowedKStream} instance that can be used to perform session windowed aggregations.
      * @param windows the specification of the aggregation {@link SessionWindows}
      * @return an instance of {@link TimeWindowedKStream}

@@ -19,11 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -32,27 +28,30 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.HashSet;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamSlidingWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
+public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
-    private final Windows<W> windows;
+    private final SlidingWindows windows;
     private final Initializer<Agg> initializer;
     private final Aggregator<? super K, ? super V, Agg> aggregator;
 
     private boolean sendOldValues = false;
 
-    public KStreamSlidingWindowAggregate(final Windows<W> windows,
-                                  final String storeName,
-                                  final Initializer<Agg> initializer,
-                                  final Aggregator<? super K, ? super V, Agg> aggregator) {
+    public KStreamSlidingWindowAggregate (final SlidingWindows windows,
+                                          final String storeName,
+                                          final Initializer<Agg> initializer,
+                                          final Aggregator<? super K, ? super V, Agg> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -64,7 +63,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg, W extends Window> implemen
         return new KStreamSlidingWindowAggregateProcessor();
     }
 
-    public Windows<W> windows() {
+    public SlidingWindows windows() {
         return windows;
     }
 
@@ -107,6 +106,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg, W extends Window> implemen
 
         @Override
         public void process(final K key, final V value) {
+            //CURRENTLY ASSUMING WE HAVE BACKWARDS ITERATOR ACCESS
             if (key == null) {
                 log.warn(
                         "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
@@ -119,158 +119,170 @@ public class KStreamSlidingWindowAggregate<K, V, Agg, W extends Window> implemen
             final long timestamp = context().timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
-            //Create two new windows defined by the new record: left window ends at the record's time
-            final TimeWindow leftWindow = new TimeWindow(timestamp - windows.size(), timestamp);
-            //right window starts one after the record's time
-            final TimeWindow rightWindow = new TimeWindow(timestamp + 1, timestamp + 1 + windows.size());
+            final HashSet<Long> windowStartTimes = new HashSet();
+            ValueAndTimestamp<Agg> leftWinAgg;
+            ValueAndTimestamp<Agg> rightWinAgg = null;
 
-            Agg oldAgg = initializer.apply();
+            boolean foundLeftFirst = false;
+
+            boolean leftWinExists = false;
+
+            boolean prevRightWinExists = false;
+            boolean prevRightWinAlreadyCreated = false;
+
             try (
                     //Fetch all the windows that have a start time between timestamp and timestamp+windowSize
-                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetchAll(
-                            timestamp - windows.size(),
-                            timestamp
-                    )
+                   //potentially need to change long to instant
+                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(key,
+                            key,
+                            timestamp - 2*windows.size(),
+                            timestamp+1)
             ) {
                 //Updating the already created windows that the new record falls within
-                while (iterator.hasNext()) {
-                    final Agg newAgg;
-                    final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next = iterator.next();
-                    final long windowStart = next.value.timestamp();
-                    final long windowEnd = next.value.timestamp() + windows.size();
-                    if (next.value.timestamp() + windows.size() > closeTime) {
-                        //get aggregate from existing window
-                        oldAgg = getValueOrNull(next.value);
-                        //add record's value to existing aggregate
-                        newAgg = aggregator.apply(key, value, oldAgg);
-                        windowStore.put(next.key.key(),
-                                ValueAndTimestamp.make(newAgg, windowStart),
-                                windowStart);
-                        tupleForwarder.maybeForward(
-                                next.key,
-                                newAgg,
-                                sendOldValues ? oldAgg : null,
-                               windowStart);
+                KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next = iterator.next();
+
+                boolean rightWindowExists = false;
+                if (next.key.window().start() == timestamp + 1) {
+                    rightWindowExists = true;
+                    windowStartTimes.add(next.key.window().start());
+                    next = iterator.next();
+                }
+
+                if (next.key.window().start() > timestamp) {
+                    rightWinAgg = next.value;
+                    windowStartTimes.add(next.key.window().start());
+                    if (isLeftWindow(next)) {
+                        foundLeftFirst = true;
+                    }
+                    putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
+
+                }
+                while (iterator.hasNext() && next.key.window().end() > timestamp) {
+                    next = iterator.next();
+                    windowStartTimes.add(next.key.window().start());
+                    if (next.key.window().end() > timestamp) {
+                        putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
+
+                    }
+                }
+
+
+                //if left window of new record already exists
+                if (next.key.window().end() == timestamp) {
+                    putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
+                    next = iterator.next();
+                    windowStartTimes.add(next.key.window().start());
+                    leftWinExists = true;
+                }
+
+
+
+                leftWinAgg = next.value;
+
+                if (isLeftWindow(next)) {
+                    prevRightWinExists = true;
+                    long rightWinStart = next.key.window().end() + 1;
+                    if (windowStartTimes.contains(rightWinStart)) {
+                        final TimeWindow window = new TimeWindow(rightWinStart, rightWinStart + windows.sizeMs);
+                        ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
+                        putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
                     } else {
-                        log.warn(
-                                "Skipping record for expired window. " +
-                                        "key=[{}] " +
-                                        "topic=[{}] " +
-                                        "partition=[{}] " +
-                                        "offset=[{}] " +
-                                        "timestamp=[{}] " +
-                                        "window=[{},{}) " +
-                                        "expiration=[{}] " +
-                                        "streamTime=[{}]",
-                                key,
-                                context().topic(),
-                                context().partition(),
-                                context().offset(),
-                                context().timestamp(),
-                                windowStart, windowEnd,
-                                closeTime,
-                                observedStreamTime
-                        );
-                        lateRecordDropSensor.record();
+                        prevRightWinAlreadyCreated = true;
                     }
-                }
-                //check to see if new right window created by the record already exists
-                final ValueAndTimestamp<Agg> rightWindowAggAndTimestamp = windowStore.fetch(key, rightWindow.start());
-                final Agg recordAgg = getValueOrNull(rightWindowAggAndTimestamp);
-                //Grace check for the new right window
-                if (rightWindow.end() > closeTime) {
-                    //If the right windows needs to have a new aggregate updated
-                    if (recordAgg == null && timestamp != observedStreamTime) {
-                        windowStore.put(key,
-                                ValueAndTimestamp.make(oldAgg, rightWindowAggAndTimestamp.timestamp()),
-                                rightWindow.start());
-                        tupleForwarder.maybeForward(
-                                new Windowed<K>(key, rightWindow),
-                                oldAgg,
-                                sendOldValues ? null : null,
-                                rightWindowAggAndTimestamp.timestamp());
 
-                    } else if (timestamp == observedStreamTime) {
-                        windowStore.put(key,
-                                ValueAndTimestamp.make(initializer.apply(), rightWindowAggAndTimestamp.timestamp()),
-                                rightWindow.start());
-                    }
-                } else {
-                    log.warn(
-                            "Skipping record for expired window. " +
-                                    "key=[{}] " +
-                                    "topic=[{}] " +
-                                    "partition=[{}] " +
-                                    "offset=[{}] " +
-                                    "timestamp=[{}] " +
-                                    "window=[{},{}) " +
-                                    "expiration=[{}] " +
-                                    "streamTime=[{}]",
-                            key,
-                            context().topic(),
-                            context().partition(),
-                            context().offset(),
-                            context().timestamp(),
-                            rightWindow.start(), rightWindow.start(),
-                            closeTime,
-                            observedStreamTime
-                    );
-                    lateRecordDropSensor.record();
                 }
+
+                while (iterator.hasNext() && !prevRightWinExists) {
+                    next = iterator.next();
+                    windowStartTimes.add(next.key.window().start());
+                    if (isLeftWindow(next)) {
+                        prevRightWinExists = true;
+                        long rightWinStart = next.key.window().end() + 1;
+                        if (!windowStartTimes.contains(rightWinStart)) {
+                            final TimeWindow window = new TimeWindow(rightWinStart, rightWinStart + windows.sizeMs);
+                            ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
+                            putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
+                        } else {
+                            prevRightWinAlreadyCreated = true;
+                        }
+                    }
+                }
+
             }
 
-            try (
-                    //Get windows to find aggregate to update new left window
-                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetchAll(
-                            timestamp - windows.size() - windows.size(),
-                            timestamp - windows.size()
-                    )
-            ) {
-                Agg storedAgg = initializer.apply();
-                while (iterator.hasNext()) {
-                    final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next = iterator.next();
-                    storedAgg = getValueOrNull(next.value);
-                }
-                //We've found an updated value for the new window
-                if (leftWindow.end() > closeTime) {
-                    if (storedAgg != initializer.apply()) {
-                        windowStore.put(key,
-                                ValueAndTimestamp.make(storedAgg, leftWindow.start()),
-                                leftWindow.start());
-                        tupleForwarder.maybeForward(
-                                new Windowed<K>(key, leftWindow),
-                                storedAgg,
-                                sendOldValues ? null : null,
-                                leftWindow.start());
-                    }
+            if (!leftWinExists) {
+                Agg aggValue;
+                long newTimestamp;
+                if (prevRightWinExists) {
+                    aggValue = aggregator.apply(key, value, getValueOrNull(leftWinAgg));
+                    newTimestamp = leftWinAgg.timestamp();
                 } else {
-                    log.warn(
-                            "Skipping record for expired window. " +
-                                    "key=[{}] " +
-                                    "topic=[{}] " +
-                                    "partition=[{}] " +
-                                    "offset=[{}] " +
-                                    "timestamp=[{}] " +
-                                    "window=[{},{}) " +
-                                    "expiration=[{}] " +
-                                    "streamTime=[{}]",
-                            key,
-                            context().topic(),
-                            context().partition(),
-                            context().offset(),
-                            context().timestamp(),
-                            rightWindow.start(), rightWindow.start(),
-                            closeTime,
-                            observedStreamTime
-                    );
-                    lateRecordDropSensor.record();
+                    aggValue = aggregator.apply(key, value, initializer.apply());
+                    newTimestamp = timestamp;
                 }
+                final TimeWindow window = new TimeWindow(timestamp-windows.sizeMs, timestamp);
+                ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(aggValue, Math.max(timestamp, newTimestamp));
+                putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
             }
 
+            if (!prevRightWinExists && (foundLeftFirst || prevRightWinAlreadyCreated)) {
+                final TimeWindow window = new TimeWindow(timestamp+1, timestamp+1+windows.sizeMs);
+                ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(getValueOrNull(rightWinAgg), Math.max(rightWinAgg.timestamp(), timestamp));
+                putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
+            }
+        }
+
+        private boolean isLeftWindow(KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> window){
+            return window.key.window().end() == window.value.timestamp();
+        }
+
+        private void putAndForward(Window window, ValueAndTimestamp<Agg> valueAndTime, K key, V value, long closeTime, long timestamp) {
+            long windowStart = window.start();
+            long windowEnd = window.end();
+            if (windowEnd > closeTime) {
+                //get aggregate from existing window
+                Agg oldAgg = getValueOrNull(valueAndTime);
+                //add record's value to existing aggregate
+                Agg newAgg = aggregator.apply(key, value, oldAgg);
+
+                windowStore.put(key,
+                        ValueAndTimestamp.make(newAgg, Math.max(timestamp, valueAndTime.timestamp())),
+                        windowStart);
+                tupleForwarder.maybeForward(
+                        new Windowed<K>(key, window),
+                        newAgg,
+                        sendOldValues ? oldAgg : null,
+                        windowStart);
+            } else {
+                log.warn(
+                        "Skipping record for expired window. " +
+                                "key=[{}] " +
+                                "topic=[{}] " +
+                                "partition=[{}] " +
+                                "offset=[{}] " +
+                                "timestamp=[{}] " +
+                                "window=[{},{}) " +
+                                "expiration=[{}] " +
+                                "streamTime=[{}]",
+                        key,
+                        context().topic(),
+                        context().partition(),
+                        context().offset(),
+                        context().timestamp(),
+                        windowStart, windowEnd,
+                        closeTime,
+                        observedStreamTime
+                );
+                lateRecordDropSensor.record();
+            }
 
         }
 
+
+
     }
+
+
 
 
 
@@ -303,8 +315,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg, W extends Window> implemen
         @Override
         public ValueAndTimestamp<Agg> get(final Windowed<K> windowedKey) {
             final K key = windowedKey.key();
-            final W window = (W) windowedKey.window();
-            return windowStore.fetch(key, window.start());
+            return windowStore.fetch(key, windowedKey.window().start());
         }
 
         @Override

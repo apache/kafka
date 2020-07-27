@@ -163,8 +163,11 @@
     <suppress checks="(FinalLocalVariable|UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>
 
-    <suppress checks="NPath Complexity"
+    <suppress checks="(NPathComplexity|MethodLength)"
               files="KStreamSlidingWindowAggregate.java"/>
+
+    <suppress checks="(ImportControl|AvoidStarImport)"
+              files="TimeWindowedKStreamImpl.java"/>
 
     <!-- suppress FinalLocalVariable outside of the streams package. -->
     <suppress checks="FinalLocalVariable"

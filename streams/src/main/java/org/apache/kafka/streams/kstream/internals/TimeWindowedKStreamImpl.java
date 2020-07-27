@@ -95,23 +95,15 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        if (windows instanceof SlidingWindows) {
-            return aggregateBuilder.build(
-                    new NamedInternal(aggregateName),
-                    materialize(materializedInternal),
-                    new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
-                    materializedInternal.queryableStoreName(),
-                    materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                    materializedInternal.valueSerde());
-        } else {
-            return aggregateBuilder.build(
-                    new NamedInternal(aggregateName),
-                    materialize(materializedInternal),
-                    new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
-                    materializedInternal.queryableStoreName(),
-                    materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                    materializedInternal.valueSerde());
-        }
+
+        return aggregateBuilder.build(
+                new NamedInternal(aggregateName),
+                materialize(materializedInternal),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
+                materializedInternal.queryableStoreName(),
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+                materializedInternal.valueSerde());
+
 
     }
 
@@ -151,23 +143,15 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
-        if (windows instanceof SlidingWindows) {
-            return aggregateBuilder.build(
-                    new NamedInternal(aggregateName),
-                    materialize(materializedInternal),
-                    new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
-                    materializedInternal.queryableStoreName(),
-                    materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                    materializedInternal.valueSerde());
-        } else {
-            return aggregateBuilder.build(
-                    new NamedInternal(aggregateName),
-                    materialize(materializedInternal),
-                    new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
-                    materializedInternal.queryableStoreName(),
-                    materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                    materializedInternal.valueSerde());
-        }
+
+        return aggregateBuilder.build(
+                new NamedInternal(aggregateName),
+                materialize(materializedInternal),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
+                materializedInternal.queryableStoreName(),
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+                materializedInternal.valueSerde());
+
 
     }
 
@@ -206,23 +190,15 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         }
 
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
-        if (windows instanceof SlidingWindows) {
-            return aggregateBuilder.build(
-                    new NamedInternal(reduceName),
-                    materialize(materializedInternal),
-                    new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
-                    materializedInternal.queryableStoreName(),
-                    materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                    materializedInternal.valueSerde());
-        } else {
-            return aggregateBuilder.build(
-                    new NamedInternal(reduceName),
-                    materialize(materializedInternal),
-                    new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
-                    materializedInternal.queryableStoreName(),
-                    materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                    materializedInternal.valueSerde());
-        }
+
+        return aggregateBuilder.build(
+                new NamedInternal(reduceName),
+                materialize(materializedInternal),
+                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
+                materializedInternal.queryableStoreName(),
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+                materializedInternal.valueSerde());
+
 
     }
 

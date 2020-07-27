@@ -279,6 +279,15 @@ public interface CogroupedKStream<K, VOut> {
      * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
      * windowed aggregations.
      *
+     * @param windows the specification of the aggregation {@link SlidingWindows}
+     * @return an instance of {@link TimeWindowedCogroupedKStream}
+     */
+    TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows windows);
+
+    /**
+     * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
+     * windowed aggregations.
+     *
      * @param windows the specification of the aggregation {@link SessionWindows}
      * @return an instance of {@link SessionWindowedCogroupedKStream}
      */
