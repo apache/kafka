@@ -27,7 +27,7 @@ ext {
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.11'
+def defaultScala212Version = '2.12.12'
 def defaultScala213Version = '2.13.3'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
@@ -58,13 +58,13 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
-  bcpkix: "1.64",
+  bcpkix: "1.66",
   checkstyle: "8.20",
   commonsCli: "1.4",
   gradle: "6.5",
-  gradleVersionsPlugin: "0.28.0",
-  grgit: "4.0.1",
-  httpclient: "4.5.11",
+  gradleVersionsPlugin: "0.29.0",
+  grgit: "4.0.2",
+  httpclient: "4.5.12",
   easymock: "4.2",
   jackson: "2.10.2",
   jacoco: "0.8.5",
@@ -94,8 +94,8 @@ versions += [
   lz4: "1.7.1",
   mavenArtifact: "3.6.3",
   metrics: "2.2.0",
-  mockito: "3.3.3",
-  netty: "4.1.50.Final",
+  mockito: "3.4.4",
+  netty: "4.1.51.Final",
   owaspDepCheckPlugin: "5.3.2.1",
   powermock: "2.0.7",
   reflections: "0.9.12",
@@ -105,17 +105,17 @@ versions += [
   scalaJava8Compat : "0.9.1",
   scalatest: "3.0.8",
   scoverage: "1.4.1",
-  scoveragePlugin: "4.0.1",
-  shadowPlugin: "5.2.0",
+  scoveragePlugin: "4.0.2",
+  shadowPlugin: "6.0.0",
   slf4j: "1.7.30",
-  snappy: "1.1.7.3",
-  spotbugs: "4.0.3",
-  spotbugsPlugin: "4.2.4",
-  spotlessPlugin: "3.28.1",
-  testRetryPlugin: "1.1.5",
+  snappy: "1.1.7.6",
+  spotbugs: "4.0.6",
+  spotbugsPlugin: "4.4.4",
+  spotlessPlugin: "5.1.0",
+  testRetryPlugin: "1.1.6",
   zinc: "1.3.5",
   zookeeper: "3.5.8",
-  zstd: "1.4.5-2"
+  zstd: "1.4.5-6"
 ]
 libs += [
   activation: "javax.activation:activation:$versions.activation",
