@@ -199,6 +199,7 @@ The following metrics are emitted:
     # MBean: kafka.connect.mirror:type=MirrorSourceConnector,target=([-.w]+),topic=([-.w]+),partition=([0-9]+)
 
     record-count            # number of records replicated source -> target
+    record-rate
     record-age-ms           # age of records when they are replicated
     record-age-ms-min
     record-age-ms-max
@@ -207,6 +208,7 @@ The following metrics are emitted:
     replication-latency-ms-min
     replication-latency-ms-max
     replication-latency-ms-avg
+    byte-count
     byte-rate               # average number of bytes/sec in replicated records
 
 
