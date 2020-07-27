@@ -728,7 +728,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         subscriptions.resetGroupSubscription();
 
         if (exception != null) {
-            throw new KafkaException("User rebalance callback throws an error", exception);
+            if (exception instanceof KafkaException) {
+                throw (KafkaException) exception;
+            } else {
+                throw new KafkaException("User rebalance callback throws an error", exception);
+            }
         }
     }
 
@@ -744,17 +748,21 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
 
         if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
-            final Exception e;
+            final Exception exception;
             if (generation() == Generation.NO_GENERATION || rebalanceInProgress()) {
-                e = invokePartitionsLost(droppedPartitions);
+                exception = invokePartitionsLost(droppedPartitions);
             } else {
-                e = invokePartitionsRevoked(droppedPartitions);
+                exception = invokePartitionsRevoked(droppedPartitions);
             }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
 
-            if (e != null) {
-                throw new KafkaException("User rebalance callback throws an error", e);
+            if (exception != null) {
+                if (exception instanceof KafkaException) {
+                    throw (KafkaException) exception;
+                } else {
+                    throw new KafkaException("User rebalance callback throws an error", exception);
+                }
             }
         }
     }
