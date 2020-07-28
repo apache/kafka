@@ -196,6 +196,9 @@ class WorkerSinkTask extends WorkerTask {
         try (UncheckedCloseable suppressible = this::closePartitions) {
             while (!isStopping())
                 iteration();
+        } catch (WakeupException e) {
+            log.trace("Consumer woken up during initial offset commit attempt, " 
+                + "but succeeded during a later attempt");
         }
     }
 

@@ -99,7 +99,7 @@ public class ProduceRequest extends AbstractRequest {
     /**
      * The body of PRODUCE_REQUEST_V4 is the same as PRODUCE_REQUEST_V3.
      * The version number is bumped up to indicate that the client supports KafkaStorageException.
-     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 3
+     * The KafkaStorageException will be translated to NotLeaderOrFollowerException in the response if version <= 3
      */
     private static final Schema PRODUCE_REQUEST_V4 = PRODUCE_REQUEST_V3;
 

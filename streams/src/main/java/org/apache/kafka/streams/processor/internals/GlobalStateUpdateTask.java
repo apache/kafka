@@ -19,8 +19,10 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -33,6 +35,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
  * Updates the state for all Global State Stores.
  */
 public class GlobalStateUpdateTask implements GlobalStateMaintainer {
+    private final Logger log;
+    private final LogContext logContext;
 
     private final ProcessorTopology topology;
     private final InternalProcessorContext processorContext;
@@ -40,18 +44,18 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
     private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
     private final GlobalStateManager stateMgr;
     private final DeserializationExceptionHandler deserializationExceptionHandler;
-    private final LogContext logContext;
 
-    public GlobalStateUpdateTask(final ProcessorTopology topology,
+    public GlobalStateUpdateTask(final LogContext logContext,
+                                 final ProcessorTopology topology,
                                  final InternalProcessorContext processorContext,
                                  final GlobalStateManager stateMgr,
-                                 final DeserializationExceptionHandler deserializationExceptionHandler,
-                                 final LogContext logContext) {
+                                 final DeserializationExceptionHandler deserializationExceptionHandler) {
+        this.logContext = logContext;
+        this.log = logContext.logger(getClass());
         this.topology = topology;
         this.stateMgr = stateMgr;
         this.processorContext = processorContext;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
-        this.logContext = logContext;
     }
 
     /**
@@ -114,8 +118,16 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         stateMgr.checkpoint(offsets);
     }
 
-    public void close() throws IOException {
+    public void close(final boolean wipeStateStore) throws IOException {
         stateMgr.close();
+        if (wipeStateStore) {
+            try {
+                log.info("Deleting global task directory after detecting corruption.");
+                Utils.delete(stateMgr.baseDir());
+            } catch (final IOException e) {
+                log.error("Failed to delete global task directory after detecting corruption.", e);
+            }
+        }
     }
 
     private void initTopology() {

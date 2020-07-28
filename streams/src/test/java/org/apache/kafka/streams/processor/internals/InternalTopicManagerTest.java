@@ -78,6 +78,7 @@ public class InternalTopicManagerTest {
     private MockAdminClient mockAdminClient;
     private InternalTopicManager internalTopicManager;
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     private final Map<String, Object> config = new HashMap<String, Object>() {
         {
             put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");

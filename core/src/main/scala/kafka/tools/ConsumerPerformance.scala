@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util.{Properties, Random}
 
 import com.typesafe.scalalogging.LazyLogging
+import joptsimple.OptionException
 import kafka.utils.{CommandLineUtils, ToolsUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
@@ -255,7 +256,12 @@ object ConsumerPerformance extends LazyLogging {
       .ofType(classOf[Long])
       .defaultsTo(10000)
 
-    options = parser.parse(args: _*)
+    try
+      options = parser.parse(args: _*)
+    catch {
+      case e: OptionException =>
+        CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+    }
 
     if(options.has(numThreadsOpt) || options.has(numFetchersOpt))
       println("WARNING: option [threads] and [num-fetch-threads] have been deprecated and will be ignored by the test")

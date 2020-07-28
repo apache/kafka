@@ -123,7 +123,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
         final String topic = recordContext.topic();
 
-        if (topic.equals(NONEXIST_TOPIC)) {
+        if (NONEXIST_TOPIC.equals(topic)) {
             return null;
         }
 

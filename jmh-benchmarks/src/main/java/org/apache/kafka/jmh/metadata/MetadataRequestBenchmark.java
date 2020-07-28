@@ -25,6 +25,7 @@ import kafka.server.AdminManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
 import kafka.server.ClientRequestQuotaManager;
+import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
@@ -100,10 +101,11 @@ public class MetadataRequestBenchmark {
     private MetadataCache metadataCache = new MetadataCache(brokerId);
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
+    private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
     private ReplicationQuotaManager replicaQuotaManager = Mockito.mock(ReplicationQuotaManager.class);
     private QuotaFactory.QuotaManagers quotaManagers = new QuotaFactory.QuotaManagers(clientQuotaManager,
-        clientQuotaManager, clientRequestQuotaManager, replicaQuotaManager, replicaQuotaManager,
-        replicaQuotaManager, Option.empty());
+        clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
+        replicaQuotaManager, replicaQuotaManager, Option.empty());
     private FetchManager fetchManager = Mockito.mock(FetchManager.class);
     private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
     private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
