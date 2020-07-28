@@ -975,6 +975,29 @@ public final class MessageTest {
     }
 
     @Test
+    public void testFindAndGetOrCreate() throws Exception {
+        ApiVersionsResponseData responseData = new ApiVersionsResponseData();
+        responseData.apiKeys().add(new ApiVersionsResponseData.ApiVersionsResponseKey().
+            setApiKey((short) 0).setMinVersion((short) 0).setMaxVersion((short) 3));
+        responseData.apiKeys().add(new ApiVersionsResponseData.ApiVersionsResponseKey().
+            setApiKey((short) 1).setMinVersion((short) 0).setMaxVersion((short) 10));
+        responseData.apiKeys().add(new ApiVersionsResponseData.ApiVersionsResponseKey().
+            setApiKey((short) 2).setMinVersion((short) 0).setMaxVersion((short) 0));
+        ApiVersionsResponseData.ApiVersionsResponseKey key0 =
+            responseData.apiKeys().find((short) 0);
+        assertEquals((short) 0, key0.apiKey());
+        assertEquals((short) 0, key0.minVersion());
+        assertEquals((short) 3, key0.maxVersion());
+        ApiVersionsResponseData.ApiVersionsResponseKey key3 =
+            responseData.apiKeys().getOrCreate((short) 3);
+        assertEquals((short) 3, key3.apiKey());
+        key3.setMaxVersion((short) 123);
+        ApiVersionsResponseData.ApiVersionsResponseKey secondKey3 =
+            responseData.apiKeys().getOrCreate((short) 3);
+        assertEquals((short) 123, secondKey3.maxVersion());
+    }
+
+    @Test
     public void testWriteNullForNonNullableFieldRaisesException() {
         CreateTopicsRequestData createTopics = new CreateTopicsRequestData().setTopics(null);
         for (short i = (short) 0; i <= createTopics.highestSupportedVersion(); i++) {
