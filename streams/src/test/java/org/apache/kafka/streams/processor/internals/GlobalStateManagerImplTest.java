@@ -1100,7 +1100,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUsePollPlusRequestPlusTaskTimeoutInPollDuringRestoreAndFailIfNoDataReturned() {
+    public void shouldUseRequestTimeoutPlusTaskTimeoutInPollDuringRestoreAndFailIfNoDataReturned() {
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
             public synchronized ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
@@ -1149,7 +1149,7 @@ public class GlobalStateManagerImplTest {
             equalTo("Global task did not make progress to restore state within 10 ms. Adjust `task.timeout.ms` if needed.")
         );
 
-        assertThat(time.milliseconds() - startTime, equalTo(115L));
+        assertThat(time.milliseconds() - startTime, equalTo(110L));
 
     }
 
