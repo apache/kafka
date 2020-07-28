@@ -266,7 +266,6 @@ object Defaults {
   val PasswordEncoderIterations = 4096
 }
 
-
 object KafkaConfig {
 
   private val LogConfigPrefix = "log."
