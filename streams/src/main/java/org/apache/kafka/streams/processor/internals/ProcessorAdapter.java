@@ -20,18 +20,18 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
-public final class ProcessorShim<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
+public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
     private final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
 
-    static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> shim(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
+    static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> adapt(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
         if (delegate == null) {
             return null;
         } else {
-            return new ProcessorShim<>(delegate);
+            return new ProcessorAdapter<>(delegate);
         }
     }
 
-    private ProcessorShim(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
+    private ProcessorAdapter(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
         this.delegate = delegate;
     }
 

@@ -62,7 +62,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
                          final Set<String> stateStores) {
 
         this.name = name;
-        this.processor = ProcessorShim.shim(processor);
+        this.processor = ProcessorAdapter.adapt(processor);
         this.children = new ArrayList<>();
         this.childByName = new HashMap<>();
         this.stateStores = stateStores;
