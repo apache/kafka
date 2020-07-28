@@ -46,19 +46,22 @@ public interface ReadOnlyKeyValueStore<K, V> {
     /**
      * Get an iterator over a given range of keys. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
-     * and must not return null values. No ordering guarantees are provided.
+     * and must not return null values.
+     * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
+     *
      * @param from The first key that could be in the range
-     * @param to The last key that could be in the range
+     * @param to   The last key that could be in the range
      * @return The iterator for this range.
-     * @throws NullPointerException If null is used for from or to.
+     * @throws NullPointerException       If null is used for from or to.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<K, V> range(K from, K to);
 
     /**
-     * Get an reverse iterator over a given range of keys. This iterator must be closed after use.
+     * Get a reverse iterator over a given range of keys. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
-     * and must not return null values. No ordering guarantees are provided.
+     * and must not return null values.
+     * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      * @param from The last key that could be in the range
      * @param to The first key that could be in the range
      * @return The reverse iterator for this range.
@@ -72,7 +75,8 @@ public interface ReadOnlyKeyValueStore<K, V> {
     /**
      * Return an iterator over all keys in this store. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
-     * and must not return null values. No ordering guarantees are provided.
+     * and must not return null values.
+     * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      * @return An iterator of all key/value pairs in the store.
      * @throws InvalidStateStoreException if the store is not initialized
      */
@@ -81,7 +85,8 @@ public interface ReadOnlyKeyValueStore<K, V> {
     /**
      * Return an reverse iterator over all keys in this store. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
-     * and must not return null values. No ordering guarantees are provided.
+     * and must not return null values.
+     * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      * @return An reverse iterator of all key/value pairs in the store.
      * @throws InvalidStateStoreException if the store is not initialized
      */
