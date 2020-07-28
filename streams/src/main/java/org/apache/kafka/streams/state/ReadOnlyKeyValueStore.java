@@ -21,7 +21,7 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 /**
  * A key-value store that only supports read operations.
  * Implementations should be thread-safe as concurrent reads and writes are expected.
- *
+ * <p>
  * Please note that this contract defines the thread-safe read functionality only; it does not
  * guarantee anything about whether the actual instance is writable by another thread, or
  * whether it uses some locking mechanism under the hood. For this reason, making dependencies
@@ -38,7 +38,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      *
      * @param key The key to fetch
      * @return The value or null if no value is found.
-     * @throws NullPointerException If null is used for key.
+     * @throws NullPointerException       If null is used for key.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     V get(K key);
@@ -62,10 +62,11 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values.
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
+     *
      * @param from The last key that could be in the range
-     * @param to The first key that could be in the range
+     * @param to   The first key that could be in the range
      * @return The reverse iterator for this range.
-     * @throws NullPointerException If null is used for from or to.
+     * @throws NullPointerException       If null is used for from or to.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     default KeyValueIterator<K, V> reverseRange(K from, K to) {
@@ -77,16 +78,18 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values.
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
+     *
      * @return An iterator of all key/value pairs in the store.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<K, V> all();
 
     /**
-     * Return an reverse iterator over all keys in this store. This iterator must be closed after use.
+     * Return a reverse iterator over all keys in this store. This iterator must be closed after use.
      * The returned iterator must be safe from {@link java.util.ConcurrentModificationException}s
      * and must not return null values.
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
+     *
      * @return An reverse iterator of all key/value pairs in the store.
      * @throws InvalidStateStoreException if the store is not initialized
      */
@@ -96,7 +99,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
 
     /**
      * Return an approximate count of key-value mappings in this store.
-     *
+     * <p>
      * The count is not guaranteed to be exact in order to accommodate stores
      * where an exact count is expensive to calculate.
      *
