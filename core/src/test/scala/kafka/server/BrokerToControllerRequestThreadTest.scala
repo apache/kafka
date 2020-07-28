@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.message.MetadataRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.MetadataRequest
+import org.apache.kafka.common.requests.{AbstractRequest, MetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test
@@ -166,10 +166,10 @@ class BrokerToControllerRequestThreadTest {
     val testRequestThread = new BrokerToControllerRequestThread(mockClient, new ManualMetadataUpdater(), requestQueue, metadataCache,
       config, listenerName, time, "")
 
-
     val responseLatch = new CountDownLatch(1)
     val queueItem = BrokerToControllerQueueItem(
-      new MetadataRequest.Builder(new MetadataRequestData()), response => {
+      new MetadataRequest.Builder(new MetadataRequestData()
+        .setAllowAutoTopicCreation(true)), response => {
         assertEquals(expectedResponse, response.responseBody())
         responseLatch.countDown()
       }, "")
@@ -177,7 +177,10 @@ class BrokerToControllerRequestThreadTest {
     // initialize to the controller
     testRequestThread.doWork()
     // send and process the request
-    mockClient.prepareResponse(responseWithNotControllerError)
+    mockClient.prepareResponse((body: AbstractRequest) => {
+      body.isInstanceOf[MetadataRequest] &&
+      body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
+    }, responseWithNotControllerError)
     testRequestThread.doWork()
     // reinitialize the controller to a different node
     testRequestThread.doWork()

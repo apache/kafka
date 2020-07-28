@@ -97,7 +97,7 @@ class BrokerToControllerChannelManager(metadataCache: kafka.server.MetadataCache
         config.requestTimeoutMs,
         config.connectionSetupTimeoutMs,
         config.connectionSetupTimeoutMaxMs,
-        ClientDnsLookup.DEFAULT,
+        ClientDnsLookup.USE_ALL_DNS_IPS,
         time,
         false,
         new ApiVersions,
@@ -160,6 +160,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
       // just close the controller connection and wait for metadata cache update in doWork
       networkClient.close(activeController.get.idString)
       activeController = None
+      requestQueue.putFirst(request)
     } else {
       request.callback.onComplete(response)
     }
