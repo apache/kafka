@@ -407,19 +407,41 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   @Test(expected = classOf[TimeoutException])
-  def testSendOffsetsToTransactionTimeout(): Unit = {
-    val producer = createTransactionalProducer("transactionProducer", maxBlockMs = 1000)
-    producer.initTransactions()
-    producer.beginTransaction()
-    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
+  def testInitTransactionsTimeout(): Unit = {
+    testTimeout(false, producer => producer.initTransactions())
+  }
 
-    for (i <- servers.indices)
+  @Test(expected = classOf[TimeoutException])
+  def testSendOffsetsToTransactionTimeout(): Unit = {
+    testTimeout(true, producer => producer.sendOffsetsToTransaction(
+      Map(new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)).asJava, "test-group"))
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testCommitTransactionTimeout(): Unit = {
+    testTimeout(true, producer => producer.commitTransaction())
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testAbortTransactionTimeout(): Unit = {
+    testTimeout(true, producer => producer.abortTransaction())
+  }
+
+  def testTimeout(needInitAndSendMsg: Boolean,
+                  timeoutProcess: KafkaProducer[Array[Byte], Array[Byte]] => Unit): Unit = {
+    val producer = createTransactionalProducer("transactionProducer", maxBlockMs =  1000)
+
+    if (needInitAndSendMsg) {
+      producer.initTransactions()
+      producer.beginTransaction()
+      producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
+    }
+
+    for  (i <- servers.indices)
       killBroker(i)
 
     try {
-      producer.sendOffsetsToTransaction(Map(
-        new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)
-      ).asJava, "test-group")
+      timeoutProcess(producer)
       fail("Should raise a TimeoutException")
     } finally {
       producer.close(Duration.ZERO)
@@ -604,23 +626,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer.initTransactions()
     producer.initTransactions()
     fail("Should have raised a KafkaException")
-  }
-
-  @Test(expected = classOf[TimeoutException])
-  def testCommitTransactionTimeout(): Unit = {
-    val producer = createTransactionalProducer("transactionalProducer", maxBlockMs = 1000)
-    producer.initTransactions()
-    producer.beginTransaction()
-    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foobar".getBytes))
-
-    for (i <- 0 until servers.size)
-      killBroker(i) // pretend all brokers not available
-
-    try {
-      producer.commitTransaction()
-    } finally {
-      producer.close(Duration.ZERO)
-    }
   }
 
   @Test
