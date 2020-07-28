@@ -64,6 +64,16 @@ public class ByteBufferAccessor implements Readable, Writable {
     }
 
     @Override
+    public int readVarint() {
+        return ByteUtils.readVarint(buf);
+    }
+
+    @Override
+    public long readVarlong() {
+        return ByteUtils.readVarlong(buf);
+    }
+
+    @Override
     public ByteBuffer readByteBuffer(int length) {
         ByteBuffer res = buf.slice();
         res.limit(length);
@@ -106,6 +116,16 @@ public class ByteBufferAccessor implements Readable, Writable {
     @Override
     public void writeUnsignedVarint(int i) {
         ByteUtils.writeUnsignedVarint(i, buf);
+    }
+
+    @Override
+    public void writeVarint(int i) {
+        ByteUtils.writeVarint(i, buf);
+    }
+
+    @Override
+    public void writeVarlong(long i) {
+        ByteUtils.writeVarlong(i, buf);
     }
 
     @Override

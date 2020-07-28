@@ -97,6 +97,37 @@ public interface FieldType {
         }
     }
 
+    final class Varint32FieldType implements FieldType {
+        static final Varint32FieldType INSTANCE = new Varint32FieldType();
+        private static final String NAME = "varint32";
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.empty();
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
+    final class Varint64FieldType implements FieldType {
+        static final Varint64FieldType INSTANCE = new Varint64FieldType();
+        private static final String NAME = "varint64";
+
+        @Override
+        public Optional<Integer> fixedLength() {
+            return Optional.empty();
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
+
     final class UUIDFieldType implements FieldType {
         static final UUIDFieldType INSTANCE = new UUIDFieldType();
         private static final String NAME = "uuid";
@@ -259,6 +290,10 @@ public interface FieldType {
                 return Int32FieldType.INSTANCE;
             case Int64FieldType.NAME:
                 return Int64FieldType.INSTANCE;
+            case Varint32FieldType.NAME:
+                return Varint32FieldType.INSTANCE;
+            case Varint64FieldType.NAME:
+                return Varint64FieldType.INSTANCE;
             case UUIDFieldType.NAME:
                 return UUIDFieldType.INSTANCE;
             case Float64FieldType.NAME:

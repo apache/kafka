@@ -28,6 +28,8 @@ public interface Writable {
     void writeDouble(double val);
     void writeByteArray(byte[] arr);
     void writeUnsignedVarint(int i);
+    void writeVarint(int i);
+    void writeVarlong(long i);
     void writeByteBuffer(ByteBuffer buf);
 
     default void writeUUID(UUID uuid) {
