@@ -1059,12 +1059,12 @@ public class KafkaAdminClientTest {
         }
     }
 
-    private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag) {
+    private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag) {
         return prepareDescribeLogDirsResponse(error, logDir,
                 prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false));
     }
 
-    private List<DescribeLogDirsTopic> prepareDescribeLogDirsTopics(
+    private static List<DescribeLogDirsTopic> prepareDescribeLogDirsTopics(
             long partitionSize, long offsetLag, String topic, int partition, boolean isFuture) {
         return singletonList(new DescribeLogDirsTopic()
                 .setName(topic)
@@ -1075,7 +1075,7 @@ public class KafkaAdminClientTest {
                         .setOffsetLag(offsetLag))));
     }
 
-    private DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir,
+    private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir,
                                                                    List<DescribeLogDirsTopic> topics) {
         return new DescribeLogDirsResponse(
                 new DescribeLogDirsResponseData().setResults(singletonList(new DescribeLogDirsResponseData.DescribeLogDirsResult()
@@ -1112,7 +1112,7 @@ public class KafkaAdminClientTest {
         }
     }
 
-    private void assertDescriptionContains(Map<String, LogDirDescription> descriptionsMap, String logDir,
+    private static void assertDescriptionContains(Map<String, LogDirDescription> descriptionsMap, String logDir,
                                            TopicPartition tp, long partitionSize, long offsetLag) {
         assertNotNull(descriptionsMap);
         assertEquals(Collections.singleton(logDir), descriptionsMap.keySet());
@@ -1154,7 +1154,7 @@ public class KafkaAdminClientTest {
     }
 
     @SuppressWarnings("deprecation")
-    private void assertDescriptionContains(Map<String, DescribeLogDirsResponse.LogDirInfo> descriptionsMap,
+    private static  void assertDescriptionContains(Map<String, DescribeLogDirsResponse.LogDirInfo> descriptionsMap,
                                            String logDir, TopicPartition tp, Errors error,
                                            int offsetLag, long partitionSize) {
         assertNotNull(descriptionsMap);
@@ -1276,7 +1276,7 @@ public class KafkaAdminClientTest {
         }
     }
 
-    private DescribeLogDirsResponseData.DescribeLogDirsResult prepareDescribeLogDirsResult(TopicPartitionReplica tpr, String logDir, int partitionSize, int offsetLag, boolean isFuture) {
+    private static DescribeLogDirsResponseData.DescribeLogDirsResult prepareDescribeLogDirsResult(TopicPartitionReplica tpr, String logDir, int partitionSize, int offsetLag, boolean isFuture) {
         return new DescribeLogDirsResponseData.DescribeLogDirsResult()
                 .setErrorCode(Errors.NONE.code())
                 .setLogDir(logDir)

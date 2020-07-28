@@ -2310,8 +2310,8 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeLogDirsResult(new HashMap<>(futures));
     }
 
-    private Map<String, LogDirDescription> logDirDescriptions(DescribeLogDirsResponse response) {
-        HashMap<String, LogDirDescription> result = new HashMap<>(response.data().results().size());
+    private static Map<String, LogDirDescription> logDirDescriptions(DescribeLogDirsResponse response) {
+        Map<String, LogDirDescription> result = new HashMap<>(response.data().results().size());
         for (DescribeLogDirsResponseData.DescribeLogDirsResult logDirResult : response.data().results()) {
             Map<TopicPartition, ReplicaInfo> replicaInfoMap = new HashMap<>();
             for (DescribeLogDirsResponseData.DescribeLogDirsTopic t : logDirResult.topics()) {
