@@ -317,7 +317,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             if (o == null || getClass() != o.getClass())
                 return false;
 
-            PartitionData that = (PartitionData) o;
+            PartitionData<?> that = (PartitionData<?>) o;
 
             return error == that.error &&
                     highWatermark == that.highWatermark &&
@@ -524,7 +524,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         sends.add(new ByteBufferSend(dest, buffer));
 
         // finally the send for the record set itself
-        RecordsSend recordsSend = records.toSend(dest);
+        RecordsSend<?> recordsSend = records.toSend(dest);
         if (recordsSend.size() > 0)
             sends.add(recordsSend);
     }

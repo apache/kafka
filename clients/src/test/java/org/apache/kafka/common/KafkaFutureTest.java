@@ -158,9 +158,9 @@ public class KafkaFutureTest {
         for (int i = 0; i < numThreads; i++) {
             futures.add(new KafkaFutureImpl<>());
         }
-        KafkaFuture<Void> allFuture = KafkaFuture.allOf(futures.toArray(new KafkaFuture[0]));
-        final List<CompleterThread> completerThreads = new ArrayList<>();
-        final List<WaiterThread> waiterThreads = new ArrayList<>();
+        KafkaFuture<Void> allFuture = KafkaFuture.allOf(futures.toArray(new KafkaFuture<?>[0]));
+        final List<CompleterThread<Integer>> completerThreads = new ArrayList<>();
+        final List<WaiterThread<Integer>> waiterThreads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
             completerThreads.add(new CompleterThread<>(futures.get(i), i));
             waiterThreads.add(new WaiterThread<>(futures.get(i), i));

@@ -36,7 +36,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     static final int MIN_OVERFLOW_MESSAGE_LENGTH = Records.LOG_OVERHEAD;
 
     private RecordConversionStats recordConversionStats;
-    private RecordsSend convertedRecordsWriter;
+    private RecordsSend<?> convertedRecordsWriter;
     private Iterator<ConvertedRecords<?>> convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {

@@ -50,7 +50,7 @@ public class DescribeTopicsResult {
      * Return a future which succeeds only if all the topic descriptions succeed.
      */
     public KafkaFuture<Map<String, TopicDescription>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).
             thenApply(v -> {
                 Map<String, TopicDescription> descriptions = new HashMap<>(futures.size());
                 for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : futures.entrySet()) {
