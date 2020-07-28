@@ -63,6 +63,34 @@ public class TokenBucketTest {
     }
 
     @Test
+    public void testTimeWindowLargerThan1s() {
+        MetricConfig config = new MetricConfig()
+            .quota(Quota.upperBound(2))
+            .timeWindow(5, TimeUnit.SECONDS)
+            .samples(11);
+
+        TokenBucket tk = new TokenBucket();
+
+        // Record 14 at T
+        tk.record(config, 14, time.milliseconds());
+
+        // Expect 14 at T
+        assertEquals(14, tk.measure(config, time.milliseconds()), 0.1);
+
+        // Expect 14 at T+2s
+        time.sleep(2000);
+        assertEquals(14, tk.measure(config, time.milliseconds()), 0.1);
+
+        // Expect 4 at T+5s
+        time.sleep(3000);
+        assertEquals(4, tk.measure(config, time.milliseconds()), 0.1);
+
+        // Expect 4 at T+10s
+        time.sleep(5000);
+        assertEquals(0, tk.measure(config, time.milliseconds()), 0.1);
+    }
+
+    @Test
     public void testOneSampleIsDecreasedCorrectlyAndThenDropped() {
         MetricConfig config = new MetricConfig()
             .quota(Quota.upperBound(1))
