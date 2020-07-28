@@ -737,6 +737,7 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile project(':metadata')
     compile project(':raft')
     compile libs.jacksonDatabind
     compile libs.jacksonModuleScala
@@ -975,6 +976,53 @@ project(':core') {
 
   checkstyle {
     configProperties = checkstyleConfigProperties("import-control-core.xml")
+  }
+}
+
+project(':metadata') {
+  archivesBaseName = "kafka-metadata"
+
+  dependencies {
+    compile project(':clients')
+    compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
+    compileOnly libs.log4j
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
+    testCompile libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
+  }
+
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "-p", "org.apache.kafka.common.metadata",
+             "-o", "src/generated/java/org/apache/kafka/common/metadata",
+             "-i", "src/main/resources/common/metadata",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator",
+             "-t", "MetadataRecordTypeGenerator"
+           ]
+    inputs.dir("src/main/resources/common/metadata")
+    outputs.dir("src/generated/java/org/apache/kafka/common/metadata")
+  }
+
+  compileJava.dependsOn 'processMessages'
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  javadoc {
+    enabled = false
   }
 }
 

@@ -51,6 +51,8 @@ public final class MessageGenerator {
 
     static final String API_MESSAGE_TYPE_JAVA = "ApiMessageType.java";
 
+    static final String METADATA_RECORD_TYPE_JAVA = "MetadataRecordType.java";
+
     static final String API_MESSAGE_CLASS = "org.apache.kafka.common.protocol.ApiMessage";
 
     static final String MESSAGE_CLASS = "org.apache.kafka.common.protocol.Message";
@@ -171,6 +173,8 @@ public final class MessageGenerator {
         switch (type) {
             case "ApiMessageTypeGenerator":
                 return new ApiMessageTypeGenerator(packageName);
+            case "MetadataRecordTypeGenerator":
+                return new MetadataRecordTypeGenerator(packageName);
             default:
                 throw new RuntimeException("Unknown type class generator type '" + type + "'");
         }

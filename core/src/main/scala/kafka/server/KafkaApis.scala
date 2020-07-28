@@ -194,6 +194,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
         case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.BROKER_HEARTBEAT => handleBrokerHeartbeat(request)
+        case ApiKeys.CONTROLLER_HEARTBEAT => handleControllerHeartbeat(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3139,6 +3141,34 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
       controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
+    }
+  }
+
+  def handleBrokerHeartbeat(request: RequestChannel.Request): Unit = {
+    val brokerHeartbeatRequest = request.body[BrokerHeartbeatRequest]
+
+    if (authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        brokerHeartbeatRequest.getErrorResponse(requestThrottleMs,
+          Errors.UNSUPPORTED_VERSION.exception))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        brokerHeartbeatRequest.getErrorResponse(requestThrottleMs,
+          Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
+  }
+
+  def handleControllerHeartbeat(request: RequestChannel.Request): Unit = {
+    val controllerHeartbeatRequest = request.body[ControllerHeartbeatRequest]
+
+    if (authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        controllerHeartbeatRequest.getErrorResponse(requestThrottleMs,
+          Errors.UNSUPPORTED_VERSION.exception))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        controllerHeartbeatRequest.getErrorResponse(requestThrottleMs,
+          Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
   }
 
