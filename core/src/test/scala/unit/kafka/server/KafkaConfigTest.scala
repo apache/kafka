@@ -266,6 +266,29 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testControllerListenerName() = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put("listeners", "PLAINTEXT://localhost:0,CONTROLPLANE://localhost:4000,CONTROLLER://localhost:5000")
+    props.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLPLANE:SSL,CONTROLLER:SASL_SSL")
+    props.put("control.plane.listener.name", "CONTROLPLANE")
+    props.put("controller.listeners", "CONTROLLER")
+    assertTrue(isValidKafkaConfig(props))
+
+    val serverConfig = KafkaConfig.fromProps(props)
+    val controlPlaneEndpoint = serverConfig.controlPlaneListener.get
+    assertEquals("localhost", controlPlaneEndpoint.host)
+    assertEquals(4000, controlPlaneEndpoint.port)
+    assertEquals(SecurityProtocol.SSL, controlPlaneEndpoint.securityProtocol)
+
+    val controllerEndpoints = serverConfig.controllerListeners
+    assertEquals(1, controllerEndpoints.size)
+    val controllerEndpoint = controllerEndpoints.iterator.next()
+    assertEquals("localhost", controllerEndpoint.host)
+    assertEquals(5000, controllerEndpoint.port)
+    assertEquals(SecurityProtocol.SASL_SSL, controllerEndpoint.securityProtocol)
+  }
+
+  @Test
   def testBadListenerProtocol(): Unit = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
@@ -620,6 +643,7 @@ class KafkaConfigTest {
         case KafkaConfig.ZkSslOcspEnableProp => assertPropertyInvalid(baseProperties, name, "not_a_boolean")
 
         case KafkaConfig.BrokerIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ControllerIdProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.NumNetworkThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.NumIoThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaConfig.BackgroundThreadsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
@@ -629,6 +653,8 @@ class KafkaConfigTest {
         case KafkaConfig.RequestTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ConnectionSetupTimeoutMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.ConnectionSetupTimeoutMaxMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ProcessRolesProp => // ignore string
+        case KafkaConfig.ControllerConnectProp => // ignore string
 
         case KafkaConfig.AuthorizerClassNameProp => //ignore string
         case KafkaConfig.CreateTopicPolicyClassNameProp => //ignore string
@@ -637,6 +663,7 @@ class KafkaConfigTest {
         case KafkaConfig.HostNameProp => // ignore string
         case KafkaConfig.AdvertisedHostNameProp => //ignore string
         case KafkaConfig.AdvertisedPortProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case KafkaConfig.ControllerListenersProp => // ignore string
         case KafkaConfig.SocketSendBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.SocketReceiveBufferBytesProp => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KafkaConfig.MaxConnectionsPerIpOverridesProp =>

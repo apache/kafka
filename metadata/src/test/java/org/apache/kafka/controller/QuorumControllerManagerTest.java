@@ -15,23 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.message;
+package org.apache.kafka.controller;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.Timeout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public enum MessageSpecType {
-    @JsonProperty("request")
-    REQUEST,
+public class QuorumControllerManagerTest {
+    private static final Logger log =
+        LoggerFactory.getLogger(QuorumControllerManagerTest.class);
 
-    @JsonProperty("response")
-    RESPONSE,
+    @Rule
+    final public Timeout globalTimeout = Timeout.seconds(40);
 
-    @JsonProperty("header")
-    HEADER,
-
-    @JsonProperty("data")
-    DATA,
-
-    @JsonProperty("metadata")
-    METADATA;
+    @Test
+    public void testDoNothing() throws Throwable {
+    }
 }

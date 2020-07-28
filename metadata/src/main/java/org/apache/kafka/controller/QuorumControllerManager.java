@@ -15,23 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.message;
+package org.apache.kafka.controller;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
-public enum MessageSpecType {
-    @JsonProperty("request")
-    REQUEST,
-
-    @JsonProperty("response")
-    RESPONSE,
-
-    @JsonProperty("header")
-    HEADER,
-
-    @JsonProperty("data")
-    DATA,
-
-    @JsonProperty("metadata")
-    METADATA;
+public final class QuorumControllerManager {
+    QuorumControllerManager() {
+    }
 }
