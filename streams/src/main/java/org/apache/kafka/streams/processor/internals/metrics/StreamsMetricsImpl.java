@@ -128,8 +128,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_SUFFIX = "-rate";
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
-    public static final String P99_SUFFIX = "-p99";
-    public static final String P90_SUFFIX = "-p90";
 
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
@@ -151,10 +149,17 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
 
-    public StreamsMetricsImpl(final Metrics metrics,
-                              final String clientId,
-                              final String builtInMetricsVersion,
-                              final Time time) {
+    public static final String RECORD_E2E_LATENCY = "record-e2e-latency";
+    public static final String RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX =
+        "end-to-end latency of a record, measuring by comparing the record timestamp with the "
+            + "system time when it has been fully processed by the node";
+    public static final String RECORD_E2E_LATENCY_MIN_DESCRIPTION = "The minimum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+    public static final String RECORD_E2E_LATENCY_MAX_DESCRIPTION = "The maximum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+
+   public StreamsMetricsImpl(final Metrics metrics,
+        final String clientId,
+        final String builtInMetricsVersion,
+        final Time time) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;

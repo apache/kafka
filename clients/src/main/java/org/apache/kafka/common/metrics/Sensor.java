@@ -63,7 +63,7 @@ public final class Sensor {
     }
 
     public enum RecordingLevel {
-        INFO(0, "INFO"), DEBUG(1, "DEBUG");
+        INFO(0, "INFO"), DEBUG(1, "DEBUG"), TRACE(2, "TRACE");
 
         private static final RecordingLevel[] ID_TO_TYPE;
         private static final int MIN_RECORDING_LEVEL_KEY = 0;
