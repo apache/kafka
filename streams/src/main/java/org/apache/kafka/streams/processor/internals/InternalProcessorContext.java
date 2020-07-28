@@ -46,7 +46,7 @@ public interface InternalProcessorContext extends ProcessorContext {
     void setSystemTimeMs(long timeMs);
 
     /**
-     * @retun the current wall-clock system timestamp in milliseconds
+     * @return the current wall-clock system timestamp in milliseconds
      */
     long currentSystemTimeMs();
 

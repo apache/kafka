@@ -37,8 +37,8 @@ import java.util.Map;
 /**
  * Processor context interface.
  *
- * @param <KForward>> a bound on the types of keys that may be forwarded
- * @param <VForward>> a bound on the types of values that may be forwarded
+ * @param <KForward> a bound on the types of keys that may be forwarded
+ * @param <VForward> a bound on the types of values that may be forwarded
  */
 public interface ProcessorContext<KForward, VForward> {
 

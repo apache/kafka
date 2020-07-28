@@ -57,7 +57,10 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         this(name, null, null);
     }
 
-    public ProcessorNode(final String name, final org.apache.kafka.streams.processor.Processor<KIn, VIn> processor, final Set<String> stateStores) {
+    public ProcessorNode(final String name,
+                         final org.apache.kafka.streams.processor.Processor<KIn, VIn> processor,
+                         final Set<String> stateStores) {
+
         this.name = name;
         this.processor = ProcessorShim.shim(processor);
         this.children = new ArrayList<>();
@@ -94,7 +97,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             maybeMeasureLatency(
                 () -> {
                     if (processor != null) {
-                        processor.init(ProcessorContextShim.shim(context));
+                        processor.init(ProcessorContextAdapter.shim(context));
                     }
                 },
                 time,

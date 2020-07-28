@@ -38,7 +38,7 @@ public final class ProcessorShim<KIn, VIn, KOut, VOut> implements Processor<KIn,
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
-        delegate.init(ProcessorContextReverseShim.shim((InternalApiProcessorContext<Object, Object>) context));
+        delegate.init(ProcessorContextReverseAdapter.adapt((InternalApiProcessorContext<Object, Object>) context));
     }
 
     @Override

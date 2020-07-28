@@ -35,19 +35,21 @@ import java.io.File;
 import java.time.Duration;
 import java.util.Map;
 
-public final class ProcessorContextShim<KForward, VForward> implements ProcessorContext<KForward, VForward>, InternalApiProcessorContext<KForward, VForward> {
+public final class ProcessorContextAdapter<KForward, VForward>
+    implements ProcessorContext<KForward, VForward>, InternalApiProcessorContext<KForward, VForward> {
+
     final InternalProcessorContext delegate;
 
     @SuppressWarnings("unchecked")
     static <KForward, VForward> InternalApiProcessorContext<KForward, VForward> shim(final InternalProcessorContext delegate) {
-        if (delegate instanceof ProcessorContextReverseShim) {
-            return (InternalApiProcessorContext<KForward, VForward>) ((ProcessorContextReverseShim) delegate).delegate;
+        if (delegate instanceof ProcessorContextReverseAdapter) {
+            return (InternalApiProcessorContext<KForward, VForward>) ((ProcessorContextReverseAdapter) delegate).delegate;
         } else {
-            return new ProcessorContextShim<>(delegate);
+            return new ProcessorContextAdapter<>(delegate);
         }
     }
 
-    private ProcessorContextShim(final InternalProcessorContext delegate) {
+    private ProcessorContextAdapter(final InternalProcessorContext delegate) {
         this.delegate = delegate;
     }
 

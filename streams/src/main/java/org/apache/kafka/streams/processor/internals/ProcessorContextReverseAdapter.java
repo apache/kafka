@@ -34,18 +34,18 @@ import java.io.File;
 import java.time.Duration;
 import java.util.Map;
 
-public final class ProcessorContextReverseShim implements InternalProcessorContext {
+public final class ProcessorContextReverseAdapter implements InternalProcessorContext {
     final InternalApiProcessorContext<Object, Object> delegate;
 
-    static InternalProcessorContext shim(final InternalApiProcessorContext<Object, Object> delegate) {
-        if (delegate instanceof ProcessorContextShim) {
-            return ((ProcessorContextShim<Object, Object>) delegate).delegate;
+    static InternalProcessorContext adapt(final InternalApiProcessorContext<Object, Object> delegate) {
+        if (delegate instanceof ProcessorContextAdapter) {
+            return ((ProcessorContextAdapter<Object, Object>) delegate).delegate;
         } else {
-            return new ProcessorContextReverseShim(delegate);
+            return new ProcessorContextReverseAdapter(delegate);
         }
     }
 
-    private ProcessorContextReverseShim(final InternalApiProcessorContext<Object, Object> delegate) {
+    private ProcessorContextReverseAdapter(final InternalApiProcessorContext<Object, Object> delegate) {
         this.delegate = delegate;
     }
 

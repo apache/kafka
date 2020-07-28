@@ -914,7 +914,7 @@ public class InternalTopologyBuilder {
                                   topicSinkMap,
                                   repartitionTopics,
                                   (SinkNodeFactory<?, ?, ?, ?>) factory,
-                                  (SinkNode<Object, Object, Object, Object>) node);
+                                  (SinkNode<Object, Object, ?, ?>) node);
                 } else {
                     throw new TopologyException("Unknown definition class: " + factory.getClass().getName());
                 }
@@ -934,7 +934,7 @@ public class InternalTopologyBuilder {
                                final Map<String, SinkNode<?, ?, ?, ?>> topicSinkMap,
                                final Set<String> repartitionTopics,
                                final SinkNodeFactory<?, ?, ?, ?> sinkNodeFactory,
-                               final SinkNode<Object, Object, Object, Object> node) {
+                               final SinkNode<Object, Object, ?, ?> node) {
 
         for (final String predecessorName : sinkNodeFactory.predecessors) {
             getProcessor(processorMap, predecessorName).addChild(node);
@@ -955,8 +955,10 @@ public class InternalTopologyBuilder {
     }
 
     @SuppressWarnings("unchecked")
-    private static <KIn, VIn, KOut, VOut> ProcessorNode<KIn, VIn, KOut, VOut> getProcessor(final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
-                                                                             final String predecessor) {
+    private static <KIn, VIn, KOut, VOut> ProcessorNode<KIn, VIn, KOut, VOut> getProcessor(
+        final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
+        final String predecessor) {
+
         return (ProcessorNode<KIn, VIn, KOut, VOut>) processorMap.get(predecessor);
     }
 
