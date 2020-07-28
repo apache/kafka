@@ -85,6 +85,8 @@ public class FileConfigProvider implements ConfigProvider {
                 String value = properties.getProperty(key);
                 if (value != null) {
                     data.put(key, value);
+                } else if (!properties.containsKey(key)) {
+                    throw new ConfigException("Config key not found: {}", key);
                 }
             }
             return new ConfigData(data);

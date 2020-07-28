@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigData;
+import org.apache.kafka.common.config.ConfigException;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -28,6 +30,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class FileConfigProviderTest {
@@ -84,6 +87,14 @@ public class FileConfigProviderTest {
         ConfigData configData = configProvider.get(null, Collections.singleton("testKey"));
         assertTrue(configData.data().isEmpty());
         assertEquals(null, configData.ttl());
+    }
+
+    @Test
+    public void testMissingKey() {
+        assertThrows(
+            "The test expected to throw a ConfigException",
+            ConfigException.class, () -> configProvider
+                .get("dummy", Collections.singleton("fakeKey")));
     }
 
     public static class TestFileConfigProvider extends FileConfigProvider {
