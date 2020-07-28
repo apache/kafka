@@ -16,16 +16,14 @@
  */
 package org.apache.kafka.clients.admin;
 
+import java.util.Set;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
+/**
+ * Options for {@link AdminClient#updateFeatures(Set, UpdateFeaturesOptions)}
+ *
+ * The API of this class is evolving. See {@link AdminClient} for details.
+ */
 @InterfaceStability.Evolving
 public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {
-    /**
-     * Sets the timeout in milliseconds for this operation or {@code null} if the default API
-     * timeout for the AdminClient should be used.
-     */
-    public UpdateFeaturesOptions timeoutMs(final Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
 }

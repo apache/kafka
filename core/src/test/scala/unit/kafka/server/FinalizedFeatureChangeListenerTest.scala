@@ -98,10 +98,15 @@ class FinalizedFeatureChangeListenerTest extends ZooKeeperTestHarness {
       assertTrue(listener.isListenerInitiated)
     }
 
+    // Check if the write succeeds and a ZK notification is received that causes the feature cache
+    // to be populated.
     updateAndCheckCache(
       Features.finalizedFeatures(
         Map[String, FinalizedVersionRange](
       "feature_1" -> new FinalizedVersionRange(2, 4)).asJava))
+    // Check if second write succeeds and a ZK notification is again received that causes the cache
+    // to be populated. This check is needed to verify that the watch on the FeatureZNode was
+    // re-established after the notification was received due to the first write above.
     updateAndCheckCache(
       Features.finalizedFeatures(
         Map[String, FinalizedVersionRange](

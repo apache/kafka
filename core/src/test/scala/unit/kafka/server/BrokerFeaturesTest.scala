@@ -24,6 +24,7 @@ import org.junit.Test
 import scala.jdk.CollectionConverters._
 
 class BrokerFeaturesTest {
+
   @Test
   def testEmpty(): Unit = {
     assertTrue(BrokerFeatures.createDefault().supportedFeatures.empty)
@@ -66,18 +67,18 @@ class BrokerFeaturesTest {
       classOf[IllegalArgumentException],
       () => brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevelsWithNonExistingFeature))
 
-    val defaultMinVersionLevelsWithInvalidValue1 = Map[String, Short](
+    val defaultMinVersionLevelsWithInvalidSmallValue = Map[String, Short](
       "test_feature_1" -> 2,
       "test_feature_2" -> (supportedFeatures.get("test_feature_2").min() - 1).asInstanceOf[Short])
     assertThrows(
       classOf[IllegalArgumentException],
-      () => brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevelsWithInvalidValue1))
+      () => brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevelsWithInvalidSmallValue))
 
-    val defaultMinVersionLevelsWithInvalidValue2 = Map[String, Short](
+    val defaultMinVersionLevelsWithInvalidLargeValue = Map[String, Short](
       "test_feature_1" -> 2,
       "test_feature_2" -> (supportedFeatures.get("test_feature_2").max() + 1).asInstanceOf[Short])
     assertThrows(
       classOf[IllegalArgumentException],
-      () => brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevelsWithInvalidValue2))
+      () => brokerFeatures.setDefaultMinVersionLevels(defaultMinVersionLevelsWithInvalidLargeValue))
   }
 }

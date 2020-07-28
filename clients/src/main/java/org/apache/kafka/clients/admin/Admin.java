@@ -1322,28 +1322,28 @@ public interface Admin extends AutoCloseable {
      * <p>
      * @param options   the options to use
      *
-     * @return          the DescribeFeaturesResult containing the result
+     * @return          the {@link DescribeFeaturesResult} containing the result
      */
     DescribeFeaturesResult describeFeatures(DescribeFeaturesOptions options);
 
     /**
-     * Applies specified updates to finalized features. The API is atomic, meaning that if a single
-     * feature update in the request can't succeed on the controller, then none of the feature
-     * updates are carried out. This request is issued only to the controller since the API is
-     * only served by the controller.
+     * Applies specified updates to finalized features. This operation is not transactional so it
+     * may succeed for some features while fail for others.
      * <p>
-     * The API takes in a set of feature updates that need to be applied. Each such update specifies
-     * the finalized feature to be added or updated or deleted, along with the new max feature
-     * version level value.
+     * The API takes in a map of finalized feature name to {@link FeatureUpdate} that need to be
+     * applied. Each entry in the map specifies the finalized feature to be added or updated or
+     * deleted, along with the new max feature version level value. This request is issued only to
+     * the controller since the API is only served by the controller. The return value contains an
+     * error code for each supplied feature.
      * <ul>
      * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
-     * in the controller if the feature update has the allowDowngrade flag set - setting this flag
-     * conveys user intent to attempt downgrade of a feature max version level. Note that despite
-     * the allowDowngrade flag being set, certain downgrades may be rejected by the controller if it
-     * is deemed impossible.</li>
+     * in the controller if the {@link FeatureUpdate} has the allowDowngrade flag set - setting this
+     * flag conveys user intent to attempt downgrade of a feature max version level. Note that
+     * despite the allowDowngrade flag being set, certain downgrades may be rejected by the
+     * controller if it is deemed impossible.</li>
      * <li>Deletion of a finalized feature version is not a regular operation/intent. It could be
-     * done by setting the allowDowngrade flag to true in the feature update, and, setting the
-     * max version level to be less than 1.</li>
+     * done by setting the allowDowngrade flag to true in the {@link FeatureUpdate}, and, setting
+     * the max version level to be less than 1.</li>
      * </ul>
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures
@@ -1364,12 +1364,12 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This operation is supported by brokers with version 2.7.0 or higher.
 
-     * @param featureUpdates   the set of finalized feature updates
+     * @param featureUpdates   the map of finalized feature name to {@link FeatureUpdate}
      * @param options          the options to use
      *
      * @return                 the {@link UpdateFeaturesResult} containing the result
      */
-    UpdateFeaturesResult updateFeatures(Set<FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
+    UpdateFeaturesResult updateFeatures(Map<String, FeatureUpdate> featureUpdates, UpdateFeaturesOptions options);
 
     /**
      * Get the metrics kept by the adminClient

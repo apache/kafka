@@ -22,11 +22,11 @@
   "fields": [
     { "name": "FeatureUpdates", "type": "[]FeatureUpdateKey", "versions": "0+",
       "about": "The list of updates to finalized features.", "fields": [
-      {"name": "Name", "type":  "string", "versions":  "0+", "mapKey": true,
+      {"name": "Feature", "type": "string", "versions": "0+", "mapKey": true,
         "about": "The name of the finalized feature to be updated."},
-      {"name":  "MaxVersionLevel", "type": "int16", "versions":  "0+",
+      {"name": "MaxVersionLevel", "type": "int16", "versions": "0+",
         "about": "The new maximum version level for the finalized feature. A value >= 1 is valid. A value < 1, is special, and can be used to request the deletion of the finalized feature."},
-      {"name":  "AllowDowngrade", "type":  "bool", "versions":  "0+",
+      {"name": "AllowDowngrade", "type": "bool", "versions": "0+",
         "about": "When set to true, the finalized feature version level is allowed to be downgraded/deleted."}
     ]}
   ]

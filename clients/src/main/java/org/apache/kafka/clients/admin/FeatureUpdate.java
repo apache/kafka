@@ -16,21 +16,17 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Objects;
-import java.util.Set;
-import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import java.util.Map;
 
 /**
  * Encapsulates details about an update to a finalized feature. This is particularly useful to
- * define each feature update in the {@link Admin#updateFeatures(Set, UpdateFeaturesOptions)} API.
+ * define each feature update in the {@link Admin#updateFeatures(Map, UpdateFeaturesOptions)} API.
  */
 public class FeatureUpdate {
-    private final String featureName;
     private final short maxVersionLevel;
     private final boolean allowDowngrade;
 
     /**
-     * @param featureName       the name of the finalized feature to be updated.
      * @param maxVersionLevel   the new maximum version level for the finalized feature.
      *                          a value < 1 is special and indicates that the update is intended to
      *                          delete the finalized feature, and should be accompanied by setting
@@ -39,21 +35,14 @@ public class FeatureUpdate {
      *                            maximum version level of the finalized feature.
      *                          - false, otherwise.
      */
-    public FeatureUpdate(final String featureName, final short maxVersionLevel, final boolean allowDowngrade) {
-        Objects.requireNonNull(featureName, "Provided feature name can not be null.");
+    public FeatureUpdate(final short maxVersionLevel, final boolean allowDowngrade) {
         if (maxVersionLevel < 1 && !allowDowngrade) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "For featureName: %s, the allowDowngrade flag is not set when the" +
-                    " provided maxVersionLevel:%d is < 1.", featureName, maxVersionLevel));
+            throw new IllegalArgumentException(String.format(
+                "The allowDowngrade flag is not set when the provided maxVersionLevel:%d is < 1.",
+                maxVersionLevel));
         }
-        this.featureName = featureName;
         this.maxVersionLevel = maxVersionLevel;
         this.allowDowngrade = allowDowngrade;
-    }
-
-    public String featureName() {
-        return featureName;
     }
 
     public short maxVersionLevel() {
@@ -62,26 +51,5 @@ public class FeatureUpdate {
 
     public boolean allowDowngrade() {
         return allowDowngrade;
-    }
-
-    /**
-     * Helper function that creates {@link UpdateFeaturesRequestData} from a set of {@link FeatureUpdate}.
-     *
-     * @param updates   the set of {@link FeatureUpdate}
-     *
-     * @return          a newly constructed UpdateFeaturesRequestData object
-     */
-    public static UpdateFeaturesRequestData createRequest(Set<FeatureUpdate> updates) {
-        final UpdateFeaturesRequestData.FeatureUpdateKeyCollection items
-            = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
-        for (FeatureUpdate update : updates) {
-            final UpdateFeaturesRequestData.FeatureUpdateKey item =
-                new UpdateFeaturesRequestData.FeatureUpdateKey();
-            item.setName(update.featureName());
-            item.setMaxVersionLevel(update.maxVersionLevel());
-            item.setAllowDowngrade(update.allowDowngrade());
-            items.add(item);
-        }
-        return new UpdateFeaturesRequestData().setFeatureUpdates(items);
     }
 }

@@ -86,9 +86,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         final Map<String, FinalizedVersionRange> features = new HashMap<>();
 
         for (FinalizedFeatureKey key : data.finalizedFeatures().valuesSet()) {
-            features.put(
-                key.name(),
-                new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
+            features.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
         }
 
         return Features.finalizedFeatures(features);

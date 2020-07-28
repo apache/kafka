@@ -17,8 +17,11 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKey;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -44,7 +47,7 @@ public class UpdateFeaturesRequest extends AbstractRequest {
         }
     }
 
-    public final UpdateFeaturesRequestData data;
+    private final UpdateFeaturesRequestData data;
 
     public UpdateFeaturesRequest(UpdateFeaturesRequestData data, short version) {
         super(ApiKeys.UPDATE_FEATURES, version);
@@ -59,10 +62,15 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMsIgnored, Throwable e) {
         final ApiError apiError = ApiError.fromThrowable(e);
-        return new UpdateFeaturesResponse(
-            new UpdateFeaturesResponseData()
+        UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
+        for (FeatureUpdateKey update : this.data.featureUpdates().valuesSet()) {
+            UpdatableFeatureResult result = new UpdatableFeatureResult()
+                .setFeature(update.feature())
                 .setErrorCode(apiError.error().code())
-                .setErrorMessage(apiError.message()));
+                .setErrorMessage(apiError.message());
+            results.add(result);
+        }
+        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData().setResults(results));
     }
 
     @Override
@@ -80,6 +88,6 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     }
 
     public static boolean isDeleteRequest(UpdateFeaturesRequestData.FeatureUpdateKey update) {
-        return update.maxVersionLevel() < 1;
+        return update.maxVersionLevel() < 1 && update.allowDowngrade();
     }
 }

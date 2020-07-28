@@ -143,6 +143,8 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteReque
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopic;
 import org.apache.kafka.common.message.OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesRequestData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -4342,38 +4344,11 @@ public class KafkaAdminClient extends AdminClient {
     public DescribeFeaturesResult describeFeatures(final DescribeFeaturesOptions options) {
         final KafkaFutureImpl<FeatureMetadata> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
+        final NodeProvider provider =
+            options.sendRequestToController() ? new ControllerNodeProvider() : new LeastLoadedNodeProvider();
 
-        Call callViaLeastLoadedNode = new Call("describeFeatures", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
-
-            @Override
-            ApiVersionsRequest.Builder createRequest(int timeoutMs) {
-                return new ApiVersionsRequest.Builder();
-            }
-
-            @Override
-            void handleResponse(AbstractResponse response) {
-                final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
-                if (apiVersionsResponse.data.errorCode() == Errors.NONE.code()) {
-                    future.complete(
-                        new FeatureMetadata(
-                            apiVersionsResponse.finalizedFeatures(),
-                            apiVersionsResponse.finalizedFeaturesEpoch(),
-                            apiVersionsResponse.supportedFeatures()));
-                } else {
-                    future.completeExceptionally(
-                        Errors.forCode(apiVersionsResponse.data.errorCode()).exception());
-                }
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(Collections.singletonList(future), throwable);
-            }
-        };
-
-        Call callViaControllerNode = new Call("describeFeatures", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
+        Call call = new Call(
+            "describeFeatures", calcDeadlineMs(now, options.timeoutMs()), provider) {
 
             @Override
             ApiVersionsRequest.Builder createRequest(int timeoutMs) {
@@ -4389,7 +4364,7 @@ public class KafkaAdminClient extends AdminClient {
                             apiVersionsResponse.finalizedFeatures(),
                             apiVersionsResponse.finalizedFeaturesEpoch(),
                             apiVersionsResponse.supportedFeatures()));
-                } else if (apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
+                } else if (options.sendRequestToController() && apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
                     handleNotControllerError(Errors.NOT_CONTROLLER);
                 } else {
                     future.completeExceptionally(
@@ -4403,52 +4378,87 @@ public class KafkaAdminClient extends AdminClient {
             }
         };
 
-        Call call;
-        if (options.sendRequestToController()) {
-            call = callViaControllerNode;
-        } else {
-            call = callViaLeastLoadedNode;
-        }
         runnable.call(call, now);
         return new DescribeFeaturesResult(future);
     }
 
     @Override
     public UpdateFeaturesResult updateFeatures(
-        final Set<FeatureUpdate> featureUpdates, final UpdateFeaturesOptions options) {
-        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
+        final Map<String, FeatureUpdate> featureUpdates, final UpdateFeaturesOptions options) {
+        if (featureUpdates == null || featureUpdates.isEmpty()) {
+            throw new IllegalArgumentException("Feature updates can not be null or empty.");
+        }
+        Objects.requireNonNull(options, "UpdateFeaturesOptions can not be null");
 
-        final Call call = new Call("updateFinalizedFeatures", calcDeadlineMs(now, options.timeoutMs()),
+        final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
+        final UpdateFeaturesRequestData.FeatureUpdateKeyCollection featureUpdatesRequestData
+            = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+        for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            String feature = entry.getKey();
+            FeatureUpdate update = entry.getValue();
+            if (feature.trim().isEmpty()) {
+                throw new IllegalArgumentException("Provided feature can not be null or empty.");
+            }
+
+            updateFutures.put(feature, new KafkaFutureImpl<>());
+            final UpdateFeaturesRequestData.FeatureUpdateKey requestItem =
+                new UpdateFeaturesRequestData.FeatureUpdateKey();
+            requestItem.setFeature(feature);
+            requestItem.setMaxVersionLevel(update.maxVersionLevel());
+            requestItem.setAllowDowngrade(update.allowDowngrade());
+            featureUpdatesRequestData.add(requestItem);
+        }
+        final UpdateFeaturesRequestData request = new UpdateFeaturesRequestData().setFeatureUpdates(featureUpdatesRequestData);
+
+        final long now = time.milliseconds();
+        final Call call = new Call("updateFeatures", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
             UpdateFeaturesRequest.Builder createRequest(int timeoutMs) {
-                return new UpdateFeaturesRequest.Builder(FeatureUpdate.createRequest(featureUpdates));
+                return new UpdateFeaturesRequest.Builder(request);
             }
 
             @Override
-            void handleResponse(AbstractResponse response) {
-                final UpdateFeaturesResponse featuresResponse =
-                    (UpdateFeaturesResponse) response;
-                final Errors error = Errors.forCode(featuresResponse.data().errorCode());
-                if (error == Errors.NONE) {
-                    future.complete(null);
-                } else if (error == Errors.NOT_CONTROLLER) {
-                    handleNotControllerError(error);
-                } else {
-                    future.completeExceptionally(
-                        error.exception(featuresResponse.data.errorMessage()));
+            void handleResponse(AbstractResponse abstractResponse) {
+                final UpdateFeaturesResponse response =
+                    (UpdateFeaturesResponse) abstractResponse;
+
+                // Check for controller change.
+                for (UpdatableFeatureResult result : response.data().results()) {
+                    Errors error = Errors.forCode(result.errorCode());
+                    if (error == Errors.NOT_CONTROLLER) {
+                        handleNotControllerError(error);
+                        throw error.exception();
+                    }
                 }
+
+                for (UpdatableFeatureResult result : response.data().results()) {
+                    KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
+                    if (future == null) {
+                        log.warn("Server response mentioned unknown feature {}", result.feature());
+                    } else {
+                        Errors error = Errors.forCode(result.errorCode());
+                        if (error == Errors.NONE) {
+                            future.complete(null);
+                        } else {
+                            future.completeExceptionally(error.exception(result.errorMessage()));
+                        }
+                    }
+                }
+                // The server should send back a response for every feature, but we do a sanity check anyway.
+                completeUnrealizedFutures(updateFutures.entrySet().stream(),
+                    feature -> "The controller response did not contain a result for feature " + feature);
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                completeAllExceptionally(Collections.singletonList(future), throwable);
+                completeAllExceptionally(updateFutures.values(), throwable);
             }
         };
+
         runnable.call(call, now);
-        return new UpdateFeaturesResult(future);
+        return new UpdateFeaturesResult(new HashMap<>(updateFutures));
     }
 
     /**

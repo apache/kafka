@@ -17,7 +17,10 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -34,7 +37,7 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public class UpdateFeaturesResponse extends AbstractResponse {
 
-    public final UpdateFeaturesResponseData data;
+    private final UpdateFeaturesResponseData data;
 
     public UpdateFeaturesResponse(UpdateFeaturesResponseData data) {
         this.data = data;
@@ -49,13 +52,16 @@ public class UpdateFeaturesResponse extends AbstractResponse {
         this.data = new UpdateFeaturesResponseData(struct, version);
     }
 
-    public Errors error() {
-        return Errors.forCode(data.errorCode());
+    public Map<String, ApiError> errors() {
+        return data.results().valuesSet().stream().collect(
+            Collectors.toMap(
+                result -> result.feature(),
+                result -> new ApiError(Errors.forCode(result.errorCode()), result.errorMessage())));
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(Errors.forCode(data.errorCode()));
+        return apiErrorCounts(errors());
     }
 
     @Override

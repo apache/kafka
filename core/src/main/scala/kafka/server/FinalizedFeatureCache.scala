@@ -147,12 +147,13 @@ class FinalizedFeatureCache(private val brokerFeatures: BrokerFeatures) extends 
     val waitEndTimeNanos = System.nanoTime() + (timeoutMs * 1_000_000)
     synchronized {
       while (!waitCondition()) {
-        if (System.nanoTime() > waitEndTimeNanos) {
+        val nowNanos = System.nanoTime()
+        if (nowNanos > waitEndTimeNanos) {
           throw new TimeoutException(
             s"Timed out after waiting for ${timeoutMs}ms for required condition to be met." +
               s" Current epoch: ${featuresAndEpoch.map(fe => fe.epoch).getOrElse("<none>")}.")
         }
-        val sleepTimeMs = max(1L, (waitEndTimeNanos - System.nanoTime()) / 1_000_000)
+        val sleepTimeMs = max(1L, (waitEndTimeNanos - nowNanos) / 1_000_000)
         wait(sleepTimeMs)
       }
     }

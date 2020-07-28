@@ -31,15 +31,15 @@ import scala.jdk.CollectionConverters._
  * 2. The default minimum version levels for specific features. This map enables feature
  *    version level deprecation. This is how it works: in order to deprecate feature version levels,
  *    in this map the default minimum version level of a feature can be set to a new value that's
- *    higher than 1 (let's call this new_min_version_level). In doing so, the feature version levels
+ *    higher than 1 (let's call this latest_min_version_level). In doing so, the feature version levels
  *    in the closed range: [1, latest_min_version_level - 1] get deprecated by the controller logic
  *    that applies this map to persistent finalized feature state in ZK (this mutation happens
  *    during controller election and during finalized feature updates via the
- *    ApiKeys.UPDATE_FINALIZED_FEATURES api). This will automatically mean clients have to stop
- *    using the finalized min version levels that have been deprecated.
+ *    ApiKeys.UPDATE_FINALIZED_FEATURES api). This will automatically mean external clients of Kafka
+ *    would need to stop using the finalized min version levels that have been deprecated.
  *
  * This class also provides APIs to check for incompatibilities between the features supported by
- * the Broker and finalized features. The class is generally immutable. It provides few APIs to
+ * the Broker and finalized features. This class is immutable in production. It provides few APIs to
  * mutate state only for the purpose of testing.
  */
 class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange],
@@ -86,7 +86,7 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
   }
 
   /**
-   * Returns the set of feature names found to be 'incompatible'.
+   * Returns the set of feature names found to be incompatible.
    * A feature incompatibility is a version mismatch between the latest feature supported by the
    * Broker, and the provided finalized feature. This can happen because a provided finalized
    * feature:
@@ -171,8 +171,8 @@ object BrokerFeatures extends Logging {
       case(featureName, minVersionLevel) =>
         val supportedFeature = supportedFeatures.get(featureName)
         (supportedFeature != null) &&
-          new FinalizedVersionRange(minVersionLevel, supportedFeature.max())
-            .isCompatibleWith(supportedFeature)
+          !new FinalizedVersionRange(minVersionLevel, supportedFeature.max())
+            .isIncompatibleWith(supportedFeature)
     }
   }
 }

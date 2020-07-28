@@ -38,10 +38,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
 import org.apache.kafka.common.feature.{Features, FinalizedVersionRange}
+import org.apache.kafka.common.message.UpdateFeaturesRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateMetadataResponse}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateFeaturesRequest, UpdateMetadataResponse}
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
@@ -63,7 +64,7 @@ object KafkaController extends Logging {
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
   type AlterIsrCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
-  type UpdateFeaturesCallback = (Errors, Option[String]) => Unit
+  type UpdateFeaturesCallback = (Map[String, ApiError]) => Unit
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -301,24 +302,24 @@ class KafkaController(val config: KafkaConfig,
    * 1. Supported feature:
    * A supported feature is represented by a name (String) and a range of versions (defined by a
    * {@link SupportedVersionRange}). It refers to a feature that a particular broker advertises
-   * support for. Each broker advertises the version ranges of it’s own supported features in its
-   * own BrokerIdZnode. The contents of the advertisement are specific to the particular broker and
+   * support for. Each broker advertises the version ranges of its own supported features in its
+   * own BrokerIdZNode. The contents of the advertisement are specific to the particular broker and
    * do not represent any guarantee of a cluster-wide availability of the feature for any particular
    * range of versions.
    *
    * 2. Finalized feature:
-   * A finalized feature is is represented by a name (String) and a range of version levels (defined
+   * A finalized feature is represented by a name (String) and a range of version levels (defined
    * by a {@link FinalizedVersionRange}). Whenever the feature versioning system (KIP-584) is
-   * enabled, the finalized features are stored in ZK in the cluster-wide common FeatureZNode.
+   * enabled, the finalized features are stored in the cluster-wide common FeatureZNode.
    * In comparison to a supported feature, the key difference is that a finalized feature exists
    * in ZK only when it is guaranteed to be supported by any random broker in the cluster for a
-   * specified range of version levels. Also, the controller is the one and only entity modifying
-   * the information about finalized features and their version levels.
+   * specified range of version levels. Also, the controller is the only entity modifying the
+   * information about finalized features.
    *
-   * This method sets up the FeatureZNode with enabled status. This status means the feature
-   * versioning system (KIP-584) is enabled, and, the finalized features stored in the FeatureZNode
-   * are active. This status should be written by the controller to the FeatureZNode only when the
-   * broker IBP config is greater than or equal to KAFKA_2_7_IV0.
+   * This method sets up the FeatureZNode with enabled status, which means that the finalized
+   * features stored in the FeatureZNode are active. The enabled status should be written by the
+   * controller to the FeatureZNode only when the broker IBP config is greater than or equal to
+   * KAFKA_2_7_IV0.
    *
    * There are multiple cases handled here:
    *
@@ -332,17 +333,17 @@ class KafkaController(val config: KafkaConfig,
    *
    * 2. Broker binary upgraded, but IBP config set to lower than KAFKA_2_7_IV0:
    *    Imagine there is an existing Kafka cluster with IBP config less than KAFKA_2_7_IV0, and the
-   *    Broker binary has been upgraded to a newer version that supports the feature versioning
-   *    system (KIP-584). This means the user is upgrading from an earlier version of the Broker
+   *    broker binary has been upgraded to a newer version that supports the feature versioning
+   *    system (KIP-584). This means the user is upgrading from an earlier version of the broker
    *    binary. In this case, we want to start with no finalized features and allow the user to
    *    finalize them whenever they are ready i.e. in the future whenever the user sets IBP config
    *    to be greater than or equal to KAFKA_2_7_IV0, then the user could start finalizing the
-   *    features. The reason to do this is that enabling all the possible features immediately after
-   *    an upgrade could be harmful to the cluster.
+   *    features. This process ensures we do not enable all the possible features immediately after
+   *    an upgrade, which could be harmful to Kafka.
    *    This is how we handle such a case:
    *      - Before the IBP config upgrade (i.e. IBP config set to less than KAFKA_2_7_IV0), the
-   *        controller will start up and check if the FeatureZNode is absent. If absent, then it
-   *        will react by creating a FeatureZNode with disabled status and empty finalized features.
+   *        controller will start up and check if the FeatureZNode is absent. If absent, it will
+   *        react by creating a FeatureZNode with disabled status and empty finalized features.
    *        Otherwise, if a node already exists in enabled status then the controller will just
    *        flip the status to disabled and clear the finalized features.
    *      - After the IBP config upgrade (i.e. IBP config set to greater than or equal to
@@ -359,7 +360,7 @@ class KafkaController(val config: KafkaConfig,
    *    existing finalized features and mutate them for the purpose of version level deprecation
    *    (if needed).
    *    This is how we handle this case: If an existing finalized feature is present in the default
-   *    finalized features, then, it's existing minimum version level is updated to the default
+   *    finalized features, then, its existing minimum version level is updated to the default
    *    minimum version level maintained in the BrokerFeatures object. The goal of this mutation is
    *    to permanently deprecate one or more feature version levels. The range of feature version
    *    levels deprecated are from the closed range: [existing_min_version_level, default_min_version_level].
@@ -385,14 +386,14 @@ class KafkaController(val config: KafkaConfig,
       var newFeatures: Features[FinalizedVersionRange] = Features.emptyFinalizedFeatures()
       if (existingFeatureZNode.status.equals(FeatureZNodeStatus.Enabled)) {
         newFeatures = Features.finalizedFeatures(existingFeatureZNode.features.features().asScala.map {
-          case (featureName, existingVersionRange) => {
+          case (featureName, existingVersionRange) =>
             val brokerDefaultVersionRange = defaultFinalizedFeatures.get(featureName)
             if (brokerDefaultVersionRange == null) {
               warn(s"Existing finalized feature: $featureName with $existingVersionRange"
                 + s" is absent in default finalized $defaultFinalizedFeatures")
               (featureName, existingVersionRange)
-            } else if (existingVersionRange.max() >= brokerDefaultVersionRange.min() &&
-                       brokerDefaultVersionRange.max() >= existingVersionRange.max()) {
+            } else if (brokerDefaultVersionRange.max() >= existingVersionRange.max() &&
+                       existingVersionRange.max() >= brokerDefaultVersionRange.min()) {
               // Through this change, we deprecate all version levels in the closed range:
               // [existingVersionRange.min(), brokerDefaultVersionRange.min() - 1]
               (featureName, new FinalizedVersionRange(brokerDefaultVersionRange.min(), existingVersionRange.max()))
@@ -406,7 +407,6 @@ class KafkaController(val config: KafkaConfig,
                 + s" based on the default $brokerDefaultVersionRange.")
               (featureName, existingVersionRange)
             }
-          }
         }.asJava)
       }
       val newFeatureZNode = new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures)
@@ -429,7 +429,7 @@ class KafkaController(val config: KafkaConfig,
    * 1. When this method returns, existing finalized features (if any) will be cleared from the
    *    FeatureZNode.
    * 2. This method, unlike enableFeatureVersioning() need not wait for the FinalizedFeatureCache
-   *    to be updated, because, such updates to the caceh (via FinalizedFeatureChangeListener)
+   *    to be updated, because, such updates to the cache (via FinalizedFeatureChangeListener)
    *    are disabled when IBP config is < than KAFKA_2_7_IV0.
    */
   private def disableFeatureVersioning(): Unit = {
@@ -1182,16 +1182,13 @@ class KafkaController(val config: KafkaConfig,
       val filteredBrokers = scala.collection.mutable.Set[Int]() ++ brokers
       if (config.isFeatureVersioningEnabled) {
         def hasIncompatibleFeatures(broker: Broker): Boolean = {
-          val latestFinalizedFeatures = featureCache.get
-          if (latestFinalizedFeatures.isDefined) {
-            BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.get.features)
-          } else {
-            false
-          }
+          featureCache.get.exists(
+            latestFinalizedFeatures =>
+              BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
         }
         controllerContext.liveOrShuttingDownBrokers.foreach(broker => {
           if (filteredBrokers.contains(broker.id) && hasIncompatibleFeatures(broker)) {
-            warn(s"Ignoring UpdateMetadataRequest to broker: ${broker.id} due to incompatible features")
+            warn(s"No UpdateMetadataRequest will be sent to broker: ${broker.id} due to incompatible features")
             filteredBrokers -= broker.id
           }
         })
@@ -1856,33 +1853,189 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  private def processUpdateFeatures(newFeatures: Features[FinalizedVersionRange],
-                                             callback: UpdateFeaturesCallback): Unit = {
-    if (isActive) {
-      val incompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.filter(broker => {
-        BrokerFeatures.hasIncompatibleFeatures(broker.features, newFeatures)
-      })
-      if (incompatibleBrokers.nonEmpty) {
-        callback(
-          Errors.INVALID_REQUEST,
-          Some(
-            s"Could not apply finalized feature updates because ${incompatibleBrokers.size} brokers"
-            + s" were found to have incompatible features. newFeatures: $newFeatures"
-           + s", incompatibleBrokers: $incompatibleBrokers."))
+  /**
+   * Returns the new FinalizedVersionRange for the feature, if there are no feature
+   * incompatibilities with all known brokers. Otherwise returns a suitable error.
+   *
+   * @param update   the feature update to be processed (this can not be meant to delete the feature)
+   *
+   * @return         the new FinalizedVersionRange or error, as described above.
+   */
+  private def newFinalizedVersionRangeOrError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[FinalizedVersionRange, ApiError] = {
+    if (UpdateFeaturesRequest.isDeleteRequest(update)) {
+      throw new IllegalArgumentException(s"Provided feature update can not be meant to delete the feature: $update")
+    }
+    // NOTE: Below we set the finalized min version level to be the default minimum version
+    // level. If the finalized feature already exists, then, this can cause deprecation of all
+    // version levels in the closed range:
+    // [existingVersionRange.min(), defaultMinVersionLevel - 1].
+    val defaultMinVersionLevel = brokerFeatures.defaultMinVersionLevel(update.feature)
+    val newVersionRange = new FinalizedVersionRange(defaultMinVersionLevel, update.maxVersionLevel)
+    val numIncompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.count(broker => {
+      val singleFinalizedFeature =
+        Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
+      BrokerFeatures.hasIncompatibleFeatures(broker.features, singleFinalizedFeature)
+    })
+    if (numIncompatibleBrokers == 0) {
+      Left(newVersionRange)
+    } else {
+      Right(
+        new ApiError(Errors.INVALID_REQUEST,
+            s"Could not apply finalized feature update because $numIncompatibleBrokers" +
+                     " brokers were found to have incompatible features."))
+    }
+  }
+
+  /**
+   * Validate and process a finalized feature update.
+   *
+   * If processed successfully, then, the return value contains:
+   * 1. the new FinalizedVersionRange for the feature, if the feature update was not meant to delete the feature.
+   * 2. Option.empty, if the feature update was meant to delete the feature.
+   *
+   * If the processing failed, then returned value contains a suitable ApiError.
+   *
+   * @param update   the feature update to be processed.
+   *
+   * @return         the new FinalizedVersionRange or error, as described above.
+   */
+  private def processFeatureUpdate(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[Option[FinalizedVersionRange], ApiError] = {
+    val existingFeatures = featureCache.get
+      .map(featuresAndEpoch => featuresAndEpoch.features.features().asScala)
+      .getOrElse(Map[String, FinalizedVersionRange]())
+
+    def newVersionRangeOrError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[Option[FinalizedVersionRange], ApiError] = {
+      newFinalizedVersionRangeOrError(update).fold(versionRange => Left(Some(versionRange)), error => Right(error))
+    }
+
+    if (update.feature.isEmpty) {
+      // Check that the feature name is not empty.
+      Right(new ApiError(Errors.INVALID_REQUEST, "Feature name can not be empty."))
+    } else {
+      val cacheEntry = existingFeatures.get(update.feature).orNull
+
+      // We handle deletion requests separately from non-deletion requests.
+      if (UpdateFeaturesRequest.isDeleteRequest(update)) {
+        if (cacheEntry == null) {
+          // Disallow deletion of a non-existing finalized feature.
+          Right(
+            new ApiError(Errors.INVALID_REQUEST,
+                s"Can not delete non-existing finalized feature: '${update.feature}'"))
+        } else {
+          Left(Option.empty)
+        }
+      } else if (update.maxVersionLevel() < 1) {
+        // Disallow deletion of a finalized feature without allowDowngrade flag set.
+        Right(
+          new ApiError(Errors.INVALID_REQUEST,
+              s"Can not provide maxVersionLevel: ${update.maxVersionLevel} less" +
+                       s" than 1 for feature: '${update.feature}' without setting the" +
+                       s" allowDowngrade flag to true in the request."))
       } else {
-        try {
-          val newVersion = zkClient.updateFeatureZNode(
-            new FeatureZNode(FeatureZNodeStatus.Enabled, newFeatures))
-          featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
-          callback(Errors.NONE, Option.empty)
-        } catch {
-          case e: Exception => callback(
-            Errors.FEATURE_UPDATE_FAILED,
-            Some(Errors.FEATURE_UPDATE_FAILED.message() + " Error: " + e))
+        if (cacheEntry == null) {
+          newVersionRangeOrError(update)
+        } else {
+          if (update.maxVersionLevel == cacheEntry.max()) {
+            // Disallow a case where target maxVersionLevel matches existing maxVersionLevel.
+            Right(
+              new ApiError(Errors.INVALID_REQUEST,
+                  s"Can not ${if (update.allowDowngrade) "downgrade" else "upgrade"}" +
+                           s" a finalized feature: '${update.feature}' from existing" +
+                           s" maxVersionLevel:${cacheEntry.max} to the same value."))
+          } else if (update.maxVersionLevel < cacheEntry.max && !update.allowDowngrade) {
+            // Disallow downgrade of a finalized feature without the allowDowngrade flag set.
+            Right(
+              new ApiError(Errors.INVALID_REQUEST,
+                  s"Can not downgrade finalized feature: '${update.feature}' from" +
+                           s" existing maxVersionLevel:${cacheEntry.max} to provided" +
+                           s" maxVersionLevel:${update.maxVersionLevel} without setting the" +
+                           " allowDowngrade flag in the request."))
+          } else if (update.allowDowngrade && update.maxVersionLevel > cacheEntry.max) {
+            // Disallow a request that sets allowDowngrade flag without specifying a
+            // maxVersionLevel that's lower than the existing maxVersionLevel.
+            Right(
+              new ApiError(Errors.INVALID_REQUEST,
+                  s"When finalized feature: '${update.feature}' has the allowDowngrade" +
+                           s" flag set in the request, the provided" +
+                           s" maxVersionLevel:${update.maxVersionLevel} can not be greater than" +
+                           s" existing maxVersionLevel:${cacheEntry.max}."))
+          } else if (update.maxVersionLevel() < cacheEntry.min()) {
+            // Disallow downgrade of a finalized feature below the existing finalized
+            // minVersionLevel.
+            Right(
+              new ApiError(Errors.INVALID_REQUEST,
+                  s"Can not downgrade finalized feature: '${update.feature}' to" +
+                           s" maxVersionLevel:${update.maxVersionLevel} because it's lower than" +
+                           s" the existing minVersionLevel:${cacheEntry.min}."))
+          } else {
+            newVersionRangeOrError(update)
+          }
         }
       }
+    }
+  }
+
+  private def processFeatureUpdates(request: UpdateFeaturesRequest,
+                                    callback: UpdateFeaturesCallback): Unit = {
+    if (isActive) {
+      processFeatureUpdatesWithActiveController(request, callback)
     } else {
-      callback(Errors.NOT_CONTROLLER, Option.empty)
+      val results = request.data().featureUpdates().asScala.map {
+        update => update.feature() -> new ApiError(Errors.NOT_CONTROLLER)
+      }.toMap
+      callback(results)
+    }
+  }
+
+  private def processFeatureUpdatesWithActiveController(request: UpdateFeaturesRequest,
+                                                        callback: UpdateFeaturesCallback): Unit = {
+    val updates = request.data.featureUpdates
+    val existingFeatures = featureCache.get
+      .map(featuresAndEpoch => featuresAndEpoch.features.features().asScala)
+      .getOrElse(Map[String, FinalizedVersionRange]())
+    // Map of feature to FinalizedVersionRange. This contains the target features to be eventually
+    // written to FeatureZNode.
+    val targetFeatures = scala.collection.mutable.Map[String, FinalizedVersionRange]() ++ existingFeatures
+    // Map of feature to error.
+    var errors = scala.collection.mutable.Map[String, ApiError]()
+
+    // Process each FeatureUpdate, insert an entry into errors and mutate targetFeatures suitably.
+    // If a FeatureUpdate is found to be valid, then the corresponding entry in errors contains
+    // Errors.NONE. Otherwise the entry contains the appropriate error.
+    updates.asScala.iterator.foreach { update =>
+      processFeatureUpdate(update) match {
+        case Left(newVersionRangeOrNone) =>
+          newVersionRangeOrNone
+            .map(newVersionRange => targetFeatures += (update.feature() -> newVersionRange))
+            .getOrElse(targetFeatures -= update.feature())
+          errors += (update.feature() -> new ApiError(Errors.NONE))
+        case Right(featureUpdateFailureReason) => errors += (update.feature() -> featureUpdateFailureReason)
+      }
+    }
+
+    if (existingFeatures.equals(targetFeatures)) {
+      callback(errors)
+    } else {
+      try {
+        val newNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.finalizedFeatures(targetFeatures.asJava))
+        val newVersion = zkClient.updateFeatureZNode(newNode)
+        featureCache.waitUntilEpochOrThrow(newVersion, config.zkConnectionTimeoutMs)
+      } catch {
+        // For all features that correspond to valid FeatureUpdate (i.e. error is Errors.NONE),
+        // we set the error as Errors.FEATURE_UPDATE_FAILED since the FeatureZNode update has failed
+        // for these. For the rest, the existing error is left untouched.
+        case e: Exception =>
+          errors = errors.map { case (feature, apiError) =>
+            if (apiError.error() == Errors.NONE) {
+              (feature, new ApiError(Errors.FEATURE_UPDATE_FAILED,
+                Errors.FEATURE_UPDATE_FAILED.message() + " Error: " + e))
+            } else {
+              (feature, apiError)
+            }
+          }
+      } finally {
+        callback(errors)
+      }
     }
   }
 
@@ -1920,9 +2073,9 @@ class KafkaController(val config: KafkaConfig,
     eventManager.put(ListPartitionReassignments(partitions, callback))
   }
 
-  def updateFeatures(newFeatures: Features[FinalizedVersionRange],
+  def updateFeatures(request: UpdateFeaturesRequest,
                      callback: UpdateFeaturesCallback): Unit = {
-    eventManager.put(UpdateFeatures(newFeatures, callback))
+    eventManager.put(UpdateFeatures(request, callback))
   }
 
   def alterPartitionReassignments(partitions: Map[TopicPartition, Option[Seq[Int]]],
@@ -2215,7 +2368,7 @@ class KafkaController(val config: KafkaConfig,
         case ListPartitionReassignments(partitions, callback) =>
           processListPartitionReassignments(partitions, callback)
         case UpdateFeatures(request, callback) =>
-          processUpdateFeatures(request, callback)
+          processFeatureUpdates(request, callback)
         case PartitionReassignmentIsrChange(partition) =>
           processPartitionReassignmentIsrChange(partition)
         case IsrChangeNotification =>
@@ -2509,7 +2662,7 @@ case class ListPartitionReassignments(partitionsOpt: Option[Set[TopicPartition]]
   override def preempt(): Unit = callback(Right(new ApiError(Errors.NOT_CONTROLLER, null)))
 }
 
-case class UpdateFeatures(newFeatures: Features[FinalizedVersionRange],
+case class UpdateFeatures(request: UpdateFeaturesRequest,
                           callback: UpdateFeaturesCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.UpdateFeatures
 }

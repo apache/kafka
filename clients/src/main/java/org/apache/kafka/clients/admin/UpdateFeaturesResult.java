@@ -16,16 +16,28 @@
  */
 package org.apache.kafka.clients.admin;
 
+import java.util.Map;
 import org.apache.kafka.common.KafkaFuture;
 
 public class UpdateFeaturesResult {
-    private final KafkaFuture<Void> future;
+    private final Map<String, KafkaFuture<Void>> futures;
 
-    public UpdateFeaturesResult(final KafkaFuture<Void> future) {
-        this.future = future;
+    /**
+     * @param futures   a map from feature names to future, which can be used to check the status of
+     *                  individual feature updates.
+     */
+    public UpdateFeaturesResult(final Map<String, KafkaFuture<Void>> futures) {
+        this.futures = futures;
     }
 
-    public KafkaFuture<Void> result() {
-        return future;
+    public Map<String, KafkaFuture<Void>> values() {
+        return futures;
+    }
+
+    /**
+     * Return a future which succeeds if all the feature updates succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
 }

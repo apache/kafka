@@ -116,6 +116,8 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -484,26 +486,26 @@ public class KafkaAdminClientTest {
         return data;
     }
 
-    private static UpdateFeaturesResponse prepareUpdateFeaturesResponse(Errors error) {
-        final UpdateFeaturesResponseData data = new UpdateFeaturesResponseData();
-        data.setErrorCode(error.code());
-        return new UpdateFeaturesResponse(data);
+    private static UpdateFeaturesResponse prepareUpdateFeaturesResponse(Map<String, Errors> featureUpdateErrors) {
+        final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
+        for (Map.Entry<String, Errors> entry : featureUpdateErrors.entrySet()) {
+            UpdatableFeatureResult result = new UpdatableFeatureResult();
+            result.setFeature(entry.getKey());
+            Errors error = entry.getValue();
+            result.setErrorCode(error.code());
+            result.setErrorMessage(error.message());
+            results.add(result);
+        }
+        return new UpdateFeaturesResponse( new UpdateFeaturesResponseData().setResults(results));
     }
 
-    private static FeatureMetadata getDefaultFeatureMetadata() {
+    private static FeatureMetadata defaultFeatureMetadata() {
         return new FeatureMetadata(
-            Features.finalizedFeatures(new HashMap<String, FinalizedVersionRange>() {
-                {
-                    put("test_feature_1", new FinalizedVersionRange((short) 2, (short) 3));
-                }
-            }),
+            Features.finalizedFeatures(
+                Utils.mkMap(Utils.mkEntry("test_feature_1", new FinalizedVersionRange((short) 2, (short) 3)))),
             1,
-            Features.supportedFeatures(new HashMap<String, SupportedVersionRange>() {
-                {
-                    put("test_feature_1", new SupportedVersionRange((short) 1, (short) 5));
-                }
-            })
-        );
+            Features.supportedFeatures(
+                Utils.mkMap(Utils.mkEntry("test_feature_1", new SupportedVersionRange((short) 1, (short) 5)))));
     }
 
     private static ApiVersionsResponse prepareApiVersionsResponseForDescribeFeatures(Errors error) {
@@ -512,9 +514,9 @@ public class KafkaAdminClientTest {
                 ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.throttleTimeMs(),
                 error,
                 ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data().apiKeys(),
-                getDefaultFeatureMetadata().supportedFeatures(),
-                getDefaultFeatureMetadata().finalizedFeatures(),
-                getDefaultFeatureMetadata().finalizedFeaturesEpoch().orElse(-1)));
+                defaultFeatureMetadata().supportedFeatures(),
+                defaultFeatureMetadata().finalizedFeatures(),
+                defaultFeatureMetadata().finalizedFeaturesEpoch().orElse(-1)));
         }
         return new ApiVersionsResponse(new ApiVersionsResponseData().setErrorCode(error.code()));
     }
@@ -3931,38 +3933,66 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testUpdateFeaturesDuringSuccess() throws Exception {
-        testUpdateFeaturesDuringError(Errors.NONE);
+        testUpdateFeatures(
+            makeTestFeatureUpdates(),
+            makeTestFeatureUpdateErrors(Errors.NONE));
     }
 
     @Test
     public void testUpdateFeaturesInvalidRequestError() throws Exception {
-        testUpdateFeaturesDuringError(Errors.INVALID_REQUEST);
+        testUpdateFeatures(
+            makeTestFeatureUpdates(),
+            makeTestFeatureUpdateErrors(Errors.INVALID_REQUEST));
     }
 
     @Test
     public void testUpdateFeaturesUpdateFailedError() throws Exception {
-        testUpdateFeaturesDuringError(Errors.FEATURE_UPDATE_FAILED);
+        testUpdateFeatures(
+            makeTestFeatureUpdates(),
+            makeTestFeatureUpdateErrors(Errors.FEATURE_UPDATE_FAILED));
     }
 
-    private void testUpdateFeaturesDuringError(Errors error) throws Exception {
+    @Test
+    public void testUpdateFeaturesPartialSuccess() throws Exception {
+        final Map<String, Errors> errors = makeTestFeatureUpdateErrors(Errors.NONE);
+        errors.put("test_feature_2", Errors.INVALID_REQUEST);
+        testUpdateFeatures(makeTestFeatureUpdates(), errors);
+    }
+
+    private Map<String, FeatureUpdate> makeTestFeatureUpdates() {
+        return Utils.mkMap(
+            Utils.mkEntry("test_feature_1", new FeatureUpdate((short) 2, false)),
+            Utils.mkEntry("test_feature_2", new FeatureUpdate((short) 3, true)));
+    }
+
+    private Map<String, Errors> makeTestFeatureUpdateErrors(final Errors error) {
+        final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
+        final Map<String, Errors> errors = new HashMap<>();
+        for (Map.Entry<String, FeatureUpdate> entry : updates.entrySet()) {
+            errors.put(entry.getKey(), error);
+        }
+        return errors;
+    }
+
+    private void testUpdateFeatures(Map<String, FeatureUpdate> featureUpdates,
+                                    Map<String, Errors> featureUpdateErrors) throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
                 body -> body instanceof UpdateFeaturesRequest,
-                prepareUpdateFeaturesResponse(error));
-            final KafkaFuture<Void> future = env.adminClient().updateFeatures(
-                new HashSet<>(
-                    Arrays.asList(
-                        new FeatureUpdate(
-                            "test_feature_1", (short) 2, false),
-                        new FeatureUpdate(
-                            "test_feature_2", (short) 3, true))),
-                new UpdateFeaturesOptions().timeoutMs(10000)).result();
-            if (error.exception() == null) {
-                future.get();
-            } else {
-                final ExecutionException e = assertThrows(ExecutionException.class,
-                    () -> future.get());
-                assertEquals(e.getCause().getClass(), error.exception().getClass());
+                prepareUpdateFeaturesResponse(featureUpdateErrors));
+            final Map<String, KafkaFuture<Void>> futures = env.adminClient().updateFeatures(
+                featureUpdates,
+                new UpdateFeaturesOptions().timeoutMs(10000)).values();
+            for (Map.Entry<String, KafkaFuture<Void>> entry : futures.entrySet()) {
+                final KafkaFuture<Void> future = entry.getValue();
+                final Errors error = featureUpdateErrors.get(entry.getKey());
+                if (error == Errors.NONE) {
+                    future.get();
+                } else {
+                    final ExecutionException e = assertThrows(ExecutionException.class,
+                        () -> future.get());
+                    assertEquals(e.getCause().getClass(), error.exception().getClass());
+                }
             }
         }
     }
@@ -3971,23 +4001,28 @@ public class KafkaAdminClientTest {
     public void testUpdateFeaturesHandleNotControllerException() throws Exception {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponseFrom(
-                prepareUpdateFeaturesResponse(Errors.NOT_CONTROLLER),
+                request -> request instanceof UpdateFeaturesRequest,
+                prepareUpdateFeaturesResponse(Utils.mkMap(
+                    Utils.mkEntry("test_feature_1", Errors.NOT_CONTROLLER),
+                    Utils.mkEntry("test_feature_2", Errors.NOT_CONTROLLER))),
                 env.cluster().nodeById(0));
+            final int controllerId = 1;
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
                 env.cluster().clusterResource().clusterId(),
-                1,
-                Collections.<MetadataResponse.TopicMetadata>emptyList()));
+                controllerId,
+                Collections.emptyList()));
             env.kafkaClient().prepareResponseFrom(
-                prepareUpdateFeaturesResponse(Errors.NONE),
-                env.cluster().nodeById(1));
+                request -> request instanceof UpdateFeaturesRequest,
+                prepareUpdateFeaturesResponse(Utils.mkMap(
+                    Utils.mkEntry("test_feature_1", Errors.NONE),
+                    Utils.mkEntry("test_feature_2", Errors.NONE))),
+                env.cluster().nodeById(controllerId));
             final KafkaFuture<Void> future = env.adminClient().updateFeatures(
-                new HashSet<>(
-                    Arrays.asList(
-                        new FeatureUpdate(
-                            "test_feature_1", (short) 2, false),
-                        new FeatureUpdate(
-                            "test_feature_2", (short) 3, true))),
-                new UpdateFeaturesOptions().timeoutMs(10000)).result();
+                Utils.mkMap(
+                    Utils.mkEntry("test_feature_1", new FeatureUpdate((short) 2, false)),
+                    Utils.mkEntry("test_feature_2", new FeatureUpdate((short) 3, true))),
+                new UpdateFeaturesOptions().timeoutMs(10000)
+            ).all();
             future.get();
         }
     }
@@ -4000,8 +4035,8 @@ public class KafkaAdminClientTest {
                 prepareApiVersionsResponseForDescribeFeatures(Errors.NONE));
             final KafkaFuture<FeatureMetadata> future = env.adminClient().describeFeatures(
                 new DescribeFeaturesOptions().timeoutMs(10000)).featureMetadata();
-            FeatureMetadata metadata = future.get();
-            assertEquals(getDefaultFeatureMetadata(), metadata);
+            final FeatureMetadata metadata = future.get();
+            assertEquals(defaultFeatureMetadata(), metadata);
         }
     }
 
@@ -4014,7 +4049,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
                 env.cluster().clusterResource().clusterId(),
                 1,
-                Collections.<MetadataResponse.TopicMetadata>emptyList()));
+                Collections.emptyList()));
             env.kafkaClient().prepareResponseFrom(
                 prepareApiVersionsResponseForDescribeFeatures(Errors.NONE),
                 env.cluster().nodeById(1));

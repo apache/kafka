@@ -737,7 +737,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilControllerElected(zkClient)
 
     val (mayBeFeatureZNodeBytes, version) = zkClient.getDataAndVersion(FeatureZNode.path)
-    assertNotEquals(version, ZkVersion.UnknownVersion)
+    assertEquals(0, version)
     val featureZNode = FeatureZNode.decode(mayBeFeatureZNodeBytes.get)
     if (interBrokerProtocolVersion >= KAFKA_2_7_IV0) {
       assertEquals(FeatureZNodeStatus.Enabled, featureZNode.status)
