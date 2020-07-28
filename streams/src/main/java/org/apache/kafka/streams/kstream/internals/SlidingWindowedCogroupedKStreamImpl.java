@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -40,14 +41,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V>
-        implements TimeWindowedCogroupedKStream<K, V> {
-
-    private final Windows<W> windows;
+public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K, V> implements TimeWindowedCogroupedKStream<K, V>{
+    private final SlidingWindows windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
 
-    TimeWindowedCogroupedKStreamImpl(final Windows<W> windows,
+    SlidingWindowedCogroupedKStreamImpl(final SlidingWindows windows,
                                      final InternalStreamsBuilder builder,
                                      final Set<String> subTopologySourceNodes,
                                      final String name,
@@ -60,7 +59,6 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
         this.aggregateBuilder = aggregateBuilder;
         this.groupPatterns = groupPatterns;
     }
-
 
     @Override
     public KTable<Windowed<K>, V> aggregate(final Initializer<V> initializer) {
@@ -87,23 +85,23 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(
-            materialized,
-            builder,
-            CogroupedKStreamImpl.AGGREGATE_NAME);
+                materialized,
+                builder,
+                CogroupedKStreamImpl.AGGREGATE_NAME);
         return aggregateBuilder.build(
-            groupPatterns,
-            initializer,
-            new NamedInternal(named),
-            materialize(materializedInternal),
-            materializedInternal.keySerde() != null ?
-                    new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
-                    : null,
-            materializedInternal.valueSerde(),
-            materializedInternal.queryableStoreName(),
-            windows,
-            null,
-            null,
-            null);
+                groupPatterns,
+                initializer,
+                new NamedInternal(named),
+                materialize(materializedInternal),
+                materializedInternal.keySerde() != null ?
+                        new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
+                        : null,
+                materializedInternal.valueSerde(),
+                materializedInternal.queryableStoreName(),
+                null,
+                windows,
+                null,
+                null);
     }
 
     @SuppressWarnings("deprecation")
@@ -118,23 +116,23 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
 
                 if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
                     throw new IllegalArgumentException("The retention period of the window store "
-                                                       + name
-                                                       + " must be no smaller than its window size plus the grace period."
-                                                       + " Got size=[" + windows.size() + "],"
-                                                       + " grace=[" + windows.gracePeriodMs()
-                                                       + "],"
-                                                       + " retention=[" + retentionPeriod
-                                                       + "]");
+                            + name
+                            + " must be no smaller than its window size plus the grace period."
+                            + " Got size=[" + windows.size() + "],"
+                            + " grace=[" + windows.gracePeriodMs()
+                            + "],"
+                            + " retention=[" + retentionPeriod
+                            + "]");
                 }
 
                 supplier = Stores.persistentTimestampedWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
-                    false
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.size()),
+                        false
                 );
 
-            } else {
+            } /*else {
                 // old style retention: use deprecated Windows retention/segmentInterval.
 
                 // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
@@ -142,30 +140,30 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
 
                 if ((windows.size() + windows.gracePeriodMs()) > windows.maintainMs()) {
                     throw new IllegalArgumentException("The retention period of the window store "
-                                                       + name
-                                                       + " must be no smaller than its window size plus the grace period."
-                                                       + " Got size=[" + windows.size() + "],"
-                                                       + " grace=[" + windows.gracePeriodMs()
-                                                       + "],"
-                                                       + " retention=[" + windows.maintainMs()
-                                                       + "]");
+                            + name
+                            + " must be no smaller than its window size plus the grace period."
+                            + " Got size=[" + windows.size() + "],"
+                            + " grace=[" + windows.gracePeriodMs()
+                            + "],"
+                            + " retention=[" + windows.maintainMs()
+                            + "]");
                 }
 
                 supplier = new RocksDbWindowBytesStoreSupplier(
-                    materialized.storeName(),
-                    windows.maintainMs(),
-                    Math.max(windows.maintainMs() / (windows.segments - 1), 60_000L),
-                    windows.size(),
-                    false,
-                    true);
-            }
+                        materialized.storeName(),
+                        windows.maintainMs(),
+                        Math.max(windows.maintainMs() / (windows.segments - 1), 60_000L),
+                        windows.size(),
+                        false,
+                        true);
+            }*/
         }
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
-            .timestampedWindowStoreBuilder(
-                supplier,
-                materialized.keySerde(),
-                materialized.valueSerde()
-            );
+                .timestampedWindowStoreBuilder(
+                        supplier,
+                        materialized.keySerde(),
+                        materialized.valueSerde()
+                );
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());
@@ -178,4 +176,5 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
         }
         return builder;
     }
+
 }

@@ -25,13 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Merger;
-import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -56,6 +50,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                        final Serde<VOut> valueSerde,
                                                        final String queryableName,
                                                        final Windows<W> windows,
+                                                       final SlidingWindows slidingWindows,
                                                        final SessionWindows sessionWindows,
                                                        final Merger<? super K, VOut> sessionMerger) {
 
@@ -99,6 +94,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 stateCreated,
                 storeBuilder,
                 windows,
+                slidingWindows,
                 sessionWindows,
                 sessionMerger);
             stateCreated = true;
@@ -132,16 +128,19 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                                                     final boolean stateCreated,
                                                                                     final StoreBuilder<?> storeBuilder,
                                                                                     final Windows<W> windows,
+                                                                                    final SlidingWindows slidingWindows,
                                                                                     final SessionWindows sessionWindows,
                                                                                     final Merger<? super K, VOut> sessionMerger) {
 
         final ProcessorSupplier<K, ?> kStreamAggregate;
 
-        if (windows == null && sessionWindows == null) {
+        if (windows == null && slidingWindows == null && sessionWindows == null) {
             kStreamAggregate = new KStreamAggregate<>(storeBuilder.name(), initializer, aggregator);
-        } else if (windows != null && sessionWindows == null) {
+        } else if (windows != null && slidingWindows == null && sessionWindows == null) {
             kStreamAggregate = new KStreamWindowAggregate<>(windows, storeBuilder.name(), initializer, aggregator);
-        } else if (windows == null && sessionMerger != null) {
+        } else if (windows == null && slidingWindows != null && sessionWindows == null){
+            kStreamAggregate = new KStreamSlidingWindowAggregate<>(slidingWindows, storeBuilder.name(), initializer, aggregator);
+        } else if (windows == null && slidingWindows == null && sessionMerger != null) {
             kStreamAggregate = new KStreamSessionWindowAggregate<>(sessionWindows, storeBuilder.name(), initializer, aggregator, sessionMerger);
         } else {
             throw new IllegalArgumentException("must include windows OR sessionWindows + sessionMerger OR all must be null");

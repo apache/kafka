@@ -119,7 +119,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             final long timestamp = context().timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
-            final HashSet<Long> windowStartTimes = new HashSet();
+            final HashSet<Long> windowStartTimes = new HashSet<Long>();
             ValueAndTimestamp<Agg> leftWinAgg;
             ValueAndTimestamp<Agg> rightWinAgg = null;
 

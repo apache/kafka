@@ -99,7 +99,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     @Override
     public TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows slidingWindows) {
         Objects.requireNonNull(slidingWindows, "slidingWindows can't be null");
-        return new TimeWindowedCogroupedKStreamImpl<>(
+        return new SlidingWindowedCogroupedKStreamImpl<> (
                 slidingWindows,
                 builder,
                 subTopologySourceNodes,
@@ -132,6 +132,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
+            null,
             null,
             null,
             null);

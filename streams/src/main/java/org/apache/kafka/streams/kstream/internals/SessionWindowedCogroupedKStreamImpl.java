@@ -102,6 +102,7 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                 materializedInternal.valueSerde(),
                 materializedInternal.queryableStoreName(),
                 null,
+                null,
                 sessionWindows,
                 sessionMerger);
     }
