@@ -17,10 +17,8 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;

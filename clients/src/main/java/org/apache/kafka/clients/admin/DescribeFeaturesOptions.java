@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Set;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
