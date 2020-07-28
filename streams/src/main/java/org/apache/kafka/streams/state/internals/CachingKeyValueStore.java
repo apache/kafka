@@ -24,8 +24,6 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -40,8 +38,6 @@ import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppr
 public class CachingKeyValueStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
     implements KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
-
-    private static final Logger LOG = LoggerFactory.getLogger(CachingKeyValueStore.class);
 
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
@@ -239,12 +235,7 @@ public class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        if (from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
+        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
@@ -255,12 +246,7 @@ public class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                         final Bytes to) {
-        if (from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
+        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().reverseRange(from, to);

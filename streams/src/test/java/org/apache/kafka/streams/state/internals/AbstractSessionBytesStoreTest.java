@@ -134,6 +134,33 @@ public abstract class AbstractSessionBytesStoreTest {
     }
 
     @Test
+    public void shouldPutAndBackwardFindSessionsInRange() {
+        final String key = "a";
+        final Windowed<String> a1 = new Windowed<>(key, new SessionWindow(10, 10L));
+        final Windowed<String> a2 = new Windowed<>(key, new SessionWindow(500L, 1000L));
+        sessionStore.put(a1, 1L);
+        sessionStore.put(a2, 2L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(1500L, 2000L)), 1L);
+        sessionStore.put(new Windowed<>(key, new SessionWindow(2500L, 3000L)), 2L);
+
+        final List<KeyValue<Windowed<String>, Long>> expected =
+            Arrays.asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.backwardFindSessions(key, 0, 1000L)
+        ) {
+            assertEquals(new HashSet<>(expected), toSet(values));
+        }
+
+        final List<KeyValue<Windowed<String>, Long>> expected2 =
+            Collections.singletonList(KeyValue.pair(a2, 2L));
+
+        try (final KeyValueIterator<Windowed<String>, Long> values2 = sessionStore.backwardFindSessions(key, 400L, 600L)
+        ) {
+            assertEquals(new HashSet<>(expected2), toSet(values2));
+        }
+    }
+
+    @Test
     public void shouldFetchAllSessionsWithSameRecordKey() {
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
             KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),

@@ -131,6 +131,21 @@ public class CachingSessionStoreTest {
     }
 
     @Test
+    public void shouldPutBackwardFetchAllKeysFromCache() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.put(new Windowed<>(keyAA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(0, 0)), "1".getBytes());
+
+        assertEquals(3, cache.size());
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> all = cachingStore.backwardFindSessions(keyA, keyB, 0, 0);
+        verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(all.next(), new Windowed<>(keyA, new SessionWindow(0, 0)), "1");
+        assertFalse(all.hasNext());
+    }
+
+    @Test
     public void shouldCloseWrappedStoreAndCacheAfterErrorDuringCacheFlush() {
         setUpCloseTests();
         EasyMock.reset(cache);
@@ -204,6 +219,20 @@ public class CachingSessionStoreTest {
     }
 
     @Test
+    public void shouldPutBackwardFetchRangeFromCache() {
+        cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.put(new Windowed<>(keyAA, new SessionWindow(0, 0)), "1".getBytes());
+        cachingStore.put(new Windowed<>(keyB, new SessionWindow(0, 0)), "1".getBytes());
+
+        assertEquals(3, cache.size());
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> some = cachingStore.backwardFindSessions(keyAA, keyB, 0, 0);
+        verifyWindowedKeyValue(some.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
+        verifyWindowedKeyValue(some.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
+        assertFalse(some.hasNext());
+    }
+
+    @Test
     public void shouldFetchAllSessionsWithSameRecordKey() {
         final List<KeyValue<Windowed<Bytes>, byte[]>> expected = asList(
             KeyValue.pair(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes()),
@@ -219,6 +248,26 @@ public class CachingSessionStoreTest {
         cachingStore.put(new Windowed<>(keyAA, new SessionWindow(0, 0)), "5".getBytes());
 
         final List<KeyValue<Windowed<Bytes>, byte[]>> results = toList(cachingStore.fetch(keyA));
+        verifyKeyValueList(expected, results);
+    }
+
+    @Test
+    public void shouldBackwardFetchAllSessionsWithSameRecordKey() {
+        final List<KeyValue<Windowed<Bytes>, byte[]>> expected = asList(
+            KeyValue.pair(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes()),
+            KeyValue.pair(new Windowed<>(keyA, new SessionWindow(10, 10)), "2".getBytes()),
+            KeyValue.pair(new Windowed<>(keyA, new SessionWindow(100, 100)), "3".getBytes()),
+            KeyValue.pair(new Windowed<>(keyA, new SessionWindow(1000, 1000)), "4".getBytes())
+        );
+        for (final KeyValue<Windowed<Bytes>, byte[]> kv : expected) {
+            cachingStore.put(kv.key, kv.value);
+        }
+
+        // add one that shouldn't appear in the results
+        cachingStore.put(new Windowed<>(keyAA, new SessionWindow(0, 0)), "5".getBytes());
+
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toList(cachingStore.backwardFetch(keyA));
+        Collections.reverse(results);
         verifyKeyValueList(expected, results);
     }
 
@@ -292,6 +341,29 @@ public class CachingSessionStoreTest {
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults =
             cachingStore.findSessions(keyA, keyAA, 0, SEGMENT_INTERVAL * 2);
+        final Set<Windowed<Bytes>> keys = new HashSet<>();
+        while (rangeResults.hasNext()) {
+            keys.add(rangeResults.next().key);
+        }
+        rangeResults.close();
+        assertEquals(mkSet(a1, a2, a3, aa1, aa3), keys);
+    }
+
+    @Test
+    public void shouldBackwardFetchRangeCorrectlyAcrossSegments() {
+        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
+        final Windowed<Bytes> aa1 = new Windowed<>(keyAA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
+        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 1, SEGMENT_INTERVAL * 1));
+        final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
+        final Windowed<Bytes> aa3 = new Windowed<>(keyAA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
+        cachingStore.put(a1, "1".getBytes());
+        cachingStore.put(aa1, "1".getBytes());
+        cachingStore.put(a2, "2".getBytes());
+        cachingStore.put(a3, "3".getBytes());
+        cachingStore.put(aa3, "3".getBytes());
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults =
+            cachingStore.backwardFindSessions(keyA, keyAA, 0, SEGMENT_INTERVAL * 2);
         final Set<Windowed<Bytes>> keys = new HashSet<>();
         while (rangeResults.hasNext()) {
             keys.add(rangeResults.next().key);
@@ -520,11 +592,30 @@ public class CachingSessionStoreTest {
     }
 
     @Test
+    public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey() {
+        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
+        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateStoreRangeValidator.class)) {
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.backwardFindSessions(keyFrom, keyTo, 0L, 10L);
+            assertFalse(iterator.hasNext());
+
+            final List<String> messages = appender.getMessages();
+            assertThat(
+                messages,
+                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+            );
+        }
+    }
+
+    @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingSessionStore.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateStoreRangeValidator.class)) {
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 

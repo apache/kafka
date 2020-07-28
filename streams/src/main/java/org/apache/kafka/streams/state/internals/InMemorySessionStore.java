@@ -164,7 +164,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        return registerNewIterator(key,
+        return registerNewIterator(
+            key,
             key,
             latestSessionStartTime,
             endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
@@ -178,7 +179,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        return registerNewIterator(key,
+        return registerNewIterator(
+            key,
             key,
             earliestSessionEndTime,
             endTimeMap.headMap(latestSessionStartTime, true).descendingMap().entrySet().iterator());
@@ -194,12 +196,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        if (keyFrom.compareTo(keyTo) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
+        if (StateStoreRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
 
         return registerNewIterator(keyFrom,
             keyTo,
@@ -217,12 +214,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        if (keyFrom.compareTo(keyTo) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
+        if (StateStoreRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
 
         return registerNewIterator(keyFrom,
             keyTo,

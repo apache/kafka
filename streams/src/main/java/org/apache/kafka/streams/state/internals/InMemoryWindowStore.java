@@ -104,9 +104,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         );
 
         if (root != null) {
-            context.register(root, (key, value) -> {
-                put(Bytes.wrap(extractStoreKeyBytes(key)), value, extractStoreTimestamp(key));
-            });
+            context.register(root, (key, value) ->
+                put(Bytes.wrap(extractStoreKeyBytes(key)), value, extractStoreTimestamp(key)));
         }
         open = true;
     }
@@ -223,12 +222,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        if (from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
+        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         // add one b/c records expire exactly retentionPeriod ms after created
         final long minTime = Math.max(timeFrom, observedStreamTime - retentionPeriod + 1);

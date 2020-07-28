@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.List;
-import java.util.NavigableMap;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -29,16 +24,17 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Iterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.List;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
     private final NavigableMap<Bytes, byte[]> map = new TreeMap<>();
     private volatile boolean open = false;
     private long size = 0L; // SkipListMap#size is O(N) so we just do our best to track it
-
-    private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
@@ -119,12 +115,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean reverse) {
-        if (from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
-                "Note that the built-in numerical serdes do not follow this for negative numbers");
-            return KeyValueIterators.emptyIterator();
-        }
+        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         return new DelegatingPeekingKeyValueIterator<>(
             name,
