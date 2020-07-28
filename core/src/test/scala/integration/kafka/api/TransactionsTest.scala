@@ -36,7 +36,7 @@ import org.junit.{After, Before, Test}
 import org.scalatest.Assertions.fail
 
 import scala.jdk.CollectionConverters._
-import scala.collection.{Seq, mutable}
+import scala.collection.Seq
 import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
 
@@ -416,10 +416,10 @@ class TransactionsTest extends KafkaServerTestHarness {
     for (i <- 0 until servers.size)
       killBroker(i)
 
-    val offsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]().asJava
-    offsets.put(new TopicPartition(topic1, 0), new OffsetAndMetadata(0))
     try {
-      producer.sendOffsetsToTransaction(offsets, "test-group")
+      producer.sendOffsetsToTransaction(Map(
+        new TopicPartition(topic1, 0) -> new OffsetAndMetadata(0)
+      ).asJava, "test-group")
       fail("Should raise a TimeoutException")
     } finally {
       producer.close(Duration.ZERO)
