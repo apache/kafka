@@ -42,15 +42,13 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * It's highly recommended to use {@link WindowStore#put(Object, Object, long)} instead, as the record timestamp
      * is unlikely to be the correct windowStartTimestamp in general.
      *
-     * @param key The key to associate the value to
+     * @param key   The key to associate the value to
      * @param value The value to update, it can be null;
      *              if the serialized bytes are also null it is interpreted as delete
      * @throws NullPointerException if the given key is {@code null}
-     *
      * @deprecated as timestamp is not provided for the key-value pair, this causes inconsistency
      * to identify the window frame to which the key belongs.
      * Use {@link #put(Object, Object, long)} instead.
-     *
      */
     @Deprecated
     void put(K key, V value);
@@ -61,8 +59,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * If serialized value bytes are null it is interpreted as delete. Note that deletes will be
      * ignored in the case of an underlying store that retains duplicates.
      *
-     * @param key The key to associate the value to
-     * @param value The value; can be null
+     * @param key                  The key to associate the value to
+     * @param value                The value; can be null
      * @param windowStartTimestamp The timestamp of the beginning of the window to put the key/value into
      * @throws NullPointerException if the given key is {@code null}
      */
@@ -94,14 +92,15 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
      * available window to the newest/latest window.
      *
-     * @param key       the key to fetch
-     * @param timeFrom  time range start (inclusive)
-     * @param timeTo    time range end (inclusive)
+     * @param key      the key to fetch
+     * @param timeFrom time range start (inclusive)
+     * @param timeTo   time range end (inclusive)
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException if the given key is {@code null}
+     * @throws NullPointerException       if the given key is {@code null}
      */
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
+    // note, this method must be kept if super#fetch(...) is removed
+    @SuppressWarnings("deprecation")
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
     @Override
@@ -119,15 +118,16 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * <p>
      * This iterator must be closed after use.
      *
-     * @param from      the first key in the range
-     * @param to        the last key in the range
-     * @param timeFrom  time range start (inclusive)
-     * @param timeTo    time range end (inclusive)
+     * @param from     the first key in the range
+     * @param to       the last key in the range
+     * @param timeFrom time range start (inclusive)
+     * @param timeTo   time range end (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException if one of the given keys is {@code null}
+     * @throws NullPointerException       if one of the given keys is {@code null}
      */
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
+    // note, this method must be kept if super#fetch(...) is removed
+    @SuppressWarnings("deprecation")
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
 
     @Override
@@ -150,7 +150,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
+    // note, this method must be kept if super#fetchAll(...) is removed
+    @SuppressWarnings("deprecation")
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     @Override

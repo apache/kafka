@@ -36,6 +36,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store
+     *
      * @param sessionKey key of the session to remove
      * @throws NullPointerException If null is used for sessionKey.
      */
@@ -43,6 +44,7 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
 
     /**
      * Write the aggregated value for the provided key to the store
+     *
      * @param sessionKey key of the session to write
      * @param aggregate  the aggregated value for the session, it can be null;
      *                   if the serialized bytes are also null it is interpreted as deletes
