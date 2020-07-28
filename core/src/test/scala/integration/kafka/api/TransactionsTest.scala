@@ -413,7 +413,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer.beginTransaction()
     producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foo".getBytes, "bar".getBytes))
 
-    for (i <- 0 until servers.size)
+    for (i <- servers.indices)
       killBroker(i)
 
     try {
