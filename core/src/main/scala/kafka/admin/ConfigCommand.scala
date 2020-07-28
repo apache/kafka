@@ -365,10 +365,10 @@ object ConfigCommand extends Config {
         adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case ConfigType.User | ConfigType.Client =>
-        val quotaConfigsToAdd = configsToBeAdded.keys.filter(QuotaConfigs.isQuotaConfig)
+        val hasQuotaConfigsToAdd = configsToBeAdded.keys.exists(QuotaConfigs.isQuotaConfig)
         val scramConfigsToAdd = configsToBeAdded.keys.filter(ScramMechanism.isScram)
         val unknownConfigsToAdd = configsToBeAdded.keys.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isQuotaConfig(key))
-        val quotaConfigsToDelete = configsToBeDeleted.filter(QuotaConfigs.isQuotaConfig)
+        val hasQuotaConfigsToDelete = configsToBeDeleted.exists(QuotaConfigs.isQuotaConfig)
         val scramConfigsToDelete = configsToBeDeleted.filter(ScramMechanism.isScram)
         val unknownConfigsToDelete = configsToBeDeleted.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isQuotaConfig(key))
         if (entityTypeHead == ConfigType.Client) {
@@ -382,45 +382,52 @@ object ConfigCommand extends Config {
           if (unknownConfigsToDelete.nonEmpty)
             throw new IllegalArgumentException(s"Only quota and SCRAM credential configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $unknownConfigsToDelete")
           if (scramConfigsToAdd.nonEmpty || scramConfigsToDelete.nonEmpty) {
-            if (quotaConfigsToAdd.nonEmpty || quotaConfigsToDelete.nonEmpty)
+            if (hasQuotaConfigsToAdd || hasQuotaConfigsToDelete)
               throw new IllegalArgumentException(s"Cannot alter both quota and SCRAM credential configs simultaneously for '$entityTypeHead' using --bootstrap-server.")
-            if (entityTypes.size == 2)
+            if (entityTypes.size == 2) // deals with the case of users specified first on the command line, with clients specified second
               throw new IllegalArgumentException(s"Only quota configs can be altered for '${ConfigType.Client}' using --bootstrap-server.")
+            val hasEntityDefault = entityNames.exists(_.isEmpty)
+            if (hasEntityDefault)
+              throw new IllegalArgumentException("The use of --entity-default is not allowed with User Scram Credentials using --bootstrap-server.")
           }
         }
 
+        if (hasQuotaConfigsToAdd || hasQuotaConfigsToDelete) {
+          // handle altering client/user quota configs
+          val oldConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)
 
-        val oldConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)
+          val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+          if (invalidConfigs.nonEmpty)
+            throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
 
-        val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
-        if (invalidConfigs.nonEmpty)
-          throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
-
-        val alterEntityTypes = entityTypes.map { entType =>
-          entType match {
-            case ConfigType.User => ClientQuotaEntity.USER
-            case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
-            case _ => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
+          val alterEntityTypes = entityTypes.map { entType =>
+            entType match {
+              case ConfigType.User => ClientQuotaEntity.USER
+              case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
+              case _ => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
+            }
           }
+          val alterEntityNames = entityNames.map(en => if (en.nonEmpty) en else null)
+
+          // Explicitly populate a HashMap to ensure nulls are recorded properly.
+          val alterEntityMap = new java.util.HashMap[String, String]
+          alterEntityTypes.zip(alterEntityNames).foreach { case (k, v) => alterEntityMap.put(k, v) }
+          val entity = new ClientQuotaEntity(alterEntityMap)
+
+          val alterOptions = new AlterClientQuotasOptions().validateOnly(false)
+          val alterOps = (configsToBeAddedMap.map { case (key, value) =>
+            val doubleValue = try value.toDouble catch {
+              case _: NumberFormatException =>
+                throw new IllegalArgumentException(s"Cannot parse quota configuration value for ${key}: ${value}")
+            }
+            new ClientQuotaAlteration.Op(key, doubleValue)
+          } ++ configsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
+
+          adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
+            .all().get(60, TimeUnit.SECONDS)
+        } else {
+          // TODO: handle altering user SCRAM credential configs
         }
-        val alterEntityNames = entityNames.map(en => if (en.nonEmpty) en else null)
-
-        // Explicitly populate a HashMap to ensure nulls are recorded properly.
-        val alterEntityMap = new java.util.HashMap[String, String]
-        alterEntityTypes.zip(alterEntityNames).foreach { case (k, v) => alterEntityMap.put(k, v) }
-        val entity = new ClientQuotaEntity(alterEntityMap)
-
-        val alterOptions = new AlterClientQuotasOptions().validateOnly(false)
-        val alterOps = (configsToBeAddedMap.map { case (key, value) =>
-          val doubleValue = try value.toDouble catch {
-            case _: NumberFormatException =>
-              throw new IllegalArgumentException(s"Cannot parse quota configuration value for ${key}: ${value}")
-          }
-          new ClientQuotaAlteration.Op(key, doubleValue)
-        } ++ configsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
-
-        adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
-          .all().get(60, TimeUnit.SECONDS)
 
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")
     }
@@ -440,7 +447,7 @@ object ConfigCommand extends Config {
       case ConfigType.Topic | ConfigType.Broker | BrokerLoggerConfigType =>
         describeResourceConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
       case ConfigType.User | ConfigType.Client =>
-        describeClientQuotasConfig(adminClient, entityTypes, entityNames)
+        describeClientQuotaAndUserScramCredentialConfigs(adminClient, entityTypes, entityNames)
     }
   }
 
@@ -509,8 +516,9 @@ object ConfigCommand extends Config {
       }).toSeq
   }
 
-  private def describeClientQuotasConfig(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
-    getAllClientQuotasConfigs(adminClient, entityTypes, entityNames).foreach { case (entity, entries) =>
+  private def describeClientQuotaAndUserScramCredentialConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
+    val quotaConfigs = getAllClientQuotasConfigs(adminClient, entityTypes, entityNames)
+    quotaConfigs.foreach { case (entity, entries) =>
       val entityEntries = entity.entries.asScala
 
       def entitySubstr(entityType: String): Option[String] =
@@ -525,7 +533,11 @@ object ConfigCommand extends Config {
 
       val entityStr = (entitySubstr(ClientQuotaEntity.USER) ++ entitySubstr(ClientQuotaEntity.CLIENT_ID)).mkString(", ")
       val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
-      println(s"Configs for ${entityStr} are ${entriesStr}")
+      println(s"Quota configs for ${entityStr} are ${entriesStr}")
+    }
+    // we describe user SCRAM credentials only when we are not describing client information and we are not given --entity-default
+    if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
+      // TODO: handle describing user SCRAM credential configs
     }
   }
 
@@ -676,7 +688,7 @@ object ConfigCommand extends Config {
       .ofType(classOf[String])
     val alterOpt = parser.accepts("alter", "Alter the configuration for the entity.")
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
-    val allOpt = parser.accepts("all", "List all configs for the given entity (includes static configuration when the entity type is brokers)")
+    val allOpt = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
 
     val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers)")
             .withRequiredArg

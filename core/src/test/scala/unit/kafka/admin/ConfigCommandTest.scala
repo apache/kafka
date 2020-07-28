@@ -557,6 +557,44 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
+  def shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer(): Unit = {
+    // SCRAM credentials should not be described when specifying --describe --entity-default with --bootstrap-server
+    val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
+    describeFuture.complete(Map((new ClientQuotaEntity(Map("" -> "").asJava) -> Map(("request_percentage" -> Double.box(50.0))).asJava)).asJava)
+    val describeClientQuotasResult: DescribeClientQuotasResult = EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
+    EasyMock.expect(describeClientQuotasResult.entities()).andReturn(describeFuture)
+    EasyMock.replay(describeClientQuotasResult)
+
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions):  DescribeClientQuotasResult = {
+        describeClientQuotasResult
+      }
+      override def describeUserScramCredentials(users: util.List[String], options: DescribeUserScramCredentialsOptions): DescribeUserScramCredentialsResult = {
+        throw new IllegalStateException("Incorrectly described SCRAM credentials when specifying --entity-default with --bootstrap-server")
+      }
+    }
+
+    def verifyCommand(expectedMessage: String, alterOrDescribeOpt: String, requestOpts: String*): Unit = {
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092", "--entity-type", "users",
+        alterOrDescribeOpt) ++ requestOpts)
+      if (alterOrDescribeOpt.equals("--describe"))
+        ConfigCommand.describeConfig(mockAdminClient, opts) // fails if describeUserScramCredentials() is invoked
+      else {
+        val e = intercept[IllegalArgumentException] {
+          ConfigCommand.alterConfig(mockAdminClient, opts)
+        }
+        assertTrue(s"Unexpected exception: $e", e.getMessage.contains(expectedMessage))
+      }
+    }
+
+    val expectedMsg = "The use of --entity-default is not allowed with User Scram Credentials using --bootstrap-server."
+    verifyCommand(expectedMsg, "--alter", "--entity-default", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand(expectedMsg, "--alter", "--entity-default", "--delete-config", "SCRAM-SHA-256")
+    verifyCommand(expectedMsg, "--describe", "--entity-default")
+  }
+
+  @Test
   def shouldAddTopicConfigUsingZookeeper(): Unit = {
     val createOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
       "--entity-name", "my-topic",
