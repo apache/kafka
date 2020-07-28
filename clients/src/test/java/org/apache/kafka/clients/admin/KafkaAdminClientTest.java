@@ -496,7 +496,7 @@ public class KafkaAdminClientTest {
             result.setErrorMessage(error.message());
             results.add(result);
         }
-        return new UpdateFeaturesResponse( new UpdateFeaturesResponseData().setResults(results));
+        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData().setResults(results));
     }
 
     private static FeatureMetadata defaultFeatureMetadata() {
