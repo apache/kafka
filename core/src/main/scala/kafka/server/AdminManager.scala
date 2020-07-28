@@ -26,7 +26,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
@@ -38,6 +38,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
 import org.apache.kafka.common.message.{AlterUserScramCredentialsRequestData, AlterUserScramCredentialsResponseData, DescribeConfigsResponseData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.{CredentialInfo, UserScramCredential}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
@@ -46,6 +47,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
+import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
@@ -982,7 +984,34 @@ class AdminManager(val config: KafkaConfig,
   }
 
   def describeUserScramCredentials(users: Seq[String]): DescribeUserScramCredentialsResponseData = {
-    new DescribeUserScramCredentialsResponseData() // TODO: implementme
+    val retval = new DescribeUserScramCredentialsResponseData()
+
+    def addUserConfigToResults(user: String, userConfig: Properties) = {
+      val configKeys = userConfig.stringPropertyNames
+      val hasScramCredential = !ScramMechanism.values().toList.filter(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.toMechanismName)).isEmpty
+      if (hasScramCredential) {
+        val userScramCredentials = new UserScramCredential().setName(user)
+        ScramMechanism.values().foreach(mechanism => if (mechanism != ScramMechanism.UNKNOWN) {
+          val propertyValue = userConfig.getProperty(mechanism.toMechanismName)
+          if (propertyValue != null) {
+            val iterations = ScramCredentialUtils.credentialFromString(propertyValue).iterations()
+            userScramCredentials.credentialInfos.add(new CredentialInfo().setMechanism(mechanism.ordinal().toByte).setIterations(iterations))
+          }
+        })
+        retval.userScramCredentials.add(userScramCredentials)
+      }
+    }
+
+    if (users.isEmpty)
+      // describe all users
+      adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
+        case (user, properties) => addUserConfigToResults(user, properties)
+    } else
+      // describe specific users
+      users.foreach {
+        user => addUserConfigToResults(user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user)))
+      }
+    retval
   }
 
   def alterUserScramCredentials(upsertions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion],

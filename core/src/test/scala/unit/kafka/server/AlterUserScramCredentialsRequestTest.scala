@@ -85,8 +85,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
-        .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("name1").setMechanism(ScramMechanism.HMAC_SHA_256.ordinal().toByte)))
-        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("name2").setMechanism(ScramMechanism.HMAC_SHA_512.ordinal().toByte)))).build()
+        .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("name1").setMechanism(ScramMechanism.SCRAM_SHA_256.ordinal().toByte)))
+        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("name2").setMechanism(ScramMechanism.SCRAM_SHA_512.ordinal().toByte)))).build()
     val response = sendAlterUserScramCredentialsRequest(request)
 
     val results = response.data.results
@@ -99,8 +99,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   def testAlterNotController(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
-        .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("name1").setMechanism(ScramMechanism.HMAC_SHA_256.ordinal().toByte)))
-        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("name2").setMechanism(ScramMechanism.HMAC_SHA_512.ordinal().toByte)))).build()
+        .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("name1").setMechanism(ScramMechanism.SCRAM_SHA_256.ordinal().toByte)))
+        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("name2").setMechanism(ScramMechanism.SCRAM_SHA_512.ordinal().toByte)))).build()
     val response = sendAlterUserScramCredentialsRequest(request, notControllerSocketServer)
 
     val results = response.data.results

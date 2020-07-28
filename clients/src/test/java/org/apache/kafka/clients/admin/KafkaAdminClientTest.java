@@ -4423,9 +4423,9 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             final String user0Name = "user0";
-            ScramMechanism user0ScramMechanism0 = ScramMechanism.HMAC_SHA_256;
+            ScramMechanism user0ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
             int user0Iterations0 = 4096;
-            ScramMechanism user0ScramMechanism1 = ScramMechanism.HMAC_SHA_512;
+            ScramMechanism user0ScramMechanism1 = ScramMechanism.SCRAM_SHA_512;
             int user0Iterations1 = 8192;
 
             final CredentialInfo user0CredentialInfo0 = new CredentialInfo();
@@ -4439,7 +4439,7 @@ public class KafkaAdminClientTest {
             user0.setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1));
 
             final String user1Name = "user1";
-            ScramMechanism user1ScramMechanism = ScramMechanism.HMAC_SHA_256;
+            ScramMechanism user1ScramMechanism = ScramMechanism.SCRAM_SHA_256;
             int user1Iterations = 4096;
 
             final CredentialInfo user1CredentialInfo = new CredentialInfo();

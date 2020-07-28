@@ -29,7 +29,7 @@ import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncod
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, Config => JConfig}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, UserScramCredentialsDescription, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -537,7 +537,10 @@ object ConfigCommand extends Config {
     }
     // we describe user SCRAM credentials only when we are not describing client information and we are not given --entity-default
     if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
-      // TODO: handle describing user SCRAM credential configs
+      getUserScramCredentialConfigs(adminClient, entityNames).foreach { case (user, description) =>
+        val descriptionText = description.getInfos.asScala.map(info => s"${info.getMechanism.toMechanismName}=iterations=${info.getIterations}").mkString(", ")
+        println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
+      }
     }
   }
 
@@ -563,6 +566,10 @@ object ConfigCommand extends Config {
     }
 
     adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala
+  }
+
+  private def getUserScramCredentialConfigs(adminClient: Admin, users: List[String]): Map[String, UserScramCredentialsDescription] = {
+      adminClient.describeUserScramCredentials(users.asJava).all.get(30, TimeUnit.SECONDS).asScala
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {

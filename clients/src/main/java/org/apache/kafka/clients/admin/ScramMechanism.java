@@ -24,8 +24,8 @@ package org.apache.kafka.clients.admin;
  */
 public enum ScramMechanism {
     UNKNOWN((byte) 0),
-    HMAC_SHA_256((byte) 1),
-    HMAC_SHA_512((byte) 2);
+    SCRAM_SHA_256((byte) 1),
+    SCRAM_SHA_512((byte) 2);
 
     /**
      *
@@ -39,6 +39,16 @@ public enum ScramMechanism {
             }
         }
         return UNKNOWN;
+    }
+
+    /**
+     *
+     * @return the corresponding SASL SCRAM mechanism name
+     * @see <a href="https://tools.ietf.org/html/rfc5802#section-4>
+     *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
+     */
+    public String toMechanismName() {
+        return toString().replace('_', '-');
     }
 
     byte type;
