@@ -23,6 +23,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.junit.Test;
 
@@ -69,7 +70,7 @@ public class WindowedStreamPartitionerTest {
             final Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
 
             for (int w = 1; w < 10; w++) {
-                final TimeWindow window = new TimeWindow(10 * w, 20 * w);
+                final Window window = Window.withBounds(10 * w, 20 * w);
 
                 final Windowed<Integer> windowedKey = new Windowed<>(key, window);
                 final Integer actual = streamPartitioner.partition(topicName, windowedKey, value, infos.size());

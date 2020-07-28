@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -93,13 +94,13 @@ public class SessionWindowedKStreamImplTest {
 
         assertThat(result.size(), equalTo(3));
         assertThat(
-            result.get(new Windowed<>("1", new SessionWindow(10L, 15L))),
+            result.get(new Windowed<>("1", Window.withBounds(10L, 15L))),
             equalTo(ValueAndTimestamp.make(2L, 15L)));
         assertThat(
-            result.get(new Windowed<>("2", new SessionWindow(599L, 600L))),
+            result.get(new Windowed<>("2", Window.withBounds(599L, 600L))),
             equalTo(ValueAndTimestamp.make(2L, 600L)));
         assertThat(
-            result.get(new Windowed<>("1", new SessionWindow(600L, 600L))),
+            result.get(new Windowed<>("1", Window.withBounds(600L, 600L))),
             equalTo(ValueAndTimestamp.make(1L, 600L)));
     }
 
@@ -119,13 +120,13 @@ public class SessionWindowedKStreamImplTest {
 
         assertThat(result.size(), equalTo(3));
         assertThat(
-            result.get(new Windowed<>("1", new SessionWindow(10, 15))),
+            result.get(new Windowed<>("1", Window.withBounds(10, 15))),
             equalTo(ValueAndTimestamp.make("1+2", 15L)));
         assertThat(
-            result.get(new Windowed<>("2", new SessionWindow(599L, 600))),
+            result.get(new Windowed<>("2", Window.withBounds(599L, 600))),
             equalTo(ValueAndTimestamp.make("1+2", 600L)));
         assertThat(
-            result.get(new Windowed<>("1", new SessionWindow(600, 600))),
+            result.get(new Windowed<>("1", Window.withBounds(600, 600))),
             equalTo(ValueAndTimestamp.make("3", 600L)));
     }
 
@@ -147,13 +148,13 @@ public class SessionWindowedKStreamImplTest {
 
         assertThat(result.size(), equalTo(3));
         assertThat(
-            result.get(new Windowed<>("1", new SessionWindow(10, 15))),
+            result.get(new Windowed<>("1", Window.withBounds(10, 15))),
             equalTo(ValueAndTimestamp.make("0+0+1+2", 15L)));
         assertThat(
-            result.get(new Windowed<>("2", new SessionWindow(599, 600))),
+            result.get(new Windowed<>("2", Window.withBounds(599, 600))),
             equalTo(ValueAndTimestamp.make("0+0+1+2", 600L)));
         assertThat(
-            result.get(new Windowed<>("1", new SessionWindow(600, 600))),
+            result.get(new Windowed<>("1", Window.withBounds(600, 600))),
             equalTo(ValueAndTimestamp.make("0+3", 600L)));
     }
 
@@ -168,9 +169,9 @@ public class SessionWindowedKStreamImplTest {
             assertThat(
                 data,
                 equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(10, 15)), 2L),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(600, 600)), 1L),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(599, 600)), 2L))));
         }
     }
 
@@ -186,9 +187,9 @@ public class SessionWindowedKStreamImplTest {
             assertThat(
                 data,
                 equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(10, 15)), "1+2"),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(600, 600)), "3"),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(599, 600)), "1+2"))));
         }
     }
 
@@ -207,9 +208,9 @@ public class SessionWindowedKStreamImplTest {
             assertThat(
                 data,
                 equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
-                    KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(10, 15)), "0+0+1+2"),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(600, 600)), "0+3"),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(599, 600)), "0+0+1+2"))));
         }
     }
 

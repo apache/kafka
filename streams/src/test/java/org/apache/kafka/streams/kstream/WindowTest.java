@@ -22,44 +22,21 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 
 public class WindowTest {
-
-    static class TestWindow extends Window {
-        TestWindow(final long startMs, final long endMs) {
-            super(startMs, endMs);
-        }
-
-        @Override
-        public boolean overlap(final Window other) {
-            return false;
-        }
-    }
-
-    static class TestWindow2 extends  Window {
-        TestWindow2(final long startMs, final long endMs) {
-            super(startMs, endMs);
-        }
-
-        @Override
-        public boolean overlap(final Window other) {
-            return false;
-        }
-    }
-
-    private final TestWindow window = new TestWindow(5, 10);
+    private final Window window = Window.withBounds(5, 10);
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfStartIsNegative() {
-        new TestWindow(-1, 0);
+        Window.withBounds(-1, 0);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfEndIsSmallerThanStart() {
-        new TestWindow(1, 0);
+        Window.withBounds(1, 0);
     }
 
     @Test
     public void shouldBeEqualIfStartAndEndSame() {
-        final TestWindow window2 = new TestWindow(window.startMs, window.endMs);
+        final Window window2 = Window.withBounds(window.startMs, window.endMs);
 
         assertEquals(window, window);
         assertEquals(window, window2);
@@ -73,16 +50,11 @@ public class WindowTest {
 
     @Test
     public void shouldNotBeEqualIfStartOrEndIsDifferent() {
-        assertNotEquals(window, new TestWindow(0, window.endMs));
-        assertNotEquals(window, new TestWindow(7, window.endMs));
-        assertNotEquals(window, new TestWindow(window.startMs, 7));
-        assertNotEquals(window, new TestWindow(window.startMs, 15));
-        assertNotEquals(window, new TestWindow(7, 8));
-        assertNotEquals(window, new TestWindow(0, 15));
-    }
-
-    @Test
-    public void shouldNotBeEqualIfDifferentWindowType() {
-        assertNotEquals(window, new TestWindow2(window.startMs, window.endMs));
+        assertNotEquals(window, Window.withBounds(0, window.endMs));
+        assertNotEquals(window, Window.withBounds(7, window.endMs));
+        assertNotEquals(window, Window.withBounds(window.startMs, 7));
+        assertNotEquals(window, Window.withBounds(window.startMs, 15));
+        assertNotEquals(window, Window.withBounds(7, 8));
+        assertNotEquals(window, Window.withBounds(0, 15));
     }
 }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.junit.Test;
 
 import java.util.Map;
@@ -57,25 +56,25 @@ public class UnlimitedWindowsTest {
     @Test
     public void shouldIncludeRecordsThatHappenedOnWindowStart() {
         final UnlimitedWindows w = UnlimitedWindows.of().startOn(ofEpochMilli(anyStartTime));
-        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(w.startMs);
+        final Map<Long, Window> matchedWindows = w.windowsFor(w.startMs);
         assertEquals(1, matchedWindows.size());
-        assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
+        assertEquals(Window.withBounds(anyStartTime, Long.MAX_VALUE), matchedWindows.get(anyStartTime));
     }
 
     @Test
     public void shouldIncludeRecordsThatHappenedAfterWindowStart() {
         final UnlimitedWindows w = UnlimitedWindows.of().startOn(ofEpochMilli(anyStartTime));
         final long timestamp = w.startMs + 1;
-        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
+        final Map<Long, Window> matchedWindows = w.windowsFor(timestamp);
         assertEquals(1, matchedWindows.size());
-        assertEquals(new UnlimitedWindow(anyStartTime), matchedWindows.get(anyStartTime));
+        assertEquals(Window.withBounds(anyStartTime, Long.MAX_VALUE), matchedWindows.get(anyStartTime));
     }
 
     @Test
     public void shouldExcludeRecordsThatHappenedBeforeWindowStart() {
         final UnlimitedWindows w = UnlimitedWindows.of().startOn(ofEpochMilli(anyStartTime));
         final long timestamp = w.startMs - 1;
-        final Map<Long, UnlimitedWindow> matchedWindows = w.windowsFor(timestamp);
+        final Map<Long, Window> matchedWindows = w.windowsFor(timestamp);
         assertTrue(matchedWindows.isEmpty());
     }
 

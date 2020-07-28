@@ -273,7 +273,7 @@ public interface CogroupedKStream<K, VOut> {
      * @param <W>     the window type
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
-    <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final EnumerableWindowDefinition<W> windows);
+    TimeWindowedCogroupedKStream<K, VOut> windowedBy(final EnumerableWindowDefinition windows);
 
     /**
      * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session

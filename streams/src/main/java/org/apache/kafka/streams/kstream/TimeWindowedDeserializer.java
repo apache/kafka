@@ -21,10 +21,8 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.internals.WindowKeySchema;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -59,7 +57,7 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
         this.inner = inner;
-        this.windowEndForStartFunction = start -> new TimeWindow(start, start + windowSize);
+        this.windowEndForStartFunction = start -> Window.withBounds(start, start + windowSize);
         this.isChangelogTopic = false;
     }
 

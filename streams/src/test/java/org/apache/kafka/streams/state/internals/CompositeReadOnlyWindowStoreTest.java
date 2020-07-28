@@ -19,8 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.StateStoreProviderStub;
@@ -207,8 +207,8 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.fetch("a", "b", ofEpochMilli(0), ofEpochMilli(10)));
         assertThat(results, equalTo(Arrays.asList(
-                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+                KeyValue.pair(new Windowed<>("a", Window.withBounds(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", Window.withBounds(10, 10 + WINDOW_SIZE)), "b"))));
     }
 
     @Test
@@ -233,8 +233,8 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.all());
         assertThat(results, equalTo(Arrays.asList(
-                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+                KeyValue.pair(new Windowed<>("a", Window.withBounds(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", Window.withBounds(10, 10 + WINDOW_SIZE)), "b"))));
     }
 
     @Test
@@ -246,8 +246,8 @@ public class CompositeReadOnlyWindowStoreTest {
         secondUnderlying.put("b", "b", 10L);
         final List<KeyValue<Windowed<String>, String>> results = StreamsTestUtils.toList(windowStore.fetchAll(ofEpochMilli(0), ofEpochMilli(10)));
         assertThat(results, equalTo(Arrays.asList(
-                KeyValue.pair(new Windowed<>("a", new TimeWindow(0, WINDOW_SIZE)), "a"),
-                KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
+                KeyValue.pair(new Windowed<>("a", Window.withBounds(0, WINDOW_SIZE)), "a"),
+                KeyValue.pair(new Windowed<>("b", Window.withBounds(10, 10 + WINDOW_SIZE)), "b"))));
     }
 
     @Test(expected = NullPointerException.class)

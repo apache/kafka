@@ -28,8 +28,8 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -109,12 +109,12 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldPutAndFindSessionsInRange() {
         final String key = "a";
-        final Windowed<String> a1 = new Windowed<>(key, new SessionWindow(10, 10L));
-        final Windowed<String> a2 = new Windowed<>(key, new SessionWindow(500L, 1000L));
+        final Windowed<String> a1 = new Windowed<>(key, Window.withBounds(10, 10L));
+        final Windowed<String> a2 = new Windowed<>(key, Window.withBounds(500L, 1000L));
         sessionStore.put(a1, 1L);
         sessionStore.put(a2, 2L);
-        sessionStore.put(new Windowed<>(key, new SessionWindow(1500L, 2000L)), 1L);
-        sessionStore.put(new Windowed<>(key, new SessionWindow(2500L, 3000L)), 2L);
+        sessionStore.put(new Windowed<>(key, Window.withBounds(1500L, 2000L)), 1L);
+        sessionStore.put(new Windowed<>(key, Window.withBounds(2500L, 3000L)), 2L);
 
         final List<KeyValue<Windowed<String>, Long>> expected =
             Arrays.asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
@@ -136,17 +136,17 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldFetchAllSessionsWithSameRecordKey() {
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
+            KeyValue.pair(new Windowed<>("a", Window.withBounds(0, 0)), 1L),
+            KeyValue.pair(new Windowed<>("a", Window.withBounds(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("a", Window.withBounds(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("a", Window.withBounds(1000, 1000)), 4L));
 
         for (final KeyValue<Windowed<String>, Long> kv : expected) {
             sessionStore.put(kv.key, kv.value);
         }
 
         // add one that shouldn't appear in the results
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 5L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(0, 0)), 5L);
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
             assertEquals(new HashSet<>(expected), toSet(values));
@@ -156,19 +156,19 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldFetchAllSessionsWithinKeyRange() {
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>("aa", new SessionWindow(10, 10)), 2L),
-            KeyValue.pair(new Windowed<>("b", new SessionWindow(1000, 1000)), 4L),
+            KeyValue.pair(new Windowed<>("aa", Window.withBounds(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("b", Window.withBounds(1000, 1000)), 4L),
 
-            KeyValue.pair(new Windowed<>("aaa", new SessionWindow(100, 100)), 3L),
-            KeyValue.pair(new Windowed<>("bb", new SessionWindow(1500, 2000)), 5L));
+            KeyValue.pair(new Windowed<>("aaa", Window.withBounds(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("bb", Window.withBounds(1500, 2000)), 5L));
 
         for (final KeyValue<Windowed<String>, Long> kv : expected) {
             sessionStore.put(kv.key, kv.value);
         }
 
         // add some that shouldn't appear in the results
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("bbb", Window.withBounds(2500, 3000)), 6L);
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("aa", "bb")) {
             assertEquals(new HashSet<>(expected), toSet(values));
@@ -177,11 +177,11 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldFetchExactSession() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 4)), 1L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 3)), 2L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 4)), 3L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(1, 4)), 4L);
-        sessionStore.put(new Windowed<>("aaa", new SessionWindow(0, 4)), 5L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 4)), 1L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(0, 3)), 2L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(0, 4)), 3L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(1, 4)), 4L);
+        sessionStore.put(new Windowed<>("aaa", Window.withBounds(0, 4)), 5L);
 
         final long result = sessionStore.fetchSession("aa", 0, 4);
         assertEquals(3L, result);
@@ -195,12 +195,12 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldFindValuesWithinMergingSessionWindowRange() {
         final String key = "a";
-        sessionStore.put(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L);
-        sessionStore.put(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L);
+        sessionStore.put(new Windowed<>(key, Window.withBounds(0L, 0L)), 1L);
+        sessionStore.put(new Windowed<>(key, Window.withBounds(1000L, 1000L)), 2L);
 
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L),
-            KeyValue.pair(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L));
+            KeyValue.pair(new Windowed<>(key, Window.withBounds(0L, 0L)), 1L),
+            KeyValue.pair(new Windowed<>(key, Window.withBounds(1000L, 1000L)), 2L));
 
         try (final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions(key, -1, 1000L)) {
             assertEquals(new HashSet<>(expected), toSet(results));
@@ -209,10 +209,10 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldRemove() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1000)), 1L);
-        sessionStore.put(new Windowed<>("a", new SessionWindow(1500, 2500)), 2L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 1000)), 1L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(1500, 2500)), 2L);
 
-        sessionStore.remove(new Windowed<>("a", new SessionWindow(0, 1000)));
+        sessionStore.remove(new Windowed<>("a", Window.withBounds(0, 1000)));
 
         try (final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions("a", 0L, 1000L)) {
             assertFalse(results.hasNext());
@@ -225,10 +225,10 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldRemoveOnNullAggValue() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1000)), 1L);
-        sessionStore.put(new Windowed<>("a", new SessionWindow(1500, 2500)), 2L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 1000)), 1L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(1500, 2500)), 2L);
 
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1000)), null);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 1000)), null);
 
         try (final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions("a", 0L, 1000L)) {
             assertFalse(results.hasNext());
@@ -241,11 +241,11 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldFindSessionsToMerge() {
-        final Windowed<String> session1 = new Windowed<>("a", new SessionWindow(0, 100));
-        final Windowed<String> session2 = new Windowed<>("a", new SessionWindow(101, 200));
-        final Windowed<String> session3 = new Windowed<>("a", new SessionWindow(201, 300));
-        final Windowed<String> session4 = new Windowed<>("a", new SessionWindow(301, 400));
-        final Windowed<String> session5 = new Windowed<>("a", new SessionWindow(401, 500));
+        final Windowed<String> session1 = new Windowed<>("a", Window.withBounds(0, 100));
+        final Windowed<String> session2 = new Windowed<>("a", Window.withBounds(101, 200));
+        final Windowed<String> session3 = new Windowed<>("a", Window.withBounds(201, 300));
+        final Windowed<String> session4 = new Windowed<>("a", Window.withBounds(301, 400));
+        final Windowed<String> session5 = new Windowed<>("a", Window.withBounds(401, 500));
         sessionStore.put(session1, 1L);
         sessionStore.put(session2, 2L);
         sessionStore.put(session3, 3L);
@@ -265,12 +265,12 @@ public abstract class AbstractSessionBytesStoreTest {
         sessionStore = buildSessionStore(0x7a00000000000000L, Serdes.String(), Serdes.Long());
         sessionStore.init(context, sessionStore);
 
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
-        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(10, 20)), 4L);
         sessionStore.put(new Windowed<>("a",
-            new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
+            Window.withBounds(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
             sessionStore.findSessions("a", 0, Long.MAX_VALUE)
@@ -308,15 +308,15 @@ public abstract class AbstractSessionBytesStoreTest {
         final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
         final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
 
-        sessionStore.put(new Windowed<>(key1, new SessionWindow(1, 100)), "1");
-        sessionStore.put(new Windowed<>(key2, new SessionWindow(2, 100)), "2");
-        sessionStore.put(new Windowed<>(key3, new SessionWindow(3, 100)), "3");
-        sessionStore.put(new Windowed<>(key1, new SessionWindow(4, 100)), "4");
-        sessionStore.put(new Windowed<>(key2, new SessionWindow(5, 100)), "5");
-        sessionStore.put(new Windowed<>(key3, new SessionWindow(6, 100)), "6");
-        sessionStore.put(new Windowed<>(key1, new SessionWindow(7, 100)), "7");
-        sessionStore.put(new Windowed<>(key2, new SessionWindow(8, 100)), "8");
-        sessionStore.put(new Windowed<>(key3, new SessionWindow(9, 100)), "9");
+        sessionStore.put(new Windowed<>(key1, Window.withBounds(1, 100)), "1");
+        sessionStore.put(new Windowed<>(key2, Window.withBounds(2, 100)), "2");
+        sessionStore.put(new Windowed<>(key3, Window.withBounds(3, 100)), "3");
+        sessionStore.put(new Windowed<>(key1, Window.withBounds(4, 100)), "4");
+        sessionStore.put(new Windowed<>(key2, Window.withBounds(5, 100)), "5");
+        sessionStore.put(new Windowed<>(key3, Window.withBounds(6, 100)), "6");
+        sessionStore.put(new Windowed<>(key1, Window.withBounds(7, 100)), "7");
+        sessionStore.put(new Windowed<>(key2, Window.withBounds(8, 100)), "8");
+        sessionStore.put(new Windowed<>(key3, Window.withBounds(9, 100)), "9");
 
         final Set<String> expectedKey1 = new HashSet<>(asList("1", "4", "7"));
         assertThat(valuesToSet(sessionStore.findSessions(key1, 0L, Long.MAX_VALUE)), equalTo(expectedKey1));
@@ -328,14 +328,14 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void testIteratorPeek() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
-        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(10, 20)), 4L);
 
         final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0L, 20);
 
-        assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(0L, 0L)));
+        assertEquals(iterator.peekNextKey(), new Windowed<>("a", Window.withBounds(0L, 0L)));
         assertEquals(iterator.peekNextKey(), iterator.next().key);
         assertEquals(iterator.peekNextKey(), iterator.next().key);
         assertFalse(iterator.hasNext());
@@ -344,10 +344,10 @@ public abstract class AbstractSessionBytesStoreTest {
     @Test
     public void shouldRestore() {
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
-            KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
+            KeyValue.pair(new Windowed<>("a", Window.withBounds(0, 0)), 1L),
+            KeyValue.pair(new Windowed<>("a", Window.withBounds(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("a", Window.withBounds(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("a", Window.withBounds(1000, 1000)), 4L));
 
         for (final KeyValue<Windowed<String>, Long> kv : expected) {
             sessionStore.put(kv.key, kv.value);
@@ -378,9 +378,9 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        sessionStore.put(new Windowed<>("b", new SessionWindow(10, 50)), 2L);
-        sessionStore.put(new Windowed<>("c", new SessionWindow(100, 500)), 3L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("b", Window.withBounds(10, 50)), 2L);
+        sessionStore.put(new Windowed<>("c", Window.withBounds(100, 500)), 3L);
 
         final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.fetch("a");
         assertTrue(iterator.hasNext());
@@ -391,10 +391,10 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldReturnSameResultsForSingleKeyFindSessionsAndEqualKeyRangeFindSessions() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1)), 0L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(2, 3)), 1L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(4, 5)), 2L);
-        sessionStore.put(new Windowed<>("aaa", new SessionWindow(6, 7)), 3L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 1)), 0L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(2, 3)), 1L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(4, 5)), 2L);
+        sessionStore.put(new Windowed<>("aaa", Window.withBounds(6, 7)), 3L);
 
         final KeyValueIterator<Windowed<String>, Long> singleKeyIterator = sessionStore.findSessions("aa", 0L, 10L);
         final KeyValueIterator<Windowed<String>, Long> rangeIterator = sessionStore.findSessions("aa", "aa", 0L, 10L);
@@ -432,11 +432,11 @@ public abstract class AbstractSessionBytesStoreTest {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
             // Note that rocksdb will only expire segments at a time (where segment interval = 60,000 for this retention period)
-            sessionStore.put(new Windowed<>("initial record", new SessionWindow(0, 2 * SEGMENT_INTERVAL)), 0L);
+            sessionStore.put(new Windowed<>("initial record", Window.withBounds(0, 2 * SEGMENT_INTERVAL)), 0L);
 
             // Try inserting a record with timestamp 0 -- should be dropped
-            sessionStore.put(new Windowed<>("late record", new SessionWindow(0, 0)), 0L);
-            sessionStore.put(new Windowed<>("another on-time record", new SessionWindow(0, 2 * SEGMENT_INTERVAL)), 0L);
+            sessionStore.put(new Windowed<>("late record", Window.withBounds(0, 0)), 0L);
+            sessionStore.put(new Windowed<>("another on-time record", Window.withBounds(0, 2 * SEGMENT_INTERVAL)), 0L);
 
             final List<String> messages = appender.getMessages();
             assertThat(messages, hasItem("Skipping record for expired segment."));
@@ -496,7 +496,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldNotThrowExceptionRemovingNonexistentKey() {
-        sessionStore.remove(new Windowed<>("a", new SessionWindow(0, 1)));
+        sessionStore.remove(new Windowed<>("a", Window.withBounds(0, 1)));
     }
 
     @Test(expected = NullPointerException.class)

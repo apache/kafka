@@ -22,14 +22,14 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 
-final class DeprecatedWindowsUtils {
+public final class DeprecatedWindowsUtils {
 
     private DeprecatedWindowsUtils() {}
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"unchecked", "deprecation"})
     static <K, VR, W extends Window> RocksDbWindowBytesStoreSupplier supplierFromDeprecatedWindows(
         final String name,
-        final EnumerableWindowDefinition<W> windows,
+        final EnumerableWindowDefinition windows,
         final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
 
         // old style retention: use deprecated Windows retention/segmentInterval.
@@ -60,7 +60,13 @@ final class DeprecatedWindowsUtils {
     }
 
     @SuppressWarnings("deprecation")
-    static <W extends Window> boolean isDeprecatedWindows(final EnumerableWindowDefinition<W> windows) {
+    static boolean isDeprecatedWindows(final EnumerableWindowDefinition windows) {
         return windows instanceof org.apache.kafka.streams.kstream.Windows;
+    }
+
+
+    @SuppressWarnings("unchecked") // can be removed when windowsFor is made to return exactly Window, not <W extends Window>
+    public static  <W extends Window> W asWindowSubclass(final Window window) {
+        return (W) window;
     }
 }

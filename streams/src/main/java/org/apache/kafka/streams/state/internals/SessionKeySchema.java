@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -35,13 +34,13 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
+        final Windowed<Bytes> sessionKey = new Windowed<>(key, Window.withBounds(to, Long.MAX_VALUE));
         return SessionKeySchema.toBinary(sessionKey);
     }
 
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
-        final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
+        final Windowed<Bytes> sessionKey = new Windowed<>(key, Window.withBounds(0, Math.max(0, from)));
         return SessionKeySchema.toBinary(sessionKey);
     }
 
@@ -115,7 +114,7 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
         final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
-        return new SessionWindow(start, end);
+        return Window.withBounds(start, end);
     }
 
     public static <K> Windowed<K> from(final byte[] binaryKey,

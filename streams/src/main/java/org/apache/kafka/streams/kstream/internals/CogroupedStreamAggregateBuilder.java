@@ -55,7 +55,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                        final Serde<KR> keySerde,
                                                        final Serde<VOut> valueSerde,
                                                        final String queryableName,
-                                                       final EnumerableWindowDefinition<W> windows,
+                                                       final EnumerableWindowDefinition windows,
                                                        final SessionWindows sessionWindows,
                                                        final Merger<? super K, VOut> sessionMerger) {
 
@@ -131,7 +131,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                                                     final String processorName,
                                                                                     final boolean stateCreated,
                                                                                     final StoreBuilder<?> storeBuilder,
-                                                                                    final EnumerableWindowDefinition<W> windows,
+                                                                                    final EnumerableWindowDefinition windows,
                                                                                     final SessionWindows sessionWindows,
                                                                                     final Merger<? super K, VOut> sessionMerger) {
 

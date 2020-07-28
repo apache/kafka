@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.state.SessionStore;
@@ -45,7 +45,7 @@ public class ChangeLoggingSessionBytesStoreTest {
     private ChangeLoggingSessionBytesStore store;
     private final byte[] value1 = {0};
     private final Bytes bytesKey = Bytes.wrap(value1);
-    private final Windowed<Bytes> key1 = new Windowed<>(bytesKey, new SessionWindow(0, 0));
+    private final Windowed<Bytes> key1 = new Windowed<>(bytesKey, Window.withBounds(0, 0));
 
     @Before
     public void setUp() {

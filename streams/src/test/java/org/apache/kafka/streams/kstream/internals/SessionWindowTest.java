@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Window;
 import org.junit.Test;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation")
 public class SessionWindowTest {
 
     private long start = 50;
     private long end = 100;
-    private final SessionWindow window = new SessionWindow(start, end);
-    private final TimeWindow timeWindow = new TimeWindow(start, end);
+    private final Window window = Window.withBounds(start, end);
+    private final Window timeWindow = Window.withBounds(start, end);
 
     @Test
     public void shouldNotOverlapIfOtherWindowIsBeforeThisWindow() {
@@ -34,9 +36,9 @@ public class SessionWindowTest {
          * This:        [-------]
          * Other: [---]
          */
-        assertFalse(window.overlap(new SessionWindow(0, 25)));
-        assertFalse(window.overlap(new SessionWindow(0, start - 1)));
-        assertFalse(window.overlap(new SessionWindow(start - 1, start - 1)));
+        assertFalse(window.overlap(Window.withBounds(0, 25)));
+        assertFalse(window.overlap(Window.withBounds(0, start - 1)));
+        assertFalse(window.overlap(Window.withBounds(start - 1, start - 1)));
     }
 
     @Test
@@ -45,17 +47,17 @@ public class SessionWindowTest {
          * This:        [-------]
          * Other: [---------]
          */
-        assertTrue(window.overlap(new SessionWindow(0, start)));
-        assertTrue(window.overlap(new SessionWindow(0, start + 1)));
-        assertTrue(window.overlap(new SessionWindow(0, 75)));
-        assertTrue(window.overlap(new SessionWindow(0, end - 1)));
-        assertTrue(window.overlap(new SessionWindow(0, end)));
+        assertTrue(window.overlap(Window.withBounds(0, start)));
+        assertTrue(window.overlap(Window.withBounds(0, start + 1)));
+        assertTrue(window.overlap(Window.withBounds(0, 75)));
+        assertTrue(window.overlap(Window.withBounds(0, end - 1)));
+        assertTrue(window.overlap(Window.withBounds(0, end)));
 
-        assertTrue(window.overlap(new SessionWindow(start - 1, start)));
-        assertTrue(window.overlap(new SessionWindow(start - 1, start + 1)));
-        assertTrue(window.overlap(new SessionWindow(start - 1, 75)));
-        assertTrue(window.overlap(new SessionWindow(start - 1, end - 1)));
-        assertTrue(window.overlap(new SessionWindow(start - 1, end)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, start)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, start + 1)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, 75)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, end - 1)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, end)));
     }
 
     @Test
@@ -64,17 +66,17 @@ public class SessionWindowTest {
          * This:        [-------]
          * Other: [------------------]
          */
-        assertTrue(window.overlap(new SessionWindow(0, end)));
-        assertTrue(window.overlap(new SessionWindow(0, end + 1)));
-        assertTrue(window.overlap(new SessionWindow(0, 150)));
+        assertTrue(window.overlap(Window.withBounds(0, end)));
+        assertTrue(window.overlap(Window.withBounds(0, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(0, 150)));
 
-        assertTrue(window.overlap(new SessionWindow(start - 1, end)));
-        assertTrue(window.overlap(new SessionWindow(start - 1, end + 1)));
-        assertTrue(window.overlap(new SessionWindow(start - 1, 150)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, end)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, 150)));
 
-        assertTrue(window.overlap(new SessionWindow(start, end)));
-        assertTrue(window.overlap(new SessionWindow(start, end + 1)));
-        assertTrue(window.overlap(new SessionWindow(start, 150)));
+        assertTrue(window.overlap(Window.withBounds(start, end)));
+        assertTrue(window.overlap(Window.withBounds(start, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(start, 150)));
     }
 
     @Test
@@ -83,11 +85,11 @@ public class SessionWindowTest {
          * This:        [-------]
          * Other:         [---]
          */
-        assertTrue(window.overlap(new SessionWindow(start, start)));
-        assertTrue(window.overlap(new SessionWindow(start, 75)));
-        assertTrue(window.overlap(new SessionWindow(start, end)));
-        assertTrue(window.overlap(new SessionWindow(75, end)));
-        assertTrue(window.overlap(new SessionWindow(end, end)));
+        assertTrue(window.overlap(Window.withBounds(start, start)));
+        assertTrue(window.overlap(Window.withBounds(start, 75)));
+        assertTrue(window.overlap(Window.withBounds(start, end)));
+        assertTrue(window.overlap(Window.withBounds(75, end)));
+        assertTrue(window.overlap(Window.withBounds(end, end)));
     }
 
     @Test
@@ -96,12 +98,12 @@ public class SessionWindowTest {
          * This:        [-------]
          * Other:           [-------]
          */
-        assertTrue(window.overlap(new SessionWindow(start, end + 1)));
-        assertTrue(window.overlap(new SessionWindow(start, 150)));
-        assertTrue(window.overlap(new SessionWindow(75, end + 1)));
-        assertTrue(window.overlap(new SessionWindow(75, 150)));
-        assertTrue(window.overlap(new SessionWindow(end, end + 1)));
-        assertTrue(window.overlap(new SessionWindow(end, 150)));
+        assertTrue(window.overlap(Window.withBounds(start, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(start, 150)));
+        assertTrue(window.overlap(Window.withBounds(75, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(75, 150)));
+        assertTrue(window.overlap(Window.withBounds(end, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(end, 150)));
     }
 
     @Test
@@ -110,9 +112,9 @@ public class SessionWindowTest {
          * This:        [-------]
          * Other:                  [---]
          */
-        assertFalse(window.overlap(new SessionWindow(end + 1, end + 1)));
-        assertFalse(window.overlap(new SessionWindow(end + 1, 150)));
-        assertFalse(window.overlap(new SessionWindow(125, 150)));
+        assertFalse(window.overlap(Window.withBounds(end + 1, end + 1)));
+        assertFalse(window.overlap(Window.withBounds(end + 1, 150)));
+        assertFalse(window.overlap(Window.withBounds(125, 150)));
     }
 
     @Test(expected = IllegalArgumentException.class)

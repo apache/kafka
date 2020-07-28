@@ -19,9 +19,9 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -82,7 +82,7 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> node = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(
-                new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
+                new KStreamWindowAggregate<String, Long, Integer, Window>(
                     windows,
                     "asdf",
                     null,
@@ -205,7 +205,7 @@ public class GraphGraceSearchUtilTest {
         final StatefulProcessorNode<String, Long> rightParent = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(
-                new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
+                new KStreamWindowAggregate<String, Long, Integer, Window>(
                     TimeWindows.of(ofMillis(10L)).grace(ofMillis(4321L)),
                     "asdf",
                     null,

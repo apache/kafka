@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -62,12 +63,12 @@ public class SessionTupleForwarderTest {
         expect(store.setFlushListener(null, sendOldValued)).andReturn(false);
         if (sendOldValued) {
             context.forward(
-                new Windowed<>("key", new SessionWindow(21L, 42L)),
+                new Windowed<>("key", Window.withBounds(21L, 42L)),
                 new Change<>("value", "oldValue"),
                 To.all().withTimestamp(42L));
         } else {
             context.forward(
-                new Windowed<>("key", new SessionWindow(21L, 42L)),
+                new Windowed<>("key", Window.withBounds(21L, 42L)),
                 new Change<>("value", null),
                 To.all().withTimestamp(42L));
         }
@@ -75,7 +76,7 @@ public class SessionTupleForwarderTest {
         replay(store, context);
 
         new SessionTupleForwarder<>(store, context, null, sendOldValued)
-            .maybeForward(new Windowed<>("key", new SessionWindow(21L, 42L)), "value", "oldValue");
+            .maybeForward(new Windowed<>("key", Window.withBounds(21L, 42L)), "value", "oldValue");
 
         verify(store, context);
     }
@@ -89,7 +90,7 @@ public class SessionTupleForwarderTest {
         replay(store, context);
 
         new SessionTupleForwarder<>(store, context, null, false)
-            .maybeForward(new Windowed<>("key", new SessionWindow(21L, 42L)), "value", "oldValue");
+            .maybeForward(new Windowed<>("key", Window.withBounds(21L, 42L)), "value", "oldValue");
 
         verify(store, context);
     }

@@ -47,10 +47,10 @@ import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDU
 
 public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V> implements TimeWindowedKStream<K, V> {
 
-    private final EnumerableWindowDefinition<W> windows;
+    private final EnumerableWindowDefinition windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
 
-    TimeWindowedKStreamImpl(final EnumerableWindowDefinition<W> windows,
+    TimeWindowedKStreamImpl(final EnumerableWindowDefinition windows,
                             final InternalStreamsBuilder builder,
                             final Set<String> subTopologySourceNodes,
                             final String name,
@@ -111,8 +111,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null
-                ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(),
-                                              start -> windows.windowsFor(start).get(start))
+                ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), start -> windows.windowsFor(start).get(start))
                 : null,
             materializedInternal.valueSerde());
     }

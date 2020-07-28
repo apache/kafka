@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Window;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation")
 public class UnlimitedWindowTest {
 
     private long start = 50;
-    private final UnlimitedWindow window = new UnlimitedWindow(start);
-    private final SessionWindow sessionWindow = new SessionWindow(start, start);
+    private final Window window = Window.withBounds(start, Long.MAX_VALUE);
+    private final Window sessionWindow = Window.withBounds(start, start);
 
     @Test
     public void shouldAlwaysOverlap() {

@@ -24,9 +24,8 @@ import java.util.Map;
  * Grace period defines how long to wait on out-of-order events. That is, windows will continue to accept new records until {@code stream_time >= window_end + grace_period}.
  * Records that arrive after the grace period passed are considered <em>late</em> and will not be processed but are dropped.
  * 
- * @param <W> type of the window instance
  */
-public interface EnumerableWindowDefinition<W extends Window> {
+public interface EnumerableWindowDefinition {
 
 
     /**
@@ -34,9 +33,10 @@ public interface EnumerableWindowDefinition<W extends Window> {
      * indexed by non-negative window start timestamps.
      *
      * @param timestamp the timestamp window should get created for
+     * @param <W> type of the window instance
      * @return a map of {@code windowStartTimestamp -> Window} entries
      */
-    Map<Long, W> windowsFor(final long timestamp);
+    <W extends Window> Map<Long, W> windowsFor(final long timestamp);
 
     /**
      * Return an upper bound on the size of windows in milliseconds.

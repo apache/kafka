@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
@@ -205,15 +206,15 @@ public class KStreamSessionWindowAggregateProcessorTest {
         assertEquals(
             Arrays.asList(
                 new KeyValueTimestamp<>(
-                    new Windowed<>(sessionId, new SessionWindow(0, 0)),
+                    new Windowed<>(sessionId, Window.withBounds(0, 0)),
                     new Change<>(1L, null),
                     0L),
                 new KeyValueTimestamp<>(
-                    new Windowed<>(sessionId, new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
+                    new Windowed<>(sessionId, Window.withBounds(GAP_MS + 1, GAP_MS + 1)),
                     new Change<>(2L, null),
                     GAP_MS + 1),
                 new KeyValueTimestamp<>(
-                    new Windowed<>(sessionId, new SessionWindow(time, time)),
+                    new Windowed<>(sessionId, Window.withBounds(time, time)),
                     new Change<>(3L, null),
                     time)
             ),
@@ -230,7 +231,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         // first ensure it is in the store
         final KeyValueIterator<Windowed<String>, Long> a1 =
             sessionStore.findSessions("a", 0, 0);
-        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), a1.next());
+        assertEquals(KeyValue.pair(new Windowed<>("a", Window.withBounds(0, 0)), 1L), a1.next());
 
         context.setTime(100);
         processor.process("a", "2");
@@ -238,7 +239,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         // should have merged session in store
         final KeyValueIterator<Windowed<String>, Long> a2 =
             sessionStore.findSessions("a", 0, 100);
-        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 100)), 2L), a2.next());
+        assertEquals(KeyValue.pair(new Windowed<>("a", Window.withBounds(0, 100)), 2L), a2.next());
         assertFalse(a2.hasNext());
     }
 
@@ -263,32 +264,32 @@ public class KStreamSessionWindowAggregateProcessorTest {
         assertEquals(
             Arrays.asList(
                 new KeyValueTimestamp<>(
-                    new Windowed<>("a", new SessionWindow(0, 0)),
+                    new Windowed<>("a", Window.withBounds(0, 0)),
                     new Change<>(1L, null),
                     0L),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("b", new SessionWindow(0, 0)),
+                    new Windowed<>("b", Window.withBounds(0, 0)),
                     new Change<>(1L, null),
                     0L),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("c", new SessionWindow(0, 0)),
+                    new Windowed<>("c", Window.withBounds(0, 0)),
                     new Change<>(1L, null),
                     0L),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("d", new SessionWindow(0, GAP_MS / 2)),
+                    new Windowed<>("d", Window.withBounds(0, GAP_MS / 2)),
                     new Change<>(2L, null),
                     GAP_MS / 2),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("b", new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
+                    new Windowed<>("b", Window.withBounds(GAP_MS + 1, GAP_MS + 1)),
                     new Change<>(1L, null),
                     GAP_MS + 1),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1 + GAP_MS / 2)),
+                    new Windowed<>("a", Window.withBounds(GAP_MS + 1, GAP_MS + 1 + GAP_MS / 2)),
                     new Change<>(2L, null),
                     GAP_MS + 1 + GAP_MS / 2),
                 new KeyValueTimestamp<>(new Windowed<>(
                     "c",
-                    new SessionWindow(GAP_MS + 1 + GAP_MS / 2, GAP_MS + 1 + GAP_MS / 2)), new Change<>(1L, null),
+                    Window.withBounds(GAP_MS + 1 + GAP_MS / 2, GAP_MS + 1 + GAP_MS / 2)), new Change<>(1L, null),
                     GAP_MS + 1 + GAP_MS / 2)
             ),
             results
@@ -304,8 +305,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(GAP_MS + 1);
         processor.process("a", "1");
         processor.process("a", "2");
-        final long t0 = getter.get(new Windowed<>("a", new SessionWindow(0, 0))).value();
-        final long t1 = getter.get(new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1))).value();
+        final long t0 = getter.get(new Windowed<>("a", Window.withBounds(0, 0))).value();
+        final long t1 = getter.get(new Windowed<>("a", Window.withBounds(GAP_MS + 1, GAP_MS + 1))).value();
         assertEquals(1L, t0);
         assertEquals(2L, t1);
     }
@@ -323,15 +324,15 @@ public class KStreamSessionWindowAggregateProcessorTest {
         assertEquals(
             Arrays.asList(
                 new KeyValueTimestamp<>(
-                    new Windowed<>("a", new SessionWindow(0, 0)),
+                    new Windowed<>("a", Window.withBounds(0, 0)),
                     new Change<>(1L, null),
                     0L),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("b", new SessionWindow(0, 0)),
+                    new Windowed<>("b", Window.withBounds(0, 0)),
                     new Change<>(1L, null),
                     0L),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("c", new SessionWindow(0, 0)),
+                    new Windowed<>("c", Window.withBounds(0, 0)),
                     new Change<>(1L, null),
                     0L)
             ),
@@ -351,15 +352,15 @@ public class KStreamSessionWindowAggregateProcessorTest {
         assertEquals(
             Arrays.asList(
                 new KeyValueTimestamp<>(
-                    new Windowed<>("a", new SessionWindow(0, 0)),
+                    new Windowed<>("a", Window.withBounds(0, 0)),
                     new Change<>(1L, null),
                     0L),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("a", new SessionWindow(0, 0)),
+                    new Windowed<>("a", Window.withBounds(0, 0)),
                     new Change<>(null, null),
                     0L),
                 new KeyValueTimestamp<>(
-                    new Windowed<>("a", new SessionWindow(0, 5)),
+                    new Windowed<>("a", Window.withBounds(0, 5)),
                     new Change<>(2L, null),
                     5L)
             ),

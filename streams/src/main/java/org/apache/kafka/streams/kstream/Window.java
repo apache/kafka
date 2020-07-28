@@ -34,7 +34,7 @@ import java.time.Instant;
  * @see org.apache.kafka.streams.kstream.internals.UnlimitedWindow
  * @see TimestampExtractor
  */
-public abstract class Window {
+public class Window {
 
     protected final long startMs;
     protected final long endMs;
@@ -42,13 +42,19 @@ public abstract class Window {
     private final Instant endTime;
 
 
+    public static Window withBounds(final long startMs, final long endMs) {
+        return new Window(startMs, endMs);
+    }
+
     /**
      * Create a new window for the given start and end time.
      *
      * @param startMs the start timestamp of the window
      * @param endMs   the end timestamp of the window
      * @throws IllegalArgumentException if {@code startMs} is negative or if {@code endMs} is smaller than {@code startMs}
+     * @deprecated since 2.7 Use {@code Window.withBounds(start, end)} instead of subclassing.
      */
+    @Deprecated
     public Window(final long startMs, final long endMs) throws IllegalArgumentException {
         if (startMs < 0) {
             throw new IllegalArgumentException("Window startMs time cannot be negative.");
@@ -107,7 +113,10 @@ public abstract class Window {
      * @param other another window of the same type
      * @return {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
      */
-    public abstract boolean overlap(final Window other);
+    @Deprecated
+    public boolean overlap(final Window other) {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
     public boolean equals(final Object obj) {

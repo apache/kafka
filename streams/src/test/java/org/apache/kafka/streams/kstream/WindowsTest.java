@@ -25,6 +25,7 @@ import static org.junit.Assert.assertEquals;
 @SuppressWarnings("deprecation") // specifically testing deprecated APIs
 public class WindowsTest {
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private class TestWindows extends Windows {
         @Override
         public Map windowsFor(final long timestamp) {

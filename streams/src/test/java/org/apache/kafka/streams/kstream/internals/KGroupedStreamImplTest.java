@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -101,7 +102,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsWithWindowedReduce() {
-        groupedStream.windowedBy((EnumerableWindowDefinition<?>) null);
+        groupedStream.windowedBy((EnumerableWindowDefinition) null);
     }
 
     @Test(expected = TopologyException.class)
@@ -145,7 +146,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowsOnWindowedAggregate() {
-        groupedStream.windowedBy((EnumerableWindowDefinition<?>) null);
+        groupedStream.windowedBy((EnumerableWindowDefinition) null);
     }
 
     @Test(expected = TopologyException.class)
@@ -170,13 +171,13 @@ public class KGroupedStreamImplTest {
             = supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
         assertEquals(
             ValueAndTimestamp.make(2, 30L),
-            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+            result.get(new Windowed<>("1", Window.withBounds(10L, 30L))));
         assertEquals(
             ValueAndTimestamp.make(1, 15L),
-            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+            result.get(new Windowed<>("2", Window.withBounds(15L, 15L))));
         assertEquals(
             ValueAndTimestamp.make(3, 100L),
-            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
+            result.get(new Windowed<>("1", Window.withBounds(70L, 100L))));
     }
 
     @Test
@@ -228,13 +229,13 @@ public class KGroupedStreamImplTest {
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
         assertEquals(
             ValueAndTimestamp.make(2L, 30L),
-            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+            result.get(new Windowed<>("1", Window.withBounds(10L, 30L))));
         assertEquals(
             ValueAndTimestamp.make(1L, 15L),
-            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+            result.get(new Windowed<>("2", Window.withBounds(15L, 15L))));
         assertEquals(
             ValueAndTimestamp.make(3L, 100L),
-            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
+            result.get(new Windowed<>("1", Window.withBounds(70L, 100L))));
     }
 
     @Test
@@ -274,13 +275,13 @@ public class KGroupedStreamImplTest {
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
         assertEquals(
             ValueAndTimestamp.make("A:B", 30L),
-            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+            result.get(new Windowed<>("1", Window.withBounds(10L, 30L))));
         assertEquals(
             ValueAndTimestamp.make("Z", 15L),
-            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+            result.get(new Windowed<>("2", Window.withBounds(15L, 15L))));
         assertEquals(
             ValueAndTimestamp.make("A:B:C", 100L),
-            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
+            result.get(new Windowed<>("1", Window.withBounds(70L, 100L))));
     }
 
     @Test
@@ -623,18 +624,18 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("3", "B", 100L);
         }
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 1L, 0L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 2L, 100L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 3L, 200L),
-            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 1L, 1L),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 1L, 500L),
-            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 2L, 500L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 1L, 500L),
-            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 2L, 500L),
-            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 2L, 100L)
+            new KeyValueTimestamp<>(new Windowed<>("1", Window.withBounds(0L, 500L)), 1L, 0L),
+            new KeyValueTimestamp<>(new Windowed<>("1", Window.withBounds(0L, 500L)), 2L, 499L),
+            new KeyValueTimestamp<>(new Windowed<>("1", Window.withBounds(0L, 500L)), 3L, 499L),
+            new KeyValueTimestamp<>(new Windowed<>("2", Window.withBounds(0L, 500L)), 1L, 0L),
+            new KeyValueTimestamp<>(new Windowed<>("2", Window.withBounds(0L, 500L)), 2L, 100L),
+            new KeyValueTimestamp<>(new Windowed<>("2", Window.withBounds(0L, 500L)), 3L, 200L),
+            new KeyValueTimestamp<>(new Windowed<>("3", Window.withBounds(0L, 500L)), 1L, 1L),
+            new KeyValueTimestamp<>(new Windowed<>("1", Window.withBounds(500L, 1000L)), 1L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("1", Window.withBounds(500L, 1000L)), 2L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", Window.withBounds(500L, 1000L)), 1L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", Window.withBounds(500L, 1000L)), 2L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("3", Window.withBounds(0L, 500L)), 2L, 100L)
         )));
     }
 

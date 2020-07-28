@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.internals.ApiUtils;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
@@ -27,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.kstream.internals.DeprecatedWindowsUtils.asWindowSubclass;
 import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 /**
@@ -42,7 +42,7 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  *          it discretize a stream into non-overlapping windows, which implies that a record is only ever contained in
  *          one and only one tumbling window.</li>
  * </ul>
- * Thus, the specified {@link TimeWindow}s are aligned to the epoch.
+ * Thus, the specified {@code TimeWindow}s are aligned to the epoch.
  * Aligned to the epoch means, that the first window starts at timestamp zero.
  * For example, hopping windows with size of 5000ms and advance of 3000ms, have window boundaries
  * [0;5000),[3000;8000),... and not [1000;6000),[4000;9000),... or even something "random" like [1452;6452),[4452;9452),...
@@ -52,11 +52,10 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see SessionWindows
  * @see UnlimitedWindows
  * @see JoinWindows
- * @see KGroupedStream#windowedBy(EnumerableWindowDefinition)
  * @see TimestampExtractor
  */
 @SuppressWarnings("deprecation") // Remove this suppression when Windows is removed
-public final class TimeWindows extends Windows<TimeWindow> implements EnumerableWindowDefinition<TimeWindow> {
+public final class TimeWindows extends Windows<org.apache.kafka.streams.kstream.internals.TimeWindow> implements EnumerableWindowDefinition {
 
     private final long maintainDurationMs;
 
@@ -172,12 +171,11 @@ public final class TimeWindows extends Windows<TimeWindow> implements Enumerable
     }
 
     @Override
-    public Map<Long, TimeWindow> windowsFor(final long timestamp) {
+    public <W extends Window> Map<Long, W> windowsFor(final long timestamp) {
         long windowStart = (Math.max(0, timestamp - sizeMs + advanceMs) / advanceMs) * advanceMs;
-        final Map<Long, TimeWindow> windows = new LinkedHashMap<>();
+        final Map<Long, W> windows = new LinkedHashMap<>();
         while (windowStart <= timestamp) {
-            final TimeWindow window = new TimeWindow(windowStart, windowStart + sizeMs);
-            windows.put(windowStart, window);
+            windows.put(windowStart, asWindowSubclass(Window.withBounds(windowStart, windowStart + sizeMs)));
             windowStart += advanceMs;
         }
         return windows;

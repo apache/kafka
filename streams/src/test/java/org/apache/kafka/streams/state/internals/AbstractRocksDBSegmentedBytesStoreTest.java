@@ -29,7 +29,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -98,15 +97,15 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     @Before
     public void before() {
         if (schema instanceof SessionKeySchema) {
-            windows[0] = new SessionWindow(10L, 10L);
-            windows[1] = new SessionWindow(500L, 1000L);
-            windows[2] = new SessionWindow(1_000L, 1_500L);
-            windows[3] = new SessionWindow(30_000L, 60_000L);
+            windows[0] = Window.withBounds(10L, 10L);
+            windows[1] = Window.withBounds(500L, 1000L);
+            windows[2] = Window.withBounds(1_000L, 1_500L);
+            windows[3] = Window.withBounds(30_000L, 60_000L);
             // All four of the previous windows will go into segment 1.
             // The nextSegmentWindow is computed be a high enough time that when it gets written
             // to the segment store, it will advance stream time past the first segment's retention time and
             // expire it.
-            nextSegmentWindow = new SessionWindow(segmentInterval + retention, segmentInterval + retention);
+            nextSegmentWindow = Window.withBounds(segmentInterval + retention, segmentInterval + retention);
         }
         if (schema instanceof WindowKeySchema) {
             windows[0] = timeWindowForSize(10L, windowSizeForTimeWindow);

@@ -19,8 +19,6 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -53,7 +51,7 @@ public class WindowedSerdesTest {
 
     @Test
     public void testTimeWindowSerdeFrom() {
-        final Windowed<Integer> timeWindowed = new Windowed<>(10, new TimeWindow(0, Long.MAX_VALUE));
+        final Windowed<Integer> timeWindowed = new Windowed<>(10, Window.withBounds(0, Long.MAX_VALUE));
         final Serde<Windowed<Integer>> timeWindowedSerde = WindowedSerdes.timeWindowedSerdeFrom(Integer.class);
         final byte[] bytes = timeWindowedSerde.serializer().serialize(topic, timeWindowed);
         final Windowed<Integer> windowed = timeWindowedSerde.deserializer().deserialize(topic, bytes);
@@ -62,7 +60,7 @@ public class WindowedSerdesTest {
 
     @Test
     public void testSessionWindowedSerdeFrom() {
-        final Windowed<Integer> sessionWindowed = new Windowed<>(10, new SessionWindow(0, 1));
+        final Windowed<Integer> sessionWindowed = new Windowed<>(10, Window.withBounds(0, 1));
         final Serde<Windowed<Integer>> sessionWindowedSerde = WindowedSerdes.sessionWindowedSerdeFrom(Integer.class);
         final byte[] bytes = sessionWindowedSerde.serializer().serialize(topic, sessionWindowed);
         final Windowed<Integer> windowed = sessionWindowedSerde.deserializer().deserialize(topic, bytes);
@@ -74,7 +72,7 @@ public class WindowedSerdesTest {
         final TimeWindowedSerializer<byte[]> serializer = new TimeWindowedSerializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> serializer.serialize("topic", new Windowed<>(new byte[0], new TimeWindow(0, 1))));
+            () -> serializer.serialize("topic", new Windowed<>(new byte[0], Window.withBounds(0, 1))));
         assertThat(
             exception.getMessage(),
             equalTo("Inner serializer is `null`. User code must use constructor " +
@@ -86,7 +84,7 @@ public class WindowedSerdesTest {
         final TimeWindowedSerializer<byte[]> serializer = new TimeWindowedSerializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], new TimeWindow(0, 1))));
+            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], Window.withBounds(0, 1))));
         assertThat(
             exception.getMessage(),
             equalTo("Inner serializer is `null`. User code must use constructor " +
@@ -110,7 +108,7 @@ public class WindowedSerdesTest {
         final SessionWindowedSerializer<byte[]> serializer = new SessionWindowedSerializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> serializer.serialize("topic", new Windowed<>(new byte[0], new SessionWindow(0, 0))));
+            () -> serializer.serialize("topic", new Windowed<>(new byte[0], Window.withBounds(0, 0))));
         assertThat(
             exception.getMessage(),
             equalTo("Inner serializer is `null`. User code must use constructor " +
@@ -122,7 +120,7 @@ public class WindowedSerdesTest {
         final SessionWindowedSerializer<byte[]> serializer = new SessionWindowedSerializer<>();
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
-            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], new SessionWindow(0, 0))));
+            () -> serializer.serializeBaseKey("topic", new Windowed<>(new byte[0], Window.withBounds(0, 0))));
         assertThat(
             exception.getMessage(),
             equalTo("Inner serializer is `null`. User code must use constructor " +

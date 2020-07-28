@@ -43,13 +43,13 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;
-    private final EnumerableWindowDefinition<W> windows;
+    private final EnumerableWindowDefinition windows;
     private final Initializer<Agg> initializer;
     private final Aggregator<? super K, ? super V, Agg> aggregator;
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(final EnumerableWindowDefinition<W> windows,
+    public KStreamWindowAggregate(final EnumerableWindowDefinition windows,
                                   final String storeName,
                                   final Initializer<Agg> initializer,
                                   final Aggregator<? super K, ? super V, Agg> aggregator) {
@@ -64,7 +64,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         return new KStreamWindowAggregateProcessor();
     }
 
-    public EnumerableWindowDefinition<W> windows() {
+    public EnumerableWindowDefinition windows() {
         return windows;
     }
 

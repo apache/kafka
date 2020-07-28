@@ -21,15 +21,13 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.Function;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
@@ -103,7 +101,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
      * Safely construct a time window of the given size,
      * taking care of bounding endMs to Long.MAX_VALUE if necessary
      */
-    static TimeWindow timeWindowForSize(final long startMs,
+    static Window timeWindowForSize(final long startMs,
                                         final long windowSize) {
         long endMs = startMs + windowSize;
 
@@ -111,7 +109,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
             LOG.warn("Warning: window end time was truncated to Long.MAX");
             endMs = Long.MAX_VALUE;
         }
-        return new TimeWindow(startMs, endMs);
+        return Window.withBounds(startMs, endMs);
     }
 
     // for pipe serdes

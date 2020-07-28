@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.junit.Test;
 
 import java.util.Map;
@@ -26,16 +27,17 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation")
 public class TimeWindowTest {
 
     private long start = 50;
     private long end = 100;
-    private final TimeWindow window = new TimeWindow(start, end);
-    private final SessionWindow sessionWindow = new SessionWindow(start, end);
+    private final Window window = Window.withBounds(start, end);
+    private final Window sessionWindow = Window.withBounds(start, end);
 
     @Test(expected = IllegalArgumentException.class)
     public void endMustBeLargerThanStart() {
-        new TimeWindow(start, start);
+        Window.withBounds(start, start);
     }
 
     @Test
@@ -44,9 +46,9 @@ public class TimeWindowTest {
          * This:        [-------)
          * Other: [-----)
          */
-        assertFalse(window.overlap(new TimeWindow(0, 25)));
-        assertFalse(window.overlap(new TimeWindow(0, start - 1)));
-        assertFalse(window.overlap(new TimeWindow(0, start)));
+        assertFalse(window.overlap(Window.withBounds(0, 25)));
+        assertFalse(window.overlap(Window.withBounds(0, start - 1)));
+        assertFalse(window.overlap(Window.withBounds(0, start)));
     }
 
     @Test
@@ -55,13 +57,13 @@ public class TimeWindowTest {
          * This:        [-------)
          * Other: [---------)
          */
-        assertTrue(window.overlap(new TimeWindow(0, start + 1)));
-        assertTrue(window.overlap(new TimeWindow(0, 75)));
-        assertTrue(window.overlap(new TimeWindow(0, end - 1)));
+        assertTrue(window.overlap(Window.withBounds(0, start + 1)));
+        assertTrue(window.overlap(Window.withBounds(0, 75)));
+        assertTrue(window.overlap(Window.withBounds(0, end - 1)));
 
-        assertTrue(window.overlap(new TimeWindow(start - 1, start + 1)));
-        assertTrue(window.overlap(new TimeWindow(start - 1, 75)));
-        assertTrue(window.overlap(new TimeWindow(start - 1, end - 1)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, start + 1)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, 75)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, end - 1)));
     }
 
     @Test
@@ -70,17 +72,16 @@ public class TimeWindowTest {
          * This:        [-------)
          * Other: [------------------)
          */
-        assertTrue(window.overlap(new TimeWindow(0, end)));
-        assertTrue(window.overlap(new TimeWindow(0, end + 1)));
-        assertTrue(window.overlap(new TimeWindow(0, 150)));
+        assertTrue(window.overlap(Window.withBounds(0, end)));
+        assertTrue(window.overlap(Window.withBounds(0, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(0, 150)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, end)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(start - 1, 150)));
 
-        assertTrue(window.overlap(new TimeWindow(start - 1, end)));
-        assertTrue(window.overlap(new TimeWindow(start - 1, end + 1)));
-        assertTrue(window.overlap(new TimeWindow(start - 1, 150)));
-
-        assertTrue(window.overlap(new TimeWindow(start, end)));
-        assertTrue(window.overlap(new TimeWindow(start, end + 1)));
-        assertTrue(window.overlap(new TimeWindow(start, 150)));
+        assertTrue(window.overlap(Window.withBounds(start, end)));
+        assertTrue(window.overlap(Window.withBounds(start, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(start, 150)));
     }
 
     @Test
@@ -89,9 +90,9 @@ public class TimeWindowTest {
          * This:        [-------)
          * Other:         [---)
          */
-        assertTrue(window.overlap(new TimeWindow(start, 75)));
-        assertTrue(window.overlap(new TimeWindow(start, end)));
-        assertTrue(window.overlap(new TimeWindow(75, end)));
+        assertTrue(window.overlap(Window.withBounds(start, 75)));
+        assertTrue(window.overlap(Window.withBounds(start, end)));
+        assertTrue(window.overlap(Window.withBounds(75, end)));
     }
 
     @Test
@@ -100,10 +101,10 @@ public class TimeWindowTest {
          * This:        [-------)
          * Other:           [-------)
          */
-        assertTrue(window.overlap(new TimeWindow(start, end + 1)));
-        assertTrue(window.overlap(new TimeWindow(start, 150)));
-        assertTrue(window.overlap(new TimeWindow(75, end + 1)));
-        assertTrue(window.overlap(new TimeWindow(75, 150)));
+        assertTrue(window.overlap(Window.withBounds(start, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(start, 150)));
+        assertTrue(window.overlap(Window.withBounds(75, end + 1)));
+        assertTrue(window.overlap(Window.withBounds(75, 150)));
     }
 
     @Test
@@ -112,10 +113,10 @@ public class TimeWindowTest {
          * This:        [-------)
          * Other:               [------)
          */
-        assertFalse(window.overlap(new TimeWindow(end, end + 1)));
-        assertFalse(window.overlap(new TimeWindow(end, 150)));
-        assertFalse(window.overlap(new TimeWindow(end + 1, 150)));
-        assertFalse(window.overlap(new TimeWindow(125, 150)));
+        assertFalse(window.overlap(Window.withBounds(end, end + 1)));
+        assertFalse(window.overlap(Window.withBounds(end, 150)));
+        assertFalse(window.overlap(Window.withBounds(end + 1, 150)));
+        assertFalse(window.overlap(Window.withBounds(125, 150)));
     }
 
     @Test(expected = IllegalArgumentException.class)

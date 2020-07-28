@@ -45,11 +45,11 @@ import static org.apache.kafka.streams.kstream.internals.DeprecatedWindowsUtils.
 public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends AbstractStream<K, V>
         implements TimeWindowedCogroupedKStream<K, V> {
 
-    private final EnumerableWindowDefinition<W> windows;
+    private final EnumerableWindowDefinition windows;
     private final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
 
-    TimeWindowedCogroupedKStreamImpl(final EnumerableWindowDefinition<W> windows,
+    TimeWindowedCogroupedKStreamImpl(final EnumerableWindowDefinition windows,
                                      final InternalStreamsBuilder builder,
                                      final Set<String> subTopologySourceNodes,
                                      final String name,
