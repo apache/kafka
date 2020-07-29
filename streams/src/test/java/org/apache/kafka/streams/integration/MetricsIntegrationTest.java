@@ -605,6 +605,7 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, DESTROY_TOTAL, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_TOTAL, numberOfModifiedForwardMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_RATE, numberOfModifiedForwardMetrics);
+        checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_AVG, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MIN, numberOfSourceNodes + numberOfTerminalNodes);
         checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MAX, numberOfSourceNodes + numberOfTerminalNodes);
     }
@@ -619,6 +620,7 @@ public class MetricsIntegrationTest {
         final int expectedNumberOfLatencyMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 1;
         final int expectedNumberOfRateMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 1;
         final int expectedNumberOfTotalMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 0;
+        final int expectedNumberofE2ELatencyMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 0 : 1;
         checkMetricByName(listMetricStore, PUT_LATENCY_AVG, expectedNumberOfLatencyMetrics);
         checkMetricByName(listMetricStore, PUT_LATENCY_MAX, expectedNumberOfLatencyMetrics);
         checkMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, expectedNumberOfLatencyMetrics);
@@ -669,9 +671,9 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_CURRENT, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_AVG, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_MAX, 0);
-        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_AVG, 1);
-        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MIN, 1);
-        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MAX, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_AVG, expectedNumberofE2ELatencyMetrics);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MIN, expectedNumberofE2ELatencyMetrics);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MAX, expectedNumberofE2ELatencyMetrics);
     }
 
     private void checkMetricsDeregistration() {
