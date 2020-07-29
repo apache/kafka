@@ -18,7 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.NotLeaderForPartitionException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -448,8 +448,8 @@ public class KafkaRaftClient implements RaftClient {
 
         for (UnwrittenAppend unwrittenAppend: unwrittenAppends) {
             if (!unwrittenAppend.isCancelled()) {
-                unwrittenAppend.fail(new NotLeaderForPartitionException("Append refused since this node is no longer " +
-                        "the leader"));
+                unwrittenAppend.fail(new NotLeaderOrFollowerException(
+                    "Append refused since this node is no longer the leader"));
             }
         }
         unwrittenAppends.clear();
@@ -1520,8 +1520,8 @@ public class KafkaRaftClient implements RaftClient {
                 }
             }
         } else {
-            unwrittenAppend.fail(new NotLeaderForPartitionException("Append refused since this node is no longer " +
-                "the leader"));
+            unwrittenAppend.fail(new NotLeaderOrFollowerException(
+                "Append refused since this node is no longer the leader"));
         }
     }
 
