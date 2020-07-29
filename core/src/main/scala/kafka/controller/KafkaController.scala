@@ -16,6 +16,7 @@
  */
 package kafka.controller
 
+import java.util
 import java.util.concurrent.TimeUnit
 
 import kafka.admin.AdminOperationException
@@ -32,6 +33,8 @@ import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
+import org.apache.kafka.common.message.AlterIsrResponseData.{AlterIsrResponsePartitions, AlterIsrResponseTopics}
+import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, LeaderAndIsrResponse, UpdateMetadataResponse}
@@ -41,6 +44,7 @@ import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}
 
 sealed trait ElectionTrigger
@@ -1771,6 +1775,75 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
+  // TODO is it okay to pull message classes down into the controller?
+  def alterIsrs(alterIsrRequest: AlterIsrRequestData, callback: AlterIsrResponseData => Unit): Unit = {
+    val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(alterIsrRequest.brokerId())
+    if (brokerEpochOpt.isEmpty) {
+      info(s"Ignoring AlterIsr due to unknown broker ${alterIsrRequest.brokerId()}")
+      // TODO is INVALID_REQUEST a reasonable error here?
+      callback.apply(new AlterIsrResponseData().setErrorCode(Errors.INVALID_REQUEST.code))
+      return
+    }
+
+    if (!brokerEpochOpt.contains(alterIsrRequest.brokerEpoch())) {
+      info(s"Ignoring AlterIsr due to stale broker epoch ${alterIsrRequest.brokerEpoch()} for broker ${alterIsrRequest.brokerId()}")
+      callback.apply(new AlterIsrResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
+      return
+    }
+
+    val isrsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
+
+    val resp = new AlterIsrResponseData()
+    resp.setTopics(new util.ArrayList())
+
+    alterIsrRequest.topics().forEach(topicReq => {
+      val topicResp = new AlterIsrResponseTopics()
+        .setName(topicReq.name())
+        .setPartitions(new util.ArrayList())
+      resp.topics().add(topicResp)
+
+      topicReq.partitions().forEach(partitionReq => {
+        val partitionResp = new AlterIsrResponsePartitions()
+          .setPartitionIndex(partitionReq.partitionIndex())
+        topicResp.partitions().add(partitionResp)
+
+        // For each partition who's ISR we are altering, let's do some upfront validation for the broker response
+        val tp = new TopicPartition(topicReq.name(), partitionReq.partitionIndex())
+        val partitionError: Errors = controllerContext.partitionLeadershipInfo(tp) match {
+          case Some(leaderIsrAndControllerEpoch) =>
+            val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
+            if (partitionReq.leaderId() == currentLeaderAndIsr.leader) {
+              Errors.NOT_LEADER_OR_FOLLOWER // Is this the right error code?
+            } else if (partitionReq.leaderEpoch() < currentLeaderAndIsr.leaderEpoch) {
+              Errors.FENCED_LEADER_EPOCH
+            } else if (partitionReq.currentIsrVersion() != currentLeaderAndIsr.zkVersion) {
+              Errors.INVALID_ISR_VERSION
+            } else {
+              val newIsr = partitionReq.newIsr().asScala.toList.map(_.toInt)
+              val currentAssignment = controllerContext.partitionReplicaAssignment(tp)
+              if (!newIsr.forall(replicaId => currentAssignment.contains(replicaId))) {
+                Errors.INVALID_REQUEST
+              } else {
+                isrsToAlter.put(tp, new LeaderAndIsr(partitionReq.leaderId(), partitionReq.leaderEpoch(),
+                  newIsr, partitionReq.currentIsrVersion()))
+                Errors.NONE
+              }
+            }
+          case None => Errors.UNKNOWN_TOPIC_OR_PARTITION
+        }
+        partitionResp.setErrorCode(partitionError.code())
+      })
+    })
+
+    // Enqueue the event and return the response
+    eventManager.put(AlterIsrReceived(isrsToAlter))
+    callback.apply(resp)
+  }
+
+  private def processAlterIsr(isrsToAlter: Map[TopicPartition, LeaderAndIsr]): Unit = {
+    // TODO actually update the ISRs in ZK
+  }
+
   private def processControllerChange(): Unit = {
     maybeResign()
   }
@@ -1845,6 +1918,8 @@ class KafkaController(val config: KafkaConfig,
           processPartitionReassignmentIsrChange(partition)
         case IsrChangeNotification =>
           processIsrChangeNotification()
+        case AlterIsrReceived(isrsToAlter) =>
+          processAlterIsr(isrsToAlter)
         case Startup =>
           processStartup()
       }
@@ -2080,6 +2155,10 @@ case class PartitionReassignmentIsrChange(partition: TopicPartition) extends Con
 }
 
 case object IsrChangeNotification extends ControllerEvent {
+  override def state: ControllerState = ControllerState.IsrChange
+}
+
+case class AlterIsrReceived(isrsToAlter: Map[TopicPartition, LeaderAndIsr]) extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
 }
 
