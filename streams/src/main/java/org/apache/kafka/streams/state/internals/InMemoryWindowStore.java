@@ -204,9 +204,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
-                                                           final Bytes to,
-                                                           final Instant fromTime,
-                                                           final Instant toTime) {
+                                                                   final Bytes to,
+                                                                   final Instant fromTime,
+                                                                   final Instant toTime) {
         final long timeFrom = ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
         final long timeTo = ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
         return fetch(from, to, timeFrom, timeTo, true);
@@ -378,7 +378,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private static abstract class InMemoryWindowStoreIteratorWrapper {
 
-        private Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator;
         private Iterator<Map.Entry<Bytes, byte[]>> recordIterator;
         private KeyValue<Bytes, byte[]> next;
         private long currentTime;
@@ -386,6 +385,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         private final boolean allKeys;
         private final Bytes keyFrom;
         private final Bytes keyTo;
+        private final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator;
         private final boolean retainDuplicates;
         private final ClosingCallback callback;
 

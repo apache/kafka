@@ -331,7 +331,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private static class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
-        private final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
         private Iterator<Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>>> keyIterator;
         private Iterator<Entry<Long, byte[]>> recordIterator;
 
@@ -342,6 +341,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         private final Bytes keyFrom;
         private final Bytes keyTo;
         private final long latestSessionStartTime;
+        private final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
 
         private final ClosingCallback callback;
 

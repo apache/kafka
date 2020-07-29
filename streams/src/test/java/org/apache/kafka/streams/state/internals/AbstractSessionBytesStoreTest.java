@@ -65,7 +65,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-
 public abstract class AbstractSessionBytesStoreTest {
 
     static final long SEGMENT_INTERVAL = 60_000L;
@@ -415,25 +414,25 @@ public abstract class AbstractSessionBytesStoreTest {
             new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.backwardFindSessions("a", 0, Long.MAX_VALUE)
+                 sessionStore.backwardFindSessions("a", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 3L, 5L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.backwardFindSessions("aa", 0, Long.MAX_VALUE)
+                 sessionStore.backwardFindSessions("aa", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L, 4L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.backwardFindSessions("a", "aa", 0, Long.MAX_VALUE)
+                 sessionStore.backwardFindSessions("a", "aa", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.backwardFindSessions("a", "aa", 10, 0)
+                 sessionStore.backwardFindSessions("a", "aa", 10, 0)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
         }
@@ -446,9 +445,9 @@ public abstract class AbstractSessionBytesStoreTest {
 
         sessionStore.init(context, sessionStore);
 
-        final Bytes key1 = Bytes.wrap(new byte[]{0});
-        final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
-        final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
+        final Bytes key1 = Bytes.wrap(new byte[] {0});
+        final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[] {0, 0, 0});
 
         sessionStore.put(new Windowed<>(key1, new SessionWindow(1, 100)), "1");
         sessionStore.put(new Windowed<>(key2, new SessionWindow(2, 100)), "2");
@@ -475,9 +474,9 @@ public abstract class AbstractSessionBytesStoreTest {
 
         sessionStore.init(context, sessionStore);
 
-        final Bytes key1 = Bytes.wrap(new byte[]{0});
-        final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
-        final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
+        final Bytes key1 = Bytes.wrap(new byte[] {0});
+        final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[] {0, 0, 0});
 
         sessionStore.put(new Windowed<>(key1, new SessionWindow(1, 100)), "1");
         sessionStore.put(new Windowed<>(key2, new SessionWindow(2, 100)), "2");
