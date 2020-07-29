@@ -1888,7 +1888,8 @@ class KafkaController(val config: KafkaConfig,
   }
 
   /**
-   * Validate and process a finalized feature update.
+   * Validate and process a finalized feature update on an existing FinalizedVersionRange for the
+   * feature.
    *
    * If the processing is successful, then, the return value contains:
    * 1. the new FinalizedVersionRange for the feature, if the feature update was not meant to delete the feature.
@@ -1896,15 +1897,14 @@ class KafkaController(val config: KafkaConfig,
    *
    * If the processing failed, then returned value contains a suitable ApiError.
    *
-   * @param update   the feature update to be processed.
+   * @param update                 the feature update to be processed.
+   * @param existingVersionRange   the existing FinalizedVersionRange which can be empty when no
+   *                               FinalizedVersionRange exists for the associated feature
    *
-   * @return         the new FinalizedVersionRange or error, as described above.
+   * @return                       the new FinalizedVersionRange or error, as described above.
    */
-  private def processFeatureUpdate(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[Option[FinalizedVersionRange], ApiError] = {
-    val existingFeatures = featureCache.get
-      .map(featuresAndEpoch => featuresAndEpoch.features.features().asScala)
-      .getOrElse(Map[String, FinalizedVersionRange]())
-
+  private def processFeatureUpdate(update: UpdateFeaturesRequestData.FeatureUpdateKey,
+                                   existingVersionRange: Option[FinalizedVersionRange]): Either[Option[FinalizedVersionRange], ApiError] = {
     def newVersionRangeOrError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[Option[FinalizedVersionRange], ApiError] = {
       newFinalizedVersionRangeOrIncompatibilityError(update)
         .fold(versionRange => Left(Some(versionRange)), error => Right(error))
@@ -1914,11 +1914,9 @@ class KafkaController(val config: KafkaConfig,
       // Check that the feature name is not empty.
       Right(new ApiError(Errors.INVALID_REQUEST, "Feature name can not be empty."))
     } else {
-      val cacheEntry = existingFeatures.get(update.feature).orNull
-
       // We handle deletion requests separately from non-deletion requests.
       if (UpdateFeaturesRequest.isDeleteRequest(update)) {
-        if (cacheEntry == null) {
+        if (existingVersionRange.isEmpty) {
           // Disallow deletion of a non-existing finalized feature.
           Right(new ApiError(Errors.INVALID_REQUEST,
                              s"Can not delete non-existing finalized feature: '${update.feature}'"))
@@ -1932,41 +1930,39 @@ class KafkaController(val config: KafkaConfig,
                            s" than 1 for feature: '${update.feature}' without setting the" +
                            " allowDowngrade flag to true in the request."))
       } else {
-        if (cacheEntry == null) {
-          newVersionRangeOrError(update)
-        } else {
-          if (update.maxVersionLevel == cacheEntry.max()) {
+        existingVersionRange.map(existing =>
+          if (update.maxVersionLevel == existing.max) {
             // Disallow a case where target maxVersionLevel matches existing maxVersionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"Can not ${if (update.allowDowngrade) "downgrade" else "upgrade"}" +
-                               s" a finalized feature: '${update.feature}' from existing" +
-                               s" maxVersionLevel:${cacheEntry.max} to the same value."))
-          } else if (update.maxVersionLevel < cacheEntry.max && !update.allowDowngrade) {
+              s"Can not ${if (update.allowDowngrade) "downgrade" else "upgrade"}" +
+                s" a finalized feature: '${update.feature}' from existing" +
+                s" maxVersionLevel:${existing.max} to the same value."))
+          } else if (update.maxVersionLevel < existing.max && !update.allowDowngrade) {
             // Disallow downgrade of a finalized feature without the allowDowngrade flag set.
             Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"Can not downgrade finalized feature: '${update.feature}' from" +
-                               s" existing maxVersionLevel:${cacheEntry.max} to provided" +
-                               s" maxVersionLevel:${update.maxVersionLevel} without setting the" +
-                               " allowDowngrade flag in the request."))
-          } else if (update.allowDowngrade && update.maxVersionLevel > cacheEntry.max) {
+              s"Can not downgrade finalized feature: '${update.feature}' from" +
+                s" existing maxVersionLevel:${existing.max} to provided" +
+                s" maxVersionLevel:${update.maxVersionLevel} without setting the" +
+                " allowDowngrade flag in the request."))
+          } else if (update.allowDowngrade && update.maxVersionLevel > existing.max) {
             // Disallow a request that sets allowDowngrade flag without specifying a
             // maxVersionLevel that's lower than the existing maxVersionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"When finalized feature: '${update.feature}' has the allowDowngrade" +
-                               " flag set in the request, the provided" +
-                               s" maxVersionLevel:${update.maxVersionLevel} can not be greater than" +
-                               s" existing maxVersionLevel:${cacheEntry.max}."))
-          } else if (update.maxVersionLevel() < cacheEntry.min()) {
+              s"When finalized feature: '${update.feature}' has the allowDowngrade" +
+                " flag set in the request, the provided" +
+                s" maxVersionLevel:${update.maxVersionLevel} can not be greater than" +
+                s" existing maxVersionLevel:${existing.max}."))
+          } else if (update.maxVersionLevel() < existing.min) {
             // Disallow downgrade of a finalized feature below the existing finalized
             // minVersionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
-                               s"Can not downgrade finalized feature: '${update.feature}' to" +
-                               s" maxVersionLevel:${update.maxVersionLevel} because it's lower than" +
-                               s" the existing minVersionLevel:${cacheEntry.min}."))
+              s"Can not downgrade finalized feature: '${update.feature}' to" +
+                s" maxVersionLevel:${update.maxVersionLevel} because it's lower than" +
+                s" the existing minVersionLevel:${existing.min}."))
           } else {
             newVersionRangeOrError(update)
           }
-        }
+        ).getOrElse(newVersionRangeOrError(update))
       }
     }
   }
@@ -1999,13 +1995,14 @@ class KafkaController(val config: KafkaConfig,
     // If a FeatureUpdate is found to be valid, then the corresponding entry in errors would contain
     // Errors.NONE. Otherwise the entry would contain the appropriate error.
     updates.asScala.iterator.foreach { update =>
-      processFeatureUpdate(update) match {
+      processFeatureUpdate(update, existingFeatures.get(update.feature())) match {
         case Left(newVersionRangeOrNone) =>
           newVersionRangeOrNone
             .map(newVersionRange => targetFeatures += (update.feature() -> newVersionRange))
             .getOrElse(targetFeatures -= update.feature())
           errors += (update.feature() -> new ApiError(Errors.NONE))
-        case Right(featureUpdateFailureReason) => errors += (update.feature() -> featureUpdateFailureReason)
+        case Right(featureUpdateFailureReason) =>
+          errors += (update.feature() -> featureUpdateFailureReason)
       }
     }
 
