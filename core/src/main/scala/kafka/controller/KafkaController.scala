@@ -1965,6 +1965,7 @@ private[controller] class ControllerStats extends KafkaMetricsGroup {
 
 sealed trait ControllerEvent {
   def state: ControllerState
+  // preempt() is not executed by `ControllerEventThread` but by the main thread.
   def preempt(): Unit
 }
 

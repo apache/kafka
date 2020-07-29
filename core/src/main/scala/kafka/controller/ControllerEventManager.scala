@@ -17,6 +17,7 @@
 
 package kafka.controller
 
+import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
@@ -27,6 +28,7 @@ import kafka.utils.ShutdownableThread
 import org.apache.kafka.common.utils.Time
 
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
@@ -104,9 +106,10 @@ class ControllerEventManager(controllerId: Int,
     queuedEvent
   }
 
-  def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock) {
-    queue.forEach(_.preempt(processor))
-    queue.clear()
+  def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock){
+    val preemptedEvents = new util.ArrayList[QueuedEvent]()
+    queue.drainTo(preemptedEvents)
+    preemptedEvents.forEach(_.preempt(processor))
     put(event)
   }
 

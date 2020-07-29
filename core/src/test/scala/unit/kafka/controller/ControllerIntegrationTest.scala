@@ -607,7 +607,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   def testPreemptionOnControllerShutdown(): Unit = {
     servers = makeServers(1, enableControlledShutdown = false)
     val controller = getController().kafkaController
-    val count = new AtomicInteger(2)
+    var count = 2
     val latch = new CountDownLatch(1)
     val spyThread = spy(controller.eventManager.thread)
     controller.eventManager.setControllerEventThread(spyThread)
@@ -617,7 +617,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     }
     val preemptedEvent = new MockEvent(ControllerState.TopicChange) {
       override def process(): Unit = {}
-      override def preempt(): Unit = count.decrementAndGet()
+      override def preempt(): Unit = count -= 1
     }
 
     controller.eventManager.put(processedEvent)
@@ -629,7 +629,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     }).doCallRealMethod().when(spyThread).awaitShutdown()
     controller.shutdown()
     TestUtils.waitUntilTrue(() => {
-      count.get() == 0
+      count == 0
     }, "preemption was not fully completed before shutdown")
 
     verify(spyThread).awaitShutdown()
