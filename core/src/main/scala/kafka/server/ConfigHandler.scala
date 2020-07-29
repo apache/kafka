@@ -144,6 +144,12 @@ class QuotaConfigHandler(private val quotaManagers: QuotaManagers) {
       else
         None
     quotaManagers.request.updateQuota(sanitizedUser, clientId, sanitizedClientId, requestQuota)
+    val controllerMutationQuota =
+      if (config.containsKey(DynamicConfig.Client.ControllerMutationOverrideProp))
+        Some(new Quota(config.getProperty(DynamicConfig.Client.ControllerMutationOverrideProp).toLong.toDouble, true))
+      else
+        None
+    quotaManagers.controllerMutation.updateQuota(sanitizedUser, clientId, sanitizedClientId, controllerMutationQuota)
   }
 }
 
