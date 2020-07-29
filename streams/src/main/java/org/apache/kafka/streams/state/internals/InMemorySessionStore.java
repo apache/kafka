@@ -168,7 +168,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             key,
             key,
             latestSessionStartTime,
-            endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
+            endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator(),
+            false);
     }
 
     @Override
@@ -182,8 +183,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         return registerNewIterator(
             key,
             key,
-            earliestSessionEndTime,
-            endTimeMap.headMap(latestSessionStartTime, true).descendingMap().entrySet().iterator());
+            latestSessionStartTime,
+            endTimeMap.tailMap(earliestSessionEndTime, true).descendingMap().entrySet().iterator(),
+            true);
     }
 
     @Override
@@ -198,10 +200,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         if (StateStoreRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
 
-        return registerNewIterator(keyFrom,
+        return registerNewIterator(
+            keyFrom,
             keyTo,
             latestSessionStartTime,
-            endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
+            endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator(),
+            false);
     }
 
     @Override
@@ -216,10 +220,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         if (StateStoreRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
 
-        return registerNewIterator(keyFrom,
+        return registerNewIterator(
+            keyFrom,
             keyTo,
-            earliestSessionEndTime,
-            endTimeMap.headMap(latestSessionStartTime, true).entrySet().iterator());
+            latestSessionStartTime,
+            endTimeMap.tailMap(earliestSessionEndTime, true).descendingMap().entrySet().iterator(),
+            true);
     }
 
     @Override
@@ -229,7 +235,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
+        return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), false);
     }
 
     @Override
@@ -239,7 +245,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator());
+        return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), true);
     }
 
     @Override
@@ -250,7 +256,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
+        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator(), false);
     }
 
     @Override
@@ -260,7 +266,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator());
+        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.descendingMap().entrySet().iterator(), true);
     }
 
     @Override
@@ -305,8 +311,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     private InMemorySessionStoreIterator registerNewIterator(final Bytes keyFrom,
                                                              final Bytes keyTo,
                                                              final long latestSessionStartTime,
-                                                             final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator) {
-        final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator, openIterators::remove);
+                                                             final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator,
+                                                             final boolean backward) {
+        final InMemorySessionStoreIterator iterator =
+            new InMemorySessionStoreIterator(
+                keyFrom,
+                keyTo,
+                latestSessionStartTime,
+                endTimeIterator,
+                openIterators::remove,
+                backward);
         openIterators.add(iterator);
         return iterator;
     }
@@ -331,17 +345,20 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         private final ClosingCallback callback;
 
+        private final boolean backward;
+
         InMemorySessionStoreIterator(final Bytes keyFrom,
                                      final Bytes keyTo,
                                      final long latestSessionStartTime,
                                      final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator,
-                                     final ClosingCallback callback) {
+                                     final ClosingCallback callback,
+                                     final boolean backward) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.latestSessionStartTime = latestSessionStartTime;
-
             this.endTimeIterator = endTimeIterator;
             this.callback = callback;
+            this.backward = backward;
             setAllIterators();
         }
 
@@ -412,7 +429,15 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             while (endTimeIterator.hasNext()) {
                 final Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> nextEndTimeEntry = endTimeIterator.next();
                 currentEndTime = nextEndTimeEntry.getKey();
-                keyIterator = nextEndTimeEntry.getValue().subMap(keyFrom, true, keyTo, true).entrySet().iterator();
+                final Set<Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>>> entries;
+                if (backward) entries = nextEndTimeEntry.getValue()
+                    .subMap(keyFrom, true, keyTo, true)
+                    .descendingMap()
+                    .entrySet();
+                else entries = nextEndTimeEntry.getValue()
+                    .subMap(keyFrom, true, keyTo, true)
+                    .entrySet();
+                keyIterator = entries.iterator();
 
                 if (setInnerIterators()) {
                     return;
@@ -429,9 +454,20 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                 currentKey = nextKeyEntry.getKey();
 
                 if (latestSessionStartTime == Long.MAX_VALUE) {
-                    recordIterator = nextKeyEntry.getValue().entrySet().iterator();
+                    final Set<Entry<Long, byte[]>> entries;
+                    if (backward) entries = nextKeyEntry.getValue().descendingMap().entrySet();
+                    else entries = nextKeyEntry.getValue().entrySet();
+                    recordIterator = entries.iterator();
                 } else {
-                    recordIterator = nextKeyEntry.getValue().headMap(latestSessionStartTime, true).entrySet().iterator();
+                    final Set<Entry<Long, byte[]>> entries;
+                    if (backward) entries = nextKeyEntry.getValue()
+                        .headMap(latestSessionStartTime, true)
+                        .descendingMap()
+                        .entrySet();
+                    else entries = nextKeyEntry.getValue()
+                        .headMap(latestSessionStartTime, true)
+                        .entrySet();
+                    recordIterator = entries.iterator();
                 }
 
                 if (recordIterator.hasNext()) {
