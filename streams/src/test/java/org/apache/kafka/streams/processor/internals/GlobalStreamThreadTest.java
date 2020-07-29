@@ -221,7 +221,6 @@ public class GlobalStreamThreadTest {
         globalStreamThread.shutdown();
     }
 
-    @Test
     public void shouldDieOnInvalidOffsetExceptionDuringStartup() throws Exception {
         initializeConsumer();
         mockConsumer.setPollException(new InvalidOffsetException("Try Again!") {

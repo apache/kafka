@@ -32,35 +32,35 @@ public class SlidingWindowsTest {
 
     @Test
     public void shouldSetWindowSize() {
-        assertEquals(ANY_SIZE, SlidingWindows.of(ofMillis(ANY_SIZE), ofMillis(3)).sizeMs);
+        assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(3)).timeDifference);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void windowSizeMustNotBeZero() {
-        SlidingWindows.of(ofMillis(0), ofMillis(5));
+        SlidingWindows.withTimeDifferenceAndGrace(ofMillis(0), ofMillis(5));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void windowSizeMustNotBeNegative() {
-        SlidingWindows.of(ofMillis(-1), ofMillis(5));
+        SlidingWindows.withTimeDifferenceAndGrace(ofMillis(-1), ofMillis(5));
     }
 
     @Test
     public void shouldSetGracePeriod() {
-        assertEquals(ANY_SIZE, SlidingWindows.of(ofMillis(10), ofMillis(ANY_SIZE)).gracePeriodMs());
+        assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(ANY_SIZE)).gracePeriodMs());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void graceMustNotBeNegative() {
-        SlidingWindows.of(ofMillis(10), ofMillis(-1));
+        SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(-1));
     }
 
     @Test
     public void gracePeriodShouldEnforceBoundaries() {
-        SlidingWindows.of(ofMillis(3L), ofMillis(0L));
+        SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3L), ofMillis(0L));
 
         try {
-            SlidingWindows.of(ofMillis(3L), ofMillis(-1L));
+            SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3L), ofMillis(-1L));
             fail("should not accept negatives");
         } catch (final IllegalArgumentException e) {
             //expected
@@ -69,30 +69,30 @@ public class SlidingWindowsTest {
 
     @Test
     public void equalsAndHashcodeShouldBeValidForPositiveCases() {
-        verifyEquality(SlidingWindows.of(ofMillis(3), ofMillis(3)), SlidingWindows.of(ofMillis(3), ofMillis(3)));
+        verifyEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(3)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(3)));
 
-        verifyEquality(SlidingWindows.of(ofMillis(3), ofMillis(1)), SlidingWindows.of(ofMillis(3), ofMillis(1)));
+        verifyEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)));
 
-        verifyEquality(SlidingWindows.of(ofMillis(3), ofMillis(4)), SlidingWindows.of(ofMillis(3), ofMillis(4)));
+        verifyEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(4)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(4)));
 
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForNegativeCases() {
 
-        verifyInEquality(SlidingWindows.of(ofMillis(3), ofMillis(2)), SlidingWindows.of(ofMillis(3), ofMillis(1)));
+        verifyInEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(2)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)));
 
-        verifyInEquality(SlidingWindows.of(ofMillis(3), ofMillis(9)), SlidingWindows.of(ofMillis(3), ofMillis(4)));
+        verifyInEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(9)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(4)));
 
 
         verifyInEquality(
-                SlidingWindows.of(ofMillis(4), ofMillis(2)),
-                SlidingWindows.of(ofMillis(3), ofMillis(2))
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(4), ofMillis(2)),
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(2))
         );
 
         assertNotEquals(
-                SlidingWindows.of(ofMillis(3), ofMillis(1)),
-                SlidingWindows.of(ofMillis(3), ofMillis(2))
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)),
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(2))
         );
     }
 }

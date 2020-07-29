@@ -19,14 +19,21 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Named;
+import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.SlidingWindows;
+import org.apache.kafka.streams.kstream.TimeWindowedKStream;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -35,7 +42,7 @@ import java.util.Set;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
-public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K,V> implements TimeWindowedKStream<K, V> {
+public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> implements TimeWindowedKStream<K, V> {
     private final SlidingWindows windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
 
@@ -100,7 +107,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K,V> implem
                 materialize(materializedInternal),
                 new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
                 materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifference()) : null,
                 materializedInternal.valueSerde());
 
 
@@ -148,7 +155,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K,V> implem
                 materialize(materializedInternal),
                 new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
                 materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifference()) : null,
                 materializedInternal.valueSerde());
 
 
@@ -195,7 +202,7 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K,V> implem
                 materialize(materializedInternal),
                 new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
                 materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifference()) : null,
                 materializedInternal.valueSerde());
 
 
@@ -205,47 +212,23 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K,V> implem
     private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            if (materialized.retention() != null) {
-                // new style retention: use Materialized retention and default segmentInterval
-                final long retentionPeriod = materialized.retention().toMillis();
+            // new style retention: use Materialized retention and default segmentInterval
+            final long retentionPeriod = materialized.retention().toMillis();
 
-                if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
-                    throw new IllegalArgumentException("The retention period of the window store "
-                            + name + " must be no smaller than its window size plus the grace period."
-                            + " Got size=[" + windows.size() + "],"
-                            + " grace=[" + windows.gracePeriodMs() + "],"
-                            + " retention=[" + retentionPeriod + "]");
-                }
+            if ((windows.timeDifference() + windows.gracePeriodMs()) > retentionPeriod) {
+                throw new IllegalArgumentException("The retention period of the window store "
+                        + name + " must be no smaller than its window time difference plus the grace period."
+                        + " Got time difference=[" + windows.timeDifference() + "],"
+                        + " grace=[" + windows.gracePeriodMs() + "],"
+                        + " retention=[" + retentionPeriod + "]");
+            }
 
-                supplier = Stores.persistentTimestampedWindowStore(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.size()),
-                        false
-                );
-
-            } /*else {
-                // old style retention: use deprecated Windows retention/segmentInterval.
-
-                // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
-                // to be (windows.size() + windows.grace()). This will yield the same default behavior.
-
-                if ((windows.size() + windows.gracePeriodMs()) > windows.maintainMs()) {
-                    throw new IllegalArgumentException("The retention period of the window store "
-                            + name + " must be no smaller than its window size plus the grace period."
-                            + " Got size=[" + windows.size() + "],"
-                            + " grace=[" + windows.gracePeriodMs() + "],"
-                            + " retention=[" + windows.maintainMs() + "]");
-                }
-
-                supplier = new RocksDbWindowBytesStoreSupplier(
-                        materialized.storeName(),
-                        windows.maintainMs(),
-                        Math.max(windows.maintainMs() / (windows.segments - 1), 60_000L),
-                        windows.size(),
-                        false,
-                        true);
-            }*/
+            supplier = Stores.persistentTimestampedWindowStore(
+                    materialized.storeName(),
+                    Duration.ofMillis(retentionPeriod),
+                    Duration.ofMillis(windows.timeDifference()),
+                    false
+            );
         }
         final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(
                 supplier,
