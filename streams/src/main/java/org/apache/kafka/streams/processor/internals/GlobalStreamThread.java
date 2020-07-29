@@ -44,6 +44,7 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
 
 /**
  * This is the thread responsible for keeping all Global State Stores updated.
@@ -104,6 +105,10 @@ public class GlobalStreamThread extends Thread {
 
         public boolean isRunning() {
             return equals(RUNNING);
+        }
+
+        public boolean isDead() {
+            return equals(DEAD);
         }
 
         @Override
@@ -170,6 +175,12 @@ public class GlobalStreamThread extends Thread {
     public boolean stillRunning() {
         synchronized (stateLock) {
             return state.isRunning();
+        }
+    }
+
+    public boolean stillInitializing() {
+        synchronized (stateLock) {
+            return !state.isRunning() && !state.isDead();
         }
     }
 
@@ -276,7 +287,7 @@ public class GlobalStreamThread extends Thread {
 
             return;
         }
-        setState(State.RUNNING);
+        setState(RUNNING);
 
         boolean wipeStateStore = false;
         try {
@@ -384,7 +395,7 @@ public class GlobalStreamThread extends Thread {
     @Override
     public synchronized void start() {
         super.start();
-        while (!stillRunning()) {
+        while (stillInitializing()) {
             Utils.sleep(1);
             if (startupException != null) {
                 throw startupException;
