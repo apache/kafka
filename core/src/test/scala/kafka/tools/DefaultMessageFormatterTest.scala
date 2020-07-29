@@ -168,7 +168,17 @@ object DefaultMessageFormatterTest {
         "print fields in the beginning, middle and the end",
         consumerRecord(),
         Map("print.key" -> "true", "print.value" -> "true", "print.partition" -> "true"),
-        "Partition:9\tsomeKey\tsomeValue\n")
+        "Partition:9\tsomeKey\tsomeValue\n"),
+      Array(
+        "null value without custom null literal",
+        consumerRecord(value = null),
+        Map("print.key" -> "true"),
+        "someKey\tnull\n"),
+      Array(
+        "null value with custom null literal",
+        consumerRecord(value = null),
+        Map("print.key" -> "true", "null.literal" -> "NULL"),
+        "someKey\tNULL\n"),
     ).asJava
   }
 
@@ -204,10 +214,9 @@ object DefaultMessageFormatterTest {
       0L,
       0,
       0,
-      key.getBytes(StandardCharsets.UTF_8),
-      value.getBytes(StandardCharsets.UTF_8),
+      if (key == null) null else key.getBytes(StandardCharsets.UTF_8),
+      if (value == null) null else value.getBytes(StandardCharsets.UTF_8),
       new RecordHeaders(headers.asJava))
-
   }
 
   private def withResource[Resource <: Closeable, Result](resource: Resource)(handler: Resource => Result): Result = {

@@ -222,18 +222,19 @@ object ConsoleConsumer extends Logging {
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property",
     """The properties to initialize the message formatter. Default properties include:
-      |	print.timestamp=true|false
-      |	print.key=true|false
-      |	print.offset=true|false
-      |	print.partition=true|false
-      |	print.headers=true|false
-      |	print.value=true|false
-      |	key.separator=<key.separator>
-      |	line.separator=<line.separator>
-      |	headers.separator=<line.separator>
-      |	key.deserializer=<key.deserializer>
-      |	value.deserializer=<value.deserializer>
-      |	header.deserializer=<header.deserializer>
+      | print.timestamp=true|false
+      | print.key=true|false
+      | print.offset=true|false
+      | print.partition=true|false
+      | print.headers=true|false
+      | print.value=true|false
+      | key.separator=<key.separator>
+      | line.separator=<line.separator>
+      | headers.separator=<line.separator>
+      | null.literal=<null.literal>
+      | key.deserializer=<key.deserializer>
+      | value.deserializer=<value.deserializer>
+      | header.deserializer=<header.deserializer>
       |
       |Users can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers."""
       .stripMargin)
@@ -470,6 +471,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   var keySeparator = utfBytes("\t")
   var lineSeparator = utfBytes("\n")
   var headersSeparator = utfBytes(",")
+  var nullLiteral = utfBytes("null")
 
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
@@ -485,6 +487,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     getPropertyIfExists(props, "key.separator", getByteProperty).foreach(keySeparator = _)
     getPropertyIfExists(props, "line.separator", getByteProperty).foreach(lineSeparator = _)
     getPropertyIfExists(props, "headers.separator", getByteProperty).foreach(headersSeparator = _)
+    getPropertyIfExists(props, "null.literal", getByteProperty).foreach(nullLiteral = _)
 
     keyDeserializer = getPropertyIfExists(props, "key.deserializer", getDeserializerProperty(true))
     valueDeserializer = getPropertyIfExists(props, "value.deserializer", getDeserializerProperty(false))
@@ -563,7 +566,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   }
 
   private def deserialize(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) = {
-    val nonNullBytes = Option(sourceBytes).getOrElse(utfBytes("null"))
+    val nonNullBytes = Option(sourceBytes).getOrElse(nullLiteral)
     val convertedBytes = deserializer
       .map(d => utfBytes(d.deserialize(topic, nonNullBytes).toString))
       .getOrElse(nonNullBytes)
