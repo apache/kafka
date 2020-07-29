@@ -596,7 +596,7 @@ public class CachingSessionStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateStoreRangeValidator.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(BytesRangeValidator.class)) {
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.backwardFindSessions(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 
@@ -615,7 +615,7 @@ public class CachingSessionStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(StateStoreRangeValidator.class)) {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(BytesRangeValidator.class)) {
             final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(keyFrom, keyTo, 0L, 10L);
             assertFalse(iterator.hasNext());
 

@@ -115,7 +115,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean reverse) {
-        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         return new DelegatingPeekingKeyValueIterator<>(
             name,

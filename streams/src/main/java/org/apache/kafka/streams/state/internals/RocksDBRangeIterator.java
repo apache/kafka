@@ -55,22 +55,15 @@ class RocksDBRangeIterator extends RocksDbIterator {
     @Override
     public KeyValue<Bytes, byte[]> makeNext() {
         final KeyValue<Bytes, byte[]> next = super.makeNext();
-
         if (next == null) {
             return allDone();
         } else {
             if (!reverse) {
-                if (comparator.compare(next.key.get(), rawLastKey) <= 0) {
-                    return next;
-                } else {
-                    return allDone();
-                }
+                if (comparator.compare(next.key.get(), rawLastKey) <= 0) return next;
+                else return allDone();
             } else {
-                if (comparator.compare(next.key.get(), rawLastKey) >= 0) {
-                    return next;
-                } else {
-                    return allDone();
-                }
+                if (comparator.compare(next.key.get(), rawLastKey) >= 0) return next;
+                else return allDone();
             }
         }
     }

@@ -198,7 +198,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        if (StateStoreRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
 
         return registerNewIterator(
             keyFrom,
@@ -218,7 +218,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        if (StateStoreRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
 
         return registerNewIterator(
             keyFrom,

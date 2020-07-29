@@ -235,7 +235,7 @@ public class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
@@ -246,7 +246,7 @@ public class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                         final Bytes to) {
-        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().reverseRange(from, to);

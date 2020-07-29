@@ -190,7 +190,7 @@ class CachingSessionStore
                                                                   final Bytes keyTo,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
-        if (StateStoreRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
 
         validateStoreOpen();
 
@@ -213,7 +213,7 @@ class CachingSessionStore
                                                                           final Bytes keyTo,
                                                                           final long earliestSessionEndTime,
                                                                           final long latestSessionStartTime) {
-        if (StateStoreRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(keyFrom, keyTo)) return KeyValueIterators.emptyIterator();
 
         validateStoreOpen();
 

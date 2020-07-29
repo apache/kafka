@@ -54,14 +54,14 @@ public class SegmentIteratorTest {
     @Before
     public void before() {
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
-                TestUtils.tempDirectory(),
-                Serdes.String(),
-                Serdes.String(),
-                new MockRecordCollector(),
-                new ThreadCache(
-                    new LogContext("testCache "),
-                    0,
-                    new MockStreamsMetrics(new Metrics())));
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.String(),
+            new MockRecordCollector(),
+            new ThreadCache(
+                new LogContext("testCache "),
+                0,
+                new MockStreamsMetrics(new Metrics())));
         segmentOne.init(context, segmentOne);
         segmentTwo.init(context, segmentTwo);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());

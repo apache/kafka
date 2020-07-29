@@ -29,16 +29,16 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.util.Objects;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 public class TimestampedWindowStoreBuilder<K, V>
     extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, TimestampedWindowStore<K, V>> {
-    private final Logger log = LoggerFactory.getLogger(TimestampedWindowStoreBuilder.class);
+
+    private static final Logger LOG = LoggerFactory.getLogger(TimestampedWindowStoreBuilder.class);
 
     private final WindowBytesStoreSupplier storeSupplier;
 
@@ -62,7 +62,7 @@ public class TimestampedWindowStoreBuilder<K, V>
             }
         }
         if (storeSupplier.retainDuplicates() && enableCaching) {
-            log.warn("Disabling caching for {} since store was configured to retain duplicates", storeSupplier.name());
+            LOG.warn("Disabling caching for {} since store was configured to retain duplicates", storeSupplier.name());
             enableCaching = false;
         }
 

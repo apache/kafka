@@ -17,13 +17,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -33,18 +31,16 @@ import static org.junit.Assert.assertFalse;
 public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
     private final String namespace = "0.0-one";
-    private final StateSerdes<byte[], byte[]> serdes =  new StateSerdes<>("dummy", Serdes.ByteArray(), Serdes.ByteArray());
     private KeyValueStore<Bytes, byte[]> store;
     private ThreadCache cache;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         store = new InMemoryKeyValueStore(namespace);
         cache = new ThreadCache(new LogContext("testCache "), 10000L, new MockStreamsMetrics(new Metrics()));
     }
-
     @Test
-    public void shouldIterateOverRange() throws Exception {
+    public void shouldIterateOverRange() {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
         for (int i = 0; i < bytes.length; i += 2) {
             store.put(Bytes.wrap(bytes[i]), bytes[i]);
@@ -53,7 +49,8 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
         final Bytes from = Bytes.wrap(new byte[] {2});
         final Bytes to = Bytes.wrap(new byte[] {9});
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.range(from, to));
+        final KeyValueIterator<Bytes, byte[]> storeIterator =
+            new DelegatingPeekingKeyValueIterator<>("store", store.range(from, to));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
         final MergedSortedCacheKeyValueBytesStoreIterator iterator =
@@ -71,7 +68,34 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
 
     @Test
-    public void shouldSkipLargerDeletedCacheValue() throws Exception {
+    public void shouldReverseIterateOverRange() {
+        final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
+        for (int i = 0; i < bytes.length; i += 2) {
+            store.put(Bytes.wrap(bytes[i]), bytes[i]);
+            cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));
+        }
+
+        final Bytes from = Bytes.wrap(new byte[] {2});
+        final Bytes to = Bytes.wrap(new byte[] {9});
+        final KeyValueIterator<Bytes, byte[]> storeIterator =
+            new DelegatingPeekingKeyValueIterator<>("store", store.reverseRange(from, to));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.reverseRange(namespace, from, to);
+
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator =
+            new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
+        final byte[][] values = new byte[8][];
+        int index = 0;
+        int bytesIndex = 9;
+        while (iterator.hasNext()) {
+            final byte[] value = iterator.next().value;
+            values[index++] = value;
+            assertArrayEquals(bytes[bytesIndex--], value);
+        }
+        iterator.close();
+    }
+
+    @Test
+    public void shouldSkipLargerDeletedCacheValue() {
         final byte[][] bytes = {{0}, {1}};
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
         cache.put(namespace, Bytes.wrap(bytes[1]), new LRUCacheEntry(null));
@@ -81,7 +105,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     }
 
     @Test
-    public void shouldSkipSmallerDeletedCachedValue() throws Exception {
+    public void shouldSkipSmallerDeletedCachedValue() {
         final byte[][] bytes = {{0}, {1}};
         cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[1]), bytes[1]);
@@ -91,7 +115,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     }
 
     @Test
-    public void shouldIgnoreIfDeletedInCacheButExistsInStore() throws Exception {
+    public void shouldIgnoreIfDeletedInCacheButExistsInStore() {
         final byte[][] bytes = {{0}};
         cache.put(namespace, Bytes.wrap(bytes[0]), new LRUCacheEntry(null));
         store.put(Bytes.wrap(bytes[0]), bytes[0]);
@@ -100,7 +124,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     }
 
     @Test
-    public void shouldNotHaveNextIfAllCachedItemsDeleted() throws Exception {
+    public void shouldNotHaveNextIfAllCachedItemsDeleted() {
         final byte[][] bytes = {{0}, {1}, {2}};
         for (final byte[] aByte : bytes) {
             final Bytes aBytes = Bytes.wrap(aByte);
@@ -111,7 +135,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     }
 
     @Test
-    public void shouldNotHaveNextIfOnlyCacheItemsAndAllDeleted() throws Exception {
+    public void shouldNotHaveNextIfOnlyCacheItemsAndAllDeleted() {
         final byte[][] bytes = {{0}, {1}, {2}};
         for (final byte[] aByte : bytes) {
             cache.put(namespace, Bytes.wrap(aByte), new LRUCacheEntry(null));
@@ -120,7 +144,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     }
 
     @Test
-    public void shouldSkipAllDeletedFromCache() throws Exception {
+    public void shouldSkipAllDeletedFromCache() {
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}};
         for (final byte[] aByte : bytes) {
             final Bytes aBytes = Bytes.wrap(aByte);
@@ -146,7 +170,7 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
     }
 
     @Test
-    public void shouldPeekNextKey() throws Exception {
+    public void shouldPeekNextKey() {
         final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore("one");
         final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, new MockStreamsMetrics(new Metrics()));
         final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
@@ -155,8 +179,8 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
             cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));
         }
 
-        final Bytes from = Bytes.wrap(new byte[]{2});
-        final Bytes to = Bytes.wrap(new byte[]{9});
+        final Bytes from = Bytes.wrap(new byte[] {2});
+        final Bytes to = Bytes.wrap(new byte[] {9});
         final KeyValueIterator<Bytes, byte[]> storeIterator = kv.range(from, to);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(namespace, from, to);
 
@@ -169,6 +193,35 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
             final byte[] keys = iterator.peekNextKey().get();
             values[index++] = keys;
             assertArrayEquals(bytes[bytesIndex++], keys);
+            iterator.next();
+        }
+        iterator.close();
+    }
+
+    @Test
+    public void shouldPeekNextKeyReverse() {
+        final KeyValueStore<Bytes, byte[]> kv = new InMemoryKeyValueStore("one");
+        final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1000000L, new MockStreamsMetrics(new Metrics()));
+        final byte[][] bytes = {{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}};
+        for (int i = 0; i < bytes.length - 1; i += 2) {
+            kv.put(Bytes.wrap(bytes[i]), bytes[i]);
+            cache.put(namespace, Bytes.wrap(bytes[i + 1]), new LRUCacheEntry(bytes[i + 1]));
+        }
+
+        final Bytes from = Bytes.wrap(new byte[] {2});
+        final Bytes to = Bytes.wrap(new byte[] {9});
+        final KeyValueIterator<Bytes, byte[]> storeIterator = kv.reverseRange(from, to);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.reverseRange(namespace, from, to);
+
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator =
+            new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator, true);
+        final byte[][] values = new byte[8][];
+        int index = 0;
+        int bytesIndex = 9;
+        while (iterator.hasNext()) {
+            final byte[] keys = iterator.peekNextKey().get();
+            values[index++] = keys;
+            assertArrayEquals(bytes[bytesIndex--], keys);
             iterator.next();
         }
         iterator.close();

@@ -252,7 +252,7 @@ class CachingWindowStore
                                                            final Bytes to,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
@@ -290,7 +290,7 @@ class CachingWindowStore
                                                                    final Bytes to,
                                                                    final Instant fromTime,
                                                                    final Instant toTime) {
-        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         final long timeFrom = ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
         final long timeTo = ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));

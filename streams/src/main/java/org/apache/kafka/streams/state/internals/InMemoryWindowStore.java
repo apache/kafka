@@ -222,7 +222,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         removeExpiredSegments();
 
-        if (StateStoreRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
+        if (BytesRangeValidator.isInvalid(from, to)) return KeyValueIterators.emptyIterator();
 
         // add one b/c records expire exactly retentionPeriod ms after created
         final long minTime = Math.max(timeFrom, observedStreamTime - retentionPeriod + 1);

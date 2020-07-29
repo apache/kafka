@@ -46,7 +46,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     private final long windowSize;
     private final Map<Long, NavigableMap<K, V>> data = new HashMap<>();
-    private boolean open  = true;
+    private boolean open = true;
 
     ReadOnlyWindowStoreStub(final long windowSize) {
         this.windowSize = windowSize;
@@ -160,7 +160,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
         return new KeyValueIterator<Windowed<K>, V>() {
             @Override
-            public void close() {}
+            public void close() {
+            }
 
             @Override
             public Windowed<K> peekNextKey() {
@@ -202,7 +203,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
         return new KeyValueIterator<Windowed<K>, V>() {
             @Override
-            public void close() {}
+            public void close() {
+            }
 
             @Override
             public Windowed<K> peekNextKey() {
@@ -293,7 +295,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
         return new KeyValueIterator<Windowed<K>, V>() {
             @Override
-            public void close() {}
+            public void close() {
+            }
 
             @Override
             public Windowed<K> peekNextKey() {
@@ -382,13 +385,16 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {}
+    public void init(final ProcessorContext context, final StateStore root) {
+    }
 
     @Override
-    public void flush() {}
+    public void flush() {
+    }
 
     @Override
-    public void close() {}
+    public void close() {
+    }
 
     @Override
     public boolean persistent() {
@@ -413,7 +419,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
 
         @Override
         public Long peekNextKey() {

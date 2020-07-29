@@ -70,7 +70,7 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
     public boolean hasNext() {
         boolean hasNext = false;
         while ((currentIterator == null || !(hasNext = hasNextConditionHasNext()) || !currentSegment.isOpen())
-                && segments.hasNext()) {
+            && segments.hasNext()) {
             close();
             currentSegment = segments.next();
             try {

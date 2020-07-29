@@ -21,8 +21,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class StateStoreRangeValidator {
-    private static final Logger LOG = LoggerFactory.getLogger(StateStoreRangeValidator.class);
+public class BytesRangeValidator {
+
+    private static final Logger LOG = LoggerFactory.getLogger(BytesRangeValidator.class);
 
     static boolean isInvalid(final Bytes from, final Bytes to) {
         if (from.compareTo(to) > 0) {
