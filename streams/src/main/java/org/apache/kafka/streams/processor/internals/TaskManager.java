@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -325,7 +326,7 @@ public class TaskManager {
         }
 
         // for all tasks to close or recycle, we should first right a checkpoint as in post-commit
-        final Set<Task> tasksToCheckpoint = new HashSet<>(tasksToCloseClean);
+        final List<Task> tasksToCheckpoint = new ArrayList<>(tasksToCloseClean);
         tasksToCheckpoint.addAll(tasksToRecycle);
         for (final Task task : tasksToCheckpoint) {
             try {
@@ -336,6 +337,11 @@ public class TaskManager {
                 // standby tasks should have no offsets to commit, we should expect nothing to commit
                 task.suspend();
 
+                // Note that we are not actually committing here but just check if we need to write checkpoint file:
+                // 1) for active tasks prepareCommit should return empty if it has committed during suspension successfully,
+                //    and their changelog positions should not change at all postCommit would not write the checkpoint again.
+                // 2) for standby tasks prepareCommit should always return empty, and then in postCommit we would probably
+                //    write the checkpoint file.
                 final Map<TopicPartition, OffsetAndMetadata> offsets = task.prepareCommit();
                 if (!offsets.isEmpty()) {
                     log.error("Task {} should has been committed when it was suspended, but it reports non-empty " +
@@ -546,13 +552,13 @@ public class TaskManager {
             firstException.compareAndSet(null, e);
         }
 
-        // only try to complete post-commit if committing succeeded; we do not need to
-        // enforce checkpointing upon suspending a task: if it is resumed later we just
+        // only try to complete post-commit if committing succeeded;
+        // we enforce checkpointing upon suspending a task: if it is resumed later we just
         // proceed normally, if it is going to be closed we would checkpoint by then
         if (firstException.get() == null) {
             for (final Task task : revokedActiveTasks) {
                 try {
-                    task.postCommit(false);
+                    task.postCommit(true);
                 } catch (final RuntimeException e) {
                     log.error("Exception caught while post-committing task " + task.id(), e);
                     firstException.compareAndSet(null, e);
@@ -562,7 +568,7 @@ public class TaskManager {
             if (shouldCommitAdditionalTasks) {
                 for (final Task task : nonRevokedActiveTasks) {
                     try {
-                        task.postCommit(false);
+                        task.postCommit(true);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
                         firstException.compareAndSet(null, e);
