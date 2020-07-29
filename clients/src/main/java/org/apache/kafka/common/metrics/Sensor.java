@@ -106,7 +106,15 @@ public final class Sensor {
         }
 
         public boolean shouldRecord(final int configId) {
-            return configId == DEBUG.id || configId == this.id;
+            if (configId == INFO.id) {
+                return this.id == INFO.id;
+            } else if (configId == DEBUG.id) {
+                return this.id == INFO.id || this.id == DEBUG.id;
+            } else if (configId == TRACE.id) {
+                return true;
+            } else {
+                throw new IllegalStateException("Did not recognize recording level " + configId);
+            }
         }
     }
 

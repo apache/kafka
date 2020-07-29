@@ -153,6 +153,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX =
         "end-to-end latency of a record, measuring by comparing the record timestamp with the "
             + "system time when it has been fully processed by the node";
+    public static final String RECORD_E2E_LATENCY_AVG_DESCRIPTION = "The average " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
     public static final String RECORD_E2E_LATENCY_MIN_DESCRIPTION = "The minimum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
     public static final String RECORD_E2E_LATENCY_MAX_DESCRIPTION = "The maximum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
 

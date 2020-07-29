@@ -469,38 +469,44 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldRecordE2ELatencyMinAndMax() {
+    public void shouldRecordE2ELatencyAvgAndMinAndMax() {
         time = new MockTime(0L, 0L, 0L);
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
         task = createStatelessTask(createConfig(false, "0"), StreamsConfig.METRICS_LATEST);
 
         final String sourceNode = source1.name();
 
-        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+        final Metric avgMetric = getProcessorMetric("record-e2e-latency", "%s-avg", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
         final Metric minMetric = getProcessorMetric("record-e2e-latency", "%s-min", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
+        final Metric maxMetric = getProcessorMetric("record-e2e-latency", "%s-max", task.id().toString(), sourceNode, StreamsConfig.METRICS_LATEST);
 
+        assertThat(avgMetric.metricValue(), equalTo(Double.NaN));
         assertThat(minMetric.metricValue(), equalTo(Double.NaN));
         assertThat(maxMetric.metricValue(), equalTo(Double.NaN));
 
         // e2e latency = 10
         task.maybeRecordE2ELatency(0L, 10L, sourceNode);
+        assertThat(avgMetric.metricValue(), equalTo(10.0));
         assertThat(minMetric.metricValue(), equalTo(10.0));
         assertThat(maxMetric.metricValue(), equalTo(10.0));
 
         // e2e latency = 15
         task.maybeRecordE2ELatency(10L, 25L, sourceNode);
+        assertThat(avgMetric.metricValue(), equalTo(12.5));
         assertThat(minMetric.metricValue(), equalTo(10.0));
         assertThat(maxMetric.metricValue(), equalTo(15.0));
 
-        // e2e latency = 25
-        task.maybeRecordE2ELatency(5L, 30L, sourceNode);
+        // e2e latency = 23
+        task.maybeRecordE2ELatency(7L, 30L, sourceNode);
+        assertThat(avgMetric.metricValue(), equalTo(16.0));
         assertThat(minMetric.metricValue(), equalTo(10.0));
-        assertThat(maxMetric.metricValue(), equalTo(25.0));
+        assertThat(maxMetric.metricValue(), equalTo(23.0));
 
-        // e2e latency = 20
+        // e2e latency = 5
         task.maybeRecordE2ELatency(35L, 40L, sourceNode);
+        assertThat(avgMetric.metricValue(), equalTo(13.25));
         assertThat(minMetric.metricValue(), equalTo(5.0));
-        assertThat(maxMetric.metricValue(), equalTo(25.0));
+        assertThat(maxMetric.metricValue(), equalTo(23.0));
     }
 
     @Test

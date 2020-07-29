@@ -1027,10 +1027,10 @@ public class StreamsMetricsImplTest {
     }
 
     private void verifyMetric(final String name,
-                               final String description,
-                               final double valueToRecord1,
-                               final double valueToRecord2,
-                               final double expectedMetricValue) {
+                              final String description,
+                              final double valueToRecord1,
+                              final double valueToRecord2,
+                              final double expectedMetricValue) {
         final KafkaMetric metric = metrics
             .metric(new MetricName(name, group, description, tags));
         assertThat(metric, is(notNullValue()));
@@ -1040,25 +1040,6 @@ public class StreamsMetricsImplTest {
         assertThat(
             metric.measurable().measure(new MetricConfig(), time.milliseconds()),
             equalTo(expectedMetricValue)
-        );
-    }
-
-    private void verifyMetricWithinError(final String name,
-                                         final String description,
-                                         final double valueToRecord1,
-                                         final double valueToRecord2,
-                                         final double expectedMetricValue,
-                                         final double acceptableError) {
-        final KafkaMetric metric = metrics
-            .metric(new MetricName(name, group, description, tags));
-        assertThat(metric, is(notNullValue()));
-        assertThat(metric.metricName().description(), equalTo(description));
-        sensor.record(valueToRecord1, time.milliseconds());
-        sensor.record(valueToRecord2, time.milliseconds());
-        assertEquals(
-            expectedMetricValue,
-            metric.measurable().measure(new MetricConfig(), time.milliseconds()),
-            1.0
         );
     }
 

@@ -204,8 +204,9 @@ public class MetricsIntegrationTest {
     private static final String SUPPRESSION_BUFFER_COUNT_MAX = "suppression-buffer-count-max";
     private static final String EXPIRED_WINDOW_RECORD_DROP_RATE = "expired-window-record-drop-rate";
     private static final String EXPIRED_WINDOW_RECORD_DROP_TOTAL = "expired-window-record-drop-total";
-    private static final String E2E_LATENCY_MIN = "record-e2e-latency-min";
-    private static final String E2E_LATENCY_MAX = "record-e2e-latency-max";
+    private static final String RECORD_E2E_LATENCY_AVG = "record-e2e-latency-avg";
+    private static final String RECORD_E2E_LATENCY_MIN = "record-e2e-latency-min";
+    private static final String RECORD_E2E_LATENCY_MAX = "record-e2e-latency-max";
 
     // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
@@ -273,7 +274,7 @@ public class MetricsIntegrationTest {
         verifyStateMetric(State.RUNNING);
     }
 
-    private void produceRecordsForTwoSegments(final Duration segmentInterval) throws Exception {
+    private void produceRecordsForTwoSegments(final Duration segmentInterval) {
         final MockTime mockTime = new MockTime(Math.max(segmentInterval.toMillis(), 60_000L));
         final Properties props = TestUtils.producerConfig(
             CLUSTER.bootstrapServers(),
@@ -294,7 +295,7 @@ public class MetricsIntegrationTest {
         );
     }
 
-    private void produceRecordsForClosingWindow(final Duration windowSize) throws Exception {
+    private void produceRecordsForClosingWindow(final Duration windowSize) {
         final MockTime mockTime = new MockTime(windowSize.toMillis() + 1);
         final Properties props = TestUtils.producerConfig(
             CLUSTER.bootstrapServers(),
@@ -604,8 +605,8 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricProcessor, DESTROY_TOTAL, numberOfRemovedMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_TOTAL, numberOfModifiedForwardMetrics);
         checkMetricByName(listMetricProcessor, FORWARD_RATE, numberOfModifiedForwardMetrics);
-        checkMetricByName(listMetricProcessor, E2E_LATENCY_MIN, numberOfSourceNodes + numberOfTerminalNodes);
-        checkMetricByName(listMetricProcessor, E2E_LATENCY_MAX, numberOfSourceNodes + numberOfTerminalNodes);
+        checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MIN, numberOfSourceNodes + numberOfTerminalNodes);
+        checkMetricByName(listMetricProcessor, RECORD_E2E_LATENCY_MAX, numberOfSourceNodes + numberOfTerminalNodes);
     }
 
     private void checkKeyValueStoreMetrics(final String group0100To24,
@@ -668,6 +669,9 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_CURRENT, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_AVG, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_MAX, 0);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_AVG, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MIN, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MAX, 1);
     }
 
     private void checkMetricsDeregistration() {
@@ -761,6 +765,9 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_CURRENT, expectedNumberOfRemovedMetrics);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_AVG, 1);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_MAX, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_AVG, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MIN, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MAX, 1);
     }
 
     private void checkSessionStoreMetrics(final String builtInMetricsVersion) {
@@ -826,6 +833,9 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_CURRENT, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_AVG, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_MAX, 0);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_AVG, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MIN, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MAX, 1);
     }
 
     private void checkMetricByName(final List<Metric> listMetric, final String metricName, final int numMetric) {

@@ -327,6 +327,38 @@ public class StateStoreMetricsTest {
         assertThat(sensor, is(expectedSensor));
     }
 
+    @Test
+    public void shouldGetRecordE2ELatencySensor() {
+        final String metricName = "record-e2e-latency";
+
+        final String e2eLatencyDescription =
+            "end-to-end latency of a record, measuring by comparing the record timestamp with the "
+                + "system time when it has been fully processed by the node";
+        final String descriptionOfAvg = "The average " + e2eLatencyDescription;
+        final String descriptionOfMin = "The minimum " + e2eLatencyDescription;
+        final String descriptionOfMax = "The maximum " + e2eLatencyDescription;
+
+        expect(streamsMetrics.storeLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, metricName, RecordingLevel.TRACE))
+            .andReturn(expectedSensor);
+        expect(streamsMetrics.storeLevelTagMap(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
+        StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
+            expectedSensor,
+            STORE_LEVEL_GROUP,
+            storeTagMap,
+            metricName,
+            descriptionOfAvg,
+            descriptionOfMin,
+            descriptionOfMax
+        );
+        replay(StreamsMetricsImpl.class, streamsMetrics);
+
+        final Sensor sensor =
+            StateStoreMetrics.e2ELatencySensor(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
+
+        verify(StreamsMetricsImpl.class, streamsMetrics);
+        assertThat(sensor, is(expectedSensor));
+    }
+
     private void shouldGetSensor(final String metricName,
                                  final String descriptionOfRate,
                                  final String descriptionOfCount,
