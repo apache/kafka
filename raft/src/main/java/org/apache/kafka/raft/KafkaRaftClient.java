@@ -133,10 +133,10 @@ public class KafkaRaftClient implements RaftClient {
      * new deadline time:
      *
      * 1. If the client is in leader state, the timer is for the fetch timeout from the majority of quorum;
-     *    when it expired, the leader should try to use find-quorum to discover if there's a new leader.
+     *    when it expires, the leader should try to use find-quorum to discover if there's a new leader.
      *
      * 2. If the client is in candidate state requesting votes from others, the timer is for the election timeout;
-     *    when it expired, the candidate should treat the current election as already failed.
+     *    when it expires, the candidate should treat the current election as already failed.
      *
      * 3. If the client is in candidate state completing a failed election, the timer is for the exponential election backoff
      *    based on the number of retries; when it expired, the candidate can bump the epoch and start the next election.
