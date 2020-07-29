@@ -293,7 +293,7 @@ public class GlobalStreamThreadTest {
     private void startAndSwallowError() {
         try {
             globalStreamThread.start();
-        } catch (IllegalStateException ignored) {
+        } catch (final IllegalStateException ignored) {
         }
     }
 }

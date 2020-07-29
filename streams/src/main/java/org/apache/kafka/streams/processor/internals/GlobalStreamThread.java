@@ -42,6 +42,7 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.PENDING_SHUTDOWN;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
@@ -186,7 +187,7 @@ public class GlobalStreamThread extends Thread {
 
     public boolean stillInitializing() {
         synchronized (stateLock) {
-            return !state.isRunning() && !state.inErrorState();
+            return state.equals(CREATED);
         }
     }
 
