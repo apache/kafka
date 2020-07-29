@@ -138,9 +138,8 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
 
   override def generateRequests(): Iterable[RequestAndCompletionHandler] = {
     val requestsToSend = new mutable.Queue[RequestAndCompletionHandler]
-    if (requestQueue.peek() != null) {
-      val topRequest = requestQueue.poll()
-
+    val topRequest = requestQueue.poll()
+    if (topRequest != null) {
       val request = RequestAndCompletionHandler(
         activeController.get,
         topRequest.request,
