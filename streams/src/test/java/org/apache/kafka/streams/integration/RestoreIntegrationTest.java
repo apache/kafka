@@ -117,8 +117,6 @@ public class RestoreIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
-        streamsConfiguration.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 300);
         return streamsConfiguration;
     }
 
@@ -340,22 +338,12 @@ public class RestoreIntegrationTest {
         final Properties props1 = props();
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
-        // Set heartbeat interval and session timeout to default values to decrease the probability that the
-        // client is kicked out of the group and the in-memory state stores are closed when the group coordinator
-        // is not available. The low values for these two configurations caused this test to be flaky.
-        props1.remove(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
-        props1.remove(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
         purgeLocalStreamsState(props1);
         final KafkaStreams client1 = new KafkaStreams(builder.build(), props1);
 
         final Properties props2 = props();
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
-        // Set heartbeat interval and session timeout to default values to decrease the probability that the
-        // client is kicked out of the group and the in-memory state stores are closed when the group coordinator
-        // is not available. The low values for these two configurations caused this test to be flaky.
-        props2.remove(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
-        props2.remove(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
         purgeLocalStreamsState(props2);
         final KafkaStreams client2 = new KafkaStreams(builder.build(), props2);
 
