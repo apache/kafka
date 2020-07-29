@@ -68,7 +68,7 @@ class BrokerToControllerRequestThreadTest {
       new MetadataRequest.Builder(new MetadataRequestData()), response => {
         assertEquals(expectedResponse, response.responseBody())
         responseLatch.countDown()
-      }, "")
+      })
     requestQueue.put(queueItem)
     // initialize to the controller
     testRequestThread.doWork()
@@ -113,7 +113,7 @@ class BrokerToControllerRequestThreadTest {
       new MetadataRequest.Builder(new MetadataRequestData()), response => {
         assertEquals(expectedResponse, response.responseBody())
         responseLatch.countDown()
-      }, "")
+      })
     requestQueue.put(queueItem)
     mockClient.prepareResponse(expectedResponse)
     // initialize the thread with oldController
@@ -172,7 +172,7 @@ class BrokerToControllerRequestThreadTest {
         .setAllowAutoTopicCreation(true)), response => {
         assertEquals(expectedResponse, response.responseBody())
         responseLatch.countDown()
-      }, "")
+      })
     requestQueue.put(queueItem)
     // initialize to the controller
     testRequestThread.doWork()

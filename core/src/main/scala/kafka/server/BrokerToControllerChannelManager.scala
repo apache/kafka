@@ -115,13 +115,12 @@ class BrokerToControllerChannelManager(metadataCache: kafka.server.MetadataCache
 
   private[server] def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                                   callback: RequestCompletionHandler): Unit = {
-    requestQueue.put(BrokerToControllerQueueItem(request, callback, ""))
+    requestQueue.put(BrokerToControllerQueueItem(request, callback))
   }
 }
 
 case class BrokerToControllerQueueItem(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                       callback: RequestCompletionHandler,
-                                       initialPrincipalName: String)
+                                       callback: RequestCompletionHandler)
 
 class BrokerToControllerRequestThread(networkClient: KafkaClient,
                                       metadataUpdater: ManualMetadataUpdater,
@@ -146,7 +145,7 @@ class BrokerToControllerRequestThread(networkClient: KafkaClient,
         activeController.get,
         topRequest.request,
         handleResponse(topRequest),
-        topRequest.initialPrincipalName)
+        )
       requestsToSend.enqueue(request)
     }
     requestsToSend

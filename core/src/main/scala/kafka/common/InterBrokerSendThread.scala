@@ -145,8 +145,7 @@ abstract class InterBrokerSendThread(name: String,
 
 case class RequestAndCompletionHandler(destination: Node,
                                        request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                       handler: RequestCompletionHandler,
-                                       initialPrincipalName: String)
+                                       handler: RequestCompletionHandler)
 
 private class UnsentRequests {
   private val unsent = new HashMap[Node, ArrayDeque[ClientRequest]]
