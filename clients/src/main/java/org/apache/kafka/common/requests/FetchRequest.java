@@ -55,7 +55,6 @@ public class FetchRequest extends AbstractRequest {
     private final List<TopicPartition> toForget;
     private final FetchMetadata metadata;
 
-    @Override
     public FetchRequestData data() {
         return data;
     }

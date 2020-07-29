@@ -52,16 +52,16 @@ import java.util.function.Consumer;
  *
  * @see org.apache.kafka.common.requests.FetchResponse
  */
-public class RecordsWriter implements Writable {
+public class RecordsWritable implements Writable {
     private final String dest;
     private final Consumer<Send> sendConsumer;
     private final ByteBuffer buffer;
     private int mark;
 
-    public RecordsWriter(String dest, int totalSize, Consumer<Send> sendConsumer) {
+    public RecordsWritable(String dest, int messageSizeExcludingRecords, Consumer<Send> sendConsumer) {
         this.dest = dest;
         this.sendConsumer = sendConsumer;
-        this.buffer = ByteBuffer.allocate(totalSize);
+        this.buffer = ByteBuffer.allocate(messageSizeExcludingRecords);
         this.mark = 0;
     }
 

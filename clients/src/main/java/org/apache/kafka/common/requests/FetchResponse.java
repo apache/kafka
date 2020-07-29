@@ -24,8 +24,8 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.protocol.RecordsReader;
-import org.apache.kafka.common.protocol.RecordsWriter;
+import org.apache.kafka.common.protocol.RecordsReadable;
+import org.apache.kafka.common.protocol.RecordsWritable;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -74,7 +74,6 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     private final FetchResponseData data;
     private final LinkedHashMap<TopicPartition, PartitionData<T>> responseDataMap;
 
-    @Override
     public FetchResponseData data() {
         return data;
     }
@@ -280,7 +279,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 .sum();
         int totalMessageSize = data.size(cache, apiVersion);
 
-        RecordsWriter writer = new RecordsWriter(dest, totalMessageSize - totalRecordSize, sends::add);
+        RecordsWritable writer = new RecordsWritable(dest, totalMessageSize - totalRecordSize, sends::add);
         data.write(writer, cache, apiVersion);
         writer.flush();
 
@@ -288,7 +287,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         ResponseHeaderData responseHeaderData = responseHeader.data();
 
         int headerSize = responseHeaderData.size(cache, responseHeader.headerVersion());
-        int bodySize = (int) sends.stream().mapToLong(Send::size).sum();
+        int bodySize = Math.toIntExact(sends.stream().mapToLong(Send::size).sum());
 
         ByteBuffer buffer = ByteBuffer.allocate(headerSize + 4);
         ByteBufferAccessor headerWriter = new ByteBufferAccessor(buffer);
@@ -332,7 +331,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
     public static FetchResponse<MemoryRecords> parse(ByteBuffer buffer, short version) {
         FetchResponseData fetchResponseData = new FetchResponseData();
-        RecordsReader reader = new RecordsReader(buffer);
+        RecordsReadable reader = new RecordsReadable(buffer);
         fetchResponseData.read(reader, version);
         return new FetchResponse<>(fetchResponseData);
     }

@@ -28,10 +28,10 @@ import java.nio.ByteBuffer;
  *
  * @see org.apache.kafka.common.requests.FetchResponse
  */
-public class RecordsReader implements Readable {
+public class RecordsReadable implements Readable {
     private final ByteBuffer buf;
 
-    public RecordsReader(ByteBuffer buf) {
+    public RecordsReadable(ByteBuffer buf) {
         this.buf = buf;
     }
 

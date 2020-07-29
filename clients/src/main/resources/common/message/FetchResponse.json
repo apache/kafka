@@ -72,7 +72,7 @@
             { "name": "FirstOffset", "type": "int64", "versions": "4+",
               "about": "The first offset in the aborted transaction." }
           ]},
-          { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "default": "-1", "ignorable": true,
+          { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "default": "-1", "ignorable": false,
             "about": "The preferred read replica for the consumer to use on its next fetch request"}
         ]},
         { "name": "RecordSet", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."}

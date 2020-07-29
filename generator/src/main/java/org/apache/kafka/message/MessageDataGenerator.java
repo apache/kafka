@@ -686,10 +686,10 @@ public final class MessageDataGenerator {
                 buffer.printf("%snewBytes%s", assignmentPrefix, assignmentSuffix);
             }
         } else if (type.isRecords()) {
-            headerGenerator.addImport(MessageGenerator.RECORDS_READER_CLASS);
-            buffer.printf("if (_readable instanceof RecordsReader) {%n");
+            headerGenerator.addImport(MessageGenerator.RECORDS_READABLE_CLASS);
+            buffer.printf("if (_readable instanceof RecordsReadable) {%n");
             buffer.incrementIndent();
-            buffer.printf("%s((RecordsReader) _readable).readRecords(%s)%s", assignmentPrefix, lengthVar, assignmentSuffix);
+            buffer.printf("%s((RecordsReadable) _readable).readRecords(%s)%s", assignmentPrefix, lengthVar, assignmentSuffix);
             buffer.decrementIndent();
             buffer.printf("} else {%n");
             buffer.incrementIndent();
@@ -1527,10 +1527,10 @@ public final class MessageDataGenerator {
                         buffer.printf("_writable.writeByteArray(%s);%n", name);
                     }
                 } else if (type.isRecords()) {
-                    headerGenerator.addImport(MessageGenerator.RECORDS_WRITER_CLASS);
-                    buffer.printf("if (_writable instanceof RecordsWriter) {%n");
+                    headerGenerator.addImport(MessageGenerator.RECORDS_WRITABLE_CLASS);
+                    buffer.printf("if (_writable instanceof RecordsWritable) {%n");
                     buffer.incrementIndent();
-                    buffer.printf("((RecordsWriter) _writable).writeRecords(%s);%n", name);
+                    buffer.printf("((RecordsWritable) _writable).writeRecords(%s);%n", name);
                     buffer.decrementIndent();
                     buffer.printf("} else {%n");
                     buffer.incrementIndent();

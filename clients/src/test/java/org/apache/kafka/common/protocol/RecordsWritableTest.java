@@ -25,11 +25,11 @@ import org.junit.Test;
 import java.util.ArrayDeque;
 import java.util.Queue;
 
-public class RecordsWriterTest {
+public class RecordsWritableTest {
     @Test
     public void testBufferSlice() {
         Queue<Send> sends = new ArrayDeque<>();
-        RecordsWriter writer = new RecordsWriter("dest", 10000 /* enough for tests */, sends::add);
+        RecordsWritable writer = new RecordsWritable("dest", 10000 /* enough for tests */, sends::add);
         for (int i = 0; i < 4; i++) {
             writer.writeInt(i);
         }
