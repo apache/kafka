@@ -84,7 +84,7 @@ public class SensorTest {
 
     @Test
     public void testShouldRecordForInfoLevelSensor() {
-        Sensor infoSensor = new Sensor(null,"infoSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor infoSensor = new Sensor(null, "infoSensor", null, INFO_CONFIG, new SystemTime(),
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
 
@@ -99,7 +99,7 @@ public class SensorTest {
 
     @Test
     public void testShouldRecordForDebugLevelSensor() {
-        Sensor debugSensor = new Sensor(null,"debugSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor debugSensor = new Sensor(null, "debugSensor", null, INFO_CONFIG, new SystemTime(),
             0, Sensor.RecordingLevel.DEBUG);
         assertFalse(debugSensor.shouldRecord());
 
@@ -114,7 +114,7 @@ public class SensorTest {
 
     @Test
     public void testShouldRecordForTraceLevelSensor() {
-        Sensor traceSensor = new Sensor(null,"traceSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor traceSensor = new Sensor(null, "traceSensor", null, INFO_CONFIG, new SystemTime(),
              0, Sensor.RecordingLevel.TRACE);
         assertFalse(traceSensor.shouldRecord());
 
