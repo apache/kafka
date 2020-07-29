@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals.metrics;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -27,6 +28,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
+import org.rocksdb.Cache;
+import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
 import org.rocksdb.StatsLevel;
 import org.rocksdb.TickerType;
@@ -55,6 +58,10 @@ public class RocksDBMetricsRecorderTest {
     private final static String SEGMENT_STORE_NAME_1 = "segment-store-name-1";
     private final static String SEGMENT_STORE_NAME_2 = "segment-store-name-2";
 
+    private final RocksDB dbToAdd1 = mock(RocksDB.class);
+    private final RocksDB dbToAdd2 = mock(RocksDB.class);
+    private final Cache cacheToAdd1 = mock(Cache.class);
+    private final Cache cacheToAdd2 = mock(Cache.class);
     private final Statistics statisticsToAdd1 = mock(Statistics.class);
     private final Statistics statisticsToAdd2 = mock(Statistics.class);
 
@@ -115,86 +122,106 @@ public class RocksDBMetricsRecorderTest {
         assertThrows(
             IllegalStateException.class,
             () -> recorder.init(
-                new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST),
+                new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
                 taskId1
             )
         );
     }
 
     @Test
-    public void shouldSetStatsLevelToExceptDetailedTimersWhenStatisticsIsAdded() {
+    public void shouldSetStatsLevelToExceptDetailedTimersWhenValueProvidersWithStatisticsAreAdded() {
         statisticsToAdd1.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
         replay(statisticsToAdd1);
 
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+
+        verify(statisticsToAdd1);
+    }
+
+    @Test
+    public void shouldSetStatsLevelToExceptDetailedTimersWhenValueProvidersWithoutStatisticsAreAdded() {
+        replay(statisticsToAdd1);
+
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
 
         verify(statisticsToAdd1);
     }
 
     @Test
     public void shouldThrowIfStatisticsToAddHasBeenAlreadyAdded() {
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         assertThrows(
             IllegalStateException.class,
-            () -> recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1)
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null)
         );
     }
 
     @Test
-    public void shouldAddItselfToRecordingTriggerWhenFirstStatisticsIsAddedToNewlyCreatedRecorder() {
+    public void shouldAddItselfToRecordingTriggerWhenFirstValueProvidersAreAddedToNewlyCreatedRecorder() {
         recordingTrigger.addMetricsRecorder(recorder);
         replay(recordingTrigger);
 
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         verify(recordingTrigger);
     }
 
     @Test
-    public void shouldAddItselfToRecordingTriggerWhenFirstStatisticsIsAddedAfterLastStatisticsWasRemoved() {
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
-        recorder.removeStatistics(SEGMENT_STORE_NAME_1);
+    public void shouldAddItselfToRecordingTriggerWhenFirstValueProvidersAreAddedAfterLastValueProvidersWereRemoved() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
         reset(recordingTrigger);
         recordingTrigger.addMetricsRecorder(recorder);
         replay(recordingTrigger);
 
-        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
 
         verify(recordingTrigger);
     }
 
     @Test
-    public void shouldNotAddItselfToRecordingTriggerWhenNotEmpty() {
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
+    public void shouldNotAddItselfToRecordingTriggerWhenNotEmpty2() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
         reset(recordingTrigger);
         replay(recordingTrigger);
 
-        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
 
         verify(recordingTrigger);
     }
 
     @Test
-    public void shouldCloseStatisticsWhenStatisticsIsRemoved() {
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
+    public void shouldCloseStatisticsWhenValueProvidersAreRemoved() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
         reset(statisticsToAdd1);
         statisticsToAdd1.close();
         replay(statisticsToAdd1);
 
-        recorder.removeStatistics(SEGMENT_STORE_NAME_1);
+        recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
 
         verify(statisticsToAdd1);
     }
 
     @Test
-    public void shouldRemoveItselfFromRecordingTriggerWhenLastStatisticsIsRemoved() {
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
-        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2);
+    public void shouldNotCloseStatisticsWhenValueProvidersWithoutStatisticsAreRemoved() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
+        reset(statisticsToAdd1);
+        replay(statisticsToAdd1);
+
+        recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
+
+        verify(statisticsToAdd1);
+    }
+
+    @Test
+    public void shouldRemoveItselfFromRecordingTriggerWhenLastValueProvidersAreRemoved() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
         reset(recordingTrigger);
         replay(recordingTrigger);
 
-        recorder.removeStatistics(SEGMENT_STORE_NAME_1);
+        recorder.removeValueProviders(SEGMENT_STORE_NAME_1);
 
         verify(recordingTrigger);
 
@@ -202,25 +229,25 @@ public class RocksDBMetricsRecorderTest {
         recordingTrigger.removeMetricsRecorder(recorder);
         replay(recordingTrigger);
 
-        recorder.removeStatistics(SEGMENT_STORE_NAME_2);
+        recorder.removeValueProviders(SEGMENT_STORE_NAME_2);
 
         verify(recordingTrigger);
     }
 
     @Test
-    public void shouldThrowIfStatisticsToRemoveNotFound() {
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
+    public void shouldThrowIfValueProvidersToRemoveNotFound() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         assertThrows(
             IllegalStateException.class,
-            () -> recorder.removeStatistics(SEGMENT_STORE_NAME_2)
+            () -> recorder.removeValueProviders(SEGMENT_STORE_NAME_2)
         );
     }
 
     @Test
     public void shouldRecordMetrics() {
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
-        recorder.addStatistics(SEGMENT_STORE_NAME_2, statisticsToAdd2);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
         reset(statisticsToAdd1);
         reset(statisticsToAdd2);
 
@@ -307,7 +334,7 @@ public class RocksDBMetricsRecorderTest {
     @Test
     public void shouldCorrectlyHandleHitRatioRecordingsWithZeroHitsAndMisses() {
         resetToNice(statisticsToAdd1);
-        recorder.addStatistics(SEGMENT_STORE_NAME_1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
         expect(statisticsToAdd1.getTickerCount(anyObject())).andStubReturn(0L);
         replay(statisticsToAdd1);
         memtableHitRatioSensor.record(0, 0L);

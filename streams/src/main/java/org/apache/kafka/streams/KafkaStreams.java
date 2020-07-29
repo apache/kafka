@@ -69,7 +69,6 @@ import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
-import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -159,8 +158,6 @@ public class KafkaStreams implements AutoCloseable {
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
-
-    private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
     // container states
     /**
@@ -688,10 +685,12 @@ public class KafkaStreams implements AutoCloseable {
         final MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-        streamsMetrics =
-            new StreamsMetricsImpl(metrics, clientId, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
-        rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
-        streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
+        streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            clientId,
+            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
+            time
+        );
         ClientMetrics.addVersionMetric(streamsMetrics);
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
@@ -886,7 +885,7 @@ public class KafkaStreams implements AutoCloseable {
             final long recordingInterval = 1;
             if (rocksDBMetricsRecordingService != null) {
                 rocksDBMetricsRecordingService.scheduleAtFixedRate(
-                    rocksDBMetricsRecordingTrigger,
+                    streamsMetrics.rocksDBMetricsRecordingTrigger(),
                     recordingDelay,
                     recordingInterval,
                     TimeUnit.MINUTES

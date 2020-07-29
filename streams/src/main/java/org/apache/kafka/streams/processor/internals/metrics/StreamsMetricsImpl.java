@@ -151,12 +151,16 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
 
-    public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
+    public StreamsMetricsImpl(final Metrics metrics,
+                              final String clientId,
+                              final String builtInMetricsVersion,
+                              final Time time) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;
         this.clientId = clientId;
         version = parseBuiltInMetricsVersion(builtInMetricsVersion);
+        rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
         this.parentSensors = new HashMap<>();
     }
@@ -171,10 +175,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Version version() {
         return version;
-    }
-
-    public void setRocksDBMetricsRecordingTrigger(final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger) {
-        this.rocksDBMetricsRecordingTrigger = rocksDBMetricsRecordingTrigger;
     }
 
     public RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger() {

@@ -110,8 +110,8 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true),
             0,
-            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST),
-            new MockTime(),
+            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, time),
+            time,
             "clientId",
             stateRestoreListener
         );
@@ -144,8 +144,8 @@ public class GlobalStreamThreadTest {
             mockConsumer,
             new StateDirectory(config, time, true),
             0,
-            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST),
-            new MockTime(),
+            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, time),
+            time,
             "clientId",
             stateRestoreListener
         );

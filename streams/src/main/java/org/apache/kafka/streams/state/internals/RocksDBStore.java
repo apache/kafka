@@ -31,7 +31,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
-import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -48,6 +47,7 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.Statistics;
+import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
@@ -100,9 +100,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private BloomFilter filter;
 
     private RocksDBConfigSetter configSetter;
+    private boolean userSpecifiedStatistics = false;
 
     private final RocksDBMetricsRecorder metricsRecorder;
-    private boolean isStatisticsRegistered = false;
 
     ProcessorContext internalProcessorContext;
     // visible for testing
@@ -131,7 +131,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
 
-        final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+        final BlockBasedTableConfigWithAccessibleCache tableConfig = new BlockBasedTableConfigWithAccessibleCache();
         cache = new LRUCache(BLOCK_CACHE_SIZE);
         tableConfig.setBlockCache(cache);
         tableConfig.setBlockSize(BLOCK_SIZE);
@@ -181,23 +181,39 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             throw new ProcessorStateException(fatal);
         }
 
-        // Setup metrics before the database is opened, otherwise the metrics are not updated
+        // Setup statistics before the database is opened, otherwise the statistics are not updated
         // with the measurements from Rocks DB
-        maybeSetUpMetricsRecorder(configs);
+        maybeSetUpStatistics(configs);
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
+
+        addValueProvidersToMetricsRecorder(configs);
     }
 
-    private void maybeSetUpMetricsRecorder(final Map<String, Object> configs) {
-        if (userSpecifiedOptions.statistics() == null &&
+    private void maybeSetUpStatistics(final Map<String, Object> configs) {
+        if (userSpecifiedOptions.statistics() != null) {
+            userSpecifiedStatistics = true;
+        }
+        if (!userSpecifiedStatistics &&
             RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
 
-            isStatisticsRegistered = true;
             // metrics recorder will clean up statistics object
             final Statistics statistics = new Statistics();
             userSpecifiedOptions.setStatistics(statistics);
-            metricsRecorder.addStatistics(name, statistics);
+        }
+    }
+
+    private void addValueProvidersToMetricsRecorder(final Map<String, Object> configs) {
+        final TableFormatConfig tableFormatConfig = userSpecifiedOptions.tableFormatConfig();
+        final Statistics statistics = userSpecifiedStatistics ? null : userSpecifiedOptions.statistics();
+        if (tableFormatConfig instanceof BlockBasedTableConfigWithAccessibleCache) {
+            final Cache cache = ((BlockBasedTableConfigWithAccessibleCache) tableFormatConfig).blockCache();
+            metricsRecorder.addValueProviders(name, db, cache, statistics);
+        } else {
+            metricsRecorder.addValueProviders(name, db, null, statistics);
+            log.warn("A table format configuration is used that does not expose the block cache. This means " +
+                "that metrics that relate to the block cache may be wrong if the block cache is shared.");
         }
     }
 
@@ -402,7 +418,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             configSetter = null;
         }
 
-        maybeRemoveStatisticsFromMetricsRecorder();
+        metricsRecorder.removeValueProviders(name);
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
@@ -421,13 +437,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         db = null;
         filter = null;
         cache = null;
-    }
-
-    private void maybeRemoveStatisticsFromMetricsRecorder() {
-        if (isStatisticsRegistered) {
-            metricsRecorder.removeStatistics(name);
-            isStatisticsRegistered = false;
-        }
     }
 
     private void closeOpenIterators() {
