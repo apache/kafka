@@ -14,31 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.errors;
 
-package org.apache.kafka.test;
+/**
+ * Indicates that the state store being queried is unknown, i.e., the state store does either not exist in your topology
+ * or it is not queryable.
+ */
+public class UnknownStateStoreException extends InvalidStateStoreException {
 
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
+    private static final long serialVersionUID = 1L;
 
-import java.util.ArrayList;
-import java.util.Collection;
-
-public class MockBatchingStateRestoreListener extends MockStateRestoreListener implements BatchingStateRestoreCallback {
-
-    private final Collection<KeyValue<byte[], byte[]>> restoredRecords = new ArrayList<>();
-
-    @Override
-    public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-        restoredRecords.addAll(records);
+    public UnknownStateStoreException(final String message) {
+        super(message);
     }
 
-    @Override
-    public void restore(final byte[] key, final byte[] value) {
-        throw new IllegalStateException("Should not be called");
-
+    public UnknownStateStoreException(final String message, final Throwable throwable) {
+        super(message, throwable);
     }
 
-    public Collection<KeyValue<byte[], byte[]>> getRestoredRecords() {
-        return restoredRecords;
-    }
 }

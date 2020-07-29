@@ -115,7 +115,7 @@ class DumpLogSegmentsTest {
         // only increment the offset if it's not a batch
         if (isBatch(index)) {
           assertTrue(s"Not a valid batch-level message record: $line", line.startsWith(s"baseOffset: $offset lastOffset: "))
-          batch = batchIterator.next
+          batch = batchIterator.next()
         } else {
           assertTrue(s"Not a valid message record: $line", line.startsWith(s"${DumpLogSegments.RecordIndent} offset: $offset"))
           if (checkKeysAndValues) {

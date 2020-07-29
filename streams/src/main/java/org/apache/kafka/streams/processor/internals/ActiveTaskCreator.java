@@ -184,7 +184,7 @@ class ActiveTaskCreator {
         final ProcessorStateManager stateManager = standbyTask.stateMgr;
         final LogContext logContext = getLogContext(standbyTask.id);
 
-        standbyTask.closeAndRecycleState();
+        standbyTask.closeCleanAndRecycleState();
         stateManager.transitionTaskType(TaskType.ACTIVE, logContext);
 
         return createActiveTask(

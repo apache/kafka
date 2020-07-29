@@ -56,7 +56,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
     props.map(KafkaConfig.fromProps)
   }
 
-  private def createAdminConfig():util.Map[String, Object] = {
+  private def createAdminConfig: util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val securityProps: util.Map[Object, Object] =

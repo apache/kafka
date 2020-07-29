@@ -377,9 +377,15 @@ abstract class AbstractFetcherThread(name: String,
                 case Errors.FENCED_LEADER_EPOCH =>
                   if (onPartitionFenced(topicPartition, requestEpoch)) partitionsWithError += topicPartition
 
-                case Errors.NOT_LEADER_FOR_PARTITION =>
+                case Errors.NOT_LEADER_OR_FOLLOWER =>
                   debug(s"Remote broker is not the leader for partition $topicPartition, which could indicate " +
                     "that the partition is being moved")
+                  partitionsWithError += topicPartition
+
+                case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+                  warn(s"Received ${Errors.UNKNOWN_TOPIC_OR_PARTITION} from the leader for partition $topicPartition. " +
+                       "This error may be returned transiently when the partition is being created or deleted, but it is not " +
+                       "expected to persist.")
                   partitionsWithError += topicPartition
 
                 case _ =>
@@ -556,7 +562,7 @@ abstract class AbstractFetcherThread(name: String,
 
       case e @ (_ : UnknownTopicOrPartitionException |
                 _ : UnknownLeaderEpochException |
-                _ : NotLeaderForPartitionException) =>
+                _ : NotLeaderOrFollowerException) =>
         info(s"Could not fetch offset for $topicPartition due to error: ${e.getMessage}")
         true
 
@@ -651,7 +657,7 @@ abstract class AbstractFetcherThread(name: String,
     } finally partitionMapLock.unlock()
   }
 
-  def partitionCount(): Int = {
+  def partitionCount: Int = {
     partitionMapLock.lockInterruptibly()
     try partitionStates.size
     finally partitionMapLock.unlock()

@@ -164,7 +164,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return new KStreamImpl<>(
             name,
             keySerde,
-            valSerde,
+            valueSerde,
             subTopologySourceNodes,
             repartitionRequired,
             filterProcessorNode,
@@ -193,7 +193,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return new KStreamImpl<>(
             name,
             keySerde,
-            valSerde,
+            valueSerde,
             subTopologySourceNodes,
             repartitionRequired,
             filterNotProcessorNode,
@@ -220,7 +220,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return new KStreamImpl<>(
             selectKeyProcessorNode.nodeName(),
             null,
-            valSerde,
+            valueSerde,
             subTopologySourceNodes,
             true,
             selectKeyProcessorNode,
@@ -432,7 +432,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         return new KStreamImpl<>(
             name,
             keySerde,
-            valSerde,
+            valueSerde,
             subTopologySourceNodes,
             repartitionRequired,
             peekNode,
@@ -485,7 +485,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 new ProcessorGraphNode<>(childNames[i], innerProcessorParameters);
 
             builder.addGraphNode(branchNode, branchChildNode);
-            branchChildren[i] = new KStreamImpl<>(childNames[i], keySerde, valSerde, subTopologySourceNodes, repartitionRequired, branchChildNode, builder);
+            branchChildren[i] = new KStreamImpl<>(childNames[i], keySerde, valueSerde, subTopologySourceNodes, repartitionRequired, branchChildNode, builder);
         }
 
         return branchChildren;
@@ -537,7 +537,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Deprecated
     @Override
     public KStream<K, V> through(final String topic) {
-        return through(topic, Produced.with(keySerde, valSerde, null));
+        return through(topic, Produced.with(keySerde, valueSerde, null));
     }
 
     @Deprecated
@@ -552,7 +552,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             producedInternal.withKeySerde(keySerde);
         }
         if (producedInternal.valueSerde() == null) {
-            producedInternal.withValueSerde(valSerde);
+            producedInternal.withValueSerde(valueSerde);
         }
         to(topic, producedInternal);
 
@@ -585,7 +585,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final String name = repartitionedInternal.name() != null ? repartitionedInternal.name() : builder
             .newProcessorName(REPARTITION_NAME);
 
-        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? valSerde : repartitionedInternal.valueSerde();
+        final Serde<V> valueSerde = repartitionedInternal.valueSerde() == null ? this.valueSerde : repartitionedInternal.valueSerde();
         final Serde<K> keySerde = repartitionedInternal.keySerde() == null ? this.keySerde : repartitionedInternal.keySerde();
 
         final UnoptimizableRepartitionNodeBuilder<K, V> unoptimizableRepartitionNodeBuilder = UnoptimizableRepartitionNode
@@ -622,7 +622,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public void to(final String topic) {
-        to(topic, Produced.with(keySerde, valSerde, null));
+        to(topic, Produced.with(keySerde, valueSerde, null));
     }
 
     @Override
@@ -636,14 +636,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             producedInternal.withKeySerde(keySerde);
         }
         if (producedInternal.valueSerde() == null) {
-            producedInternal.withValueSerde(valSerde);
+            producedInternal.withValueSerde(valueSerde);
         }
         to(new StaticTopicNameExtractor<>(topic), producedInternal);
     }
 
     @Override
     public void to(final TopicNameExtractor<K, V> topicExtractor) {
-        to(topicExtractor, Produced.with(keySerde, valSerde, null));
+        to(topicExtractor, Produced.with(keySerde, valueSerde, null));
     }
 
     @Override
@@ -657,7 +657,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             producedInternal.withKeySerde(keySerde);
         }
         if (producedInternal.valueSerde() == null) {
-            producedInternal.withValueSerde(valSerde);
+            producedInternal.withValueSerde(valueSerde);
         }
         to(topicExtractor, producedInternal);
     }
@@ -676,12 +676,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KTable<K, V> toTable() {
-        return toTable(NamedInternal.empty(), Materialized.with(keySerde, valSerde));
+        return toTable(NamedInternal.empty(), Materialized.with(keySerde, valueSerde));
     }
 
     @Override
     public KTable<K, V> toTable(final Named named) {
-        return toTable(named, Materialized.with(keySerde, valSerde));
+        return toTable(named, Materialized.with(keySerde, valueSerde));
     }
 
     @Override
@@ -705,7 +705,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             ? keySerde
             : materializedInternal.keySerde();
         final Serde<V> valueSerdeOverride = materializedInternal.valueSerde() == null
-            ? valSerde
+            ? valueSerde
             : materializedInternal.valueSerde();
 
         final Set<String> subTopologySourceNodes;
@@ -757,7 +757,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> keySelector) {
-        return groupBy(keySelector, Grouped.with(null, valSerde));
+        return groupBy(keySelector, Grouped.with(null, valueSerde));
     }
 
     @Override
@@ -795,7 +795,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KGroupedStream<K, V> groupByKey() {
-        return groupByKey(Grouped.with(keySerde, valSerde));
+        return groupByKey(Grouped.with(keySerde, valueSerde));
     }
 
     @Override
@@ -982,7 +982,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                  final Serde<K> keySerdeOverride,
                                                  final Serde<V> valueSerdeOverride) {
         final Serde<K> repartitionKeySerde = keySerdeOverride != null ? keySerdeOverride : keySerde;
-        final Serde<V> repartitionValueSerde = valueSerdeOverride != null ? valueSerdeOverride : valSerde;
+        final Serde<V> repartitionValueSerde = valueSerdeOverride != null ? valueSerdeOverride : valueSerde;
         final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder =
             OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
         // we still need to create the repartitioned source each time
@@ -1013,7 +1013,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     static <K1, V1, RN extends BaseRepartitionNode<K1, V1>> String createRepartitionedSource(final InternalStreamsBuilder builder,
                                                                                              final Serde<K1> keySerde,
-                                                                                             final Serde<V1> valSerde,
+                                                                                             final Serde<V1> valueSerde,
                                                                                              final String repartitionTopicNamePrefix,
                                                                                              final StreamPartitioner<K1, V1> streamPartitioner,
                                                                                              final BaseRepartitionNodeBuilder<K1, V1, RN> baseRepartitionNodeBuilder) {
@@ -1048,7 +1048,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         baseRepartitionNodeBuilder.withKeySerde(keySerde)
-                                  .withValueSerde(valSerde)
+                                  .withValueSerde(valueSerde)
                                   .withSourceName(sourceName)
                                   .withRepartitionTopic(repartitionTopicName)
                                   .withSinkName(sinkName)

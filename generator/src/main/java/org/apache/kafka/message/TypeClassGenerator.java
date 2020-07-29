@@ -14,15 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.KeyValue;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteBatch;
+package org.apache.kafka.message;
 
-public interface BulkLoadingStore {
-    void toggleDbForBulkLoading(final boolean prepareForBulkload);
-    void addToBatch(final KeyValue<byte[], byte[]> record,
-                    final WriteBatch batch) throws RocksDBException;
-    void write(final WriteBatch batch) throws RocksDBException;
+import java.io.BufferedWriter;
+import java.io.IOException;
+
+public interface TypeClassGenerator {
+    /**
+     * The short name of the type class file we are generating. For example,
+     * ApiMessageType.java.
+     */
+    String outputName();
+
+    /**
+     * Registers a message spec with the generator.
+     *
+     * @param spec      The spec to register.
+     */
+    void registerMessageType(MessageSpec spec);
+
+    /**
+     * Generate the type, and then write it out.
+     *
+     * @param writer    The writer to write out the state to.
+     */
+    void generateAndWrite(BufferedWriter writer) throws IOException;
 }

@@ -120,7 +120,7 @@ public class RepartitionWithMergeOptimizingTest {
 
     private void runTest(final String optimizationConfig, final int expectedNumberRepartitionTopics) {
 
-        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
+        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, optimizationConfig);
 
         final StreamsBuilder builder = new StreamsBuilder();
 

@@ -17,6 +17,7 @@ import time
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsOptimizedUpgradeTestService
+from kafkatest.services.streams import StreamsResetter
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.streams.utils import stop_processors
@@ -77,6 +78,8 @@ class StreamsOptimizedTest(Test):
 
         stop_processors(processors, self.stopped_message)
 
+        self.reset_application()
+
         # start again with topology optimized
         for processor in processors:
             processor.OPTIMIZED_CONFIG = 'all'
@@ -89,6 +92,12 @@ class StreamsOptimizedTest(Test):
         self.producer.stop()
         self.kafka.stop()
         self.zookeeper.stop()
+
+    def reset_application(self):
+        resetter = StreamsResetter(self.test_context, self.kafka, topic = self.input_topic, applicationId = 'StreamsOptimizedTest')
+        resetter.start()
+        # resetter is not long-term running but it would be better to check the pid by stopping it
+        resetter.stop()
 
     @staticmethod
     def verify_running_repartition_topic_count(processor, repartition_topic_count):

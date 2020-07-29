@@ -100,7 +100,7 @@ public class PartitionGroupTest {
     private RecordQueue createQueue1() {
         return new RecordQueue(
                 partition1,
-                new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+                new MockSourceNode<>(intDeserializer, intDeserializer),
                 timestampExtractor,
                 new LogAndContinueExceptionHandler(),
                 new InternalMockProcessorContext(),
@@ -111,7 +111,7 @@ public class PartitionGroupTest {
     private RecordQueue createQueue2() {
         return new RecordQueue(
                 partition2,
-                new MockSourceNode<>(topics, intDeserializer, intDeserializer),
+                new MockSourceNode<>(intDeserializer, intDeserializer),
                 timestampExtractor,
                 new LogAndContinueExceptionHandler(),
                 new InternalMockProcessorContext(),
@@ -420,26 +420,6 @@ public class PartitionGroupTest {
         assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
 
         group.addRawRecords(partition1, list);
-    }
-
-    @Test
-    public void shouldCleanPartitionsOnClose() {
-        final List<ConsumerRecord<byte[], byte[]>> list = Arrays.asList(
-                new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
-                new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
-        group.addRawRecords(partition1, list);
-        group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds());
-
-        group.close();
-
-        assertThat(group.numBuffered(), equalTo(0));
-        assertThat(group.streamTime(), equalTo(RecordQueue.UNKNOWN));
-        assertThat(group.nextRecord(new PartitionGroup.RecordInfo(), time.milliseconds()), equalTo(null));
-        assertThat(group.partitionTimestamp(partition1), equalTo(RecordQueue.UNKNOWN));
-
-        // The partition1 should still be able to find.
-        assertThat(group.addRawRecords(partition1, list), equalTo(3));
     }
 
     @Test

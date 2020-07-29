@@ -108,13 +108,25 @@ public final class ClientUtils {
 
     static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         InetAddress[] addresses = InetAddress.getAllByName(host);
-        if (ClientDnsLookup.USE_ALL_DNS_IPS == clientDnsLookup) {
-            return filterPreferredAddresses(addresses);
-        } else {
-            return Collections.singletonList(addresses[0]);
+
+        switch (clientDnsLookup) {
+            case DEFAULT:
+                return Collections.singletonList(addresses[0]);
+            case USE_ALL_DNS_IPS:
+            case RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY:
+                return filterPreferredAddresses(addresses);
         }
+
+        throw new IllegalStateException("Unhandled ClientDnsLookup instance: " + clientDnsLookup);
     }
 
+    /**
+     * Return a list containing the first address in `allAddresses` and subsequent addresses
+     * that are a subtype of the first address.
+     *
+     * The outcome is that all returned addresses are either IPv4 or IPv6 (InetAddress has two
+     * subclasses: Inet4Address and Inet6Address).
+     */
     static List<InetAddress> filterPreferredAddresses(InetAddress[] allAddresses) {
         List<InetAddress> preferredAddresses = new ArrayList<>();
         Class<? extends InetAddress> clazz = null;

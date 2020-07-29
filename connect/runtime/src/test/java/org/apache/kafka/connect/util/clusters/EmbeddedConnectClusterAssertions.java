@@ -46,7 +46,7 @@ public class EmbeddedConnectClusterAssertions {
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectClusterAssertions.class);
     public static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
     public static final long VALIDATION_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
-    private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
+    public static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long CONNECT_INTERNAL_TOPIC_UPDATES_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
 
     private final EmbeddedConnectCluster connect;
@@ -363,7 +363,7 @@ public class EmbeddedConnectClusterAssertions {
             waitForCondition(
                 () -> checkConnectorAndTasksAreStopped(connectorName),
                 CONNECTOR_SETUP_DURATION_MS,
-                "At least the connector or one of its tasks is still");
+                "At least the connector or one of its tasks is still running");
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }

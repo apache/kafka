@@ -31,7 +31,6 @@ import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
-import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
@@ -59,6 +58,7 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.ConnectUtils;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
 import org.apache.kafka.connect.util.SinkUtils;
@@ -78,6 +78,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -90,6 +91,9 @@ import java.util.stream.Collectors;
  * </p>
  */
 public class Worker {
+
+    public static final long CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(5);
+
     private static final Logger log = LoggerFactory.getLogger(Worker.class);
 
     protected Herder herder;
@@ -209,7 +213,7 @@ public class Worker {
 
         if (!connectors.isEmpty()) {
             log.warn("Shutting down connectors {} uncleanly; herder should have shut down connectors before the Worker is stopped", connectors.keySet());
-            stopConnectors();
+            stopAndAwaitConnectors();
         }
 
         if (!tasks.isEmpty()) {
@@ -239,18 +243,23 @@ public class Worker {
      * @param ctx the connector runtime context.
      * @param statusListener a listener for the runtime status transitions of the connector.
      * @param initialState the initial state of the connector.
-     * @return true if the connector started successfully.
+     * @param onConnectorStateChange invoked when the initial state change of the connector is completed
      */
-    public boolean startConnector(
+    public void startConnector(
             String connName,
             Map<String, String> connProps,
-            ConnectorContext ctx,
+            CloseableConnectorContext ctx,
             ConnectorStatus.Listener statusListener,
-            TargetState initialState
+            TargetState initialState,
+            Callback<TargetState> onConnectorStateChange
     ) {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
-            if (connectors.containsKey(connName))
-                throw new ConnectException("Connector with name " + connName + " already exists");
+            if (connectors.containsKey(connName)) {
+                onConnectorStateChange.onCompletion(
+                        new ConnectException("Connector with name " + connName + " already exists"),
+                        null);
+                return;
+            }
 
             final WorkerConnector workerConnector;
             ClassLoader savedLoader = plugins.currentThreadLoader();
@@ -258,19 +267,22 @@ public class Worker {
                 // By the time we arrive here, CONNECTOR_CLASS_CONFIG has been validated already
                 // Getting this value from the unparsed map will allow us to instantiate the
                 // right config (source or sink)
-                final String connClassProp = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-                log.info("Creating connector {} of type {}", connName, connClassProp);
-                final Connector connector = plugins.newConnector(connClassProp);
-                final OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(
-                        offsetBackingStore, connName, internalKeyConverter, internalValueConverter);
-                workerConnector = new WorkerConnector(connName, connector, ctx, metrics, statusListener, offsetReader);
-                final ConnectorConfig connConfig = workerConnector.isSinkConnector()
+                final String connClass = connProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+                ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connClass);
+                savedLoader = Plugins.compareAndSwapLoaders(connectorLoader);
+
+                log.info("Creating connector {} of type {}", connName, connClass);
+                final Connector connector = plugins.newConnector(connClass);
+                final ConnectorConfig connConfig = ConnectUtils.isSinkConnector(connector)
                         ? new SinkConnectorConfig(plugins, connProps)
                         : new SourceConnectorConfig(plugins, connProps, config.topicCreationEnable());
+
+                final OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(
+                        offsetBackingStore, connName, internalKeyConverter, internalValueConverter);
+                workerConnector = new WorkerConnector(
+                        connName, connector, connConfig, ctx, metrics, statusListener, offsetReader, connectorLoader);
                 log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
-                savedLoader = plugins.compareAndSwapLoaders(connector);
-                workerConnector.initialize(connConfig);
-                workerConnector.transitionTo(initialState);
+                workerConnector.transitionTo(initialState, onConnectorStateChange);
                 Plugins.compareAndSwapLoaders(savedLoader);
             } catch (Throwable t) {
                 log.error("Failed to start connector {}", connName, t);
@@ -279,17 +291,25 @@ public class Worker {
                 Plugins.compareAndSwapLoaders(savedLoader);
                 workerMetricsGroup.recordConnectorStartupFailure();
                 statusListener.onFailure(connName, t);
-                return false;
+                onConnectorStateChange.onCompletion(t, null);
+                return;
             }
 
             WorkerConnector existing = connectors.putIfAbsent(connName, workerConnector);
-            if (existing != null)
-                throw new ConnectException("Connector with name " + connName + " already exists");
+            if (existing != null) {
+                onConnectorStateChange.onCompletion(
+                        new ConnectException("Connector with name " + connName + " already exists"),
+                        null);
+                // Don't need to do any cleanup of the WorkerConnector instance (such as calling
+                // shutdown() on it) here because it hasn't actually started running yet
+                return;
+            }
+
+            executor.submit(workerConnector);
 
             log.info("Finished creating connector {}", connName);
             workerMetricsGroup.recordConnectorStartupSuccess();
         }
-        return true;
     }
 
     /**
@@ -306,7 +326,7 @@ public class Worker {
 
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
-            savedLoader = plugins.compareAndSwapLoaders(workerConnector.connector());
+            savedLoader = Plugins.compareAndSwapLoaders(workerConnector.loader());
             return workerConnector.isSinkConnector();
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
@@ -334,7 +354,7 @@ public class Worker {
             Connector connector = workerConnector.connector();
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
-                savedLoader = plugins.compareAndSwapLoaders(connector);
+                savedLoader = Plugins.compareAndSwapLoaders(workerConnector.loader());
                 String taskClassName = connector.taskClass().getName();
                 for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
                     // Ensure we don't modify the connector's copy of the config
@@ -356,40 +376,94 @@ public class Worker {
         return result;
     }
 
-    private void stopConnectors() {
-        // Herder is responsible for stopping connectors. This is an internal method to sequentially
-        // stop connectors that have not explicitly been stopped.
-        for (String connector: connectors.keySet())
-            stopConnector(connector);
-    }
-
     /**
      * Stop a connector managed by this worker.
      *
      * @param connName the connector name.
-     * @return true if the connector belonged to this worker and was successfully stopped.
      */
-    public boolean stopConnector(String connName) {
+    private void stopConnector(String connName) {
         try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+            WorkerConnector workerConnector = connectors.get(connName);
             log.info("Stopping connector {}", connName);
 
-            WorkerConnector workerConnector = connectors.remove(connName);
             if (workerConnector == null) {
                 log.warn("Ignoring stop request for unowned connector {}", connName);
-                return false;
+                return;
             }
 
             ClassLoader savedLoader = plugins.currentThreadLoader();
             try {
-                savedLoader = plugins.compareAndSwapLoaders(workerConnector.connector());
+                savedLoader = Plugins.compareAndSwapLoaders(workerConnector.loader());
                 workerConnector.shutdown();
             } finally {
                 Plugins.compareAndSwapLoaders(savedLoader);
             }
-
-            log.info("Stopped connector {}", connName);
         }
-        return true;
+    }
+
+    private void stopConnectors(Collection<String> ids) {
+        // Herder is responsible for stopping connectors. This is an internal method to sequentially
+        // stop connectors that have not explicitly been stopped.
+        for (String connector: ids)
+            stopConnector(connector);
+    }
+
+    private void awaitStopConnector(String connName, long timeout) {
+        try (LoggingContext loggingContext = LoggingContext.forConnector(connName)) {
+            WorkerConnector connector = connectors.remove(connName);
+            if (connector == null) {
+                log.warn("Ignoring await stop request for non-present connector {}", connName);
+                return;
+            }
+
+            if (!connector.awaitShutdown(timeout)) {
+                log.error("Connector ‘{}’ failed to properly shut down, has become unresponsive, and "
+                        + "may be consuming external resources. Correct the configuration for "
+                        + "this connector or remove the connector. After fixing the connector, it "
+                        + "may be necessary to restart this worker to release any consumed "
+                        + "resources.", connName);
+                connector.cancel();
+            } else {
+                log.debug("Graceful stop of connector {} succeeded.", connName);
+            }
+        }
+    }
+
+    private void awaitStopConnectors(Collection<String> ids) {
+        long now = time.milliseconds();
+        long deadline = now + CONNECTOR_GRACEFUL_SHUTDOWN_TIMEOUT_MS;
+        for (String id : ids) {
+            long remaining = Math.max(0, deadline - time.milliseconds());
+            awaitStopConnector(id, remaining);
+        }
+    }
+
+    /**
+     * Stop asynchronously all the worker's connectors and await their termination.
+     */
+    public void stopAndAwaitConnectors() {
+        stopAndAwaitConnectors(new ArrayList<>(connectors.keySet()));
+    }
+
+    /**
+     * Stop asynchronously a collection of connectors that belong to this worker and await their
+     * termination.
+     *
+     * @param ids the collection of connectors to be stopped.
+     */
+    public void stopAndAwaitConnectors(Collection<String> ids) {
+        stopConnectors(ids);
+        awaitStopConnectors(ids);
+    }
+
+    /**
+     * Stop a connector that belongs to this worker and await its termination.
+     *
+     * @param connName the name of the connector to be stopped.
+     */
+    public void stopAndAwaitConnector(String connName) {
+        stopConnector(connName);
+        awaitStopConnectors(Collections.singletonList(connName));
     }
 
     /**
@@ -789,12 +863,17 @@ public class Worker {
                 return;
             }
 
-            connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             if (!task.awaitStop(timeout)) {
                 log.error("Graceful stop of task {} failed.", task.id());
                 task.cancel();
             } else {
                 log.debug("Graceful stop of task {} succeeded.", task.id());
+            }
+
+            try {
+                task.removeMetrics();
+            } finally {
+                connectorStatusMetricsGroup.recordTaskRemoved(taskId);
             }
         }
     }
@@ -876,38 +955,31 @@ public class Worker {
         return metrics;
     }
 
-    public void setTargetState(String connName, TargetState state) {
+    public void setTargetState(String connName, TargetState state, Callback<TargetState> stateChangeCallback) {
         log.info("Setting connector {} state to {}", connName, state);
 
         WorkerConnector workerConnector = connectors.get(connName);
         if (workerConnector != null) {
             ClassLoader connectorLoader =
                     plugins.delegatingLoader().connectorLoader(workerConnector.connector());
-            transitionTo(workerConnector, state, connectorLoader);
+            executeStateTransition(
+                () -> workerConnector.transitionTo(state, stateChangeCallback),
+                connectorLoader);
         }
 
         for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
             if (taskEntry.getKey().connector().equals(connName)) {
                 WorkerTask workerTask = taskEntry.getValue();
-                transitionTo(workerTask, state, workerTask.loader());
+                executeStateTransition(() -> workerTask.transitionTo(state), workerTask.loader);
             }
         }
     }
 
-    private void transitionTo(Object connectorOrTask, TargetState state, ClassLoader loader) {
+    private void executeStateTransition(Runnable stateTransition, ClassLoader loader) {
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
             savedLoader = Plugins.compareAndSwapLoaders(loader);
-            if (connectorOrTask instanceof WorkerConnector) {
-                ((WorkerConnector) connectorOrTask).transitionTo(state);
-            } else if (connectorOrTask instanceof WorkerTask) {
-                ((WorkerTask) connectorOrTask).transitionTo(state);
-            } else {
-                throw new ConnectException(
-                        "Request for state transition on an object that is neither a "
-                                + "WorkerConnector nor a WorkerTask: "
-                                + connectorOrTask.getClass());
-            }
+            stateTransition.run();
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }

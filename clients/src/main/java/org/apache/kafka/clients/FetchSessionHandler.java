@@ -461,7 +461,7 @@ public class FetchSessionHandler {
                 // fetch request is perfectly valid.
                 if (log.isDebugEnabled())
                     log.debug("Node {} sent an incremental fetch response with throttleTimeMs = {} " +
-                        "for session {}{}", response.throttleTimeMs(), node, response.sessionId(),
+                        "for session {}{}", node, response.throttleTimeMs(), response.sessionId(),
                         responseDataToLogString(response));
                 nextMetadata = nextMetadata.nextIncremental();
                 return true;

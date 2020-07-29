@@ -165,7 +165,7 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
       .stream[String, String](sourceTopic)
       .groupByKey
       .windowedBy(window)
-      .count
+      .count()
       .suppress(suppression)
 
     table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
@@ -222,7 +222,7 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
       .stream[String, String](sourceTopic)
       .groupByKey
       .windowedBy(window)
-      .count
+      .count()
       .suppress(suppression)
 
     table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
@@ -280,7 +280,7 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
       .stream[String, String](sourceTopic)
       .groupByKey
       .windowedBy(window)
-      .count
+      .count()
       .suppress(suppression)
 
     table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
@@ -348,7 +348,7 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     val table: KTable[String, Long] = builder
       .stream[String, String](sourceTopic)
       .groupByKey
-      .count
+      .count()
       .suppress(suppression)
 
     table.toStream.to(sinkTopic)

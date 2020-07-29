@@ -105,7 +105,7 @@ class SystemTimer(executorName: String,
       writeLock.lock()
       try {
         while (bucket != null) {
-          timingWheel.advanceClock(bucket.getExpiration())
+          timingWheel.advanceClock(bucket.getExpiration)
           bucket.flush(reinsert)
           bucket = delayQueue.poll()
         }
