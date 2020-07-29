@@ -19,6 +19,11 @@ package org.apache.kafka.clients.admin;
 import java.util.Map;
 import org.apache.kafka.common.KafkaFuture;
 
+/**
+ * The result of the {@link Admin#updateFeatures(Map, UpdateFeaturesOptions)} call.
+ *
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
 public class UpdateFeaturesResult {
     private final Map<String, KafkaFuture<Void>> futures;
 

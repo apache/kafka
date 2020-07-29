@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Encapsulates details about an update to a finalized feature. This is particularly useful to
@@ -38,7 +39,7 @@ public class FeatureUpdate {
     public FeatureUpdate(final short maxVersionLevel, final boolean allowDowngrade) {
         if (maxVersionLevel < 1 && !allowDowngrade) {
             throw new IllegalArgumentException(String.format(
-                "The allowDowngrade flag is not set when the provided maxVersionLevel:%d is < 1.",
+                "The allowDowngrade flag should be set when the provided maxVersionLevel:%d is < 1.",
                 maxVersionLevel));
         }
         this.maxVersionLevel = maxVersionLevel;
@@ -51,5 +52,29 @@ public class FeatureUpdate {
 
     public boolean allowDowngrade() {
         return allowDowngrade;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+
+        if (!(other instanceof FeatureUpdate)) {
+            return false;
+        }
+
+        final FeatureUpdate that = (FeatureUpdate) other;
+        return this.maxVersionLevel == that.maxVersionLevel && this.allowDowngrade == that.allowDowngrade;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(maxVersionLevel, allowDowngrade);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("FeatureUpdate{maxVersionLevel:%d, allowDowngrade:%s}", maxVersionLevel, allowDowngrade);
     }
 }

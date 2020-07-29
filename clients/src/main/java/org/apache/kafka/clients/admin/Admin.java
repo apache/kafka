@@ -1330,11 +1330,12 @@ public interface Admin extends AutoCloseable {
      * Applies specified updates to finalized features. This operation is not transactional so it
      * may succeed for some features while fail for others.
      * <p>
-     * The API takes in a map of finalized feature name to {@link FeatureUpdate} that need to be
+     * The API takes in a map of finalized feature name to {@link FeatureUpdate} that needs to be
      * applied. Each entry in the map specifies the finalized feature to be added or updated or
      * deleted, along with the new max feature version level value. This request is issued only to
      * the controller since the API is only served by the controller. The return value contains an
-     * error code for each supplied feature.
+     * error code for each supplied {@link FeatureUpdate}, and the code indicates if the update
+     * succeeded or failed in the controller.
      * <ul>
      * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
      * in the controller if the {@link FeatureUpdate} has the allowDowngrade flag set - setting this

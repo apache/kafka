@@ -393,7 +393,7 @@ class KafkaController(val config: KafkaConfig,
                 + s" is absent in default finalized $defaultFinalizedFeatures")
               (featureName, existingVersionRange)
             } else if (brokerDefaultVersionRange.max() >= existingVersionRange.max() &&
-                       existingVersionRange.max() >= brokerDefaultVersionRange.min()) {
+                       brokerDefaultVersionRange.min() <= existingVersionRange.max()) {
               // Through this change, we deprecate all version levels in the closed range:
               // [existingVersionRange.min(), brokerDefaultVersionRange.min() - 1]
               (featureName, new FinalizedVersionRange(brokerDefaultVersionRange.min(), existingVersionRange.max()))
@@ -1862,7 +1862,7 @@ class KafkaController(val config: KafkaConfig,
    *
    * @return         the new FinalizedVersionRange or error, as described above.
    */
-  private def newFinalizedVersionRangeOrError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[FinalizedVersionRange, ApiError] = {
+  private def newFinalizedVersionRangeOrIncompatibilityError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[FinalizedVersionRange, ApiError] = {
     if (UpdateFeaturesRequest.isDeleteRequest(update)) {
       throw new IllegalArgumentException(s"Provided feature update can not be meant to delete the feature: $update")
     }
@@ -1906,7 +1906,8 @@ class KafkaController(val config: KafkaConfig,
       .getOrElse(Map[String, FinalizedVersionRange]())
 
     def newVersionRangeOrError(update: UpdateFeaturesRequestData.FeatureUpdateKey): Either[Option[FinalizedVersionRange], ApiError] = {
-      newFinalizedVersionRangeOrError(update).fold(versionRange => Left(Some(versionRange)), error => Right(error))
+      newFinalizedVersionRangeOrIncompatibilityError(update)
+        .fold(versionRange => Left(Some(versionRange)), error => Right(error))
     }
 
     if (update.feature.isEmpty) {
@@ -1995,8 +1996,8 @@ class KafkaController(val config: KafkaConfig,
     var errors = scala.collection.mutable.Map[String, ApiError]()
 
     // Process each FeatureUpdate.
-    // When this is done, if a FeatureUpdate is found to be valid, then the corresponding entry in
-    // errors would contain Errors.NONE. Otherwise the entry would contain the appropriate error.
+    // If a FeatureUpdate is found to be valid, then the corresponding entry in errors would contain
+    // Errors.NONE. Otherwise the entry would contain the appropriate error.
     updates.asScala.iterator.foreach { update =>
       processFeatureUpdate(update) match {
         case Left(newVersionRangeOrNone) =>

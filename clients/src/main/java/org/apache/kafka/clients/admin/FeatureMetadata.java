@@ -37,8 +37,7 @@ public class FeatureMetadata {
     public FeatureMetadata(
         final Features<FinalizedVersionRange> finalizedFeatures,
         final int finalizedFeaturesEpoch,
-        final Features<SupportedVersionRange> supportedFeatures
-    ) {
+        final Features<SupportedVersionRange> supportedFeatures) {
         Objects.requireNonNull(finalizedFeatures, "Provided finalizedFeatures can not be null.");
         Objects.requireNonNull(supportedFeatures, "Provided supportedFeatures can not be null.");
         this.finalizedFeatures = finalizedFeatures;

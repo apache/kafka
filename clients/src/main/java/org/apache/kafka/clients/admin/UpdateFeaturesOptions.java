@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Set;
+import java.util.Map;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#updateFeatures(Set, UpdateFeaturesOptions)}
+ * Options for {@link AdminClient#updateFeatures(Map, UpdateFeaturesOptions)}.
  *
- * The API of this class is evolving. See {@link AdminClient} for details.
+ * The API of this class is evolving. See {@link Admin} for details.
  */
 @InterfaceStability.Evolving
 public class UpdateFeaturesOptions extends AbstractOptions<UpdateFeaturesOptions> {

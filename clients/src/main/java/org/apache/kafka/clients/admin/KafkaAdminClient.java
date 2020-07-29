@@ -4394,8 +4394,8 @@ public class KafkaAdminClient extends AdminClient {
         final UpdateFeaturesRequestData.FeatureUpdateKeyCollection featureUpdatesRequestData
             = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
-            String feature = entry.getKey();
-            FeatureUpdate update = entry.getValue();
+            final String feature = entry.getKey();
+            final FeatureUpdate update = entry.getValue();
             if (feature.trim().isEmpty()) {
                 throw new IllegalArgumentException("Provided feature can not be null or empty.");
             }
@@ -4426,7 +4426,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Check for controller change.
                 for (UpdatableFeatureResult result : response.data().results()) {
-                    Errors error = Errors.forCode(result.errorCode());
+                    final Errors error = Errors.forCode(result.errorCode());
                     if (error == Errors.NOT_CONTROLLER) {
                         handleNotControllerError(error);
                         throw error.exception();
@@ -4434,11 +4434,11 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 for (UpdatableFeatureResult result : response.data().results()) {
-                    KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
+                    final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
                     if (future == null) {
                         log.warn("Server response mentioned unknown feature {}", result.feature());
                     } else {
-                        Errors error = Errors.forCode(result.errorCode());
+                        final Errors error = Errors.forCode(result.errorCode());
                         if (error == Errors.NONE) {
                             future.complete(null);
                         } else {
