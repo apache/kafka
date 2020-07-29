@@ -107,8 +107,8 @@ public class GlobalStreamThread extends Thread {
             return equals(RUNNING);
         }
 
-        public boolean isDead() {
-            return equals(DEAD);
+        public boolean inErrorState() {
+            return equals(DEAD) || equals(PENDING_SHUTDOWN);
         }
 
         @Override
@@ -178,9 +178,15 @@ public class GlobalStreamThread extends Thread {
         }
     }
 
+    public boolean inErrorState() {
+        synchronized (stateLock) {
+            return state.inErrorState();
+        }
+    }
+
     public boolean stillInitializing() {
         synchronized (stateLock) {
-            return !state.isRunning() && !state.isDead();
+            return !state.isRunning() && !state.inErrorState();
         }
     }
 
@@ -400,6 +406,10 @@ public class GlobalStreamThread extends Thread {
             if (startupException != null) {
                 throw startupException;
             }
+        }
+
+        if (inErrorState()) {
+            throw new IllegalStateException("Initialization for the global stream thread failed");
         }
     }
 
