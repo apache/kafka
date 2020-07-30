@@ -176,7 +176,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       k -> v.keys.toSeq
     }
     val brokers = (0 until brokerCount).map(Integer.valueOf)
-    val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
+    val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).allDescriptions.get
 
     (0 until brokerCount).foreach { brokerId =>
       val server = servers.find(_.config.brokerId == brokerId).get
