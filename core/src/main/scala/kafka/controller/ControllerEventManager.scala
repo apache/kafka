@@ -143,9 +143,6 @@ class ControllerEventManager(controllerId: Int,
     }
   }
 
-  // for testing
-  private[controller] def setControllerEventThread(thread: ControllerEventThread): Unit = this.thread = thread
-
   private def pollFromEventQueue(): QueuedEvent = {
     val count = eventQueueTimeHist.count()
     if (count != 0) {

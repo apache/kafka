@@ -641,7 +641,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val controller = getController().kafkaController
     val latch = new CountDownLatch(1)
     val spyThread = spy(controller.eventManager.thread)
-    controller.eventManager.setControllerEventThread(spyThread)
+    controller.eventManager.thread = spyThread
     val processedEvent = new MockEvent(ControllerState.TopicChange) {
       override def process(): Unit = latch.await()
       override def preempt(): Unit = {}
