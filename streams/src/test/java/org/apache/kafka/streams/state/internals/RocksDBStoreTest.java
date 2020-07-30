@@ -68,6 +68,7 @@ import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.notNull;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -150,8 +151,8 @@ public class RocksDBStoreTest {
         reset(metricsRecorder);
         metricsRecorder.addValueProviders(
             eq(DB_NAME),
-            anyObject(RocksDB.class),
-            anyObject(Cache.class),
+            notNull(),
+            notNull(),
             isNull()
         );
         replay(metricsRecorder);
@@ -169,9 +170,9 @@ public class RocksDBStoreTest {
         reset(metricsRecorder);
         metricsRecorder.addValueProviders(
             eq(DB_NAME),
-            anyObject(RocksDB.class),
-            anyObject(Cache.class),
-            anyObject(Statistics.class)
+            notNull(),
+            notNull(),
+            notNull()
         );
         replay(metricsRecorder);
 
@@ -215,9 +216,38 @@ public class RocksDBStoreTest {
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
         metricsRecorder.addValueProviders(
             eq(DB_NAME),
-            anyObject(RocksDB.class),
-            anyObject(Cache.class),
+            notNull(),
+            notNull(),
             isNull()
+        );
+        replay(metricsRecorder);
+
+        rocksDBStore.openDB(context);
+        verify(metricsRecorder);
+        reset(metricsRecorder);
+    }
+
+    public static class RocksDBConfigSetterWithUserProvidedNewTableFormatConfig implements RocksDBConfigSetter {
+        public RocksDBConfigSetterWithUserProvidedNewTableFormatConfig(){}
+
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            options.setTableFormatConfig(new BlockBasedTableConfig());
+        }
+
+        public void close(final String storeName, final Options options) {
+            options.statistics().close();
+        }
+    }
+
+    @Test
+    public void shouldNotSetCacheInValueProvidersWhenUserProvidesNewTableFormatConfig() {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedNewTableFormatConfig.class);
+        metricsRecorder.addValueProviders(
+            eq(DB_NAME),
+            notNull(),
+            isNull(),
+            notNull()
         );
         replay(metricsRecorder);
 
