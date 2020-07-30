@@ -226,26 +226,27 @@ public class StateDirectory {
         }
 
         final File lockFile = new File(globalStateDir(), LOCK_FILE_NAME);
-        final FileChannel channel;
-        try {
-            channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        try (final FileChannel channel = FileChannel.open(lockFile.toPath(),
+                StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE)) {
+            final FileLock lock = tryLock(channel);
+            if (lock == null) {
+                channel.close();
+                return false;
+            }
+
+            globalStateChannel = channel;
+            globalStateLock = lock;
+
+            log.debug("{} Acquired global state dir lock", logPrefix());
+
+            return true;
         } catch (final NoSuchFileException e) {
             // FileChannel.open(..) could throw NoSuchFileException when there is another thread
             // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
             // file, in this case we will return immediately indicating locking failed.
             return false;
         }
-        final FileLock fileLock = tryLock(channel);
-        if (fileLock == null) {
-            channel.close();
-            return false;
-        }
-        globalStateChannel = channel;
-        globalStateLock = fileLock;
-
-        log.debug("{} Acquired global state dir lock", logPrefix());
-
-        return true;
     }
 
     synchronized void unlockGlobalState() throws IOException {
@@ -412,8 +413,8 @@ public class StateDirectory {
     }
 
     private FileLock tryLock(final FileChannel channel) throws IOException {
-        try {
-            return channel.tryLock();
+        try (final FileLock fileLock = channel.tryLock()) {
+            return fileLock;
         } catch (final OverlappingFileLockException e) {
             return null;
         }
