@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigExceptio
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
@@ -986,7 +987,7 @@ class AdminManager(val config: KafkaConfig,
   def describeUserScramCredentials(users: Seq[String]): DescribeUserScramCredentialsResponseData = {
     val retval = new DescribeUserScramCredentialsResponseData()
 
-    def addUserConfigToResults(user: String, userConfig: Properties) = {
+    def addToResults(user: String, userConfig: Properties) = {
       val configKeys = userConfig.stringPropertyNames
       val hasScramCredential = !ScramMechanism.values().toList.filter(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.toMechanismName)).isEmpty
       if (hasScramCredential) {
@@ -1004,18 +1005,47 @@ class AdminManager(val config: KafkaConfig,
 
     if (users.isEmpty)
       // describe all users
-      adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
-        case (user, properties) => addUserConfigToResults(user, properties)
-    } else
+      adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach { case (user, properties) => addToResults(user, properties) }
+    else {
       // describe specific users
-      users.foreach {
-        user => addUserConfigToResults(user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user)))
-      }
+      // https://stackoverflow.com/questions/24729544/how-to-find-duplicates-in-a-list
+      val duplicatedUsers = users.groupBy(identity).collect { case (x, Seq(_, _, _*)) => x }
+      if (duplicatedUsers.nonEmpty) {
+        retval.setError(Errors.INVALID_REQUEST.code())
+        retval.setErrorMessage(s"Cannot describe SCRAM credentials for the same user twice in a single request: ${duplicatedUsers.mkString("[", ", ", "]")}")
+      } else
+        users.foreach { user => addToResults(user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))) }
+    }
     retval
   }
 
   def alterUserScramCredentials(upsertions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion],
                                 deletions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialDeletion]): AlterUserScramCredentialsResponseData = {
-    new AlterUserScramCredentialsResponseData() // TODO: implementme
+
+    val userMechanismPairs = upsertions.map(upsertion => (upsertion.name, upsertion.mechanism)) ++
+      deletions.map(deletion => (deletion.name, deletion.mechanism))
+
+    def errors(error: Errors, errorMessage: String) : AlterUserScramCredentialsResponseData = {
+      val retval = new AlterUserScramCredentialsResponseData()
+      userMechanismPairs.map(_._1).toSet[String].foreach(user => {
+        retval.results.add(new AlterUserScramCredentialsResult().setUser(user).setErrorCode(error.code).setErrorMessage(errorMessage))
+      })
+      retval
+    }
+
+    // https://stackoverflow.com/questions/24729544/how-to-find-duplicates-in-a-list
+    val duplicatedUserCredentials = userMechanismPairs.groupBy(p => s"${p._1}:${ScramMechanism.from(p._2).toMechanismName}").collect { case (x, Seq(_, _, _*)) => x }
+    if (duplicatedUserCredentials.nonEmpty)
+      return errors(Errors.INVALID_REQUEST,s"Cannot alter the same user SCRAM credential twice in a single request: ${duplicatedUserCredentials.mkString("[", ", ", "]")}")
+    // check for deletion of a credential that does not exist
+    val invalidDeletion = deletions.find(deletion =>
+      adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(deletion.name))
+        .getProperty(ScramMechanism.from(deletion.mechanism).toMechanismName) == null)
+    if (invalidDeletion.isDefined)
+      return errors(Errors.RESOURCE_NOT_FOUND,
+        s"Cannot delete SCRAM credential for user ${invalidDeletion.get.name}: no credential for mechanism ${ScramMechanism.from(invalidDeletion.get.mechanism).toMechanismName}")
+    // the request is valid
+    // TODO: implement-me
+    new AlterUserScramCredentialsResponseData()
   }
 }

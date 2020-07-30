@@ -558,11 +558,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer(): Unit = {
-    // SCRAM credentials should not be described when specifying --describe --entity-default with --bootstrap-server
+    // User SCRAM credentials should not be described when specifying
+    // --describe --entity-type users --entity-default (or --user-defaults) with --bootstrap-server
     val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
     describeFuture.complete(Map((new ClientQuotaEntity(Map("" -> "").asJava) -> Map(("request_percentage" -> Double.box(50.0))).asJava)).asJava)
     val describeClientQuotasResult: DescribeClientQuotasResult = EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
-    EasyMock.expect(describeClientQuotasResult.entities()).andReturn(describeFuture)
+    EasyMock.expect(describeClientQuotasResult.entities()).andReturn(describeFuture).times(2)
     EasyMock.replay(describeClientQuotasResult)
 
     val node = new Node(1, "localhost", 9092)
@@ -576,7 +577,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     }
 
     def verifyCommand(expectedMessage: String, alterOrDescribeOpt: String, requestOpts: String*): Unit = {
-      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092", "--entity-type", "users",
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
         alterOrDescribeOpt) ++ requestOpts)
       if (alterOrDescribeOpt.equals("--describe"))
         ConfigCommand.describeConfig(mockAdminClient, opts) // fails if describeUserScramCredentials() is invoked
@@ -589,9 +590,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     }
 
     val expectedMsg = "The use of --entity-default is not allowed with User Scram Credentials using --bootstrap-server."
-    verifyCommand(expectedMsg, "--alter", "--entity-default", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
-    verifyCommand(expectedMsg, "--alter", "--entity-default", "--delete-config", "SCRAM-SHA-256")
-    verifyCommand(expectedMsg, "--describe", "--entity-default")
+    verifyCommand(expectedMsg, "--alter", "--entity-type", "users", "--entity-default", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand(expectedMsg, "--alter", "--entity-type", "users", "--entity-default", "--delete-config", "SCRAM-SHA-256")
+    verifyCommand(expectedMsg, "--describe", "--entity-type", "users", "--entity-default")
+    verifyCommand(expectedMsg, "--alter", "--user-defaults", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand(expectedMsg, "--alter", "--user-defaults", "--delete-config", "SCRAM-SHA-256")
+    verifyCommand(expectedMsg, "--describe", "--user-defaults")
   }
 
   @Test

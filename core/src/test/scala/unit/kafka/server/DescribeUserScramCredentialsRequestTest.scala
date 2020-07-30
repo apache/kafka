@@ -23,6 +23,7 @@ import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
+import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
 import org.apache.kafka.common.resource.ResourceType
@@ -34,8 +35,8 @@ import org.junit.{Before, Test}
 import scala.jdk.CollectionConverters._
 
 /**
- * Test DescribeUserScramCredentialsRequest/Response API for the cases where either no credentials exist
- * or failure is expected due to lack of authorization or sending the request to a non-controller broker.
+ * Test DescribeUserScramCredentialsRequest/Response API for the cases where no credentials exist
+ * or failure is expected due to lack of authorization, sending the request to a non-controller broker, or some other issue.
  * Testing the API for the case where there are actually credentials to describe is performed elsewhere.
  */
 class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
@@ -83,6 +84,18 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     val error = response.data.error
     assertEquals("Expected not authorized error", Errors.CLUSTER_AUTHORIZATION_FAILED.code, error)
   }
+
+  @Test
+  def testDescribeSameUserTwice(): Unit = {
+    val user = new UserName().setName("user1")
+    val request = new DescribeUserScramCredentialsRequest.Builder(
+      new DescribeUserScramCredentialsRequestData().setUsers(List(user, user).asJava)).build()
+    val response = sendDescribeUserScramCredentialsRequest(request)
+
+    val error = response.data.error
+    assertEquals("Expected invalid request error", Errors.INVALID_REQUEST.code, error)
+  }
+
 
   private def sendDescribeUserScramCredentialsRequest(request: DescribeUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): DescribeUserScramCredentialsResponse = {
     connectAndReceive[DescribeUserScramCredentialsResponse](request, destination = socketServer)

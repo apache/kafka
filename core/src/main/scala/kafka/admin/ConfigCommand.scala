@@ -56,9 +56,10 @@ import scala.collection._
  *     <li> broker: --broker <broker-id> OR --entity-type brokers --entity-name <broker-id>
  *     <li> broker-logger: --broker-logger <broker-id> OR --entity-type broker-loggers --entity-name <broker-id>
  * </ul>
- * --user-defaults, --client-defaults, or --broker-defaults may be when describing or altering default configuration for users,
- * clients, and brokers, respectively. Alternatively, --entity-default may be used instead of --entity-name.
- *
+ * --entity-type <users|clients|brokers> --entity-default may be specified in place of --entity-type <users|clients|brokers> --entity-name <entityName>
+ * when describing or altering default configuration for users, clients, or brokers, respectively.
+ * Alternatively, --user-defaults, --client-defaults, or --broker-defaults may be specified in place of
+ * --entity-type <users|clients|brokers> --entity-default, respectively.
  */
 object ConfigCommand extends Config {
 
@@ -310,7 +311,8 @@ object ConfigCommand extends Config {
     val entityNames = opts.entityNames
     val entityTypeHead = entityTypes.head
     val entityNameHead = entityNames.head
-    val configsToBeAddedMap = parseConfigsToBeAdded(opts).asScala
+    val configsToBeAddedProperties = parseConfigsToBeAdded(opts)
+    val configsToBeAddedMap = configsToBeAddedProperties.asScala
     val configsToBeAdded = configsToBeAddedMap.map { case (k, v) => (k, new ConfigEntry(k, v)) }
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
 
@@ -426,7 +428,25 @@ object ConfigCommand extends Config {
           adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
             .all().get(60, TimeUnit.SECONDS)
         } else {
-          // TODO: handle altering user SCRAM credential configs
+          // handle altering user SCRAM credential configs
+          if (entityNames.size != 1)
+            // should never happen, if we get here then it is a bug
+            throw new IllegalStateException(s"Altering user SCRAM credentials should never occur for more zero or multiple users: $entityNames")
+          val user = entityNames.head
+          if (!scramConfigsToDelete.isEmpty) {
+            // retrieve the current set of configs to ensure that configs to be deleted actually exist
+            val currentConfig = getUserScramCredentialConfigs(adminClient, entityNames)
+            val currentMechanisms: Set[String] = {
+              if (currentConfig.isEmpty)
+                Set.empty
+              else
+                currentConfig(user).getInfos.asScala.map(scramCredentialInfo => scramCredentialInfo.getMechanism.toMechanismName).toSet
+            }
+            val invalidConfigs = configsToBeDeleted.filterNot(currentMechanisms.contains)
+            if (invalidConfigs.nonEmpty)
+              throw new InvalidConfigurationException(s"Invalid config(s) cannot be deleted: ${invalidConfigs.mkString(",")}")
+          }
+          // TODO: implement-me
         }
 
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")
@@ -535,7 +555,8 @@ object ConfigCommand extends Config {
       val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
       println(s"Quota configs for ${entityStr} are ${entriesStr}")
     }
-    // we describe user SCRAM credentials only when we are not describing client information and we are not given --entity-default
+    // we describe user SCRAM credentials only when we are not describing client information
+    // and we are not given either --entity-default or --user-defaults
     if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
       getUserScramCredentialConfigs(adminClient, entityNames).foreach { case (user, description) =>
         val descriptionText = description.getInfos.asScala.map(info => s"${info.getMechanism.toMechanismName}=iterations=${info.getIterations}").mkString(", ")
