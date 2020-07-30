@@ -475,7 +475,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         }
 
         final ProcessorParameters processorParameters =
-            new ProcessorParameters<>(new KStreamBranch(predicates.clone(), childNames), branchName);
+            new ProcessorParameters<>(new KStreamBranch(Arrays.asList(predicates.clone()),
+                    Arrays.asList(childNames)), branchName);
         final ProcessorGraphNode<K, V> branchNode =
             new ProcessorGraphNode<>(branchName, processorParameters);
 
@@ -497,12 +498,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public BranchedKStream<K, V> split() {
-        return new BranchedKStreamImpl<>(this, NamedInternal.empty());
+        return new BranchedKStreamImpl<>(this, repartitionRequired, NamedInternal.empty());
     }
 
     @Override
     public BranchedKStream<K, V> split(final Named named) {
-        return new BranchedKStreamImpl<>(this, new NamedInternal(named));
+        return new BranchedKStreamImpl<>(this, repartitionRequired, new NamedInternal(named));
     }
 
     @Override

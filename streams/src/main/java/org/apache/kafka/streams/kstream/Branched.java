@@ -28,17 +28,26 @@ import java.util.function.Function;
  */
 public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
 
-    private final String name;
-    private final Function<? super KStream<? super K, ? super V>,
-            ? extends KStream<? extends K, ? extends V>> chainFunction;
-    private final Consumer<? super KStream<? super K, ? super V>> chainConsumer;
+    protected final String name;
+    protected final Function<? super KStream<K, V>,
+            ? extends KStream<K, V>> chainFunction;
+    protected final Consumer<? super KStream<K, V>> chainConsumer;
 
-    private Branched(final String name,
-                     final Function<? super KStream<? super K, ? super V>, ? extends KStream<? extends K, ? extends V>> chainFunction,
-                     final Consumer<? super KStream<? super K, ? super V>> chainConsumer) {
+    protected Branched(final String name,
+                       final Function<? super KStream<K, V>, ? extends KStream<K, V>> chainFunction,
+                       final Consumer<? super KStream<K, V>> chainConsumer) {
         this.name = name;
         this.chainFunction = chainFunction;
         this.chainConsumer = chainConsumer;
+    }
+
+    /**
+     * Create an instance of {@link Branched} from an existing instance.
+     *
+     * @param branched the instance of {@link Branched} to copy
+     */
+    protected Branched(final Branched<K, V> branched) {
+        this(branched.name, branched.chainFunction, branched.chainConsumer);
     }
 
     /**
@@ -78,10 +87,9 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @param <V>   value type
      * @return a new instance of {@link Branched}
      */
-    @SuppressWarnings("overloads")
-    public static <K, V> Branched<K, V> with(
-            final Function<? super KStream<? super K, ? super V>,
-                    ? extends KStream<? extends K, ? extends V>> chain) {
+    public static <K, V> Branched<K, V> withFunction(
+            final Function<? super KStream<K, V>,
+                    ? extends KStream<K, V>> chain) {
         return new Branched<>(null, chain, null);
     }
 
@@ -97,9 +105,8 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @param <V>   value type
      * @return a new instance of {@link Branched}
      */
-    @SuppressWarnings("overloads")
-    public static <K, V> Branched<K, V> with(final Consumer<? super KStream<? super K, ? super V>> chain) {
-        return new Branched<>(null, null, chain);
+    public static <K, V> Branched<K, V> withConsumer(final Consumer<KStream<K, V>> chain) {
+        return new Branched<K, V>(null, null, chain);
     }
 
     /**
@@ -116,10 +123,9 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * @param <V>   value type
      * @return a new instance of {@link Branched}
      */
-    @SuppressWarnings("overloads")
-    public static <K, V> Branched<K, V> with(
-            final Function<? super KStream<? super K, ? super V>,
-                    ? extends KStream<? extends K, ? extends V>> chain, final String name) {
+    public static <K, V> Branched<K, V> withFunction(
+            final Function<? super KStream<K, V>,
+                    ? extends KStream<K, V>> chain, final String name) {
         return new Branched<>(name, chain, null);
     }
 
@@ -127,19 +133,18 @@ public class Branched<K, V> implements NamedOperation<Branched<K, V>> {
      * Create an instance of {@link Branched} with provided chain function and branch name postfix.
      *
      * @param chain A consumer to which the branch will be sent. If a non-null branch is provided here,
-     *      *              the respective branch will not be added to the resulting {@code Map} returned
-     *      *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
-     *      *              {@link BranchedKStream} description for details). If {@code null}, a no-op consumer will be supposed
-     *      *              and the branch will be added to the resulting {@code Map}.
+     *              the respective branch will not be added to the resulting {@code Map} returned
+     *              by {@link BranchedKStream#defaultBranch()} or {@link BranchedKStream#noDefaultBranch()} (see
+     *              {@link BranchedKStream} description for details). If {@code null}, a no-op consumer will be supposed
+     *              and the branch will be added to the resulting {@code Map}.
      * @param name  the branch name postfix to be used. If {@code null}, a default branch name postfix will be generated
      *              (see {@link BranchedKStream} description for details)
      * @param <K>   key type
      * @param <V>   value type
      * @return a new instance of {@link Branched}
      */
-    @SuppressWarnings("overloads")
-    public static <K, V> Branched<K, V> with(final Consumer<? super KStream<? super K, ? super V>> chain,
-                                             final String name) {
+    public static <K, V> Branched<K, V> withConsumer(final Consumer<? super KStream<K, V>> chain,
+                                                     final String name) {
         return new Branched<>(name, null, chain);
     }
 }

@@ -20,41 +20,78 @@ import org.apache.kafka.streams.kstream.Branched;
 import org.apache.kafka.streams.kstream.BranchedKStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class BranchedKStreamImpl<K, V> implements BranchedKStream<K, V> {
 
-    private final KStream<K, V> source;
-    private final NamedInternal named;
+    private static final String BRANCH_NAME = "KSTREAM-BRANCH-";
 
-    BranchedKStreamImpl(final KStream<K, V> source, final NamedInternal named) {
+    private final KStreamImpl<K, V> source;
+    private final boolean repartitionRequired;
+    private final String splitterName;
+    private final Map<String, KStream<K, V>> result = new HashMap<>();
+
+    private final List<Predicate<? super K, ? super V>> predicates = new ArrayList<>();
+    private final List<String> childNames = new ArrayList<>();
+    private final ProcessorGraphNode<K, V> splitterNode;
+
+    BranchedKStreamImpl(final KStreamImpl<K, V> source, final boolean repartitionRequired, final NamedInternal named) {
         this.source = source;
-        this.named = named;
+        this.repartitionRequired = repartitionRequired;
+        this.splitterName = named.orElseGenerateWithPrefix(source.builder, BRANCH_NAME);
+
+        // predicates and childNames are passed by reference so when the user adds a branch they get added to
+        final ProcessorParameters<K, V> processorParameters =
+                new ProcessorParameters<>(new KStreamBranch<>(predicates, childNames), splitterName);
+        splitterNode = new ProcessorGraphNode<>(splitterName, processorParameters);
+        source.builder.addGraphNode(source.streamsGraphNode, splitterNode);
     }
 
     @Override
-    public BranchedKStream<K, V> branch(final Predicate predicate) {
-        return null;
+    public BranchedKStream<K, V> branch(final Predicate<? super K, ? super V> predicate) {
+        return branch(predicate, BranchedInternal.empty());
     }
 
     @Override
-    public BranchedKStream<K, V> branch(final Predicate predicate, final Branched branched) {
-        return null;
+    public BranchedKStream<K, V> branch(final Predicate<? super K, ? super V> predicate, final Branched<K, V> branched) {
+        predicates.add(predicate);
+        createBranch(branched, predicates.size());
+        return this;
     }
 
     @Override
     public Map<String, KStream<K, V>> defaultBranch() {
-        return null;
+        return defaultBranch(BranchedInternal.empty());
     }
 
     @Override
     public Map<String, KStream<K, V>> defaultBranch(final Branched<K, V> branched) {
-        return null;
+        createBranch(branched, 0);
+        return result;
+    }
+
+    private void createBranch(final Branched<K, V> branched, final int index) {
+        final BranchedInternal<K, V> branchedInternal = new BranchedInternal<>(branched);
+        final String branchChildName = branchedInternal.branchProcessorName(splitterName, index);
+        childNames.add(branchChildName);
+        source.builder.newProcessorName(branchChildName);
+        final ProcessorParameters<K, V> parameters = new ProcessorParameters<>(new PassThrough<>(), branchChildName);
+        final ProcessorGraphNode<K, V> branchChildNode = new ProcessorGraphNode<>(branchChildName, parameters);
+        source.builder.addGraphNode(splitterNode, branchChildNode);
+        final KStreamImpl<K, V> newStream = new KStreamImpl<>(branchChildName, source.keySerde,
+                source.valueSerde, source.subTopologySourceNodes,
+                repartitionRequired, branchChildNode, source.builder);
+        branchedInternal.process(newStream, branchChildName, result);
     }
 
     @Override
     public Map<String, KStream<K, V>> noDefaultBranch() {
-        return null;
+        return result;
     }
 }
