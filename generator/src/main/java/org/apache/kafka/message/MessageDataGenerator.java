@@ -390,6 +390,9 @@ public final class MessageDataGenerator {
             } else {
                 return "byte[]";
             }
+        } else if (field.type() instanceof FieldType.RecordsFieldType) {
+            headerGenerator.addImport(MessageGenerator.BASE_RECORDS_CLASS);
+            return "BaseRecords";
         } else if (field.type().isStruct()) {
             return MessageGenerator.capitalizeFirst(field.typeString());
         } else if (field.type().isArray()) {
@@ -643,7 +646,7 @@ public final class MessageDataGenerator {
             ifNotMember(__ -> {
                 if (type.isString()) {
                     buffer.printf("%s = _readable.readShort();%n", lengthVar);
-                } else if (type.isBytes() || type.isArray()) {
+                } else if (type.isBytes() || type.isArray() || type.isRecords()) {
                     buffer.printf("%s = _readable.readInt();%n", lengthVar);
                 } else {
                     throw new RuntimeException("Can't handle variable length type " + type);
@@ -682,6 +685,17 @@ public final class MessageDataGenerator {
                 buffer.printf("_readable.readArray(newBytes);%n");
                 buffer.printf("%snewBytes%s", assignmentPrefix, assignmentSuffix);
             }
+        } else if (type.isRecords()) {
+            headerGenerator.addImport(MessageGenerator.RECORDS_READABLE_CLASS);
+            buffer.printf("if (_readable instanceof RecordsReadable) {%n");
+            buffer.incrementIndent();
+            buffer.printf("%s((RecordsReadable) _readable).readRecords(%s)%s", assignmentPrefix, lengthVar, assignmentSuffix);
+            buffer.decrementIndent();
+            buffer.printf("} else {%n");
+            buffer.incrementIndent();
+            buffer.printf("throw new RuntimeException(\"Cannot read records from reader of class: \" + _readable.getClass().getSimpleName());%n");
+            buffer.decrementIndent();
+            buffer.printf("}%n");
         } else if (type.isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
             if (isStructArrayWithKeys) {
@@ -964,6 +978,12 @@ public final class MessageDataGenerator {
                     String.format("MessageUtil.jsonNodeToBinary(%s, \"%s\")",
                         target.sourceVariable(), target.humanReadableName())));
             }
+        } else if (target.field().type().isRecords()) {
+            headerGenerator.addImport(MessageGenerator.BYTE_BUFFER_CLASS);
+            headerGenerator.addImport(MessageGenerator.MEMORY_RECORDS_CLASS);
+            buffer.printf("%s;%n", target.assignmentStatement(
+                    String.format("MemoryRecords.readableRecords(ByteBuffer.wrap(MessageUtil.jsonNodeToBinary(%s, \"%s\")))",
+                            target.sourceVariable(), target.humanReadableName())));
         } else if (target.field().type().isArray()) {
             buffer.printf("if (!%s.isArray()) {%n", target.sourceVariable());
             buffer.incrementIndent();
@@ -1109,6 +1129,9 @@ public final class MessageDataGenerator {
                     String.format("new BinaryNode(Arrays.copyOf(%s, %s.length))",
                         target.sourceVariable(), target.sourceVariable())));
             }
+        } else if (target.field().type().isRecords()) {
+            headerGenerator.addImport(MessageGenerator.BINARY_NODE_CLASS);
+            buffer.printf("%s;%n", target.assignmentStatement("new BinaryNode(new byte[]{})"));
         } else if (target.field().type().isArray()) {
             headerGenerator.addImport(MessageGenerator.ARRAY_NODE_CLASS);
             headerGenerator.addImport(MessageGenerator.JSON_NODE_FACTORY_CLASS);
@@ -1209,6 +1232,8 @@ public final class MessageDataGenerator {
             } else {
                 return String.format("struct.getByteArray(\"%s\")", name);
             }
+        } else if (type.isRecords()) {
+            return String.format("struct.getRecords(\"%s\")", name);
         } else if (type.isStruct()) {
             return String.format("new %s((Struct) struct.get(\"%s\"), _version)",
                     type.toString(), name);
@@ -1467,6 +1492,8 @@ public final class MessageDataGenerator {
                     } else {
                         lengthExpression = String.format("%s.length", name);
                     }
+                } else if (type.isRecords()) {
+                    lengthExpression = String.format("%s.sizeInBytes()", name);
                 } else if (type.isArray()) {
                     lengthExpression = String.format("%s.size()", name);
                 } else {
@@ -1499,6 +1526,17 @@ public final class MessageDataGenerator {
                     } else {
                         buffer.printf("_writable.writeByteArray(%s);%n", name);
                     }
+                } else if (type.isRecords()) {
+                    headerGenerator.addImport(MessageGenerator.RECORDS_WRITABLE_CLASS);
+                    buffer.printf("if (_writable instanceof RecordsWritable) {%n");
+                    buffer.incrementIndent();
+                    buffer.printf("((RecordsWritable) _writable).writeRecords(%s);%n", name);
+                    buffer.decrementIndent();
+                    buffer.printf("} else {%n");
+                    buffer.incrementIndent();
+                    buffer.printf("throw new RuntimeException(\"Cannot write records to writer of class: \" + _writable.getClass().getSimpleName());%n");
+                    buffer.decrementIndent();
+                    buffer.printf("}%n");
                 } else if (type.isArray()) {
                     FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
                     FieldType elementType = arrayType.elementType();
@@ -1658,6 +1696,9 @@ public final class MessageDataGenerator {
                 buffer.printf("struct.setByteArray(\"%s\", this.%s);%n",
                     field.snakeCaseName(), field.camelCaseName());
             }
+        } else if (field.type().isRecords()) {
+            buffer.printf("struct.set(\"%s\", this.%s);%n",
+                    field.snakeCaseName(), field.camelCaseName());
         } else if (field.type().isArray()) {
             IsNullConditional.forField(field).
                 possibleVersions(versions).
@@ -1997,6 +2038,8 @@ public final class MessageDataGenerator {
                     } else {
                         buffer.printf("_size += _bytesSize;%n");
                     }
+                } else if (field.type().isRecords()) {
+                    buffer.printf("_size += %s.sizeInBytes() + 4;%n", field.camelCaseName());
                 } else if (field.type().isStruct()) {
                     buffer.printf("int size = this.%s.size(_cache, _version);%n", field.camelCaseName());
                     if (tagged) {
@@ -2078,6 +2121,10 @@ public final class MessageDataGenerator {
                 buffer.printf("if (!Arrays.equals(this.%s, other.%s)) return false;%n",
                     field.camelCaseName(), field.camelCaseName());
             }
+        } else if (field.type().isRecords()) {
+            headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
+            buffer.printf("if (!Objects.equals(this.%s, other.%s)) return false;%n",
+                    field.camelCaseName(), field.camelCaseName());
         } else {
             buffer.printf("if (%s != other.%s) return false;%n",
                 field.camelCaseName(), field.camelCaseName());
@@ -2121,12 +2168,16 @@ public final class MessageDataGenerator {
             if (field.zeroCopy()) {
                 headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
                 buffer.printf("hashCode = 31 * hashCode + Objects.hashCode(%s);%n",
-                    field.camelCaseName());
+                        field.camelCaseName());
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYS_CLASS);
                 buffer.printf("hashCode = 31 * hashCode + Arrays.hashCode(%s);%n",
                     field.camelCaseName());
             }
+        } else if (field.type().isRecords()) {
+            headerGenerator.addImport(MessageGenerator.OBJECTS_CLASS);
+            buffer.printf("hashCode = 31 * hashCode + Objects.hashCode(%s);%n",
+                    field.camelCaseName());
         } else if (field.type().isStruct()
                    || field.type().isArray()
                    || field.type().isString()) {
@@ -2180,6 +2231,13 @@ public final class MessageDataGenerator {
                                 target.sourceVariable())));
                     });
                 }
+            } else if (field.type().isRecords()) {
+                cond.ifShouldNotBeNull(() -> {
+                    headerGenerator.addImport(MessageGenerator.MEMORY_RECORDS_CLASS);
+                    buffer.printf("%s;%n", target.assignmentStatement(
+                        String.format("MemoryRecords.readableRecords(((MemoryRecords) %s).buffer().duplicate())",
+                            target.sourceVariable())));
+                });
             } else if (field.type().isStruct()) {
                 cond.ifShouldNotBeNull(() ->
                     buffer.printf("%s;%n", target.assignmentStatement(
@@ -2254,6 +2312,9 @@ public final class MessageDataGenerator {
                 buffer.printf("+ \"%s%s=\" + Arrays.toString(%s)%n",
                     prefix, field.camelCaseName(), field.camelCaseName());
             }
+        } else if (field.type().isRecords()) {
+            buffer.printf("+ \"%s%s=\" + %s%n",
+                    prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isStruct() ||
             field.type() instanceof FieldType.UUIDFieldType) {
         } else if (field.type().isStruct()) {
@@ -2397,6 +2458,8 @@ public final class MessageDataGenerator {
                 headerGenerator.addImport(MessageGenerator.BYTES_CLASS);
                 return "Bytes.EMPTY";
             }
+        } else if (field.type().isRecords()) {
+            return "null";
         } else if (field.type().isStruct()) {
             if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for struct field " +
