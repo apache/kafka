@@ -345,10 +345,10 @@ public class MirrorConnectorsIntegrationTest {
     private void waitForConsumingAllRecords(Consumer<byte[], byte[]> consumer) throws InterruptedException {
         final AtomicInteger totalConsumedRecords = new AtomicInteger(0);
         waitForCondition(() -> {
-            ConsumerRecords records = consumer.poll(Duration.ofMillis(500));
-            consumer.commitSync();
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
             return NUM_RECORDS_PRODUCED == totalConsumedRecords.addAndGet(records.count());
-        }, RECORD_CONSUME_DURATION_MS, "Consumer cannot consume all the records in time");
+        }, RECORD_CONSUME_DURATION_MS, "Consumer cannot consume all records in time");
+        consumer.commitSync();
     }
 
     @Test
@@ -357,7 +357,7 @@ public class MirrorConnectorsIntegrationTest {
         // create consumers before starting the connectors so we don't need to wait for discovery
         try (Consumer<byte[], byte[]> consumer1 = primary.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
             "group.id", "consumer-group-1"), "test-topic-1")) {
-            // we need to wait for consuming all the records for MM2 replicaing the expected offsets
+            // we need to wait for consuming all the records for MM2 replicating the expected offsets
             waitForConsumingAllRecords(consumer1);
         }
 
@@ -395,7 +395,7 @@ public class MirrorConnectorsIntegrationTest {
         // create a consumer at primary cluster to consume the new topic
         try (Consumer<byte[], byte[]> consumer1 = primary.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
             "group.id", "consumer-group-1"), "test-topic-2")) {
-            // we need to wait for consuming all the records for MM2 replicaing the expected offsets
+            // we need to wait for consuming all the records for MM2 replicating the expected offsets
             waitForConsumingAllRecords(consumer1);
         }
 
