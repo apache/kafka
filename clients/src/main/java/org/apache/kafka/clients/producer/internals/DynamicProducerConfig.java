@@ -107,10 +107,13 @@ public class DynamicProducerConfig extends DynamicClientConfigUpdater {
             // Only parse and validate dynamic configs if they have changed since the last time they were fetched
             if (!dynamicConfigs.equals(previousDynamicConfigs)) {
                 try {
+                    // We want dynamic configs to take priority over user provided configs
                     Map<String, Object> overlayed = new HashMap<>();
                     overlayed.putAll(originals);
                     overlayed.putAll(dynamicConfigs);
                     previousDynamicConfigs = dynamicConfigs;
+
+                    // Only update our configs if the parse in ProducerConfig is successful
                     ProducerConfig parsedConfigs = new ProducerConfig(overlayed, false);
                     updatedConfigs = parsedConfigs;
                     log.info("Updated dynamic configurations {}", dynamicConfigs);

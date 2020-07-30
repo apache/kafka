@@ -87,9 +87,6 @@ public class Sender implements Runnable {
     /* the maximum request size to attempt to send to the server */
     private final int maxRequestSize;
 
-    /* the number of acknowledgements to request from the server */
-    private final short acks;
-
     /* the number of times to retry a failed request before giving up */
     private final int retries;
 
@@ -128,24 +125,6 @@ public class Sender implements Runnable {
                   RecordAccumulator accumulator,
                   boolean guaranteeMessageOrder,
                   int maxRequestSize,
-                  short acks,
-                  int retries,
-                  SenderMetricsRegistry metricsRegistry,
-                  Time time,
-                  int requestTimeoutMs,
-                  long retryBackoffMs,
-                  TransactionManager transactionManager,
-                  ApiVersions apiVersions) {
-        this(logContext, client, metadata, accumulator, guaranteeMessageOrder, maxRequestSize, acks, retries, metricsRegistry, time, requestTimeoutMs, retryBackoffMs, transactionManager, apiVersions, null);
-    }
-
-    public Sender(LogContext logContext,
-                  KafkaClient client,
-                  ProducerMetadata metadata,
-                  RecordAccumulator accumulator,
-                  boolean guaranteeMessageOrder,
-                  int maxRequestSize,
-                  short acks,
                   int retries,
                   SenderMetricsRegistry metricsRegistry,
                   Time time,
@@ -161,7 +140,6 @@ public class Sender implements Runnable {
         this.guaranteeMessageOrder = guaranteeMessageOrder;
         this.maxRequestSize = maxRequestSize;
         this.running = true;
-        this.acks = acks;
         this.retries = retries;
         this.time = time;
         this.sensors = new SenderMetrics(metricsRegistry, metadata, client, time);
@@ -170,11 +148,10 @@ public class Sender implements Runnable {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
-        if (config != null && config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG)) {
-            this.dynamicConfig = new DynamicProducerConfig(client, config, time, logContext, requestTimeoutMs);
-        } else {
-            this.dynamicConfig = null;
-        }
+        this.dynamicConfig = new DynamicProducerConfig(client, config, time, logContext, requestTimeoutMs);
+        if (!config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG)) {
+            this.dynamicConfig.disable();
+        } 
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {
@@ -348,16 +325,11 @@ public class Sender implements Runnable {
         }
 
         long currentTimeMs = time.milliseconds();
-        Short acks = this.acks;
-        if (dynamicConfig != null && !dynamicConfig.shouldDisable()) {
+        if (!dynamicConfig.shouldDisable()) {
             dynamicConfig.maybeFetchConfigs(currentTimeMs);
-            acks = dynamicConfig.getAcks();
-        } else if (dynamicConfig != null) {
-            log.info("Disabling DynamicProducerConfig");
-            dynamicConfig = null;
-        }
+        } 
         currentTimeMs = time.milliseconds();
-        long pollTimeout = sendProducerData(currentTimeMs, acks);
+        long pollTimeout = sendProducerData(currentTimeMs, dynamicConfig.getAcks());
         client.poll(pollTimeout, currentTimeMs);
     }
 

@@ -467,14 +467,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 apiVersions,
                 throttleTimeSensor,
                 logContext);
-        short acks = configureAcks(producerConfig, log);
+        validateAcks(producerConfig, log);
         return new Sender(logContext,
                 client,
                 metadata,
                 this.accumulator,
                 maxInflightRequests == 1,
                 producerConfig.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
-                acks,
                 producerConfig.getInt(ProducerConfig.RETRIES_CONFIG),
                 metricsRegistry.senderMetrics,
                 time,
@@ -552,7 +551,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
     }
 
-    private static short configureAcks(ProducerConfig config, Logger log) {
+    private static void validateAcks(ProducerConfig config, Logger log) {
         boolean userConfiguredAcks = config.originals().containsKey(ProducerConfig.ACKS_CONFIG);
         short acks = Short.parseShort(config.getString(ProducerConfig.ACKS_CONFIG));
 
@@ -563,7 +562,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
                         "producer. Otherwise we cannot guarantee idempotence.");
         }
-        return acks;
     }
 
     /**
