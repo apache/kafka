@@ -97,7 +97,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> storeLevelSensors = new HashMap<>();
 
-    private RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
+    private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
     private static final String SENSOR_PREFIX_DELIMITER = ".";
     private static final String SENSOR_NAME_DELIMITER = ".s.";
