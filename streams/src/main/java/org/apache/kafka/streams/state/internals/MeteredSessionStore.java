@@ -255,7 +255,7 @@ public class MeteredSessionStore<K, V>
     }
 
     private void maybeRecordE2ELatency() {
-        if (e2eLatencySensor.shouldRecord() && e2eLatencySensor.hasMetrics()) {
+        if (e2eLatencySensor.shouldRecord()) {
             final long currentTime = time.milliseconds();
             final long e2eLatency =  currentTime - context.timestamp();
             e2eLatencySensor.record(e2eLatency, currentTime);

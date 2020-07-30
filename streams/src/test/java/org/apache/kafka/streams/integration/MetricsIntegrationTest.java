@@ -615,12 +615,12 @@ public class MetricsIntegrationTest {
                                            final String builtInMetricsVersion) {
         final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().tags().containsKey(tagKey) &&
-                m.metricName().group().equals(StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? group0100To24 : STATE_STORE_LEVEL_GROUP))
+                 m.metricName().group().equals(group0100To24) ||
+                 m.metricName().group().equals(STATE_STORE_LEVEL_GROUP))
             .collect(Collectors.toList());
         final int expectedNumberOfLatencyMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 1;
         final int expectedNumberOfRateMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 1;
         final int expectedNumberOfTotalMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 2 : 0;
-        final int expectedNumberofE2ELatencyMetrics = StreamsConfig.METRICS_0100_TO_24.equals(builtInMetricsVersion) ? 0 : 1;
         checkMetricByName(listMetricStore, PUT_LATENCY_AVG, expectedNumberOfLatencyMetrics);
         checkMetricByName(listMetricStore, PUT_LATENCY_MAX, expectedNumberOfLatencyMetrics);
         checkMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, expectedNumberOfLatencyMetrics);
@@ -671,9 +671,9 @@ public class MetricsIntegrationTest {
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_CURRENT, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_AVG, 0);
         checkMetricByName(listMetricStore, SUPPRESSION_BUFFER_SIZE_MAX, 0);
-        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_AVG, expectedNumberofE2ELatencyMetrics);
-        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MIN, expectedNumberofE2ELatencyMetrics);
-        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MAX, expectedNumberofE2ELatencyMetrics);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_AVG, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MIN, 1);
+        checkMetricByName(listMetricStore, RECORD_E2E_LATENCY_MAX, 1);
     }
 
     private void checkMetricsDeregistration() {
