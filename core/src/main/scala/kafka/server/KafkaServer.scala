@@ -168,6 +168,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var kafkaController: KafkaController = null
 
+  var brokerToControllerChannelManager: BrokerToControllerChannelManager = null
+
   var kafkaScheduler: KafkaScheduler = null
 
   var metadataCache: MetadataCache = null
@@ -313,6 +315,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* start kafka controller */
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, threadNamePrefix)
         kafkaController.startup()
+
+        brokerToControllerChannelManager = new BrokerToControllerChannelManager(metadataCache, time, metrics, config, threadNamePrefix)
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
 
