@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -34,12 +33,15 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
@@ -62,8 +64,9 @@ public class MirrorConnectorsIntegrationTest {
     private static final int NUM_PARTITIONS = 10;
     private static final int RECORD_TRANSFER_DURATION_MS = 20_000;
     private static final int CHECKPOINT_DURATION_MS = 20_000;
+    private static final int RECORD_CONSUME_DURATION_MS = 20_000;
+    private static final int OFFSET_SYNC_DURATION_MS = 30_000;
 
-    private Time time = Time.SYSTEM;
     private Map<String, String> mm2Props;
     private MirrorMakerConfig mm2Config; 
     private EmbeddedConnectCluster primary;
@@ -315,16 +318,48 @@ public class MirrorConnectorsIntegrationTest {
             backup.kafka().consume(NUM_RECORDS_PRODUCED, 2 * RECORD_TRANSFER_DURATION_MS, "primary.test-topic-2").count());
     }
 
+    private void waitForConsumerGroupOffsetSync(Consumer<byte[], byte[]> consumer, List<String> topics, String consumerGroupId)
+            throws InterruptedException {
+        Admin backupClient = backup.kafka().createAdminClient();
+        List<TopicPartition> tps = new ArrayList<>(NUM_PARTITIONS * topics.size());
+        for (int partitionIndex = 0; partitionIndex < NUM_PARTITIONS; partitionIndex++) {
+            for (String topic : topics) {
+                tps.add(new TopicPartition(topic, partitionIndex));
+            }
+        }
+        long expectedTotalOffsets = NUM_RECORDS_PRODUCED * topics.size();
+
+        waitForCondition(() -> {
+            Map<TopicPartition, OffsetAndMetadata> consumerGroupOffsets =
+                backupClient.listConsumerGroupOffsets(consumerGroupId).partitionsToOffsetAndMetadata().get();
+            long consumerGroupOffsetTotal = consumerGroupOffsets.values().stream().mapToLong(metadata -> metadata.offset()).sum();
+
+            Map<TopicPartition, Long> offsets = consumer.endOffsets(tps, Duration.ofMillis(500));
+            long totalOffsets = offsets.values().stream().mapToLong(l -> l).sum();
+
+            // make sure the consumer group offsets are synced to expected number
+            return totalOffsets == expectedTotalOffsets && consumerGroupOffsetTotal > 0;
+        }, OFFSET_SYNC_DURATION_MS, "Consumer group offset sync is not complete in time");
+    }
+
+    private void waitForConsumingAllRecords(Consumer<byte[], byte[]> consumer) throws InterruptedException {
+        final AtomicInteger totalConsumedRecords = new AtomicInteger(0);
+        waitForCondition(() -> {
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
+            return NUM_RECORDS_PRODUCED == totalConsumedRecords.addAndGet(records.count());
+        }, RECORD_CONSUME_DURATION_MS, "Consumer cannot consume all records in time");
+        consumer.commitSync();
+    }
 
     @Test
-    public void testOneWayReplicationWithAutorOffsetSync1() throws InterruptedException {
+    public void testOneWayReplicationWithAutoOffsetSync() throws InterruptedException {
 
         // create consumers before starting the connectors so we don't need to wait for discovery
-        Consumer<byte[], byte[]> consumer1 = primary.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
-            "group.id", "consumer-group-1"), "test-topic-1");
-        consumer1.poll(Duration.ofMillis(500));
-        consumer1.commitSync();
-        consumer1.close();
+        try (Consumer<byte[], byte[]> consumer1 = primary.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
+            "group.id", "consumer-group-1"), "test-topic-1")) {
+            // we need to wait for consuming all the records for MM2 replicating the expected offsets
+            waitForConsumingAllRecords(consumer1);
+        }
 
         // enable automated consumer group offset sync
         mm2Props.put("sync.group.offsets.enabled", "true");
@@ -336,13 +371,14 @@ public class MirrorConnectorsIntegrationTest {
 
         waitUntilMirrorMakerIsRunning(backup, mm2Config, "primary", "backup");
 
-        // sleep 5 seconds to ensure the automated group offset sync is complete
-        time.sleep(5000);
-
         // create a consumer at backup cluster with same consumer group Id to consume 1 topic
         Consumer<byte[], byte[]> consumer = backup.kafka().createConsumerAndSubscribeTo(
             Collections.singletonMap("group.id", "consumer-group-1"), "primary.test-topic-1");
+
+        waitForConsumerGroupOffsetSync(consumer, Collections.singletonList("primary.test-topic-1"), "consumer-group-1");
+
         ConsumerRecords records = consumer.poll(Duration.ofMillis(500));
+
         // the size of consumer record should be zero, because the offsets of the same consumer group
         // have been automatically synchronized from primary to backup by the background job, so no
         // more records to consume from the replicated topic by the same consumer group at backup cluster
@@ -357,18 +393,17 @@ public class MirrorConnectorsIntegrationTest {
         }
 
         // create a consumer at primary cluster to consume the new topic
-        consumer1 = primary.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
-            "group.id", "consumer-group-1"), "test-topic-2");
-        consumer1.poll(Duration.ofMillis(500));
-        consumer1.commitSync();
-        consumer1.close();
-
-        // sleep 5 seconds to ensure the automated group offset sync is complete
-        time.sleep(5000);
+        try (Consumer<byte[], byte[]> consumer1 = primary.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
+            "group.id", "consumer-group-1"), "test-topic-2")) {
+            // we need to wait for consuming all the records for MM2 replicating the expected offsets
+            waitForConsumingAllRecords(consumer1);
+        }
 
         // create a consumer at backup cluster with same consumer group Id to consume old and new topic
         consumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
             "group.id", "consumer-group-1"), "primary.test-topic-1", "primary.test-topic-2");
+
+        waitForConsumerGroupOffsetSync(consumer, Arrays.asList("primary.test-topic-1", "primary.test-topic-2"), "consumer-group-1");
 
         records = consumer.poll(Duration.ofMillis(500));
         // similar reasoning as above, no more records to consume by the same consumer group at backup cluster
