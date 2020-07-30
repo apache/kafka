@@ -67,12 +67,12 @@ import java.util.Map;
  * For example:
  * <pre> {@code
  * Map<String, KStream<..., ...>> result =
- *     source.split(Named.as("foo-"))
- *         .branch(predicate1, Branched.as("bar"))            // "foo-bar"
- *         .branch(predicate2, Branched.with(ks->ks.to("A"))  // no entry: a Consumer is provided
- *         .branch(predicate3, Branched.with(ks->null))       // no entry: chain function returns null
- *         .branch(predicate4)                                // "foo-4": name defaults to the branch position
- *         .defaultBranch()                                   // "foo-0": "0" is the default name for the default branch
+ *   source.split(Named.as("foo-"))
+ *     .branch(predicate1, Branched.as("bar"))                    // "foo-bar"
+ *     .branch(predicate2, Branched.withConsumer(ks->ks.to("A"))  // no entry: a Consumer is provided
+ *     .branch(predicate3, Branched.withFunction(ks->null))       // no entry: chain function returns null
+ *     .branch(predicate4)                                        // "foo-4": name defaults to the branch position
+ *     .defaultBranch()                                           // "foo-0": "0" is the default name for the default branch
  * }</pre>
  *
  * <h2><a name="examples">Usage examples</a></h2>
@@ -83,9 +83,9 @@ import java.util.Map;
  *
  * <pre> {@code
  * source.split()
- *     .branch((key, value) -> value.contains("A"), Branched.with(ks -> ks.to("A")))
- *     .branch((key, value) -> value.contains("B"), Branched.with(ks -> ks.to("B")))
- *     .defaultBranch(Branched.with(ks->ks.to("C")));
+ *     .branch((key, value) -> value.contains("A"), Branched.withConsumer(ks -> ks.to("A")))
+ *     .branch((key, value) -> value.contains("B"), Branched.withConsumer(ks -> ks.to("B")))
+ *     .defaultBranch(Branched.withConsumer(ks->ks.to("C")));
  * }</pre>
  *
  * <h3>Collecting branches in a single scope</h3>
@@ -94,11 +94,11 @@ import java.util.Map;
  * access to all the branches in the same scope:
  *
  * <pre> {@code
- * Map<String, KStream<String, String>> branches = source.split()
- *     .branch((key, value) -> value == null, Branched.with(s -> s.mapValues(v->"NULL"), "null")
+ * Map<String, KStream<String, String>> branches = source.split(Named.as("split-"))
+ *     .branch((key, value) -> value == null, Branched.withFunction(s -> s.mapValues(v->"NULL"), "null")
  *     .defaultBranch(Branched.as("non-null"));
  *
- * KStream<String, String> merged = branches.get("non-null").merge(branches.get("null"));
+ * KStream<String, String> merged = branches.get("split-non-null").merge(branches.get("split-null"));
  * }</pre>
  *
  * <h3>Dynamic branching</h3>
@@ -108,7 +108,7 @@ import java.util.Map;
  * BranchedKStream branched = stream.split();
  * for (RecordType recordType : RecordType.values())
  *     branched.branch((k, v) -> v.getRecType() == recordType,
- *         Branched.with(recordType::processRecords));
+ *         Branched.withConsumer(recordType::processRecords));
  * }</pre>
  *
  * @param <K> Type of keys
