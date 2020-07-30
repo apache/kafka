@@ -1841,7 +1841,58 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processAlterIsr(isrsToAlter: Map[TopicPartition, LeaderAndIsr]): Unit = {
-    // TODO actually update the ISRs in ZK
+    // TODO maybe we still need broker id and broker epoch at this point to validate again...
+
+    val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = isrsToAlter.flatMap { case (tp: TopicPartition, newLeaderAndIsr: LeaderAndIsr) =>
+      // Check that the topic still exists and the leader epoch hasn't changed
+      zkClient.getTopicPartitionState(tp) match {
+        case Some(currentTopicPartitionState) => {
+          val currentLeaderAndIsr = currentTopicPartitionState.leaderAndIsr
+          if (currentLeaderAndIsr.leaderEpoch == newLeaderAndIsr.leaderEpoch) {
+            // Bump epoch before updating in ZK
+            Some(tp -> newLeaderAndIsr.newEpochAndZkVersion)
+          } else {
+            warn(s"Not updating ISR for partition ${tp} since it has a stale leader epoch ${newLeaderAndIsr.leaderEpoch}")
+            None
+          }
+        }
+        case None =>
+          // We don't know about this partition anymore
+          warn(s"Not updating ISR for partition ${tp} since it no longer exists")
+          None
+      }
+    }
+
+    info(s"Updating ISRs for partitions: ${adjustedIsrs.keySet}.")
+
+    val UpdateLeaderAndIsrResult(finishedUpdates, _) =  zkClient.updateLeaderAndIsr(
+      adjustedIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
+
+
+    val successfulUpdates: Map[TopicPartition, LeaderAndIsr] = finishedUpdates.flatMap {
+      case (partition: TopicPartition, isrOrError: Either[Throwable, LeaderAndIsr]) =>
+      isrOrError match {
+        case Right(updatedIsr) =>
+          info("ISR updated to [%s] and zkVersion updated to [%d]".format(updatedIsr.isr.mkString(","), updatedIsr.zkVersion))
+          Some(partition -> updatedIsr)
+        case Left(error) =>
+          warn(s"Failed to update ISR for partition $partition", error)
+          None
+      }
+    }
+
+    // Update our cache
+    updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
+
+    // Send out LeaderAndIsr to replicas
+    brokerRequestBatch.newBatch()
+    successfulUpdates.foreach { case (partition: TopicPartition, leaderAndIsr: LeaderAndIsr) =>
+      val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
+      val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
+      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicaAssignment.replicas, partition,
+        leaderIsrAndControllerEpoch, replicaAssignment, isNew = false)
+    }
+    brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
   }
 
   private def processControllerChange(): Unit = {
