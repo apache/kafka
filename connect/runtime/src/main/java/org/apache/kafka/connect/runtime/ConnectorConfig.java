@@ -89,11 +89,16 @@ public class ConnectorConfig extends AbstractConfig {
     public static final String VALUE_CONVERTER_CLASS_DISPLAY = "Value converter class";
 
     public static final String HEADER_CONVERTER_CLASS_CONFIG = WorkerConfig.HEADER_CONVERTER_CLASS_CONFIG;
-    public static final String HEADER_CONVERTER_CLASS_DOC = WorkerConfig.HEADER_CONVERTER_CLASS_DOC;
+    public static final String HEADER_CONVERTER_CLASS_DOC =
+            "HeaderConverter class used to convert between Kafka Connect format and the serialized form that is written to Kafka." +
+            " This controls the format of the header values in messages written to or read from Kafka, and since this is" +
+            " independent of connectors it allows any connector to work with any serialization format." +
+            " Examples of common formats include JSON and Avro. By default, the value will be inherited from" +
+            " the <a href=\"https://kafka.apache.org/documentation/#header.converter\">Connect config</a>.";
     public static final String HEADER_CONVERTER_CLASS_DISPLAY = "Header converter class";
     // The Connector config should not have a default for the header converter, since the absence of a config property means that
     // the worker config settings should be used. Thus, we set the default to null here.
-    public static final String HEADER_CONVERTER_CLASS_DEFAULT = null;
+    public static final String HEADER_CONVERTER_CLASS_DEFAULT = "Inherited from Connect config";
 
     public static final String TASKS_MAX_CONFIG = "tasks.max";
     private static final String TASKS_MAX_DOC = "Maximum number of tasks to use for this connector.";
