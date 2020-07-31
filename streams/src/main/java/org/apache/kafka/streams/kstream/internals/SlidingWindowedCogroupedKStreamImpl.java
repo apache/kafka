@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-
 import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
@@ -44,12 +43,12 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
     private final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns;
 
     SlidingWindowedCogroupedKStreamImpl(final SlidingWindows windows,
-                                     final InternalStreamsBuilder builder,
-                                     final Set<String> subTopologySourceNodes,
-                                     final String name,
-                                     final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                                     final StreamsGraphNode streamsGraphNode,
-                                     final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
+                                        final InternalStreamsBuilder builder,
+                                        final Set<String> subTopologySourceNodes,
+                                        final String name,
+                                        final CogroupedStreamAggregateBuilder<K, V> aggregateBuilder,
+                                        final StreamsGraphNode streamsGraphNode,
+                                        final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, V>> groupPatterns) {
         super(name, null, null, subTopologySourceNodes, streamsGraphNode, builder);
         //keySerde and valueSerde are null because there are many different groupStreams that they could be from
         this.windows = windows;
@@ -91,7 +90,7 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
                 new NamedInternal(named),
                 materialize(materializedInternal),
                 materializedInternal.keySerde() != null ?
-                        new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifference())
+                        new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs())
                         : null,
                 materializedInternal.valueSerde(),
                 materializedInternal.queryableStoreName(),
@@ -101,20 +100,17 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
                 null);
     }
 
-    @SuppressWarnings("deprecation")
-    // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     private StoreBuilder<TimestampedWindowStore<K, V>> materialize(
             final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            // new style retention: use Materialized retention and default segmentInterval
             final long retentionPeriod = materialized.retention().toMillis();
 
-            if ((windows.timeDifference() + windows.gracePeriodMs()) > retentionPeriod) {
+            if ((windows.timeDifferenceMs() + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the window store "
                         + name
                         + " must be no smaller than its window time difference plus the grace period."
-                        + " Got time difference=[" + windows.timeDifference() + "],"
+                        + " Got time difference=[" + windows.timeDifferenceMs() + "],"
                         + " grace=[" + windows.gracePeriodMs()
                         + "],"
                         + " retention=[" + retentionPeriod
@@ -124,7 +120,7 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
             supplier = Stores.persistentTimestampedWindowStore(
                     materialized.storeName(),
                     Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.timeDifference()),
+                    Duration.ofMillis(windows.timeDifferenceMs()),
                     false
                 );
 
@@ -141,9 +137,10 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
         } else {
             builder.withLoggingDisabled();
         }
-
         if (materialized.cachingEnabled()) {
             builder.withCachingEnabled();
+        } else {
+            builder.withCachingDisabled();
         }
         return builder;
     }

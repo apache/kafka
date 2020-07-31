@@ -34,11 +34,9 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-
 import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
-
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
@@ -47,13 +45,13 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
 
     SlidingWindowedKStreamImpl(final SlidingWindows windows,
-                            final InternalStreamsBuilder builder,
-                            final Set<String> subTopologySourceNodes,
-                            final String name,
-                            final Serde<K> keySerde,
-                            final Serde<V> valueSerde,
-                            final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
-                            final StreamsGraphNode streamsGraphNode) {
+                               final InternalStreamsBuilder builder,
+                               final Set<String> subTopologySourceNodes,
+                               final String name,
+                               final Serde<K> keySerde,
+                               final Serde<V> valueSerde,
+                               final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
+                               final StreamsGraphNode streamsGraphNode) {
         super(name, keySerde, valueSerde, subTopologySourceNodes, streamsGraphNode, builder);
         this.windows = Objects.requireNonNull(windows, "windows can't be null");
         this.aggregateBuilder = aggregateBuilder;
@@ -69,7 +67,6 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return doCount(named, Materialized.with(keySerde, Serdes.Long()));
     }
 
-
     @Override
     public KTable<Windowed<K>, Long> count(final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized) {
         return count(NamedInternal.empty(), materialized);
@@ -78,13 +75,6 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     @Override
     public KTable<Windowed<K>, Long> count(final Named named, final Materialized<K, Long, WindowStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-
-        // TODO: remove this when we do a topology-incompatible release
-        // we used to burn a topology name here, so we have to keep doing it for compatibility
-        if (new MaterializedInternal<>(materialized).storeName() == null) {
-            builder.newStoreName(AGGREGATE_NAME);
-        }
-
         return doCount(named, materialized);
     }
 
@@ -107,10 +97,8 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 materialize(materializedInternal),
                 new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
                 materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifference()) : null,
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde());
-
-
     }
 
     @Override
@@ -125,7 +113,6 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                                                   final Named named) {
         return aggregate(initializer, aggregator, named, Materialized.with(keySerde, null));
     }
-
 
     @Override
     public <VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
@@ -147,7 +134,6 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
-
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
         return aggregateBuilder.build(
@@ -155,10 +141,8 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 materialize(materializedInternal),
                 new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
                 materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifference()) : null,
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde());
-
-
     }
 
     @Override
@@ -202,31 +186,26 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 materialize(materializedInternal),
                 new KStreamSlidingWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
                 materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifference()) : null,
+                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs()) : null,
                 materializedInternal.valueSerde());
-
-
     }
 
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            // new style retention: use Materialized retention and default segmentInterval
-            final long retentionPeriod = materialized.retention().toMillis();
+            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
 
-            if ((windows.timeDifference() + windows.gracePeriodMs()) > retentionPeriod) {
+            if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the window store "
                         + name + " must be no smaller than its window time difference plus the grace period."
-                        + " Got time difference=[" + windows.timeDifference() + "],"
+                        + " Got time difference=[" + windows.timeDifferenceMs() + "],"
                         + " grace=[" + windows.gracePeriodMs() + "],"
                         + " retention=[" + retentionPeriod + "]");
             }
-
             supplier = Stores.persistentTimestampedWindowStore(
                     materialized.storeName(),
                     Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.timeDifference()),
+                    Duration.ofMillis(windows.timeDifferenceMs()),
                     false
             );
         }
@@ -241,9 +220,10 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         } else {
             builder.withLoggingDisabled();
         }
-
         if (materialized.cachingEnabled()) {
             builder.withCachingEnabled();
+        } else {
+            builder.withCachingDisabled();
         }
         return builder;
     }

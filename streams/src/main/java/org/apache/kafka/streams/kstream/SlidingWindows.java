@@ -18,10 +18,8 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-
 import java.time.Duration;
 import java.util.Objects;
-
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
@@ -71,17 +69,15 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 
 public final class SlidingWindows {
 
-
     /** The size of the windows in milliseconds, defined by the max time difference between records. */
-    public final long timeDifference;
+    private final long timeDifferenceMs;
 
     /** The grace period in milliseconds. */
     private final long graceMs;
 
-    private SlidingWindows(final long timeDifference, final long graceMs) {
-        this.timeDifference = timeDifference;
+    private SlidingWindows(final long timeDifferenceMs, final long graceMs) {
+        this.timeDifferenceMs = timeDifferenceMs;
         this.graceMs = graceMs;
-
     }
 
     /**
@@ -106,26 +102,17 @@ public final class SlidingWindows {
         if (graceMs < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
-
         return new SlidingWindows(timeDifferenceMs, graceMs);
     }
 
-
-    public long timeDifference() {
-        return timeDifference;
+    public long timeDifferenceMs() {
+        return timeDifferenceMs;
     }
 
-
-
-
-
-    @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public long gracePeriodMs() {
         return graceMs;
     }
 
-
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -135,21 +122,19 @@ public final class SlidingWindows {
             return false;
         }
         final SlidingWindows that = (SlidingWindows) o;
-        return  timeDifference == that.timeDifference &&
+        return timeDifferenceMs == that.timeDifferenceMs &&
                 graceMs == that.graceMs;
     }
 
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public int hashCode() {
-        return Objects.hash(timeDifference, graceMs);
+        return Objects.hash(timeDifferenceMs, graceMs);
     }
-
-    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
+    
     @Override
     public String toString() {
         return "SlidingWindows{" +
-                ", sizeMs=" + timeDifference +
+                ", sizeMs=" + timeDifferenceMs +
                 ", graceMs=" + graceMs +
                 '}';
     }

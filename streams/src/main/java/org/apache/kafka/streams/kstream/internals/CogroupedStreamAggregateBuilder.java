@@ -138,7 +138,6 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                                                     final SlidingWindows slidingWindows,
                                                                                     final SessionWindows sessionWindows,
                                                                                     final Merger<? super K, VOut> sessionMerger) {
-
         final ProcessorSupplier<K, ?> kStreamAggregate;
 
         if (windows == null && slidingWindows == null && sessionWindows == null) {
@@ -178,7 +177,6 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                  final OptimizableRepartitionNodeBuilder<K, ?> optimizableRepartitionNodeBuilder,
                                                  final Serde<K> keySerde,
                                                  final Serde<?> valueSerde) {
-
         KStreamImpl.createRepartitionedSource(builder,
                 keySerde,
                 (Serde<VIn>) valueSerde,

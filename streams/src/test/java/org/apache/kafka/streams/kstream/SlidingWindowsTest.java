@@ -32,7 +32,7 @@ public class SlidingWindowsTest {
 
     @Test
     public void shouldSetWindowSize() {
-        assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(3)).timeDifference);
+        assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(3)).timeDifferenceMs());
     }
 
     @Test(expected = IllegalArgumentException.class)
