@@ -965,15 +965,15 @@ object ReassignPartitionsCommand extends Logging {
     val currentParts = getReplicaAssignmentForPartitions(adminClient, proposedParts.keySet.toSet)
     println(currentPartitionReplicaAssignmentToString(proposedParts, currentParts))
 
-    if (interBrokerThrottle > 0 || logDirThrottle > 0) {
+    if (interBrokerThrottle >= 0 || logDirThrottle >= 0) {
       println(youMustRunVerifyPeriodicallyMessage)
 
-      if (interBrokerThrottle > 0) {
+      if (interBrokerThrottle >= 0) {
         val moveMap = calculateProposedMoveMap(currentReassignments, proposedParts, currentParts)
         modifyReassignmentThrottle(adminClient, moveMap, interBrokerThrottle)
       }
 
-      if (logDirThrottle > 0) {
+      if (logDirThrottle >= 0) {
         val movingBrokers = calculateMovingBrokers(proposedReplicas.keySet.toSet)
         modifyLogDirThrottle(adminClient, movingBrokers, logDirThrottle)
       }
