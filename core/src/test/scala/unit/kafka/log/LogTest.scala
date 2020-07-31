@@ -4327,27 +4327,6 @@ class LogTest {
     assertEquals(1, log.numberOfSegments)
   }
 
-  @Test
-  def testMetricsRemovedOnLogDeletion(): Unit = {
-    TestUtils.clearYammerMetrics()
-
-    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024)
-    val log = createLog(logDir, logConfig)
-    val topicPartition = Log.parseTopicPartitionName(logDir)
-    val metricTag = s"topic=${topicPartition.topic},partition=${topicPartition.partition}"
-
-    val logMetrics = metricsKeySet.filter(_.getType == "Log")
-    assertEquals(LogMetricNames.allMetricNames.size, logMetrics.size)
-    logMetrics.foreach { metric =>
-      assertTrue(metric.getMBeanName.contains(metricTag))
-    }
-
-    // Delete the log and validate that corresponding metrics were removed.
-    log.delete()
-    val logMetricsAfterDeletion = metricsKeySet.filter(_.getType == "Log")
-    assertTrue(logMetricsAfterDeletion.isEmpty)
-  }
-
   private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
 
   private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Int => Unit = {
