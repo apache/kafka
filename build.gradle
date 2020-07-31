@@ -41,7 +41,7 @@ buildscript {
   }
 }
 
-apply plugin: "com.diffplug.gradle.spotless"
+apply plugin: "com.diffplug.spotless"
 spotless {
   scala {
     target 'streams/**/*.scala'
