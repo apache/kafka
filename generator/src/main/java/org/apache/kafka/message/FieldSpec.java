@@ -56,7 +56,7 @@ public final class FieldSpec {
 
     private final Optional<Integer> tag;
 
-    private boolean zeroCopy;
+    private final boolean zeroCopy;
 
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,

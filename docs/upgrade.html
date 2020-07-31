@@ -49,6 +49,14 @@
         Fetch requests and other requests intended only for the leader or follower return NOT_LEADER_OR_FOLLOWER(6) instead of REPLICA_NOT_AVAILABLE(9)
         if the broker is not a replica, ensuring that this transient error during reassignments is handled by all clients as a retriable exception.
     </li>
+    <li>There are several notable changes to the reassignment tool <code>kafka-reassign-partitions.sh</code>
+        following the completion of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-455%3A+Create+an+Administrative+API+for+Replica+Reassignment">KIP-455</a>.
+        This tool now requires the <code>--additional</code> flag to be provided when changing the throttle of an
+        active reassignment. Reassignment cancellation is now possible using the
+        <code>--cancel</code> command. Finally, reassignment with <code>--zookeeper</code>
+        has been deprecated in favor of <code>--bootstrap-server</code>. See the KIP for more detail.
+    </li>
 </ul>
 
 <h5><a id="upgrade_250_notable" href="#upgrade_250_notable">Notable changes in 2.5.0</a></h5>
