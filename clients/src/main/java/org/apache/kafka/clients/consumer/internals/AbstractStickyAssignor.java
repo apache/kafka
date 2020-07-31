@@ -183,7 +183,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Map<String, List<TopicPartition>> assignment = new HashMap<>(
             consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(minQuota))));
 
-        // step 1: Reassign as many previously owned partitions as possible
+        // Reassign as many previously owned partitions as possible
         for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
             String consumer = consumerEntry.getKey();
             List<TopicPartition> ownedPartitions = consumerEntry.getValue();
@@ -215,7 +215,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         Collections.sort(unfilledMembers);
         Iterator<TopicPartition> unassignedPartitionsIter = unassignedPartitions.iterator();
 
-        // step 2: Fill remaining members up to minQuota
+        // Fill remaining members up to minQuota
         while (!unfilledMembers.isEmpty() && !unassignedPartitions.isEmpty()) {
             Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
 
@@ -241,7 +241,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             }
         }
 
-        // step 3: If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
+        // If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
         // from the over-full consumers at max capacity
         for (String consumer : unfilledMembers) {
             List<TopicPartition> consumerAssignment = assignment.get(consumer);
@@ -261,7 +261,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             minCapacityMembers.add(consumer);
         }
 
-        // step 4: Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
+        // Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
         // should just distribute one partition each to all consumers at min capacity
         for (TopicPartition unassignedPartition : unassignedPartitions) {
             String underCapacityConsumer = minCapacityMembers.poll();
