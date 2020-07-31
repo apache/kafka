@@ -17,6 +17,9 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.Objects;
 
 /**
@@ -30,17 +33,40 @@ public class UserScramCredentialUpsertion extends UserScramCredentialAlteration 
     private final byte[] password;
 
     /**
+     * Constructor that generates a random salt
      *
      * @param user the user for which the credential is to be updated/inserted
      * @param info the mechanism and iterations to be used
-     * @param salt the salt to be used
      * @param password the password
      */
-    public UserScramCredentialUpsertion(String user, ScramCredentialInfo info, byte[] salt, byte[] password) {
-        super(user);
+    public UserScramCredentialUpsertion(String user, ScramCredentialInfo info, String password) {
+        this(user, info, password.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Constructor that generates a random salt
+     *
+     * @param user the user for which the credential is to be updated/inserted
+     * @param info the mechanism and iterations to be used
+     * @param password the password
+     */
+    public UserScramCredentialUpsertion(String user, ScramCredentialInfo info, byte[] password) {
+        this(user, info, password, generateRandomSalt());
+    }
+
+    /**
+     * Constructor that accepts an explicit salt
+     *
+     * @param user the user for which the credential is to be updated/inserted
+     * @param info the mechanism and iterations to be used
+     * @param password the password
+     * @param salt the salt to be used
+     */
+    public UserScramCredentialUpsertion(String user, ScramCredentialInfo info, byte[] password, byte[] salt) {
+        super(Objects.requireNonNull(user));
         this.info = Objects.requireNonNull(info);
-        this.salt = Objects.requireNonNull(salt);
         this.password = Objects.requireNonNull(password);
+        this.salt = Objects.requireNonNull(salt);
     }
 
     /**
@@ -65,5 +91,9 @@ public class UserScramCredentialUpsertion extends UserScramCredentialAlteration 
      */
     public byte[] getPassword() {
         return password;
+    }
+
+    private static byte[] generateRandomSalt() {
+        return new BigInteger(130, new SecureRandom()).toString(Character.MAX_RADIX).getBytes(StandardCharsets.UTF_8);
     }
 }

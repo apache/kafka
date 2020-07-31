@@ -106,16 +106,12 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val requests = List (
       new AlterUserScramCredentialsRequest.Builder(
         new AlterUserScramCredentialsRequestData()
-          .setDeletions(util.Arrays.asList(deletion1, deletion1, deletion2))
-          .setUpsertions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion])).build(),
-      new AlterUserScramCredentialsRequest.Builder(
-        new AlterUserScramCredentialsRequestData()
-          .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
-          .setUpsertions(util.Arrays.asList(upsertion1, upsertion1, upsertion2))).build(),
+          .setDeletions(util.Arrays.asList(deletion1, deletion1))
+          .setUpsertions(util.Arrays.asList(upsertion2, upsertion2))).build(),
       new AlterUserScramCredentialsRequest.Builder(
         new AlterUserScramCredentialsRequestData()
           .setDeletions(util.Arrays.asList(deletion1, deletion2))
-          .setUpsertions(util.Arrays.asList(upsertion1))).build(),
+          .setUpsertions(util.Arrays.asList(upsertion1, upsertion2))).build(),
     )
     requests.foreach(request => {
       val response = sendAlterUserScramCredentialsRequest(request)
@@ -124,6 +120,58 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       assertTrue("Expected error when altering the same credential twice in a single request",
         results.get(0).errorCode == Errors.INVALID_REQUEST.code && results.get(1).errorCode == Errors.INVALID_REQUEST.code)
     })
+  }
+
+  @Test
+  def testAlterEmptyUser(): Unit = {
+    val deletionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.ordinal().toByte)
+    val upsertionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.ordinal().toByte)
+      .setIterations(-1).setSalt("salt".getBytes).setSaltedPassword("saltedPassword".getBytes)
+    val requests = List (
+      new AlterUserScramCredentialsRequest.Builder(
+        new AlterUserScramCredentialsRequestData()
+          .setDeletions(util.Arrays.asList(deletionEmpty))
+          .setUpsertions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion])).build(),
+      new AlterUserScramCredentialsRequest.Builder(
+        new AlterUserScramCredentialsRequestData()
+          .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
+          .setUpsertions(util.Arrays.asList(upsertionEmpty))).build(),
+      new AlterUserScramCredentialsRequest.Builder(
+        new AlterUserScramCredentialsRequestData()
+          .setDeletions(util.Arrays.asList(deletionEmpty, deletionEmpty))
+          .setUpsertions(util.Arrays.asList(upsertionEmpty))).build(),
+    )
+    requests.foreach(request => {
+      val response = sendAlterUserScramCredentialsRequest(request)
+      val results = response.data.results
+      assertEquals(1, results.size)
+      assertTrue("Expected error when altering the same credential twice in a single request",
+        results.get(0).errorCode == Errors.INVALID_REQUEST.code)
+    })
+  }
+
+  @Test
+  def testAlterUnknownMechanism(): Unit = {
+    val deletionUnknown1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("user1").setMechanism(ScramMechanism.UNKNOWN.ordinal().toByte)
+    val deletionValid1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("user1").setMechanism(ScramMechanism.SCRAM_SHA_256.ordinal().toByte)
+    val deletionUnknown2 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("user2").setMechanism(10.toByte)
+    val upsertionUnknown3 = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("user3").setMechanism(ScramMechanism.UNKNOWN.ordinal().toByte)
+      .setIterations(8192).setSalt("salt".getBytes).setSaltedPassword("saltedPassword".getBytes)
+    val upsertionValid3 = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("user3").setMechanism(ScramMechanism.SCRAM_SHA_256.ordinal().toByte)
+      .setIterations(8192).setSalt("salt".getBytes).setSaltedPassword("saltedPassword".getBytes)
+    val upsertionUnknown4 = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("user4").setMechanism(10.toByte)
+      .setIterations(8192).setSalt("salt".getBytes).setSaltedPassword("saltedPassword".getBytes)
+    val upsertionUnknown5 = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("user5").setMechanism(ScramMechanism.UNKNOWN.ordinal().toByte)
+      .setIterations(8192).setSalt("salt".getBytes).setSaltedPassword("saltedPassword".getBytes)
+    val request = new AlterUserScramCredentialsRequest.Builder(
+        new AlterUserScramCredentialsRequestData()
+          .setDeletions(util.Arrays.asList(deletionUnknown1, deletionValid1, deletionUnknown2))
+          .setUpsertions(util.Arrays.asList(upsertionUnknown3, upsertionValid3, upsertionUnknown4, upsertionUnknown5))).build()
+    val response = sendAlterUserScramCredentialsRequest(request)
+    val results = response.data.results
+    assertEquals(5, results.size)
+    assertTrue("Expected error when altering the credentials with unknown SCRAM mechanisms",
+      results.asScala.filterNot(_.errorCode == Errors.INVALID_REQUEST.code).size == 0)
   }
 
   @Test

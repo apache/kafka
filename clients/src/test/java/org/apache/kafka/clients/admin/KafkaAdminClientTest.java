@@ -70,6 +70,7 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
+import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateAclsResponseData;
@@ -118,6 +119,7 @@ import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
+import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
@@ -4457,21 +4459,82 @@ public class KafkaAdminClientTest {
 
             DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(Arrays.asList(user0Name, user1Name));
             Map<String, UserScramCredentialsDescription> resultData = result.all().get();
-            assertEquals(resultData.size(), 2);
+            assertEquals(2, resultData.size());
             assertTrue(resultData.containsKey(user0Name) && resultData.containsKey(user1Name));
             UserScramCredentialsDescription userScramCredentialsDescription0 = resultData.get(user0Name);
-            assertEquals(userScramCredentialsDescription0.getName(), user0Name);
-            assertEquals(userScramCredentialsDescription0.getInfos().size(), 2);
-            assertEquals(userScramCredentialsDescription0.getInfos().get(0).getMechanism(), user0ScramMechanism0);
-            assertEquals(userScramCredentialsDescription0.getInfos().get(0).getIterations(), user0Iterations0);
-            assertEquals(userScramCredentialsDescription0.getInfos().get(1).getMechanism(), user0ScramMechanism1);
-            assertEquals(userScramCredentialsDescription0.getInfos().get(1).getIterations(), user0Iterations1);
+            assertEquals(user0Name, userScramCredentialsDescription0.getName());
+            assertEquals(2, userScramCredentialsDescription0.getInfos().size());
+            assertEquals(user0ScramMechanism0, userScramCredentialsDescription0.getInfos().get(0).getMechanism());
+            assertEquals(user0Iterations0, userScramCredentialsDescription0.getInfos().get(0).getIterations());
+            assertEquals(user0ScramMechanism1, userScramCredentialsDescription0.getInfos().get(1).getMechanism());
+            assertEquals(user0Iterations1, userScramCredentialsDescription0.getInfos().get(1).getIterations());
 
             UserScramCredentialsDescription userScramCredentialsDescription1 = resultData.get(user1Name);
-            assertEquals(userScramCredentialsDescription1.getName(), user1Name);
-            assertEquals(userScramCredentialsDescription1.getInfos().size(), 1);
-            assertEquals(userScramCredentialsDescription1.getInfos().get(0).getMechanism(), user1ScramMechanism);
-            assertEquals(userScramCredentialsDescription1.getInfos().get(0).getIterations(), user1Iterations);
+            assertEquals(user1Name, userScramCredentialsDescription1.getName());
+            assertEquals(1, userScramCredentialsDescription1.getInfos().size());
+            assertEquals(user1ScramMechanism, userScramCredentialsDescription1.getInfos().get(0).getMechanism());
+            assertEquals(user1Iterations, userScramCredentialsDescription1.getInfos().get(0).getIterations());
+        }
+    }
+
+    @Test
+    public void testAlterUserScramCredentialsUnknownMechanism() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final String user0Name = "user0";
+            ScramMechanism user0ScramMechanism0 = ScramMechanism.UNKNOWN;
+
+            final String user1Name = "user1";
+            ScramMechanism user1ScramMechanism0 = ScramMechanism.UNKNOWN;
+
+            AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
+            responseData.setResults(Collections.emptyList());
+
+            env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
+
+            AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(Arrays.asList(
+                    new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
+                    new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password")));
+            Map<String, KafkaFuture<Void>> resultData = result.values();
+            assertEquals(2, resultData.size());
+            Arrays.asList(user0Name, user1Name).stream().forEach(u -> {
+                assertTrue(resultData.containsKey(u));
+                assertTrue(resultData.get(u).isCompletedExceptionally());
+            });
+        }
+    }
+
+    @Test
+    public void testAlterUserScramCredentials() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final String user0Name = "user0";
+            ScramMechanism user0ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
+            ScramMechanism user0ScramMechanism1 = ScramMechanism.SCRAM_SHA_512;
+            final String user1Name = "user1";
+            ScramMechanism user1ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
+            final String user2Name = "user2";
+            ScramMechanism user2ScramMechanism0 = ScramMechanism.SCRAM_SHA_512;
+            AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
+            responseData.setResults(Arrays.asList(user0Name, user1Name, user2Name).stream().map(u ->
+                    new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
+                    .setUser(u).setErrorCode(Errors.NONE.code())).collect(Collectors.toList()));
+
+            env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
+
+            AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(Arrays.asList(
+                    new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
+                    new UserScramCredentialUpsertion(user0Name, new ScramCredentialInfo(user0ScramMechanism1, 8192), "password"),
+                    new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password"),
+                    new UserScramCredentialDeletion(user2Name, user2ScramMechanism0)));
+            Map<String, KafkaFuture<Void>> resultData = result.values();
+            assertEquals(3, resultData.size());
+            Arrays.asList(user0Name, user1Name, user2Name).stream().forEach(u -> {
+                assertTrue(resultData.containsKey(u));
+                assertFalse(resultData.get(u).isCompletedExceptionally());
+            });
         }
     }
 

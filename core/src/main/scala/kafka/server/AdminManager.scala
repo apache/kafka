@@ -41,6 +41,7 @@ import org.apache.kafka.common.message.{AlterUserScramCredentialsRequestData, Al
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.{CredentialInfo, UserScramCredential}
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.security.scram.internals.{ScramMechanism => InternalScramMechanism}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.apache.kafka.common.protocol.Errors
@@ -48,7 +49,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
-import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
+import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
@@ -995,8 +996,8 @@ class AdminManager(val config: KafkaConfig,
         ScramMechanism.values().foreach(mechanism => if (mechanism != ScramMechanism.UNKNOWN) {
           val propertyValue = userConfig.getProperty(mechanism.toMechanismName)
           if (propertyValue != null) {
-            val iterations = ScramCredentialUtils.credentialFromString(propertyValue).iterations()
-            userScramCredentials.credentialInfos.add(new CredentialInfo().setMechanism(mechanism.ordinal().toByte).setIterations(iterations))
+            val iterations = ScramCredentialUtils.credentialFromString(propertyValue).iterations
+            userScramCredentials.credentialInfos.add(new CredentialInfo().setMechanism(mechanism.ordinal.toByte).setIterations(iterations))
           }
         })
         retval.userScramCredentials.add(userScramCredentials)
@@ -1022,30 +1023,98 @@ class AdminManager(val config: KafkaConfig,
   def alterUserScramCredentials(upsertions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion],
                                 deletions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialDeletion]): AlterUserScramCredentialsResponseData = {
 
-    val userMechanismPairs = upsertions.map(upsertion => (upsertion.name, upsertion.mechanism)) ++
-      deletions.map(deletion => (deletion.name, deletion.mechanism))
-
-    def errors(error: Errors, errorMessage: String) : AlterUserScramCredentialsResponseData = {
-      val retval = new AlterUserScramCredentialsResponseData()
-      userMechanismPairs.map(_._1).toSet[String].foreach(user => {
-        retval.results.add(new AlterUserScramCredentialsResult().setUser(user).setErrorCode(error.code).setErrorMessage(errorMessage))
-      })
-      retval
+    def scramMechanism(mechanism: Byte): ScramMechanism = {
+      ScramMechanism.from(mechanism)
     }
 
+    def mechanismName(mechanism: Byte): String = {
+      scramMechanism(mechanism).toMechanismName
+    }
+
+    val retval = new AlterUserScramCredentialsResponseData()
+
+    // fail any user that is invalid due to an empty user name, an unknown SCRAM mechanism, or not enough iterations
+    val invalidUsers = (
+      upsertions.filter(upsertion => {
+        if (upsertion.name.isEmpty)
+          true
+        else {
+          val publicScramMechanism = scramMechanism(upsertion.mechanism)
+          publicScramMechanism == ScramMechanism.UNKNOWN ||
+            (upsertion.iterations != -1 &&
+              InternalScramMechanism.forMechanismName(publicScramMechanism.toMechanismName).minIterations > upsertion.iterations)
+        }
+      }).map(_.name) ++ deletions.filter(deletions => deletions.name.isEmpty || scramMechanism(deletions.mechanism) == ScramMechanism.UNKNOWN).map(_.name))
+      .toSet
+    invalidUsers.foreach(user => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
+      .setErrorCode(Errors.INVALID_REQUEST.code).setErrorMessage("Unknown SCRAM mechanism or too few iterations")))
+
+    val initiallyValidUserMechanismPairs = (upsertions.filter(upsertion => !invalidUsers.contains(upsertion.name)).map(upsertion => (upsertion.name, upsertion.mechanism)) ++
+      deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism)))
+
     // https://stackoverflow.com/questions/24729544/how-to-find-duplicates-in-a-list
-    val duplicatedUserCredentials = userMechanismPairs.groupBy(p => s"${p._1}:${ScramMechanism.from(p._2).toMechanismName}").collect { case (x, Seq(_, _, _*)) => x }
-    if (duplicatedUserCredentials.nonEmpty)
-      return errors(Errors.INVALID_REQUEST,s"Cannot alter the same user SCRAM credential twice in a single request: ${duplicatedUserCredentials.mkString("[", ", ", "]")}")
+    val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(p => (p._1, s"${p._1}:${mechanismName(p._2)}")).collect { case (x, Seq(_, _, _*)) => x._1 }.toSet
+    usersWithDuplicateUserMechanismPairs.foreach(user => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
+      .setErrorCode(Errors.INVALID_REQUEST.code).setErrorMessage("A user credential cannot be altered twice in the same request")))
+
+    def potentiallyValidUserMechanismPairs = initiallyValidUserMechanismPairs.filter(pair => !usersWithDuplicateUserMechanismPairs.contains(pair._1))
+
+    val potentiallyValidUsers = potentiallyValidUserMechanismPairs.map(_._1).toSet
+    val configsByPotentiallyValidUser = potentiallyValidUsers.map(user => (user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user)))).toMap
+
     // check for deletion of a credential that does not exist
-    val invalidDeletion = deletions.find(deletion =>
-      adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(deletion.name))
-        .getProperty(ScramMechanism.from(deletion.mechanism).toMechanismName) == null)
-    if (invalidDeletion.isDefined)
-      return errors(Errors.RESOURCE_NOT_FOUND,
-        s"Cannot delete SCRAM credential for user ${invalidDeletion.get.name}: no credential for mechanism ${ScramMechanism.from(invalidDeletion.get.mechanism).toMechanismName}")
-    // the request is valid
-    // TODO: implement-me
-    new AlterUserScramCredentialsResponseData()
+    val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name)).filter(deletion =>
+      configsByPotentiallyValidUser(deletion.name).getProperty(mechanismName(deletion.mechanism)) == null)
+    val invalidUsersDueToInvalidDeletions = invalidDeletions.map(_.name).toSet
+    invalidUsersDueToInvalidDeletions.foreach(user => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
+      .setErrorCode(Errors.RESOURCE_NOT_FOUND.code).setErrorMessage("Attempt to delete a user credential that does not exist")))
+
+    // now prepare the new set of property values for users that don't have any issues identified above,
+    // keeping track of ones that fail
+    val usersToTryToAlter = potentiallyValidUsers.diff(invalidUsersDueToInvalidDeletions)
+    val usersFailedToPrepareProperties = usersToTryToAlter.map(user => {
+      try {
+        // deletions: remove property keys
+        deletions.filter(deletion => usersToTryToAlter.contains(deletion.name)).foreach(deletion =>
+          configsByPotentiallyValidUser(deletion.name).remove(mechanismName(deletion.mechanism)))
+        // upsertions: put property key/value
+        upsertions.filter(upsertion => usersToTryToAlter.contains(upsertion.name)).foreach(upsertion => {
+          val mechanism = InternalScramMechanism.forMechanismName(mechanismName(upsertion.mechanism))
+          val credential = new ScramFormatter(mechanism)
+            .generateCredential(upsertion.salt, upsertion.saltedPassword,
+              if (upsertion.iterations != -1) upsertion.iterations else mechanism.minIterations)
+          configsByPotentiallyValidUser(upsertion.name).put(mechanismName(upsertion.mechanism), ScramCredentialUtils.credentialToString(credential))
+        })
+        (user) // success, 1 element, won't be matched
+      } catch {
+        case e: Throwable =>
+          info(s"Error encountered while altering user SCRAM credentials", e)
+          (user, e) // fail, 2 elements, will be matched
+      }
+    }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
+
+    // now persist the properties we have prepared, again keeping track of whatever fails
+    val usersFailedToPersist = usersToTryToAlter.filterNot(usersFailedToPrepareProperties.contains).map(user => {
+      try {
+        adminZkClient.changeConfigs(ConfigType.User, Sanitizer.sanitize(user), configsByPotentiallyValidUser(user))
+        (user) // success, 1 element, won't be matched
+      } catch {
+        case e: Throwable =>
+          info(s"Error encountered while altering user SCRAM credentials", e)
+          (user, e) // fail, 2 elements, will be matched
+      }
+    }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
+
+    // report failures
+    usersFailedToPrepareProperties.++(usersFailedToPersist).foreach { case (user, exception) =>
+      val error = Errors.forException(exception)
+      retval.results.add(new AlterUserScramCredentialsResult().setUser(user).setErrorCode(error.code).setErrorMessage(error.message))
+    }
+
+    // report successes
+    usersToTryToAlter.filterNot(usersFailedToPrepareProperties.contains).filterNot(usersFailedToPersist.contains).foreach(user =>
+      retval.results.add(new AlterUserScramCredentialsResult().setUser(user).setErrorCode(Errors.NONE.code)))
+
+    retval
   }
 }

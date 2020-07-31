@@ -222,6 +222,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -233,6 +234,8 @@ import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -4094,25 +4097,26 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 DescribeUserScramCredentialsResponse response = (DescribeUserScramCredentialsResponse) abstractResponse;
-                // Check for controller change
-                for (Errors error : response.errorCounts().keySet()) {
-                    if (error == Errors.NOT_CONTROLLER) {
-                        metadataManager.clearController();
-                        metadataManager.requestUpdate();
-                        throw error.exception();
-                    }
+                Errors error = Errors.forCode(response.data().error());
+                switch (error) {
+                    case NONE:
+                        DescribeUserScramCredentialsResponseData data = response.data();
+                        future.complete(data.userScramCredentials().stream().collect(Collectors.toMap(
+                            DescribeUserScramCredentialsResponseData.UserScramCredential::name,
+                            userScramCredential -> {
+                                List<ScramCredentialInfo> scramCredentialInfos = userScramCredential.credentialInfos().stream().map(
+                                    credentialInfo -> new ScramCredentialInfo(ScramMechanism.from(credentialInfo.mechanism()), credentialInfo.iterations()))
+                                        .collect(Collectors.toList());
+                                return new UserScramCredentialsDescription(userScramCredential.name(), scramCredentialInfos);
+                            })));
+                        break;
+                    case NOT_CONTROLLER:
+                        handleNotControllerError(error);
+                        break;
+                    default:
+                        future.completeExceptionally(new ApiError(error, response.data().errorMessage()).exception());
+                        break;
                 }
-                DescribeUserScramCredentialsResponseData data = response.data();
-                Errors error = Errors.forCode(data.error());
-                if (error != Errors.NONE) {
-                    future.completeExceptionally(error.exception());
-                    return;
-                }
-                future.complete(data.userScramCredentials().stream().collect(Collectors.toMap(
-                    DescribeUserScramCredentialsResponseData.UserScramCredential::name,
-                    userScramCredential -> new UserScramCredentialsDescription(userScramCredential.name(),
-                            userScramCredential.credentialInfos().stream().map(credentialInfo -> new ScramCredentialInfo(
-                                    ScramMechanism.from(credentialInfo.mechanism()), credentialInfo.iterations())).collect(Collectors.toList())))));
             }
 
             @Override
@@ -4132,17 +4136,56 @@ public class KafkaAdminClient extends AdminClient {
         for (UserScramCredentialAlteration alteration: alterations) {
             futures.put(alteration.getUser(), new KafkaFutureImpl<>());
         }
+        final Map<String, Exception> userIllegalAlterationExceptions = new HashMap<>();
+        // We need to keep track of users with deletions of an unknown SCRAM mechanism
+        alterations.stream().filter(a -> a instanceof UserScramCredentialDeletion).forEach(alteration -> {
+            UserScramCredentialDeletion deletion = (UserScramCredentialDeletion) alteration;
+            ScramMechanism mechanism = deletion.getMechanism();
+            if (mechanism == null || mechanism == ScramMechanism.UNKNOWN) {
+                userIllegalAlterationExceptions.put(deletion.getUser(), new IllegalArgumentException("Unknown SCRAM mechanism"));
+            }
+        });
+        // Creating an upsertion may throw InvalidKeyException or NoSuchAlgorithmException,
+        // so keep track of which users are affected by such a failure and immediately fail all their alterations
+        final Map<String, Map<ScramMechanism, AlterUserScramCredentialsRequestData.ScramCredentialUpsertion>> userInsertions = new HashMap<>();
+        alterations.stream().filter(a -> a instanceof UserScramCredentialUpsertion)
+                .filter(alteration -> !userIllegalAlterationExceptions.containsKey(alteration.getUser()))
+                .forEach(alteration -> {
+                    UserScramCredentialUpsertion upsertion = (UserScramCredentialUpsertion) alteration;
+                    String user = upsertion.getUser();
+                    try {
+                        ScramMechanism mechanism = upsertion.getInfo().getMechanism();
+                        if (mechanism == null || mechanism == ScramMechanism.UNKNOWN)
+                            throw new IllegalArgumentException("Unknown SCRAM mechanism");
+                        userInsertions.putIfAbsent(user, new HashMap<>());
+                        userInsertions.get(user).put(mechanism, getScramCredentialUpsertion(upsertion));
+                    } catch (Exception e) {
+                        // we might overwrite aa exception from a previous upsertion, but we don't really care
+                        // since we just needs to mark this user as having at least one illegal alteration
+                        // and make an exception instance available for completing the corresponding future exceptionally
+                        userIllegalAlterationExceptions.put(user, e);
+                    }
+                });
+        // fail any users immediately that have an illegal alteration as identified above
+        userIllegalAlterationExceptions.entrySet().stream().forEach(entry -> {
+            futures.get(entry.getKey()).completeExceptionally(entry.getValue());
+        });
 
+        // submit alterations for users that do not have an illegal upsertion as identified above
         Call call = new Call("alterUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
             @Override
             public AlterUserScramCredentialsRequest.Builder createRequest(int timeoutMs) {
                 return new AlterUserScramCredentialsRequest.Builder(
-                        new AlterUserScramCredentialsRequestData().setUpsertions(alterations.stream().
-                                filter(a -> a instanceof UserScramCredentialUpsertion).map(u ->
-                                getScramCredentialUpsertion((UserScramCredentialUpsertion) u)).collect(Collectors.toList()))
-                        .setDeletions(alterations.stream().
-                                filter(a -> a instanceof UserScramCredentialDeletion).map(d ->
+                        new AlterUserScramCredentialsRequestData().setUpsertions(alterations.stream()
+                                .filter(a -> a instanceof UserScramCredentialUpsertion)
+                                .filter(a -> !userIllegalAlterationExceptions.containsKey(a.getUser()))
+                                .map(a -> userInsertions.get(a.getUser()).get(((UserScramCredentialUpsertion) a).getInfo().getMechanism()))
+                                .collect(Collectors.toList()))
+                        .setDeletions(alterations.stream()
+                                .filter(a -> a instanceof UserScramCredentialDeletion)
+                                .filter(a -> !userIllegalAlterationExceptions.containsKey(a.getUser()))
+                                .map(d ->
                                 getScramCredentialDeletion((UserScramCredentialDeletion) d)).collect(Collectors.toList())));
             }
 
@@ -4152,9 +4195,7 @@ public class KafkaAdminClient extends AdminClient {
                 // Check for controller change
                 for (Errors error : response.errorCounts().keySet()) {
                     if (error == Errors.NOT_CONTROLLER) {
-                        metadataManager.clearController();
-                        metadataManager.requestUpdate();
-                        throw error.exception();
+                        handleNotControllerError(error);
                     }
                 }
                 response.data().results().forEach(result -> {
@@ -4184,21 +4225,22 @@ public class KafkaAdminClient extends AdminClient {
         return new AlterUserScramCredentialsResult(new HashMap<>(futures));
     }
 
-    private static AlterUserScramCredentialsRequestData.ScramCredentialUpsertion getScramCredentialUpsertion(UserScramCredentialUpsertion u) {
+    private static AlterUserScramCredentialsRequestData.ScramCredentialUpsertion getScramCredentialUpsertion(UserScramCredentialUpsertion u) throws InvalidKeyException, NoSuchAlgorithmException {
         AlterUserScramCredentialsRequestData.ScramCredentialUpsertion retval = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion();
         return retval.setName(u.getUser())
                 .setMechanism((byte) u.getInfo().getMechanism().ordinal())
                 .setIterations(u.getInfo().getIterations())
                 .setSalt(u.getSalt())
-                .setSaltedPassword(getSaltedPasword(retval));
+                .setSaltedPassword(getSaltedPasword(u.getInfo().getMechanism(), u.getPassword(), u.getSalt(), u.getInfo().getIterations()));
     }
 
     private static AlterUserScramCredentialsRequestData.ScramCredentialDeletion getScramCredentialDeletion(UserScramCredentialDeletion d) {
         return new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(d.getUser()).setMechanism((byte) d.getMechanism().ordinal());
     }
 
-    private static byte[] getSaltedPasword(AlterUserScramCredentialsRequestData.ScramCredentialUpsertion retval) {
-        return retval.salt(); // TODO: FIXME
+    private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int interations) throws NoSuchAlgorithmException, InvalidKeyException {
+        return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.toMechanismName()))
+                .hi(password, salt, interations);
     }
 
     /**

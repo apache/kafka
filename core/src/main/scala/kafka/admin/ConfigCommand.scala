@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 
@@ -28,8 +29,8 @@ import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, UserScramCredentialsDescription, Config => JConfig, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, UserScramCredentialsDescription, Config => JConfig}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -368,29 +369,27 @@ object ConfigCommand extends Config {
 
       case ConfigType.User | ConfigType.Client =>
         val hasQuotaConfigsToAdd = configsToBeAdded.keys.exists(QuotaConfigs.isQuotaConfig)
-        val scramConfigsToAdd = configsToBeAdded.keys.filter(ScramMechanism.isScram)
+        val scramConfigsToAddMap = configsToBeAdded.filter(entry => ScramMechanism.isScram(entry._1))
         val unknownConfigsToAdd = configsToBeAdded.keys.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isQuotaConfig(key))
         val hasQuotaConfigsToDelete = configsToBeDeleted.exists(QuotaConfigs.isQuotaConfig)
         val scramConfigsToDelete = configsToBeDeleted.filter(ScramMechanism.isScram)
         val unknownConfigsToDelete = configsToBeDeleted.filterNot(key => ScramMechanism.isScram(key) || QuotaConfigs.isQuotaConfig(key))
-        if (entityTypeHead == ConfigType.Client) {
-          if (unknownConfigsToAdd.nonEmpty || scramConfigsToAdd.nonEmpty)
-            throw new IllegalArgumentException(s"Only quota configs can be added for '$entityTypeHead' using --bootstrap-server. Unexpected config names: ${unknownConfigsToAdd ++ scramConfigsToAdd}")
+        if (entityTypeHead == ConfigType.Client || entityTypes.size == 2) { // size==2 for case where users is specified first on the command line, before clients
+          // either just a client or both a user and a client
+          if (unknownConfigsToAdd.nonEmpty || scramConfigsToAddMap.nonEmpty)
+            throw new IllegalArgumentException(s"Only quota configs can be added for '${ConfigType.Client}' using --bootstrap-server. Unexpected config names: ${unknownConfigsToAdd ++ scramConfigsToAddMap.keys}")
           if (unknownConfigsToDelete.nonEmpty || scramConfigsToDelete.nonEmpty)
-            throw new IllegalArgumentException(s"Only quota configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: ${unknownConfigsToDelete ++ scramConfigsToDelete}")
+            throw new IllegalArgumentException(s"Only quota configs can be deleted for '${ConfigType.Client}' using --bootstrap-server. Unexpected config names: ${unknownConfigsToDelete ++ scramConfigsToDelete}")
         } else { // ConfigType.User
           if (unknownConfigsToAdd.nonEmpty)
-            throw new IllegalArgumentException(s"Only quota and SCRAM credential configs can be added for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $unknownConfigsToAdd")
+            throw new IllegalArgumentException(s"Only quota and SCRAM credential configs can be added for '${ConfigType.User}' using --bootstrap-server. Unexpected config names: $unknownConfigsToAdd")
           if (unknownConfigsToDelete.nonEmpty)
-            throw new IllegalArgumentException(s"Only quota and SCRAM credential configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $unknownConfigsToDelete")
-          if (scramConfigsToAdd.nonEmpty || scramConfigsToDelete.nonEmpty) {
+            throw new IllegalArgumentException(s"Only quota and SCRAM credential configs can be deleted for '${ConfigType.User}' using --bootstrap-server. Unexpected config names: $unknownConfigsToDelete")
+          if (scramConfigsToAddMap.nonEmpty || scramConfigsToDelete.nonEmpty) {
+            if (entityNames.exists(_.isEmpty)) // either --entity-type users --entity-default or --user-defaults
+              throw new IllegalArgumentException("The use of --entity-default or --user-defaults is not allowed with User SCRAM Credentials using --bootstrap-server.")
             if (hasQuotaConfigsToAdd || hasQuotaConfigsToDelete)
-              throw new IllegalArgumentException(s"Cannot alter both quota and SCRAM credential configs simultaneously for '$entityTypeHead' using --bootstrap-server.")
-            if (entityTypes.size == 2) // deals with the case of users specified first on the command line, with clients specified second
-              throw new IllegalArgumentException(s"Only quota configs can be altered for '${ConfigType.Client}' using --bootstrap-server.")
-            val hasEntityDefault = entityNames.exists(_.isEmpty)
-            if (hasEntityDefault)
-              throw new IllegalArgumentException("The use of --entity-default is not allowed with User Scram Credentials using --bootstrap-server.")
+              throw new IllegalArgumentException(s"Cannot alter both quota and SCRAM credential configs simultaneously for '${ConfigType.User}' using --bootstrap-server.")
           }
         }
 
@@ -433,20 +432,25 @@ object ConfigCommand extends Config {
             // should never happen, if we get here then it is a bug
             throw new IllegalStateException(s"Altering user SCRAM credentials should never occur for more zero or multiple users: $entityNames")
           val user = entityNames.head
-          if (!scramConfigsToDelete.isEmpty) {
-            // retrieve the current set of configs to ensure that configs to be deleted actually exist
-            val currentConfig = getUserScramCredentialConfigs(adminClient, entityNames)
-            val currentMechanisms: Set[String] = {
-              if (currentConfig.isEmpty)
-                Set.empty
-              else
-                currentConfig(user).getInfos.asScala.map(scramCredentialInfo => scramCredentialInfo.getMechanism.toMechanismName).toSet
+          val deletions = scramConfigsToDelete.map(mechanismName =>
+            new UserScramCredentialDeletion(user, PublicScramMechanism.fromMechanismName(mechanismName)))
+
+          def iterationsAndPasswordBytes(mechanism: ScramMechanism, credentialStr: String): (Integer, Array[Byte]) = {
+            val pattern = "(?:iterations=(\\-?[0-9]*),)?password=(.*)".r
+            val (iterations, password) = credentialStr match {
+              case pattern(iterations, password) => (if (iterations != null && iterations != "-1") iterations.toInt else DefaultScramIterations, password)
+              case _ => throw new IllegalArgumentException(s"Invalid credential property $mechanism=$credentialStr")
             }
-            val invalidConfigs = configsToBeDeleted.filterNot(currentMechanisms.contains)
-            if (invalidConfigs.nonEmpty)
-              throw new InvalidConfigurationException(s"Invalid config(s) cannot be deleted: ${invalidConfigs.mkString(",")}")
+            if (iterations < mechanism.minIterations)
+              throw new IllegalArgumentException(s"Iterations $iterations is less than the minimum ${mechanism.minIterations} required for ${mechanism.mechanismName}")
+            (iterations, password.getBytes(StandardCharsets.UTF_8))
           }
-          // TODO: implement-me
+
+          val upsertions = scramConfigsToAddMap.map { case (mechanismName, configEntry) =>
+            val (iterations, passwordBytes) = iterationsAndPasswordBytes(ScramMechanism.forMechanismName(mechanismName), configEntry.value)
+            new UserScramCredentialUpsertion(user, new ScramCredentialInfo(PublicScramMechanism.fromMechanismName(mechanismName), iterations), passwordBytes)
+          }
+          adminClient.alterUserScramCredentials((deletions ++ upsertions).toList.asJava).all.get(60, TimeUnit.SECONDS)
         }
 
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")

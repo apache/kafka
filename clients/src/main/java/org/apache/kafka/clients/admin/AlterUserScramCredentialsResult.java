@@ -36,17 +36,25 @@ public class AlterUserScramCredentialsResult {
 
     /**
      *
-     * @param futures the required futures representing the results of the call
+     * @param futures the required map from user names to futures representing the results of the alteration(s)
+     *                for each user
      */
     public AlterUserScramCredentialsResult(Map<String, KafkaFuture<Void>> futures) {
         this.futures = Collections.unmodifiableMap(Objects.requireNonNull(futures));
     }
 
     /**
-     *
-     * @return the futures representing the results of the call
+     * Return a map from user names to futures, which can be used to check the status of the alteration(s)
+     * for each user.
      */
-    public Map<String, KafkaFuture<Void>> results() {
+    public Map<String, KafkaFuture<Void>> values() {
         return this.futures;
+    }
+
+    /**
+     * Return a future which succeeds only if all the user SCRAM credential alterations succeed.
+     */
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
     }
 }

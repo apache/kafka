@@ -166,6 +166,14 @@ public class ScramFormatter {
         try {
             byte[] salt = secureRandomBytes();
             byte[] saltedPassword = saltedPassword(password, salt, iterations);
+            return generateCredential(salt, saltedPassword, iterations);
+        } catch (InvalidKeyException e) {
+            throw new KafkaException("Could not create credential", e);
+        }
+    }
+
+    public ScramCredential generateCredential(byte[] salt, byte[] saltedPassword, int iterations) {
+        try {
             byte[] clientKey = clientKey(saltedPassword);
             byte[] storedKey = storedKey(clientKey);
             byte[] serverKey = serverKey(saltedPassword);
