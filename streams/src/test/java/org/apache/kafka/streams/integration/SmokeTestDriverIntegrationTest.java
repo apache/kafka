@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -92,6 +94,13 @@ public class SmokeTestDriverIntegrationTest {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
+        props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
 
         // cycle out Streams instances as long as the test is running.
         while (driver.isAlive()) {
@@ -102,10 +111,6 @@ public class SmokeTestDriverIntegrationTest {
             final SmokeTestClient smokeTestClient = new SmokeTestClient("streams-" + numClientsCreated++);
             clients.add(smokeTestClient);
             smokeTestClient.start(props);
-
-            while (!clients.get(clients.size() - 1).started()) {
-                Thread.sleep(100);
-            }
 
             // let the oldest client die of "natural causes"
             if (clients.size() >= 3) {

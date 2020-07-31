@@ -27,13 +27,10 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 
 public class SmokeTestUtil {
-    private static final Logger LOG = LoggerFactory.getLogger(SmokeTestUtil.class);
 
     final static int END = Integer.MAX_VALUE;
 
@@ -53,7 +50,6 @@ public class SmokeTestUtil {
                     @Override
                     public void init(final ProcessorContext context) {
                         super.init(context);
-                        LOG.info("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         System.out.flush();
                         numRecordsProcessed = 0;
@@ -64,9 +60,10 @@ public class SmokeTestUtil {
                     @Override
                     public void process(final Object key, final Object value) {
                         numRecordsProcessed++;
-                        LOG.info("processed " + numRecordsProcessed + " records from topic=" + topic);
-                        System.out.printf("%s: %s%n", name, Instant.now());
-                        System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
+                        if (numRecordsProcessed % 100 == 0) {
+                            System.out.printf("%s: %s%n", name, Instant.now());
+                            System.out.println("processed " + numRecordsProcessed + " records from topic=" + topic);
+                        }
 
                         if (smallestOffset > context().offset()) {
                             smallestOffset = context().offset();
@@ -78,7 +75,6 @@ public class SmokeTestUtil {
 
                     @Override
                     public void close() {
-                        LOG.info("Close processor for task {}", context().taskId());
                         System.out.printf("Close processor for task %s%n", context().taskId());
                         System.out.println("processed " + numRecordsProcessed + " records");
                         final long processed;

@@ -55,6 +55,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     private KafkaStreams streams;
     private boolean uncaughtException = false;
+    private boolean started;
     private volatile boolean closed;
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
@@ -91,6 +92,10 @@ public class SmokeTestClient extends SmokeTestUtil {
         this.name = name;
     }
 
+    public boolean started() {
+        return started;
+    }
+
     public boolean closed() {
         return closed;
     }
@@ -103,6 +108,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams.setStateListener((newState, oldState) -> {
             System.out.printf("%s %s: %s -> %s%n", name, Instant.now(), oldState, newState);
             if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
+                started = true;
                 countDownLatch.countDown();
             }
 
@@ -139,14 +145,14 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        final boolean wasClosed = streams.close(Duration.ofMinutes(1));
+        final boolean closed = streams.close(Duration.ofMinutes(1));
 
-        if (wasClosed && !uncaughtException) {
+        if (closed && !uncaughtException) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-CLOSED");
-        } else if (wasClosed) {
+        } else if (closed) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
         } else {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close in time.");
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close");
         }
     }
 

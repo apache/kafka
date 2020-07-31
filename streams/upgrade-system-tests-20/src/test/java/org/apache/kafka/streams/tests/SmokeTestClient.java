@@ -26,13 +26,12 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Suppressed.BufferConfig;
+import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.Stores;
@@ -41,20 +40,20 @@ import org.apache.kafka.streams.state.WindowStore;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
-
 public class SmokeTestClient extends SmokeTestUtil {
 
+    public static final int ONE_DAY = 24 * 60 * 60 * 1000;
+    public static final long TWO_DAYS = 2L * ONE_DAY;
     private final String name;
 
     private KafkaStreams streams;
     private boolean uncaughtException = false;
+    private boolean started;
     private volatile boolean closed;
 
     private static void addShutdownHook(final String name, final Runnable runnable) {
@@ -91,6 +90,10 @@ public class SmokeTestClient extends SmokeTestUtil {
         this.name = name;
     }
 
+    public boolean started() {
+        return started;
+    }
+
     public boolean closed() {
         return closed;
     }
@@ -103,6 +106,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams.setStateListener((newState, oldState) -> {
             System.out.printf("%s %s: %s -> %s%n", name, Instant.now(), oldState, newState);
             if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
+                started = true;
                 countDownLatch.countDown();
             }
 
@@ -116,7 +120,7 @@ public class SmokeTestClient extends SmokeTestUtil {
             System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
             e.printStackTrace(System.out);
             uncaughtException = true;
-            streams.close(Duration.ofSeconds(30));
+            streams.close(30, TimeUnit.SECONDS);
         });
 
         addShutdownHook("streams-shutdown-hook", this::close);
@@ -134,19 +138,15 @@ public class SmokeTestClient extends SmokeTestUtil {
         System.out.println(name + " started at " + Instant.now());
     }
 
-    public void closeAsync() {
-        streams.close(Duration.ZERO);
-    }
-
     public void close() {
-        final boolean wasClosed = streams.close(Duration.ofMinutes(1));
+        final boolean closed = streams.close(1, TimeUnit.MINUTES);
 
-        if (wasClosed && !uncaughtException) {
+        if (closed && !uncaughtException) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-CLOSED");
-        } else if (wasClosed) {
+        } else if (closed) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
         } else {
-            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close in time.");
+            System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION: Didn't close");
         }
     }
 
@@ -169,22 +169,19 @@ public class SmokeTestClient extends SmokeTestUtil {
         data.process(SmokeTestUtil.printProcessorSupplier("data", name));
 
         // min
-        final KGroupedStream<String, Integer> groupedData = data.groupByKey(Grouped.with(stringSerde, intSerde));
+        final KGroupedStream<String, Integer> groupedData = data.groupByKey(Serialized.with(stringSerde, intSerde));
 
         final KTable<Windowed<String>, Integer> minAggregation = groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(1)).grace(Duration.ofMinutes(1)))
+            .windowedBy(TimeWindows.of(ONE_DAY))
             .aggregate(
                 () -> Integer.MAX_VALUE,
                 (aggKey, value, aggregate) -> (value < aggregate) ? value : aggregate,
                 Materialized
                     .<String, Integer, WindowStore<Bytes, byte[]>>as("uwin-min")
                     .withValueSerde(intSerde)
-                    .withRetention(Duration.ofHours(25))
             );
 
         streamify(minAggregation, "min-raw");
-
-        streamify(minAggregation.suppress(untilWindowCloses(BufferConfig.unbounded())), "min-suppressed");
 
         minAggregation
             .toStream(new Unwindow<>())
@@ -192,11 +189,10 @@ public class SmokeTestClient extends SmokeTestUtil {
             .to("min", Produced.with(stringSerde, intSerde));
 
         final KTable<Windowed<String>, Integer> smallWindowSum = groupedData
-            .windowedBy(TimeWindows.of(Duration.ofSeconds(2)).advanceBy(Duration.ofSeconds(1)).grace(Duration.ofSeconds(30)))
+            .windowedBy(TimeWindows.of(2_000L).advanceBy(1_000L))
             .reduce((l, r) -> l + r);
 
         streamify(smallWindowSum, "sws-raw");
-        streamify(smallWindowSum.suppress(untilWindowCloses(BufferConfig.unbounded())), "sws-suppressed");
 
         final KTable<String, Integer> minTable = builder.table(
             "min",
@@ -207,7 +203,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // max
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.of(TWO_DAYS))
             .aggregate(
                 () -> Integer.MIN_VALUE,
                 (aggKey, value, aggregate) -> (value > aggregate) ? value : aggregate,
@@ -224,7 +220,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // sum
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.of(TWO_DAYS))
             .aggregate(
                 () -> 0L,
                 (aggKey, value, aggregate) -> (long) value + aggregate,
@@ -239,7 +235,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // cnt
         groupedData
-            .windowedBy(TimeWindows.of(Duration.ofDays(2)))
+            .windowedBy(TimeWindows.of(TWO_DAYS))
             .count(Materialized.as("uwin-cnt"))
             .toStream(new Unwindow<>())
             .filterNot((k, v) -> k.equals("flush"))
@@ -271,7 +267,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // test repartition
         final Agg agg = new Agg();
-        cntTable.groupBy(agg.selector(), Grouped.with(stringSerde, longSerde))
+        cntTable.groupBy(agg.selector(), Serialized.with(stringSerde, longSerde))
                 .aggregate(agg.init(), agg.adder(), agg.remover(),
                            Materialized.<String, Long>as(Stores.inMemoryKeyValueStore("cntByCnt"))
                                .withKeySerde(Serdes.String())
