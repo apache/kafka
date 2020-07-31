@@ -213,7 +213,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         } else {
             metricsRecorder.addValueProviders(name, db, null, statistics);
             log.warn("A table format configuration is used that does not expose the block cache. This means " +
-                "that metrics that relate to the block cache may be wrong if the block cache is shared.");
+                "that metrics that relate to the block cache may be wrong if the block cache is shared. " +
+                "Please use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
+                "the internal table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
+                "the RocksDB options.");
         }
     }
 
