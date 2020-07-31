@@ -330,13 +330,6 @@ public class TaskManager {
         tasksToCheckpoint.addAll(tasksToRecycle);
         for (final Task task : tasksToCheckpoint) {
             try {
-                // Always try to first suspend and commit the task before checkpointing it;
-                // some tasks may already be suspended which should be a no-op.
-                //
-                // Also since active tasks should already be suspended / committed and
-                // standby tasks should have no offsets to commit, we should expect nothing to commit
-                task.suspend();
-
                 // Note that we are not actually committing here but just check if we need to write checkpoint file:
                 // 1) for active tasks prepareCommit should return empty if it has committed during suspension successfully,
                 //    and their changelog positions should not change at all postCommit would not write the checkpoint again.
@@ -349,7 +342,12 @@ public class TaskManager {
                             task.id(), offsets);
 
                     tasksToCloseDirty.add(task);
-                } else {
+                } else if (!task.isActive()) {
+                    // For standby tasks, always try to first suspend before committing (checkpointing) it;
+                    // Since standby tasks do not actually need to commit offsets but only need to
+                    // flush / checkpoint state stores, so we only need to call postCommit here.
+                    task.suspend();
+
                     task.postCommit(true);
                 }
             } catch (final RuntimeException e) {
