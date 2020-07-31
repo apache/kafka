@@ -188,7 +188,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
 
-        addValueProvidersToMetricsRecorder(configs);
+        addValueProvidersToMetricsRecorder();
     }
 
     private void maybeSetUpStatistics(final Map<String, Object> configs) {
@@ -204,7 +204,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
-    private void addValueProvidersToMetricsRecorder(final Map<String, Object> configs) {
+    private void addValueProvidersToMetricsRecorder() {
         final TableFormatConfig tableFormatConfig = userSpecifiedOptions.tableFormatConfig();
         final Statistics statistics = userSpecifiedStatistics ? null : userSpecifiedOptions.statistics();
         if (tableFormatConfig instanceof BlockBasedTableConfigWithAccessibleCache) {
