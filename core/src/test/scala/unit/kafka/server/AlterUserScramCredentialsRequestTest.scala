@@ -17,6 +17,7 @@
 package kafka.server
 
 
+import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Properties
 
@@ -24,9 +25,9 @@ import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.acl.AclOperation
-import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData
+import org.apache.kafka.common.message.{AlterUserScramCredentialsRequestData, DescribeUserScramCredentialsRequestData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse}
+import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse, DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
@@ -38,7 +39,7 @@ import scala.jdk.CollectionConverters._
 /**
  * Test AlterUserScramCredentialsRequest/Response API for the cases where either no credentials are altered
  * or failure is expected due to lack of authorization, sending the request to a non-controller broker, or some other issue.
- * Testing the API for the case where credentials are successfully altered is performed elsewhere.
+ * Also tests the Alter and Describe APIs for the case where credentials are successfully altered/described.
  */
 class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
@@ -202,8 +203,104 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       results.get(0).errorCode == Errors.NOT_CONTROLLER.code && results.get(1).errorCode == Errors.NOT_CONTROLLER.code)
   }
 
+  @Test
+  def testAlterAndDescribe(): Unit = {
+    // create a bunch of credentials
+    val request1 = new AlterUserScramCredentialsRequest.Builder(
+      new AlterUserScramCredentialsRequestData()
+        .setUpsertions(util.Arrays.asList(
+          new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion()
+            .setName("user1").setMechanism(ScramMechanism.SCRAM_SHA_256.ordinal().toByte)
+            .setIterations(4096)
+            .setSalt("salt".getBytes(StandardCharsets.UTF_8))
+            .setSaltedPassword("saltedPassword".getBytes(StandardCharsets.UTF_8)),
+          new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion()
+            .setName("user1").setMechanism(ScramMechanism.SCRAM_SHA_512.ordinal().toByte)
+            .setIterations(8192)
+            .setSalt("salt".getBytes(StandardCharsets.UTF_8))
+            .setSaltedPassword("saltedPassword".getBytes(StandardCharsets.UTF_8)),
+          new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion()
+            .setName("user2").setMechanism(ScramMechanism.SCRAM_SHA_512.ordinal().toByte)
+            .setIterations(8192)
+            .setSalt("salt".getBytes(StandardCharsets.UTF_8))
+            .setSaltedPassword("saltedPassword".getBytes(StandardCharsets.UTF_8)),
+        ))).build()
+    val response1 = sendAlterUserScramCredentialsRequest(request1)
+    val results1 = response1.data.results
+    assertEquals(2, results1.size)
+    assertTrue("Expected no error when creating the credentials",
+      results1.asScala.filterNot(_.errorCode == Errors.NONE.code).size == 0)
+    assertTrue(results1.asScala.exists(_.user == "user1"))
+    assertTrue(results1.asScala.exists(_.user == "user2"))
+    // now describe them all
+    val request2 = new DescribeUserScramCredentialsRequest.Builder(
+      new DescribeUserScramCredentialsRequestData()).build()
+    val response2 = sendDescribeUserScramCredentialsRequest(request2)
+    assertTrue("Expected no error when describing the credentials",
+      response2.data.error == Errors.NONE.code)
+    val results2 = response2.data.userScramCredentials
+    assertEquals(2, results2.size)
+    assertTrue(results2.asScala.exists(usc => usc.name == "user1" && usc.credentialInfos.size == 2))
+    assertTrue(results2.asScala.exists(usc => usc.name == "user2" && usc.credentialInfos.size == 1))
+    assertTrue(results2.asScala.exists(usc => usc.name == "user1"
+      && usc.credentialInfos.asScala.exists(info =>
+        info.mechanism == ScramMechanism.SCRAM_SHA_256.ordinal().toByte && info.iterations == 4096)
+      && usc.credentialInfos.asScala.exists(info =>
+      info.mechanism == ScramMechanism.SCRAM_SHA_512.ordinal().toByte && info.iterations == 8192)))
+    assertTrue(results2.asScala.exists(usc => usc.name == "user2"
+      && usc.credentialInfos.asScala.exists(info =>
+      info.mechanism == ScramMechanism.SCRAM_SHA_512.ordinal().toByte && info.iterations == 8192)))
+    // now describe just one
+    val request3 = new DescribeUserScramCredentialsRequest.Builder(
+      new DescribeUserScramCredentialsRequestData().setUsers(util.Arrays.asList(
+        new DescribeUserScramCredentialsRequestData.UserName().setName("user1")))).build()
+    val response3 = sendDescribeUserScramCredentialsRequest(request3)
+    assertTrue("Expected no error when describing the credentials",
+      response3.data.error == Errors.NONE.code)
+    val results3 = response3.data.userScramCredentials
+    assertEquals(1, results3.size)
+    assertTrue(results3.asScala.exists(usc => usc.name == "user1" && usc.credentialInfos.size == 2))
+    assertTrue(results3.asScala.exists(usc => usc.name == "user1"
+      && usc.credentialInfos.asScala.exists(info =>
+      info.mechanism == ScramMechanism.SCRAM_SHA_256.ordinal().toByte && info.iterations == 4096)
+      && usc.credentialInfos.asScala.exists(info =>
+      info.mechanism == ScramMechanism.SCRAM_SHA_512.ordinal().toByte && info.iterations == 8192)))
+    // now delete a couple of credentials
+    val request4 = new AlterUserScramCredentialsRequest.Builder(
+      new AlterUserScramCredentialsRequestData()
+        .setDeletions(util.Arrays.asList(
+          new AlterUserScramCredentialsRequestData.ScramCredentialDeletion()
+            .setName("user1").setMechanism(ScramMechanism.SCRAM_SHA_256.ordinal().toByte),
+          new AlterUserScramCredentialsRequestData.ScramCredentialDeletion()
+            .setName("user2").setMechanism(ScramMechanism.SCRAM_SHA_512.ordinal().toByte),
+        ))).build()
+    val response4 = sendAlterUserScramCredentialsRequest(request4)
+    val results4 = response4.data.results
+    assertEquals(2, results1.size)
+    assertTrue("Expected no error when creating the credentials",
+      results4.asScala.filterNot(_.errorCode == Errors.NONE.code).size == 0)
+    assertTrue(results4.asScala.exists(_.user == "user1"))
+    assertTrue(results4.asScala.exists(_.user == "user2"))
+    // now describe them all, which should just yield 1 credential
+    val request5 = new DescribeUserScramCredentialsRequest.Builder(
+      new DescribeUserScramCredentialsRequestData()).build()
+    val response5 = sendDescribeUserScramCredentialsRequest(request5)
+    assertTrue("Expected no error when describing the credentials",
+      response5.data.error == Errors.NONE.code)
+    val results5 = response5.data.userScramCredentials
+    assertEquals(1, results5.size)
+    assertTrue(results5.asScala.exists(usc => usc.name == "user1" && usc.credentialInfos.size == 1))
+    assertTrue(results5.asScala.exists(usc => usc.name == "user1"
+      && usc.credentialInfos.asScala.exists(info =>
+      info.mechanism == ScramMechanism.SCRAM_SHA_512.ordinal().toByte && info.iterations == 8192)))
+  }
+
   private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): AlterUserScramCredentialsResponse = {
     connectAndReceive[AlterUserScramCredentialsResponse](request, destination = socketServer)
+  }
+
+  private def sendDescribeUserScramCredentialsRequest(request: DescribeUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): DescribeUserScramCredentialsResponse = {
+    connectAndReceive[DescribeUserScramCredentialsResponse](request, destination = socketServer)
   }
 }
 
