@@ -179,7 +179,8 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
-                     threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
+                     threadNamePrefix: Option[String],
+                     val alterIsrChannelManager: AlterIsrChannelManager) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -192,6 +193,7 @@ class ReplicaManager(val config: KafkaConfig,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
+           alterIsrChannelManager: AlterIsrChannelManager,
            threadNamePrefix: Option[String] = None) = {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
@@ -206,7 +208,7 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix)
+      threadNamePrefix, alterIsrChannelManager)
   }
 
   /* epoch of the controller that last changed the leader */
@@ -314,7 +316,7 @@ class ReplicaManager(val config: KafkaConfig,
     // start ISR expiration thread
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
-    scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _, period = 2500L, unit = TimeUnit.MILLISECONDS)
+    //scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _, period = 2500L, unit = TimeUnit.MILLISECONDS)
     scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", shutdownIdleReplicaAlterLogDirsThread _, period = 10000L, unit = TimeUnit.MILLISECONDS)
 
     // If inter-broker protocol (IBP) < 1.0, the controller will send LeaderAndIsrRequest V0 which does not include isNew field.
@@ -323,6 +325,8 @@ class ReplicaManager(val config: KafkaConfig,
     val haltBrokerOnFailure = config.interBrokerProtocolVersion < KAFKA_1_0_IV0
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
+
+    alterIsrChannelManager.startup()
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
@@ -1751,6 +1755,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (checkpointHW)
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)
+    alterIsrChannelManager.shutdown()
     info("Shut down completely")
   }
 

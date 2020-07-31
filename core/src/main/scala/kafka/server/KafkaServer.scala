@@ -298,12 +298,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
         socketServer.startup(startProcessingRequests = false)
 
-        /* start replica manager */
-        replicaManager = createReplicaManager(isShuttingDown)
-        replicaManager.startup()
+        brokerToControllerChannelManager = new BrokerToControllerChannelManager(metadataCache, time, metrics, config, threadNamePrefix)
 
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
+
+        /* start replica manager */
+        replicaManager = createReplicaManager(isShuttingDown, brokerEpoch)
+        replicaManager.startup()
 
         // Now that the broker is successfully registered, checkpoint its metadata
         checkpointBrokerMetadata(BrokerMetadata(config.brokerId, Some(clusterId)))
@@ -315,8 +317,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         /* start kafka controller */
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, threadNamePrefix)
         kafkaController.startup()
-
-        brokerToControllerChannelManager = new BrokerToControllerChannelManager(metadataCache, time, metrics, config, threadNamePrefix)
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
 
@@ -422,9 +422,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     metricsContext
   }
 
-  protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager =
+  protected def createReplicaManager(isShuttingDown: AtomicBoolean, brokerEpoch: Long): ReplicaManager = {
+    val alterIsrManager = new AlterIsrChannelManagerImpl(brokerToControllerChannelManager, zkClient, kafkaScheduler,
+      config.brokerId, brokerEpoch)
     new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
-      brokerTopicStats, metadataCache, logDirFailureChannel)
+      brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
+  }
 
   private def initZkClient(time: Time): Unit = {
     info(s"Connecting to zookeeper on ${config.zkConnect}")

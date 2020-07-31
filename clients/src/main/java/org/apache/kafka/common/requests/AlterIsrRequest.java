@@ -51,4 +51,24 @@ public class AlterIsrRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         return new AlterIsrResponse(new AlterIsrResponseData().setErrorCode(Errors.forException(e).code()));
     }
+
+    public static class Builder extends AbstractRequest.Builder<AlterIsrRequest> {
+
+        private final AlterIsrRequestData data;
+
+        public Builder(AlterIsrRequestData data) {
+            super(ApiKeys.ALTER_ISR);
+            this.data = data;
+        }
+
+        @Override
+        public AlterIsrRequest build(short version) {
+            return new AlterIsrRequest(data, version);
+        }
+
+        @Override
+        public String toString() {
+            return data.toString();
+        }
+    }
 }

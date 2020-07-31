@@ -1777,8 +1777,8 @@ class KafkaController(val config: KafkaConfig,
 
   // TODO is it okay to pull message classes down into the controller?
   def alterIsrs(alterIsrRequest: AlterIsrRequestData, callback: AlterIsrResponseData => Unit): Unit = {
-    val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(alterIsrRequest.brokerId())
-    if (brokerEpochOpt.isEmpty) {
+    //val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(alterIsrRequest.brokerId())
+    /*if (brokerEpochOpt.isEmpty) {
       info(s"Ignoring AlterIsr due to unknown broker ${alterIsrRequest.brokerId()}")
       // TODO is INVALID_REQUEST a reasonable error here?
       callback.apply(new AlterIsrResponseData().setErrorCode(Errors.INVALID_REQUEST.code))
@@ -1789,7 +1789,7 @@ class KafkaController(val config: KafkaConfig,
       info(s"Ignoring AlterIsr due to stale broker epoch ${alterIsrRequest.brokerEpoch()} for broker ${alterIsrRequest.brokerId()}")
       callback.apply(new AlterIsrResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
       return
-    }
+    }*/
 
     val isrsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
 
@@ -1812,7 +1812,7 @@ class KafkaController(val config: KafkaConfig,
         val partitionError: Errors = controllerContext.partitionLeadershipInfo(tp) match {
           case Some(leaderIsrAndControllerEpoch) =>
             val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-            if (partitionReq.leaderId() == currentLeaderAndIsr.leader) {
+            if (partitionReq.leaderId() != currentLeaderAndIsr.leader) {
               Errors.NOT_LEADER_OR_FOLLOWER // Is this the right error code?
             } else if (partitionReq.leaderEpoch() < currentLeaderAndIsr.leaderEpoch) {
               Errors.FENCED_LEADER_EPOCH
@@ -1822,6 +1822,7 @@ class KafkaController(val config: KafkaConfig,
               val newIsr = partitionReq.newIsr().asScala.toList.map(_.toInt)
               val currentAssignment = controllerContext.partitionReplicaAssignment(tp)
               if (!newIsr.forall(replicaId => currentAssignment.contains(replicaId))) {
+                warn(s"Some of the new ISR are not in the assignment for partition. ISR=$newIsr assignment=$currentAssignment")
                 Errors.INVALID_REQUEST
               } else {
                 isrsToAlter.put(tp, new LeaderAndIsr(partitionReq.leaderId(), partitionReq.leaderEpoch(),
@@ -1841,7 +1842,7 @@ class KafkaController(val config: KafkaConfig,
   }
 
   private def processAlterIsr(isrsToAlter: Map[TopicPartition, LeaderAndIsr]): Unit = {
-    // TODO maybe we still need broker id and broker epoch at this point to validate again...
+    // TODO maybe we still need broker id and broker epoch at this point to validate again?
 
     val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = isrsToAlter.flatMap { case (tp: TopicPartition, newLeaderAndIsr: LeaderAndIsr) =>
       // Check that the topic still exists and the leader epoch hasn't changed
@@ -1852,6 +1853,7 @@ class KafkaController(val config: KafkaConfig,
             // Bump epoch before updating in ZK
             Some(tp -> newLeaderAndIsr.newEpochAndZkVersion)
           } else {
+            // Old leader epoch
             warn(s"Not updating ISR for partition ${tp} since it has a stale leader epoch ${newLeaderAndIsr.leaderEpoch}")
             None
           }
@@ -1863,11 +1865,10 @@ class KafkaController(val config: KafkaConfig,
       }
     }
 
+    // Do the updates in ZK
     info(s"Updating ISRs for partitions: ${adjustedIsrs.keySet}.")
-
     val UpdateLeaderAndIsrResult(finishedUpdates, _) =  zkClient.updateLeaderAndIsr(
       adjustedIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
-
 
     val successfulUpdates: Map[TopicPartition, LeaderAndIsr] = finishedUpdates.flatMap {
       case (partition: TopicPartition, isrOrError: Either[Throwable, LeaderAndIsr]) =>

@@ -50,11 +50,11 @@ class BrokerToControllerChannelManager(metadataCache: kafka.server.MetadataCache
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val requestThread = newRequestThread
 
-  def start(): Unit = {
+  private[server] def start(): Unit = {
     requestThread.start()
   }
 
-  def shutdown(): Unit = {
+  private[server] def shutdown(): Unit = {
     requestThread.shutdown()
     requestThread.awaitShutdown()
   }
@@ -113,8 +113,8 @@ class BrokerToControllerChannelManager(metadataCache: kafka.server.MetadataCache
       brokerToControllerListenerName, time, threadName)
   }
 
-  private[server] def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                                  callback: RequestCompletionHandler): Unit = {
+  def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
+                  callback: RequestCompletionHandler): Unit = {
     requestQueue.put(BrokerToControllerQueueItem(request, callback))
   }
 }

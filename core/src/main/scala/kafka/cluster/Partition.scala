@@ -21,7 +21,7 @@ import java.util.{Optional, Properties}
 
 import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
-import kafka.controller.{KafkaController, StateChangeLogger}
+import kafka.controller.StateChangeLogger
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server._
@@ -133,6 +133,7 @@ object Partition extends KafkaMetricsGroup {
       replicaManager.delayedFetchPurgatory,
       replicaManager.delayedDeleteRecordsPurgatory)
 
+
     new Partition(topicPartition,
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
@@ -141,7 +142,8 @@ object Partition extends KafkaMetricsGroup {
       stateStore = zkIsrBackingStore,
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
-      logManager = replicaManager.logManager)
+      logManager = replicaManager.logManager,
+      alterIsrChannelManager = replicaManager.alterIsrChannelManager)
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -198,7 +200,8 @@ class Partition(val topicPartition: TopicPartition,
                 stateStore: PartitionStateStore,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
-                logManager: LogManager) extends Logging with KafkaMetricsGroup {
+                logManager: LogManager,
+                alterIsrChannelManager: AlterIsrChannelManager) extends Logging with KafkaMetricsGroup {
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -207,6 +210,7 @@ class Partition(val topicPartition: TopicPartition,
   private val remoteReplicasMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock
+
   // lock to prevent the follower replica log update while checking if the log dir could be replaced with future log.
   private val futureLogLock = new Object()
   private var zkVersion: Int = LeaderAndIsr.initialZKVersion
@@ -217,6 +221,8 @@ class Partition(val topicPartition: TopicPartition,
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile var inSyncReplicaIds = Set.empty[Int]
   @volatile var assignmentState: AssignmentState = SimpleAssignmentState(Seq.empty)
+  @volatile var alterIsrInFlight: Boolean = false
+
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
@@ -231,7 +237,8 @@ class Partition(val topicPartition: TopicPartition,
    * the controller sends it a start replica command containing the leader for each partition that the broker hosts.
    * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
    * each partition. */
-  private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
+  //private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
+
   this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
@@ -487,11 +494,12 @@ class Partition(val topicPartition: TopicPartition,
     val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
-      controllerEpoch = partitionState.controllerEpoch
+      //controllerEpoch = partitionState.controllerEpoch
 
       val isr = partitionState.isr.asScala.map(_.toInt).toSet
       val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
       val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
+      info(s"Leader setting ISR for $topicPartition to $inSyncReplicaIds")
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.map(_.toInt),
         isr = isr,
@@ -569,8 +577,9 @@ class Partition(val topicPartition: TopicPartition,
       val oldLeaderEpoch = leaderEpoch
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
-      controllerEpoch = partitionState.controllerEpoch
+      //controllerEpoch = partitionState.controllerEpoch
 
+      info(s"Follower ignoring ISR for $topicPartition")
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
         isr = Set.empty[Int],
@@ -714,7 +723,7 @@ class Partition(val topicPartition: TopicPartition,
     if (needsIsrUpdate) {
       inWriteLock(leaderIsrUpdateLock) {
         // check if this replica needs to be added to the ISR
-        if (needsExpandIsr(followerReplica)) {
+        if (!alterIsrInFlight && needsExpandIsr(followerReplica)) {
           val newInSyncReplicaIds = inSyncReplicaIds + followerReplica.brokerId
           info(s"Expanding ISR from ${inSyncReplicaIds.mkString(",")} to ${newInSyncReplicaIds.mkString(",")}")
           // update ISR in ZK and cache
@@ -1212,17 +1221,32 @@ class Partition(val topicPartition: TopicPartition,
 
   private def expandIsr(newIsr: Set[Int]): Unit = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
-    val zkVersionOpt = stateStore.expandIsr(controllerEpoch, newLeaderAndIsr)
-    maybeUpdateIsrAndVersion(newIsr, zkVersionOpt)
+    //val zkVersionOpt = stateStore.expandIsr(controllerEpoch, newLeaderAndIsr)
+    //maybeUpdateIsrAndVersion(newIsr, zkVersionOpt)
+    alterIsrChannelManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, handleIsrUpdate))
+    alterIsrInFlight = true
+
+    info("ISR updated to [%s]".format(newIsr.mkString(",")))
+    inSyncReplicaIds = newIsr
   }
 
   private[cluster] def shrinkIsr(newIsr: Set[Int]): Unit = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
-    val zkVersionOpt = stateStore.shrinkIsr(controllerEpoch, newLeaderAndIsr)
-    maybeUpdateIsrAndVersion(newIsr, zkVersionOpt)
+    //val zkVersionOpt = stateStore.shrinkIsr(controllerEpoch, newLeaderAndIsr)
+    //maybeUpdateIsrAndVersion(newIsr, zkVersionOpt)
+    alterIsrChannelManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, handleIsrUpdate))
+    alterIsrInFlight = true
   }
 
-  private[cluster] def maybeUpdateIsrAndVersion(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {
+  private def handleIsrUpdate(error: Errors): Unit = {
+    error match {
+      case NONE => println(s"Controller accepted ISR for $topicPartition")
+      case _ => println(s"Had an error sending ISR for $topicPartition : $error")
+    }
+    alterIsrInFlight = false
+  }
+
+  /*private[cluster] def maybeUpdateIsrAndVersion(isr: Set[Int], zkVersionOpt: Option[Int]): Unit = {
     zkVersionOpt match {
       case Some(newVersion) =>
         inSyncReplicaIds = isr
@@ -1232,7 +1256,7 @@ class Partition(val topicPartition: TopicPartition,
       case None =>
         info(s"Cached zkVersion $zkVersion not equal to that in zookeeper, skip updating ISR")
     }
-  }
+  }*/
 
   override def equals(that: Any): Boolean = that match {
     case other: Partition => partitionId == other.partitionId && topic == other.topic
