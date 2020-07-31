@@ -119,7 +119,8 @@ public class ProduceBenchWorker implements TaskWorker {
                 }
                 status.update(new TextNode("Creating " + newTopics.keySet().size() + " topic(s)"));
                 WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
-                                         spec.adminClientConf(), newTopics, false);
+                                         spec.adminClientConf(), newTopics, false, spec.topicVerificationRetries(),
+                                         WorkerUtils.DEFAULT_TOPIC_VERIFY_BACKOFF);
                 status.update(new TextNode("Created " + newTopics.keySet().size() + " topic(s)"));
                 executor.submit(new SendRecords(active));
             } catch (Throwable e) {
@@ -131,10 +132,12 @@ public class ProduceBenchWorker implements TaskWorker {
     private static class SendRecordsCallback implements Callback {
         private final SendRecords sendRecords;
         private final long startMs;
+        private final AtomicLong totalCallbackErrors;
 
-        SendRecordsCallback(SendRecords sendRecords, long startMs) {
+        SendRecordsCallback(SendRecords sendRecords, long startMs, AtomicLong totalCallbackErrors) {
             this.sendRecords = sendRecords;
             this.startMs = startMs;
+            this.totalCallbackErrors = totalCallbackErrors;
         }
 
         @Override
@@ -143,6 +146,7 @@ public class ProduceBenchWorker implements TaskWorker {
             long durationMs = now - startMs;
             sendRecords.recordDuration(durationMs);
             if (exception != null) {
+                totalCallbackErrors.getAndIncrement();
                 log.error("SendRecordsCallback: error", exception);
             }
         }
@@ -190,7 +194,10 @@ public class ProduceBenchWorker implements TaskWorker {
         private Iterator<TopicPartition> partitionsIterator;
         private Future<RecordMetadata> sendFuture;
         private AtomicLong transactionsCommitted;
+        private AtomicLong totalProduceErrors;
+        private AtomicLong totalCallbackErrors;
         private boolean enableTransactions;
+        private boolean ignoreProduceErrors;
 
         SendRecords(HashSet<TopicPartition> activePartitions) {
             this.activePartitions = activePartitions;
@@ -198,12 +205,15 @@ public class ProduceBenchWorker implements TaskWorker {
             this.histogram = new Histogram(10000);
 
             this.transactionGenerator = spec.transactionGenerator();
+            this.ignoreProduceErrors = spec.ignoreProduceErrors();
             this.enableTransactions = this.transactionGenerator.isPresent();
             this.transactionsCommitted = new AtomicLong();
+            this.totalProduceErrors = new AtomicLong();
+            this.totalCallbackErrors = new AtomicLong();
 
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
-                new StatusUpdater(histogram, transactionsCommitted), 30, 30, TimeUnit.SECONDS);
+                new StatusUpdater(histogram, transactionsCommitted, totalProduceErrors, totalCallbackErrors), 30, 30, TimeUnit.SECONDS);
 
             Properties props = new Properties();
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
@@ -259,7 +269,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 WorkerUtils.abort(log, "SendRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
-                StatusData statusData = new StatusUpdater(histogram, transactionsCommitted).update();
+                StatusData statusData = new StatusUpdater(histogram, transactionsCommitted, totalProduceErrors, totalCallbackErrors).update();
                 long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("Sent {} total record(s) in {} ms.  status: {}",
                     histogram.summarize().numSamples(), curTimeMs - startTimeMs, statusData);
@@ -305,8 +315,15 @@ public class ProduceBenchWorker implements TaskWorker {
                 record = new ProducerRecord<>(
                     partition.topic(), partition.partition(), keys.next(), values.next());
             }
-            sendFuture = producer.send(record,
-                new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+            try {
+                sendFuture = producer.send(record,
+                    new SendRecordsCallback(this, Time.SYSTEM.milliseconds(), totalCallbackErrors));
+            } catch (Exception e) {
+                totalProduceErrors.getAndIncrement();
+                if (!ignoreProduceErrors) {
+                    throw e;
+                }
+            }
             throttle.increment();
         }
 
@@ -318,10 +335,14 @@ public class ProduceBenchWorker implements TaskWorker {
     public class StatusUpdater implements Runnable {
         private final Histogram histogram;
         private final AtomicLong transactionsCommitted;
+        private final AtomicLong totalProduceErrors;
+        private final AtomicLong totalCallbackErrors;
 
-        StatusUpdater(Histogram histogram, AtomicLong transactionsCommitted) {
+        StatusUpdater(Histogram histogram, AtomicLong transactionsCommitted, AtomicLong totalProduceErrors, AtomicLong totalCallbackErrors) {
             this.histogram = histogram;
             this.transactionsCommitted = transactionsCommitted;
+            this.totalProduceErrors = totalProduceErrors;
+            this.totalCallbackErrors = totalCallbackErrors;
         }
 
         @Override
@@ -339,7 +360,9 @@ public class ProduceBenchWorker implements TaskWorker {
                 summary.percentiles().get(0).value(),
                 summary.percentiles().get(1).value(),
                 summary.percentiles().get(2).value(),
-                transactionsCommitted.get());
+                transactionsCommitted.get(),
+                totalProduceErrors.get(),
+                totalCallbackErrors.get());
             status.update(JsonUtil.JSON_SERDE.valueToTree(statusData));
             return statusData;
         }
@@ -352,6 +375,8 @@ public class ProduceBenchWorker implements TaskWorker {
         private final int p95LatencyMs;
         private final int p99LatencyMs;
         private final long transactionsCommitted;
+        private final long totalProduceErrors;
+        private final long totalCallbackErrors;
 
         /**
          * The percentiles to use when calculating the histogram data.
@@ -365,18 +390,32 @@ public class ProduceBenchWorker implements TaskWorker {
                    @JsonProperty("p50LatencyMs") int p50latencyMs,
                    @JsonProperty("p95LatencyMs") int p95latencyMs,
                    @JsonProperty("p99LatencyMs") int p99latencyMs,
-                   @JsonProperty("transactionsCommitted") long transactionsCommitted) {
+                   @JsonProperty("transactionsCommitted") long transactionsCommitted,
+                   @JsonProperty("totalProduceErrors") long totalProduceErrors,
+                   @JsonProperty("totalCallbackErrors") long totalCallbackErrors) {
             this.totalSent = totalSent;
             this.averageLatencyMs = averageLatencyMs;
             this.p50LatencyMs = p50latencyMs;
             this.p95LatencyMs = p95latencyMs;
             this.p99LatencyMs = p99latencyMs;
             this.transactionsCommitted = transactionsCommitted;
+            this.totalProduceErrors = totalProduceErrors;
+            this.totalCallbackErrors = totalCallbackErrors;
         }
 
         @JsonProperty
         public long totalSent() {
             return totalSent;
+        }
+
+        @JsonProperty
+        public long totalProduceErrors() {
+            return totalProduceErrors;
+        }
+
+        @JsonProperty
+        public long totalCallbackErrors() {
+            return totalCallbackErrors;
         }
 
         @JsonProperty
