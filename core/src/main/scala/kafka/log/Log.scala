@@ -2242,18 +2242,16 @@ class Log(@volatile private var _dir: File,
     segments.foreach(_.changeFileSuffixes("", Log.DeletedFileSuffix))
 
     def deleteSegments(): Unit = {
-      info(s"Deleting segments ${segments.mkString(",")}")
+      info(s"Deleting segment files ${segments.mkString(",")}")
       maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
         segments.foreach(_.deleteIfExists())
       }
     }
 
-    if (asyncDelete) {
-      info(s"Scheduling segments for deletion ${segments.mkString(",")}")
+    if (asyncDelete)
       scheduler.schedule("delete-file", () => deleteSegments(), delay = config.fileDeleteDelayMs)
-    } else {
+    else
       deleteSegments()
-    }
   }
 
   /**
