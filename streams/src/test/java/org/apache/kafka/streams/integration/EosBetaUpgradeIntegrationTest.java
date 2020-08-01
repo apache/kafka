@@ -811,7 +811,6 @@ public class EosBetaUpgradeIntegrationTest {
             final List<KeyValue<Long, Long>> expectedCommittedResult =
                 computeExpectedResult(committedInputDataAfterUpgrade, committedState);
             verifyCommitted(expectedCommittedResult);
-            fail("This test has failed");
         } finally {
             if (streams1Alpha != null) {
                 streams1Alpha.close();
