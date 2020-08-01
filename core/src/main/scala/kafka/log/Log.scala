@@ -1903,7 +1903,7 @@ class Log(@volatile private var _dir: File,
                  s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
                  s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
                  s" size of offset index: ${activeSegment.offsetIndex.entries}.")
-            removeAndDeleteSegments(Seq(activeSegment), asyncDelete = true, GenericDeletion)
+            removeAndDeleteSegments(Seq(activeSegment), asyncDelete = true, LogRollDeletion)
           } else {
             throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
                                      s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
@@ -2086,7 +2086,7 @@ class Log(@volatile private var _dir: File,
             truncateFullyAndStartAt(targetOffset)
           } else {
             val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-            removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncation)
+            removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncateDeletion)
             activeSegment.truncateTo(targetOffset)
             updateLogEndOffset(targetOffset)
             updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
@@ -2109,7 +2109,7 @@ class Log(@volatile private var _dir: File,
       debug(s"Truncate and start at offset $newOffset")
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
-        removeAndDeleteSegments(logSegments, asyncDelete = true, LogTruncation)
+        removeAndDeleteSegments(logSegments, asyncDelete = true, LogTruncateDeletion)
         addSegment(LogSegment.open(dir,
           baseOffset = newOffset,
           config = config,
@@ -2720,14 +2720,14 @@ case object LogDeletion extends SegmentDeletionReason {
   }
 }
 
-case object LogTruncation extends SegmentDeletionReason {
+case object LogTruncateDeletion extends SegmentDeletionReason {
   override def reasonString(log: Log, segment: LogSegment): String = {
     s"Segment with base offset ${segment.baseOffset} will be deleted as part of log truncation"
   }
 }
 
-case object GenericDeletion extends SegmentDeletionReason {
+case object LogRollDeletion extends SegmentDeletionReason {
   override def reasonString(log: Log, segment: LogSegment): String = {
-    s"Segment with base offset ${segment.baseOffset} will be deleted"
+    s"Segment with base offset ${segment.baseOffset} will be deleted as part of log roll"
   }
 }
