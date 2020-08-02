@@ -345,6 +345,28 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testSyncCommitWithoutOffsetsAndPendingAsyncCommit() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        TopicPartition tp = new TopicPartition("foo", 0);
+        Map<TopicPartition, OffsetAndMetadata> offsets = singletonMap(tp, new OffsetAndMetadata(123));
+
+        final AtomicBoolean committed = new AtomicBoolean();
+        coordinator.commitOffsetsAsync(offsets, (committedOffsets, exception) -> {
+            committed.set(true);
+        });
+
+        assertFalse("expected sync commit to fail", coordinator.commitOffsetsSync(Collections.emptyMap(), time.timer(100L)));
+        assertFalse(committed.get());
+
+        prepareOffsetCommitRequest(singletonMap(tp, 123L), Errors.NONE);
+
+        assertTrue("expected sync commit to succeed", coordinator.commitOffsetsSync(Collections.emptyMap(), time.timer(Long.MAX_VALUE)));
+        assertTrue("expected commit callback to be invoked", committed.get());
+    }
+
+    @Test
     public void testManyInFlightAsyncCommitsWithCoordinatorDisconnect() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
