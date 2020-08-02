@@ -157,12 +157,10 @@ public abstract class AbstractCoordinator implements Closeable {
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
-        if (rebalanceConfig.enableDynamicConfig()) {
-            this.dynamicConfig = new DynamicConsumerConfig(client, this, rebalanceConfig, time, logContext);
-        } else {
-            this.dynamicConfig = null;
-        }
-       
+        this.dynamicConfig = new DynamicConsumerConfig(client, this, rebalanceConfig, time, logContext);
+        if (!rebalanceConfig.enableDynamicConfig()) {
+            dynamicConfig.disable();
+        } 
     }
 
     /**
@@ -364,9 +362,10 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         startHeartbeatThreadIfNeeded();
-        if (dynamicConfig != null) {
-            // This will block if this is the first JoinGroupRequest being sent
-            dynamicConfig.maybeFetchInitialConfigs(timer);
+        if (!dynamicConfig.shouldDisable()) {
+            // This will only return a future and block for it if this is before the first JoinGroupRequest being sent
+            RequestFuture<ClientResponse> configsFuture = dynamicConfig.maybeFetchInitialConfigs();
+            dynamicConfig.maybeWaitForInitialConfigs(configsFuture);
         }
         return joinGroupIfNeeded(timer);
     }
@@ -1333,7 +1332,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         client.pollNoWakeup();
                         long now = time.milliseconds();
-                        if (dynamicConfig != null && !dynamicConfig.shouldDisable()) {
+                        if (!dynamicConfig.shouldDisable()) {
                             dynamicConfig.maybeFetchConfigs(now);
                             if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate() && joinFuture == null) {
                                 // Need to rejoin group so that the coordinator changes the session timeout in this 
@@ -1344,10 +1343,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 // These methods will use the dynamically updated values in rebalanceConfig to reset the timers.
                                 rejoinNeeded = true;
                             }
-                        } else if (dynamicConfig != null) {
-                            log.info("Disabling DynamicConsumerConfig");
-                            dynamicConfig = null;
-                        }
+                        } 
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null || lookupCoordinator().failed())

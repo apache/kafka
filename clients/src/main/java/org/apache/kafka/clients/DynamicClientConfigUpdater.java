@@ -54,7 +54,7 @@ public abstract class DynamicClientConfigUpdater {
     private boolean disable;
 
     public DynamicClientConfigUpdater(Time time) {
-        this.dynamicConfigurationExpireMs = 5 * 1000;
+        this.dynamicConfigurationExpireMs = 30000;
         this.lastSuccessfulUpdate = new AtomicLong();
         this.updateInProgress = new AtomicBoolean();
         this.time = time;
@@ -135,7 +135,7 @@ public abstract class DynamicClientConfigUpdater {
         Map<String, String> dynamicConfigs = new HashMap<>();
         configsResponse.resultMap().entrySet().forEach(entry -> {
             if (entry.getValue().errorCode() == Errors.INVALID_REQUEST.code()) {
-                log.info("DynamicProducerConfig not compatible with the broker, this feature will be disabled");
+                log.info("DynamicConfiguration not compatible with the broker, this feature will be disabled");
                 disable();
                 return;
             }

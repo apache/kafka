@@ -117,7 +117,7 @@ public class DynamicProducerConfig extends DynamicClientConfigUpdater {
                     ProducerConfig parsedConfigs = new ProducerConfig(overlayed, false);
                     updatedConfigs = parsedConfigs;
                     log.info("Updated dynamic configurations {}", dynamicConfigs);
-                    log.info("Using acks=", getAcks());
+                    log.info("Using acks={}", this.getAcks().toString()); 
                 } catch (ConfigException ce) {
                     log.info("Rejecting new dynamic configs");
                 }

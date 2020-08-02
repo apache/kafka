@@ -146,9 +146,9 @@ public class SenderTest {
     @Before
     public void setup() {
         Properties props = new Properties();
-        props.setProperty("acks", "all");
         props.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.setProperty("acks", "all");
         props.setProperty("enable.dynamic.config", "false");
         config = new ProducerConfig(props); 
         setupWithTransactionState(null);

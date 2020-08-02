@@ -27,7 +27,6 @@ import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 /**
@@ -67,16 +66,11 @@ public class DynamicConsumerConfig extends DynamicClientConfigUpdater {
     }
     
     /**
-     * Send a {@link DescribeConfigsRequest} to a node specifically for dynamic client configurations and 
-     * block waiting for a response. Used to fetch the initial dynamic configurations before sending the initial
-     * {@link org.apache.kafka.common.requests.JoinGroupRequest}. Since this join RPC sends the group member's session timeout
-     * to the group coordinator, we should check that a dynamic configuration for session timeout is set before joining.
-     * If we do not do this initial fetch synchronously, then we could possibly trigger an unnecessary group rebalance operation by 
-     * sending a second join request after the dynamic configs are recieved asynchronously.
+     * Send a {@link DescribeConfigsRequest} to a node specifically for dynamic client configurations
      *
-     * @param timer Can we use the same timer as joinGroupIfNeeded (the method that calls this one)?
+     * @return {@link RequestFuture} 
      */ 
-    public boolean maybeFetchInitialConfigs(Timer timer) {
+    public RequestFuture<ClientResponse> maybeFetchInitialConfigs() {
         if (!initialConfigsFetched) {
             Node node = null;
             while (node == null) {
@@ -84,14 +78,32 @@ public class DynamicConsumerConfig extends DynamicClientConfigUpdater {
             }
             log.info("Trying to fetch initial dynamic configs before join group request");
             RequestFuture<ClientResponse> configsFuture = client.send(node, newRequestBuilder(this.clientId));
-            client.poll(configsFuture, timer);
-            if (configsFuture.isDone()) {
-                DescribeConfigsResponse configsResponse = (DescribeConfigsResponse) configsFuture.value().responseBody();
+            return configsFuture;
+        }
+        return null;
+    }
+
+    /**
+     * Block for a {@link DescribeConfigsResponse} and process it. Used to fetch the initial dynamic configurations synchronously before sending the initial
+     * {@link org.apache.kafka.common.requests.JoinGroupRequest}. Since this join RPC sends the group member's session timeout
+     * to the group coordinator, we should check if a dynamic configuration for session timeout is set before joining.
+     * If we do not do this initial fetch synchronously, then we could possibly trigger an unnecessary group rebalance operation by 
+     * sending a second join request after the dynamic configs are recieved asynchronously.
+     *
+     * @param responseFuture - future to block on
+     * @return true if responseFuture was blocked on and a response was recieved
+     */
+    public boolean maybeWaitForInitialConfigs(RequestFuture<ClientResponse> responseFuture) {
+        if (responseFuture != null) {
+            client.poll(responseFuture);
+            if (responseFuture.isDone()) {
+                DescribeConfigsResponse configsResponse = (DescribeConfigsResponse) responseFuture.value().responseBody();
                 handleSuccessfulResponse(configsResponse);
-                initialConfigsFetched = true;
+                this.initialConfigsFetched = true;
+                return true;
             }
         }
-        return initialConfigsFetched;
+        return false;
     }
 
     /**
@@ -103,11 +115,10 @@ public class DynamicConsumerConfig extends DynamicClientConfigUpdater {
      */ 
     @Override
     public boolean maybeFetchConfigs(long now) {
-        // Order matters, if the node is null we should not set updateInProgress to true.
-        // This is lazily evaluated so it is ok as long as order is kept
         if (shouldUpdateConfigs(now)) {
-            System.out.println("Should Update");
             Node node = client.leastLoadedNode();
+            // Order matters, if the node is null we should not set updateInProgress to true.
+            // This is lazily evaluated so it is ok as long as order is kept
             if (node != null && client.ready(node, now)) {
                 updateInProgress();
                 log.info("Sending periodic describe configs request for dynamic config update");
@@ -141,13 +152,13 @@ public class DynamicConsumerConfig extends DynamicClientConfigUpdater {
      */
     private void handleSuccessfulResponse(DescribeConfigsResponse configsResponse) {
         Map<String, String> dynamicConfigs = createResultMapAndHandleErrors(configsResponse, log);
+        log.info("DescribeConfigsResponse received");
 
         // We only want to process them if they have changed since the last time they were fetched.
         if (!dynamicConfigs.equals(previousDynamicConfigs)) {
             previousDynamicConfigs = dynamicConfigs;
             try {
                 rebalanceConfig.setDynamicConfigs(dynamicConfigs);
-                log.info("Accepting dynamic configs: {}", dynamicConfigs);
             } catch (IllegalArgumentException e) {
                 log.info("Rejecting dynamic configs: {}", e.getMessage());
             }
