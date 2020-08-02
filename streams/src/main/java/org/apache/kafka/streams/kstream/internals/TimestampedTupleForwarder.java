@@ -60,4 +60,13 @@ class TimestampedTupleForwarder<K, V> {
             context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null), To.all().withTimestamp(timestamp));
         }
     }
+
+    public void maybeForward(final K key,
+                             final V newValue,
+                             final V oldValue,
+                             final To to) {
+        if (!cachingEnabled) {
+            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null), to);
+        }
+    }
 }

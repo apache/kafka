@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor;
 
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * This class is used to provide the optional parameters when sending output records to downstream processor
@@ -25,20 +27,24 @@ import java.util.Objects;
 public class To {
     protected String childName;
     protected long timestamp;
+    protected Set<String> childExclusions;
 
     private To(final String childName,
-               final long timestamp) {
+               final long timestamp,
+               final Set<String> childExclusions) {
         this.childName = childName;
         this.timestamp = timestamp;
+        this.childExclusions = childExclusions;
     }
 
     protected To(final To to) {
-        this(to.childName, to.timestamp);
+        this(to.childName, to.timestamp, to.childExclusions);
     }
 
     protected void update(final To to) {
         childName = to.childName;
         timestamp = to.timestamp;
+        childExclusions = to.childExclusions;
     }
 
     /**
@@ -47,7 +53,7 @@ public class To {
      * @return a new {@link To} instance configured with {@code childName}
      */
     public static To child(final String childName) {
-        return new To(childName, -1);
+        return new To(childName, -1, Collections.emptySet());
     }
 
     /**
@@ -55,7 +61,7 @@ public class To {
      * @return a new {@link To} instance configured for all downstream processor
      */
     public static To all() {
-        return new To(null, -1);
+        return new To(null, -1,  Collections.emptySet());
     }
 
     /**
@@ -65,6 +71,11 @@ public class To {
      */
     public To withTimestamp(final long timestamp) {
         this.timestamp = timestamp;
+        return this;
+    }
+
+    public To withExclusions(final Set<String> childExclusions) {
+        this.childExclusions = childExclusions;
         return this;
     }
 
@@ -78,7 +89,8 @@ public class To {
         }
         final To to = (To) o;
         return timestamp == to.timestamp &&
-            Objects.equals(childName, to.childName);
+            Objects.equals(childName, to.childName) &&
+            Objects.equals(childExclusions, to.childExclusions);
     }
 
     /**

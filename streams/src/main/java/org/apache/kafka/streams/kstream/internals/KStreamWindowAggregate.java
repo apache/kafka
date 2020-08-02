@@ -18,14 +18,11 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.streams.kstream.Aggregator;
-import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -33,6 +30,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor;
@@ -46,6 +44,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
     private final Windows<W> windows;
     private final Initializer<Agg> initializer;
     private final Aggregator<? super K, ? super V, Agg> aggregator;
+    private final String deadLetterNodeName;
 
     private boolean sendOldValues = false;
 
@@ -53,10 +52,21 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                                   final String storeName,
                                   final Initializer<Agg> initializer,
                                   final Aggregator<? super K, ? super V, Agg> aggregator) {
+        this(windows, storeName, initializer, aggregator, null);
+    }
+
+    public KStreamWindowAggregate(
+        final Windows<W> windows,
+        final String storeName,
+        final Initializer<Agg> initializer,
+        final Aggregator<? super K, ? super V, Agg> aggregator,
+        final String deadLetterNodeName
+    ) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
         this.aggregator = aggregator;
+        this.deadLetterNodeName = deadLetterNodeName;
     }
 
     @Override
@@ -101,8 +111,9 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
                 context,
-                new TimestampedCacheFlushListener<>(context),
-                sendOldValues);
+                new TimestampedCacheFlushListener<>(context, deadLetterNodeName == null ? Collections.emptySet() : Collections.singleton(deadLetterNodeName)),
+                sendOldValues
+            );
         }
 
         @Override
@@ -149,7 +160,10 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         new Windowed<>(key, entry.getValue()),
                         newAgg,
                         sendOldValues ? oldAgg : null,
-                        newTimestamp);
+                        To.all()
+                            .withTimestamp(newTimestamp)
+                            .withExclusions(deadLetterNodeName == null ? Collections.emptySet() : Collections.singleton(deadLetterNodeName))
+                    );
                 } else {
                     log.warn(
                         "Skipping record for expired window. " +
@@ -170,6 +184,9 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                         closeTime,
                         observedStreamTime
                     );
+                    if (deadLetterNodeName != null) {
+                        context().forward(key, value, To.child(deadLetterNodeName));
+                    }
                     lateRecordDropSensor.record();
                 }
             }
@@ -186,7 +203,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
             @Override
             public String[] storeNames() {
-                return new String[] {storeName};
+                return new String[]{storeName};
             }
         };
     }
@@ -210,6 +227,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         }
 
         @Override
-        public void close() {}
+        public void close() {
+        }
     }
 }

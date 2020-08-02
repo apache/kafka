@@ -29,7 +29,10 @@ import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -139,6 +142,17 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                                                   final Aggregator<? super K, ? super V, VR> aggregator,
                                                   final Named named,
                                                   final Materialized<K, VR, WindowStore<Bytes, byte[]>> materialized) {
+        return aggregate(initializer, aggregator, named, materialized, null);
+    }
+
+    @Override
+    public <VR> KTable<Windowed<K>, VR> aggregate(
+        final Initializer<VR> initializer,
+        final Aggregator<? super K, ? super V, VR> aggregator,
+        final Named named,
+        final Materialized<K, VR, WindowStore<Bytes, byte[]>> materialized,
+        final String deadLetterTopic
+    ) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
@@ -148,14 +162,27 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             materializedInternal.withKeySerde(keySerde);
         }
 
+        String deadLetterNodeName = null;
+        StreamSinkNode<K, V> lateMessagesSinkNode = null;
+        if (deadLetterTopic != null) {
+            deadLetterNodeName = new NamedInternal(named).suffixWithOrElseGet("-lateMessages", builder, AGGREGATE_NAME);
+            lateMessagesSinkNode = new StreamSinkNode<>(
+                deadLetterNodeName,
+                new StaticTopicNameExtractor<>(deadLetterTopic),
+                new ProducedInternal<>(Produced.with(keySerde, valueSerde))
+            );
+        }
+
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
         return aggregateBuilder.build(
             new NamedInternal(aggregateName),
             materialize(materializedInternal),
-            new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
+            new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator, deadLetterNodeName),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            lateMessagesSinkNode
+        );
     }
 
     @Override

@@ -23,15 +23,24 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
+import java.util.Collections;
+import java.util.Set;
+
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 class TimestampedCacheFlushListener<K, V> implements CacheFlushListener<K, ValueAndTimestamp<V>> {
     private final InternalProcessorContext context;
     private final ProcessorNode myNode;
+    private final Set<String> forwardingExclusions;
 
     TimestampedCacheFlushListener(final ProcessorContext context) {
+        this(context, Collections.emptySet());
+    }
+
+    TimestampedCacheFlushListener(final ProcessorContext context, final Set<String> forwardingExclusions) {
         this.context = (InternalProcessorContext) context;
-        myNode = this.context.currentNode();
+        this.myNode = this.context.currentNode();
+        this.forwardingExclusions = forwardingExclusions;
     }
 
     @Override
@@ -45,7 +54,10 @@ class TimestampedCacheFlushListener<K, V> implements CacheFlushListener<K, Value
             context.forward(
                 key,
                 new Change<>(getValueOrNull(newValue), getValueOrNull(oldValue)),
-                To.all().withTimestamp(newValue != null ? newValue.timestamp() : timestamp));
+                To.all()
+                    .withTimestamp(newValue != null ? newValue.timestamp() : timestamp)
+                    .withExclusions(forwardingExclusions)
+            );
         } finally {
             context.setCurrentNode(prev);
         }
