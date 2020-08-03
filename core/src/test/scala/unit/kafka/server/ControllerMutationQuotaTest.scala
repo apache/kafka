@@ -110,13 +110,14 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   @Test
   def testSetUnsetQuota(): Unit = {
+    val rate = 1.5
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "User")
     // Default Value
     waitUserQuota(principal.getName, Long.MaxValue)
     // Define a new quota
-    defineUserQuota(principal.getName, Some(ControllerMutationRate))
+    defineUserQuota(principal.getName, Some(rate))
     // Check it
-    waitUserQuota(principal.getName, ControllerMutationRate)
+    waitUserQuota(principal.getName, rate)
     // Remove it
     defineUserQuota(principal.getName, None)
     // Back to the default
