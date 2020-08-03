@@ -1284,6 +1284,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-23:test',
             ':streams:upgrade-system-tests-24:test',
             ':streams:upgrade-system-tests-25:test',
+            ':streams:upgrade-system-tests-26:test',
             ':streams:examples:test'
     ]
   )
@@ -1534,6 +1535,18 @@ project(':streams:upgrade-system-tests-25') {
 
   dependencies {
     testCompile libs.kafkaStreams_25
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-26') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-26"
+
+  dependencies {
+    testCompile libs.kafkaStreams_26
   }
 
   systemTestLibs {
