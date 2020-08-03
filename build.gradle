@@ -50,6 +50,26 @@ spotless {
 }
 
 
+task copyGitHooks(type: Copy) {
+    description 'Copies the git hooks.'
+    from("${rootDir}/bin/git-hooks/") {
+        include '*'
+    }
+    into "${rootDir}/.git/hooks"
+}
+
+task installGitHooks(type: Exec) {
+    description 'Installs the git hooks.'
+    group 'git hooks'
+    workingDir rootDir
+    commandLine 'chmod'
+    args '-R', '+x', '.git/hooks/'
+    dependsOn copyGitHooks
+    doLast {
+        logger.info('Git hook installed successfully.')
+    }
+}
+
 allprojects {
 
   repositories {
@@ -75,6 +95,13 @@ allprojects {
       }
     }
     configurations {
+      all {
+        resolutionStrategy {
+          dependencySubstitution {
+            substitute module("log4j:log4j:1.2.17") because "we use a custom version with security patches" with module("io.confluent:confluent-log4j:1.2.17-cp1")
+          }
+        }
+      }
       runtime {
         resolutionStrategy {
           force(
@@ -108,12 +135,13 @@ ext {
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
+  userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
 
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
-  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
+  shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && !version.contains("-alpha") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
   mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
   mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
@@ -149,7 +177,7 @@ if (file('.git').exists()) {
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
         'TROGDOR.md',
-        '**/README.md',
+        '**/*README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
@@ -198,6 +226,7 @@ subprojects {
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
     if (JavaVersion.current().isJava9Compatible())
       options.compilerArgs << "--release" << minJavaVersion
+    dependsOn installGitHooks
   }
 
   uploadArchives {
@@ -328,6 +357,7 @@ subprojects {
 
   task integrationTest(type: Test, dependsOn: compileJava) {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -356,6 +386,7 @@ subprojects {
 
   task unitTest(type: Test, dependsOn: compileJava) {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -2002,3 +2033,4 @@ task aggregatedJavadoc(type: Javadoc) {
   else
     options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
+
