@@ -149,7 +149,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * This constrainedAssign optimizes the assignment algorithm when all consumers were subscribed to same set of topics.
      * The method includes the following steps:
      *
-     * 1. Reassign as many previously owned partitions as possible
+     * 1. Reassign as many previously owned partitions as possible, up to the maxQuota
      * 2. Fill remaining members up to minQuota
      * 3. If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
      *    from the over-full consumers at max capacity
