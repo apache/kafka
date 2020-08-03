@@ -178,6 +178,8 @@ public class SensorTest {
             assertTrue(service.awaitTermination(10, TimeUnit.SECONDS));
             needShutdown = false;
             for (Future<Throwable> callable : workers) {
+                if (callable.get() != null)
+                    callable.get().printStackTrace();
                 assertTrue("If this failure happen frequently, we can try to increase the wait time", callable.isDone());
                 assertNull("Sensor#checkQuotas SHOULD be thread-safe!", callable.get());
             }

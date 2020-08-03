@@ -28,5 +28,4 @@ public interface Measurable extends MetricValueProvider<Double> {
      * @return The measured value
      */
     double measure(MetricConfig config, long now);
-
 }

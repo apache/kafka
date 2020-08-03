@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.HashMap;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
+import org.apache.kafka.common.metrics.stats.TokenBucket;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.ArrayList;
@@ -44,6 +46,7 @@ public final class Sensor {
     private final String name;
     private final Sensor[] parents;
     private final List<Stat> stats;
+    private final Map<Stat, MetricConfig> configPerStat;
     private final Map<MetricName, KafkaMetric> metrics;
     private final MetricConfig config;
     private final Time time;
@@ -109,6 +112,7 @@ public final class Sensor {
         this.parents = parents == null ? new Sensor[0] : parents;
         this.metrics = new LinkedHashMap<>();
         this.stats = new ArrayList<>();
+        this.configPerStat = new HashMap<>();
         this.config = config;
         this.time = time;
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
@@ -199,8 +203,10 @@ public final class Sensor {
         synchronized (this) {
             synchronized (metricLock()) {
                 // increment all the stats
-                for (Stat stat : this.stats)
+                for (Stat stat : this.stats) {
+                    MetricConfig config = this.configPerStat.getOrDefault(stat, this.config);
                     stat.record(config, value, timeMs);
+                }
             }
             if (checkQuotas)
                 checkQuotas(timeMs);
@@ -223,8 +229,14 @@ public final class Sensor {
                 Quota quota = config.quota();
                 if (quota != null) {
                     double value = metric.measurableValue(timeMs);
-                    if (!quota.acceptable(value)) {
-                        throw new QuotaViolationException(metric, value, quota.bound());
+                    if (metric.measurable() instanceof TokenBucket) {
+                        if (value <= 0) {
+                            throw new QuotaViolationException(metric, value, quota.bound());
+                        }
+                    } else {
+                        if (!quota.acceptable(value)) {
+                            throw new QuotaViolationException(metric, value, quota.bound());
+                        }
                     }
                 }
             }
@@ -252,6 +264,8 @@ public final class Sensor {
             return false;
 
         this.stats.add(Objects.requireNonNull(stat));
+        if (config != null)
+            this.configPerStat.put(stat, config);
         Object lock = metricLock();
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
@@ -297,6 +311,8 @@ public final class Sensor {
             registry.registerMetric(metric);
             metrics.put(metric.metricName(), metric);
             stats.add(stat);
+            if (config != null)
+                this.configPerStat.put(stat, config);
             return true;
         }
     }
