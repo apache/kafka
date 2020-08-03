@@ -66,7 +66,7 @@ final class StateManagerUtil {
         // we can checkpoint if the the difference between the current and the previous snapshot is large enough
         long totalOffsetDelta = 0L;
         for (final Map.Entry<TopicPartition, Long> entry : newOffsetSnapshot.entrySet()) {
-            totalOffsetDelta += Math.abs(oldOffsetSnapshot.getOrDefault(entry.getKey(), 0L) - entry.getValue());
+            totalOffsetDelta += entry.getValue() - oldOffsetSnapshot.getOrDefault(entry.getKey(), 0L);
         }
 
         // when enforcing checkpoint is required, we should overwrite the checkpoint if it is different from the old one;

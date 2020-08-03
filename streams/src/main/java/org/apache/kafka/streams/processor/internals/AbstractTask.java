@@ -77,8 +77,7 @@ public abstract class AbstractTask implements Task {
     protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
         final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
         if (StateManagerUtil.checkpointNeeded(enforceCheckpoint, offsetSnapshotSinceLastFlush, offsetSnapshot)) {
-            // since there's no written offsets we can checkpoint with empty map,
-            // and the state's current offset would be used to checkpoint
+            // the state's current offset would be used to checkpoint
             stateMgr.flush();
             stateMgr.checkpoint();
             offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);

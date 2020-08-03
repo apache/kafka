@@ -273,13 +273,6 @@ public class TaskManager {
         // close and recycle those tasks
         handleCloseAndRecycle(tasksToRecycle, tasksToCloseClean, tasksToCloseDirty, activeTasksToCreate, standbyTasksToCreate, taskCloseExceptions);
 
-        // for tasks that cannot be cleanly closed or recycled, close them dirty
-        for (final Task task : tasksToCloseDirty) {
-            closeTaskDirty(task);
-            cleanUpTaskProducer(task, taskCloseExceptions);
-            tasks.remove(task.id());
-        }
-
         if (!taskCloseExceptions.isEmpty()) {
             log.error("Hit exceptions while closing / recycling tasks: {}", taskCloseExceptions);
 
@@ -400,6 +393,14 @@ public class TaskManager {
                 taskCloseExceptions.put(task.id(), e);
                 tasksToCloseDirty.add(task);
             }
+        }
+
+
+        // for tasks that cannot be cleanly closed or recycled, close them dirty
+        for (final Task task : tasksToCloseDirty) {
+            closeTaskDirty(task);
+            cleanUpTaskProducer(task, taskCloseExceptions);
+            tasks.remove(task.id());
         }
     }
 
