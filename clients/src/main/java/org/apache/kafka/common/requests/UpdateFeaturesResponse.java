@@ -17,9 +17,12 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
+import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -78,5 +81,27 @@ public class UpdateFeaturesResponse extends AbstractResponse {
 
     public static UpdateFeaturesResponse parse(ByteBuffer buffer, short version) {
         return new UpdateFeaturesResponse(ApiKeys.UPDATE_FEATURES.parseResponse(version, buffer), version);
+    }
+
+    public static UpdateFeaturesResponse createWithFeatureUpdateApiErrors(Map<String, ApiError> updateErrors) {
+        final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
+        for (Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
+            final String feature = updateError.getKey();
+            final ApiError error = updateError.getValue();
+            final UpdatableFeatureResult result = new UpdatableFeatureResult();
+            result.setFeature(feature)
+                .setErrorCode(error.error().code())
+                .setErrorMessage(error.message());
+            results.add(result);
+        }
+        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData().setResults(results));
+    }
+
+    public static UpdateFeaturesResponse createWithFeatureUpdateErrors(Map<String, Errors> updateErrors) {
+        final Map<String, ApiError> updateApiErrors = new HashMap<>();
+        for (Map.Entry<String, Errors> entry : updateErrors.entrySet()) {
+            updateApiErrors.put(entry.getKey(), new ApiError(entry.getValue()));
+        }
+        return createWithFeatureUpdateApiErrors(updateApiErrors);
     }
 }

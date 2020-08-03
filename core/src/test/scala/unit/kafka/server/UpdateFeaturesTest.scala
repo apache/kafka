@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
@@ -25,18 +24,18 @@ import kafka.api.KAFKA_2_7_IV0
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureMetadata, FeatureUpdate, UpdateFeaturesOptions, UpdateFeaturesResult}
+import org.apache.kafka.clients.admin.{Admin, DescribeFeaturesOptions, FeatureMetadata, UpdateFeaturesOptions, UpdateFeaturesResult}
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.feature.FinalizedVersionRange
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.message.UpdateFeaturesRequestData
 import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKeyCollection
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{UpdateFeaturesRequest, UpdateFeaturesResponse}
+import org.apache.kafka.common.requests.{FeatureUpdate, UpdateFeaturesRequest, UpdateFeaturesResponse}
 import org.apache.kafka.common.utils.Utils
 import org.junit.Test
 import org.junit.Assert.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
-import org.scalatest.Assertions.{assertThrows, intercept}
+import org.scalatest.Assertions.intercept
 
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
@@ -159,6 +158,9 @@ class UpdateFeaturesTest extends BaseRequestTest {
       new FeatureMetadata(defaultFinalizedFeatures(), versionBefore, defaultSupportedFeatures()))
   }
 
+  /**
+   * Tests that an UpdateFeatures request sent to a non-Controller node fails as expected.
+   */
   @Test
   def testShouldFailRequestIfNotController(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
@@ -190,42 +192,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
       new FeatureMetadata(defaultFinalizedFeatures(), versionBefore, defaultSupportedFeatures()))
   }
 
-  @Test
-  def testShouldFailRequestForEmptyUpdates(): Unit = {
-    val nullMap: util.Map[String, FeatureUpdate] = null
-    val emptyMap: util.Map[String, FeatureUpdate] = Utils.mkMap()
-    Set(nullMap, emptyMap).foreach { updates =>
-      val client = createAdminClient()
-      val exception = intercept[IllegalArgumentException] {
-        client.updateFeatures(updates, new UpdateFeaturesOptions())
-      }
-      assertNotNull(exception)
-      assertEquals("Feature updates can not be null or empty.", exception.getMessage)
-    }
-  }
-
-  @Test
-  def testShouldFailRequestForNullUpdateFeaturesOptions(): Unit = {
-    val client = createAdminClient()
-    val update = new FeatureUpdate(defaultSupportedFeatures().get("feature_1").max(), false)
-    val exception = intercept[NullPointerException] {
-      client.updateFeatures(Utils.mkMap(Utils.mkEntry("feature_1", update)), null)
-    }
-    assertNotNull(exception)
-    assertEquals("UpdateFeaturesOptions can not be null", exception.getMessage)
-  }
-
-  @Test
-  def testShouldFailRequestForInvalidFeatureName(): Unit = {
-    val client = createAdminClient()
-    val update = new FeatureUpdate(defaultSupportedFeatures().get("feature_1").max(), false)
-    val exception = intercept[IllegalArgumentException] {
-      client.updateFeatures(Utils.mkMap(Utils.mkEntry("", update)), new UpdateFeaturesOptions())
-    }
-    assertNotNull(exception)
-    assertTrue((".*Provided feature can not be null or empty.*"r).findFirstIn(exception.getMessage).isDefined)
-  }
-
+  /**
+   * Tests that an UpdateFeatures request fails in the Controller, when, for a feature the
+   * allowDowngrade flag is not set during a downgrade request.
+   */
   @Test
   def testShouldFailRequestWhenDowngradeFlagIsNotSetDuringDowngrade(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
@@ -234,6 +204,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
       ".*Can not downgrade finalized feature: 'feature_1'.*allowDowngrade.*".r)
   }
 
+  /**
+   * Tests that an UpdateFeatures request fails in the Controller, when, for a feature the downgrade
+   * is attempted to a max version level thats higher than the existing max version level.
+   */
   @Test
   def testShouldFailRequestWhenDowngradeToHigherVersionLevelIsAttempted(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
@@ -242,13 +216,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
       ".*finalized feature: 'feature_1'.*allowDowngrade.* provided maxVersionLevel:3.*existing maxVersionLevel:2.*".r)
   }
 
-  @Test
-  def testShouldFailRequestInClientWhenDowngradeFlagIsNotSetDuringDeletion(): Unit = {
-    assertThrows[IllegalArgumentException] {
-      new FeatureUpdate(0, false)
-    }
-  }
-
+  /**
+   * Tests that an UpdateFeatures request fails in the Controller, when, a feature deletion is
+   * attempted without setting the allowDowngrade flag.
+   */
   @Test
   def testShouldFailRequestInServerWhenDowngradeFlagIsNotSetDuringDeletion(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
@@ -287,6 +258,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
       new FeatureMetadata(defaultFinalizedFeatures(), versionBefore, defaultSupportedFeatures()))
   }
 
+  /**
+   * Tests that an UpdateFeatures request fails in the Controller, when, a feature version level
+   * upgrade is attempted for a non-existing feature.
+   */
   @Test
   def testShouldFailRequestDuringDeletionOfNonExistingFeature(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
@@ -295,6 +270,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
       ".*Can not delete non-existing finalized feature: 'feature_non_existing'.*".r)
   }
 
+  /**
+   * Tests that an UpdateFeatures request fails in the Controller, when, a feature version level
+   * upgrade is attempted to a version level thats the same as the existing max version level.
+   */
   @Test
   def testShouldFailRequestWhenUpgradingToSameVersionLevel(): Unit = {
     testWithInvalidFeatureUpdate[InvalidRequestException](
@@ -303,6 +282,11 @@ class UpdateFeaturesTest extends BaseRequestTest {
       ".*Can not upgrade a finalized feature: 'feature_1'.*to the same value.*".r)
   }
 
+  /**
+   * Tests that an UpdateFeatures request fails in the Controller, when, a feature version level
+   * downgrade is attempted to a version level thats below the default min version level for the
+   * feature.
+   */
   @Test
   def testShouldFailRequestWhenDowngradingBelowMinVersionLevel(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
@@ -330,6 +314,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
       new FeatureMetadata(initialFinalizedFeatures, versionBefore, defaultSupportedFeatures()))
   }
 
+  /**
+   * Tests that an UpdateFeatures request fails in the Controller, when, a feature version level
+   * upgrade introduces a version incompatibility with existing supported features.
+   */
   @Test
   def testShouldFailRequestDuringBrokerMaxVersionLevelIncompatibility(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
@@ -361,13 +349,17 @@ class UpdateFeaturesTest extends BaseRequestTest {
       Utils.mkMap(Utils.mkEntry("feature_1", invalidUpdate)),
       new UpdateFeaturesOptions())
 
-    checkException[InvalidRequestException](result, Map("feature_1" -> ".*1 broker.*incompatible.*".r))
+    checkException[InvalidRequestException](result, Map("feature_1" -> ".*brokers.*incompatible.*".r))
     checkFeatures(
       adminClient,
       nodeBefore,
       new FeatureMetadata(defaultFinalizedFeatures(), versionBefore, defaultSupportedFeatures()))
   }
 
+  /**
+   * Tests that an UpdateFeatures request succeeds in the Controller, when, there are no existing
+   * finalized features in FeatureZNode when the test starts.
+   */
   @Test
   def testSuccessfulFeatureUpgradeAndWithNoExistingFinalizedFeatures(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
@@ -407,6 +399,10 @@ class UpdateFeaturesTest extends BaseRequestTest {
       expected)
   }
 
+  /**
+   * Tests that an UpdateFeatures request succeeds in the Controller, when, the request contains
+   * both a valid feature version level upgrade as well as a downgrade request.
+   */
   @Test
   def testSuccessfulFeatureUpgradeAndDowngrade(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
@@ -450,6 +446,11 @@ class UpdateFeaturesTest extends BaseRequestTest {
       expected)
   }
 
+  /**
+   * Tests that an UpdateFeatures request succeeds partially in the Controller, when, the request
+   * contains a valid feature version level upgrade and an invalid version level downgrade.
+   * i.e. expect the upgrade operation to succeed, and the downgrade operation to fail.
+   */
   @Test
   def testPartialSuccessDuringValidFeatureUpgradeAndInvalidDowngrade(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
@@ -493,6 +494,11 @@ class UpdateFeaturesTest extends BaseRequestTest {
       new FeatureMetadata(expectedFeatures, versionBefore + 1, initialSupportedFeatures))
   }
 
+  /**
+   * Tests that an UpdateFeatures request succeeds partially in the Controller, when, the request
+   * contains an invalid feature version level upgrade and a valid version level downgrade.
+   * i.e. expect the downgrade operation to succeed, and the upgrade operation to fail.
+   */
   @Test
   def testPartialSuccessDuringInvalidFeatureUpgradeAndValidDowngrade(): Unit = {
     TestUtils.waitUntilControllerElected(zkClient)
@@ -537,7 +543,7 @@ class UpdateFeaturesTest extends BaseRequestTest {
     // Expect update for "feature_2" to have succeeded.
     result.values().get("feature_2").get()
     // Expect update for "feature_1" to have failed.
-    checkException[InvalidRequestException](result, Map("feature_1" -> ".*1 broker.*incompatible.*".r))
+    checkException[InvalidRequestException](result, Map("feature_1" -> ".*brokers.*incompatible.*".r))
     val expectedFeatures = Features.finalizedFeatures(
       Utils.mkMap(
         Utils.mkEntry("feature_1", initialFinalizedFeatures.get("feature_1")),

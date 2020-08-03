@@ -394,18 +394,39 @@ class KafkaController(val config: KafkaConfig,
               (featureName, existingVersionRange)
             } else if (brokerDefaultVersionRange.max() >= existingVersionRange.max() &&
                        brokerDefaultVersionRange.min() <= existingVersionRange.max()) {
-              // Through this change, we deprecate all version levels in the closed range:
-              // [existingVersionRange.min(), brokerDefaultVersionRange.min() - 1]
+              // Using the change below, we deprecate all version levels in the range:
+              // [existingVersionRange.min(), brokerDefaultVersionRange.min() - 1].
+              //
+              // NOTE: if existingVersionRange.min() equals brokerDefaultVersionRange.min(), then
+              // we do not deprecate any version levels with this change.
+              //
+              // Examples:
+              // 1. brokerDefaultVersionRange = [4, 7] and existingVersionRange = [1, 5].
+              //    In this case, we deprecate all version levels in the range: [1, 3].
+              // 2. brokerDefaultVersionRange = [4, 7] and existingVersionRange = [4, 5].
+              //    In this case, we do not deprecate any version level since
+              //    brokerDefaultVersionRange.min() equals existingVersionRange.min().
               (featureName, new FinalizedVersionRange(brokerDefaultVersionRange.min(), existingVersionRange.max()))
             } else {
-              // If the existing version levels fall completely outside the
-              // range of the default finalized version levels (i.e. no intersection), or, if the
-              // existing version levels are ineligible for a modification since they are
-              // incompatible with default finalized version levels, then we skip the update.
-              warn(s"Can not update minimum version level in finalized feature: $featureName,"
+              // This is a serious error. We should never be reaching here, since we already
+              // verify once during KafkaServer startup that existing finalized feature versions in
+              // the FeatureZNode contained no incompatibilities. If we are here, it means that one of
+              // the following is true:
+              // 1. The existing version levels fall completely outside the range of the default
+              // finalized version levels (i.e. no intersection), or
+              // 2. The existing version levels are incompatible with default finalized version
+              // levels.
+              //
+              // Examples of invalid cases that can cause this exception to be triggered:
+              // 1. No intersection      : brokerDefaultVersionRange = [4, 7] and existingVersionRange = [2, 3].
+              // 2. No intersection      : brokerDefaultVersionRange = [2, 3] and existingVersionRange = [4, 7].
+              // 3. Incompatible versions: brokerDefaultVersionRange = [2, 3] and existingVersionRange = [1, 7].
+              throw new IllegalStateException(
+                s"Can not update minimum version level in finalized feature: $featureName,"
                 + s" since the existing $existingVersionRange is not eligible for a change"
-                + s" based on the default $brokerDefaultVersionRange.")
-              (featureName, existingVersionRange)
+                + s" based on the default $brokerDefaultVersionRange. This should never happen"
+                + s" since feature version incompatibilities are already checked during"
+                + s" Kafka server startup.")
             }
         }.asJava)
       }
@@ -1856,7 +1877,7 @@ class KafkaController(val config: KafkaConfig,
   /**
    * Returns the new FinalizedVersionRange for the feature, if there are no feature
    * incompatibilities seen with all known brokers for the provided feature update.
-   * Otherwise returns a suitable error.
+   * Otherwise returns an ApiError object containing Errors#INVALID_REQUEST.
    *
    * @param update   the feature update to be processed (this can not be meant to delete the feature)
    *
@@ -1866,24 +1887,29 @@ class KafkaController(val config: KafkaConfig,
     if (UpdateFeaturesRequest.isDeleteRequest(update)) {
       throw new IllegalArgumentException(s"Provided feature update can not be meant to delete the feature: $update")
     }
+
+    val incompatibilityError = "Could not apply finalized feature update because" +
+      " brokers were found to have incompatible versions for the feature."
+
     // NOTE: Below we set the finalized min version level to be the default minimum version
     // level. If the finalized feature already exists, then, this can cause deprecation of all
     // version levels in the closed range:
     // [existingVersionRange.min(), defaultMinVersionLevel - 1].
-    val defaultMinVersionLevel = brokerFeatures.defaultMinVersionLevel(update.feature)
-    val newVersionRange = new FinalizedVersionRange(defaultMinVersionLevel, update.maxVersionLevel)
-    val numIncompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.count(broker => {
-      val singleFinalizedFeature =
-        Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
-      BrokerFeatures.hasIncompatibleFeatures(broker.features, singleFinalizedFeature)
-    })
-    if (numIncompatibleBrokers == 0) {
-      Left(newVersionRange)
+    if (brokerFeatures.supportedFeatures.get(update.feature()) == null) {
+      Right(new ApiError(Errors.INVALID_REQUEST, incompatibilityError))
     } else {
-      Right(
-        new ApiError(Errors.INVALID_REQUEST,
-                     s"Could not apply finalized feature update because $numIncompatibleBrokers" +
-                     " brokers were found to have incompatible features."))
+      val defaultMinVersionLevel = brokerFeatures.defaultMinVersionLevel(update.feature)
+      val newVersionRange = new FinalizedVersionRange(defaultMinVersionLevel, update.maxVersionLevel)
+      val numIncompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.count(broker => {
+        val singleFinalizedFeature =
+          Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
+        BrokerFeatures.hasIncompatibleFeatures(broker.features, singleFinalizedFeature)
+      })
+      if (numIncompatibleBrokers == 0) {
+        Left(newVersionRange)
+      } else {
+        Right(new ApiError(Errors.INVALID_REQUEST, incompatibilityError))
+      }
     }
   }
 
@@ -1952,7 +1978,7 @@ class KafkaController(val config: KafkaConfig,
                 " flag set in the request, the provided" +
                 s" maxVersionLevel:${update.maxVersionLevel} can not be greater than" +
                 s" existing maxVersionLevel:${existing.max}."))
-          } else if (update.maxVersionLevel() < existing.min) {
+          } else if (update.maxVersionLevel < existing.min) {
             // Disallow downgrade of a finalized feature below the existing finalized
             // minVersionLevel.
             Right(new ApiError(Errors.INVALID_REQUEST,
@@ -2006,6 +2032,10 @@ class KafkaController(val config: KafkaConfig,
       }
     }
 
+    // If the existing and target features are the same, then, we skip the update to the
+    // FeatureZNode as no changes to the node are required. Otherwise, we replace the contents
+    // of the FeatureZNode with the new features. This may result in partial or full modification
+    // of the existing finalized features.
     if (existingFeatures.equals(targetFeatures)) {
       callback(errors)
     } else {

@@ -194,7 +194,7 @@ public class ApiVersionsResponse extends AbstractResponse {
             UNKNOWN_FINALIZED_FEATURES_EPOCH);
     }
 
-    public static ApiVersionsResponse createApiVersionsResponse(
+    private static ApiVersionsResponse createApiVersionsResponse(
         final int throttleTimeMs,
         final byte minMagic,
         final Features<SupportedVersionRange> latestSupportedFeatures,

@@ -34,10 +34,9 @@ public class FeatureMetadata {
 
     private final Features<SupportedVersionRange> supportedFeatures;
 
-    public FeatureMetadata(
-        final Features<FinalizedVersionRange> finalizedFeatures,
-        final int finalizedFeaturesEpoch,
-        final Features<SupportedVersionRange> supportedFeatures) {
+    public FeatureMetadata(final Features<FinalizedVersionRange> finalizedFeatures,
+                           final int finalizedFeaturesEpoch,
+                           final Features<SupportedVersionRange> supportedFeatures) {
         Objects.requireNonNull(finalizedFeatures, "Provided finalizedFeatures can not be null.");
         Objects.requireNonNull(supportedFeatures, "Provided supportedFeatures can not be null.");
         this.finalizedFeatures = finalizedFeatures;
@@ -96,9 +95,9 @@ public class FeatureMetadata {
     @Override
     public String toString() {
         return String.format(
-            "FeatureMetadata{finalized:%s, finalizedFeaturesEpoch:%d, supported:%s}",
+            "FeatureMetadata{finalized:%s, finalizedFeaturesEpoch:%s, supported:%s}",
             finalizedFeatures,
-            finalizedFeaturesEpoch,
+            finalizedFeaturesEpoch.map(Object::toString).orElse("<none>"),
             supportedFeatures);
     }
 }

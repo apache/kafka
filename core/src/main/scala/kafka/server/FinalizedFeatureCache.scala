@@ -38,7 +38,9 @@ case class FinalizedFeaturesAndEpoch(features: Features[FinalizedVersionRange], 
  * A common mutable cache containing the latest finalized features and epoch. By default the contents of
  * the cache are empty. This cache needs to be populated at least once for its contents to become
  * non-empty. Currently the main reader of this cache is the read path that serves an ApiVersionsRequest,
- * returning the features information in the response.
+ * returning the features information in the response. This cache is typically updated asynchronously
+ * whenever the finalized features and epoch values are modified in ZK by the KafkaController.
+ * This cache is thread-safe for reads and writes.
  *
  * @see FinalizedFeatureChangeListener
  */

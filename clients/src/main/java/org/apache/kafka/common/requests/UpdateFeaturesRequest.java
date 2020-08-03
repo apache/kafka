@@ -17,6 +17,9 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData.FeatureUpdateKey;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
@@ -89,5 +92,27 @@ public class UpdateFeaturesRequest extends AbstractRequest {
 
     public static boolean isDeleteRequest(UpdateFeaturesRequestData.FeatureUpdateKey update) {
         return update.maxVersionLevel() < 1 && update.allowDowngrade();
+    }
+
+    public static UpdateFeaturesRequestData create(Map<String, FeatureUpdate> featureUpdates) {
+        final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
+        final UpdateFeaturesRequestData.FeatureUpdateKeyCollection featureUpdatesRequestData
+            = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
+        for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
+            final String feature = entry.getKey();
+            final FeatureUpdate update = entry.getValue();
+            if (feature.trim().isEmpty()) {
+                throw new IllegalArgumentException("Provided feature can not be null or empty.");
+            }
+
+            updateFutures.put(feature, new KafkaFutureImpl<>());
+            final UpdateFeaturesRequestData.FeatureUpdateKey requestItem =
+                new UpdateFeaturesRequestData.FeatureUpdateKey();
+            requestItem.setFeature(feature);
+            requestItem.setMaxVersionLevel(update.maxVersionLevel());
+            requestItem.setAllowDowngrade(update.allowDowngrade());
+            featureUpdatesRequestData.add(requestItem);
+        }
+        return new UpdateFeaturesRequestData().setFeatureUpdates(featureUpdatesRequestData);
     }
 }

@@ -27,15 +27,16 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 public class DescribeFeaturesOptions extends AbstractOptions<DescribeFeaturesOptions> {
 
     /**
-     * - True means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request can be
-     *   issued only to the controller.
-     * - False means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request can be
-     *   issued to any random broker.
+     * - True means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request must be
+     *   processed only by the controller.
+     * - False means the {@link Admin#describeFeatures(DescribeFeaturesOptions)} request could be
+     *   processed by any random broker.
      */
     private boolean sendRequestToController = false;
 
     /**
-     * Sets a flag indicating that the describe features request should be issued to the controller.
+     * Sets a flag indicating that the describe features request must be processed only
+     * by the controller.
      */
     public DescribeFeaturesOptions sendRequestToController(boolean sendRequestToController) {
         this.sendRequestToController = sendRequestToController;

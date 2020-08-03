@@ -55,15 +55,15 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
   }
 
   /**
-   * Returns the default minimum version level for a specific feature.
+   * Returns the default minimum version level for a specific supported feature.
    *
    * @param feature   the name of the feature
    *
-   * @return          the default minimum version level for the feature if its defined.
-   *                  otherwise, returns 1.
+   * @return          the default minimum version level for the supported feature if its defined.
+   *                  otherwise, returns the minimum version of the supported feature.
    */
   def defaultMinVersionLevel(feature: String): Short = {
-    defaultFeatureMinVersionLevels.getOrElse(feature, 1)
+    defaultFeatureMinVersionLevels.getOrElse(feature, supportedFeatures.get(feature).min())
   }
 
   // For testing only.
@@ -92,8 +92,8 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    * feature:
    *  1) Does not exist in the Broker (i.e. it is unknown to the Broker).
    *           [OR]
-   *  2) Exists but the FinalizedVersionRange does not match with the
-   *     supported feature's SupportedVersionRange.
+   *  2) Exists but the FinalizedVersionRange does not match with either the SupportedVersionRange
+   *     of the supported feature, or the default minimum version level of the feature.
    *
    * @param finalized   The finalized features against which incompatibilities need to be checked for.
    *
@@ -101,7 +101,8 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
    *                    is empty, it means there were no feature incompatibilities found.
    */
   def incompatibleFeatures(finalized: Features[FinalizedVersionRange]): Features[FinalizedVersionRange] = {
-    BrokerFeatures.incompatibleFeatures(supportedFeatures, finalized, logIncompatibilities = true)
+    BrokerFeatures.incompatibleFeatures(
+      supportedFeatures, finalized, Some(defaultFeatureMinVersionLevels), logIncompatibilities = true)
   }
 }
 
@@ -125,11 +126,20 @@ object BrokerFeatures extends Logging {
    */
   def hasIncompatibleFeatures(supportedFeatures: Features[SupportedVersionRange],
                               finalizedFeatures: Features[FinalizedVersionRange]): Boolean = {
-    !incompatibleFeatures(supportedFeatures, finalizedFeatures, false).empty
+    !incompatibleFeatures(supportedFeatures, finalizedFeatures, Option.empty, false).empty
+  }
+
+  private def isIncompatibleDefaultMinVersionLevel(feature: String,
+                                                   versionLevels: FinalizedVersionRange,
+                                                   defaultFeatureMinVersionLevels: Option[Map[String, Short]]): Boolean = {
+    defaultFeatureMinVersionLevels.exists(defaults =>
+      defaults.get(feature).exists(defaultMinVersionLevel =>
+        defaultMinVersionLevel > versionLevels.max()))
   }
 
   private def incompatibleFeatures(supportedFeatures: Features[SupportedVersionRange],
                                    finalizedFeatures: Features[FinalizedVersionRange],
+                                   defaultFeatureMinVersionLevels: Option[Map[String, Short]],
                                    logIncompatibilities: Boolean): Features[FinalizedVersionRange] = {
     val incompatibleFeaturesInfo = finalizedFeatures.features.asScala.map {
       case (feature, versionLevels) =>
@@ -139,15 +149,19 @@ object BrokerFeatures extends Logging {
         } else if (versionLevels.isIncompatibleWith(supportedVersions)) {
           (feature, versionLevels, "{feature=%s, reason='%s is incompatible with %s'}".format(
             feature, versionLevels, supportedVersions))
+        } else if (isIncompatibleDefaultMinVersionLevel(feature, versionLevels, defaultFeatureMinVersionLevels)) {
+          (feature, versionLevels, "{feature=%s, reason='%s is incompatible with default min_version_level: %d'}".format(
+            feature, versionLevels, defaultFeatureMinVersionLevels.get(feature)))
         } else {
           (feature, versionLevels, null)
+
         }
     }.filter{ case(_, _, errorReason) => errorReason != null}.toList
 
     if (logIncompatibilities && incompatibleFeaturesInfo.nonEmpty) {
       warn(
         "Feature incompatibilities seen: " + incompatibleFeaturesInfo.map {
-          case(_, _, errorReason) => errorReason })
+          case(_, _, errorReason) => errorReason }.mkString(", "))
     }
     Features.finalizedFeatures(incompatibleFeaturesInfo.map {
       case(feature, versionLevels, _) => (feature, versionLevels) }.toMap.asJava)

@@ -14,14 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.common.requests;
 
-import java.util.Map;
 import java.util.Objects;
 
 /**
- * Encapsulates details about an update to a finalized feature. This is particularly useful to
- * define each feature update in the {@link Admin#updateFeatures(Map, UpdateFeaturesOptions)} API.
+ * Encapsulates details about an update to a finalized feature.
  */
 public class FeatureUpdate {
     private final short maxVersionLevel;

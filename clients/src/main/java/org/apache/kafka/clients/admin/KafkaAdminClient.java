@@ -207,6 +207,7 @@ import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
+import org.apache.kafka.common.requests.FeatureUpdate;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -4390,26 +4391,11 @@ public class KafkaAdminClient extends AdminClient {
         }
         Objects.requireNonNull(options, "UpdateFeaturesOptions can not be null");
 
+        final UpdateFeaturesRequestData request = UpdateFeaturesRequest.create(featureUpdates);
         final Map<String, KafkaFutureImpl<Void>> updateFutures = new HashMap<>();
-        final UpdateFeaturesRequestData.FeatureUpdateKeyCollection featureUpdatesRequestData
-            = new UpdateFeaturesRequestData.FeatureUpdateKeyCollection();
         for (Map.Entry<String, FeatureUpdate> entry : featureUpdates.entrySet()) {
-            final String feature = entry.getKey();
-            final FeatureUpdate update = entry.getValue();
-            if (feature.trim().isEmpty()) {
-                throw new IllegalArgumentException("Provided feature can not be null or empty.");
-            }
-
-            updateFutures.put(feature, new KafkaFutureImpl<>());
-            final UpdateFeaturesRequestData.FeatureUpdateKey requestItem =
-                new UpdateFeaturesRequestData.FeatureUpdateKey();
-            requestItem.setFeature(feature);
-            requestItem.setMaxVersionLevel(update.maxVersionLevel());
-            requestItem.setAllowDowngrade(update.allowDowngrade());
-            featureUpdatesRequestData.add(requestItem);
+            updateFutures.put(entry.getKey(), new KafkaFutureImpl<>());
         }
-        final UpdateFeaturesRequestData request = new UpdateFeaturesRequestData().setFeatureUpdates(featureUpdatesRequestData);
-
         final long now = time.milliseconds();
         final Call call = new Call("updateFeatures", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {

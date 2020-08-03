@@ -115,9 +115,6 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResult;
-import org.apache.kafka.common.message.UpdateFeaturesResponseData.UpdatableFeatureResultCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
@@ -148,6 +145,7 @@ import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
+import org.apache.kafka.common.requests.FeatureUpdate;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -484,19 +482,6 @@ public class KafkaAdminClientTest {
                 describedGroupMembers,
                 Collections.emptySet()));
         return data;
-    }
-
-    private static UpdateFeaturesResponse prepareUpdateFeaturesResponse(Map<String, Errors> featureUpdateErrors) {
-        final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
-        for (Map.Entry<String, Errors> entry : featureUpdateErrors.entrySet()) {
-            UpdatableFeatureResult result = new UpdatableFeatureResult();
-            result.setFeature(entry.getKey());
-            Errors error = entry.getValue();
-            result.setErrorCode(error.code());
-            result.setErrorMessage(error.message());
-            results.add(result);
-        }
-        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData().setResults(results));
     }
 
     private static FeatureMetadata defaultFeatureMetadata() {
@@ -3933,28 +3918,25 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testUpdateFeaturesDuringSuccess() throws Exception {
-        testUpdateFeatures(
-            makeTestFeatureUpdates(),
-            makeTestFeatureUpdateErrors(Errors.NONE));
+        final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
+        testUpdateFeatures(updates, makeTestFeatureUpdateErrors(updates, Errors.NONE));
     }
 
     @Test
     public void testUpdateFeaturesInvalidRequestError() throws Exception {
-        testUpdateFeatures(
-            makeTestFeatureUpdates(),
-            makeTestFeatureUpdateErrors(Errors.INVALID_REQUEST));
+        final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
+        testUpdateFeatures(updates, makeTestFeatureUpdateErrors(updates, Errors.INVALID_REQUEST));
     }
 
     @Test
     public void testUpdateFeaturesUpdateFailedError() throws Exception {
-        testUpdateFeatures(
-            makeTestFeatureUpdates(),
-            makeTestFeatureUpdateErrors(Errors.FEATURE_UPDATE_FAILED));
+        final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
+        testUpdateFeatures(updates, makeTestFeatureUpdateErrors(updates, Errors.FEATURE_UPDATE_FAILED));
     }
 
     @Test
     public void testUpdateFeaturesPartialSuccess() throws Exception {
-        final Map<String, Errors> errors = makeTestFeatureUpdateErrors(Errors.NONE);
+        final Map<String, Errors> errors = makeTestFeatureUpdateErrors(makeTestFeatureUpdates(), Errors.NONE);
         errors.put("test_feature_2", Errors.INVALID_REQUEST);
         testUpdateFeatures(makeTestFeatureUpdates(), errors);
     }
@@ -3965,8 +3947,7 @@ public class KafkaAdminClientTest {
             Utils.mkEntry("test_feature_2", new FeatureUpdate((short) 3, true)));
     }
 
-    private Map<String, Errors> makeTestFeatureUpdateErrors(final Errors error) {
-        final Map<String, FeatureUpdate> updates = makeTestFeatureUpdates();
+    private Map<String, Errors> makeTestFeatureUpdateErrors(final Map<String, FeatureUpdate> updates, final Errors error) {
         final Map<String, Errors> errors = new HashMap<>();
         for (Map.Entry<String, FeatureUpdate> entry : updates.entrySet()) {
             errors.put(entry.getKey(), error);
@@ -3979,7 +3960,7 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
                 body -> body instanceof UpdateFeaturesRequest,
-                prepareUpdateFeaturesResponse(featureUpdateErrors));
+                UpdateFeaturesResponse.createWithFeatureUpdateErrors(featureUpdateErrors));
             final Map<String, KafkaFuture<Void>> futures = env.adminClient().updateFeatures(
                 featureUpdates,
                 new UpdateFeaturesOptions().timeoutMs(10000)).values();
@@ -4002,7 +3983,7 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof UpdateFeaturesRequest,
-                prepareUpdateFeaturesResponse(Utils.mkMap(
+                UpdateFeaturesResponse.createWithFeatureUpdateErrors(Utils.mkMap(
                     Utils.mkEntry("test_feature_1", Errors.NOT_CONTROLLER),
                     Utils.mkEntry("test_feature_2", Errors.NOT_CONTROLLER))),
                 env.cluster().nodeById(0));
@@ -4013,7 +3994,7 @@ public class KafkaAdminClientTest {
                 Collections.emptyList()));
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof UpdateFeaturesRequest,
-                prepareUpdateFeaturesResponse(Utils.mkMap(
+                UpdateFeaturesResponse.createWithFeatureUpdateErrors(Utils.mkMap(
                     Utils.mkEntry("test_feature_1", Errors.NONE),
                     Utils.mkEntry("test_feature_2", Errors.NONE))),
                 env.cluster().nodeById(controllerId));
@@ -4025,6 +4006,46 @@ public class KafkaAdminClientTest {
             ).all();
             future.get();
         }
+    }
+
+    @Test
+    public void testUpdateFeaturesShouldFailRequestForEmptyUpdates() {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> env.adminClient().updateFeatures(null, new UpdateFeaturesOptions()));
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> env.adminClient().updateFeatures(
+                    new HashMap<>(), new UpdateFeaturesOptions()));
+        }
+    }
+
+    @Test
+    public void testUpdateFeaturesShouldFailRequestForNullUpdateFeaturesOptions() {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            assertThrows(
+                NullPointerException.class,
+                () -> env.adminClient().updateFeatures(makeTestFeatureUpdates(), null));
+        }
+    }
+
+    @Test
+    public void testUpdateFeaturesShouldFailRequestForInvalidFeatureName() {
+        try (final AdminClientUnitTestEnv env = mockClientEnv()) {
+            assertThrows(
+                IllegalArgumentException.class,
+                () -> env.adminClient().updateFeatures(
+                    Utils.mkMap(Utils.mkEntry("", new FeatureUpdate((short) 2, false))),
+                    new UpdateFeaturesOptions()));
+        }
+    }
+
+    @Test
+    public void testUpdateFeaturesShouldFailRequestInClientWhenDowngradeFlagIsNotSetDuringDeletion() {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new FeatureUpdate((short) 0, false));
     }
 
     @Test

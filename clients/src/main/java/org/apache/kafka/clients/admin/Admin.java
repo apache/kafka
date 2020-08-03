@@ -40,6 +40,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
+import org.apache.kafka.common.requests.FeatureUpdate;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
 
 /**
@@ -1330,7 +1331,7 @@ public interface Admin extends AutoCloseable {
      * Applies specified updates to finalized features. This operation is not transactional so it
      * may succeed for some features while fail for others.
      * <p>
-     * The API takes in a map of finalized feature name to {@link FeatureUpdate} that needs to be
+     * The API takes in a map of finalized feature names to {@link FeatureUpdate} that needs to be
      * applied. Each entry in the map specifies the finalized feature to be added or updated or
      * deleted, along with the new max feature version level value. This request is issued only to
      * the controller since the API is only served by the controller. The return value contains an
