@@ -797,7 +797,7 @@ class Log(@volatile private var _dir: File,
           warn(s"Corruption found in segment ${segment.baseOffset}, truncating to offset ${segment.readNextOffset}")
           removeAndDeleteSegments(unflushed.toList,
             asyncDelete = true,
-            reason = LogRecoveryDeletion)
+            reason = LogRecovery)
           truncated = true
         }
       }
@@ -810,7 +810,7 @@ class Log(@volatile private var _dir: File,
           "This could happen if segment files were deleted from the file system.")
         removeAndDeleteSegments(logSegments,
           asyncDelete = true,
-          reason = LogRecoveryDeletion)
+          reason = LogRecovery)
       }
     }
 
@@ -1789,7 +1789,7 @@ class Log(@volatile private var _dir: File,
       startMs - segment.largestTimestamp > config.retentionMs
     }
 
-    deleteOldSegments(shouldDelete, RetentionMsBreachDeletion)
+    deleteOldSegments(shouldDelete, RetentionMsBreach)
   }
 
   private def deleteRetentionSizeBreachedSegments(): Int = {
@@ -1804,7 +1804,7 @@ class Log(@volatile private var _dir: File,
       }
     }
 
-    deleteOldSegments(shouldDelete, RetentionSizeBreachDeletion)
+    deleteOldSegments(shouldDelete, RetentionSizeBreach)
   }
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
@@ -1812,7 +1812,7 @@ class Log(@volatile private var _dir: File,
       nextSegmentOpt.exists(_.baseOffset <= logStartOffset)
     }
 
-    deleteOldSegments(shouldDelete, StartOffsetBreachDeletion)
+    deleteOldSegments(shouldDelete, StartOffsetBreach)
   }
 
   def isFuture: Boolean = dir.getName.endsWith(Log.FutureDirSuffix)
@@ -1903,7 +1903,7 @@ class Log(@volatile private var _dir: File,
                  s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
                  s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
                  s" size of offset index: ${activeSegment.offsetIndex.entries}.")
-            removeAndDeleteSegments(Seq(activeSegment), asyncDelete = true, LogRollDeletion)
+            removeAndDeleteSegments(Seq(activeSegment), asyncDelete = true, LogRoll)
           } else {
             throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
                                      s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
@@ -2086,7 +2086,7 @@ class Log(@volatile private var _dir: File,
             truncateFullyAndStartAt(targetOffset)
           } else {
             val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-            removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncateDeletion)
+            removeAndDeleteSegments(deletable, asyncDelete = true, LogTruncation)
             activeSegment.truncateTo(targetOffset)
             updateLogEndOffset(targetOffset)
             updateLogStartOffset(math.min(targetOffset, this.logStartOffset))
@@ -2109,7 +2109,7 @@ class Log(@volatile private var _dir: File,
       debug(s"Truncate and start at offset $newOffset")
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
-        removeAndDeleteSegments(logSegments, asyncDelete = true, LogTruncateDeletion)
+        removeAndDeleteSegments(logSegments, asyncDelete = true, LogTruncation)
         addSegment(LogSegment.open(dir,
           baseOffset = newOffset,
           config = config,
@@ -2219,7 +2219,7 @@ class Log(@volatile private var _dir: File,
         // removing the deleted segment, we should force materialization of the iterator here, so that results of the
         // iteration remain valid and deterministic.
         val toDelete = segments.toList
-        info(s"${reason.reasonString(this, toDelete)}")
+        info(s"${reason.reasonString(this)}: ${toDelete.mkString(",")}")
         toDelete.foreach { segment =>
           this.segments.remove(segment.baseOffset)
         }
@@ -2672,48 +2672,28 @@ object LogMetricNames {
 }
 
 sealed trait SegmentDeletionReason {
-  def reasonString(log: Log, toDelete: Iterable[LogSegment]): String
+  def reasonString(log: Log): String
 }
-
-case object RetentionMsBreachDeletion extends SegmentDeletionReason {
-  override def reasonString(log: Log, toDelete: Iterable[LogSegment]): String = {
-    s"Deleting segments due to retention time ${log.config.retentionMs}ms breach: ${toDelete.mkString(",")}"
+case object RetentionMsBreach extends SegmentDeletionReason {
+  override def reasonString(log: Log): String = s"Deleting segments due to retention time ${log.config.retentionMs}ms breach"
+}
+case object RetentionSizeBreach extends SegmentDeletionReason {
+  override def reasonString(log: Log): String = {
+    s"Deleting segments due to retention size ${log.config.retentionSize} breach. Current log size is ${log.size}"
   }
 }
-
-case object RetentionSizeBreachDeletion extends SegmentDeletionReason {
-  override def reasonString(log: Log, toDelete: Iterable[LogSegment]): String = {
-    s"Deleting segments due to retention size ${log.config.retentionSize} breach. " +
-      s"Current log size is ${log.size}. ${toDelete.mkString(",")}"
-  }
+case object StartOffsetBreach extends SegmentDeletionReason {
+  override def reasonString(log: Log): String = s"Deleting segments due to log start offset ${log.logStartOffset} breach"
 }
-
-case object StartOffsetBreachDeletion extends SegmentDeletionReason {
-  override def reasonString(log: Log, toDelete: Iterable[LogSegment]): String = {
-    s"Deleting segments due to log start offset ${log.logStartOffset} breach: ${toDelete.mkString(",")}"
-  }
+case object LogRecovery extends SegmentDeletionReason {
+  override def reasonString(log: Log): String = "Deleting segments as part of log recovery"
 }
-
-case object LogRecoveryDeletion extends SegmentDeletionReason {
-  override def reasonString(log: Log, toDelete: Iterable[LogSegment]): String = {
-    s"Deleting segments as part of log recovery: ${toDelete.mkString(",")}"
-  }
+case object LogTruncation extends SegmentDeletionReason {
+  override def reasonString(log: Log): String = "Deleting segments as part of log truncation"
 }
-
-case object LogTruncateDeletion extends SegmentDeletionReason {
-  override def reasonString(log: Log, toDelete: Iterable[LogSegment]): String = {
-    s"Deleting segments as part of log truncation: ${toDelete.mkString(",")}"
-  }
+case object LogRoll extends SegmentDeletionReason {
+  override def reasonString(log: Log): String = "Deleting segments as part of log roll"
 }
-
-case object LogRollDeletion extends SegmentDeletionReason {
-  override def reasonString(log: Log, toDelete: Iterable[LogSegment]): String = {
-    s"Deleting segments as part of log roll: ${toDelete.mkString(",")}"
-  }
-}
-
 case object LogDeletion extends SegmentDeletionReason {
-  override def reasonString(log: Log, toDelete: Iterable[LogSegment]): String = {
-    s"Deleting segments as the log has been deleted: ${toDelete.mkString(",")}"
-  }
+  override def reasonString(log: Log): String = "Deleting segments as the log has been deleted"
 }
