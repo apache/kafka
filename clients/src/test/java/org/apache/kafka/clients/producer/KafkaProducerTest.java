@@ -1278,7 +1278,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void serializerShouldSeeGeneratedClientId() {
+    public void serializerShouldSeeGeneratedConfigs() {
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, SerializerForClientId.class.getName());
