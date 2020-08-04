@@ -65,8 +65,8 @@ public class LineSplit {
             streams.start();
             latch.await();
         } catch (Throwable e) {
-            Exit.exit(1);
+            System.exit(1);
         }
-        Exit.exit(0);
+        System.exit(0);
     }
 }

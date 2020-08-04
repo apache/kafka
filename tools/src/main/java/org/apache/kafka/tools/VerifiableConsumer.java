@@ -43,7 +43,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -634,7 +633,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         } else {
             parser.printHelp();
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
-            Exit.exit(0);
+            System.exit(0);
         }
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerHostandPort);
 
@@ -665,7 +664,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         if (args.length == 0) {
             parser.printHelp();
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
-            Exit.exit(0);
+            System.exit(0);
         }
         try {
             final VerifiableConsumer consumer = createFromArgs(parser, args);
@@ -676,7 +675,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         } catch (ArgumentParserException e) {
             parser.handleError(e);
             // Can't use `Exit.exit` here because it didn't exist until 0.11.0.0.
-            Exit.exit(1);
+            System.exit(1);
         }
     }
 

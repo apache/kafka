@@ -84,7 +84,7 @@
     <suppress checks="NPathComplexity"
             files="MessageTest.java"/>
 
-    <!-- clients tests -->
+    <!-- Clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="(Sender|Fetcher|KafkaConsumer|Metrics|RequestResponse|TransactionManager|KafkaAdminClient|Message|KafkaProducer)Test.java"/>
 
@@ -173,7 +173,7 @@
     <suppress checks="FinalLocalVariable"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
 
-    <!-- generated code -->
+    <!-- Generated code -->
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling|FinalLocalVariable|LocalVariableName|MemberName|ParameterName|MethodLength|JavaNCSS)"
               files="streams[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
@@ -201,16 +201,35 @@
     <suppress checks="(FinalLocalVariable|WhitespaceAround|LocalVariableName|ImportControl|AvoidStarImport)"
               files="Murmur3Test.java"/>
 
-    <!-- Streams Test-Utils -->
+    <!-- Streams test-utils -->
     <suppress checks="ClassFanOutComplexity"
               files="TopologyTestDriver.java"/>
     <suppress checks="ClassDataAbstractionCoupling"
               files="TopologyTestDriver.java"/>
 
+    <!-- Streams examples -->
+    <suppress checks="Regexp"
+              files="PageViewTypedDemo.java"
+              lines="245,247"/>
+    <suppress checks="Regexp"
+              files="PipeDemo.java"
+              lines="71,73"/>
+    <suppress checks="Regexp"
+              files="TemperatureDemo.java"
+              lines="123,125"/>
+    <suppress checks="Regexp"
+              files="WordCountDemo.java"
+              lines="98,100"/>
+    <suppress checks="Regexp"
+              files="WordCountProcessorDemo.java"
+              lines="144,146"/>
+    <suppress checks="Regexp"
+              files="WordCountTransformerDemo.java"
+              lines="156,158"/>
+
     <!-- Tools -->
     <suppress checks="ClassDataAbstractionCoupling"
               files="VerifiableConsumer.java"/>
-
     <suppress checks="CyclomaticComplexity"
               files="(StreamsResetter|ProducerPerformance|Agent).java"/>
     <suppress checks="BooleanExpressionComplexity"
@@ -225,6 +244,12 @@
               files="ProduceBenchSpec.java"/>
     <suppress checks="ParameterNumber"
               files="SustainedConnectionSpec.java"/>
+    <suppress checks="Regexp"
+              files="VerifiableConsumer.java"
+              lines="636,667,678"/>
+    <suppress checks="Regexp"
+              files="VerifiableProducer.java"
+              lines="244,533,561"/>
 
     <!-- Log4J-Appender -->
     <suppress checks="CyclomaticComplexity"
