@@ -478,9 +478,6 @@ class DefaultMessageFormatter extends MessageFormatter {
   var headersDeserializer: Option[Deserializer[_]] = None
 
   override def configure(configs: Map[String, _]): Unit = {
-    val props = new java.util.Properties()
-    configs.asScala.foreach { case (key, value) => props.put(key, value.toString) }
-
     getPropertyIfExists(configs, "print.timestamp", getBoolProperty).foreach(printTimestamp = _)
     getPropertyIfExists(configs, "print.key", getBoolProperty).foreach(printKey = _)
     getPropertyIfExists(configs, "print.offset", getBoolProperty).foreach(printOffset = _)
