@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -259,7 +260,7 @@ public final class WorkerUtils {
             // map will always contain the topic since all topics in 'topicsExists' are in given
             // 'topics' map
             int partitions = topicsInfo.get(desc.name()).numPartitions();
-            if (desc.partitions().size() != partitions) {
+            if (partitions != CreateTopicsRequest.NO_NUM_PARTITIONS && desc.partitions().size() != partitions) {
                 String str = "Topic '" + desc.name() + "' exists, but has "
                              + desc.partitions().size() + " partitions, while requested "
                              + " number of partitions is " + partitions;
