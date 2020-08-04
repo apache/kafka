@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
@@ -62,6 +63,8 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -169,6 +172,26 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         final Map<TopicPartition, Long> offsets = stateManager.changelogOffsets();
         assertEquals(expected, offsets);
+    }
+
+    @Test
+    public void shouldLogWarningMessageWhenIOExceptionInCheckPoint() throws IOException {
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
+        stateManager.initialize();
+
+        final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + ".tmp");
+        file.createNewFile();
+        // set the checkpoint tmp file to read-only to simulate the IOException situation
+        file.setWritable(false);
+
+        try (final LogCaptureAppender appender =
+                 LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
+
+            // checkpoint should fail due to the file is readonly
+            stateManager.checkpoint(offsets);
+            assertThat(appender.getMessages(), hasItem(containsString(
+                "Failed to write offset checkpoint file to " + checkpointFile.getPath() + " for global stores")));
+        }
     }
 
     @Test
