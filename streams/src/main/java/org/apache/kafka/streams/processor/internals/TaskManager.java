@@ -567,7 +567,10 @@ public class TaskManager {
             if (shouldCommitAdditionalTasks) {
                 for (final Task task : nonRevokedActiveTasks) {
                     try {
-                        task.postCommit(true);
+                        // for non-revoking active tasks, we should not enforce checkpoint
+                        // since if it is EOS enabled, no checkpoint should be written while
+                        // the task is in RUNNING tate
+                        task.postCommit(false);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
                         firstException.compareAndSet(null, e);
