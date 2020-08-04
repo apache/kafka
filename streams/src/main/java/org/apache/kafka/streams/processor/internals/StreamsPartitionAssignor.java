@@ -373,8 +373,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Set<TaskId> statefulTasks = new HashSet<>();
 
-        final boolean probingRebalanceNeeded =
-            assignTasksToClients(fullMetadata, allSourceTopics, topicGroups, clientMetadataMap, partitionsForTask, statefulTasks);
+        final boolean probingRebalanceNeeded;
+        try {
+            probingRebalanceNeeded = assignTasksToClients(fullMetadata, allSourceTopics, topicGroups, clientMetadataMap, partitionsForTask, statefulTasks);
+        } catch (final TaskAssignmentException e) {
+            return new GroupAssignment(
+                errorAssignment(clientMetadataMap,
+                    AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
+            );
+        }
 
         // ---------------- Step Three ---------------- //
 
@@ -477,7 +484,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return map from repartition topic to its partition info
      */
     private Map<TopicPartition, PartitionInfo> prepareRepartitionTopics(final Map<Integer, TopicsInfo> topicGroups,
-                                                                           final Cluster metadata) {
+                                                                           final Cluster metadata) throws TaskAssignmentException {
         final Map<String, InternalTopicConfig> repartitionTopicMetadata = computeRepartitionTopicMetadata(topicGroups, metadata);
 
         setRepartitionTopicMetadataNumberOfPartitions(repartitionTopicMetadata, topicGroups, metadata);
@@ -643,7 +650,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private Set<String> prepareChangelogTopics(final Map<Integer, TopicsInfo> topicGroups,
                                                final Map<Integer, Set<TaskId>> tasksForTopicGroup,
                                                final Map<TaskId, Set<TopicPartition>> changelogsByStatefulTask,
-                                               final Set<String> optimizedSourceChangelogs) {
+                                               final Set<String> optimizedSourceChangelogs) throws TaskAssignmentException {
         // add tasks to state change log topic subscribers
         final Map<String, InternalTopicConfig> changelogTopicMetadata = new HashMap<>();
         for (final Map.Entry<Integer, TopicsInfo> entry : topicGroups.entrySet()) {
@@ -698,7 +705,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final Map<Integer, TopicsInfo> topicGroups,
                                          final Map<UUID, ClientMetadata> clientMetadataMap,
                                          final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                         final Set<TaskId> statefulTasks) {
+                                         final Set<TaskId> statefulTasks) throws TaskAssignmentException {
         if (!statefulTasks.isEmpty())
             throw new IllegalArgumentException("The stateful tasks should not be populated before assigning tasks to clients");
 
