@@ -1214,8 +1214,8 @@ public class GlobalStateManagerImplTest {
     private void initializeConsumer(final long numRecords, final long startOffset, final TopicPartition... topicPartitions) {
         consumer.assign(Arrays.asList(topicPartitions));
 
-        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
-        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        final Map<TopicPartition, Long> startOffsets = new HashMap<>();
+        final Map<TopicPartition, Long> endOffsets = new HashMap<>();
         for (final TopicPartition topicPartition : topicPartitions) {
             startOffsets.put(topicPartition, startOffset);
             endOffsets.put(topicPartition, startOffset + numRecords);
