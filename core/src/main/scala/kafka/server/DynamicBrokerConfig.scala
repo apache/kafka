@@ -225,7 +225,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     dynamicDefaultConfigs.clear()
     reconfigurables.clear()
     brokerReconfigurables.clear()
-    info(s"Dynamic configs cleared")
   }
 
   /**

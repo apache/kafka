@@ -665,6 +665,7 @@ public class Metrics implements Closeable {
                 Thread.currentThread().interrupt();
             }
         }
+        log.info("Metrics scheduler closed");
 
         for (MetricsReporter reporter : reporters) {
             try {
@@ -673,8 +674,6 @@ public class Metrics implements Closeable {
                 log.error("Error when closing " + reporter.getClass().getName(), e);
             }
         }
-
-        log.info("Metrics closed");
+        log.info("Metrics reporters closed");
     }
-
 }
