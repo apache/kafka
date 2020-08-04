@@ -53,7 +53,9 @@ public class KeyQueryMetadata {
      * Get the Active streams instance for given key
      *
      * @return active instance's {@link HostInfo}
+     * @deprecated Use {@link #activeHost()} instead.
      */
+    @Deprecated
     public HostInfo getActiveHost() {
         return activeHost;
     }
@@ -62,7 +64,9 @@ public class KeyQueryMetadata {
      * Get the Streams instances that host the key as standbys
      *
      * @return set of standby {@link HostInfo} or a empty set, if no standbys are configured
+     * @deprecated Use {@link #standbyHosts()} instead.
      */
+    @Deprecated
     public Set<HostInfo> getStandbyHosts() {
         return standbyHosts;
     }
@@ -71,8 +75,37 @@ public class KeyQueryMetadata {
      * Get the Store partition corresponding to the key.
      *
      * @return store partition number
+     * @deprecated Use {@link #partition()} instead.
      */
+    @Deprecated
     public int getPartition() {
+        return partition;
+    }
+
+    /**
+     * Get the Active streams instance for given key
+     *
+     * @return active instance's {@link HostInfo}
+     */
+    public HostInfo activeHost() {
+        return activeHost;
+    }
+
+    /**
+     * Get the Streams instances that host the key as standbys
+     *
+     * @return set of standby {@link HostInfo} or a empty set, if no standbys are configured
+     */
+    public Set<HostInfo> standbyHosts() {
+        return standbyHosts;
+    }
+
+    /**
+     * Get the Store partition corresponding to the key.
+     *
+     * @return store partition number
+     */
+    public int partition() {
         return partition;
     }
 
