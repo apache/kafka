@@ -673,6 +673,8 @@ public class Metrics implements Closeable {
                 log.error("Error when closing " + reporter.getClass().getName(), e);
             }
         }
+
+        log.info("Metrics closed");
     }
 
 }
