@@ -104,6 +104,7 @@
     </module>
 
     <module name="Regexp">
+      <property name="id" value="dontUseSystemExit"/>
       <property name="format" value="System\.exit"/>
       <property name="illegalPattern" value="true"/>
       <property name="ignoreComments" value="true"/>
