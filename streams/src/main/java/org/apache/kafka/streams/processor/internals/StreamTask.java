@@ -771,6 +771,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
         }
+
+        log.info("Checkpointable offsets {}", checkpointableOffsets);
+
         return checkpointableOffsets;
     }
 
