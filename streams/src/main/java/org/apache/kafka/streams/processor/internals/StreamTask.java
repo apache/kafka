@@ -446,7 +446,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 break;
 
             case RUNNING:
-                if (enforceCheckpoint || !eosEnabled) {
+                if (!eosEnabled) {
                     maybeWriteCheckpoint(enforceCheckpoint);
                 }
                 log.debug("Finalized commit for {} task", state());

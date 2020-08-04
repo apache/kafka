@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -46,9 +45,6 @@ public class StandbyTask extends AbstractTask implements Task {
     private final boolean eosEnabled;
     private final InternalProcessorContext processorContext;
     private final StreamsMetricsImpl streamsMetrics;
-
-    // we need a separate snapshot for standby task to determine when we need to commit
-    private Map<TopicPartition, Long> offsetSnapshotSinceLastCommit = null;
 
     /**
      * @param id             the ID of this task
@@ -95,7 +91,6 @@ public class StandbyTask extends AbstractTask implements Task {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
             initializeCheckpoint();
-            offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
 
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
@@ -193,7 +188,6 @@ public class StandbyTask extends AbstractTask implements Task {
 
             case RUNNING:
             case SUSPENDED:
-                offsetSnapshotSinceLastCommit = new HashMap<>(stateMgr.changelogOffsets());
                 maybeWriteCheckpoint(enforceCheckpoint);
 
                 log.debug("Finalized commit for {} task", state());
@@ -273,9 +267,9 @@ public class StandbyTask extends AbstractTask implements Task {
 
     @Override
     public boolean commitNeeded() {
-        // we can commit if the store's offset has changed since last commit
-        return offsetSnapshotSinceLastCommit != null &&
-                !offsetSnapshotSinceLastCommit.equals(stateMgr.changelogOffsets());
+        // for standby tasks committing is the same as checkpointing,
+        // so we only need to commit if we want to checkpoint
+        return StateManagerUtil.checkpointNeeded(false, offsetSnapshotSinceLastFlush, stateMgr.changelogOffsets());
     }
 
     @Override
