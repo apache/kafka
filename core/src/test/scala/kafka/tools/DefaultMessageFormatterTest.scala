@@ -20,7 +20,6 @@ package unit.kafka.tools
 import java.io.{ByteArrayOutputStream, Closeable, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.util
-import java.util.Properties
 
 import kafka.tools.DefaultMessageFormatter
 import org.apache.kafka.clients.consumer.ConsumerRecord
@@ -183,13 +182,8 @@ object DefaultMessageFormatterTest {
   }
 
   private def buildFormatter(propsToSet: Map[String, String]): DefaultMessageFormatter = {
-    val properties = new Properties()
-    //putAll doesn't work on java 9 - https://github.com/scala/bug/issues/10418
-    propsToSet.foreach { case (k, v) =>
-      properties.setProperty(k, v)
-    }
     val formatter = new DefaultMessageFormatter()
-    formatter.init(properties)
+    formatter.configure(propsToSet.asJava)
     formatter
   }
 
