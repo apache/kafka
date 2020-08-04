@@ -669,6 +669,7 @@ public class Metrics implements Closeable {
 
         for (MetricsReporter reporter : reporters) {
             try {
+                log.info("Closing reporter {}", reporter.getClass().getName());
                 reporter.close();
             } catch (Exception e) {
                 log.error("Error when closing " + reporter.getClass().getName(), e);
