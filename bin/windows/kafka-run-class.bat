@@ -171,6 +171,11 @@ IF ["%KAFKA_JVM_PERFORMANCE_OPTS%"] EQU [""] (
 	set KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent -Djava.awt.headless=true
 )
 
+rem classpath addition for LSB style path
+if exist %BASE_DIR%\share\java\kafka\* (
+call:concat %BASE_DIR%\share\java\kafka\*
+)
+
 IF not defined CLASSPATH (
 	echo Classpath is empty. Please build the project first e.g. by running 'gradlew jarAll'
 	EXIT /B 2
