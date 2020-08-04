@@ -423,7 +423,8 @@ public class SubscriptionState {
 
     synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
         return assignment.stream()
-                .filter(tpState -> isAvailable.test(tpState.topicPartition()) && tpState.value().isFetchable())
+                // perform cheaper isFetchable test before more expensive isAvailable test
+                .filter(tpState -> tpState.value().isFetchable() && isAvailable.test(tpState.topicPartition()))
                 .map(PartitionStates.PartitionState::topicPartition)
                 .collect(Collectors.toList());
     }
