@@ -481,20 +481,20 @@ class DefaultMessageFormatter extends MessageFormatter {
     val props = new java.util.Properties()
     configs.asScala.foreach { case (key, value) => props.put(key, value.toString) }
 
-    getPropertyIfExists(props, "print.timestamp", getBoolProperty).foreach(printTimestamp = _)
-    getPropertyIfExists(props, "print.key", getBoolProperty).foreach(printKey = _)
-    getPropertyIfExists(props, "print.offset", getBoolProperty).foreach(printOffset = _)
-    getPropertyIfExists(props, "print.partition", getBoolProperty).foreach(printPartition = _)
-    getPropertyIfExists(props, "print.headers", getBoolProperty).foreach(printHeaders = _)
-    getPropertyIfExists(props, "print.value", getBoolProperty).foreach(printValue = _)
-    getPropertyIfExists(props, "key.separator", getByteProperty).foreach(keySeparator = _)
-    getPropertyIfExists(props, "line.separator", getByteProperty).foreach(lineSeparator = _)
-    getPropertyIfExists(props, "headers.separator", getByteProperty).foreach(headersSeparator = _)
-    getPropertyIfExists(props, "null.literal", getByteProperty).foreach(nullLiteral = _)
+    getPropertyIfExists(configs, "print.timestamp", getBoolProperty).foreach(printTimestamp = _)
+    getPropertyIfExists(configs, "print.key", getBoolProperty).foreach(printKey = _)
+    getPropertyIfExists(configs, "print.offset", getBoolProperty).foreach(printOffset = _)
+    getPropertyIfExists(configs, "print.partition", getBoolProperty).foreach(printPartition = _)
+    getPropertyIfExists(configs, "print.headers", getBoolProperty).foreach(printHeaders = _)
+    getPropertyIfExists(configs, "print.value", getBoolProperty).foreach(printValue = _)
+    getPropertyIfExists(configs, "key.separator", getByteProperty).foreach(keySeparator = _)
+    getPropertyIfExists(configs, "line.separator", getByteProperty).foreach(lineSeparator = _)
+    getPropertyIfExists(configs, "headers.separator", getByteProperty).foreach(headersSeparator = _)
+    getPropertyIfExists(configs, "null.literal", getByteProperty).foreach(nullLiteral = _)
 
-    keyDeserializer = getPropertyIfExists(props, "key.deserializer", getDeserializerProperty(true))
-    valueDeserializer = getPropertyIfExists(props, "value.deserializer", getDeserializerProperty(false))
-    headersDeserializer = getPropertyIfExists(props, "headers.deserializer", getDeserializerProperty(false))
+    keyDeserializer = getPropertyIfExists(configs, "key.deserializer", getDeserializerProperty(true))
+    valueDeserializer = getPropertyIfExists(configs, "value.deserializer", getDeserializerProperty(false))
+    headersDeserializer = getPropertyIfExists(configs, "headers.deserializer", getDeserializerProperty(false))
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
@@ -559,13 +559,13 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
   }
 
-  private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
-    val newProps = new Properties()
-    props.asScala.foreach { case (key, value) =>
+  private def propertiesWithKeyPrefixStripped(prefix: String, configs: Map[String, _]): Map[String, _] = {
+    val newConfigs = collection.mutable.Map[String, Any]()
+    configs.asScala.foreach { case (key, value) =>
       if (key.startsWith(prefix) && key.length > prefix.length)
-        newProps.put(key.substring(prefix.length), value)
+        newConfigs.put(key.substring(prefix.length), value)
     }
-    newProps
+    newConfigs.asJava
   }
 
   private def deserialize(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) = {
@@ -578,26 +578,26 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   private def utfBytes(str: String) = str.getBytes(StandardCharsets.UTF_8)
 
-  private def getByteProperty(props: Properties, key: String): Array[Byte] = {
-    utfBytes(props.getProperty(key))
+  private def getByteProperty(configs: Map[String, _], key: String): Array[Byte] = {
+    utfBytes(configs.get(key).asInstanceOf[String])
   }
 
-  private def getBoolProperty(props: Properties, key: String): Boolean = {
-    props.getProperty(key).trim.equalsIgnoreCase("true")
+  private def getBoolProperty(configs: Map[String, _], key: String): Boolean = {
+    configs.get(key).asInstanceOf[String].trim.equalsIgnoreCase("true")
   }
 
-  private def getDeserializerProperty(isKey: Boolean)(props: Properties, propertyName: String): Deserializer[_] = {
-    val deserializer = Class.forName(props.getProperty(propertyName)).newInstance().asInstanceOf[Deserializer[_]]
-    val deserializerConfig = propertiesWithKeyPrefixStripped(propertyName + ".", props)
+  private def getDeserializerProperty(isKey: Boolean)(configs: Map[String, _], propertyName: String): Deserializer[_] = {
+    val deserializer = Class.forName(configs.get(propertyName).asInstanceOf[String]).newInstance().asInstanceOf[Deserializer[_]]
+    val deserializerConfig = propertiesWithKeyPrefixStripped(propertyName + ".", configs)
       .asScala
       .asJava
     deserializer.configure(deserializerConfig, isKey)
     deserializer
   }
 
-  private def getPropertyIfExists[T](props: Properties, key: String, getter: (Properties, String) => T): Option[T] = {
-    if (props.containsKey(key))
-      Some(getter(props, key))
+  private def getPropertyIfExists[T](configs: Map[String, _], key: String, getter: (Map[String, _], String) => T): Option[T] = {
+    if (configs.containsKey(key))
+      Some(getter(configs, key))
     else
       None
   }
