@@ -33,6 +33,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
@@ -1231,7 +1232,7 @@ public class StreamsPartitionAssignorTest {
         ) {
             @Override
             public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) throws TaskAssignmentException {
-                throw new TaskAssignmentException("KABOOM!");
+                throw new TimeoutException("KABOOM!");
             }
         };
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
@@ -1274,7 +1275,7 @@ public class StreamsPartitionAssignorTest {
                 if (topics.isEmpty()) {
                     return emptySet();
                 }
-                throw new TaskAssignmentException("KABOOM!");
+                throw new TimeoutException("KABOOM!");
             }
         };
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);

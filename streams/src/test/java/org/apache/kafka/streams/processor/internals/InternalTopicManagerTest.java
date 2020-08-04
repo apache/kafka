@@ -39,7 +39,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -414,15 +413,15 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
 
-        final TaskAssignmentException exception = assertThrows(
-            TaskAssignmentException.class,
+        final TimeoutException exception = assertThrows(
+            TimeoutException.class,
             () -> topicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig))
         );
         assertNull(exception.getCause());
         assertThat(
             exception.getMessage(),
             equalTo("Could not create topics within 50 milliseconds." +
-                " This can happen if the Kafka cluster is temporary not available.")
+                " This can happen if the Kafka cluster is temporarily not available.")
         );
 
         EasyMock.verify(admin);
@@ -440,15 +439,15 @@ public class InternalTopicManagerTest {
         final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
 
-        final TaskAssignmentException exception = assertThrows(
-            TaskAssignmentException.class,
+        final TimeoutException exception = assertThrows(
+            TimeoutException.class,
             () -> internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig))
         );
         assertNull(exception.getCause());
         assertThat(
             exception.getMessage(),
             equalTo("Could not create topics within 50 milliseconds." +
-                " This can happen if the Kafka cluster is temporary not available.")
+                " This can happen if the Kafka cluster is temporarily not available.")
         );
     }
 

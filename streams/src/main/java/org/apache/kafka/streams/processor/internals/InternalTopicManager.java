@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.internals.ClientUtils.QuietConsumerConfig;
 import org.slf4j.Logger;
 
@@ -100,7 +99,7 @@ public class InternalTopicManager {
      * If a topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
      * @return the set of topics which had to be newly created
      */
-    public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) throws TaskAssignmentException {
+    public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) {
         // we will do the validation / topic-creation in a loop, until we have confirmed all topics
         // have existed with the expected number of partitions, or some create topic returns fatal errors.
         log.debug("Starting to validate internal topics {} in partition assignor.", topics);
@@ -178,9 +177,9 @@ public class InternalTopicManager {
 
                 if (currentWallClockMs >= deadlineMs) {
                     final String timeoutError = String.format("Could not create topics within %d milliseconds. " +
-                        "This can happen if the Kafka cluster is temporary not available.", retryTimeoutMs);
+                        "This can happen if the Kafka cluster is temporarily not available.", retryTimeoutMs);
                     log.error(timeoutError);
-                    throw new TaskAssignmentException(timeoutError);
+                    throw new TimeoutException(timeoutError);
                 }
                 log.info(
                     "Topics {} could not be made ready. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
