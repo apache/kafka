@@ -441,15 +441,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case RESTORING:
             case SUSPENDED:
                 maybeWriteCheckpoint(enforceCheckpoint);
-                log.debug("Finalized commit for {} task", state());
+                log.debug("Finalized commit for {} task with enforce checkpoint {}", state(), enforceCheckpoint);
 
                 break;
 
             case RUNNING:
-                if (!eosEnabled) {
+                if (enforceCheckpoint || !eosEnabled) {
                     maybeWriteCheckpoint(enforceCheckpoint);
                 }
-                log.debug("Finalized commit for {} task", state());
+                log.debug("Finalized commit for {} task with eos {} enforce checkpoint {}", state(), eosEnabled, enforceCheckpoint);
 
                 break;
 
