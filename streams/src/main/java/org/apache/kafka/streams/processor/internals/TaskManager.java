@@ -835,7 +835,6 @@ public class TaskManager {
 
         for (final Task task : activeTaskIterable()) {
             try {
-                task.suspend();
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
                 tasksToCommit.add(task);
                 if (!committableOffsets.isEmpty()) {
@@ -881,6 +880,7 @@ public class TaskManager {
 
         for (final Task task : tasksToCloseClean) {
             try {
+                task.suspend();
                 completeTaskCloseClean(task);
             } catch (final RuntimeException e) {
                 log.error("Exception caught while clean-closing task " + task.id(), e);
@@ -902,9 +902,9 @@ public class TaskManager {
 
         for (final Task task : standbyTaskIterable()) {
             try {
-                task.suspend();
                 task.prepareCommit();
                 task.postCommit(true);
+                task.suspend();
                 completeTaskCloseClean(task);
             } catch (final TaskMigratedException e) {
                 // just ignore the exception as it doesn't matter during shutdown
