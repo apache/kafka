@@ -22,7 +22,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 
 public class TokenBucket implements MeasurableStat {
     private final TimeUnit unit;
-    private double credits;
+    private double tokens;
     private long lastUpdateMs;
 
     public TokenBucket() {
@@ -31,7 +31,7 @@ public class TokenBucket implements MeasurableStat {
 
     public TokenBucket(TimeUnit unit) {
         this.unit = unit;
-        this.credits = 0;
+        this.tokens = 0;
         this.lastUpdateMs = 0;
     }
 
@@ -40,9 +40,9 @@ public class TokenBucket implements MeasurableStat {
         if (config.quota() == null)
             return Long.MAX_VALUE;
         final double quota = config.quota().bound();
-        final double burst = (config.samples() - 1) * convert(config.timeWindowMs()) * quota;
+        final double burst = burst(config);
         refill(quota, burst, timeMs);
-        return this.credits;
+        return this.tokens;
     }
 
     @Override
@@ -50,14 +50,18 @@ public class TokenBucket implements MeasurableStat {
         if (config.quota() == null)
             return;
         final double quota = config.quota().bound();
-        final double burst = (config.samples() - 1) * convert(config.timeWindowMs()) * quota;
+        final double burst = burst(config);
         refill(quota, burst, timeMs);
-        this.credits = Math.min(burst, this.credits - value);
+        this.tokens = Math.min(burst, this.tokens - value);
     }
 
     private void refill(final double quota, final double burst, final long timeMs) {
-        this.credits = Math.min(burst, this.credits + quota * convert(timeMs - lastUpdateMs));
+        this.tokens = Math.min(burst, this.tokens + quota * convert(timeMs - lastUpdateMs));
         this.lastUpdateMs = timeMs;
+    }
+
+    private double burst(final MetricConfig config) {
+        return (config.samples() - 1) * convert(config.timeWindowMs()) * config.quota().bound();
     }
 
     private double convert(final long timeMs) {

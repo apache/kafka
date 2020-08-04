@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.metrics;
 
-import java.util.HashMap;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
@@ -45,14 +44,23 @@ public final class Sensor {
     private final Metrics registry;
     private final String name;
     private final Sensor[] parents;
-    private final List<Stat> stats;
-    private final Map<Stat, MetricConfig> configPerStat;
+    private final List<StatAndConfig> stats;
     private final Map<MetricName, KafkaMetric> metrics;
     private final MetricConfig config;
     private final Time time;
     private volatile long lastRecordTime;
     private final long inactiveSensorExpirationTimeMs;
     private final Object metricLock;
+
+    private static class StatAndConfig {
+        public final Stat stat;
+        public final MetricConfig config;
+
+        StatAndConfig(Stat stat, MetricConfig config) {
+            this.stat = stat;
+            this.config = config;
+        }
+    }
 
     public enum RecordingLevel {
         INFO(0, "INFO"), DEBUG(1, "DEBUG");
@@ -112,7 +120,6 @@ public final class Sensor {
         this.parents = parents == null ? new Sensor[0] : parents;
         this.metrics = new LinkedHashMap<>();
         this.stats = new ArrayList<>();
-        this.configPerStat = new HashMap<>();
         this.config = config;
         this.time = time;
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
@@ -203,9 +210,8 @@ public final class Sensor {
         synchronized (this) {
             synchronized (metricLock()) {
                 // increment all the stats
-                for (Stat stat : this.stats) {
-                    MetricConfig config = this.configPerStat.getOrDefault(stat, this.config);
-                    stat.record(config, value, timeMs);
+                for (StatAndConfig statAndConfig : this.stats) {
+                    statAndConfig.stat.record(statAndConfig.config, value, timeMs);
                 }
             }
             if (checkQuotas)
@@ -230,7 +236,7 @@ public final class Sensor {
                 if (quota != null) {
                     double value = metric.measurableValue(timeMs);
                     if (metric.measurable() instanceof TokenBucket) {
-                        if (value <= 0) {
+                        if (value < 0) {
                             throw new QuotaViolationException(metric, value, quota.bound());
                         }
                     } else {
@@ -263,12 +269,11 @@ public final class Sensor {
         if (hasExpired())
             return false;
 
-        this.stats.add(Objects.requireNonNull(stat));
-        if (config != null)
-            this.configPerStat.put(stat, config);
+        final MetricConfig statConfig = config == null ? this.config : config;
+        stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig));
         Object lock = metricLock();
         for (NamedMeasurable m : stat.stats()) {
-            final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
+            final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time);
             if (!metrics.containsKey(metric.metricName())) {
                 registry.registerMetric(metric);
                 metrics.put(metric.metricName(), metric);
@@ -301,18 +306,17 @@ public final class Sensor {
         } else if (metrics.containsKey(metricName)) {
             return true;
         } else {
+            final MetricConfig statConfig = config == null ? this.config : config;
             final KafkaMetric metric = new KafkaMetric(
                 metricLock(),
                 Objects.requireNonNull(metricName),
                 Objects.requireNonNull(stat),
-                config == null ? this.config : config,
+                statConfig,
                 time
             );
             registry.registerMetric(metric);
             metrics.put(metric.metricName(), metric);
-            stats.add(stat);
-            if (config != null)
-                this.configPerStat.put(stat, config);
+            stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig));
             return true;
         }
     }

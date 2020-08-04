@@ -134,14 +134,20 @@ class PermissiveControllerMutationQuota(private val time: Time,
 object ControllerMutationQuotaManager {
   val QuotaControllerMutationDefault = Int.MaxValue.toDouble
 
+  /**
+   * This calculates the amount of time needed to bring the TokenBucket within quota
+   * assuming that no new metrics are recorded.
+   *
+   * Basically, if a value < 0 is observed, the time required to bring it to zero is
+   * -value / refill rate (quota bound) * 1000.
+   */
   def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
     e.metric().measurable() match {
-      case _: TokenBucket => Math.round(-e.value() * e.bound())
-      case _: Rate => ClientQuotaManager.throttleTime(e, timeMs)
+      case _: TokenBucket =>
+        Math.round(-e.value() / e.bound() * 1000)
       case _ => throw new IllegalArgumentException(
-        s"Metric ${e.metric().metricName()} is not a Rate metric, value ${e.metric().measurable()}")
+        s"Metric ${e.metric().metricName()} is not a TokenBucket metric, value ${e.metric().measurable()}")
     }
-
   }
 }
 
@@ -169,8 +175,8 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
   }
 
   protected def clientTokenBucketMetricName(quotaMetricTags: Map[String, String]): MetricName = {
-    metrics.metricName("credits", QuotaType.ControllerMutation.toString,
-      "Tracking remaining credits per user/client-id",
+    metrics.metricName("tokens", QuotaType.ControllerMutation.toString,
+      "Tracking remaining tokens in the token bucket per user/client-id",
       quotaMetricTags.asJava)
   }
 
