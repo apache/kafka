@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.internals.QuietStreamsConfig;
+import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.TaskManager;
@@ -57,7 +57,7 @@ public final class AssignorConfiguration {
         // NOTE: If you add a new config to pass through to here, be sure to test it in a real
         // application. Since we filter out some configurations, we may have to explicitly copy
         // them over when we construct the Consumer.
-        streamsConfig = new QuietStreamsConfig(configs);
+        streamsConfig = new ClientUtils.QuietStreamsConfig(configs);
         internalConfigs = configs;
 
         // Setting the logger with the passed in client thread name

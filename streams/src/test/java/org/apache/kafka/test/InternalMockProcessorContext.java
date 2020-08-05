@@ -62,6 +62,7 @@ public class InternalMockProcessorContext
     extends AbstractProcessorContext
     implements RecordCollector.Supplier {
 
+    private StateManager stateManager = new StateManagerStub();
     private final File stateDir;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
@@ -197,7 +198,11 @@ public class InternalMockProcessorContext
 
     @Override
     protected StateManager stateManager() {
-        return new StateManagerStub();
+        return stateManager;
+    }
+
+    public void setStateManger(final StateManager stateManger) {
+        this.stateManager = stateManger;
     }
 
     @Override
@@ -245,6 +250,7 @@ public class InternalMockProcessorContext
                          final StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
+        stateManager().registerStore(store, func);
     }
 
     @Override

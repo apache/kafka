@@ -95,11 +95,12 @@
     </p>
 
     <p>
-        The configuration parameter <code>retries</code> is deprecated in favor of a the new parameter <code>task.timeout.ms</code>.
-        Kafka Streams runtime ignores <code>retries</code> if set, however, if would still forward the parameter
-        to it's internal clients. Note though, that <code>retries</code> is deprecated for the producer and admin client, too.
-        Thus, instead of setting <code>retries</code>, you should configure the corresponding client timeouts.
-
+        The configuration parameter <code>retries</code> is deprecated in favor of the new parameter <code>task.timeout.ms</code>.
+        Kafka Streams' runtime ignores <code>retries</code> if set, however, it would still forward the parameter
+        to its internal clients. Note though, that <code>retries</code> is deprecated for the producer and admin client, too.
+        Thus, instead of setting <code>retries</code>, you should configure the corresponding client timeouts, namely
+        <code>delivery.timeout.ms</code> and <code>max.block.ms</code> for the producer and
+        <code>default.api.timeout.ms</code> for the admin client.
     </p>
 
     <h3><a id="streams_api_changes_260" href="#streams_api_changes_260">Streams API changes in 2.6.0</a></h3>
