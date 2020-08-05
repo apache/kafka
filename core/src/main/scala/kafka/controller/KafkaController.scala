@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.admin.AdminOperationException
 import kafka.api._
 import kafka.common._
-import kafka.controller.KafkaController.{AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback}
+import kafka.controller.KafkaController.{AlterIsrCallback, AlterReassignmentsCallback, ElectLeadersCallback, ListReassignmentsCallback}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
@@ -59,6 +59,7 @@ object KafkaController extends Logging {
   type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
+  type AlterIsrCallback = Either[Map[TopicPartition, Errors], Errors] => Unit
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -1775,124 +1776,138 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  // TODO is it okay to pull message classes down into the controller?
   def alterIsrs(alterIsrRequest: AlterIsrRequestData, callback: AlterIsrResponseData => Unit): Unit = {
-    //val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(alterIsrRequest.brokerId())
-    /*if (brokerEpochOpt.isEmpty) {
-      info(s"Ignoring AlterIsr due to unknown broker ${alterIsrRequest.brokerId()}")
-      // TODO is INVALID_REQUEST a reasonable error here?
-      callback.apply(new AlterIsrResponseData().setErrorCode(Errors.INVALID_REQUEST.code))
+    val isrsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
+
+    alterIsrRequest.topics().forEach(topicReq => topicReq.partitions().forEach(partitionReq => {
+      val tp = new TopicPartition(topicReq.name(), partitionReq.partitionIndex())
+      val newIsr = partitionReq.newIsr().asScala.toList.map(_.toInt)
+      isrsToAlter.put(tp, new LeaderAndIsr(partitionReq.leaderId(), partitionReq.leaderEpoch(), newIsr, partitionReq.currentIsrVersion()))
+    }))
+
+    def responseCallback(results: Either[Map[TopicPartition, Errors], Errors]): Unit = {
+      val resp = new AlterIsrResponseData()
+      results match {
+        case Right(error) =>
+          resp.setErrorCode(error.code())
+        case Left(partitions: Map[TopicPartition, Errors]) =>
+          resp.setTopics(new util.ArrayList())
+          partitions.groupBy(_._1.topic()).foreachEntry((topic, partitionMap) => {
+            val topicResp = new AlterIsrResponseTopics()
+              .setName(topic)
+              .setPartitions(new util.ArrayList())
+            resp.topics().add(topicResp)
+            partitionMap.foreachEntry((partition, error) => {
+              topicResp.partitions().add(
+                new AlterIsrResponsePartitions()
+                  .setPartitionIndex(partition.partition())
+                  .setErrorCode(error.code()))
+            })
+          })
+      }
+      callback.apply(resp)
+    }
+
+    eventManager.put(AlterIsrReceived(alterIsrRequest.brokerId(), alterIsrRequest.brokerEpoch(), isrsToAlter, responseCallback))
+  }
+
+  private def processAlterIsr(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr],
+                              callback: AlterIsrCallback): Unit = {
+    if (!isActive) {
+      callback.apply(Right(Errors.NOT_CONTROLLER))
       return
     }
 
-    if (!brokerEpochOpt.contains(alterIsrRequest.brokerEpoch())) {
-      info(s"Ignoring AlterIsr due to stale broker epoch ${alterIsrRequest.brokerEpoch()} for broker ${alterIsrRequest.brokerId()}")
-      callback.apply(new AlterIsrResponseData().setErrorCode(Errors.STALE_BROKER_EPOCH.code))
+    val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
+    if (brokerEpochOpt.isEmpty) {
+      info(s"Ignoring AlterIsr due to unknown broker $brokerId")
+      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
       return
-    }*/
+    }
 
-    val isrsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
+    if (!brokerEpochOpt.contains(brokerEpoch)) {
+      info(s"Ignoring AlterIsr due to stale broker epoch $brokerEpoch for broker $brokerId")
+      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
+      return
+    }
 
-    val resp = new AlterIsrResponseData()
-    resp.setTopics(new util.ArrayList())
+    val partitionErrors: mutable.Map[TopicPartition, Errors] = mutable.HashMap[TopicPartition, Errors]()
 
-    alterIsrRequest.topics().forEach(topicReq => {
-      val topicResp = new AlterIsrResponseTopics()
-        .setName(topicReq.name())
-        .setPartitions(new util.ArrayList())
-      resp.topics().add(topicResp)
-
-      topicReq.partitions().forEach(partitionReq => {
-        val partitionResp = new AlterIsrResponsePartitions()
-          .setPartitionIndex(partitionReq.partitionIndex())
-        topicResp.partitions().add(partitionResp)
-
-        // For each partition who's ISR we are altering, let's do some upfront validation for the broker response
-        val tp = new TopicPartition(topicReq.name(), partitionReq.partitionIndex())
+    val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = isrsToAlter.flatMap {
+      case (tp: TopicPartition, newLeaderAndIsr: LeaderAndIsr) =>
         val partitionError: Errors = controllerContext.partitionLeadershipInfo(tp) match {
           case Some(leaderIsrAndControllerEpoch) =>
             val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-            if (partitionReq.leaderId() != currentLeaderAndIsr.leader) {
-              Errors.NOT_LEADER_OR_FOLLOWER // Is this the right error code?
-            } else if (partitionReq.leaderEpoch() < currentLeaderAndIsr.leaderEpoch) {
+            if (newLeaderAndIsr.leader != currentLeaderAndIsr.leader) {
+              Errors.NOT_LEADER_OR_FOLLOWER
+            } else if (newLeaderAndIsr.leaderEpoch < currentLeaderAndIsr.leaderEpoch) {
               Errors.FENCED_LEADER_EPOCH
-            } else if (partitionReq.currentIsrVersion() != currentLeaderAndIsr.zkVersion) {
-              Errors.INVALID_ISR_VERSION
             } else {
-              val newIsr = partitionReq.newIsr().asScala.toList.map(_.toInt)
               val currentAssignment = controllerContext.partitionReplicaAssignment(tp)
-              if (!newIsr.forall(replicaId => currentAssignment.contains(replicaId))) {
-                warn(s"Some of the new ISR are not in the assignment for partition. ISR=$newIsr assignment=$currentAssignment")
+              if (!newLeaderAndIsr.isr.forall(replicaId => currentAssignment.contains(replicaId))) {
+                warn(s"Some of the proposed ISR are not in the assignment for partition $tp. Proposed ISR=$newLeaderAndIsr.isr assignment=$currentAssignment")
+                Errors.INVALID_REQUEST
+              } else if (!newLeaderAndIsr.isr.forall(replicaId => controllerContext.isReplicaOnline(replicaId, tp))) {
+                warn(s"Some of the proposed ISR are offline for partition $tp. Proposed ISR=$newLeaderAndIsr.isr")
                 Errors.INVALID_REQUEST
               } else {
-                isrsToAlter.put(tp, new LeaderAndIsr(partitionReq.leaderId(), partitionReq.leaderEpoch(),
-                  newIsr, partitionReq.currentIsrVersion()))
                 Errors.NONE
               }
             }
           case None => Errors.UNKNOWN_TOPIC_OR_PARTITION
         }
-        partitionResp.setErrorCode(partitionError.code())
-      })
-    })
-
-    // Enqueue the event and return the response
-    eventManager.put(AlterIsrReceived(isrsToAlter))
-    callback.apply(resp)
-  }
-
-  private def processAlterIsr(isrsToAlter: Map[TopicPartition, LeaderAndIsr]): Unit = {
-    // TODO maybe we still need broker id and broker epoch at this point to validate again?
-
-    val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = isrsToAlter.flatMap { case (tp: TopicPartition, newLeaderAndIsr: LeaderAndIsr) =>
-      // Check that the topic still exists and the leader epoch hasn't changed
-      zkClient.getTopicPartitionState(tp) match {
-        case Some(currentTopicPartitionState) => {
-          val currentLeaderAndIsr = currentTopicPartitionState.leaderAndIsr
-          if (currentLeaderAndIsr.leaderEpoch == newLeaderAndIsr.leaderEpoch) {
-            // Bump epoch before updating in ZK
-            Some(tp -> newLeaderAndIsr.newEpochAndZkVersion)
-          } else {
-            // Old leader epoch
-            warn(s"Not updating ISR for partition ${tp} since it has a stale leader epoch ${newLeaderAndIsr.leaderEpoch}")
-            None
-          }
-        }
-        case None =>
-          // We don't know about this partition anymore
-          warn(s"Not updating ISR for partition ${tp} since it no longer exists")
+        if (partitionError == Errors.NONE) {
+          // Bump the leaderEpoch for partitions that we're going to write
+          Some(tp -> newLeaderAndIsr.newEpochAndZkVersion)
+        } else {
+          partitionErrors.put(tp, partitionError)
           None
-      }
+        }
     }
 
     // Do the updates in ZK
     info(s"Updating ISRs for partitions: ${adjustedIsrs.keySet}.")
-    val UpdateLeaderAndIsrResult(finishedUpdates, _) =  zkClient.updateLeaderAndIsr(
+    val UpdateLeaderAndIsrResult(finishedUpdates, badVersionUpdates) =  zkClient.updateLeaderAndIsr(
       adjustedIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
 
     val successfulUpdates: Map[TopicPartition, LeaderAndIsr] = finishedUpdates.flatMap {
       case (partition: TopicPartition, isrOrError: Either[Throwable, LeaderAndIsr]) =>
       isrOrError match {
         case Right(updatedIsr) =>
-          info("ISR updated to [%s] and zkVersion updated to [%d]".format(updatedIsr.isr.mkString(","), updatedIsr.zkVersion))
+          info("ISR for partition %s updated to [%s] and zkVersion updated to [%d]".format(partition, updatedIsr.isr.mkString(","), updatedIsr.zkVersion))
           Some(partition -> updatedIsr)
         case Left(error) =>
           warn(s"Failed to update ISR for partition $partition", error)
+          partitionErrors.put(partition, Errors.forException(error))
           None
       }
     }
 
+    badVersionUpdates.foreach(partition => {
+      warn(s"Failed to update ISR for partition $partition, bad ZK version")
+      partitionErrors.put(partition, Errors.INVALID_ISR_VERSION)
+    })
+
     // Update our cache
     updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
 
-    // Send out LeaderAndIsr to replicas
+    // Send back AlterIsr response
+    callback.apply(Left(partitionErrors))
+
+    // Send out LeaderAndIsr for successful updates
     brokerRequestBatch.newBatch()
-    successfulUpdates.foreach { case (partition: TopicPartition, leaderAndIsr: LeaderAndIsr) =>
-      val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
-      val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicaAssignment.replicas, partition,
-        leaderIsrAndControllerEpoch, replicaAssignment, isNew = false)
-    }
+
+    // Send LeaderAndIsr for all requested partitions
+    adjustedIsrs.keys.foreach(partition => {
+      controllerContext.partitionLeadershipInfo(partition) match {
+        case Some(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch) =>
+          val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
+          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicaAssignment.replicas, partition,
+            leaderIsrAndControllerEpoch, replicaAssignment, isNew = false)
+        case None => warn(s"No leadership info for $partition, not including in LeaderAndIsr request")
+      }
+    })
+
     brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
   }
 
@@ -1970,8 +1985,8 @@ class KafkaController(val config: KafkaConfig,
           processPartitionReassignmentIsrChange(partition)
         case IsrChangeNotification =>
           processIsrChangeNotification()
-        case AlterIsrReceived(isrsToAlter) =>
-          processAlterIsr(isrsToAlter)
+        case AlterIsrReceived(brokerId, brokerEpoch, isrsToAlter, callback) =>
+          processAlterIsr(brokerId, brokerEpoch, isrsToAlter, callback)
         case Startup =>
           processStartup()
       }
@@ -2210,7 +2225,8 @@ case object IsrChangeNotification extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
 }
 
-case class AlterIsrReceived(isrsToAlter: Map[TopicPartition, LeaderAndIsr]) extends ControllerEvent {
+case class AlterIsrReceived(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr],
+                            callback: AlterIsrCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
 }
 

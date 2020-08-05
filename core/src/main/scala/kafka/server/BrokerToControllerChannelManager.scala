@@ -116,6 +116,7 @@ class BrokerToControllerChannelManager(metadataCache: kafka.server.MetadataCache
   def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
                   callback: RequestCompletionHandler): Unit = {
     requestQueue.put(BrokerToControllerQueueItem(request, callback))
+    requestThread.wakeup()
   }
 }
 
