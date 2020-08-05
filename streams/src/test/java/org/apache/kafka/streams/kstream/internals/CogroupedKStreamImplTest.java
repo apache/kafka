@@ -43,6 +43,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -143,6 +144,11 @@ public class CogroupedKStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowOnWindowedBySession() {
         cogroupedStream.windowedBy((SessionWindows) null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullWindowOnWindowedBySliding() {
+        cogroupedStream.windowedBy((SlidingWindows) null);
     }
 
     @Test

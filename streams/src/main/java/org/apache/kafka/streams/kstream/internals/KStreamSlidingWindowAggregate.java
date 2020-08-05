@@ -135,7 +135,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
         }
 
-        public void processReverse(final K key, final V value, long timestamp) {
+        public void processReverse(final K key, final V value, final long timestamp) {
             //TODO: Change in-order iterator call to window store to reverse call
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
@@ -216,7 +216,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
         }
 
-        public void processInOrder(final K key, final V value, long timestamp) {
+        public void processInOrder(final K key, final V value, final long timestamp) {
 
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
