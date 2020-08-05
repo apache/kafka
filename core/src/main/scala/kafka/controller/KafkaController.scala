@@ -1891,10 +1891,6 @@ class KafkaController(val config: KafkaConfig,
     val incompatibilityError = "Could not apply finalized feature update because" +
       " brokers were found to have incompatible versions for the feature."
 
-    // NOTE: Below we set the finalized min version level to be the default minimum version
-    // level. If the finalized feature already exists, then, this can cause deprecation of all
-    // version levels in the closed range:
-    // [existingVersionRange.min(), defaultMinVersionLevel - 1].
     if (brokerFeatures.supportedFeatures.get(update.feature()) == null) {
       Right(new ApiError(Errors.INVALID_REQUEST, incompatibilityError))
     } else {
