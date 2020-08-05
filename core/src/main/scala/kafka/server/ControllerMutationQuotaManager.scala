@@ -129,6 +129,10 @@ class PermissiveControllerMutationQuota(private val time: Time,
   }
 }
 
+object ControllerMutationQuotaManager {
+  val QuotaControllerMutationDefault = Int.MaxValue.toDouble
+}
+
 /**
  * The ControllerMutationQuotaManager is a specialized ClientQuotaManager used in the context
  * of throttling controller's operations/mutations.
