@@ -195,9 +195,11 @@ public class SlidingWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
 
+            // large retention time to ensure that all existing windows needed to create new sliding windows can be accessed
+            // earliest window start time we could need to create corresponding right window would be recordTime - 2 * timeDifference
             if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the window store "
-                        + name + " must be no smaller than its window time difference plus the grace period."
+                        + name + " must be no smaller than 2 * time difference plus the grace period."
                         + " Got time difference=[" + windows.timeDifferenceMs() + "],"
                         + " grace=[" + windows.gracePeriodMs() + "],"
                         + " retention=[" + retentionPeriod + "]");

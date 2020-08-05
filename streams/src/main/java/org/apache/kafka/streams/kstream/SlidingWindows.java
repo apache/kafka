@@ -23,7 +23,6 @@ import java.util.Objects;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
- /*
  * A sliding window used for aggregating events.
  * <p>
  * Sliding windows are defined by a record's timestamp, with window size based on the given maximum time difference (inclusive) between

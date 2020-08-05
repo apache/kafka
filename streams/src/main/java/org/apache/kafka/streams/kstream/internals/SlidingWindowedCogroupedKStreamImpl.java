@@ -104,12 +104,12 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
             final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
-            final long retentionPeriod = materialized.retention().toMillis();
+            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
 
-            if ((windows.timeDifferenceMs() + windows.gracePeriodMs()) > retentionPeriod) {
+            if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the window store "
                         + name
-                        + " must be no smaller than its window time difference plus the grace period."
+                        + " must be no smaller than 2 * time difference plus the grace period."
                         + " Got time difference=[" + windows.timeDifferenceMs() + "],"
                         + " grace=[" + windows.gracePeriodMs()
                         + "],"

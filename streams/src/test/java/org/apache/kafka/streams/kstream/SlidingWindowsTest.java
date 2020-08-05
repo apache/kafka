@@ -22,27 +22,20 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
 import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 
-@SuppressWarnings("deprecation")
 public class SlidingWindowsTest {
 
     private static final long ANY_SIZE = 123L;
 
     @Test
-    public void shouldSetWindowSize() {
+    public void shouldSetTimeDifference() {
         assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(ANY_SIZE), ofMillis(3)).timeDifferenceMs());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void windowSizeMustNotBeZero() {
-        SlidingWindows.withTimeDifferenceAndGrace(ofMillis(0), ofMillis(5));
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void windowSizeMustNotBeNegative() {
-        SlidingWindows.withTimeDifferenceAndGrace(ofMillis(-1), ofMillis(5));
+    @Test
+    public void timeDifferenceMustNotBeNegative() {
+        assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.withTimeDifferenceAndGrace(ofMillis(-1), ofMillis(5)));
     }
 
     @Test
@@ -50,49 +43,40 @@ public class SlidingWindowsTest {
         assertEquals(ANY_SIZE, SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(ANY_SIZE)).gracePeriodMs());
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void graceMustNotBeNegative() {
-        SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(-1));
-    }
-
     @Test
-    public void gracePeriodShouldEnforceBoundaries() {
-        SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3L), ofMillis(0L));
-
-        try {
-            SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3L), ofMillis(-1L));
-            fail("should not accept negatives");
-        } catch (final IllegalArgumentException e) {
-            //expected
-        }
+    public void gracePeriodMustNotBeNegative() {
+        assertThrows(IllegalArgumentException.class, () ->  SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(-1)));
     }
 
     @Test
     public void equalsAndHashcodeShouldBeValidForPositiveCases() {
-        verifyEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(3)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(3)));
-
-        verifyEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)));
-
-        verifyEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(4)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(4)));
-
+        final long grace = 1L + (long) (Math.random() * (20L - 1L));
+        final long timeDifference = 1L + (long) (Math.random() * (20L - 1L));
+        verifyEquality(
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(grace)),
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(grace))
+        );
     }
 
     @Test
-    public void equalsAndHashcodeShouldBeValidForNegativeCases() {
-
-        verifyInEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(2)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)));
-
-        verifyInEquality(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(9)), SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(4)));
-
-
+    public void equalsAndHashcodeShouldNotBeEqualForDifferentTimeDifference() {
+        final long grace = 1L + (long) (Math.random() * (10L - 1L));
+        final long timeDifferenceOne = 1L + (long) (Math.random() * (10L - 1L));
+        final long timeDifferenceTwo = 21L + (long) (Math.random() * (41L - 21L));
         verifyInEquality(
-                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(4), ofMillis(2)),
-                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(2))
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifferenceOne), ofMillis(grace)),
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifferenceTwo), ofMillis(grace))
         );
+    }
 
-        assertNotEquals(
-                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(1)),
-                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(3), ofMillis(2))
+    @Test
+    public void equalsAndHashcodeShouldNotBeEqualForDifferentGracePeriod() {
+        final long timeDifference = 1L + (long) (Math.random() * (10L - 1L));
+        final long graceOne = 1L + (long) (Math.random() * (10L - 1L));
+        final long graceTwo = 21L + (long) (Math.random() * (41L - 21L));
+        verifyInEquality(
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(graceOne)),
+                SlidingWindows.withTimeDifferenceAndGrace(ofMillis(timeDifference), ofMillis(graceTwo))
         );
     }
 }

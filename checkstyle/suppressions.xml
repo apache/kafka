@@ -166,6 +166,9 @@
     <suppress checks="(NPathComplexity|MethodLength|CyclomaticComplexity)"
               files="KStreamSlidingWindowAggregate.java"/>
 
+    <suppress checks="(CyclomaticComplexity)"
+              files="CogroupedStreamAggregateBuilder.java"/>
+
     <!-- suppress FinalLocalVariable outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>

@@ -153,7 +153,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 kStreamAggregate = new KStreamSessionWindowAggregate<>(sessionWindows, storeBuilder.name(), initializer, aggregator, sessionMerger);
             }
         } else {
-            throw new IllegalArgumentException("must include windows OR slidingWindows OR sessionWindows + sessionMerger OR all must be null");
+            throw new IllegalArgumentException("must include windows XOR slidingWindows XOR sessionWindows + sessionMerger OR all must be null");
         }
 
         final StatefulProcessorNode<K, ?> statefulProcessorNode;
