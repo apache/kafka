@@ -174,10 +174,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                 }
             }
         }
-
     }
-
-
 
     @Override
     public KTableValueGetterSupplier<Windowed<K>, Agg> view() {
