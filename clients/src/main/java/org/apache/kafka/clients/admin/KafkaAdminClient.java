@@ -4105,7 +4105,7 @@ public class KafkaAdminClient extends AdminClient {
                             DescribeUserScramCredentialsResponseData.UserScramCredential::name,
                             userScramCredential -> {
                                 List<ScramCredentialInfo> scramCredentialInfos = userScramCredential.credentialInfos().stream().map(
-                                    credentialInfo -> new ScramCredentialInfo(ScramMechanism.from(credentialInfo.mechanism()), credentialInfo.iterations()))
+                                    credentialInfo -> new ScramCredentialInfo(ScramMechanism.fromType(credentialInfo.mechanism()), credentialInfo.iterations()))
                                         .collect(Collectors.toList());
                                 return new UserScramCredentialsDescription(userScramCredential.name(), scramCredentialInfos);
                             })));
@@ -4142,7 +4142,7 @@ public class KafkaAdminClient extends AdminClient {
             UserScramCredentialDeletion deletion = (UserScramCredentialDeletion) alteration;
             ScramMechanism mechanism = deletion.getMechanism();
             if (mechanism == null || mechanism == ScramMechanism.UNKNOWN) {
-                userIllegalAlterationExceptions.put(deletion.getUser(), new IllegalArgumentException("Unknown SCRAM mechanism"));
+                userIllegalAlterationExceptions.put(deletion.getUser(), new InvalidRequestException("Unknown SCRAM mechanism"));
             }
         });
         // Creating an upsertion may throw InvalidKeyException or NoSuchAlgorithmException,
@@ -4156,12 +4156,12 @@ public class KafkaAdminClient extends AdminClient {
                     try {
                         ScramMechanism mechanism = upsertion.getInfo().getMechanism();
                         if (mechanism == null || mechanism == ScramMechanism.UNKNOWN)
-                            throw new IllegalArgumentException("Unknown SCRAM mechanism");
+                            throw new InvalidRequestException("Unknown SCRAM mechanism");
                         userInsertions.putIfAbsent(user, new HashMap<>());
                         userInsertions.get(user).put(mechanism, getScramCredentialUpsertion(upsertion));
                     } catch (Exception e) {
-                        // we might overwrite aa exception from a previous upsertion, but we don't really care
-                        // since we just needs to mark this user as having at least one illegal alteration
+                        // we might overwrite an exception from a previous upsertion, but we don't really care
+                        // since we just need to mark this user as having at least one illegal alteration
                         // and make an exception instance available for completing the corresponding future exceptionally
                         userIllegalAlterationExceptions.put(user, e);
                     }
@@ -4228,18 +4228,18 @@ public class KafkaAdminClient extends AdminClient {
     private static AlterUserScramCredentialsRequestData.ScramCredentialUpsertion getScramCredentialUpsertion(UserScramCredentialUpsertion u) throws InvalidKeyException, NoSuchAlgorithmException {
         AlterUserScramCredentialsRequestData.ScramCredentialUpsertion retval = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion();
         return retval.setName(u.getUser())
-                .setMechanism((byte) u.getInfo().getMechanism().ordinal())
+                .setMechanism(u.getInfo().getMechanism().getType())
                 .setIterations(u.getInfo().getIterations())
                 .setSalt(u.getSalt())
                 .setSaltedPassword(getSaltedPasword(u.getInfo().getMechanism(), u.getPassword(), u.getSalt(), u.getInfo().getIterations()));
     }
 
     private static AlterUserScramCredentialsRequestData.ScramCredentialDeletion getScramCredentialDeletion(UserScramCredentialDeletion d) {
-        return new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(d.getUser()).setMechanism((byte) d.getMechanism().ordinal());
+        return new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(d.getUser()).setMechanism(d.getMechanism().getType());
     }
 
     private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int interations) throws NoSuchAlgorithmException, InvalidKeyException {
-        return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.toMechanismName()))
+        return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.getMechanismName()))
                 .hi(password, salt, interations);
     }
 

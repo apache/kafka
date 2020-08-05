@@ -1231,7 +1231,9 @@ public interface Admin extends AutoCloseable {
      *
      * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
      *
-     * @param users the users for which credentials are to be described; all users' credentials are described if null or empty
+     * @param users the users for which credentials are to be described; all users' credentials are described if null
+     *              or empty.  A user explicitly specified here that does not have a SCRAM credential will not appear
+     *              in the results.
      * @return The DescribeUserScramCredentialsResult.
      */
     default DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users) {
@@ -1241,7 +1243,9 @@ public interface Admin extends AutoCloseable {
     /**
      * <p>Describe SASL/SCRAM credentials.
      *
-     * @param users the users for which credentials are to be described; all users' credentials are described if null or empty
+     * @param users the users for which credentials are to be described; all users' credentials are described if null
+     *              or empty.  A user explicitly specified here that does not have a SCRAM credential will not appear
+     *              in the results.
      * @param options The options to use when describing the credentials
      * @return The DescribeUserScramCredentialsResult.
      */

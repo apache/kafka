@@ -4431,10 +4431,10 @@ public class KafkaAdminClientTest {
             int user0Iterations1 = 8192;
 
             final CredentialInfo user0CredentialInfo0 = new CredentialInfo();
-            user0CredentialInfo0.setMechanism((byte) user0ScramMechanism0.ordinal());
+            user0CredentialInfo0.setMechanism(user0ScramMechanism0.getType());
             user0CredentialInfo0.setIterations(user0Iterations0);
             final CredentialInfo user0CredentialInfo1 = new CredentialInfo();
-            user0CredentialInfo1.setMechanism((byte) user0ScramMechanism1.ordinal());
+            user0CredentialInfo1.setMechanism(user0ScramMechanism1.getType());
             user0CredentialInfo1.setIterations(user0Iterations1);
             UserScramCredential user0 = new UserScramCredential();
             user0.setName(user0Name);
@@ -4445,7 +4445,7 @@ public class KafkaAdminClientTest {
             int user1Iterations = 4096;
 
             final CredentialInfo user1CredentialInfo = new CredentialInfo();
-            user1CredentialInfo.setMechanism((byte) user1ScramMechanism.ordinal());
+            user1CredentialInfo.setMechanism(user1ScramMechanism.getType());
             user1CredentialInfo.setIterations(user1Iterations);
 
             UserScramCredential user1 = new UserScramCredential();

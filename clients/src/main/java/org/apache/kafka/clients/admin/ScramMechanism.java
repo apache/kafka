@@ -29,12 +29,12 @@ public enum ScramMechanism {
 
     /**
      *
-     * @param b the byte representation
-     * @return the instance corresponding to the given byte value, otherwise {@link #UNKNOWN}
+     * @param type the type indicator
+     * @return the instance corresponding to the given type indicator, otherwise {@link #UNKNOWN}
      */
-    public static ScramMechanism from(byte b) {
+    public static ScramMechanism fromType(byte type) {
         for (ScramMechanism scramMechanism : ScramMechanism.values()) {
-            if (scramMechanism.type == b) {
+            if (scramMechanism.type == type) {
                 return scramMechanism;
             }
         }
@@ -44,12 +44,13 @@ public enum ScramMechanism {
     /**
      *
      * @param mechanismName the SASL SCRAM mechanism name
-     * @return the corresponding SASL SCRAM mechanism enum
+     * @return the corresponding SASL SCRAM mechanism enum, otherwise {@link #UNKNOWN}
      * @see <a href="https://tools.ietf.org/html/rfc5802#section-4>
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
     public static ScramMechanism fromMechanismName(String mechanismName) {
-        return ScramMechanism.valueOf(mechanismName.replace('-', '_'));
+        ScramMechanism retvalFoundMechanism = ScramMechanism.valueOf(mechanismName.replace('-', '_'));
+        return retvalFoundMechanism != null ? retvalFoundMechanism : UNKNOWN;
     }
 
     /**
@@ -58,13 +59,23 @@ public enum ScramMechanism {
      * @see <a href="https://tools.ietf.org/html/rfc5802#section-4>
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
-    public String toMechanismName() {
-        return toString().replace('_', '-');
+    public String getMechanismName() {
+        return this.mechanismName;
     }
 
-    byte type;
+    /**
+     *
+     * @return the type indicator for this SASL SCRAM mechanism
+     */
+    public byte getType() {
+        return this.type;
+    }
+
+    private final byte type;
+    private final String mechanismName;
 
     private ScramMechanism(byte type) {
         this.type = type;
+        this.mechanismName = toString().replace('_', '-');
     }
 }

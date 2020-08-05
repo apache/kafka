@@ -985,37 +985,37 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def describeUserScramCredentials(users: Seq[String]): DescribeUserScramCredentialsResponseData = {
+  def describeUserScramCredentials(users: Option[Seq[String]]): DescribeUserScramCredentialsResponseData = {
     val retval = new DescribeUserScramCredentialsResponseData()
 
     def addToResults(user: String, userConfig: Properties) = {
       val configKeys = userConfig.stringPropertyNames
-      val hasScramCredential = !ScramMechanism.values().toList.filter(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.toMechanismName)).isEmpty
+      val hasScramCredential = !ScramMechanism.values().toList.filter(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.getMechanismName)).isEmpty
       if (hasScramCredential) {
         val userScramCredentials = new UserScramCredential().setName(user)
         ScramMechanism.values().foreach(mechanism => if (mechanism != ScramMechanism.UNKNOWN) {
-          val propertyValue = userConfig.getProperty(mechanism.toMechanismName)
+          val propertyValue = userConfig.getProperty(mechanism.getMechanismName)
           if (propertyValue != null) {
             val iterations = ScramCredentialUtils.credentialFromString(propertyValue).iterations
-            userScramCredentials.credentialInfos.add(new CredentialInfo().setMechanism(mechanism.ordinal.toByte).setIterations(iterations))
+            userScramCredentials.credentialInfos.add(new CredentialInfo().setMechanism(mechanism.getType).setIterations(iterations))
           }
         })
         retval.userScramCredentials.add(userScramCredentials)
       }
     }
 
-    if (users.isEmpty)
+    if (!users.isDefined || users.get.isEmpty)
       // describe all users
       adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach { case (user, properties) => addToResults(user, properties) }
     else {
       // describe specific users
       // https://stackoverflow.com/questions/24729544/how-to-find-duplicates-in-a-list
-      val duplicatedUsers = users.groupBy(identity).collect { case (x, Seq(_, _, _*)) => x }
+      val duplicatedUsers = users.get.groupBy(identity).collect { case (x, Seq(_, _, _*)) => x }
       if (duplicatedUsers.nonEmpty) {
         retval.setError(Errors.INVALID_REQUEST.code())
         retval.setErrorMessage(s"Cannot describe SCRAM credentials for the same user twice in a single request: ${duplicatedUsers.mkString("[", ", ", "]")}")
       } else
-        users.foreach { user => addToResults(user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))) }
+        users.get.foreach { user => addToResults(user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))) }
     }
     retval
   }
@@ -1024,11 +1024,11 @@ class AdminManager(val config: KafkaConfig,
                                 deletions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialDeletion]): AlterUserScramCredentialsResponseData = {
 
     def scramMechanism(mechanism: Byte): ScramMechanism = {
-      ScramMechanism.from(mechanism)
+      ScramMechanism.fromType(mechanism)
     }
 
     def mechanismName(mechanism: Byte): String = {
-      scramMechanism(mechanism).toMechanismName
+      scramMechanism(mechanism).getMechanismName
     }
 
     val retval = new AlterUserScramCredentialsResponseData()
@@ -1042,7 +1042,7 @@ class AdminManager(val config: KafkaConfig,
           val publicScramMechanism = scramMechanism(upsertion.mechanism)
           publicScramMechanism == ScramMechanism.UNKNOWN ||
             (upsertion.iterations != -1 &&
-              InternalScramMechanism.forMechanismName(publicScramMechanism.toMechanismName).minIterations > upsertion.iterations)
+              InternalScramMechanism.forMechanismName(publicScramMechanism.getMechanismName).minIterations > upsertion.iterations)
         }
       }).map(_.name) ++ deletions.filter(deletions => deletions.name.isEmpty || scramMechanism(deletions.mechanism) == ScramMechanism.UNKNOWN).map(_.name))
       .toSet

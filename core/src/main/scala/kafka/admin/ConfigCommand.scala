@@ -312,8 +312,7 @@ object ConfigCommand extends Config {
     val entityNames = opts.entityNames
     val entityTypeHead = entityTypes.head
     val entityNameHead = entityNames.head
-    val configsToBeAddedProperties = parseConfigsToBeAdded(opts)
-    val configsToBeAddedMap = configsToBeAddedProperties.asScala
+    val configsToBeAddedMap = parseConfigsToBeAdded(opts).asScala.toMap // no need for mutability
     val configsToBeAdded = configsToBeAddedMap.map { case (k, v) => (k, new ConfigEntry(k, v)) }
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
 
@@ -394,63 +393,13 @@ object ConfigCommand extends Config {
         }
 
         if (hasQuotaConfigsToAdd || hasQuotaConfigsToDelete) {
-          // handle altering client/user quota configs
-          val oldConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)
-
-          val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
-          if (invalidConfigs.nonEmpty)
-            throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
-
-          val alterEntityTypes = entityTypes.map { entType =>
-            entType match {
-              case ConfigType.User => ClientQuotaEntity.USER
-              case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
-              case _ => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
-            }
-          }
-          val alterEntityNames = entityNames.map(en => if (en.nonEmpty) en else null)
-
-          // Explicitly populate a HashMap to ensure nulls are recorded properly.
-          val alterEntityMap = new java.util.HashMap[String, String]
-          alterEntityTypes.zip(alterEntityNames).foreach { case (k, v) => alterEntityMap.put(k, v) }
-          val entity = new ClientQuotaEntity(alterEntityMap)
-
-          val alterOptions = new AlterClientQuotasOptions().validateOnly(false)
-          val alterOps = (configsToBeAddedMap.map { case (key, value) =>
-            val doubleValue = try value.toDouble catch {
-              case _: NumberFormatException =>
-                throw new IllegalArgumentException(s"Cannot parse quota configuration value for ${key}: ${value}")
-            }
-            new ClientQuotaAlteration.Op(key, doubleValue)
-          } ++ configsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
-
-          adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
-            .all().get(60, TimeUnit.SECONDS)
+          alterQuotaConfigs(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeDeleted)
         } else {
           // handle altering user SCRAM credential configs
           if (entityNames.size != 1)
             // should never happen, if we get here then it is a bug
             throw new IllegalStateException(s"Altering user SCRAM credentials should never occur for more zero or multiple users: $entityNames")
-          val user = entityNames.head
-          val deletions = scramConfigsToDelete.map(mechanismName =>
-            new UserScramCredentialDeletion(user, PublicScramMechanism.fromMechanismName(mechanismName)))
-
-          def iterationsAndPasswordBytes(mechanism: ScramMechanism, credentialStr: String): (Integer, Array[Byte]) = {
-            val pattern = "(?:iterations=(\\-?[0-9]*),)?password=(.*)".r
-            val (iterations, password) = credentialStr match {
-              case pattern(iterations, password) => (if (iterations != null && iterations != "-1") iterations.toInt else DefaultScramIterations, password)
-              case _ => throw new IllegalArgumentException(s"Invalid credential property $mechanism=$credentialStr")
-            }
-            if (iterations < mechanism.minIterations)
-              throw new IllegalArgumentException(s"Iterations $iterations is less than the minimum ${mechanism.minIterations} required for ${mechanism.mechanismName}")
-            (iterations, password.getBytes(StandardCharsets.UTF_8))
-          }
-
-          val upsertions = scramConfigsToAddMap.map { case (mechanismName, configEntry) =>
-            val (iterations, passwordBytes) = iterationsAndPasswordBytes(ScramMechanism.forMechanismName(mechanismName), configEntry.value)
-            new UserScramCredentialUpsertion(user, new ScramCredentialInfo(PublicScramMechanism.fromMechanismName(mechanismName), iterations), passwordBytes)
-          }
-          adminClient.alterUserScramCredentials((deletions ++ upsertions).toList.asJava).all.get(60, TimeUnit.SECONDS)
+          alterUserScramCredentialConfigs(adminClient, entityNames.head, scramConfigsToAddMap, scramConfigsToDelete)
         }
 
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")
@@ -460,6 +409,63 @@ object ConfigCommand extends Config {
       println(s"Completed updating config for ${entityTypeHead.dropRight(1)} $entityNameHead.")
     else
       println(s"Completed updating default config for $entityTypeHead in the cluster.")
+  }
+
+  private def alterUserScramCredentialConfigs(adminClient: Admin, user: String, scramConfigsToAddMap: Map[String, ConfigEntry], scramConfigsToDelete: Seq[String]) = {
+    val deletions = scramConfigsToDelete.map(mechanismName =>
+      new UserScramCredentialDeletion(user, PublicScramMechanism.fromMechanismName(mechanismName)))
+
+    def iterationsAndPasswordBytes(mechanism: ScramMechanism, credentialStr: String): (Integer, Array[Byte]) = {
+      val pattern = "(?:iterations=(\\-?[0-9]*),)?password=(.*)".r
+      val (iterations, password) = credentialStr match {
+        case pattern(iterations, password) => (if (iterations != null && iterations != "-1") iterations.toInt else DefaultScramIterations, password)
+        case _ => throw new IllegalArgumentException(s"Invalid credential property $mechanism=$credentialStr")
+      }
+      if (iterations < mechanism.minIterations)
+        throw new IllegalArgumentException(s"Iterations $iterations is less than the minimum ${mechanism.minIterations} required for ${mechanism.mechanismName}")
+      (iterations, password.getBytes(StandardCharsets.UTF_8))
+    }
+
+    val upsertions = scramConfigsToAddMap.map { case (mechanismName, configEntry) =>
+      val (iterations, passwordBytes) = iterationsAndPasswordBytes(ScramMechanism.forMechanismName(mechanismName), configEntry.value)
+      new UserScramCredentialUpsertion(user, new ScramCredentialInfo(PublicScramMechanism.fromMechanismName(mechanismName), iterations), passwordBytes)
+    }
+    adminClient.alterUserScramCredentials((deletions ++ upsertions).toList.asJava).all.get(60, TimeUnit.SECONDS)
+  }
+
+  private def alterQuotaConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String], configsToBeAddedMap: Map[String, String], configsToBeDeleted: Seq[String]) = {
+    // handle altering client/user quota configs
+    val oldConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)
+
+    val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+    if (invalidConfigs.nonEmpty)
+      throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+
+    val alterEntityTypes = entityTypes.map { entType =>
+      entType match {
+        case ConfigType.User => ClientQuotaEntity.USER
+        case ConfigType.Client => ClientQuotaEntity.CLIENT_ID
+        case _ => throw new IllegalArgumentException(s"Unexpected entity type: ${entType}")
+      }
+    }
+    val alterEntityNames = entityNames.map(en => if (en.nonEmpty) en else null)
+
+    // Explicitly populate a HashMap to ensure nulls are recorded properly.
+    val alterEntityMap = new java.util.HashMap[String, String]
+    alterEntityTypes.zip(alterEntityNames).foreach { case (k, v) => alterEntityMap.put(k, v) }
+    val entity = new ClientQuotaEntity(alterEntityMap)
+
+    val alterOptions = new AlterClientQuotasOptions().validateOnly(false)
+    val alterOps = (configsToBeAddedMap.map { case (key, value) =>
+      val doubleValue = try value.toDouble catch {
+        case _: NumberFormatException =>
+          throw new IllegalArgumentException(s"Cannot parse quota configuration value for ${key}: ${value}")
+      }
+      new ClientQuotaAlteration.Op(key, doubleValue)
+    } ++ configsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
+
+    adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
+      .all().get(60, TimeUnit.SECONDS)
   }
 
   private[admin] def describeConfig(adminClient: Admin, opts: ConfigCommandOptions): Unit = {
@@ -563,7 +569,7 @@ object ConfigCommand extends Config {
     // and we are not given either --entity-default or --user-defaults
     if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
       getUserScramCredentialConfigs(adminClient, entityNames).foreach { case (user, description) =>
-        val descriptionText = description.getInfos.asScala.map(info => s"${info.getMechanism.toMechanismName}=iterations=${info.getIterations}").mkString(", ")
+        val descriptionText = description.getInfos.asScala.map(info => s"${info.getMechanism.getMechanismName}=iterations=${info.getIterations}").mkString(", ")
         println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
       }
     }
