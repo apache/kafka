@@ -40,7 +40,7 @@ public class TokenBucketTest {
         MetricConfig config = new MetricConfig()
             .quota(Quota.upperBound(5))
             .timeWindow(2, TimeUnit.SECONDS)
-            .samples(11);
+            .samples(10);
 
         TokenBucket tk = new TokenBucket();
 
@@ -69,14 +69,14 @@ public class TokenBucketTest {
         MetricConfig config = new MetricConfig()
             .quota(Quota.upperBound(5))
             .timeWindow(2, TimeUnit.SECONDS)
-            .samples(11);
+            .samples(10);
 
         TokenBucket tk = new TokenBucket();
 
         // Expect 100 credits at T
         assertEquals(100, tk.measure(config, time.milliseconds()), 0.1);
 
-        // Record 60 at T, expect 100 credits
+        // Record -60 at T, expect 100 credits
         tk.record(config, -60, time.milliseconds());
         assertEquals(100, tk.measure(config, time.milliseconds()), 0.1);
 
@@ -85,7 +85,7 @@ public class TokenBucketTest {
         tk.record(config, 60, time.milliseconds());
         assertEquals(40, tk.measure(config, time.milliseconds()), 0.1);
 
-        // Advance by 2s, record 60, expect 100 credits
+        // Advance by 2s, record -60, expect 100 credits
         time.sleep(2000);
         tk.record(config, -60, time.milliseconds());
         assertEquals(100, tk.measure(config, time.milliseconds()), 0.1);

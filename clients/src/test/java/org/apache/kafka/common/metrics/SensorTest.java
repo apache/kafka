@@ -249,7 +249,7 @@ public class SensorTest {
         final Sensor sensor = metrics.sensor("sensor", new MetricConfig()
             .quota(Quota.upperBound(2))
             .timeWindow(1, TimeUnit.SECONDS)
-            .samples(11));
+            .samples(10));
         final MetricName metricName = metrics.metricName("credits", "test-group");
         assertTrue(sensor.add(metricName, new TokenBucket()));
         final KafkaMetric tkMetric = metrics.metric(metricName);

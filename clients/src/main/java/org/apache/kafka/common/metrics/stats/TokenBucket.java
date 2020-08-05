@@ -19,7 +19,21 @@ package org.apache.kafka.common.metrics.stats;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.metrics.Quota;
 
+import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
+
+/**
+ * The {@link TokenBucket} is a {@link MeasurableStat} implementing a token bucket algorithm
+ * that is usable within a {@link org.apache.kafka.common.metrics.Sensor}.
+ *
+ * The {@link Quota#bound()} defined the refill rate of the bucket while the maximum burst or
+ * the maximum number of credits of the bucket is defined by
+ * {@link MetricConfig#samples() * MetricConfig#timeWindowMs() * Quota#bound()}.
+ *
+ * The quota is considered as exhausted when the amount of remaining credits in the bucket
+ * is below zero. The enforcement is done by the {@link org.apache.kafka.common.metrics.Sensor}.
+ */
 public class TokenBucket implements MeasurableStat {
     private final TimeUnit unit;
     private double tokens;
@@ -56,32 +70,11 @@ public class TokenBucket implements MeasurableStat {
     }
 
     private void refill(final double quota, final double burst, final long timeMs) {
-        this.tokens = Math.min(burst, this.tokens + quota * convert(timeMs - lastUpdateMs));
+        this.tokens = Math.min(burst, this.tokens + quota * convert(timeMs - lastUpdateMs, unit));
         this.lastUpdateMs = timeMs;
     }
 
     private double burst(final MetricConfig config) {
-        return (config.samples() - 1) * convert(config.timeWindowMs()) * config.quota().bound();
-    }
-
-    private double convert(final long timeMs) {
-        switch (unit) {
-            case NANOSECONDS:
-                return timeMs * 1000.0 * 1000.0;
-            case MICROSECONDS:
-                return timeMs * 1000.0;
-            case MILLISECONDS:
-                return timeMs;
-            case SECONDS:
-                return timeMs / 1000.0;
-            case MINUTES:
-                return timeMs / (60.0 * 1000.0);
-            case HOURS:
-                return timeMs / (60.0 * 60.0 * 1000.0);
-            case DAYS:
-                return timeMs / (24.0 * 60.0 * 60.0 * 1000.0);
-            default:
-                throw new IllegalStateException("Unknown unit: " + unit);
-        }
+        return config.samples() * convert(config.timeWindowMs(), unit) * config.quota().bound();
     }
 }

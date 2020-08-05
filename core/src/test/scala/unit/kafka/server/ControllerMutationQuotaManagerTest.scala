@@ -39,7 +39,7 @@ class StrictControllerMutationQuotaTest {
     val sensor = metrics.sensor("sensor", new MetricConfig()
       .quota(Quota.upperBound(10))
       .timeWindow(1, TimeUnit.SECONDS)
-      .samples(11))
+      .samples(10))
     val metricName = metrics.metricName("rate", "test-group")
     assertTrue(sensor.add(metricName, new TokenBucket))
 
@@ -80,7 +80,7 @@ class PermissiveControllerMutationQuotaTest {
     val sensor = metrics.sensor("sensor", new MetricConfig()
       .quota(Quota.upperBound(10))
       .timeWindow(1, TimeUnit.SECONDS)
-      .samples(11))
+      .samples(10))
     val metricName = metrics.metricName("rate", "test-group")
     assertTrue(sensor.add(metricName, new TokenBucket))
 
@@ -116,7 +116,10 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val User = "ANONYMOUS"
   private val ClientId = "test-client"
 
-  private val config = ClientQuotaManagerConfig()
+  private val config = ClientQuotaManagerConfig(
+    numQuotaSamples = 10,
+    quotaWindowSizeSeconds = 1
+  )
 
   private def withQuotaManager(f: ControllerMutationQuotaManager => Unit): Unit = {
     val quotaManager = new ControllerMutationQuotaManager(config, metrics, time,"", None)
@@ -138,9 +141,9 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
     sensor.add(metricName, new TokenBucket)
     val metric = metrics.metric(metricName)
 
-    assertEquals(0, throttleTime(new QuotaViolationException(metric, 0, 10), time.milliseconds()))
-    assertEquals(500, throttleTime(new QuotaViolationException(metric, -5, 10), time.milliseconds()))
-    assertEquals(1000, throttleTime(new QuotaViolationException(metric, -10, 10), time.milliseconds()))
+    assertEquals(0, throttleTimeMs(new QuotaViolationException(metric, 0, 10), time.milliseconds()))
+    assertEquals(500, throttleTimeMs(new QuotaViolationException(metric, -5, 10), time.milliseconds()))
+    assertEquals(1000, throttleTimeMs(new QuotaViolationException(metric, -10, 10), time.milliseconds()))
   }
 
   @Test

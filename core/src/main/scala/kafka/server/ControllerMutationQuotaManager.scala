@@ -62,7 +62,7 @@ abstract class AbstractControllerMutationQuota(private val time: Time) extends C
   protected var lastRecordedTimeMs = 0L
 
   protected def updateThrottleTime(e: QuotaViolationException, timeMs: Long): Unit = {
-    lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTime(e, timeMs)
+    lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e, timeMs)
     lastRecordedTimeMs = timeMs
   }
 
@@ -141,7 +141,7 @@ object ControllerMutationQuotaManager {
    * Basically, if a value < 0 is observed, the time required to bring it to zero is
    * -value / refill rate (quota bound) * 1000.
    */
-  def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
+  def throttleTimeMs(e: QuotaViolationException, timeMs: Long): Long = {
     e.metric().measurable() match {
       case _: TokenBucket =>
         Math.round(-e.value() / e.bound() * 1000)
@@ -174,7 +174,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
       quotaMetricTags.asJava)
   }
 
-  protected def clientTokenBucketMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+  private def clientTokenBucketMetricName(quotaMetricTags: Map[String, String]): MetricName = {
     metrics.metricName("tokens", QuotaType.ControllerMutation.toString,
       "Tracking remaining tokens in the token bucket per user/client-id",
       quotaMetricTags.asJava)
@@ -215,7 +215,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
       0
     } catch {
       case e: QuotaViolationException =>
-        val throttleTimeMs = ControllerMutationQuotaManager.throttleTime(e, timeMs).toInt
+        val throttleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e, timeMs).toInt
         debug(s"Quota violated for sensor (${quotaSensor.name}). Delay time: ($throttleTimeMs)")
         throttleTimeMs
     }

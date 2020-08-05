@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
 
+import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
 
 /**
  * The rate of the given quantity. By default this is the total observed over a set of samples from a sampled statistic
@@ -63,7 +64,7 @@ public class Rate implements MeasurableStat {
     @Override
     public double measure(MetricConfig config, long now) {
         double value = stat.measure(config, now);
-        return value / convert(windowSize(config, now));
+        return value / convert(windowSize(config, now), unit);
     }
 
     public long windowSize(MetricConfig config, long now) {
@@ -91,27 +92,6 @@ public class Rate implements MeasurableStat {
             totalElapsedTimeMs += (minFullWindows - numFullWindows) * config.timeWindowMs();
 
         return totalElapsedTimeMs;
-    }
-
-    private double convert(long timeMs) {
-        switch (unit) {
-            case NANOSECONDS:
-                return timeMs * 1000.0 * 1000.0;
-            case MICROSECONDS:
-                return timeMs * 1000.0;
-            case MILLISECONDS:
-                return timeMs;
-            case SECONDS:
-                return timeMs / 1000.0;
-            case MINUTES:
-                return timeMs / (60.0 * 1000.0);
-            case HOURS:
-                return timeMs / (60.0 * 60.0 * 1000.0);
-            case DAYS:
-                return timeMs / (24.0 * 60.0 * 60.0 * 1000.0);
-            default:
-                throw new IllegalStateException("Unknown unit: " + unit);
-        }
     }
 
     /**
