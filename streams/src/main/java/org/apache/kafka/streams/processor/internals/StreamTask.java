@@ -772,7 +772,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
         }
 
-        log.info("Checkpointable offsets {}", checkpointableOffsets);
+        log.debug("Checkpointable offsets {}", checkpointableOffsets);
 
         return checkpointableOffsets;
     }

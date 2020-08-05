@@ -833,6 +833,7 @@ public class TaskManager {
         final Set<Task> tasksToCloseClean = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsAndMetadataPerTask = new HashMap<>();
 
+        // first committing all tasks and then suspend and close them clean
         for (final Task task : activeTaskIterable()) {
             try {
                 final Map<TopicPartition, OffsetAndMetadata> committableOffsets = task.prepareCommit();
@@ -900,6 +901,7 @@ public class TaskManager {
         }
         final Set<Task> tasksToCloseDirty = new HashSet<>();
 
+        // first committing and then suspend / close clean
         for (final Task task : standbyTaskIterable()) {
             try {
                 task.prepareCommit();

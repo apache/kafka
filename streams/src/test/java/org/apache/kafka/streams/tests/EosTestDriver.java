@@ -401,9 +401,6 @@ public class EosTestDriver extends SmokeTestUtil {
                 if (!receivedKey.equals(expectedKey) || receivedValue != expectedValue) {
                     exception = new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + expectedKey + "," + expectedValue + "> but was <" + receivedKey + "," + receivedValue + ">");
                 }
-
-                System.out.println("Received <" + receivedKey + ", " + receivedValue + " @ " + receivedRecord.offset() + "> " +
-                        "Expected <" + expectedKey + ", " + expectedValue + " @ " + expected.offset() + ">");
             }
 
             if (exception != null)
