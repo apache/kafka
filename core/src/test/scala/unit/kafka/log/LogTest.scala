@@ -1308,7 +1308,7 @@ class LogTest {
     log.deleteOldSegments()
 
     // Producer state should not be removed when deleting log segment
-    assertEquals(2, log.logSegments.size)
+    assertEquals(1, log.logSegments.size)
     assertEquals(Set(pid1, pid2), log.activeProducersWithLastSequence.keySet)
   }
 
@@ -3342,7 +3342,7 @@ class LogTest {
 
     log.updateHighWatermark(log.logEndOffset)
     log.deleteOldSegments()
-    assertEquals("should have 2 segments", 2,log.numberOfSegments)
+    assertEquals("should have 1 segment", 1,log.numberOfSegments)
   }
 
   @Test
@@ -3357,7 +3357,7 @@ class LogTest {
 
     log.updateHighWatermark(log.logEndOffset)
     log.deleteOldSegments()
-    assertEquals("should have 3 segments", 3,log.numberOfSegments)
+    assertEquals("should have 2 segments", 2,log.numberOfSegments)
   }
 
   @Test
@@ -3518,8 +3518,8 @@ class LogTest {
     log.updateHighWatermark(log.logEndOffset)
     log.deleteOldSegments()
 
-    //The oldest epoch entry should have been removed
-    assertEquals(ListBuffer(EpochEntry(1, 5), EpochEntry(2, 10)), cache.epochEntries)
+    //The oldest two epoch entrys should have been removed
+    assertEquals(ListBuffer(EpochEntry(2, 10)), cache.epochEntries)
   }
 
   @Test
@@ -3534,17 +3534,18 @@ class LogTest {
       log.appendAsLeader(createRecords, leaderEpoch = 0)
     }
 
-    //Given epochs
+    // Given epochs
     cache.assign(0, 0)
     cache.assign(1, 7)
-    cache.assign(2, 10)
+    cache.assign(2, 11)
+    cache.assign(3, 14)
 
-    //When first segment removed (up to offset 5)
+    // When first two segments removed (up to offset 10)
     log.updateHighWatermark(log.logEndOffset)
     log.deleteOldSegments()
 
-    //The first entry should have gone from (0,0) => (0,5)
-    assertEquals(ListBuffer(EpochEntry(0, 5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
+    // The second entry should have gone from (1,7) => (1,10)
+    assertEquals(ListBuffer(EpochEntry(1, 10), EpochEntry(2, 11), EpochEntry(3, 14)), cache.epochEntries)
   }
 
   @Test

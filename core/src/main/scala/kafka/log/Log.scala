@@ -1804,7 +1804,7 @@ class Log(@volatile private var _dir: File,
     if (config.retentionSize < 0 || size < config.retentionSize) return 0
     var diff = size - config.retentionSize
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Option[LogSegment]) = {
-      if (diff - segment.size >= 0) {
+      if (diff >= 0) {
         diff -= segment.size
         info(s"Segment with base offset ${segment.baseOffset} will be deleted due to" +
           s" retention size ${config.retentionSize} bytes breach. Segment size is" +
