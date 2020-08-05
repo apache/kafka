@@ -187,11 +187,7 @@ public class KeyValueSegmentsTest {
         segments.getOrCreateSegmentIfLive(3, context, streamTime);
         segments.getOrCreateSegmentIfLive(4, context, streamTime);
 
-<<<<<<< HEAD
         final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
-=======
-        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
->>>>>>> e431f38ea... key/value reverse operation
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
@@ -211,11 +207,7 @@ public class KeyValueSegmentsTest {
         segments.getOrCreateSegmentIfLive(3, context, streamTime);
         segments.getOrCreateSegmentIfLive(4, context, streamTime);
 
-<<<<<<< HEAD
         final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
-=======
-        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
->>>>>>> e431f38ea... key/value reverse operation
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(2).id);
         assertEquals(1, segments.get(1).id);
@@ -230,11 +222,7 @@ public class KeyValueSegmentsTest {
         updateStreamTimeAndCreateSegment(1);
         updateStreamTimeAndCreateSegment(3);
 
-<<<<<<< HEAD
         final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
-=======
-        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
->>>>>>> e431f38ea... key/value reverse operation
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
@@ -249,11 +237,7 @@ public class KeyValueSegmentsTest {
         updateStreamTimeAndCreateSegment(1);
         updateStreamTimeAndCreateSegment(3);
 
-<<<<<<< HEAD
         final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, false);
-=======
-        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL, true);
->>>>>>> e431f38ea... key/value reverse operation
         assertEquals(3, segments.size());
         assertEquals(2, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
@@ -360,11 +344,7 @@ public class KeyValueSegmentsTest {
     }
 
     private void verifyCorrectSegments(final long first, final int numSegments) {
-<<<<<<< HEAD
         final List<KeyValueSegment> result = this.segments.segments(0, Long.MAX_VALUE, true);
-=======
-        final List<KeyValueSegment> result = this.segments.segments(0, Long.MAX_VALUE, false);
->>>>>>> e431f38ea... key/value reverse operation
         assertEquals(numSegments, result.size());
         for (int i = 0; i < numSegments; i++) {
             assertEquals(i + first, result.get(i).id);

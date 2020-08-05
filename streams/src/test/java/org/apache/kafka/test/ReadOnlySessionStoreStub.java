@@ -32,7 +32,7 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 
 public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V>, StateStore {
-    private NavigableMap<K, List<KeyValue<Windowed<K>, V>>> sessions = new TreeMap<>();
+    private final NavigableMap<K, List<KeyValue<Windowed<K>, V>>> sessions = new TreeMap<>();
     private boolean open = true;
 
     public void put(final Windowed<K> sessionKey, final V value) {
@@ -40,6 +40,31 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
             sessions.put(sessionKey.key(), new ArrayList<>());
         }
         sessions.get(sessionKey.key()).add(KeyValue.pair(sessionKey, value));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(K key, long earliestSessionEndTime, long latestSessionStartTime) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFindSessions(K key, long earliestSessionEndTime, long latestSessionStartTime) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(K keyFrom, K keyTo, long earliestSessionEndTime, long latestSessionStartTime) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFindSessions(K keyFrom, K keyTo, long earliestSessionEndTime, long latestSessionStartTime) {
+        return null;
+    }
+
+    @Override
+    public V fetchSession(K key, long startTime, long endTime) {
+        return null;
     }
 
     @Override
@@ -54,6 +79,17 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(K key) {
+        if (!open) {
+            throw new InvalidStateStoreException("not open");
+        }
+        if (!sessions.containsKey(key)) {
+            return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
+        }
+        return new KeyValueIteratorStub<>(sessions.descendingMap().get(key).iterator());
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
         if (!open) {
             throw new InvalidStateStoreException("not open");
@@ -61,7 +97,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
         if (sessions.subMap(from, true, to, true).isEmpty()) {
             return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
         }
-        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(from, true,  to, true).values().iterator();
+        final Iterator<List<KeyValue<Windowed<K>, V>>> keysIterator = sessions.subMap(from, true, to, true).values().iterator();
         return new KeyValueIteratorStub<>(
             new Iterator<KeyValue<Windowed<K>, V>>() {
 
@@ -82,9 +118,13 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
                 public KeyValue<Windowed<K>, V> next() {
                     return it.next();
                 }
-
             }
         );
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(K from, K to) {
+        return null;
     }
 
     @Override
