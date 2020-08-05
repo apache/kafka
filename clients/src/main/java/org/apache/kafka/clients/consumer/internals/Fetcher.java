@@ -722,7 +722,9 @@ public class Fetcher<K, V> implements Closeable {
     // Visible for testing
     void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
         FetchPosition position = new FetchPosition(
-                offsetData.offset, offsetData.leaderEpoch, metadata.currentLeader(partition));
+            offsetData.offset,
+            Optional.empty(), // This will ensure we skip validation
+            metadata.currentLeader(partition));
         offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
         subscriptions.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
     }
@@ -783,7 +785,7 @@ public class Fetcher<K, V> implements Closeable {
             regroupFetchPositionsByLeader(partitionsToValidate);
 
         long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
-        regrouped.forEach((node, fetchPostitions) -> {
+        regrouped.forEach((node, fetchPositions) -> {
             if (node.isEmpty()) {
                 metadata.requestUpdate();
                 return;
@@ -805,7 +807,7 @@ public class Fetcher<K, V> implements Closeable {
                 return;
             }
 
-            subscriptions.setNextAllowedRetry(fetchPostitions.keySet(), nextResetTimeMs);
+            subscriptions.setNextAllowedRetry(fetchPositions.keySet(), nextResetTimeMs);
 
             RequestFuture<OffsetForEpochResult> future =
                 offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPositions);
@@ -1128,19 +1130,11 @@ public class Fetcher<K, V> implements Closeable {
     private void maybeValidateAssignments() {
         int newMetadataUpdateVersion = metadata.updateVersion();
         if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
-            subscriptions.forEachAssignedPartition(
-                tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
+            subscriptions.assignedPartitions().forEach(topicPartition -> {
+                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(topicPartition);
+                subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, topicPartition, leaderAndEpoch);
+            });
         }
-
-        // Ensure the position has an up-to-date leader
-        subscriptions.assignedPartitions().forEach(tp ->
-                subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, tp, metadata.currentLeader(tp))
-        );
-
-        subscriptions.assignedPartitions().forEach(topicPartition -> {
-            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(topicPartition);
-            subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, topicPartition, leaderAndEpoch);
-        });
     }
 
     /**
