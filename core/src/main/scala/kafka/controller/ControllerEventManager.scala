@@ -17,7 +17,7 @@
 
 package kafka.controller
 
-import java.util
+import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
@@ -106,7 +106,7 @@ class ControllerEventManager(controllerId: Int,
   }
 
   def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock){
-    val preemptedEvents = new util.ArrayList[QueuedEvent]()
+    val preemptedEvents = new ArrayList[QueuedEvent]()
     queue.drainTo(preemptedEvents)
     preemptedEvents.forEach(_.preempt(processor))
     put(event)
