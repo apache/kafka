@@ -36,7 +36,7 @@ public class TokenBucketTest {
     @Test
     public void testRecord() {
         // Rate  = 5 unit / sec
-        // Burst = 2 * (11 - 1) = 20 units
+        // Burst = 2 * 10 = 20 units
         MetricConfig config = new MetricConfig()
             .quota(Quota.upperBound(5))
             .timeWindow(2, TimeUnit.SECONDS)
@@ -65,7 +65,7 @@ public class TokenBucketTest {
     @Test
     public void testUnrecord() {
         // Rate  = 5 unit / sec
-        // Burst = 2 * (11 - 1) = 20 units
+        // Burst = 2 * 10 = 20 units
         MetricConfig config = new MetricConfig()
             .quota(Quota.upperBound(5))
             .timeWindow(2, TimeUnit.SECONDS)

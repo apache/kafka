@@ -33,6 +33,27 @@ import static org.apache.kafka.common.metrics.internals.MetricsUtils.convert;
  *
  * The quota is considered as exhausted when the amount of remaining credits in the bucket
  * is below zero. The enforcement is done by the {@link org.apache.kafka.common.metrics.Sensor}.
+ *
+ * Token Bucket vs Rate based Quota:
+ * The current sampled rate based quota does not cope well with bursty workloads. The issue is
+ * that a unique and large sample can hold the average above the quota and this until it is
+ * discarded. Practically, when this happens, one must wait until the sample is expired to
+ * bring the rate below the quota even though less time would be theoretically required. As an
+ * examples, let's imagine that we have:
+ * - Quota (Q)   = 5
+ * - Samples (S) = 100
+ * - Window (W)  = 1s
+ * A burst of 560 brings the average rate (R) to 5.6 (560 / 100). The throttle time is computed as
+ * follow: ((R - Q / Q * S * W)) = ((5.6 - 5) / 5 * 100 * 1) = 12 secs. In practice, the average
+ * rate won't go below the quota before the burst is dropped from the samples so one must wait
+ * 100s (S * W).
+ *
+ * The token bucket relies on continuously updated amount of credits. Therefore, it does not
+ * suffers from the above issue. The same example would work as follow:
+ * - Quota (Q) = 5
+ * - Burst (B) = 5 * 1 * 100 = 500 (Q * S * W)
+ * A burst of 560 brings the amount of credits to -60. One must wait 12s (-(-60)/5) to refill the
+ * bucket to zero.
  */
 public class TokenBucket implements MeasurableStat {
     private final TimeUnit unit;
