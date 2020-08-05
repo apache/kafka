@@ -32,6 +32,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.time.Instant;
+
 import static java.time.Instant.ofEpochMilli;
 
 @RunWith(EasyMockRunner.class)
