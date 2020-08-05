@@ -31,6 +31,7 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
 
     private final Bytes from;
     private final Bytes to;
+    private final boolean reverse;
     protected final Iterator<S> segments;
     protected final HasNextCondition hasNextCondition;
 
@@ -40,11 +41,13 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
     SegmentIterator(final Iterator<S> segments,
                     final HasNextCondition hasNextCondition,
                     final Bytes from,
-                    final Bytes to) {
+                    final Bytes to,
+                    final boolean reverse) {
         this.segments = segments;
         this.hasNextCondition = hasNextCondition;
         this.from = from;
         this.to = to;
+        this.reverse = reverse;
     }
 
     @Override
@@ -67,14 +70,16 @@ class SegmentIterator<S extends Segment> implements KeyValueIterator<Bytes, byte
     public boolean hasNext() {
         boolean hasNext = false;
         while ((currentIterator == null || !(hasNext = hasNextConditionHasNext()) || !currentSegment.isOpen())
-                && segments.hasNext()) {
+            && segments.hasNext()) {
             close();
             currentSegment = segments.next();
             try {
                 if (from == null || to == null) {
-                    currentIterator = currentSegment.all();
+                    if (reverse) currentIterator = currentSegment.reverseAll();
+                    else currentIterator = currentSegment.all();
                 } else {
-                    currentIterator = currentSegment.range(from, to);
+                    if (reverse) currentIterator = currentSegment.reverseRange(from, to);
+                    else currentIterator = currentSegment.range(from, to);
                 }
             } catch (final InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.

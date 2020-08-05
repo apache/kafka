@@ -75,12 +75,27 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
+    public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
+                                                     final Instant from,
+                                                     final Instant to) {
+        return new WindowToTimestampedWindowIteratorAdapter(store.backwardFetch(key, from, to));
+    }
+
+    @Override
     @SuppressWarnings("deprecation")
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
                                                            final Bytes to,
                                                            final long timeFrom,
                                                            final long timeTo) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(from, to, timeFrom, timeTo));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
+                                                                   final Bytes to,
+                                                                   final Instant fromTime,
+                                                                   final Instant toTime) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.backwardFetch(from, to, fromTime, toTime));
     }
 
     @Override
@@ -97,10 +112,21 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.backwardAll());
+    }
+
+    @Override
     @SuppressWarnings("deprecation")
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant from,
+                                                                      final Instant to) {
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.backwardFetchAll(from, to));
     }
 
     @Override
