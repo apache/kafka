@@ -90,6 +90,10 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
         }
 
         final int comparison = compare(nextCacheKey, nextStoreKey);
+        return chooseNextValue(nextCacheKey, nextStoreKey, comparison);
+    }
+
+    private KeyValue<K, V> chooseNextValue(Bytes nextCacheKey, KS nextStoreKey, int comparison) {
         if (!reverse) {
             if (comparison > 0) {
                 return nextStoreValue(nextStoreKey);
@@ -151,6 +155,10 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
         }
 
         final int comparison = compare(nextCacheKey, nextStoreKey);
+        return chooseNextKey(nextCacheKey, nextStoreKey, comparison);
+    }
+
+    private K chooseNextKey(Bytes nextCacheKey, KS nextStoreKey, int comparison) {
         if (!reverse) {
             if (comparison > 0) {
                 return deserializeStoreKey(nextStoreKey);
