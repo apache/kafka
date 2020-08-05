@@ -39,6 +39,7 @@ public class AlterIsrResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.topics().forEach(topicResponse -> topicResponse.partitions().forEach(partitionResponse -> {
             updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()));
         }));

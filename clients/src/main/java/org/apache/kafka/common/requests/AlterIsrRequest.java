@@ -49,7 +49,9 @@ public class AlterIsrRequest extends AbstractRequest {
      */
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new AlterIsrResponse(new AlterIsrResponseData().setErrorCode(Errors.forException(e).code()));
+        return new AlterIsrResponse(new AlterIsrResponseData()
+                .setThrottleTimeMs(throttleTimeMs)
+                .setErrorCode(Errors.forException(e).code()));
     }
 
     public static class Builder extends AbstractRequest.Builder<AlterIsrRequest> {
