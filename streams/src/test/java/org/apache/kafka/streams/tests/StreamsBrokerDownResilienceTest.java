@@ -48,7 +48,7 @@ public class StreamsBrokerDownResilienceTest {
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsBrokerDownResilienceTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
-            System.exit(1);
+            Exit.exit(1);
         }
 
         System.out.println("StreamsTest instance started");
@@ -61,7 +61,7 @@ public class StreamsBrokerDownResilienceTest {
 
         if (kafka == null) {
             System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
-            System.exit(1);
+            Exit.exit(1);
         }
 
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-resilience");
@@ -85,7 +85,7 @@ public class StreamsBrokerDownResilienceTest {
                                              StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                                              StreamsConfig.producerPrefix(ProducerConfig.MAX_BLOCK_MS_CONFIG)));
 
-            System.exit(1);
+            Exit.exit(1);
         }
 
         final StreamsBuilder builder = new StreamsBuilder();
