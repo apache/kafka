@@ -2219,7 +2219,7 @@ class Log(@volatile private var _dir: File,
         // removing the deleted segment, we should force materialization of the iterator here, so that results of the
         // iteration remain valid and deterministic.
         val toDelete = segments.toList
-        info(s"${reason.reasonString(this)}: ${toDelete.mkString(",")}")
+        info(s"${reason.logReason(this, toDelete)}")
         toDelete.foreach { segment =>
           this.segments.remove(segment.baseOffset)
         }
@@ -2672,28 +2672,62 @@ object LogMetricNames {
 }
 
 sealed trait SegmentDeletionReason {
-  def reasonString(log: Log): String
+  def logReason(log: Log, toDelete: List[LogSegment]): Unit
 }
+
 case object RetentionMsBreach extends SegmentDeletionReason {
-  override def reasonString(log: Log): String = s"Deleting segments due to retention time ${log.config.retentionMs}ms breach"
-}
-case object RetentionSizeBreach extends SegmentDeletionReason {
-  override def reasonString(log: Log): String = {
-    s"Deleting segments due to retention size ${log.config.retentionSize} breach. Current log size is ${log.size}"
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    val retentionMs = log.config.retentionMs
+    toDelete.foreach { segment =>
+      segment.largestRecordTimestamp match {
+        case Some(_) =>
+          log.info(s"Deleting segment $segment due to retention time ${retentionMs}ms breach based on the largest " +
+            s"record timestamp in the segment")
+        case None =>
+          log.info(s"Deleting segment $segment due to retention time ${retentionMs}ms breach based on the " +
+            s"last modified time of the segment")
+      }
+    }
   }
 }
+
+case object RetentionSizeBreach extends SegmentDeletionReason {
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    var size = log.size
+    toDelete.foreach { segment =>
+      size -= segment.size
+      log.info(s"Deleting segment $segment due to retention size ${log.config.retentionSize} breach. Log size " +
+        s"after deletion will be $size.")
+    }
+  }
+}
+
 case object StartOffsetBreach extends SegmentDeletionReason {
-  override def reasonString(log: Log): String = s"Deleting segments due to log start offset ${log.logStartOffset} breach"
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    log.info(s"Deleting segments due to log start offset ${log.logStartOffset} breach: ${toDelete.mkString(",")}")
+  }
 }
+
 case object LogRecovery extends SegmentDeletionReason {
-  override def reasonString(log: Log): String = "Deleting segments as part of log recovery"
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    log.info(s"Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
+  }
 }
+
 case object LogTruncation extends SegmentDeletionReason {
-  override def reasonString(log: Log): String = "Deleting segments as part of log truncation"
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    log.info(s"Deleting segments as part of log truncation: ${toDelete.mkString(",")}")
+  }
 }
+
 case object LogRoll extends SegmentDeletionReason {
-  override def reasonString(log: Log): String = "Deleting segments as part of log roll"
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    log.info(s"Deleting segments as part of log roll: ${toDelete.mkString(",")}")
+  }
 }
+
 case object LogDeletion extends SegmentDeletionReason {
-  override def reasonString(log: Log): String = "Deleting segments as the log has been deleted"
+  override def logReason(log: Log, toDelete: List[LogSegment]): Unit = {
+    log.info(s"Deleting segments as the log has been deleted: ${toDelete.mkString(",")}")
+  }
 }
