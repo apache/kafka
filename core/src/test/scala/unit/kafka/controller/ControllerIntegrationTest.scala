@@ -18,7 +18,6 @@
 package kafka.controller
 
 import java.util.Properties
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
 import com.yammer.metrics.core.Timer
@@ -610,7 +609,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     var count = 2
     val latch = new CountDownLatch(1)
     val spyThread = spy(controller.eventManager.thread)
-    controller.eventManager.setControllerEventThread(spyThread)
+    controller.eventManager.thread = spyThread
     val processedEvent = new MockEvent(ControllerState.TopicChange) {
       override def process(): Unit = latch.await()
       override def preempt(): Unit = {}
