@@ -29,7 +29,7 @@ class RocksDBPrefixIterator extends RocksDbIterator {
                           final RocksIterator newIterator,
                           final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
                           final Bytes prefix) {
-        super(name, newIterator, openIterators);
+        super(name, newIterator, openIterators, false);
         rawPrefix = prefix.get();
         newIterator.seek(rawPrefix);
     }

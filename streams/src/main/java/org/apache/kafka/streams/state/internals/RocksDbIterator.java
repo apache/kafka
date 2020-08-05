@@ -31,6 +31,7 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     private final String storeName;
     private final RocksIterator iter;
     private final Set<KeyValueIterator<Bytes, byte[]>> openIterators;
+    private final boolean reverse;
 
     private volatile boolean open = true;
 
@@ -38,10 +39,12 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
 
     RocksDbIterator(final String storeName,
                     final RocksIterator iter,
-                    final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+                    final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
+                    final boolean reverse) {
         this.storeName = storeName;
         this.iter = iter;
         this.openIterators = openIterators;
+        this.reverse = reverse;
     }
 
     @Override
@@ -58,7 +61,8 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
             return allDone();
         } else {
             next = getKeyValue();
-            iter.next();
+            if (reverse) iter.prev();
+            else iter.next();
             return next;
         }
     }
