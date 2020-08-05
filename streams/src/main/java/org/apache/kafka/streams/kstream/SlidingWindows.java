@@ -23,15 +23,13 @@ import java.util.Objects;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
- /**
+ /*
  * A sliding window used for aggregating events.
  * <p>
- * Sliding Windows are defined based on a record's timestamp, window size based on the given maximum time difference (inclusive) between
- * records in the same window and given window grace period.
- *
- * While the window is sliding over the input data stream, a new window is created each time a record enters
- * the sliding window or a record drops out of the sliding window.
- *
+ * Sliding windows are defined by a record's timestamp, with window size based on the given maximum time difference (inclusive) between
+ * records in the same window and a given window grace period. While the window is sliding over the input data stream, a new window is
+ * created each time a record enters the sliding window or a record drops out of the sliding window.
+ * <p>
  * Records that come after set grace period will be ignored, i.e., a window is closed when
  * {@code stream-time > window-end + grace-period}.
  * <p>
@@ -48,14 +46,16 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * +-----------+-------------+------------+
  * </pre>
  * We'd have the following 5 windows:
- * - window {@code [3000;8000]} contains [1] (created when first record enters the window)
- * - window {@code [4200;9200]} contains [1,2] (created when second record enters the window)
- * - window {@code [7400;124000]} contains [1,2,3] (created when third record enters the window)
- * - window {@code [8001;130001]} contains [2,3] (created when the first record drops out of the window)
- * - window {@code [9201;142001]} contains [3] (created when the second record drops out of the window)
- *
- * Note that while SlidingWindows are of a fixed size {@link TimeWindows}, the start and end points
- * depend on when events are processed, similar to {@link SessionWindows}.
+ * <ul>
+ *     <li>window {@code [3000;8000]} contains [1] (created when first record enters the window)</li>
+ *     <li>window {@code [4200;9200]} contains [1,2] (created when second record enters the window)</li>
+ *     <li>window {@code [7400;124000]} contains [1,2,3] (created when third record enters the window)</li>
+ *     <li>window {@code [8001;130001]} contains [2,3] (created when the first record drops out of the window)</li>
+ *     <li>window {@code [9201;142001]} contains [3] (created when the second record drops out of the window)</li>
+ * </ul>
+ *<p>
+ * Note that while SlidingWindows are of a fixed size, as are {@link TimeWindows}, the start and end points of the window
+ * depend on when events occur in the stream (i.e., event timestamps), similar to {@link SessionWindows}.
  * <p>
  * For time semantics, see {@link TimestampExtractor}.
  *
@@ -63,7 +63,8 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * @see SessionWindows
  * @see UnlimitedWindows
  * @see JoinWindows
- * @see KGroupedStream#windowedBy(Windows)
+ * @see KGroupedStream#windowedBy(SlidingWindows)
+ * @see CogroupedKStream#windowedBy(SlidingWindows)
  * @see TimestampExtractor
  */
 
@@ -82,25 +83,24 @@ public final class SlidingWindows {
 
     /**
      * Return a window definition with the window size based on the given maximum time difference (inclusive) between
-     * records in the same window and given window grace period.
-     *
-     * Reject out-of-order events that arrive after {@code grace}. A window is closed when {@code stream-time > window-end + grace-period}.
+     * records in the same window and given window grace period. Reject out-of-order events that arrive after {@code grace}.
+     * A window is closed when {@code stream-time > window-end + grace-period}.
      *
      * @param timeDifference the max time difference (inclusive) between two records in a window
      * @param grace the grace period to admit out-of-order events to a window
      * @return a new window definition
-     * @throws IllegalArgumentException if the specified window size or grace is zero or negative or can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if the specified window size is < 0 or grace <= 0, or either can't be represented as {@code long milliseconds}
      */
     public static SlidingWindows withTimeDifferenceAndGrace(final Duration timeDifference, final Duration grace) throws IllegalArgumentException {
         final String msgPrefixSize = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
         final long timeDifferenceMs = ApiUtils.validateMillisecondDuration(timeDifference, msgPrefixSize);
-        if (timeDifferenceMs <= 0) {
-            throw new IllegalArgumentException("Window timeDifference (timeDifference) must be larger than zero.");
+        if (timeDifferenceMs < 0) {
+            throw new IllegalArgumentException("Window time difference must not be negative.");
         }
         final String msgPrefixGrace = prepareMillisCheckFailMsgPrefix(grace, "afterWindowEnd");
         final long graceMs = ApiUtils.validateMillisecondDuration(grace, msgPrefixGrace);
         if (graceMs < 0) {
-            throw new IllegalArgumentException("Grace period must not be negative.");
+            throw new IllegalArgumentException("Window grace period must not be negative.");
         }
         return new SlidingWindows(timeDifferenceMs, graceMs);
     }

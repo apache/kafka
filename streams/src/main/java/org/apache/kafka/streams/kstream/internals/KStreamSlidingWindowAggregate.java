@@ -34,7 +34,6 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import java.time.Instant;
 import java.util.HashSet;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
@@ -109,6 +108,14 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         @Override
         public void process(final K key, final V value) {
+            if (key == null || value == null) {
+                log.warn(
+                        "Skipping record due to null key or value. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        value, context().topic(), context().partition(), context().offset()
+                );
+                droppedRecordsSensor.record();
+                return;
+            }
             if (reverseIteratorImplemented) {
                 processReverse(key, value);
             } else {
@@ -116,16 +123,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
         }
 
-        @SuppressWarnings("checkstyle:LineLength")
         public void processReverse(final K key, final V value) {
-            if (key == null) {
-                log.warn(
-                        "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                        value, context().topic(), context().partition(), context().offset()
-                );
-                droppedRecordsSensor.record();
-                return;
-            }
 
             final long timestamp = context().timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
@@ -141,11 +139,11 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             boolean rightWinAlreadyCreated = false;
 
             try (
-                    //Fetch all the windows that have a start time <= timestamp and >= timestamp-2*timeDifference
-                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(key,
+                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(
                             key,
-                            Instant.ofEpochMilli(timestamp - 2 * windows.timeDifferenceMs()),
-                            Instant.ofEpochMilli(timestamp + 1))
+                            key,
+                            timestamp - 2 * windows.timeDifferenceMs(),
+                            timestamp + 1)
             ) {
                 KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next;
                 //if we've already seen the window with the closest start time to the record
@@ -199,11 +197,11 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     //left window just contains the current record
                     valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
                 }
-                final TimeWindow window = new TimeWindow(timestamp - windows.timeDifferenceMs(), timestamp);
+                final TimeWindow window = new TimeWindow(Math.max(0, timestamp - windows.timeDifferenceMs()), timestamp);
                 putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
             }
             //create the right window for the current record, if need be
-            if (!rightWinAlreadyCreated && rightWinAgg.timestamp() > timestamp) {
+            if (!rightWinAlreadyCreated && rightWinAgg != null && rightWinAgg.timestamp() > timestamp) {
                 final TimeWindow window = new TimeWindow(timestamp + 1, timestamp + 1 + windows.timeDifferenceMs());
                 final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(getValueOrNull(rightWinAgg), Math.max(rightWinAgg.timestamp(), timestamp));
                 putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
@@ -211,15 +209,17 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         }
 
         public void processInOrder(final K key, final V value) {
-            if (key == null) {
+
+            final long timestamp = context().timestamp();
+            //don't process records that don't fall within a full sliding window
+            if (timestamp < windows.timeDifferenceMs()) {
                 log.warn(
-                        "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
+                        "Skipping record due to early arrival. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                         value, context().topic(), context().partition(), context().offset()
                 );
                 droppedRecordsSensor.record();
                 return;
             }
-            final long timestamp = context().timestamp();
             observedStreamTime = Math.max(observedStreamTime,
                     timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
@@ -239,10 +239,12 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             Window latestLeftTypeWindow = null;
             try (
                     //Fetch all the windows that have a start time <= timestamp and >= timestamp-2*timeDifference
-                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(key,
+                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(
                             key,
-                            Instant.ofEpochMilli(timestamp - 2 * windows.timeDifferenceMs()),
-                            Instant.ofEpochMilli(timestamp + 1))
+                            key,
+                            timestamp - 2 * windows.timeDifferenceMs(),
+                            // to catch the current record's right window, if it exists, without more calls to the store
+                            timestamp + 1)
             ) {
                 KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next;
                 while (iterator.hasNext()) {
@@ -290,7 +292,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 } else {
                     valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
                 }
-                final TimeWindow window = new TimeWindow(timestamp - windows.timeDifferenceMs(), timestamp);
+                final TimeWindow window = new TimeWindow(Math.max(0, timestamp - windows.timeDifferenceMs()), timestamp);
                 putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
             }
             //create right window for new record
@@ -317,7 +319,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 //get aggregate from existing window
                 final Agg oldAgg = getValueOrNull(valueAndTime);
                 //add record's value to existing aggregate
-                final Agg newAgg = aggregator.apply(key, value, oldAgg);
+                final Agg newAgg = windowStart == timestamp + 1 ? oldAgg : aggregator.apply(key, value, oldAgg);
                 final long newTimestamp = oldAgg == null ? timestamp : Math.max(timestamp, valueAndTime.timestamp());
                 windowStore.put(key,
                         ValueAndTimestamp.make(newAgg, newTimestamp),
@@ -335,7 +337,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                                 "partition=[{}] " +
                                 "offset=[{}] " +
                                 "timestamp=[{}] " +
-                                "window=[{},{}) " +
+                                "window=[{},{}] " +
                                 "expiration=[{}] " +
                                 "streamTime=[{}]",
                         key,

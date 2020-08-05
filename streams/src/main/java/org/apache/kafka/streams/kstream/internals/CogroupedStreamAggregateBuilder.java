@@ -140,16 +140,20 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                                                                     final Merger<? super K, VOut> sessionMerger) {
         final ProcessorSupplier<K, ?> kStreamAggregate;
 
-        if (windows == null && slidingWindows == null && sessionWindows == null) {
+        if (windows == null && slidingWindows == null && sessionWindows == null && sessionMerger == null) {
             kStreamAggregate = new KStreamAggregate<>(storeBuilder.name(), initializer, aggregator);
-        } else if (windows != null && slidingWindows == null && sessionWindows == null) {
+        } else if (windows != null && slidingWindows == null && sessionWindows == null && sessionMerger == null) {
             kStreamAggregate = new KStreamWindowAggregate<>(windows, storeBuilder.name(), initializer, aggregator);
-        } else if (windows == null && slidingWindows != null && sessionWindows == null) {
+        } else if (windows == null && slidingWindows != null && sessionWindows == null && sessionMerger == null) {
             kStreamAggregate = new KStreamSlidingWindowAggregate<>(slidingWindows, storeBuilder.name(), initializer, aggregator);
-        } else if (windows == null && slidingWindows == null && sessionMerger != null) {
-            kStreamAggregate = new KStreamSessionWindowAggregate<>(sessionWindows, storeBuilder.name(), initializer, aggregator, sessionMerger);
+        } else if (windows == null && slidingWindows == null && sessionWindows != null) {
+            if (sessionMerger == null) {
+                throw new IllegalArgumentException("sessionMerger cannot be null for sessionWindows");
+            } else {
+                kStreamAggregate = new KStreamSessionWindowAggregate<>(sessionWindows, storeBuilder.name(), initializer, aggregator, sessionMerger);
+            }
         } else {
-            throw new IllegalArgumentException("must include windows OR sessionWindows + sessionMerger OR all must be null");
+            throw new IllegalArgumentException("must include windows OR slidingWindows OR sessionWindows + sessionMerger OR all must be null");
         }
 
         final StatefulProcessorNode<K, ?> statefulProcessorNode;
