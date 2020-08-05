@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
 import kafka.utils.{ShutdownableThread, TestUtils}
+import kafka.utils.Implicits._
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.junit.Assert._
 import org.junit.Before
@@ -96,9 +97,11 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     }
   }
 
-  protected def createConsumerWithGroupId(groupId: String): KafkaConsumer[Array[Byte], Array[Byte]] = {
+  protected def createConsumerWithGroupId(groupId: String,
+                                          configOverrides: Properties = new Properties): KafkaConsumer[Array[Byte], Array[Byte]] = {
     val groupOverrideConfig = new Properties
     groupOverrideConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    groupOverrideConfig ++= configOverrides
     createConsumer(configOverrides = groupOverrideConfig)
   }
 

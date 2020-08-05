@@ -240,8 +240,15 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * broker is available.
    */
   private def checkCloseWithCoordinatorFailure(numRecords: Int, dynamicGroup: String, manualGroup: String): Unit = {
-    val consumer1 = createConsumerAndReceive(dynamicGroup, false, numRecords)
-    val consumer2 = createConsumerAndReceive(manualGroup, true, numRecords)
+    val configOverrides = new Properties
+    // reduce the session timeout so the dead member can be evicted quickly.
+    // The dead member is caused by that first consumer send LEAVE_GROUP to new coordinator after previous coordinator
+    // is shutdown. If the new coordinator is shutdown also, the LEAVE_GROUP request is canceled. Hence, the dead member
+    // is left in group and the rebalance can't be completed in time.
+    configOverrides.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    configOverrides.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "1500")
+    val consumer1 = createConsumerAndReceive(dynamicGroup, false, numRecords, configOverrides = configOverrides)
+    val consumer2 = createConsumerAndReceive(manualGroup, true, numRecords, configOverrides = configOverrides)
 
     killBroker(findCoordinator(dynamicGroup))
     killBroker(findCoordinator(manualGroup))
@@ -435,8 +442,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     closeFuture2.get(2000, TimeUnit.MILLISECONDS)
   }
 
-  private def createConsumerAndReceive(groupId: String, manualAssign: Boolean, numRecords: Int): KafkaConsumer[Array[Byte], Array[Byte]] = {
-    val consumer = createConsumerWithGroupId(groupId)
+  private def createConsumerAndReceive(groupId: String, manualAssign: Boolean,
+                                       numRecords: Int, configOverrides: Properties = new Properties): KafkaConsumer[Array[Byte], Array[Byte]] = {
+    val consumer = createConsumerWithGroupId(groupId, configOverrides = configOverrides)
     val consumerPoller = if (manualAssign)
         subscribeConsumerAndStartPolling(consumer, List(), Set(tp))
       else
