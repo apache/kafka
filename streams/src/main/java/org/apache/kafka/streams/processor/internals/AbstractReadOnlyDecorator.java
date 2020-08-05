@@ -254,26 +254,11 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
-                                                                       final long earliestSessionEndTime,
-                                                                       final long latestSessionStartTime) {
-            return wrapped().backwardFindSessions(key, earliestSessionEndTime, latestSessionStartTime);
-        }
-
-        @Override
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
                                                                final K keyTo,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
             return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
-                                                                       final K keyTo,
-                                                                       final long earliestSessionEndTime,
-                                                                       final long latestSessionStartTime) {
-            return wrapped().backwardFindSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -298,20 +283,10 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K key) {
-            return wrapped().backwardFetch(key);
-        }
-
-        @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
                                                         final K to) {
             return wrapped().fetch(from, to);
         }
 
-        @Override
-        public KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K from,
-                                                                final K to) {
-            return wrapped().backwardFetch(from, to);
-        }
     }
 }
