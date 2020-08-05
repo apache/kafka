@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Instant;
-import java.util.List;
-
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -32,6 +29,9 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
+
+import java.time.Instant;
+import java.util.List;
 
 abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends WrappedStateStore<T, K, V> {
 
@@ -199,9 +199,9 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
-                                                      final K to,
-                                                      final Instant timeFrom,
-                                                      final Instant timeTo) {
+                                                              final K to,
+                                                              final Instant timeFrom,
+                                                              final Instant timeTo) {
             return wrapped().backwardFetch(from, to, timeFrom, timeTo);
         }
 
