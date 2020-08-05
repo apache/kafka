@@ -18,21 +18,25 @@ package kafka.server
 
 import java.nio.charset.StandardCharsets
 import java.util.Properties
+import java.util.concurrent.ExecutionException
 
+import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig._
+import kafka.utils._
 import kafka.server.Constants._
-import org.junit.Assert._
+import kafka.zk.ConfigEntityChangeNotificationZNode
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
+import org.junit.Assert._
 import org.junit.Test
-import kafka.integration.KafkaServerTestHarness
-import kafka.utils._
-import kafka.admin.AdminOperationException
-import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{Map, Seq}
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
@@ -191,14 +195,31 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @Test
   def testConfigChangeOnNonExistingTopic(): Unit = {
-    val topic = TestUtils.tempTopic
+    val topic = TestUtils.tempTopic()
     try {
       val logProps = new Properties()
       logProps.put(FlushMessagesProp, 10000: java.lang.Integer)
       adminZkClient.changeTopicConfig(topic, logProps)
-      fail("Should fail with AdminOperationException for topic doesn't exist")
+      fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
     } catch {
-      case _: AdminOperationException => // expected
+      case _: UnknownTopicOrPartitionException => // expected
+    }
+  }
+
+  @Test
+  def testConfigChangeOnNonExistingTopicWithAdminClient(): Unit = {
+    val topic = TestUtils.tempTopic()
+    val admin = createAdminClient()
+    try {
+      val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+      val op = new AlterConfigOp(new ConfigEntry(FlushMessagesProp, "10000"), AlterConfigOp.OpType.SET)
+      admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
+      fail("Should fail with UnknownTopicOrPartitionException for topic doesn't exist")
+    } catch {
+      case e: ExecutionException =>
+        assertTrue(e.getCause.isInstanceOf[UnknownTopicOrPartitionException])
+    } finally {
+      admin.close()
     }
   }
 
@@ -314,4 +335,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
     configHandler.parseThrottledPartitions(CoreUtils.propsWith(LeaderReplicationThrottledReplicasProp, value), 102, LeaderReplicationThrottledReplicasProp)
   }
+
+  private def createAdminClient(): Admin = {
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    Admin.create(props)
+  }
+
 }

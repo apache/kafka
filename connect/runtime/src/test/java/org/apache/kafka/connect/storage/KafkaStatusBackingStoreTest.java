@@ -18,6 +18,7 @@ package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.record.TimestampType;
@@ -27,15 +28,23 @@ import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.TaskStatus;
+import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.easymock.IAnswer;
+import org.easymock.Mock;
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 import static org.easymock.EasyMock.anyObject;
@@ -45,8 +54,11 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.newCapture;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
+@RunWith(PowerMockRunner.class)
 public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     private static final String STATUS_TOPIC = "status-topic";
@@ -54,12 +66,34 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
     private static final String CONNECTOR = "conn";
     private static final ConnectorTaskId TASK = new ConnectorTaskId(CONNECTOR, 0);
 
+    private KafkaStatusBackingStore store;
+    @Mock
+    Converter converter;
+    @Mock
+    private KafkaBasedLog<String, byte[]> kafkaBasedLog;
+    @Mock
+    WorkerConfig workerConfig;
+
+    @Before
+    public void setup() {
+        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
+    }
+
+    @Test
+    public void misconfigurationOfStatusBackingStore() {
+        expect(workerConfig.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG)).andReturn(null);
+        expect(workerConfig.getString(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG)).andReturn("   ");
+        replayAll();
+
+        Exception e = assertThrows(ConfigException.class, () -> store.configure(workerConfig));
+        assertEquals("Must specify topic for connector status.", e.getMessage());
+        e = assertThrows(ConfigException.class, () -> store.configure(workerConfig));
+        assertEquals("Must specify topic for connector status.", e.getMessage());
+        verifyAll();
+    }
+
     @Test
     public void putConnectorState() {
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         byte[] value = new byte[0];
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
@@ -87,10 +121,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     @Test
     public void putConnectorStateRetriableFailure() {
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         byte[] value = new byte[0];
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
@@ -125,10 +155,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     @Test
     public void putConnectorStateNonRetriableFailure() {
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         byte[] value = new byte[0];
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
@@ -160,10 +186,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         byte[] value = new byte[0];
         String otherWorkerId = "anotherhost:8083";
 
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         // the persisted came from a different host and has a newer generation
         Map<String, Object> statusMap = new HashMap<>();
         statusMap.put("worker_id", otherWorkerId);
@@ -188,10 +210,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     @Test
     public void putSafeWithNoPreviousValueIsPropagated() {
-        final Converter converter = mock(Converter.class);
-        final KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        final KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         final byte[] value = new byte[0];
 
         final Capture<Struct> statusValueStruct = newCapture();
@@ -216,10 +234,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
     @Test
     public void putSafeOverridesValueSetBySameWorker() {
         final byte[] value = new byte[0];
-
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        final KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
 
         // the persisted came from the same host, but has a newer generation
         Map<String, Object> firstStatusRead = new HashMap<>();
@@ -267,10 +281,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         final byte[] value = new byte[0];
         String otherWorkerId = "anotherhost:8083";
 
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        final KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         // the persisted came from a different host and has a newer generation
         Map<String, Object> firstStatusRead = new HashMap<>();
         firstStatusRead.put("worker_id", otherWorkerId);
@@ -315,10 +325,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
     public void readConnectorState() {
         byte[] value = new byte[0];
 
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         Map<String, Object> statusMap = new HashMap<>();
         statusMap.put("worker_id", WORKER_ID);
         statusMap.put("state", "RUNNING");
@@ -339,10 +345,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
 
     @Test
     public void putTaskState() {
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         byte[] value = new byte[0];
         expect(converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class)))
                 .andStubReturn(value);
@@ -372,10 +374,6 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
     public void readTaskState() {
         byte[] value = new byte[0];
 
-        KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
-        Converter converter = mock(Converter.class);
-        KafkaStatusBackingStore store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
-
         Map<String, Object> statusMap = new HashMap<>();
         statusMap.put("worker_id", WORKER_ID);
         statusMap.put("state", "RUNNING");
@@ -391,6 +389,69 @@ public class KafkaStatusBackingStoreTest extends EasyMockSupport {
         TaskStatus status = new TaskStatus(TASK, TaskStatus.State.RUNNING, WORKER_ID, 0);
         assertEquals(status, store.get(TASK));
 
+        verifyAll();
+    }
+
+    @Test
+    public void deleteConnectorState() {
+        final byte[] value = new byte[0];
+        Map<String, Object> statusMap = new HashMap<>();
+        statusMap.put("worker_id", WORKER_ID);
+        statusMap.put("state", "RUNNING");
+        statusMap.put("generation", 0L);
+
+        converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class));
+        EasyMock.expectLastCall().andReturn(value);
+        kafkaBasedLog.send(eq("status-connector-" + CONNECTOR), eq(value), anyObject(Callback.class));
+        expectLastCall();
+
+        converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class));
+        EasyMock.expectLastCall().andReturn(value);
+        kafkaBasedLog.send(eq("status-task-conn-0"), eq(value), anyObject(Callback.class));
+        expectLastCall();
+
+        expect(converter.toConnectData(STATUS_TOPIC, value)).andReturn(new SchemaAndValue(null, statusMap));
+
+        replayAll();
+
+        ConnectorStatus connectorStatus = new ConnectorStatus(CONNECTOR, ConnectorStatus.State.RUNNING, WORKER_ID, 0);
+        store.put(connectorStatus);
+        TaskStatus taskStatus = new TaskStatus(TASK, TaskStatus.State.RUNNING, WORKER_ID, 0);
+        store.put(taskStatus);
+        store.read(consumerRecord(0, "status-task-conn-0", value));
+
+        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR)), store.connectors());
+        assertEquals(new HashSet<>(Collections.singletonList(taskStatus)), new HashSet<>(store.getAll(CONNECTOR)));
+        store.read(consumerRecord(0, "status-connector-conn", null));
+        assertTrue(store.connectors().isEmpty());
+        assertTrue(store.getAll(CONNECTOR).isEmpty());
+        verifyAll();
+    }
+
+    @Test
+    public void deleteTaskState() {
+        final byte[] value = new byte[0];
+        Map<String, Object> statusMap = new HashMap<>();
+        statusMap.put("worker_id", WORKER_ID);
+        statusMap.put("state", "RUNNING");
+        statusMap.put("generation", 0L);
+
+        converter.fromConnectData(eq(STATUS_TOPIC), anyObject(Schema.class), anyObject(Struct.class));
+        EasyMock.expectLastCall().andReturn(value);
+        kafkaBasedLog.send(eq("status-task-conn-0"), eq(value), anyObject(Callback.class));
+        expectLastCall();
+
+        expect(converter.toConnectData(STATUS_TOPIC, value)).andReturn(new SchemaAndValue(null, statusMap));
+
+        replayAll();
+
+        TaskStatus taskStatus = new TaskStatus(TASK, TaskStatus.State.RUNNING, WORKER_ID, 0);
+        store.put(taskStatus);
+        store.read(consumerRecord(0, "status-task-conn-0", value));
+
+        assertEquals(new HashSet<>(Collections.singletonList(taskStatus)), new HashSet<>(store.getAll(CONNECTOR)));
+        store.read(consumerRecord(0, "status-task-conn-0", null));
+        assertTrue(store.getAll(CONNECTOR).isEmpty());
         verifyAll();
     }
 

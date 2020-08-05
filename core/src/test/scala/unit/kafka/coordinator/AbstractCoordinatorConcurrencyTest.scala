@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.Log
+import kafka.log.{AppendOrigin, Log}
 import kafka.server._
 import kafka.utils._
 import kafka.utils.timer.MockTimer
@@ -36,7 +36,7 @@ import org.easymock.EasyMock
 import org.junit.{After, Before}
 
 import scala.collection._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
 
@@ -173,7 +173,7 @@ object AbstractCoordinatorConcurrencyTest {
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,
                                internalTopicsAllowed: Boolean,
-                               isFromClient: Boolean,
+                               origin: AppendOrigin,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,

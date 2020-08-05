@@ -18,11 +18,15 @@
 package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
+
+import scala.jdk.CollectionConverters._
 
 /**
  * Test group state transitions and other GroupMetadata functionality
@@ -263,6 +267,57 @@ class GroupMetadataTest {
   }
 
   @Test
+  def testSubscribedTopics(): Unit = {
+    // not able to compute it for a newly created group
+    assertEquals(None, group.getSubscribedTopics)
+
+    val memberId = "memberId"
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, protocolType, List(("range", ConsumerProtocol.serializeSubscription(new Subscription(List("foo").asJava)).array())))
+
+    group.transitionTo(PreparingRebalance)
+    group.add(member)
+
+    group.initNextGeneration()
+
+    assertEquals(Some(Set("foo")), group.getSubscribedTopics)
+
+    group.transitionTo(PreparingRebalance)
+    group.remove(memberId)
+
+    group.initNextGeneration()
+
+    assertEquals(Some(Set.empty), group.getSubscribedTopics)
+
+    val memberWithFaultyProtocol  = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte])))
+
+    group.transitionTo(PreparingRebalance)
+    group.add(memberWithFaultyProtocol)
+
+    group.initNextGeneration()
+
+    assertEquals(None, group.getSubscribedTopics)
+  }
+
+  @Test
+  def testSubscribedTopicsNonConsumerGroup(): Unit = {
+    // not able to compute it for a newly created group
+    assertEquals(None, group.getSubscribedTopics)
+
+    val memberId = "memberId"
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, "My Protocol", List(("range", Array.empty[Byte])))
+
+    group.transitionTo(PreparingRebalance)
+    group.add(member)
+
+    group.initNextGeneration()
+
+    assertEquals(None, group.getSubscribedTopics)
+  }
+
+  @Test
   def testInitNextGeneration(): Unit = {
     member.supportedProtocols = List(("roundrobin", Array.empty[Byte]))
 
@@ -270,25 +325,25 @@ class GroupMetadataTest {
     group.add(member, _ => ())
 
     assertEquals(0, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
 
     group.initNextGeneration()
 
     assertEquals(1, group.generationId)
-    assertEquals("roundrobin", group.protocolOrNull)
+    assertEquals("roundrobin", group.protocolName.orNull)
   }
 
   @Test
   def testInitNextGenerationEmptyGroup(): Unit = {
     assertEquals(Empty, group.currentState)
     assertEquals(0, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
 
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
     assertEquals(1, group.generationId)
-    assertNull(group.protocolOrNull)
+    assertNull(group.protocolName.orNull)
   }
 
   @Test
@@ -513,7 +568,7 @@ class GroupMetadataTest {
     })
 
     assertTrue(group.hasAllMembersJoined)
-    group.maybeInvokeJoinCallback(member, GroupCoordinator.joinError(member.memberId, Errors.NONE))
+    group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NONE))
     assertTrue(invoked)
     assertFalse(member.isAwaitingJoin)
   }
@@ -523,7 +578,7 @@ class GroupMetadataTest {
     group.add(member)
 
     assertFalse(member.isAwaitingJoin)
-    group.maybeInvokeJoinCallback(member, GroupCoordinator.joinError(member.memberId, Errors.NONE))
+    group.maybeInvokeJoinCallback(member, JoinGroupResult(member.memberId, Errors.NONE))
     assertFalse(member.isAwaitingJoin)
   }
 
@@ -532,7 +587,7 @@ class GroupMetadataTest {
     group.add(member)
     member.awaitingSyncCallback = _ => {}
 
-    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NONE))
     assertTrue(invoked)
     assertFalse(member.isAwaitingSync)
   }
@@ -541,9 +596,30 @@ class GroupMetadataTest {
   def testNotInvokeSyncCallback(): Unit = {
     group.add(member)
 
-    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Errors.NONE))
     assertFalse(invoked)
     assertFalse(member.isAwaitingSync)
+  }
+
+  @Test
+  def testHasPendingNonTxnOffsets(): Unit = {
+    val partition = new TopicPartition("foo", 0)
+    val offset = offsetAndMetadata(37)
+
+    group.prepareOffsetCommit(Map(partition -> offset))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(partition))
+  }
+
+  @Test
+  def testHasPendingTxnOffsets(): Unit = {
+    val txnPartition = new TopicPartition("foo", 1)
+    val offset = offsetAndMetadata(37)
+    val producerId = 5
+
+    group.prepareTxnOffsetCommit(producerId, Map(txnPartition -> offset))
+    assertTrue(group.hasPendingOffsetCommitsForTopicPartition(txnPartition))
+
+    assertFalse(group.hasPendingOffsetCommitsForTopicPartition(new TopicPartition("non-exist", 0)))
   }
 
   private def assertState(group: GroupMetadata, targetState: GroupState): Unit = {

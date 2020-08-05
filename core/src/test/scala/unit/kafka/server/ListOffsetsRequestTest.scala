@@ -19,13 +19,13 @@ package kafka.server
 import java.util.Optional
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.requests.{ListOffsetRequest, ListOffsetResponse}
+import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class ListOffsetsRequestTest extends BaseRequestTest {
 
@@ -64,14 +64,14 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val nonReplica = servers.map(_.config.brokerId).find(!replicas.contains(_)).get
 
     // Follower
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, follower, consumerRequest)
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, follower, replicaRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, follower, consumerRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, follower, replicaRequest)
     assertResponseError(Errors.NONE, follower, debugReplicaRequest)
 
     // Non-replica
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, nonReplica, consumerRequest)
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, nonReplica, replicaRequest)
-    assertResponseError(Errors.REPLICA_NOT_AVAILABLE, nonReplica, debugReplicaRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, consumerRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, replicaRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, debugReplicaRequest)
   }
 
   @Test
@@ -105,8 +105,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     // Check follower error codes
     val followerId = TestUtils.findFollowerId(topicPartition, servers)
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.empty())
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
@@ -164,9 +164,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   private def sendRequest(leaderId: Int, request: ListOffsetRequest): ListOffsetResponse = {
-    val socketServer = brokerSocketServer(leaderId)
-    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = socketServer)
-    ListOffsetResponse.parse(response, request.version)
+    connectAndReceive[ListOffsetResponse](request, destination = brokerSocketServer(leaderId))
   }
 
 }

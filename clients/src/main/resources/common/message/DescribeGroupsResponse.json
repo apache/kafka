@@ -18,10 +18,16 @@
   "type": "response",
   "name": "DescribeGroupsResponse",
   // Version 1 added throttle time.
+  //
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
+  //
   // Starting in version 3, brokers can send authorized operations.
-  // Starting in version 4, the response will include group.instance.id info for members.
-  "validVersions": "0-4",
+  //
+  // Starting in version 4, the response will optionally include group.instance.id info for members.
+  //
+  // Version 5 is the first flexible version.
+  "validVersions": "0-5",
+  "flexibleVersions": "5+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -43,7 +49,7 @@
         "about": "The group members.", "fields": [
         { "name": "MemberId", "type": "string", "versions": "0+",
           "about": "The member ID assigned by the group coordinator." },
-        { "name": "GroupInstanceId", "type": "string", "versions": "4+",
+        { "name": "GroupInstanceId", "type": "string", "versions": "4+", "ignorable": true,
           "nullableVersions": "4+", "default": "null",
           "about": "The unique identifier of the consumer instance provided by end user." },
         { "name": "ClientId", "type": "string", "versions": "0+",

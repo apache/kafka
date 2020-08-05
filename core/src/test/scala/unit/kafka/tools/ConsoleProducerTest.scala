@@ -27,7 +27,7 @@ import kafka.utils.Exit
 
 class ConsoleProducerTest {
 
-  val validArgs: Array[String] = Array(
+  val brokerListValidArgs: Array[String] = Array(
     "--broker-list",
     "localhost:1001,localhost:1002",
     "--topic",
@@ -37,17 +37,50 @@ class ConsoleProducerTest {
     "--property",
     "key.separator=#"
   )
-
+  val bootstrapServerValidArgs: Array[String] = Array(
+    "--bootstrap-server",
+    "localhost:1003,localhost:1004",
+    "--topic",
+    "t3",
+    "--property",
+    "parse.key=true",
+    "--property",
+    "key.separator=#"
+  )
   val invalidArgs: Array[String] = Array(
     "--t", // not a valid argument
     "t3"
   )
+  val bootstrapServerOverride: Array[String] = Array(
+    "--broker-list",
+    "localhost:1001",
+    "--bootstrap-server",
+    "localhost:1002",
+    "--topic",
+    "t3",
+  )
+  val clientIdOverride: Array[String] = Array(
+    "--broker-list",
+    "localhost:1001",
+    "--topic",
+    "t3",
+    "--producer-property",
+    "client.id=producer-1"
+  )
 
   @Test
-  def testValidConfigs(): Unit = {
-    val config = new ConsoleProducer.ProducerConfig(validArgs)
+  def testValidConfigsBrokerList(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
     val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
     assertEquals(util.Arrays.asList("localhost:1001", "localhost:1002"),
+      producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
+  }
+
+  @Test
+  def testValidConfigsBootstrapServer(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(bootstrapServerValidArgs)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals(util.Arrays.asList("localhost:1003", "localhost:1004"),
       producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
   }
 
@@ -63,11 +96,26 @@ class ConsoleProducerTest {
 
   @Test
   def testParseKeyProp(): Unit = {
-    val config = new ConsoleProducer.ProducerConfig(validArgs)
+    val config = new ConsoleProducer.ProducerConfig(brokerListValidArgs)
     val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
     reader.init(System.in,ConsoleProducer.getReaderProps(config))
     assert(reader.keySeparator == "#")
     assert(reader.parseKey)
   }
 
+  @Test
+  def testBootstrapServerOverride(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(bootstrapServerOverride)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals(util.Arrays.asList("localhost:1002"),
+      producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
+  }
+
+  @Test
+  def testClientIdOverride(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(clientIdOverride)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals("producer-1",
+      producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG))
+  }
 }

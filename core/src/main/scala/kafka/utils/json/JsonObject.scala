@@ -19,7 +19,7 @@ package kafka.utils.json
 
 import com.fasterxml.jackson.databind.JsonMappingException
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 import com.fasterxml.jackson.databind.node.ObjectNode
 

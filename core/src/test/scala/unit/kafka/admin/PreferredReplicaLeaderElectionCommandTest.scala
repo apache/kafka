@@ -19,25 +19,29 @@ package kafka.admin
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
+import java.util
 import java.util.Properties
 
 import scala.collection.Seq
-
 import kafka.common.AdminCommandFailedException
-import kafka.network.RequestChannel
-import kafka.security.auth._
+import kafka.security.authorizer.AclAuthorizer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.test
 import org.junit.Assert._
 import org.junit.{After, Test}
+
+import scala.jdk.CollectionConverters._
 
 class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()
@@ -75,7 +79,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       () =>
         servers.forall { server =>
           partitionsAndAssignments.forall { partitionAndAssignment =>
-            server.getLogManager().getLog(partitionAndAssignment._1).isDefined
+            server.getLogManager.getLog(partitionAndAssignment._1).isDefined
           }
         },
       "Replicas for topic test not created"
@@ -89,8 +93,8 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     debug(s"Starting server $targetServer now that a non-preferred replica is leader")
     servers(targetServer).startup()
     TestUtils.waitUntilTrue(() => servers.forall { server =>
-      server.metadataCache.getPartitionInfo(partition.topic(), partition.partition()).exists { partitionState =>
-        partitionState.basePartitionState.isr.contains(targetServer)
+      server.metadataCache.getPartitionInfo(partition.topic, partition.partition).exists { partitionState =>
+        partitionState.isr.contains(targetServer)
       }
     },
       s"Replicas for partition $partition not created")
@@ -102,8 +106,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   private def awaitLeader(topicPartition: TopicPartition, timeoutMs: Long = test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     TestUtils.awaitValue(() => {
-      servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
-          .map(_.basePartitionState.leader)
+      servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition).map(_.leader)
     }, s"Timed out waiting to find current leader of $topicPartition", timeoutMs)
   }
 
@@ -364,7 +367,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false, rackInfo = brokerRack).map(KafkaConfig.fromProps)
     // create the topic
     adminZkClient.createTopicWithAssignment(topic, config = new Properties, expectedReplicaAssignment)
-    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
     // broker 2 should be the leader since it was started first
     val currentLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = None)
     // trigger preferred replica election
@@ -375,7 +378,13 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 }
 
-class PreferredReplicaLeaderElectionCommandTestAuthorizer extends SimpleAclAuthorizer {
-  override def authorize(session: RequestChannel.Session, operation: Operation, resource: Resource): Boolean =
-    operation != Alter || resource.resourceType != Cluster
+class PreferredReplicaLeaderElectionCommandTestAuthorizer extends AclAuthorizer {
+  override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+    actions.asScala.map { action =>
+      if (action.operation != AclOperation.ALTER || action.resourcePattern.resourceType != ResourceType.CLUSTER)
+        AuthorizationResult.ALLOWED
+      else
+        AuthorizationResult.DENIED
+    }.asJava
+  }
 }

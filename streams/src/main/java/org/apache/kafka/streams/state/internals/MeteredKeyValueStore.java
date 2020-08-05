@@ -24,18 +24,18 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
-import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
-import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its
@@ -53,26 +53,28 @@ public class MeteredKeyValueStore<K, V>
     final Serde<V> valueSerde;
     StateSerdes<K, V> serdes;
 
-    private final String metricScope;
+    private final String metricsScope;
     protected final Time time;
-    private Sensor putTime;
-    private Sensor putIfAbsentTime;
-    private Sensor getTime;
-    private Sensor deleteTime;
-    private Sensor putAllTime;
-    private Sensor allTime;
-    private Sensor rangeTime;
-    private Sensor flushTime;
-    private StreamsMetricsImpl metrics;
-    private String taskName;
+    protected Sensor putSensor;
+    private Sensor putIfAbsentSensor;
+    protected Sensor getSensor;
+    private Sensor deleteSensor;
+    private Sensor putAllSensor;
+    private Sensor allSensor;
+    private Sensor rangeSensor;
+    private Sensor flushSensor;
+    private StreamsMetricsImpl streamsMetrics;
+    private final String threadId;
+    private String taskId;
 
     MeteredKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
-                         final String metricScope,
+                         final String metricsScope,
                          final Time time,
                          final Serde<K> keySerde,
                          final Serde<V> valueSerde) {
         super(inner);
-        this.metricScope = metricScope;
+        this.metricsScope = metricsScope;
+        threadId = Thread.currentThread().getName();
         this.time = time != null ? time : Time.SYSTEM;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -81,42 +83,33 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        metrics = (StreamsMetricsImpl) context.metrics();
-
-        taskName = context.taskId().toString();
-        final String metricsGroup = "stream-" + metricScope + "-metrics";
-        final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
-        final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
-
+        taskId = context.taskId().toString();
         initStoreSerde(context);
+        streamsMetrics = (StreamsMetricsImpl) context.metrics();
 
-        putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        putIfAbsentTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put-if-absent", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        putAllTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put-all", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        getTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "get", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        allTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "all", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        rangeTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "range", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        flushTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "flush", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        deleteTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "delete", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        final Sensor restoreTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "restore", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        putIfAbsentSensor = StateStoreMetrics.putIfAbsentSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        putAllSensor = StateStoreMetrics.putAllSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        getSensor = StateStoreMetrics.getSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        allSensor = StateStoreMetrics.allSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        rangeSensor = StateStoreMetrics.rangeSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        deleteSensor = StateStoreMetrics.deleteSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        final Sensor restoreSensor =
+            StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
         // register and possibly restore the state from the logs
-        if (restoreTime.shouldRecord()) {
-            measureLatency(
-                () -> {
-                    super.init(context, root);
-                    return null;
-                },
-                restoreTime);
-        } else {
-            super.init(context, root);
-        }
+        maybeMeasureLatency(() -> super.init(context, root), time, restoreSensor);
     }
 
     @SuppressWarnings("unchecked")
     void initStoreSerde(final ProcessorContext context) {
+        final String storeName = name();
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+             changelogTopic != null ?
+                changelogTopic :
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
@@ -142,11 +135,7 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V get(final K key) {
         try {
-            if (getTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(wrapped().get(keyBytes(key))), getTime);
-            } else {
-                return outerValue(wrapped().get(keyBytes(key)));
-            }
+            return maybeMeasureLatency(() -> outerValue(wrapped().get(keyBytes(key))), time, getSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -157,14 +146,7 @@ public class MeteredKeyValueStore<K, V>
     public void put(final K key,
                     final V value) {
         try {
-            if (putTime.shouldRecord()) {
-                measureLatency(() -> {
-                    wrapped().put(keyBytes(key), serdes.rawValue(value));
-                    return null;
-                }, putTime);
-            } else {
-                wrapped().put(keyBytes(key), serdes.rawValue(value));
-            }
+            maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
@@ -174,37 +156,22 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V putIfAbsent(final K key,
                          final V value) {
-        if (putIfAbsentTime.shouldRecord()) {
-            return measureLatency(
-                () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
-                putIfAbsentTime);
-        } else {
-            return outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value)));
-        }
+        return maybeMeasureLatency(
+            () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
+            time,
+            putIfAbsentSensor
+        );
     }
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
-        if (putAllTime.shouldRecord()) {
-            measureLatency(
-                () -> {
-                    wrapped().putAll(innerEntries(entries));
-                    return null;
-                },
-                putAllTime);
-        } else {
-            wrapped().putAll(innerEntries(entries));
-        }
+        maybeMeasureLatency(() -> wrapped().putAll(innerEntries(entries)), time, putAllSensor);
     }
 
     @Override
     public V delete(final K key) {
         try {
-            if (deleteTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), deleteTime);
-            } else {
-                return outerValue(wrapped().delete(keyBytes(key)));
-            }
+            return maybeMeasureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), time, deleteSensor);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
             throw new ProcessorStateException(message, e);
@@ -216,26 +183,18 @@ public class MeteredKeyValueStore<K, V>
                                         final K to) {
         return new MeteredKeyValueIterator(
             wrapped().range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
-            rangeTime);
+            rangeSensor
+        );
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator(wrapped().all(), allTime);
+        return new MeteredKeyValueIterator(wrapped().all(), allSensor);
     }
 
     @Override
     public void flush() {
-        if (flushTime.shouldRecord()) {
-            measureLatency(
-                () -> {
-                    super.flush();
-                    return null;
-                },
-                flushTime);
-        } else {
-            super.flush();
-        }
+        maybeMeasureLatency(super::flush, time, flushSensor);
     }
 
     @Override
@@ -245,29 +204,18 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void close() {
-        super.close();
-        metrics.removeAllStoreLevelSensors(taskName, name());
-    }
-
-    private interface Action<V> {
-        V execute();
-    }
-
-    private V measureLatency(final Action<V> action,
-                             final Sensor sensor) {
-        final long startNs = time.nanoseconds();
         try {
-            return action.execute();
+            wrapped().close();
         } finally {
-            metrics.recordLatency(sensor, startNs, time.nanoseconds());
+            streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
         }
     }
 
-    private V outerValue(final byte[] value) {
+    protected V outerValue(final byte[] value) {
         return value != null ? serdes.valueFrom(value) : null;
     }
 
-    private Bytes keyBytes(final K key) {
+    protected Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
     }
 
@@ -310,7 +258,7 @@ public class MeteredKeyValueStore<K, V>
             try {
                 iter.close();
             } finally {
-                metrics.recordLatency(sensor, startNs, time.nanoseconds());
+                sensor.record(time.nanoseconds() - startNs);
             }
         }
 

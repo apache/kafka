@@ -17,23 +17,12 @@
 
 package kafka.common
 
-import java.io.PrintStream
-import java.util.Properties
-
-import org.apache.kafka.clients.consumer.ConsumerRecord
-
 /**
   * Typical implementations of this interface convert a `ConsumerRecord` into a type that can then be passed to
   * a `PrintStream`.
   *
   * This is used by the `ConsoleConsumer`.
   */
-trait MessageFormatter {
-
-  def init(props: Properties): Unit = {}
-
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit
-
-  def close(): Unit = {}
-
+@deprecated("This class is deprecated and will be replaced by org.apache.kafka.common.MessageFormatter.", "2.7.0")
+trait MessageFormatter extends org.apache.kafka.common.MessageFormatter {
 }

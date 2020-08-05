@@ -73,7 +73,6 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
     val p = new Properties()
     p.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     p.put(ProducerConfig.ACKS_CONFIG, "all")
-    p.put(ProducerConfig.RETRIES_CONFIG, "0")
     p.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p
@@ -83,7 +82,6 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
     val p = new Properties()
     p.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers())
     p.put(ProducerConfig.ACKS_CONFIG, "all")
-    p.put(ProducerConfig.RETRIES_CONFIG, "0")
     p.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[StringSerializer])
     p.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[LongSerializer])
     p
@@ -104,7 +102,7 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
                       outputTopic: String,
                       waitTillRecordsReceived: Boolean = true): java.util.List[KeyValue[String, Long]] = {
 
-    import collection.JavaConverters._
+    import _root_.scala.jdk.CollectionConverters._
 
     // Publish user-region information.
     val userRegionsProducerConfig: Properties = getUserRegionsProducerConfig()

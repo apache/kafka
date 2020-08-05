@@ -35,7 +35,7 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Map
 import scala.collection.mutable.ListBuffer
 
@@ -128,7 +128,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //And should get no leader for partition error from t1p1 (as it's not on broker 0)
     assertTrue(offsetsForEpochs(t1p1).hasError)
-    assertEquals(NOT_LEADER_FOR_PARTITION, offsetsForEpochs(t1p1).error)
+    assertEquals(NOT_LEADER_OR_FOLLOWER, offsetsForEpochs(t1p1).error)
     assertEquals(UNDEFINED_EPOCH_OFFSET, offsetsForEpochs(t1p1).endOffset)
 
     //Repointing to broker 1 we should get the correct offset for t1p1
@@ -231,10 +231,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
-      brokers(0).metadataCache.getPartitionInfo(topic, partition) match {
-        case Some(m) => m.basePartitionState.leaderEpoch == epoch
-        case None => false
-      }
+      brokers(0).metadataCache.getPartitionInfo(topic, partition).exists(_.leaderEpoch == epoch)
     }, "Epoch didn't change")
   }
 
@@ -242,9 +239,9 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     var result = true
     for (topic <- List(topic1, topic2)) {
       val tp = new TopicPartition(topic, 0)
-      val leo = broker.getLogManager().getLog(tp).get.logEndOffset
+      val leo = broker.getLogManager.getLog(tp).get.logEndOffset
       result = result && leo > 0 && brokers.forall { broker =>
-        broker.getLogManager().getLog(tp).get.logSegments.iterator.forall { segment =>
+        broker.getLogManager.getLog(tp).get.logSegments.iterator.forall { segment =>
           if (segment.read(minOffset, Integer.MAX_VALUE) == null) {
             false
           } else {
@@ -277,8 +274,9 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
-      val partitionData = partitions.mapValues(
-        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _)).toMap
+      val partitionData = partitions.map { case (k, v) =>
+        k -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), v)
+      }
 
       val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
         ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, partitionData.asJava, 1)

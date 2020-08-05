@@ -22,12 +22,14 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.tools.MockConnector;
 import org.apache.kafka.connect.tools.MockSinkConnector;
 import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.tools.SchemaSourceConnector;
 import org.apache.kafka.connect.tools.VerifiableSinkConnector;
 import org.apache.kafka.connect.tools.VerifiableSourceConnector;
+import org.apache.kafka.connect.util.FutureCallback;
 
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
@@ -37,11 +39,14 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 @Path("/connector-plugins")
 @Produces(MediaType.APPLICATION_JSON)
@@ -78,7 +83,19 @@ public class ConnectorPluginsResource {
             );
         }
 
-        return herder.validateConnectorConfig(connectorConfig);
+        // the validated configs don't need to be logged
+        FutureCallback<ConfigInfos> validationCallback = new FutureCallback<>();
+        herder.validateConnectorConfig(connectorConfig, validationCallback, false);
+
+        try {
+            return validationCallback.get(ConnectorsResource.REQUEST_TIMEOUT_MS, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
+            // error is the best option
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request timed out");
+        } catch (InterruptedException e) {
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), "Request interrupted");
+        }
     }
 
     @GET

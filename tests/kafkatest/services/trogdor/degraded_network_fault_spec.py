@@ -23,15 +23,26 @@ class DegradedNetworkFaultSpec(TaskSpec):
     Degrades the network so that traffic on a subset of nodes has higher latency
     """
 
-    def __init__(self, start_ms, duration_ms, node_specs):
+    def __init__(self, start_ms, duration_ms):
         """
         Create a new NetworkDegradeFaultSpec.
 
         :param start_ms:        The start time, as described in task_spec.py
         :param duration_ms:     The duration in milliseconds.
-        :param node_latencies:  A dict of node name to desired latency
-        :param network_device:  The name of the network device
         """
         super(DegradedNetworkFaultSpec, self).__init__(start_ms, duration_ms)
         self.message["class"] = "org.apache.kafka.trogdor.fault.DegradedNetworkFaultSpec"
-        self.message["nodeSpecs"] = node_specs
+        self.message["nodeSpecs"] = {}
+
+    def add_node_spec(self, node, networkDevice, latencyMs=0, rateLimitKbit=0):
+        """
+        Add a node spec to this fault spec
+        :param node:            The node name which is to be degraded
+        :param networkDevice:   The network device name (e.g., eth0) to apply the degradation to
+        :param latencyMs:       Optional. How much latency to add to each packet
+        :param rateLimitKbit:   Optional. Maximum throughput in kilobits per second to allow
+        :return:
+        """
+        self.message["nodeSpecs"][node] = {
+            "rateLimitKbit": rateLimitKbit, "latencyMs": latencyMs, "networkDevice": networkDevice
+        }

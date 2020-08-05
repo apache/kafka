@@ -106,12 +106,12 @@ public class AbstractConfig {
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
         this.values = definition.parse(this.originals);
+        this.used = Collections.synchronizedSet(new HashSet<>());
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
             this.values.put(update.getKey(), update.getValue());
         }
         definition.parse(this.values);
-        this.used = Collections.synchronizedSet(new HashSet<>());
         this.definition = definition;
         if (doLog)
             logAll();
@@ -199,6 +199,13 @@ public class AbstractConfig {
         if (configKey == null)
             return null;
         return configKey.type;
+    }
+
+    public String documentationOf(String key) {
+        ConfigDef.ConfigKey configKey = definition.configKeys().get(key);
+        if (configKey == null)
+            return null;
+        return configKey.documentation;
     }
 
     public Password getPassword(String key) {
@@ -483,6 +490,7 @@ public class AbstractConfig {
                 resolvedOriginals.putAll(result.data());
             }
         }
+        providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
 
         return new ResolvingMap<>(resolvedOriginals, originals);
     }

@@ -18,7 +18,7 @@ set -ex
 
 # The version of Kibosh to use for testing.
 # If you update this, also update tests/docker/Dockerfile
-export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
+export KIBOSH_VERSION=8841dd392e6fbf02986e2fb1f1ebf04df344b65a
 
 path_to_jdk_cache() {
   jdk_version=$1
@@ -32,7 +32,7 @@ fetch_jdk_tgz() {
 
   if [ ! -e $path ]; then
     mkdir -p $(dirname $path)
-    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
+    curl --retry 5 -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
   fi
 }
 
@@ -79,8 +79,8 @@ get_kafka() {
     url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
-        curl -O $url
-        curl -O $url_streams_test || true
+        curl --retry 5 -O $url
+        curl --retry 5 -O $url_streams_test || true
         file_tgz=`basename $url`
         file_streams_jar=`basename $url_streams_test` || true
         tar -xzf $file_tgz
@@ -107,6 +107,9 @@ popd
 popd
 popd
 
+# Install iperf
+apt-get install -y iperf traceroute
+
 # Test multiple Kafka versions
 # We want to use the latest Scala version per Kafka version
 # Previously we could not pull in Scala 2.12 builds, because Scala 2.12 requires Java 8 and we were running the system
@@ -131,10 +134,16 @@ get_kafka 2.0.1 2.12
 chmod a+rw /opt/kafka-2.0.1
 get_kafka 2.1.1 2.12
 chmod a+rw /opt/kafka-2.1.1
-get_kafka 2.2.1 2.12
-chmod a+rw /opt/kafka-2.2.1
-get_kafka 2.3.0 2.12
-chmod a+rw /opt/kafka-2.3.0
+get_kafka 2.2.2 2.12
+chmod a+rw /opt/kafka-2.2.2
+get_kafka 2.3.1 2.12
+chmod a+rw /opt/kafka-2.3.1
+get_kafka 2.4.1 2.12
+chmod a+rw /opt/kafka-2.4.1
+get_kafka 2.5.0 2.12
+chmod a+rw /opt/kafka-2.5.0
+get_kafka 2.6.0 2.12
+chmod a+rw /opt/kafka-2.6.0
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local
 # VMs, we can just create it if it doesn't exist and use it like we'd use
@@ -150,3 +159,11 @@ chmod a+rwx /mnt
 ntpdate -u pool.ntp.org
 # Install ntp daemon - it will automatically start on boot
 apt-get -y install ntp
+
+# Increase the ulimit
+mkdir -p /etc/security/limits.d
+echo "* soft nofile 128000" >> /etc/security/limits.d/nofile.conf
+echo "* hard nofile 128000" >> /etc/security/limits.d/nofile.conf
+
+ulimit -Hn 128000
+ulimit -Sn 128000

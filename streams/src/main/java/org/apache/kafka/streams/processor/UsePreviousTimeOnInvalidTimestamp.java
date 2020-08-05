@@ -22,7 +22,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 /**
  * Retrieves embedded metadata timestamps from Kafka messages.
  * If a record has a negative (invalid) timestamp, a new timestamp will be inferred from the current stream-time.
- * <p></p>
+ * <p>
  * Embedded metadata timestamp was introduced in "KIP-32: Add timestamps to Kafka message" for the new
  * 0.10+ Kafka message format.
  * <p>
@@ -37,11 +37,13 @@ import org.apache.kafka.streams.errors.StreamsException;
  * using this extractor effectively provides <i>ingestion-time</i> semantics.
  * <p>
  * If you need <i>processing-time</i> semantics, use {@link WallclockTimestampExtractor}.
- *
+ * @deprecated since 2.5. Use {@link UsePartitionTimeOnInvalidTimestamp} instead
  * @see FailOnInvalidTimestamp
  * @see LogAndSkipOnInvalidTimestamp
  * @see WallclockTimestampExtractor
  */
+@SuppressWarnings("deprecation")
+@Deprecated
 public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTimestamp {
 
     /**
@@ -50,8 +52,8 @@ public class UsePreviousTimeOnInvalidTimestamp extends ExtractRecordMetadataTime
      * @param record a data record
      * @param recordTimestamp the timestamp extractor from the record
      * @param partitionTime the highest extracted valid timestamp of the current record's partition˙ (could be -1 if unknown)
-     * @return the provided latest extracted valid timestamp as new timestamp for the record
-     * @throws StreamsException if latest extracted valid timestamp is unknown
+     * @return the provided highest extracted valid timestamp as new timestamp for the record
+     * @throws StreamsException if highest extracted valid timestamp is unknown
      */
     @Override
     public long onInvalidTimestamp(final ConsumerRecord<Object, Object> record,

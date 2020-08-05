@@ -16,7 +16,13 @@
 {
   "type": "header",
   "name": "RequestHeader",
-  "validVersions": "0",
+  // Version 0 of the RequestHeader is only used by v0 of ControlledShutdownRequest.
+  //
+  // Version 1 is the first version with ClientId.
+  //
+  // Version 2 is the first flexible version.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "RequestApiKey", "type": "int16", "versions": "0+",
       "about": "The API key of this request." },
@@ -24,7 +30,13 @@
       "about": "The API version of this request." },
     { "name": "CorrelationId", "type": "int32", "versions": "0+",
       "about": "The correlation ID of this request." },
-    { "name": "ClientId", "type": "string", "versions": "0+",
-      "about": "The client ID string." }
+
+    // The ClientId string must be serialized with the old-style two-byte length prefix.
+    // The reason is that older brokers must be able to read the request header for any
+    // ApiVersionsRequest, even if it is from a newer version.
+    // Since the client is sending the ApiVersionsRequest in order to discover what
+    // versions are supported, the client does not know the best version to use.
+    { "name": "ClientId", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
+      "flexibleVersions": "none", "about": "The client ID string." }
   ]
 }

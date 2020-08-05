@@ -39,10 +39,20 @@ public class StreamsEosTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
         final String kafka = streamsProperties.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+        final String processingGuarantee = streamsProperties.getProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG);
 
         if (kafka == null) {
             System.err.println("No bootstrap kafka servers specified in " + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
             System.exit(1);
+        }
+
+        if ("process".equals(command) || "process-complex".equals(command)) {
+            if (!StreamsConfig.EXACTLY_ONCE.equals(processingGuarantee) &&
+                !StreamsConfig.EXACTLY_ONCE_BETA.equals(processingGuarantee)) {
+
+                System.err.println("processingGuarantee must be either " + StreamsConfig.EXACTLY_ONCE + " or " + StreamsConfig.EXACTLY_ONCE_BETA);
+                System.exit(1);
+            }
         }
 
         System.out.println("StreamsTest instance started");

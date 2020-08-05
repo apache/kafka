@@ -43,9 +43,9 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.Node;
-import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;

@@ -33,6 +33,8 @@ import java.util.Set;
 
 public class DescribeGroupsResponse extends AbstractResponse {
 
+    public static final int AUTHORIZED_OPERATIONS_OMITTED = Integer.MIN_VALUE;
+
     /**
      * Possible per-group error codes:
      *
@@ -76,15 +78,15 @@ public class DescribeGroupsResponse extends AbstractResponse {
         final String protocol,
         final List<DescribedGroupMember> members,
         final Set<Byte> authorizedOperations) {
-        DescribedGroup groupMetada = new DescribedGroup();
-        groupMetada.setGroupId(groupId)
+        DescribedGroup groupMetadata = new DescribedGroup();
+        groupMetadata.setGroupId(groupId)
             .setErrorCode(error.code())
             .setGroupState(state)
             .setProtocolType(protocolType)
             .setProtocolData(protocol)
             .setMembers(members)
             .setAuthorizedOperations(Utils.to32BitField(authorizedOperations));
-        return  groupMetada;
+        return  groupMetadata;
     }
 
     public static DescribedGroup groupMetadata(
@@ -95,15 +97,15 @@ public class DescribeGroupsResponse extends AbstractResponse {
         final String protocol,
         final List<DescribedGroupMember> members,
         final int authorizedOperations) {
-        DescribedGroup groupMetada = new DescribedGroup();
-        groupMetada.setGroupId(groupId)
+        DescribedGroup groupMetadata = new DescribedGroup();
+        groupMetadata.setGroupId(groupId)
             .setErrorCode(error.code())
             .setGroupState(state)
             .setProtocolType(protocolType)
             .setProtocolData(protocol)
             .setMembers(members)
             .setAuthorizedOperations(authorizedOperations);
-        return  groupMetada;
+        return  groupMetadata;
     }
 
     public DescribeGroupsResponseData data() {
@@ -135,7 +137,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     public static DescribedGroup forError(String groupId, Errors error) {
         return groupMetadata(groupId, error, DescribeGroupsResponse.UNKNOWN_STATE, DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
-                DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), Collections.emptySet());
+                DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), AUTHORIZED_OPERATIONS_OMITTED);
     }
 
     public static DescribeGroupsResponse fromError(int throttleTimeMs, Errors error, List<String> groupIds) {

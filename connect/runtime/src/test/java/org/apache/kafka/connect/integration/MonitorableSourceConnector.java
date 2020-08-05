@@ -17,8 +17,10 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.runtime.TestSourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
@@ -137,7 +139,9 @@ public class MonitorableSourceConnector extends TestSourceConnector {
                                 Schema.STRING_SCHEMA,
                                 "key-" + taskId + "-" + seqno,
                                 Schema.STRING_SCHEMA,
-                                "value-" + taskId + "-" + seqno))
+                                "value-" + taskId + "-" + seqno,
+                                null,
+                                new ConnectHeaders().addLong("header-" + seqno, seqno)))
                         .collect(Collectors.toList());
             }
             return null;
@@ -150,7 +154,7 @@ public class MonitorableSourceConnector extends TestSourceConnector {
         }
 
         @Override
-        public void commitRecord(SourceRecord record) {
+        public void commitRecord(SourceRecord record, RecordMetadata metadata) {
             log.trace("Committing record: {}", record);
             taskHandle.commit();
         }

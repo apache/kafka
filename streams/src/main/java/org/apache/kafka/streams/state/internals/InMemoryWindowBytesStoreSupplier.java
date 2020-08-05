@@ -52,7 +52,7 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
 
     @Override
     public String metricsScope() {
-        return "in-memory-window-state";
+        return "in-memory-window";
     }
 
     @Deprecated
@@ -81,5 +81,15 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
     @Override
     public boolean retainDuplicates() {
         return retainDuplicates;
+    }
+
+    @Override
+    public String toString() {
+        return "InMemoryWindowBytesStoreSupplier{" +
+            "name='" + name + '\'' +
+            ", retentionPeriod=" + retentionPeriod +
+            ", windowSize=" + windowSize +
+            ", retainDuplicates=" + retainDuplicates +
+            '}';
     }
 }

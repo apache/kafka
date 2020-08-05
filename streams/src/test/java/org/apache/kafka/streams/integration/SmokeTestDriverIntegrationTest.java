@@ -22,6 +22,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 import org.apache.kafka.test.IntegrationTest;
+
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -103,20 +104,20 @@ public class SmokeTestDriverIntegrationTest {
             clients.add(smokeTestClient);
             smokeTestClient.start(props);
 
-            while (!clients.get(clients.size() - 1).started()) {
-                Thread.sleep(100);
-            }
-
             // let the oldest client die of "natural causes"
             if (clients.size() >= 3) {
-                clients.remove(0).closeAsync();
+                final SmokeTestClient client = clients.remove(0);
+
+                client.closeAsync();
+                while (!client.closed()) {
+                    Thread.sleep(100);
+                }
             }
         }
+
         try {
             // wait for verification to finish
             driver.join();
-
-
         } finally {
             // whether or not the assertions failed, tell all the streams instances to stop
             for (final SmokeTestClient client : clients) {
@@ -125,7 +126,9 @@ public class SmokeTestDriverIntegrationTest {
 
             // then, wait for them to stop
             for (final SmokeTestClient client : clients) {
-                client.close();
+                while (!client.closed()) {
+                    Thread.sleep(100);
+                }
             }
         }
 
@@ -136,5 +139,4 @@ public class SmokeTestDriverIntegrationTest {
         }
         Assert.assertTrue(driver.result().result(), driver.result().passed());
     }
-
 }

@@ -27,7 +27,7 @@ import org.apache.kafka.test.IntegrationTest
 import org.junit.experimental.categories.Category
 
 import scala.collection.Set
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import kafka.controller.ControllerEventManager
@@ -55,7 +55,7 @@ abstract class ZooKeeperTestHarness extends Logging {
   @Before
   def setUp(): Unit = {
     zookeeper = new EmbeddedZookeeper()
-    zkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
+    zkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
     adminZkClient = new AdminZkClient(zkClient)
   }

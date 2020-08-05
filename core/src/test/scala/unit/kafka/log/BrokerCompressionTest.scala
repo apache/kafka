@@ -30,7 +30,7 @@ import java.util.{Collection, Properties}
 
 import kafka.server.{BrokerTopicStats, FetchLogEnd, LogDirFailureChannel}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 @RunWith(value = classOf[Parameterized])
 class BrokerCompressionTest(messageCompression: String, brokerCompression: String) {

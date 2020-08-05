@@ -46,8 +46,8 @@ public class PunctuationQueueTest {
 
         final ProcessorNodePunctuator processorNodePunctuator = new ProcessorNodePunctuator() {
             @Override
-            public void punctuate(final ProcessorNode node, final long time, final PunctuationType type, final Punctuator punctuator) {
-                punctuator.punctuate(time);
+            public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
+                punctuator.punctuate(timestamp);
             }
         };
 
@@ -85,8 +85,8 @@ public class PunctuationQueueTest {
 
         final ProcessorNodePunctuator processorNodePunctuator = new ProcessorNodePunctuator() {
             @Override
-            public void punctuate(final ProcessorNode node, final long time, final PunctuationType type, final Punctuator punctuator) {
-                punctuator.punctuate(time);
+            public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
+                punctuator.punctuate(timestamp);
             }
         };
 
@@ -124,8 +124,8 @@ public class PunctuationQueueTest {
 
         final ProcessorNodePunctuator processorNodePunctuator = new ProcessorNodePunctuator() {
             @Override
-            public void punctuate(final ProcessorNode node, final long time, final PunctuationType type, final Punctuator punctuator) {
-                punctuator.punctuate(time);
+            public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
+                punctuator.punctuate(timestamp);
                 // simulate scheduler cancelled from within punctuator
                 cancellable.cancel();
             }

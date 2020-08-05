@@ -16,26 +16,23 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.AbstractStatus;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -46,9 +43,13 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_C
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONNECT_PROTOCOL_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -65,18 +66,23 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private static final int NUM_TOPIC_PARTITIONS = 3;
     private static final long CONNECTOR_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(30);
     private static final long WORKER_SETUP_DURATION_MS = TimeUnit.SECONDS.toMillis(60);
+    private static final int NUM_WORKERS = 3;
     private static final int NUM_TASKS = 4;
     private static final String CONNECTOR_NAME = "seq-source1";
     private static final String TOPIC_NAME = "sequential-topic";
 
     private EmbeddedConnectCluster connect;
 
+    @Rule
+    public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
+
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, COMPATIBLE.toString());
-        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, "30000");
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(30)));
+        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, String.valueOf(TimeUnit.SECONDS.toMillis(30)));
 
         // setup Kafka broker properties
         Properties brokerProps = new Properties();
@@ -85,7 +91,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
-                .numWorkers(3)
+                .numWorkers(NUM_WORKERS)
                 .numBrokers(1)
                 .workerProps(workerProps)
                 .brokerProps(brokerProps)
@@ -101,39 +107,33 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.stop();
     }
 
-    @Ignore("Flaky and disruptive. See KAFKA-8391, KAFKA-8661 for details.")
     @Test
     public void testStartTwoConnectors() throws Exception {
         // create test topic
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         // start a source connector
         connect.configureConnector("another-source", props);
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning("another-source", 4).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning("another-source", 4,
+                "Connector tasks did not start in time.");
     }
 
-    @Ignore("Flaky and disruptive. See KAFKA-8391, KAFKA-8661 for details.")
     @Test
     public void testReconfigConnector() throws Exception {
         ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
@@ -144,20 +144,16 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.kafka().createTopic(anotherTopic, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         int numRecordsProduced = 100;
         long recordTransferDurationMs = TimeUnit.SECONDS.toMillis(30);
@@ -180,8 +176,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 restartLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
 
         // And wait for the Connect to show the connectors and tasks are running
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced
         recordNum = connect.kafka().consume(numRecordsProduced, recordTransferDurationMs, anotherTopic).count();
@@ -189,43 +185,28 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 recordNum >= numRecordsProduced);
     }
 
-    @Ignore("Flaky and disruptive. See KAFKA-8391, KAFKA-8661 for details.")
     @Test
     public void testDeleteConnector() throws Exception {
         // create test topic
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
-        waitForCondition(() -> this.assertWorkersUp(3),
-                WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
-        // start a source connector
-        IntStream.range(0, 4).forEachOrdered(
-            i -> {
-                try {
-                    connect.configureConnector(CONNECTOR_NAME + i, props);
-                } catch (IOException e) {
-                    throw new ConnectException(e);
-                }
-            });
+        // start several source connectors
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(true),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME + 3);
 
-        waitForCondition(() -> !this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(true),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not stop in time.");
+        connect.assertions().assertConnectorAndTasksAreStopped(CONNECTOR_NAME + 3,
+                "Connector tasks did not stop in time.");
 
         waitForCondition(this::assertConnectorAndTasksAreUnique,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
@@ -237,38 +218,24 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
-        waitForCondition(() -> this.assertWorkersUp(3),
-                WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
         // start a source connector
-        IntStream.range(0, 4).forEachOrdered(
-            i -> {
-                try {
-                    connect.configureConnector(CONNECTOR_NAME + i, props);
-                } catch (IOException e) {
-                    throw new ConnectException(e);
-                }
-            });
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         connect.addWorker();
 
-        waitForCondition(() -> this.assertWorkersUp(4),
-                WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS + 1,
+                "Connect workers did not start in time.");
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         waitForCondition(this::assertConnectorAndTasksAreUnique,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
@@ -280,76 +247,39 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
 
         // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPIC_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
-        waitForCondition(() -> this.assertWorkersUp(3),
-                WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
+                "Connect workers did not start in time.");
 
         // start a source connector
-        IntStream.range(0, 4).forEachOrdered(
-            i -> {
-                try {
-                    connect.configureConnector(CONNECTOR_NAME + i, props);
-                } catch (IOException e) {
-                    throw new ConnectException(e);
-                }
-            });
+        IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
+        connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME + 3, NUM_TASKS,
+                "Connector tasks did not start in time.");
 
         connect.removeWorker();
 
-        waitForCondition(() -> this.assertWorkersUp(2),
-                WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
+        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS - 1,
+                "Connect workers did not start in time.");
 
         waitForCondition(this::assertConnectorAndTasksAreUnique,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
     }
 
-    /**
-     * Confirm that a connector with an exact number of tasks is running.
-     *
-     * @param connectorName the connector
-     * @param numTasks the expected number of tasks
-     * @return true if the connector and tasks are in RUNNING state; false otherwise
-     */
-    private Optional<Boolean> assertConnectorAndTasksRunning(String connectorName, int numTasks) {
-        try {
-            ConnectorStateInfo info = connect.connectorStatus(connectorName);
-            boolean result = info != null
-                    && info.tasks().size() == numTasks
-                    && info.connector().state().equals(AbstractStatus.State.RUNNING.toString())
-                    && info.tasks().stream().allMatch(s -> s.state().equals(AbstractStatus.State.RUNNING.toString()));
-            log.debug("Found connector and tasks running: {}", result);
-            return Optional.of(result);
-        } catch (Exception e) {
-            log.error("Could not check connector state info.", e);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Verifies whether the supplied number of workers matches the number of workers
-     * currently running.
-     * @param numWorkers the expected number of active workers
-     * @return true if exactly numWorkers are active; false if more or fewer workers are running
-     */
-    private boolean assertWorkersUp(int numWorkers) {
-        try {
-            int numUp = connect.activeWorkers().size();
-            return numUp == numWorkers;
-        } catch (Exception e) {
-            log.error("Could not check active workers.", e);
-            return false;
-        }
+    private Map<String, String> defaultSourceConnectorProps(String topic) {
+        // setup up props for the source connector
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
+        props.put(TOPIC_CONFIG, topic);
+        props.put("throughput", String.valueOf(10));
+        props.put("messages.per.poll", String.valueOf(10));
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
+        return props;
     }
 
     private boolean assertConnectorAndTasksAreUnique() {

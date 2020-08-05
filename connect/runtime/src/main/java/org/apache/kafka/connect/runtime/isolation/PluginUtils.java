@@ -128,14 +128,16 @@ public class PluginUtils {
     // added to the WHITELIST), then this base interface or class needs to be excluded in the
     // regular expression pattern
     private static final Pattern WHITELIST = Pattern.compile("^org\\.apache\\.kafka\\.(?:connect\\.(?:"
-            + "transforms\\.(?!Transformation$).*"
+            + "transforms\\.(?!Transformation|predicates\\.Predicate$).*"
             + "|json\\..*"
             + "|file\\..*"
+            + "|mirror\\..*"
+            + "|mirror-client\\..*"
             + "|converters\\..*"
             + "|storage\\.StringConverter"
             + "|storage\\.SimpleHeaderConverter"
             + "|rest\\.basic\\.auth\\.extension\\.BasicAuthSecurityRestExtension"
-            + "|connector\\.policy\\.(?!ConnectorClientConfigOverridePolicy$).*"
+            + "|connector\\.policy\\.(?!ConnectorClientConfig(?:OverridePolicy|Request(?:\\$ClientType)?)$).*"
             + ")"
             + "|common\\.config\\.provider\\.(?!ConfigProvider$).*"
             + ")$");

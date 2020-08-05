@@ -28,6 +28,8 @@ import java.nio.ByteBuffer;
  */
 public final class ByteUtils {
 
+    public static final ByteBuffer EMPTY_BUF = ByteBuffer.wrap(new byte[0]);
+
     private ByteUtils() {}
 
     /**
@@ -129,7 +131,7 @@ public final class ByteUtils {
     }
 
     /**
-     * Read an integer stored in variable-length format using zig-zag decoding from
+     * Read an integer stored in variable-length format using unsigned decoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
      *
      * @param buffer The buffer to read from
@@ -137,7 +139,7 @@ public final class ByteUtils {
      *
      * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
      */
-    public static int readVarint(ByteBuffer buffer) {
+    public static int readUnsignedVarint(ByteBuffer buffer) {
         int value = 0;
         int i = 0;
         int b;
@@ -148,6 +150,44 @@ public final class ByteUtils {
                 throw illegalVarintException(value);
         }
         value |= b << i;
+        return value;
+    }
+
+    /**
+     * Read an integer stored in variable-length format using unsigned decoding from
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
+     *
+     * @param in The input to read from
+     * @return The integer read
+     *
+     * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
+     * @throws IOException              if {@link DataInput} throws {@link IOException}
+     */
+    public static int readUnsignedVarint(DataInput in) throws IOException {
+        int value = 0;
+        int i = 0;
+        int b;
+        while (((b = in.readByte()) & 0x80) != 0) {
+            value |= (b & 0x7f) << i;
+            i += 7;
+            if (i > 28)
+                throw illegalVarintException(value);
+        }
+        value |= b << i;
+        return value;
+    }
+
+    /**
+     * Read an integer stored in variable-length format using zig-zag decoding from
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>.
+     *
+     * @param buffer The buffer to read from
+     * @return The integer read
+     *
+     * @throws IllegalArgumentException if variable-length value does not terminate after 5 bytes have been read
+     */
+    public static int readVarint(ByteBuffer buffer) {
+        int value = readUnsignedVarint(buffer);
         return (value >>> 1) ^ -(value & 1);
     }
 
@@ -162,16 +202,7 @@ public final class ByteUtils {
      * @throws IOException              if {@link DataInput} throws {@link IOException}
      */
     public static int readVarint(DataInput in) throws IOException {
-        int value = 0;
-        int i = 0;
-        int b;
-        while (((b = in.readByte()) & 0x80) != 0) {
-            value |= (b & 0x7f) << i;
-            i += 7;
-            if (i > 28)
-                throw illegalVarintException(value);
-        }
-        value |= b << i;
+        int value = readUnsignedVarint(in);
         return (value >>> 1) ^ -(value & 1);
     }
 
@@ -223,6 +254,60 @@ public final class ByteUtils {
     }
 
     /**
+     * Read a double-precision 64-bit format IEEE 754 value.
+     *
+     * @param in The input to read from
+     * @return The double value read
+     */
+    public static double readDouble(DataInput in) throws IOException {
+        return in.readDouble();
+    }
+
+    /**
+     * Read a double-precision 64-bit format IEEE 754 value.
+     *
+     * @param buffer The buffer to read from
+     * @return The long value read
+     */
+    public static double readDouble(ByteBuffer buffer) {
+        return buffer.getDouble();
+    }
+
+    /**
+     * Write the given integer following the variable-length unsigned encoding from
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * into the buffer.
+     *
+     * @param value The value to write
+     * @param buffer The output to write to
+     */
+    public static void writeUnsignedVarint(int value, ByteBuffer buffer) {
+        while ((value & 0xffffff80) != 0L) {
+            byte b = (byte) ((value & 0x7f) | 0x80);
+            buffer.put(b);
+            value >>>= 7;
+        }
+        buffer.put((byte) value);
+    }
+
+    /**
+     * Write the given integer following the variable-length unsigned encoding from
+     * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
+     * into the buffer.
+     *
+     * @param value The value to write
+     * @param out The output to write to
+     */
+    public static void writeUnsignedVarint(int value, DataOutput out) throws IOException {
+        while ((value & 0xffffff80) != 0L) {
+            byte b = (byte) ((value & 0x7f) | 0x80);
+            out.writeByte(b);
+            value >>>= 7;
+        }
+        out.writeByte((byte) value);
+    }
+
+    /**
      * Write the given integer following the variable-length zig-zag encoding from
      * <a href="http://code.google.com/apis/protocolbuffers/docs/encoding.html"> Google Protocol Buffers</a>
      * into the output.
@@ -231,12 +316,7 @@ public final class ByteUtils {
      * @param out The output to write to
      */
     public static void writeVarint(int value, DataOutput out) throws IOException {
-        int v = (value << 1) ^ (value >> 31);
-        while ((v & 0xffffff80) != 0L) {
-            out.writeByte((v & 0x7f) | 0x80);
-            v >>>= 7;
-        }
-        out.writeByte((byte) v);
+        writeUnsignedVarint((value << 1) ^ (value >> 31), out);
     }
 
     /**
@@ -248,13 +328,7 @@ public final class ByteUtils {
      * @param buffer The output to write to
      */
     public static void writeVarint(int value, ByteBuffer buffer) {
-        int v = (value << 1) ^ (value >> 31);
-        while ((v & 0xffffff80) != 0L) {
-            byte b = (byte) ((v & 0x7f) | 0x80);
-            buffer.put(b);
-            v >>>= 7;
-        }
-        buffer.put((byte) v);
+        writeUnsignedVarint((value << 1) ^ (value >> 31), buffer);
     }
 
     /**
@@ -293,18 +367,46 @@ public final class ByteUtils {
     }
 
     /**
+     * Write the given double following the double-precision 64-bit format IEEE 754 value into the output.
+     *
+     * @param value The value to write
+     * @param out The output to write to
+     */
+    public static void writeDouble(double value, DataOutput out) throws IOException {
+        out.writeDouble(value);
+    }
+
+    /**
+     * Write the given double following the double-precision 64-bit format IEEE 754 value into the buffer.
+     *
+     * @param value The value to write
+     * @param buffer The buffer to write to
+     */
+    public static void writeDouble(double value, ByteBuffer buffer) {
+        buffer.putDouble(value);
+    }
+
+    /**
+     * Number of bytes needed to encode an integer in unsigned variable-length format.
+     *
+     * @param value The signed value
+     */
+    public static int sizeOfUnsignedVarint(int value) {
+        int bytes = 1;
+        while ((value & 0xffffff80) != 0L) {
+            bytes += 1;
+            value >>>= 7;
+        }
+        return bytes;
+    }
+
+    /**
      * Number of bytes needed to encode an integer in variable-length format.
      *
      * @param value The signed value
      */
     public static int sizeOfVarint(int value) {
-        int v = (value << 1) ^ (value >> 31);
-        int bytes = 1;
-        while ((v & 0xffffff80) != 0L) {
-            bytes += 1;
-            v >>>= 7;
-        }
-        return bytes;
+        return sizeOfUnsignedVarint((value << 1) ^ (value >> 31));
     }
 
     /**

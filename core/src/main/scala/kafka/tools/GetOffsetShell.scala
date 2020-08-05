@@ -27,7 +27,7 @@ import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
 object GetOffsetShell {
@@ -143,7 +143,7 @@ object GetOffsetShell {
    * Return the partition infos for `topic`. If the topic does not exist, `None` is returned.
    */
   private def listPartitionInfos(consumer: KafkaConsumer[_, _], topic: String, partitionIds: Set[Int]): Option[Seq[PartitionInfo]] = {
-    val partitionInfos = consumer.listTopics.asScala.filterKeys(_ == topic).values.flatMap(_.asScala).toBuffer
+    val partitionInfos = consumer.listTopics.asScala.filter { case (k, _) => k == topic }.values.flatMap(_.asScala).toBuffer
     if (partitionInfos.isEmpty)
       None
     else if (partitionIds.isEmpty)

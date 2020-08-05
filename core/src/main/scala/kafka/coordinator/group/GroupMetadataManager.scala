@@ -27,28 +27,31 @@ import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1, KAFKA_2_3_IV0}
-import kafka.common.{MessageFormatter, OffsetAndMetadata}
+import kafka.common.OffsetAndMetadata
+import kafka.log.AppendOrigin
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{FetchLogEnd, ReplicaManager}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.metrics.stats.{Avg, Max}
-import org.apache.kafka.common.metrics.{MetricConfig, Metrics}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
+import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicPartition}
 
-import scala.collection.JavaConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
+import scala.jdk.CollectionConverters._
 
 class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
@@ -86,14 +89,34 @@ class GroupMetadataManager(brokerId: Int,
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
 
   /* setup metrics*/
-  val partitionLoadSensor = metrics.sensor("PartitionLoadTime")
+  private val partitionLoadSensor = metrics.sensor(GroupMetadataManager.LoadTimeSensor)
 
   partitionLoadSensor.add(metrics.metricName("partition-load-time-max",
-    "group-coordinator-metrics",
+    GroupMetadataManager.MetricsGroup,
     "The max time it took to load the partitions in the last 30sec"), new Max())
   partitionLoadSensor.add(metrics.metricName("partition-load-time-avg",
-    "group-coordinator-metrics",
+    GroupMetadataManager.MetricsGroup,
     "The avg time it took to load the partitions in the last 30sec"), new Avg())
+
+  val offsetCommitsSensor = metrics.sensor("OffsetCommits")
+
+  offsetCommitsSensor.add(new Meter(
+    metrics.metricName("offset-commit-rate",
+      "group-coordinator-metrics",
+      "The rate of committed offsets"),
+    metrics.metricName("offset-commit-count",
+      "group-coordinator-metrics",
+      "The total number of committed offsets")))
+
+  val offsetExpiredSensor = metrics.sensor("OffsetExpired")
+
+  offsetExpiredSensor.add(new Meter(
+    metrics.metricName("offset-expiration-rate",
+      "group-coordinator-metrics",
+      "The rate of expired offsets"),
+    metrics.metricName("offset-expiration-count",
+      "group-coordinator-metrics",
+      "The total number of expired offsets")))
 
   this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
 
@@ -103,57 +126,55 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   recreateGauge("NumOffsets",
-    new Gauge[Int] {
-      def value = groupMetadataCache.values.map(group => {
-        group.inLock { group.numOffsets }
-      }).sum
-    })
+    () => groupMetadataCache.values.map { group =>
+      group.inLock { group.numOffsets }
+    }.sum
+  )
 
   recreateGauge("NumGroups",
-    new Gauge[Int] {
-      def value = groupMetadataCache.size
-    })
+    () => groupMetadataCache.size
+  )
 
   recreateGauge("NumGroupsPreparingRebalance",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(PreparingRebalance) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(PreparingRebalance)
+      }
     })
 
   recreateGauge("NumGroupsCompletingRebalance",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(CompletingRebalance) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(CompletingRebalance)
+      }
     })
 
   recreateGauge("NumGroupsStable",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Stable) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Stable)
+      }
     })
 
   recreateGauge("NumGroupsDead",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Dead) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Dead)
+      }
     })
 
   recreateGauge("NumGroupsEmpty",
-    new Gauge[Int] {
-      def value(): Int = groupMetadataCache.values.count(group => {
-        group synchronized { group.is(Empty) }
-      })
+    () => groupMetadataCache.values.count { group =>
+      group synchronized {
+        group.is(Empty)
+      }
     })
 
   def startup(enableMetadataExpiration: Boolean): Unit = {
     scheduler.startup()
     if (enableMetadataExpiration) {
       scheduler.schedule(name = "delete-expired-group-metadata",
-        fun = () => cleanupGroupMetadata,
+        fun = () => cleanupGroupMetadata(),
         period = config.offsetsRetentionCheckIntervalMs,
         unit = TimeUnit.MILLISECONDS)
     }
@@ -187,11 +208,23 @@ class GroupMetadataManager(brokerId: Int,
     case None =>
       false
   }
+
   /**
-   * Get the group associated with the given groupId, or null if not found
+   * Get the group associated with the given groupId or null if not found
    */
   def getGroup(groupId: String): Option[GroupMetadata] = {
     Option(groupMetadataCache.get(groupId))
+  }
+
+  /**
+   * Get the group associated with the given groupId - the group is created if createIfNotExist
+   * is true - or null if not found
+   */
+  def getOrMaybeCreateGroup(groupId: String, createIfNotExist: Boolean): Option[GroupMetadata] = {
+    if (createIfNotExist)
+      Option(groupMetadataCache.getAndMaybePut(groupId, new GroupMetadata(groupId, Empty, time)))
+    else
+      Option(groupMetadataCache.get(groupId))
   }
 
   /**
@@ -252,7 +285,7 @@ class GroupMetadataManager(brokerId: Int,
                    | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
                 Errors.COORDINATOR_NOT_AVAILABLE
 
-              case Errors.NOT_LEADER_FOR_PARTITION
+              case Errors.NOT_LEADER_OR_FOLLOWER
                    | Errors.KAFKA_STORAGE_ERROR =>
                 Errors.NOT_COORDINATOR
 
@@ -294,7 +327,7 @@ class GroupMetadataManager(brokerId: Int,
       timeout = config.offsetCommitTimeoutMs.toLong,
       requiredAcks = config.offsetCommitRequiredAcks,
       internalTopicsAllowed = true,
-      isFromClient = false,
+      origin = AppendOrigin.Coordinator,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback)
@@ -359,6 +392,9 @@ class GroupMetadataManager(brokerId: Int,
               throw new IllegalStateException("Append status %s should only have one partition %s"
                 .format(responseStatus, offsetTopicPartition))
 
+            // record the number of offsets committed to the log
+            offsetCommitsSensor.record(records.size)
+
             // construct the commit response status and insert
             // the offset and metadata to cache if the append status has no error
             val status = responseStatus(offsetTopicPartition)
@@ -396,7 +432,7 @@ class GroupMetadataManager(brokerId: Int,
                        | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
                     Errors.COORDINATOR_NOT_AVAILABLE
 
-                  case Errors.NOT_LEADER_FOR_PARTITION
+                  case Errors.NOT_LEADER_OR_FOLLOWER
                        | Errors.KAFKA_STORAGE_ERROR =>
                     Errors.NOT_COORDINATOR
 
@@ -449,12 +485,12 @@ class GroupMetadataManager(brokerId: Int,
    * The most important guarantee that this API provides is that it should never return a stale offset. i.e., it either
    * returns the current offset or it begins to sync the cache from the log (and returns an error code).
    */
-  def getOffsets(groupId: String, topicPartitionsOpt: Option[Seq[TopicPartition]]): Map[TopicPartition, OffsetFetchResponse.PartitionData] = {
+  def getOffsets(groupId: String, requireStable: Boolean, topicPartitionsOpt: Option[Seq[TopicPartition]]): Map[TopicPartition, PartitionData] = {
     trace("Getting offsets of %s for group %s.".format(topicPartitionsOpt.getOrElse("all partitions"), groupId))
     val group = groupMetadataCache.get(groupId)
     if (group == null) {
       topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-        val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+        val partitionData = new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
           Optional.empty(), "", Errors.NONE)
         topicPartition -> partitionData
       }.toMap
@@ -462,33 +498,29 @@ class GroupMetadataManager(brokerId: Int,
       group.inLock {
         if (group.is(Dead)) {
           topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-            val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+            val partitionData = new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
               Optional.empty(), "", Errors.NONE)
             topicPartition -> partitionData
           }.toMap
         } else {
-          topicPartitionsOpt match {
-            case None =>
-              // Return offsets for all partitions owned by this consumer group. (this only applies to consumers
-              // that commit offsets to Kafka.)
-              group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
-                topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
-                  offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
-              }
+          val topicPartitions = topicPartitionsOpt.getOrElse(group.allOffsets.keySet)
 
-            case Some(topicPartitions) =>
-              topicPartitions.map { topicPartition =>
-                val partitionData = group.offset(topicPartition) match {
-                  case None =>
-                    new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
-                      Optional.empty(), "", Errors.NONE)
-                  case Some(offsetAndMetadata) =>
-                    new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
-                      offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
-                }
-                topicPartition -> partitionData
-              }.toMap
-          }
+          topicPartitions.map { topicPartition =>
+            if (requireStable && group.hasPendingOffsetCommitsForTopicPartition(topicPartition)) {
+              topicPartition -> new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+                Optional.empty(), "", Errors.UNSTABLE_OFFSET_COMMIT)
+            } else {
+              val partitionData = group.offset(topicPartition) match {
+                case None =>
+                  new PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+                    Optional.empty(), "", Errors.NONE)
+                case Some(offsetAndMetadata) =>
+                  new PartitionData(offsetAndMetadata.offset,
+                    offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
+              }
+              topicPartition -> partitionData
+            }
+          }.toMap
         }
       }
     }
@@ -501,20 +533,23 @@ class GroupMetadataManager(brokerId: Int,
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     if (addLoadingPartition(offsetsPartition)) {
       info(s"Scheduling loading of offsets and group metadata from $topicPartition")
-      scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, onGroupLoaded))
+      val startTimeMs = time.milliseconds()
+      scheduler.schedule(topicPartition.toString, () => loadGroupsAndOffsets(topicPartition, onGroupLoaded, startTimeMs))
     } else {
       info(s"Already loading offsets and group metadata from $topicPartition")
     }
   }
 
-  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit): Unit = {
+  private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit, startTimeMs: java.lang.Long): Unit = {
     try {
-      val startMs = time.milliseconds()
+      val schedulerTimeMs = time.milliseconds() - startTimeMs
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
-      val endMs = time.milliseconds()
-      val timeLapse = endMs - startMs
-      partitionLoadSensor.record(timeLapse, endMs, false)
-      info(s"Finished loading offsets and group metadata from $topicPartition in $timeLapse milliseconds.")
+      val endTimeMs = time.milliseconds()
+      val totalLoadingTimeMs = endTimeMs - startTimeMs
+      partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
+      info(s"Finished loading offsets and group metadata from $topicPartition "
+        + s"in $totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds"
+        + s" was spent in the scheduler.")
     } catch {
       case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
     } finally {
@@ -533,22 +568,28 @@ class GroupMetadataManager(brokerId: Int,
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
 
       case Some(log) =>
-        var currOffset = log.logStartOffset
-
-        // buffer may not be needed if records are read from memory
-        var buffer = ByteBuffer.allocate(0)
-
-        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
         val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
 
-        while (currOffset < logEndOffset && !shuttingDown.get()) {
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
+
+        // loop breaks if leader changes at any time during the load, since logEndOffset is -1
+        var currOffset = log.logStartOffset
+
+        // loop breaks if no records have been read, since the end of the log has been reached
+        var readAtLeastOneRecord = true
+
+        while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset,
             maxLength = config.loadBufferSize,
             isolation = FetchLogEnd,
             minOneMessage = true)
+
+          readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
+
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
@@ -570,7 +611,7 @@ class GroupMetadataManager(brokerId: Int,
               MemoryRecords.readableRecords(buffer)
           }
 
-          memRecords.batches.asScala.foreach { batch =>
+          memRecords.batches.forEach { batch =>
             val isTxnOffsetCommit = batch.isTransactional
             if (batch.isControlBatch) {
               val recordIterator = batch.iterator
@@ -637,19 +678,21 @@ class GroupMetadataManager(brokerId: Int,
 
         val (groupOffsets, emptyGroupOffsets) = loadedOffsets
           .groupBy(_._1.group)
-          .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset) })
-          .partition { case (group, _) => loadedGroups.contains(group) }
+          .map { case (k, v) =>
+            k -> v.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset) }
+          }.partition { case (group, _) => loadedGroups.contains(group) }
 
         val pendingOffsetsByGroup = mutable.Map[String, mutable.Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]]()
         pendingOffsets.foreach { case (producerId, producerOffsets) =>
           producerOffsets.keySet.map(_.group).foreach(addProducerGroup(producerId, _))
           producerOffsets
             .groupBy(_._1.group)
-            .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset)})
             .foreach { case (group, offsets) =>
               val groupPendingOffsets = pendingOffsetsByGroup.getOrElseUpdate(group, mutable.Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
               val groupProducerOffsets = groupPendingOffsets.getOrElseUpdate(producerId, mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
-              groupProducerOffsets ++= offsets
+              groupProducerOffsets ++= offsets.map { case (groupTopicPartition, offset) =>
+                (groupTopicPartition.topicPartition, offset)
+              }
             }
         }
 
@@ -709,7 +752,7 @@ class GroupMetadataManager(brokerId: Int,
                                onGroupUnloaded: GroupMetadata => Unit): Unit = {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling unloading of offsets and group metadata from $topicPartition")
-    scheduler.schedule(topicPartition.toString, () => removeGroupsAndOffsets)
+    scheduler.schedule(topicPartition.toString, () => removeGroupsAndOffsets())
 
     def removeGroupsAndOffsets(): Unit = {
       var numOffsetsRemoved = 0
@@ -742,7 +785,9 @@ class GroupMetadataManager(brokerId: Int,
     val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
       group.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs)
     })
-    info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
+    offsetExpiredSensor.record(numOffsetsRemoved)
+    if (numOffsetsRemoved > 0)
+      info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
   }
 
   /**
@@ -799,7 +844,7 @@ class GroupMetadataManager(brokerId: Int,
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
                 val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones.toArray: _*)
-                partition.appendRecordsToLeader(records, isFromClient = false, requiredAcks = 0)
+                partition.appendRecordsToLeader(records, origin = AppendOrigin.Coordinator, requiredAcks = 0)
 
                 offsetsRemoved += removedOffsets.size
                 trace(s"Successfully appended ${tombstones.size} tombstones to $appendPartition for expired/deleted " +
@@ -836,7 +881,7 @@ class GroupMetadataManager(brokerId: Int,
 
   private[group] def handleTxnCompletion(producerId: Long, completedPartitions: Set[Int], isCommit: Boolean): Unit = {
     val pendingGroups = groupsBelongingToPartitions(producerId, completedPartitions)
-    pendingGroups.foreach { case (groupId) =>
+    pendingGroups.foreach { groupId =>
       getGroup(groupId) match {
         case Some(group) => group.inLock {
           if (!group.is(Dead)) {
@@ -947,6 +992,9 @@ class GroupMetadataManager(brokerId: Int,
  *    -> value version 0:       [protocol_type, generation, protocol, leader, members]
  */
 object GroupMetadataManager {
+  // Metrics names
+  val MetricsGroup: String = "group-coordinator-metrics"
+  val LoadTimeSensor: String = "GroupPartitionLoadTime"
 
   private val CURRENT_OFFSET_KEY_SCHEMA_VERSION = 1.toShort
   private val CURRENT_GROUP_KEY_SCHEMA_VERSION = 2.toShort
@@ -1121,8 +1169,7 @@ object GroupMetadataManager {
    *
    * @return key for offset commit message
    */
-  private[group] def offsetCommitKey(group: String,
-                                     topicPartition: TopicPartition): Array[Byte] = {
+  def offsetCommitKey(group: String, topicPartition: TopicPartition): Array[Byte] = {
     val key = new Struct(CURRENT_OFFSET_KEY_SCHEMA)
     key.set(OFFSET_KEY_GROUP_FIELD, group)
     key.set(OFFSET_KEY_TOPIC_FIELD, topicPartition.topic)
@@ -1139,7 +1186,7 @@ object GroupMetadataManager {
    *
    * @return key bytes for group metadata message
    */
-  private[group] def groupMetadataKey(group: String): Array[Byte] = {
+  def groupMetadataKey(group: String): Array[Byte] = {
     val key = new Struct(CURRENT_GROUP_KEY_SCHEMA)
     key.set(GROUP_KEY_GROUP_FIELD, group)
 
@@ -1156,8 +1203,8 @@ object GroupMetadataManager {
    * @param apiVersion the api version
    * @return payload for offset commit message
    */
-  private[group] def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata,
-                                       apiVersion: ApiVersion): Array[Byte] = {
+  def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata,
+                        apiVersion: ApiVersion): Array[Byte] = {
     // generate commit value according to schema version
     val (version, value) = {
       if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty) {
@@ -1201,9 +1248,9 @@ object GroupMetadataManager {
    * @param apiVersion the api version
    * @return payload for offset commit message
    */
-  private[group] def groupMetadataValue(groupMetadata: GroupMetadata,
-                                        assignment: Map[String, Array[Byte]],
-                                        apiVersion: ApiVersion): Array[Byte] = {
+  def groupMetadataValue(groupMetadata: GroupMetadata,
+                         assignment: Map[String, Array[Byte]],
+                         apiVersion: ApiVersion): Array[Byte] = {
 
     val (version, value) = {
       if (apiVersion < KAFKA_0_10_1_IV0)
@@ -1218,7 +1265,7 @@ object GroupMetadataManager {
 
     value.set(PROTOCOL_TYPE_KEY, groupMetadata.protocolType.getOrElse(""))
     value.set(GENERATION_KEY, groupMetadata.generationId)
-    value.set(PROTOCOL_KEY, groupMetadata.protocolOrNull)
+    value.set(PROTOCOL_KEY, groupMetadata.protocolName.orNull)
     value.set(LEADER_KEY, groupMetadata.leaderOrNull)
 
     if (version >= 2)
@@ -1238,7 +1285,7 @@ object GroupMetadataManager {
         memberStruct.set(GROUP_INSTANCE_ID_KEY, memberMetadata.groupInstanceId.orNull)
 
       // The group is non-empty, so the current protocol must be defined
-      val protocol = groupMetadata.protocolOrNull
+      val protocol = groupMetadata.protocolName.orNull
       if (protocol == null)
         throw new IllegalStateException("Attempted to write non-empty group metadata with no defined protocol")
 
@@ -1440,6 +1487,83 @@ object GroupMetadataManager {
         case _ => // no-op
       }
     }
+  }
+
+  /**
+   * Exposed for printing records using [[kafka.tools.DumpLogSegments]]
+   */
+  def formatRecordKeyAndValue(record: Record): (Option[String], Option[String]) = {
+    if (!record.hasKey) {
+      throw new KafkaException("Failed to decode message using offset topic decoder (message had a missing key)")
+    } else {
+      GroupMetadataManager.readMessageKey(record.key) match {
+        case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
+        case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
+        case _ => throw new KafkaException("Failed to decode message using offset topic decoder (message had an invalid key)")
+      }
+    }
+  }
+
+  private def parseOffsets(offsetKey: OffsetKey, payload: ByteBuffer): (Option[String], Option[String]) = {
+    val groupId = offsetKey.key.group
+    val topicPartition = offsetKey.key.topicPartition
+    val keyString = s"offset_commit::group=$groupId,partition=$topicPartition"
+
+    val offset = GroupMetadataManager.readOffsetMessageValue(payload)
+    val valueString = if (offset == null) {
+      "<DELETE>"
+    } else {
+      if (offset.metadata.isEmpty)
+        s"offset=${offset.offset}"
+      else
+        s"offset=${offset.offset},metadata=${offset.metadata}"
+    }
+
+    (Some(keyString), Some(valueString))
+  }
+
+  private def parseGroupMetadata(groupMetadataKey: GroupMetadataKey, payload: ByteBuffer): (Option[String], Option[String]) = {
+    val groupId = groupMetadataKey.key
+    val keyString = s"group_metadata::group=$groupId"
+
+    val group = GroupMetadataManager.readGroupMessageValue(groupId, payload, Time.SYSTEM)
+    val valueString = if (group == null)
+      "<DELETE>"
+    else {
+      val protocolType = group.protocolType.getOrElse("")
+
+      val assignment = group.allMemberMetadata.map { member =>
+        if (protocolType == ConsumerProtocol.PROTOCOL_TYPE) {
+          val partitionAssignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
+          val userData = Option(partitionAssignment.userData)
+            .map(Utils.toArray)
+            .map(hex)
+            .getOrElse("")
+
+          if (userData.isEmpty)
+            s"${member.memberId}=${partitionAssignment.partitions()}"
+          else
+            s"${member.memberId}=${partitionAssignment.partitions()}:$userData"
+        } else {
+          s"${member.memberId}=${hex(member.assignment)}"
+        }
+      }.mkString("{", ",", "}")
+
+      Json.encodeAsString(Map(
+        "protocolType" -> protocolType,
+        "protocol" -> group.protocolName.orNull,
+        "generationId" -> group.generationId,
+        "assignment" -> assignment
+      ).asJava)
+    }
+    (Some(keyString), Some(valueString))
+  }
+
+  private def hex(bytes: Array[Byte]): String = {
+    if (bytes.isEmpty)
+      ""
+    else
+      "%X".format(BigInt(1, bytes))
   }
 
 }

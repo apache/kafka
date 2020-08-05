@@ -23,7 +23,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
-from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, DEV_BRANCH, KafkaVersion
+from kafkatest.version import LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, DEV_BRANCH, KafkaVersion
 
 # Compatibility tests for moving to a new broker (e.g., 0.10.x) and using a mix of old and new clients (e.g., 0.9.x)
 class ClientCompatibilityTestNewBroker(ProduceConsumeValidateTest):
@@ -50,6 +50,8 @@ class ClientCompatibilityTestNewBroker(ProduceConsumeValidateTest):
     @parametrize(producer_version=str(DEV_BRANCH), consumer_version=str(LATEST_0_9), compression_types=["snappy"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_2_2), consumer_version=str(LATEST_2_2), compression_types=["none"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_2_3), consumer_version=str(LATEST_2_3), compression_types=["none"], timestamp_type=str("CreateTime"))
+    @parametrize(producer_version=str(LATEST_2_4), consumer_version=str(LATEST_2_4), compression_types=["none"], timestamp_type=str("CreateTime"))
+    @parametrize(producer_version=str(LATEST_2_5), consumer_version=str(LATEST_2_5), compression_types=["none"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_2_1), consumer_version=str(LATEST_2_1), compression_types=["zstd"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_2_0), consumer_version=str(LATEST_2_0), compression_types=["snappy"], timestamp_type=str("CreateTime"))
     @parametrize(producer_version=str(LATEST_1_1), consumer_version=str(LATEST_1_1), compression_types=["lz4"], timestamp_type=str("CreateTime"))

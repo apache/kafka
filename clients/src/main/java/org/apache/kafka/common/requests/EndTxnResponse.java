@@ -16,85 +16,69 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-
+/**
+ * Possible error codes:
+ *
+ *   - {@link Errors#NOT_COORDINATOR}
+ *   - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ *   - {@link Errors#INVALID_TXN_STATE}
+ *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
+ *   - {@link Errors#INVALID_PRODUCER_EPOCH}
+ *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
+ */
 public class EndTxnResponse extends AbstractResponse {
-    private static final Schema END_TXN_RESPONSE_V0 = new Schema(
-            THROTTLE_TIME_MS,
-            ERROR_CODE);
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema END_TXN_RESPONSE_V1 = END_TXN_RESPONSE_V0;
+    public final EndTxnResponseData data;
 
-    public static Schema[] schemaVersions() {
-        return new Schema[]{END_TXN_RESPONSE_V0, END_TXN_RESPONSE_V1};
-    }
-
-    // Possible error codes:
-    //   NotCoordinator
-    //   CoordinatorNotAvailable
-    //   CoordinatorLoadInProgress
-    //   InvalidTxnState
-    //   InvalidProducerIdMapping
-    //   InvalidProducerEpoch
-    //   TransactionalIdAuthorizationFailed
-
-    private final Errors error;
-    private final int throttleTimeMs;
-
-    public EndTxnResponse(int throttleTimeMs, Errors error) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.error = error;
+    public EndTxnResponse(EndTxnResponseData data) {
+        this.data = data;
     }
 
     public EndTxnResponse(Struct struct) {
-        this.throttleTimeMs = struct.get(THROTTLE_TIME_MS);
-        this.error = Errors.forCode(struct.get(ERROR_CODE));
+        this(struct, (short) (EndTxnResponseData.SCHEMAS.length - 1));
+    }
+
+
+    public EndTxnResponse(Struct struct,  short version) {
+        this.data = new EndTxnResponseData(struct, version);
     }
 
     @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
+        return data.throttleTimeMs();
     }
 
+
     public Errors error() {
-        return error;
+        return Errors.forCode(data.errorCode());
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(error);
+        return errorCounts(error());
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.END_TXN.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
-        struct.set(ERROR_CODE, error.code());
-        return struct;
+        return data.toStruct(version);
     }
 
     public static EndTxnResponse parse(ByteBuffer buffer, short version) {
-        return new EndTxnResponse(ApiKeys.END_TXN.parseResponse(version, buffer));
+        return new EndTxnResponse(ApiKeys.END_TXN.parseResponse(version, buffer), version);
     }
 
     @Override
     public String toString() {
-        return "EndTxnResponse(" +
-                "error=" + error +
-                ", throttleTimeMs=" + throttleTimeMs +
-                ')';
+        return data.toString();
     }
 
     @Override

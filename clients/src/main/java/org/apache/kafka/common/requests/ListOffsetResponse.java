@@ -44,8 +44,8 @@ import static org.apache.kafka.common.protocol.types.Type.INT64;
  *
  * - {@link Errors#UNSUPPORTED_FOR_MESSAGE_FORMAT} If the message format does not support lookup by timestamp
  * - {@link Errors#TOPIC_AUTHORIZATION_FAILED} If the user does not have DESCRIBE access to a requested topic
- * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker which is not a replica
- * - {@link Errors#NOT_LEADER_FOR_PARTITION} If the broker is not a leader and either the provided leader epoch
+ * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker with version < 2.6 which is not a replica
+ * - {@link Errors#NOT_LEADER_OR_FOLLOWER} If the broker is not a leader or follower and either the provided leader epoch
  *     matches the known leader epoch on the broker or is empty
  * - {@link Errors#FENCED_LEADER_EPOCH} If the epoch is lower than the broker's epoch
  * - {@link Errors#UNKNOWN_LEADER_EPOCH} If the epoch is larger than the broker's epoch
@@ -137,7 +137,6 @@ public class ListOffsetResponse extends AbstractResponse {
     public static final class PartitionData {
         public final Errors error;
         // The offsets list is only used in ListOffsetResponse v0.
-        @Deprecated
         public final List<Long> offsets;
         public final Long timestamp;
         public final Long offset;
@@ -146,7 +145,6 @@ public class ListOffsetResponse extends AbstractResponse {
         /**
          * Constructor for ListOffsetResponse v0
          */
-        @Deprecated
         public PartitionData(Errors error, List<Long> offsets) {
             this.error = error;
             this.offsets = offsets;
@@ -170,7 +168,7 @@ public class ListOffsetResponse extends AbstractResponse {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("PartitionData(").
-                    append("errorCode: ").append((int) error.code());
+                    append("errorCode: ").append(error.code());
 
             if (offsets == null) {
                 bld.append(", timestamp: ").append(timestamp).
@@ -242,8 +240,9 @@ public class ListOffsetResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (PartitionData response : responseData.values())
-            updateErrorCounts(errorCounts, response.error);
+        responseData.values().forEach(response ->
+            updateErrorCounts(errorCounts, response.error)
+        );
         return errorCounts;
     }
 

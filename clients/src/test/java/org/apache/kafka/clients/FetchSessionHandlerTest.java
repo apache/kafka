@@ -353,4 +353,36 @@ public class FetchSessionHandlerTest {
         assertMapsEqual(reqMap(new ReqEntry("foo", 0, 0, 100, 200)),
             data3.sessionPartitions(), data3.toSend());
     }
+
+    @Test
+    public void testVerifyFullFetchResponsePartitions() throws Exception {
+        FetchSessionHandler handler = new FetchSessionHandler(LOG_CONTEXT, 1);
+        String issue = handler.verifyFullFetchResponsePartitions(new FetchResponse<>(Errors.NONE,
+            respMap(new RespEntry("foo", 0, 10, 20),
+                new RespEntry("foo", 1, 10, 20),
+                new RespEntry("bar", 0, 10, 20)),
+            0, INVALID_SESSION_ID));
+        assertTrue(issue.contains("extra"));
+        assertFalse(issue.contains("omitted"));
+        FetchSessionHandler.Builder builder = handler.newBuilder();
+        builder.add(new TopicPartition("foo", 0),
+            new FetchRequest.PartitionData(0, 100, 200, Optional.empty()));
+        builder.add(new TopicPartition("foo", 1),
+            new FetchRequest.PartitionData(10, 110, 210, Optional.empty()));
+        builder.add(new TopicPartition("bar", 0),
+            new FetchRequest.PartitionData(20, 120, 220, Optional.empty()));
+        builder.build();
+        String issue2 = handler.verifyFullFetchResponsePartitions(new FetchResponse<>(Errors.NONE,
+            respMap(new RespEntry("foo", 0, 10, 20),
+                new RespEntry("foo", 1, 10, 20),
+                new RespEntry("bar", 0, 10, 20)),
+            0, INVALID_SESSION_ID));
+        assertTrue(issue2 == null);
+        String issue3 = handler.verifyFullFetchResponsePartitions(new FetchResponse<>(Errors.NONE,
+            respMap(new RespEntry("foo", 0, 10, 20),
+                new RespEntry("foo", 1, 10, 20)),
+            0, INVALID_SESSION_ID));
+        assertFalse(issue3.contains("extra"));
+        assertTrue(issue3.contains("omitted"));
+    }
 }

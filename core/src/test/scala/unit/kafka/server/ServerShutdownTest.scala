@@ -40,7 +40,7 @@ import org.apache.kafka.common.utils.Time
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
 class ServerShutdownTest extends ZooKeeperTestHarness {
@@ -118,7 +118,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     producer.close()
     server.shutdown()
     CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus
+    verifyNonDaemonThreadsStatus()
   }
 
   @Test
@@ -131,7 +131,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.shutdown()
     server.awaitShutdown()
     CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus
+    verifyNonDaemonThreadsStatus()
   }
 
   @Test
@@ -177,7 +177,7 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       server.awaitShutdown()
     }
     CoreUtils.delete(server.config.logDirs)
-    verifyNonDaemonThreadsStatus
+    verifyNonDaemonThreadsStatus()
   }
 
   private[this] def isNonDaemonKafkaThread(t: Thread): Boolean = {
@@ -226,14 +226,14 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       val brokerAndEpochs = Map((new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol), 0L))
       val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
       val controllerContext = new ControllerContext
-      controllerContext.setLiveBrokerAndEpochs(brokerAndEpochs)
+      controllerContext.setLiveBrokers(brokerAndEpochs)
       controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
         metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
       controllerChannelManager.startup()
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
-        controllerId, 1, 0L, Map.empty.asJava, brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
+        controllerId, 1, 0L, Seq.empty.asJava, brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
       controllerChannelManager.sendRequest(1, requestBuilder)
       receiveFuture.get(10, TimeUnit.SECONDS)
 

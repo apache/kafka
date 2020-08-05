@@ -13,9 +13,7 @@
 package kafka.api
 
 import java.io.File
-import java.util.{Locale, Properties}
-
-import scala.collection.Seq
+import java.util.Locale
 
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
@@ -47,11 +45,6 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   override def tearDown(): Unit = {
     super.tearDown()
     closeSasl()
-  }
-
-  override def modifyConfigs(props: Seq[Properties]): Unit = {
-    super.modifyConfigs(props)
-    configureListeners(props)
   }
 
   /**

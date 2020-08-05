@@ -39,6 +39,7 @@ class IsrExpirationTest {
   val replicaLagTimeMaxMs = 100L
   val replicaFetchWaitMaxMs = 100
   val leaderLogEndOffset = 20
+  val leaderLogHighWatermark = 20L
 
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
@@ -213,7 +214,9 @@ class IsrExpirationTest {
 
     partition.updateAssignmentAndIsr(
       assignment = configs.map(_.brokerId),
-      isr = configs.map(_.brokerId).toSet
+      isr = configs.map(_.brokerId).toSet,
+      addingReplicas = Seq.empty,
+      removingReplicas = Seq.empty
     )
 
     // set lastCaughtUpTime to current time
@@ -234,6 +237,7 @@ class IsrExpirationTest {
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(leaderLogEndOffset)).anyTimes()
     EasyMock.expect(log.logEndOffset).andReturn(leaderLogEndOffset).anyTimes()
+    EasyMock.expect(log.highWatermark).andReturn(leaderLogHighWatermark).anyTimes()
     EasyMock.replay(log)
     log
   }

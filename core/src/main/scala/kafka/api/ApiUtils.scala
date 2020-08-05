@@ -17,6 +17,7 @@
 package kafka.api
 
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.KafkaException
 
@@ -24,8 +25,6 @@ import org.apache.kafka.common.KafkaException
  * Helper functions specific to parsing or serializing requests and responses
  */
 object ApiUtils {
-  
-  val ProtocolEncoding = "UTF-8"
 
     /**
    * Read size prefixed string where the size is stored as a 2 byte short.
@@ -37,7 +36,7 @@ object ApiUtils {
       return null
     val bytes = new Array[Byte](size)
     buffer.get(bytes)
-    new String(bytes, ProtocolEncoding)
+    new String(bytes, StandardCharsets.UTF_8)
   }
   
   /**
@@ -49,7 +48,7 @@ object ApiUtils {
     if(string == null) {
       buffer.putShort(-1)
     } else {
-      val encodedString = string.getBytes(ProtocolEncoding)
+      val encodedString = string.getBytes(StandardCharsets.UTF_8)
       if(encodedString.length > Short.MaxValue) {
         throw new KafkaException("String exceeds the maximum size of " + Short.MaxValue + ".")
       } else {
@@ -67,7 +66,7 @@ object ApiUtils {
     if(string == null) {
       2
     } else {
-      val encodedString = string.getBytes(ProtocolEncoding)
+      val encodedString = string.getBytes(StandardCharsets.UTF_8)
       if(encodedString.length > Short.MaxValue) {
         throw new KafkaException("String exceeds the maximum size of " + Short.MaxValue + ".")
       } else {

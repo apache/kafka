@@ -17,17 +17,17 @@
 
 package kafka.server
 
+import java.util.{Arrays, Collections}
+
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.message.DeleteTopicsRequestData
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
-import java.util.Collections
-import java.util.Arrays
+import scala.jdk.CollectionConverters._
 
 class DeleteTopicsRequestTest extends BaseRequestTest {
 
@@ -53,7 +53,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
     val response = sendDeleteTopicsRequest(request)
     val error = response.errorCounts.asScala.find(_._1 != Errors.NONE)
     assertTrue(s"There should be no errors, found ${response.data.responses.asScala}", error.isEmpty)
-    request.data.topicNames.asScala.foreach { topic =>
+    request.data.topicNames.forEach { topic =>
       validateTopicIsDeleted(topic)
     }
   }
@@ -124,19 +124,14 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   }
 
   private def validateTopicIsDeleted(topic: String): Unit = {
-    val metadata = sendMetadataRequest(new MetadataRequest.
-        Builder(List(topic).asJava, true).build).topicMetadata.asScala
+    val metadata = connectAndReceive[MetadataResponse](new MetadataRequest.Builder(
+      List(topic).asJava, true).build).topicMetadata.asScala
     TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE),
       s"The topic $topic should not exist")
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
-    val response = connectAndSend(request, ApiKeys.DELETE_TOPICS, socketServer)
-    DeleteTopicsResponse.parse(response, request.version)
+    connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
-  private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA)
-    MetadataResponse.parse(response, request.version)
-  }
 }

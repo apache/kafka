@@ -22,6 +22,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImp
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import java.time.Duration;
+import java.util.Map;
 
 public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
@@ -118,6 +119,25 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * duplicate results downstream, but does not promise to eliminate them.
          */
         EagerBufferConfig emitEarlyWhenFull();
+
+        /**
+         * Disable the changelog for this suppression's internal buffer.
+         * This will turn off fault-tolerance for the suppression, and will result in data loss in the event of a rebalance.
+         * By default the changelog is enabled.
+         * @return this
+         */
+        BC withLoggingDisabled();
+
+        /**
+         * Indicates that a changelog topic should be created containing the currently suppressed
+         * records. Due to the short-lived nature of records in this topic it is likely more
+         * compactable than changelog topics for KTables.
+         *
+         * @param config Configs that should be applied to the changelog. Note: Any unrecognized
+         *               configs will be ignored.
+         * @return this
+         */
+        BC withLoggingEnabled(final Map<String, String> config);
     }
 
     /**
@@ -132,7 +152,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
      *
      * To accomplish this, the operator will buffer events from the window until the window close (that is,
      * until the end-time passes, and additionally until the grace period expires). Since windowed operators
-     * are required to reject late events for a window whose grace period is expired, there is an additional
+     * are required to reject out-of-order events for a window whose grace period is expired, there is an additional
      * guarantee that the final results emitted from this suppression will match any queriable state upstream.
      *
      * @param bufferConfig A configuration specifying how much space to use for buffering intermediate results.

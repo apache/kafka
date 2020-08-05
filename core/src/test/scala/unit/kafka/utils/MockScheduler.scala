@@ -35,7 +35,7 @@ import org.apache.kafka.common.utils.Time
  * Incrementing the time to the exact next execution time of a task will result in that task executing (it as if execution itself takes no time).
  */
 class MockScheduler(val time: Time) extends Scheduler {
-  
+
   /* a priority queue of tasks ordered by next execution time */
   private val tasks = new PriorityQueue[MockTask]()
   
@@ -44,10 +44,11 @@ class MockScheduler(val time: Time) extends Scheduler {
   def startup(): Unit = {}
   
   def shutdown(): Unit = {
-    this synchronized {
-      tasks.foreach(_.fun())
-      tasks.clear()
-    }
+    var currTask: Option[MockTask] = None
+    do {
+      currTask = poll(_ => true)
+      currTask.foreach(_.fun())
+    } while (currTask.nonEmpty)
   }
   
   /**
@@ -56,28 +57,26 @@ class MockScheduler(val time: Time) extends Scheduler {
    * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
    */
   def tick(): Unit = {
-    this synchronized {
-      val now = time.milliseconds
-      while(tasks.nonEmpty && tasks.head.nextExecution <= now) {
-        /* pop and execute the task with the lowest next execution time */
-        val curr = tasks.dequeue
+    val now = time.milliseconds
+    var currTask: Option[MockTask] = None
+    /* pop and execute the task with the lowest next execution time if ready */
+    do {
+      currTask = poll(_.nextExecution <= now)
+      currTask.foreach { curr =>
         curr.fun()
         /* if the task is periodic, reschedule it and re-enqueue */
         if(curr.periodic) {
           curr.nextExecution += curr.period
-          this.tasks += curr
+          add(curr)
         }
       }
-    }
+    } while (currTask.nonEmpty)
   }
-  
+
   def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[Unit] = {
-    var task : MockTask = null
-    this synchronized {
-      task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
-      tasks += task
-      tick()
-    }
+    val task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
+    add(task)
+    tick()
     task
   }
 
@@ -86,7 +85,21 @@ class MockScheduler(val time: Time) extends Scheduler {
       tasks.clear()
     }
   }
-  
+
+  private def poll(predicate: MockTask => Boolean): Option[MockTask] = {
+    this synchronized {
+      if (tasks.nonEmpty && predicate.apply(tasks.head))
+        Some(tasks.dequeue())
+      else
+        None
+    }
+  }
+
+  private def add(task: MockTask): Unit = {
+    this synchronized {
+      tasks += task
+    }
+  }
 }
 
 case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
@@ -132,9 +145,5 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
   }
 }
 object MockTask {
-  implicit def MockTaskOrdering : Ordering[MockTask] = new Ordering[MockTask] {
-    def compare(x: MockTask, y: MockTask): Int = {
-      x.compare(y)
-    }
-  }
+  implicit def MockTaskOrdering: Ordering[MockTask] = (x, y) => x.compare(y)
 }

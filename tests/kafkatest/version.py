@@ -52,6 +52,18 @@ class KafkaVersion(LooseVersion):
     def supports_named_listeners(self):
         return self >= V_0_10_2_0
 
+    def topic_command_supports_bootstrap_server(self):
+        return self >= V_2_3_0
+
+    def supports_tls_to_zookeeper(self):
+        # indicate if KIP-515 is available
+        return self > LATEST_2_4
+
+    def reassign_partitions_command_supports_bootstrap_server(self):
+        return self >= V_2_5_0
+
+    def kafka_configs_command_uses_bootstrap_server(self):
+        return self >= V_2_6_0
 
 def get_version(node=None):
     """Return the version attached to the given node.
@@ -63,7 +75,7 @@ def get_version(node=None):
         return DEV_BRANCH
 
 DEV_BRANCH = KafkaVersion("dev")
-DEV_VERSION = KafkaVersion("2.4.0-SNAPSHOT")
+DEV_VERSION = KafkaVersion("2.7.0-SNAPSHOT")
 
 # 0.8.2.x versions
 V_0_8_2_1 = KafkaVersion("0.8.2.1")
@@ -125,8 +137,23 @@ LATEST_2_1 = V_2_1_1
 # 2.2.x versions
 V_2_2_0 = KafkaVersion("2.2.0")
 V_2_2_1 = KafkaVersion("2.2.1")
-LATEST_2_2 = V_2_2_1
+V_2_2_2 = KafkaVersion("2.2.2")
+LATEST_2_2 = V_2_2_2
 
 # 2.3.x versions
 V_2_3_0 = KafkaVersion("2.3.0")
-LATEST_2_3 = V_2_3_0
+V_2_3_1 = KafkaVersion("2.3.1")
+LATEST_2_3 = V_2_3_1
+
+# 2.4.x versions
+V_2_4_0 = KafkaVersion("2.4.0")
+V_2_4_1 = KafkaVersion("2.4.1")
+LATEST_2_4 = V_2_4_1
+
+# 2.5.x versions
+V_2_5_0 = KafkaVersion("2.5.0")
+LATEST_2_5 = V_2_5_0
+
+# 2.6.x versions
+V_2_6_0 = KafkaVersion("2.6.0")
+LATEST_2_6 = V_2_6_0

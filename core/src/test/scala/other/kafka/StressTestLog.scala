@@ -57,13 +57,11 @@ object StressTestLog {
     val reader = new ReaderThread(log)
     reader.start()
 
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      override def run() = {
+    Exit.addShutdownHook("stress-test-shutdown-hook", {
         running.set(false)
         writer.join()
         reader.join()
         Utils.delete(dir)
-      }
     })
 
     while(running.get) {

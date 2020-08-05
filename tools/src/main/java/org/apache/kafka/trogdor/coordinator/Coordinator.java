@@ -171,7 +171,7 @@ public final class Coordinator {
         final Coordinator coordinator = new Coordinator(platform, Scheduler.SYSTEM,
             restServer, resource, ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE / 2));
         restServer.start(resource);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("coordinator-shutdown-hook", () -> {
             log.warn("Running coordinator shutdown hook.");
             try {
                 coordinator.beginShutdown(false);
@@ -179,7 +179,7 @@ public final class Coordinator {
             } catch (Exception e) {
                 log.error("Got exception while running coordinator shutdown hook.", e);
             }
-        }));
+        });
         coordinator.waitForShutdown();
     }
 };

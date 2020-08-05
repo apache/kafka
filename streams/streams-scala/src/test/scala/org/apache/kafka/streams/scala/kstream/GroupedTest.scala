@@ -14,15 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.internals.GroupedInternal
 import org.apache.kafka.streams.scala.Serdes
 import org.apache.kafka.streams.scala.Serdes._
 import org.junit.runner.RunWith
-import org.scalatest.junit.JUnitRunner
 import org.scalatest.{FlatSpec, Matchers}
+import org.scalatestplus.junit.JUnitRunner
 
 @RunWith(classOf[JUnitRunner])
 class GroupedTest extends FlatSpec with Matchers {

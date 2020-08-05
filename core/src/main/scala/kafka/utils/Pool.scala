@@ -21,8 +21,8 @@ import java.util.concurrent._
 
 import org.apache.kafka.common.KafkaException
 
-import collection.mutable
-import collection.JavaConverters._
+import collection.Set
+import scala.jdk.CollectionConverters._
 
 class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
@@ -59,9 +59,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
     * @return The final value associated with the key.
     */
   def getAndMaybePut(key: K, createValue: => V): V =
-    pool.computeIfAbsent(key, new java.util.function.Function[K, V] {
-      override def apply(k: K): V = createValue
-    })
+    pool.computeIfAbsent(key, _ => createValue)
 
   def contains(id: K): Boolean = pool.containsKey(id)
   
@@ -71,11 +69,17 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
 
   def remove(key: K, value: V): Boolean = pool.remove(key, value)
 
-  def keys: mutable.Set[K] = pool.keySet.asScala
+  def removeAll(keys: Iterable[K]): Unit = pool.keySet.removeAll(keys.asJavaCollection)
+
+  def keys: Set[K] = pool.keySet.asScala
 
   def values: Iterable[V] = pool.values.asScala
 
   def clear(): Unit = { pool.clear() }
+
+  def foreachEntry(f: (K, V) => Unit): Unit = {
+    pool.forEach((k, v) => f(k, v))
+  }
   
   override def size: Int = pool.size
   
@@ -85,7 +89,7 @@ class Pool[K,V](valueFactory: Option[K => V] = None) extends Iterable[(K, V)] {
     
     def hasNext: Boolean = iter.hasNext
     
-    def next: (K, V) = {
+    def next(): (K, V) = {
       val n = iter.next
       (n.getKey, n.getValue)
     }

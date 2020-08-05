@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -24,7 +23,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -73,7 +71,7 @@ import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CON
 /**
  * A persistent key-value store based on RocksDB.
  */
-public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingStore {
+public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
 
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");
@@ -104,10 +102,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     private RocksDBConfigSetter configSetter;
 
     private final RocksDBMetricsRecorder metricsRecorder;
-    private boolean closeMetricsRecorder = false;
-    private boolean removeStatisticsFromMetricsRecorder = false;
+    private boolean isStatisticsRegistered = false;
 
-    private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
     // visible for testing
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
@@ -116,8 +112,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
     RocksDBStore(final String name,
                  final String metricsScope) {
-        this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, name));
-        closeMetricsRecorder = true;
+        this(name, DB_FILE_DIR, new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name));
     }
 
     RocksDBStore(final String name,
@@ -177,10 +172,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             configSetter.setConfig(name, userSpecifiedOptions, configs);
         }
 
-        if (prepareForBulkload) {
-            userSpecifiedOptions.prepareForBulkLoad();
-        }
-
         dbDir = new File(new File(context.stateDir(), parentDir), name);
 
         try {
@@ -190,26 +181,23 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             throw new ProcessorStateException(fatal);
         }
 
-        setUpMetrics(context, configs);
+        // Setup metrics before the database is opened, otherwise the metrics are not updated
+        // with the measurements from Rocks DB
+        maybeSetUpMetricsRecorder(configs);
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
     }
 
-    private void setUpMetrics(final ProcessorContext context, final Map<String, Object> configs) {
+    private void maybeSetUpMetricsRecorder(final Map<String, Object> configs) {
         if (userSpecifiedOptions.statistics() == null &&
             RecordingLevel.forName((String) configs.get(METRICS_RECORDING_LEVEL_CONFIG)) == RecordingLevel.DEBUG) {
 
+            isStatisticsRegistered = true;
             // metrics recorder will clean up statistics object
             final Statistics statistics = new Statistics();
             userSpecifiedOptions.setStatistics(statistics);
-            metricsRecorder.addStatistics(
-                name,
-                statistics,
-                (StreamsMetricsImpl) context.metrics(),
-                context.taskId()
-            );
-            removeStatisticsFromMetricsRecorder = true;
+            metricsRecorder.addStatistics(name, statistics);
         }
     }
 
@@ -227,21 +215,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         }
     }
 
+    @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
         // open the DB dir
         internalProcessorContext = context;
+        metricsRecorder.init((StreamsMetricsImpl) context.metrics(), context.taskId());
         openDB(context);
         batchingStateRestoreCallback = new RocksDBBatchingRestoreCallback(this);
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, batchingStateRestoreCallback);
-    }
-
-    // visible for testing
-    boolean isPrepareForBulkload() {
-        return prepareForBulkload;
     }
 
     @Override
@@ -265,7 +250,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public synchronized void put(final Bytes key,
                                  final byte[] value) {
@@ -394,22 +378,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     }
 
     @Override
-    public void toggleDbForBulkLoading(final boolean prepareForBulkload) {
-        if (prepareForBulkload) {
-            // if the store is not empty, we need to compact to get around the num.levels check for bulk loading
-            final String[] sstFileNames = dbDir.list((dir, name) -> SST_FILE_EXTENSION.matcher(name).matches());
-
-            if (sstFileNames != null && sstFileNames.length > 0) {
-                dbAccessor.toggleDbForBulkLoading();
-            }
-        }
-
-        close();
-        this.prepareForBulkload = prepareForBulkload;
-        openDB(internalProcessorContext);
-    }
-
-    @Override
     public void addToBatch(final KeyValue<byte[], byte[]> record,
                            final WriteBatch batch) throws RocksDBException {
         dbAccessor.addToBatch(record.key, record.value, batch);
@@ -434,7 +402,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             configSetter = null;
         }
 
-        closeOrUpdateMetricsRecorder();
+        maybeRemoveStatisticsFromMetricsRecorder();
 
         // Important: do not rearrange the order in which the below objects are closed!
         // Order of closing must follow: ColumnFamilyHandle > RocksDB > DBOptions > ColumnFamilyOptions
@@ -455,6 +423,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         cache = null;
     }
 
+    private void maybeRemoveStatisticsFromMetricsRecorder() {
+        if (isStatisticsRegistered) {
+            metricsRecorder.removeStatistics(name);
+            isStatisticsRegistered = false;
+        }
+    }
+
     private void closeOpenIterators() {
         final HashSet<KeyValueIterator<Bytes, byte[]>> iterators;
         synchronized (openIterators) {
@@ -465,14 +440,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             for (final KeyValueIterator<Bytes, byte[]> iterator : iterators) {
                 iterator.close();
             }
-        }
-    }
-
-    private void closeOrUpdateMetricsRecorder() {
-        if (closeMetricsRecorder) {
-            metricsRecorder.close();
-        } else if (removeStatisticsFromMetricsRecorder) {
-            metricsRecorder.removeStatistics(name);
         }
     }
 
@@ -510,8 +477,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
                         final WriteBatch batch) throws RocksDBException;
 
         void close();
-
-        void toggleDbForBulkLoading();
     }
 
     class SingleColumnFamilyAccessor implements RocksDBAccessor {
@@ -611,20 +576,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         public void close() {
             columnFamily.close();
         }
-
-        @Override
-        @SuppressWarnings("deprecation")
-        public void toggleDbForBulkLoading() {
-            try {
-                db.compactRange(columnFamily, true, 1, 0);
-            } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
-            }
-        }
     }
 
     // not private for testing
-    static class RocksDBBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+    static class RocksDBBatchingRestoreCallback implements BatchingStateRestoreCallback {
 
         private final RocksDBStore rocksDBStore;
 
@@ -640,21 +595,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error restoring batch to store " + rocksDBStore.name, e);
             }
-        }
-
-        @Override
-        public void onRestoreStart(final TopicPartition topicPartition,
-                                   final String storeName,
-                                   final long startingOffset,
-                                   final long endingOffset) {
-            rocksDBStore.toggleDbForBulkLoading(true);
-        }
-
-        @Override
-        public void onRestoreEnd(final TopicPartition topicPartition,
-                                 final String storeName,
-                                 final long totalRestored) {
-            rocksDBStore.toggleDbForBulkLoading(false);
         }
     }
 

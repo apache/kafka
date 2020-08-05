@@ -74,7 +74,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
 
     @Override
     public String metricsScope() {
-        return "rocksdb-window-state";
+        return "rocksdb-window";
     }
 
     @Deprecated
@@ -101,5 +101,17 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
     @Override
     public long retentionPeriod() {
         return retentionPeriod;
+    }
+
+    @Override
+    public String toString() {
+        return "RocksDbWindowBytesStoreSupplier{" +
+                   "name='" + name + '\'' +
+                   ", retentionPeriod=" + retentionPeriod +
+                   ", segmentInterval=" + segmentInterval +
+                   ", windowSize=" + windowSize +
+                   ", retainDuplicates=" + retainDuplicates +
+                   ", returnTimestampedStore=" + returnTimestampedStore +
+                   '}';
     }
 }

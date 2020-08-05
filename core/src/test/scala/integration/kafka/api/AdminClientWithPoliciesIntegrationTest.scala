@@ -21,7 +21,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.{Logging, TestUtils}
-import org.apache.kafka.clients.admin.{Admin, AdminClient, AdminClientConfig, AlterConfigsOptions, Config, ConfigEntry}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsOptions, Config, ConfigEntry}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
@@ -31,7 +31,8 @@ import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.Timeout
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.annotation.nowarn
+import scala.jdk.CollectionConverters._
 
 /**
   * Tests AdminClient calls when the broker is configured with policies like AlterConfigPolicy, CreateTopicPolicy, etc.
@@ -48,7 +49,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   @Before
   override def setUp(): Unit = {
-    super.setUp
+    super.setUp()
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
   }
 
@@ -70,7 +71,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
   @Test
   def testValidAlterConfigs(): Unit = {
-    client = AdminClient.create(createConfig)
+    client = Admin.create(createConfig)
     // Create topics
     val topic1 = "describe-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
@@ -83,18 +84,19 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
     createTopic(topic2, 1, 1)
 
-    AdminClientIntegrationTest.checkValidAlterConfigs(client, topicResource1, topicResource2)
+    PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, topicResource1, topicResource2)
   }
 
   @Test
   def testInvalidAlterConfigs(): Unit = {
-    client = AdminClient.create(createConfig)
-    AdminClientIntegrationTest.checkInvalidAlterConfigs(zkClient, servers, client)
+    client = Admin.create(createConfig)
+    PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(zkClient, servers, client)
   }
 
+  @nowarn("cat=deprecation")
   @Test
   def testInvalidAlterConfigsDueToPolicy(): Unit = {
-    client = AdminClient.create(createConfig)
+    client = Admin.create(createConfig)
 
     // Create topics
     val topic1 = "invalid-alter-configs-due-to-policy-topic-1"

@@ -32,7 +32,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -41,6 +41,8 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Properties;
 
@@ -50,8 +52,6 @@ import static org.junit.Assert.assertNull;
 @SuppressWarnings("unchecked")
 public class KTableFilterTest {
     private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());
-    private final ConsumerRecordFactory<String, Integer> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
     @Before
@@ -71,12 +71,14 @@ public class KTableFilterTest {
         table3.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, "A", 1, 10L));
-            driver.pipeInput(recordFactory.create(topic, "B", 2, 5L));
-            driver.pipeInput(recordFactory.create(topic, "C", 3, 8L));
-            driver.pipeInput(recordFactory.create(topic, "D", 4, 14L));
-            driver.pipeInput(recordFactory.create(topic, "A", null, 18L));
-            driver.pipeInput(recordFactory.create(topic, "B", null, 15L));
+            final TestInputTopic<String, Integer> inputTopic =
+                    driver.createInputTopic(topic, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            inputTopic.pipeInput("A", 1, 10L);
+            inputTopic.pipeInput("B", 2, 5L);
+            inputTopic.pipeInput("C", 3, 8L);
+            inputTopic.pipeInput("D", 4, 14L);
+            inputTopic.pipeInput("A", null, 18L);
+            inputTopic.pipeInput("B", null, 15L);
         }
 
         final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
@@ -142,15 +144,18 @@ public class KTableFilterTest {
         topologyBuilder.connectProcessorAndStateStores(table3.name, getterSupplier3.storeNames());
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
+            final TestInputTopic<String, Integer> inputTopic =
+                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
             getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
             getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 1, 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", 1, 10L));
-            driver.pipeInput(recordFactory.create(topic1, "C", 1, 15L));
+            inputTopic.pipeInput("A", 1, 5L);
+            inputTopic.pipeInput("B", 1, 10L);
+            inputTopic.pipeInput("C", 1, 15L);
 
             assertNull(getter2.get("A"));
             assertNull(getter2.get("B"));
@@ -160,8 +165,8 @@ public class KTableFilterTest {
             assertEquals(ValueAndTimestamp.make(1, 10L), getter3.get("B"));
             assertEquals(ValueAndTimestamp.make(1, 15L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 2, 10L));
-            driver.pipeInput(recordFactory.create(topic1, "B", 2, 5L));
+            inputTopic.pipeInput("A", 2, 10L);
+            inputTopic.pipeInput("B", 2, 5L);
 
             assertEquals(ValueAndTimestamp.make(2, 10L), getter2.get("A"));
             assertEquals(ValueAndTimestamp.make(2, 5L), getter2.get("B"));
@@ -171,7 +176,7 @@ public class KTableFilterTest {
             assertNull(getter3.get("B"));
             assertEquals(ValueAndTimestamp.make(1, 15L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 3, 15L));
+            inputTopic.pipeInput("A", 3, 15L);
 
             assertNull(getter2.get("A"));
             assertEquals(ValueAndTimestamp.make(2, 5L), getter2.get("B"));
@@ -181,8 +186,8 @@ public class KTableFilterTest {
             assertNull(getter3.get("B"));
             assertEquals(ValueAndTimestamp.make(1, 15L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
-            driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
+            inputTopic.pipeInput("A", null, 10L);
+            inputTopic.pipeInput("B", null, 20L);
 
             assertNull(getter2.get("A"));
             assertNull(getter2.get("B"));
@@ -226,10 +231,12 @@ public class KTableFilterTest {
         builder.build().addProcessor("proc2", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, Integer> inputTopic =
+                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 1, 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", 1, 10L));
-            driver.pipeInput(recordFactory.create(topic1, "C", 1, 15L));
+            inputTopic.pipeInput("A", 1, 5L);
+            inputTopic.pipeInput("B", 1, 10L);
+            inputTopic.pipeInput("C", 1, 15L);
 
             final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
@@ -240,20 +247,20 @@ public class KTableFilterTest {
                 new KeyValueTimestamp<>("B", new Change<>(null, null), 10),
                 new KeyValueTimestamp<>("C", new Change<>(null, null), 15));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 2, 15L));
-            driver.pipeInput(recordFactory.create(topic1, "B", 2, 8L));
+            inputTopic.pipeInput("A", 2, 15L);
+            inputTopic.pipeInput("B", 2, 8L);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
                 new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
                 new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 3, 20L));
+            inputTopic.pipeInput("A", 3, 20L);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, null), 20));
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 20));
-            driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
-            driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
+            inputTopic.pipeInput("A", null, 10L);
+            inputTopic.pipeInput("B", null, 20L);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, null), 10),
                 new KeyValueTimestamp<>("B", new Change<>(null, null), 20));
@@ -301,9 +308,12 @@ public class KTableFilterTest {
         topology.addProcessor("proc2", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", 1, 5L));
-            driver.pipeInput(recordFactory.create(topic1, "B", 1, 10L));
-            driver.pipeInput(recordFactory.create(topic1, "C", 1, 15L));
+            final TestInputTopic<String, Integer> inputTopic =
+                    driver.createInputTopic(topic1, new StringSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+
+            inputTopic.pipeInput("A", 1, 5L);
+            inputTopic.pipeInput("B", 1, 10L);
+            inputTopic.pipeInput("C", 1, 15L);
 
             final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
@@ -312,21 +322,21 @@ public class KTableFilterTest {
                 new KeyValueTimestamp<>("C", new Change<>(1, null), 15));
             processors.get(1).checkEmptyAndClearProcessResult();
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 2, 15L));
-            driver.pipeInput(recordFactory.create(topic1, "B", 2, 8L));
+            inputTopic.pipeInput("A", 2, 15L);
+            inputTopic.pipeInput("B", 2, 8L);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, 1), 15),
                 new KeyValueTimestamp<>("B", new Change<>(2, 1), 8));
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(2, null), 15),
                 new KeyValueTimestamp<>("B", new Change<>(2, null), 8));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 3, 20L));
+            inputTopic.pipeInput("A", 3, 20L);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(3, 2), 20));
             processors.get(1).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 2), 20));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
-            driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
+            inputTopic.pipeInput("A", null, 10L);
+            inputTopic.pipeInput("B", null, 20L);
 
             processors.get(0).checkAndClearProcessResult(new KeyValueTimestamp<>("A", new Change<>(null, 3), 10),
                 new KeyValueTimestamp<>("B", new Change<>(null, 2), 20));
@@ -370,13 +380,13 @@ public class KTableFilterTest {
         topology.addProcessor("proc1", supplier, table1.name);
         topology.addProcessor("proc2", supplier, table2.name);
 
-        final ConsumerRecordFactory<String, String> stringRecordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
+            final TestInputTopic<String, String> stringinputTopic =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
 
-            driver.pipeInput(stringRecordFactory.create(topic1, "A", "reject", 5L));
-            driver.pipeInput(stringRecordFactory.create(topic1, "B", "reject", 10L));
-            driver.pipeInput(stringRecordFactory.create(topic1, "C", "reject", 20L));
+            stringinputTopic.pipeInput("A", "reject", 5L);
+            stringinputTopic.pipeInput("B", "reject", 10L);
+            stringinputTopic.pipeInput("C", "reject", 20L);
         }
 
         final List<MockProcessor<String, String>> processors = supplier.capturedProcessors(2);

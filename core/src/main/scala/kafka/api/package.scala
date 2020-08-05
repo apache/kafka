@@ -19,7 +19,7 @@ package kafka
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.ElectLeadersRequest
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 package object api {
   implicit final class ElectLeadersRequestOps(val self: ElectLeadersRequest) extends AnyVal {

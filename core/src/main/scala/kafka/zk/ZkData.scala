@@ -17,33 +17,36 @@
 package kafka.zk
 
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util
 import java.util.Properties
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.core.JsonProcessingException
-import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, LeaderAndIsr}
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1, KAFKA_2_7_IV0, LeaderAndIsr}
 import kafka.cluster.{Broker, EndPoint}
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch}
-import kafka.security.auth.Resource.Separator
-import kafka.security.auth.SimpleAclAuthorizer.VersionedAcls
-import kafka.security.auth.{Acl, Resource, ResourceType}
+import kafka.controller.{IsrChangeNotificationHandler, LeaderIsrAndControllerEpoch, ReplicaAssignment}
+import kafka.security.authorizer.AclAuthorizer.VersionedAcls
+import kafka.security.authorizer.AclEntry
 import kafka.server.{ConfigType, DelegationTokenManager}
 import kafka.utils.Json
+import kafka.utils.json.JsonObject
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
+import org.apache.kafka.common.feature.{Features, FinalizedVersionRange, SupportedVersionRange}
+import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.resource.PatternType
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
 import scala.beans.BeanProperty
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Map, Seq}
+import scala.collection.{Map, Seq, mutable}
 import scala.util.{Failure, Success, Try}
 
 // This file contains objects for encoding/decoding data stored in ZooKeeper nodes (znodes).
@@ -80,17 +83,26 @@ object BrokerIdsZNode {
 object BrokerInfo {
 
   /**
-   * Create a broker info with v4 json format (which includes multiple endpoints and rack) if
-   * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
+   * - Create a broker info with v5 json format if the apiVersion is 2.7.x or above.
+   * - Create a broker info with v4 json format (which includes multiple endpoints and rack) if
+   *   the apiVersion is 0.10.0.X or above but lesser than 2.7.x.
+   * - Register the broker with v2 json format otherwise.
    *
    * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
    *
-   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above without having to
-   * upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
+   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above
+   * without having to upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in
+   * any case).
    */
   def apply(broker: Broker, apiVersion: ApiVersion, jmxPort: Int): BrokerInfo = {
-    // see method documentation for the reason why we do this
-    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
+    val version = {
+      if (apiVersion >= KAFKA_2_7_IV0)
+        5
+      else if (apiVersion >= KAFKA_0_10_0_IV1)
+        4
+      else
+        2
+    }
     BrokerInfo(broker, version, jmxPort)
   }
 
@@ -110,6 +122,7 @@ object BrokerIdZNode {
   private val JmxPortKey = "jmx_port"
   private val ListenerSecurityProtocolMapKey = "listener_security_protocol_map"
   private val TimestampKey = "timestamp"
+  private val FeaturesKey = "features"
 
   def path(id: Int) = s"${BrokerIdsZNode.path}/$id"
 
@@ -119,7 +132,7 @@ object BrokerIdZNode {
    * The JSON format includes a top level host and port for compatibility with older clients.
    */
   def encode(version: Int, host: String, port: Int, advertisedEndpoints: Seq[EndPoint], jmxPort: Int,
-             rack: Option[String]): Array[Byte] = {
+             rack: Option[String], features: Features[SupportedVersionRange]): Array[Byte] = {
     val jsonMap = collection.mutable.Map(VersionKey -> version,
       HostKey -> host,
       PortKey -> port,
@@ -134,6 +147,10 @@ object BrokerIdZNode {
         endPoint.listenerName.value -> endPoint.securityProtocol.name
       }.toMap.asJava)
     }
+
+    if (version >= 5) {
+      jsonMap += (FeaturesKey -> features.toMap)
+    }
     Json.encodeAsBytes(jsonMap.asJava)
   }
 
@@ -145,7 +162,19 @@ object BrokerIdZNode {
     val plaintextEndpoint = broker.endPoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
       new EndPoint(null, -1, null, null))
     encode(brokerInfo.version, plaintextEndpoint.host, plaintextEndpoint.port, broker.endPoints, brokerInfo.jmxPort,
-      broker.rack)
+      broker.rack, broker.features)
+  }
+
+  def featuresAsJavaMap(brokerInfo: JsonObject): util.Map[String, util.Map[String, java.lang.Short]] = {
+    FeatureZNode.asJavaMap(brokerInfo
+      .get(FeaturesKey)
+      .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
+      .map(theMap => theMap.map {
+         case(featureName, versionsInfo) => featureName -> versionsInfo.map {
+           case(label, version) => label -> version.asInstanceOf[Short]
+         }.toMap
+      }.toMap)
+      .getOrElse(Map[String, Map[String, Short]]()))
   }
 
   /**
@@ -184,7 +213,7 @@ object BrokerIdZNode {
     *   "rack":"dc1"
     * }
     *
-    * Version 4 (current) JSON schema for a broker is:
+    * Version 4 JSON schema for a broker is:
     * {
     *   "version":4,
     *   "host":"localhost",
@@ -192,8 +221,19 @@ object BrokerIdZNode {
     *   "jmx_port":9999,
     *   "timestamp":"2233345666",
     *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
-    *   "listener_security_protocol_map":{"CLIENT":"SSL", "REPLICATION":"PLAINTEXT"},
     *   "rack":"dc1"
+    * }
+    *
+    * Version 5 (current) JSON schema for a broker is:
+    * {
+    *   "version":5,
+    *   "host":"localhost",
+    *   "port":9092,
+    *   "jmx_port":9999,
+    *   "timestamp":"2233345666",
+    *   "endpoints":["CLIENT://host1:9092", "REPLICATION://host1:9093"],
+    *   "rack":"dc1",
+    *   "features": {"feature": {"min_version": 1, "max_version": 5}}
     * }
     */
   def decode(id: Int, jsonBytes: Array[Byte]): BrokerInfo = {
@@ -224,7 +264,9 @@ object BrokerIdZNode {
           }
 
         val rack = brokerInfo.get(RackKey).flatMap(_.to[Option[String]])
-        BrokerInfo(Broker(id, endpoints, rack), version, jmxPort)
+        val features = featuresAsJavaMap(brokerInfo)
+        BrokerInfo(
+          Broker(id, endpoints, rack, fromSupportedFeaturesMap(features)), version, jmxPort)
       case Left(e) =>
         throw new KafkaException(s"Failed to parse ZooKeeper registration for broker $id: " +
           s"${new String(jsonBytes, UTF_8)}", e)
@@ -238,19 +280,49 @@ object TopicsZNode {
 
 object TopicZNode {
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(assignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val assignmentJson = assignment.map { case (partition, replicas) =>
-      partition.partition.toString -> replicas.asJava
+  def encode(assignment: collection.Map[TopicPartition, ReplicaAssignment]): Array[Byte] = {
+    val replicaAssignmentJson = mutable.Map[String, util.List[Int]]()
+    val addingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
+    val removingReplicasAssignmentJson = mutable.Map[String, util.List[Int]]()
+
+    for ((partition, replicaAssignment) <- assignment) {
+      replicaAssignmentJson += (partition.partition.toString -> replicaAssignment.replicas.asJava)
+      if (replicaAssignment.addingReplicas.nonEmpty)
+        addingReplicasAssignmentJson += (partition.partition.toString -> replicaAssignment.addingReplicas.asJava)
+      if (replicaAssignment.removingReplicas.nonEmpty)
+        removingReplicasAssignmentJson += (partition.partition.toString -> replicaAssignment.removingReplicas.asJava)
     }
-    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> assignmentJson.asJava).asJava)
+
+    Json.encodeAsBytes(Map(
+      "version" -> 2,
+      "partitions" -> replicaAssignmentJson.asJava,
+      "adding_replicas" -> addingReplicasAssignmentJson.asJava,
+      "removing_replicas" -> removingReplicasAssignmentJson.asJava
+    ).asJava)
   }
-  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = {
+  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, ReplicaAssignment] = {
+    def getReplicas(replicasJsonOpt: Option[JsonObject], partition: String): Seq[Int] = {
+      replicasJsonOpt match {
+        case Some(replicasJson) => replicasJson.get(partition) match {
+          case Some(ar) => ar.to[Seq[Int]]
+          case None => Seq.empty[Int]
+        }
+        case None => Seq.empty[Int]
+      }
+    }
+
     Json.parseBytes(bytes).flatMap { js =>
       val assignmentJson = js.asJsonObject
       val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
+      val addingReplicasJsonOpt = assignmentJson.get("adding_replicas").map(_.asJsonObject)
+      val removingReplicasJsonOpt = assignmentJson.get("removing_replicas").map(_.asJsonObject)
       partitionsJsonOpt.map { partitionsJson =>
         partitionsJson.iterator.map { case (partition, replicas) =>
-          new TopicPartition(topic, partition.toInt) -> replicas.to[Seq[Int]]
+          new TopicPartition(topic, partition.toInt) -> ReplicaAssignment(
+            replicas.to[Seq[Int]],
+            getReplicas(addingReplicasJsonOpt, partition),
+            getReplicas(removingReplicasJsonOpt, partition)
+          )
         }
       }
     }.map(_.toMap).getOrElse(Map.empty)
@@ -373,6 +445,10 @@ object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
 }
 
+/**
+ * The znode for initiating a partition reassignment.
+ * @deprecated Since 2.4, use the PartitionReassignment Kafka API instead.
+ */
 object ReassignPartitionsZNode {
 
   /**
@@ -388,14 +464,16 @@ object ReassignPartitionsZNode {
   /**
     * An assignment consists of a `version` and a list of `partitions`, which represent the
     * assignment of topic-partitions to brokers.
+    * @deprecated Use the PartitionReassignment Kafka API instead
     */
-  case class PartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
-                                 @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
+  @Deprecated
+  case class LegacyPartitionAssignment(@BeanProperty @JsonProperty("version") version: Int,
+                                       @BeanProperty @JsonProperty("partitions") partitions: java.util.List[ReplicaAssignment])
 
   def path = s"${AdminZNode.path}/reassign_partitions"
 
   def encode(reassignmentMap: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val reassignment = PartitionAssignment(1,
+    val reassignment = LegacyPartitionAssignment(1,
       reassignmentMap.toSeq.map { case (tp, replicas) =>
         ReplicaAssignment(tp.topic, tp.partition, replicas.asJava)
       }.asJava
@@ -404,7 +482,7 @@ object ReassignPartitionsZNode {
   }
 
   def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
-    Json.parseBytesAs[PartitionAssignment](bytes).right.map { partitionAssignment =>
+    Json.parseBytesAs[LegacyPartitionAssignment](bytes).map { partitionAssignment =>
       partitionAssignment.partitions.asScala.iterator.map { replicaAssignment =>
         new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
       }.toMap
@@ -488,9 +566,9 @@ sealed trait ZkAclStore {
   val patternType: PatternType
   val aclPath: String
 
-  def path(resourceType: ResourceType): String = s"$aclPath/$resourceType"
+  def path(resourceType: ResourceType): String = s"$aclPath/${SecurityUtils.resourceTypeName(resourceType)}"
 
-  def path(resourceType: ResourceType, resourceName: String): String = s"$aclPath/$resourceType/$resourceName"
+  def path(resourceType: ResourceType, resourceName: String): String = s"$aclPath/${SecurityUtils.resourceTypeName(resourceType)}/$resourceName"
 
   def changeStore: ZkAclChangeStore
 }
@@ -542,7 +620,7 @@ object ExtendedAclZNode {
 }
 
 trait AclChangeNotificationHandler {
-  def processNotification(resource: Resource): Unit
+  def processNotification(resource: ResourcePattern): Unit
 }
 
 trait AclChangeSubscription extends AutoCloseable {
@@ -555,26 +633,21 @@ sealed trait ZkAclChangeStore {
   val aclChangePath: String
   def createPath: String = s"$aclChangePath/${ZkAclChangeStore.SequenceNumberPrefix}"
 
-  def decode(bytes: Array[Byte]): Resource
+  def decode(bytes: Array[Byte]): ResourcePattern
 
-  protected def encode(resource: Resource): Array[Byte]
+  protected def encode(resource: ResourcePattern): Array[Byte]
 
-  def createChangeNode(resource: Resource): AclChangeNode = AclChangeNode(createPath, encode(resource))
+  def createChangeNode(resource: ResourcePattern): AclChangeNode = AclChangeNode(createPath, encode(resource))
 
   def createListener(handler: AclChangeNotificationHandler, zkClient: KafkaZkClient): AclChangeSubscription = {
-    val rawHandler: NotificationHandler = new NotificationHandler {
-      def processNotification(bytes: Array[Byte]): Unit =
-        handler.processNotification(decode(bytes))
-    }
+    val rawHandler: NotificationHandler = (bytes: Array[Byte]) => handler.processNotification(decode(bytes))
 
     val aclChangeListener = new ZkNodeChangeNotificationListener(
       zkClient, aclChangePath, ZkAclChangeStore.SequenceNumberPrefix, rawHandler)
 
     aclChangeListener.init()
 
-    new AclChangeSubscription {
-      def close(): Unit = aclChangeListener.close()
-    }
+    () => aclChangeListener.close()
   }
 }
 
@@ -588,18 +661,18 @@ case object LiteralAclChangeStore extends ZkAclChangeStore {
   val name = "LiteralAclChangeStore"
   val aclChangePath: String = "/kafka-acl-changes"
 
-  def encode(resource: Resource): Array[Byte] = {
+  def encode(resource: ResourcePattern): Array[Byte] = {
     if (resource.patternType != PatternType.LITERAL)
       throw new IllegalArgumentException("Only literal resource patterns can be encoded")
 
-    val legacyName = resource.resourceType + Resource.Separator + resource.name
+    val legacyName = resource.resourceType.toString + AclEntry.ResourceSeparator + resource.name
     legacyName.getBytes(UTF_8)
   }
 
-  def decode(bytes: Array[Byte]): Resource = {
+  def decode(bytes: Array[Byte]): ResourcePattern = {
     val string = new String(bytes, UTF_8)
-    string.split(Separator, 2) match {
-        case Array(resourceType, resourceName, _*) => new Resource(ResourceType.fromString(resourceType), resourceName, PatternType.LITERAL)
+    string.split(AclEntry.ResourceSeparator, 2) match {
+        case Array(resourceType, resourceName, _*) => new ResourcePattern(ResourceType.fromString(resourceType), resourceName, PatternType.LITERAL)
         case _ => throw new IllegalArgumentException("expected a string in format ResourceType:ResourceName but got " + string)
       }
   }
@@ -609,7 +682,7 @@ case object ExtendedAclChangeStore extends ZkAclChangeStore {
   val name = "ExtendedAclChangeStore"
   val aclChangePath: String = "/kafka-acl-extended-changes"
 
-  def encode(resource: Resource): Array[Byte] = {
+  def encode(resource: ResourcePattern): Array[Byte] = {
     if (resource.patternType == PatternType.LITERAL)
       throw new IllegalArgumentException("Literal pattern types are not supported")
 
@@ -620,7 +693,7 @@ case object ExtendedAclChangeStore extends ZkAclChangeStore {
       resource.patternType.name))
   }
 
-  def decode(bytes: Array[Byte]): Resource = {
+  def decode(bytes: Array[Byte]): ResourcePattern = {
     val changeEvent = Json.parseBytesAs[ExtendedAclChangeEvent](bytes) match {
       case Right(event) => event
       case Left(e) => throw new IllegalArgumentException("Failed to parse ACL change event", e)
@@ -634,10 +707,10 @@ case object ExtendedAclChangeStore extends ZkAclChangeStore {
 }
 
 object ResourceZNode {
-  def path(resource: Resource): String = ZkAclStore(resource.patternType).path(resource.resourceType, resource.name)
+  def path(resource: ResourcePattern): String = ZkAclStore(resource.patternType).path(resource.resourceType, resource.name)
 
-  def encode(acls: Set[Acl]): Array[Byte] = Json.encodeAsBytes(Acl.toJsonCompatibleMap(acls).asJava)
-  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(Acl.fromBytes(bytes), stat.getVersion)
+  def encode(acls: Set[AclEntry]): Array[Byte] = Json.encodeAsBytes(AclEntry.toJsonCompatibleMap(acls).asJava)
+  def decode(bytes: Array[Byte], stat: Stat): VersionedAcls = VersionedAcls(AclEntry.fromBytes(bytes), stat.getVersion)
 }
 
 object ExtendedAclChangeEvent {
@@ -651,11 +724,11 @@ case class ExtendedAclChangeEvent(@BeanProperty @JsonProperty("version") version
   if (version > ExtendedAclChangeEvent.currentVersion)
     throw new UnsupportedVersionException(s"Acl change event received for unsupported version: $version")
 
-  def toResource: Try[Resource] = {
+  def toResource: Try[ResourcePattern] = {
     for {
       resType <- Try(ResourceType.fromString(resourceType))
       patType <- Try(PatternType.fromString(patternType))
-      resource = Resource(resType, name, patType)
+      resource = new ResourcePattern(resType, name, patType)
     } yield resource
   }
 }
@@ -710,6 +783,170 @@ object DelegationTokenInfoZNode {
   def path(tokenId: String) =  s"${DelegationTokensZNode.path}/$tokenId"
   def encode(token: DelegationToken): Array[Byte] =  Json.encodeAsBytes(DelegationTokenManager.toJsonCompatibleMap(token).asJava)
   def decode(bytes: Array[Byte]): Option[TokenInformation] = DelegationTokenManager.fromBytes(bytes)
+}
+
+/**
+ * Represents the status of the FeatureZNode.
+ *
+ * Enabled  -> This status means the feature versioning system (KIP-584) is enabled, and, the
+ *             finalized features stored in the FeatureZNode are active. This status is written by
+ *             the controller to the FeatureZNode only when the broker IBP config is greater than
+ *             or equal to KAFKA_2_7_IV0.
+ *
+ * Disabled -> This status means the feature versioning system (KIP-584) is disabled, and, the
+ *             the finalized features stored in the FeatureZNode is not relevant. This status is
+ *             written by the controller to the FeatureZNode only when the broker IBP config
+ *             is less than KAFKA_2_7_IV0.
+ *
+ * The purpose behind the FeatureZNodeStatus is that it helps differentiates between the following
+ * cases:
+ *
+ * 1. New cluster bootstrap:
+ *    For a new Kafka cluster (i.e. it is deployed first time), we would like to start the cluster
+ *    with all the possible supported features finalized immediately. The new cluster will almost
+ *    never be started with an old IBP config that’s less than KAFKA_2_7_IV0. In such a case, the
+ *    controller will start up and notice that the FeatureZNode is absent in the new cluster.
+ *    To handle the requirement, the controller will create a FeatureZNode (with enabled status)
+ *    containing the entire list of supported features as its finalized features.
+ *
+ * 2. Cluster upgrade:
+ *    Imagine there is an existing Kafka cluster with IBP config less than KAFKA_2_7_IV0, but
+ *    the Broker binary has been upgraded to a state where it supports the feature versioning
+ *    system (KIP-584). This means the user is upgrading from an earlier version of the Broker
+ *    binary. In this case, we want to start with no finalized features and allow the user to enable
+ *    them whenever they are ready i.e. in the future whenever the user sets IBP config
+ *    to be greater than or equal to KAFKA_2_7_IV0. The reason is that enabling all the possible
+ *    features immediately after an upgrade could be harmful to the cluster.
+ *    In such a case:
+ *      - Before the Broker upgrade (i.e. IBP config set to less than KAFKA_2_7_IV0), the controller
+ *        will start up and check if the FeatureZNode is absent. If true, then it will react by
+ *        creating a FeatureZNode with disabled status and empty features.
+ *      - After the Broker upgrade (i.e. IBP config set to greater than or equal to KAFKA_2_7_IV0),
+ *        when the controller starts up it will check if the FeatureZNode exists and whether it is
+ *        disabled. In such a case, it won’t upgrade all features immediately. Instead it will just
+ *        switch the FeatureZNode status to enabled status. This lets the user finalize the features
+ *        later.
+ *
+ * 3. Cluster downgrade:
+ *    Imagine that a Kafka cluster exists already and the IBP config is greater than or equal to
+ *    KAFKA_2_7_IV0. Then, the user decided to downgrade the cluster by setting IBP config to a
+ *    value less than KAFKA_2_7_IV0. This means the user is also disabling the feature versioning
+ *    system (KIP-584). In this case, when the controller starts up with the lower IBP config, it
+ *    will switch the FeatureZNode status to disabled with empty features.
+ */
+object FeatureZNodeStatus extends Enumeration {
+  val Disabled, Enabled = Value
+
+  def withNameOpt(value: Int): Option[Value] = {
+    values.find(_.id == value)
+  }
+}
+
+/**
+ * Represents the contents of the ZK node containing finalized feature information.
+ *
+ * @param status     the status of the ZK node
+ * @param features   the cluster-wide finalized features
+ */
+case class FeatureZNode(status: FeatureZNodeStatus.Value, features: Features[FinalizedVersionRange]) {
+}
+
+object FeatureZNode {
+  private val VersionKey = "version"
+  private val StatusKey = "status"
+  private val FeaturesKey = "features"
+
+  // V1 contains 'version', 'status' and 'features' keys.
+  val V1 = 1
+  val CurrentVersion = V1
+
+  def path = "/feature"
+
+  def asJavaMap(scalaMap: Map[String, Map[String, Short]]): util.Map[String, util.Map[String, java.lang.Short]] = {
+    scalaMap
+      .map {
+        case(featureName, versionInfo) => featureName -> versionInfo.map {
+          case(label, version) => label -> java.lang.Short.valueOf(version)
+        }.asJava
+      }.asJava
+  }
+
+  /**
+   * Encodes a FeatureZNode to JSON.
+   *
+   * @param featureZNode   FeatureZNode to be encoded
+   *
+   * @return               JSON representation of the FeatureZNode, as an Array[Byte]
+   */
+  def encode(featureZNode: FeatureZNode): Array[Byte] = {
+    val jsonMap = collection.mutable.Map(
+      VersionKey -> CurrentVersion,
+      StatusKey -> featureZNode.status.id,
+      FeaturesKey -> featureZNode.features.toMap)
+    Json.encodeAsBytes(jsonMap.asJava)
+  }
+
+  /**
+   * Decodes the contents of the feature ZK node from Array[Byte] to a FeatureZNode.
+   *
+   * @param jsonBytes   the contents of the feature ZK node
+   *
+   * @return            the FeatureZNode created from jsonBytes
+   *
+   * @throws IllegalArgumentException   if the Array[Byte] can not be decoded.
+   */
+  def decode(jsonBytes: Array[Byte]): FeatureZNode = {
+    Json.tryParseBytes(jsonBytes) match {
+      case Right(js) =>
+        val featureInfo = js.asJsonObject
+        val version = featureInfo(VersionKey).to[Int]
+        if (version < V1) {
+          throw new IllegalArgumentException(s"Unsupported version: $version of feature information: " +
+            s"${new String(jsonBytes, UTF_8)}")
+        }
+
+        val featuresMap = featureInfo
+          .get(FeaturesKey)
+          .flatMap(_.to[Option[Map[String, Map[String, Int]]]])
+
+        if (featuresMap.isEmpty) {
+          throw new IllegalArgumentException("Features map can not be absent in: " +
+            s"${new String(jsonBytes, UTF_8)}")
+        }
+        val features = asJavaMap(
+          featuresMap
+            .map(theMap => theMap.map {
+              case (featureName, versionInfo) => featureName -> versionInfo.map {
+                case (label, version) => label -> version.asInstanceOf[Short]
+              }
+            }).getOrElse(Map[String, Map[String, Short]]()))
+
+        val statusInt = featureInfo
+          .get(StatusKey)
+          .flatMap(_.to[Option[Int]])
+        if (statusInt.isEmpty) {
+          throw new IllegalArgumentException("Status can not be absent in feature information: " +
+            s"${new String(jsonBytes, UTF_8)}")
+        }
+        val status = FeatureZNodeStatus.withNameOpt(statusInt.get)
+        if (status.isEmpty) {
+          throw new IllegalArgumentException(
+            s"Malformed status: $statusInt found in feature information: ${new String(jsonBytes, UTF_8)}")
+        }
+
+        var finalizedFeatures: Features[FinalizedVersionRange] = null
+        try {
+          finalizedFeatures = fromFinalizedFeaturesMap(features)
+        } catch {
+          case e: Exception => throw new IllegalArgumentException(
+            "Unable to convert to finalized features from map: " + features, e)
+        }
+        FeatureZNode(status.get, finalizedFeatures)
+      case Left(e) =>
+        throw new IllegalArgumentException(s"Failed to parse feature information: " +
+          s"${new String(jsonBytes, UTF_8)}", e)
+    }
+  }
 }
 
 object ZkData {

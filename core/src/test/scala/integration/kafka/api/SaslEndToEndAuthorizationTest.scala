@@ -24,7 +24,7 @@ import org.junit.Assert.{assertEquals, assertTrue}
 import org.scalatest.Assertions.fail
 
 import scala.collection.immutable.List
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
@@ -76,6 +76,6 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
       case e: TopicAuthorizationException => assertTrue(e.unauthorizedTopics.contains(topic))
       case e: GroupAuthorizationException => assertEquals(group, e.groupId)
     }
-    confirmReauthenticationMetrics
+    confirmReauthenticationMetrics()
   }
 }

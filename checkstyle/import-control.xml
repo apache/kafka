@@ -48,6 +48,7 @@
   <allow pkg="org.apache.kafka.common.memory" />
 
   <subpackage name="common">
+    <allow class="org.apache.kafka.clients.consumer.ConsumerRecord" exact-match="true" />
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
     <allow pkg="org.apache.kafka.common.annotation" />
@@ -118,10 +119,13 @@
     <subpackage name="protocol">
       <allow pkg="org.apache.kafka.common.errors" />
       <allow pkg="org.apache.kafka.common.message" />
+      <allow pkg="org.apache.kafka.common.network" />
+      <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="record">
@@ -141,12 +145,16 @@
 
     <subpackage name="requests">
       <allow pkg="org.apache.kafka.common.acl" />
+      <allow pkg="org.apache.kafka.common.feature" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.network" />
+      <allow pkg="org.apache.kafka.common.quota" />
       <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.resource" />
       <allow pkg="org.apache.kafka.common.record" />
+      <!-- for AuthorizableRequestContext interface -->
+      <allow pkg="org.apache.kafka.server.authorizer" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
     </subpackage>
@@ -157,6 +165,10 @@
     </subpackage>
 
     <subpackage name="utils">
+      <allow pkg="org.apache.kafka.common" />
+    </subpackage>
+
+    <subpackage name="quotas">
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
   </subpackage>
@@ -235,10 +247,14 @@
       <allow pkg="org.apache.kafka.connect.json" />
     </subpackage>
 
+    <subpackage name="internals">
+      <allow pkg="com.fasterxml.jackson" />
+    </subpackage>
+
     <subpackage name="perf">
       <allow pkg="com.fasterxml.jackson.databind" />
     </subpackage>
-    
+
     <subpackage name="integration">
       <allow pkg="kafka.admin" />
       <allow pkg="kafka.api" />
@@ -248,6 +264,7 @@
       <allow pkg="kafka.log" />
       <allow pkg="scala" />
       <allow class="kafka.zk.EmbeddedZookeeper"/>
+      <allow pkg="com.fasterxml.jackson" />
     </subpackage>
 
     <subpackage name="test">
@@ -274,17 +291,6 @@
         </subpackage>
       </subpackage>
     </subpackage>
-  </subpackage>
-
-  <subpackage name="jmh">
-    <allow pkg="org.openjdk.jmh.annotations" />
-    <allow pkg="org.openjdk.jmh.runner" />
-    <allow pkg="org.openjdk.jmh.runner.options" />
-    <allow pkg="org.openjdk.jmh.infra" />
-    <allow pkg="org.apache.kafka.common" />
-    <allow pkg="org.apache.kafka.clients" />
-    <allow pkg="org.apache.kafka.streams" />
-    <allow pkg="org.github.jamm" />
   </subpackage>
 
   <subpackage name="log4jappender">
@@ -339,10 +345,28 @@
       </subpackage>
     </subpackage>
 
+    <subpackage name="mirror">
+      <allow pkg="org.apache.kafka.clients.consumer" />
+      <allow pkg="org.apache.kafka.connect.source" />
+      <allow pkg="org.apache.kafka.connect.sink" />
+      <allow pkg="org.apache.kafka.connect.storage" />
+      <allow pkg="org.apache.kafka.connect.connector" />
+      <allow pkg="org.apache.kafka.connect.runtime" />
+      <allow pkg="org.apache.kafka.connect.runtime.distributed" />
+      <allow pkg="org.apache.kafka.connect.util" />
+      <allow pkg="org.apache.kafka.connect.converters" />
+      <allow pkg="net.sourceforge.argparse4j" />
+      <!-- for tests -->
+      <allow pkg="org.apache.kafka.connect.integration" />
+      <allow pkg="org.apache.kafka.connect.mirror" />
+    </subpackage>
+
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.reflections"/>
       <allow pkg="org.reflections.util"/>
+      <allow pkg="javax.crypto"/>
+      <allow pkg="org.eclipse.jetty.util" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -351,11 +375,19 @@
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
+        <subpackage name="resources">
+          <allow pkg="org.apache.log4j" />
+        </subpackage>
       </subpackage>
 
       <subpackage name="isolation">
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.maven.artifact.versioning" />
+        <allow pkg="javax.tools" />
+      </subpackage>
+
+      <subpackage name="distributed">
+        <allow pkg="javax.ws.rs.core" />
       </subpackage>
     </subpackage>
 
@@ -370,6 +402,7 @@
     <subpackage name="storage">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.common.serialization" />
+      <allow pkg="javax.crypto.spec"/>
     </subpackage>
 
     <subpackage name="util">
@@ -384,6 +417,7 @@
         <allow pkg="kafka.utils" />
         <allow class="javax.servlet.http.HttpServletResponse" />
         <allow class="javax.ws.rs.core.Response" />
+        <allow pkg="com.fasterxml.jackson.core.type" />
       </subpackage>
     </subpackage>
 

@@ -18,6 +18,7 @@
   "type": "request",
   "name": "WriteTxnMarkersRequest",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Markers", "type": "[]WritableTxnMarker", "versions": "0+",
       "about": "The transaction markers to be written.", "fields": [

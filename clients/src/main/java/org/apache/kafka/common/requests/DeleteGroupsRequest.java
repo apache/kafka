@@ -61,26 +61,18 @@ public class DeleteGroupsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-
-        switch (version()) {
-            case 0:
-            case 1:
-                DeletableGroupResultCollection groupResults = new DeletableGroupResultCollection();
-                for (String groupId : data.groupsNames()) {
-                    groupResults.add(new DeletableGroupResult()
-                                         .setGroupId(groupId)
-                                         .setErrorCode(error.code()));
-                }
-
-                return new DeleteGroupsResponse(
-                    new DeleteGroupsResponseData()
-                        .setResults(groupResults)
-                        .setThrottleTimeMs(throttleTimeMs)
-                );
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    version(), ApiKeys.DELETE_GROUPS.name, ApiKeys.DELETE_GROUPS.latestVersion()));
+        DeletableGroupResultCollection groupResults = new DeletableGroupResultCollection();
+        for (String groupId : data.groupsNames()) {
+            groupResults.add(new DeletableGroupResult()
+                                 .setGroupId(groupId)
+                                 .setErrorCode(error.code()));
         }
+
+        return new DeleteGroupsResponse(
+            new DeleteGroupsResponseData()
+                .setResults(groupResults)
+                .setThrottleTimeMs(throttleTimeMs)
+        );
     }
 
     public static DeleteGroupsRequest parse(ByteBuffer buffer, short version) {

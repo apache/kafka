@@ -35,7 +35,7 @@ public class ConnectorHealth {
                            ConnectorState connectorState,
                            Map<Integer, TaskState> tasks,
                            ConnectorType type) {
-        if (name != null && !name.trim().isEmpty()) {
+        if (name == null || name.trim().isEmpty()) {
             throw new IllegalArgumentException("Connector name is required");
         }
         Objects.requireNonNull(connectorState, "connectorState can't be null");
@@ -83,4 +83,31 @@ public class ConnectorHealth {
         return type;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+        ConnectorHealth that = (ConnectorHealth) o;
+        return name.equals(that.name)
+            && connectorState.equals(that.connectorState)
+            && tasks.equals(that.tasks)
+            && type == that.type;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, connectorState, tasks, type);
+    }
+
+    @Override
+    public String toString() {
+        return "ConnectorHealth{"
+            + "name='" + name + '\''
+            + ", connectorState=" + connectorState
+            + ", tasks=" + tasks
+            + ", type=" + type
+            + '}';
+    }
 }

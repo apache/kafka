@@ -19,6 +19,7 @@ package kafka.admin
 import java.util
 import java.util.Properties
 
+import kafka.controller.ReplicaAssignment
 import kafka.log._
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
@@ -37,7 +38,7 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq, immutable}
 
 class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
@@ -87,7 +88,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
                          1 -> List(1, 2, 3))
     adminZkClient.createTopicWithAssignment("test", topicConfig, assignment)
     val found = zkClient.getPartitionAssignmentForTopics(Set("test"))
-    assertEquals(assignment, found("test"))
+    assertEquals(assignment.map { case (k, v) => k -> ReplicaAssignment(v, List(), List()) }, found("test"))
   }
 
   @Test
@@ -159,7 +160,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
     val zkMock: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
     EasyMock.expect(zkMock.topicExists(topic)).andReturn(false)
-    EasyMock.expect(zkMock.getAllTopicsInCluster).andReturn(Set("some.topic", topic, "some.other.topic"))
+    EasyMock.expect(zkMock.getAllTopicsInCluster(false)).andReturn(Set("some.topic", topic, "some.other.topic"))
     EasyMock.replay(zkMock)
     val adminZkClient = new AdminZkClient(zkMock)
 
@@ -179,14 +180,15 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       catch { case _: TopicExistsException => () }
       val (_, partitionAssignment) = zkClient.getPartitionAssignmentForTopics(Set(topic)).head
       assertEquals(3, partitionAssignment.size)
-      partitionAssignment.foreach { case (partition, replicas) =>
-        assertEquals(s"Unexpected replication factor for $partition", 1, replicas.size)
+      partitionAssignment.foreach { case (partition, partitionReplicaAssignment) =>
+        assertEquals(s"Unexpected replication factor for $partition",
+          1, partitionReplicaAssignment.replicas.size)
       }
       val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
       assertEquals(props, savedProps)
     }
 
-    TestUtils.assertConcurrent("Concurrent topic creation failed", Seq(() => createTopic, () => createTopic),
+    TestUtils.assertConcurrent("Concurrent topic creation failed", Seq(() => createTopic(), () => createTopic()),
       JTestUtils.DEFAULT_MAX_WAIT_MS.toInt)
   }
 

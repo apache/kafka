@@ -20,20 +20,20 @@ import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Itera
 import java.util.Map.Entry
 
 import kafka.utils.ShutdownableThread
-import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
+import org.apache.kafka.clients.{ClientRequest, ClientResponse, KafkaClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
  */
 abstract class InterBrokerSendThread(name: String,
-                                     networkClient: NetworkClient,
+                                     networkClient: KafkaClient,
                                      time: Time,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
@@ -57,8 +57,13 @@ abstract class InterBrokerSendThread(name: String,
     generateRequests().foreach { request =>
       val completionHandler = request.handler
       unsentRequests.put(request.destination,
-        networkClient.newClientRequest(request.destination.idString, request.request, now, true,
-          requestTimeoutMs, completionHandler))
+        networkClient.newClientRequest(
+          request.destination.idString,
+          request.request,
+          now,
+          true,
+          requestTimeoutMs,
+          completionHandler))
     }
 
     try {
@@ -138,7 +143,8 @@ abstract class InterBrokerSendThread(name: String,
   def wakeup(): Unit = networkClient.wakeup()
 }
 
-case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest],
+case class RequestAndCompletionHandler(destination: Node,
+                                       request: AbstractRequest.Builder[_ <: AbstractRequest],
                                        handler: RequestCompletionHandler)
 
 private class UnsentRequests {

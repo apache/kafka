@@ -17,7 +17,9 @@
   "apiKey": 44,
   "type": "response",
   "name": "IncrementalAlterConfigsResponse",
-  "validVersions": "0",
+  // Version 1 is the first flexible version.
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

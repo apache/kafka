@@ -23,6 +23,8 @@ import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequest
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -33,14 +35,20 @@ import java.util.Optional;
 
 public class OffsetFetchRequest extends AbstractRequest {
 
+    private static final Logger log = LoggerFactory.getLogger(OffsetFetchRequest.class);
+
     private static final List<OffsetFetchRequestTopic> ALL_TOPIC_PARTITIONS = null;
     public final OffsetFetchRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
 
         public final OffsetFetchRequestData data;
+        private final boolean throwOnFetchStableOffsetsUnsupported;
 
-        public Builder(String groupId, List<TopicPartition> partitions) {
+        public Builder(String groupId,
+                       boolean requireStable,
+                       List<TopicPartition> partitions,
+                       boolean throwOnFetchStableOffsetsUnsupported) {
             super(ApiKeys.OFFSET_FETCH);
 
             final List<OffsetFetchRequestTopic> topics;
@@ -61,22 +69,35 @@ public class OffsetFetchRequest extends AbstractRequest {
 
             this.data = new OffsetFetchRequestData()
                             .setGroupId(groupId)
+                            .setRequireStable(requireStable)
                             .setTopics(topics);
+            this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 
-        public static Builder allTopicPartitions(String groupId) {
-            return new Builder(groupId, null);
-        }
-
-        public boolean isAllTopicPartitions() {
+        boolean isAllTopicPartitions() {
             return this.data.topics() == ALL_TOPIC_PARTITIONS;
         }
 
         @Override
         public OffsetFetchRequest build(short version) {
-            if (isAllTopicPartitions() && version < 2)
+            if (isAllTopicPartitions() && version < 2) {
                 throw new UnsupportedVersionException("The broker only supports OffsetFetchRequest " +
-                        "v" + version + ", but we need v2 or newer to request all topic partitions.");
+                    "v" + version + ", but we need v2 or newer to request all topic partitions.");
+            }
+
+            if (data.requireStable() && version < 7) {
+                if (throwOnFetchStableOffsetsUnsupported) {
+                    throw new UnsupportedVersionException("Broker unexpectedly " +
+                        "doesn't support requireStable flag on version " + version);
+                } else {
+                    log.trace("Fallback the requireStable flag to false as broker " +
+                                  "only supports OffsetFetchRequest version {}. Need " +
+                                  "v7 or newer to enable this feature", version);
+
+                    return new OffsetFetchRequest(data.setRequireStable(false), version);
+                }
+            }
+
             return new OffsetFetchRequest(data, version);
         }
 
@@ -103,6 +124,10 @@ public class OffsetFetchRequest extends AbstractRequest {
         return data.groupId();
     }
 
+    public boolean requireStable() {
+        return data.requireStable();
+    }
+
     private OffsetFetchRequest(OffsetFetchRequestData data, short version) {
         super(ApiKeys.OFFSET_FETCH, version);
         this.data = data;
@@ -118,10 +143,8 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public OffsetFetchResponse getErrorResponse(int throttleTimeMs, Errors error) {
-        short versionId = version();
-
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responsePartitions = new HashMap<>();
-        if (versionId < 2) {
+        if (version() < 2) {
             OffsetFetchResponse.PartitionData partitionError = new OffsetFetchResponse.PartitionData(
                     OffsetFetchResponse.INVALID_OFFSET,
                     Optional.empty(),
@@ -136,18 +159,10 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
         }
 
-        switch (versionId) {
-            case 0:
-            case 1:
-            case 2:
-                return new OffsetFetchResponse(error, responsePartitions);
-            case 3:
-            case 4:
-            case 5:
-                return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.OFFSET_FETCH.latestVersion()));
+        if (version() >= 3) {
+            return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
+        } else {
+            return new OffsetFetchResponse(error, responsePartitions);
         }
     }
 

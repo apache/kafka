@@ -106,6 +106,15 @@ public class LazyDownConversionRecords implements BaseRecords {
         return result;
     }
 
+    @Override
+    public String toString() {
+        return "LazyDownConversionRecords(size=" + sizeInBytes +
+                ", underlying=" + records +
+                ", toMagic=" + toMagic +
+                ", firstOffset=" + firstOffset +
+                ")";
+    }
+
     public java.util.Iterator<ConvertedRecords<?>> iterator(long maximumReadSize) {
         // We typically expect only one iterator instance to be created, so null out the first converted batch after
         // first use to make it available for GC.

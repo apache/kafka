@@ -38,7 +38,7 @@ class ShutdownableThreadTest {
     }
     val latch = new CountDownLatch(1)
     val thread = new ShutdownableThread("shutdownable-thread-test") {
-      override def doWork: Unit = {
+      override def doWork(): Unit = {
         latch.countDown()
         throw new FatalExitError
       }

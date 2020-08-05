@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -42,6 +43,7 @@ import java.util.Set;
 
 public class StreamsStandByReplicaTest {
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println("StreamsStandByReplicaTest are expecting two parameters: " +
@@ -147,16 +149,17 @@ public class StreamsStandByReplicaTest {
         System.out.println("Start Kafka Streams");
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("streams-shutdown-hook", () -> {
             shutdown(streams);
             System.out.println("Shut down streams now");
-        }));
+        });
     }
 
     private static void shutdown(final KafkaStreams streams) {
         streams.close(Duration.ofSeconds(10));
     }
 
+    @SuppressWarnings("deprecation") // TODO revisit in follow up PR
     private static boolean confirmCorrectConfigs(final Properties properties) {
         return properties.containsKey(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&

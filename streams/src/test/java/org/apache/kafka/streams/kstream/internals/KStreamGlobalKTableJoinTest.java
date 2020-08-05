@@ -27,7 +27,7 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -36,6 +36,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Properties;
 import java.util.Set;
@@ -86,30 +88,30 @@ public class KStreamGlobalKTableJoinTest {
     }
 
     private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey) {
-        final ConsumerRecordFactory<Integer, String> recordFactory =
-            new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L, 1L);
+        final TestInputTopic<Integer, String> inputTopic =
+            driver.createInputTopic(streamTopic, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ofMillis(1L));
         for (int i = 0; i < messageCount; i++) {
             String value = valuePrefix + expectedKeys[i];
             if (includeForeignKey) {
                 value = value + ",FKey" + expectedKeys[i];
             }
-            driver.pipeInput(recordFactory.create(streamTopic, expectedKeys[i], value));
+            inputTopic.pipeInput(expectedKeys[i], value);
         }
     }
 
     private void pushToGlobalTable(final int messageCount, final String valuePrefix) {
-        final ConsumerRecordFactory<String, String> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final TestInputTopic<String, String> inputTopic =
+            driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
         for (int i = 0; i < messageCount; i++) {
-            driver.pipeInput(recordFactory.create(globalTableTopic, "FKey" + expectedKeys[i], valuePrefix + expectedKeys[i]));
+            inputTopic.pipeInput("FKey" + expectedKeys[i], valuePrefix + expectedKeys[i]);
         }
     }
 
     private void pushNullValueToGlobalTable(final int messageCount) {
-        final ConsumerRecordFactory<String, String> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final TestInputTopic<String, String> inputTopic =
+            driver.createInputTopic(globalTableTopic, new StringSerializer(), new StringSerializer());
         for (int i = 0; i < messageCount; i++) {
-            driver.pipeInput(recordFactory.create(globalTableTopic, "FKey" + expectedKeys[i], (String) null));
+            inputTopic.pipeInput("FKey" + expectedKeys[i], (String) null);
         }
     }
 
