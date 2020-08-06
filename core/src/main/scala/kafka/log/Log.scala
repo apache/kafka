@@ -2219,7 +2219,7 @@ class Log(@volatile private var _dir: File,
         // removing the deleted segment, we should force materialization of the iterator here, so that results of the
         // iteration remain valid and deterministic.
         val toDelete = segments.toList
-        info(s"${reason.logReason(this, toDelete)}")
+        reason.logReason(this, toDelete)
         toDelete.foreach { segment =>
           this.segments.remove(segment.baseOffset)
         }
