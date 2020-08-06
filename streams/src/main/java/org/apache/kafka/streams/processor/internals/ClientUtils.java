@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -46,24 +45,18 @@ import java.util.stream.Collectors;
 public class ClientUtils {
     private static final Logger LOG = LoggerFactory.getLogger(ClientUtils.class);
 
-    public static class QuietStreamsConfig extends StreamsConfig {
+    public static final class QuietStreamsConfig extends StreamsConfig {
         public QuietStreamsConfig(final Map<?, ?> props) {
             super(props, false);
         }
     }
 
-    public static class QuietConsumerConfig extends ConsumerConfig {
+    public static final class QuietConsumerConfig extends ConsumerConfig {
         public QuietConsumerConfig(final Map<String, Object> props) {
             super(props, false);
         }
     }
 
-    public static final class QuietAdminClientConfig extends AdminClientConfig {
-        QuietAdminClientConfig(final StreamsConfig streamsConfig) {
-            // If you just want to look up admin configs, you don't care about the clientId
-            super(streamsConfig.getAdminConfigs("dummy"), false);
-        }
-    }
 
     // currently admin client is shared among all threads
     public static String getSharedAdminClientId(final String clientId) {
@@ -141,8 +134,8 @@ public class ClientUtils {
     public static KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> fetchEndOffsetsFuture(final Collection<TopicPartition> partitions,
                                                                                                 final Admin adminClient) {
         return adminClient.listOffsets(
-            partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest())))
-            .all();
+            partitions.stream().collect(Collectors.toMap(Function.identity(), tp -> OffsetSpec.latest()))
+        ).all();
     }
 
     /**
