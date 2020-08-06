@@ -65,9 +65,9 @@ public class UpdateFeaturesRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMsIgnored, Throwable e) {
         final ApiError apiError = ApiError.fromThrowable(e);
-        UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
+        final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
         for (FeatureUpdateKey update : this.data.featureUpdates().valuesSet()) {
-            UpdatableFeatureResult result = new UpdatableFeatureResult()
+            final UpdatableFeatureResult result = new UpdatableFeatureResult()
                 .setFeature(update.feature())
                 .setErrorCode(apiError.error().code())
                 .setErrorMessage(apiError.message());

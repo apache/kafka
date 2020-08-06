@@ -35,7 +35,7 @@ import scala.jdk.CollectionConverters._
  *    in the closed range: [1, latest_min_version_level - 1] get deprecated by the controller logic
  *    that applies this map to persistent finalized feature state in ZK (this mutation happens
  *    during controller election and during finalized feature updates via the
- *    ApiKeys.UPDATE_FINALIZED_FEATURES api). This will automatically mean external clients of Kafka
+ *    ApiKeys.UPDATE_FEATURES api). This will automatically mean external clients of Kafka
  *    would need to stop using the finalized min version levels that have been deprecated.
  *
  * This class also provides APIs to check for incompatibilities between the features supported by
@@ -88,7 +88,7 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
   /**
    * Returns the set of feature names found to be incompatible.
    * A feature incompatibility is a version mismatch between the latest feature supported by the
-   * Broker, and the provided finalized feature. This can happen because a provided finalized
+   * Broker, and a provided finalized feature. This can happen because a provided finalized
    * feature:
    *  1) Does not exist in the Broker (i.e. it is unknown to the Broker).
    *           [OR]
