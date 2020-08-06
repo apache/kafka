@@ -388,8 +388,9 @@ public class EosTestDriver extends SmokeTestUtil {
             final Iterator<ConsumerRecord<byte[], byte[]>> expectedRecord = expectedRecordsForPartition.iterator();
             RuntimeException exception = null;
             for (final ConsumerRecord<byte[], byte[]> receivedRecord : receivedRecordsForPartition) {
-                if (!expectedRecord.hasNext())
+                if (!expectedRecord.hasNext()) {
                     exception = new RuntimeException("Result verification failed for " + receivedRecord + " since there's no more expected record");
+                }
 
                 final ConsumerRecord<byte[], byte[]> expected = expectedRecord.next();
 
@@ -403,8 +404,9 @@ public class EosTestDriver extends SmokeTestUtil {
                 }
             }
 
-            if (exception != null)
+            if (exception != null) {
                 throw exception;
+            }
         }
     }
 

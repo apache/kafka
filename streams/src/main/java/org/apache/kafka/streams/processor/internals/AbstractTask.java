@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +37,6 @@ public abstract class AbstractTask implements Task {
 
     /**
      * If the checkpoint has not been loaded from the file yet (null), then we should not overwrite the checkpoint;
-     * If the checkpoint has been loaded form the file and has never been re-written (empty map), then we should re-write the checkpoint;
      * If the checkpoint has been loaded from the file but has not been updated since, then we do not need to checkpoint;
      * If the checkpoint has been loaded from the file and has been updated since, then we could overwrite the checkpoint;
      */
@@ -64,7 +62,7 @@ public abstract class AbstractTask implements Task {
     protected void initializeCheckpoint() {
         // we will delete the local checkpoint file after registering the state stores and loading them into the
         // state manager, therefore we should initialize the snapshot as empty to indicate over-write checkpoint needed
-        offsetSnapshotSinceLastFlush = Collections.emptyMap();
+        offsetSnapshotSinceLastFlush = stateMgr.changelogOffsets();
     }
 
     /**

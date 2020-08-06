@@ -66,6 +66,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -205,9 +206,9 @@ public class StandbyTaskTest {
     public void shouldFlushAndCheckpointStateManagerOnCommit() {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
         stateManager.flush();
-        EasyMock.expectLastCall().times(2);
+        EasyMock.expectLastCall();
         stateManager.checkpoint();
-        EasyMock.expectLastCall().times(2);
+        EasyMock.expectLastCall();
         EasyMock.expect(stateManager.changelogOffsets())
                 .andReturn(Collections.singletonMap(partition, 50L))
                 .andReturn(Collections.singletonMap(partition, 11000L))
@@ -218,7 +219,7 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
         task.prepareCommit();
-        task.postCommit(false);  // this should checkpoint
+        task.postCommit(false);  // this should not checkpoint
 
         task.prepareCommit();
         task.postCommit(false);  // this should checkpoint
@@ -290,7 +291,8 @@ public class StandbyTaskTest {
         stateManager.checkpoint();
         EasyMock.expectLastCall();
         EasyMock.expect(stateManager.changelogOffsets())
-                .andReturn(Collections.singletonMap(partition, 50L));
+                .andReturn(Collections.singletonMap(partition, 50L))
+                .andReturn(Collections.singletonMap(partition, 60L));
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition)).anyTimes();
         EasyMock.replay(stateManager);
         final MetricName metricName = setupCloseTaskMetric();
@@ -326,7 +328,8 @@ public class StandbyTaskTest {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition)).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets())
             .andReturn(Collections.singletonMap(partition, 50L))
-            .andReturn(Collections.singletonMap(partition, 60L)).anyTimes();
+            .andReturn(Collections.singletonMap(partition, 50L))
+            .andReturn(Collections.singletonMap(partition, 10100L)).anyTimes();
         stateManager.flush();
         EasyMock.expectLastCall();
         stateManager.checkpoint();
@@ -336,10 +339,10 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        // need to commit if we've just initialized, meaning there's no checkpoint file
-        assertTrue(task.commitNeeded());
+        // no need to commit if we've just initialized
+        assertFalse(task.commitNeeded());
 
-        // could commit if the offset advanced
+        // could commit if the offset advanced beyond threshold
         assertTrue(task.commitNeeded());
 
         task.prepareCommit();

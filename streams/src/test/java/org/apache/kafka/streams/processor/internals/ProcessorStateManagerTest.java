@@ -412,7 +412,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
-            assertFalse(checkpointFile.exists());
+            assertTrue(checkpointFile.exists());
             assertEquals(mkSet(
                 persistentStorePartition,
                 persistentStoreTwoPartition,

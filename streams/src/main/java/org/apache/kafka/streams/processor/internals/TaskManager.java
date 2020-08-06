@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -250,9 +252,10 @@ public class TaskManager {
         final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions = new LinkedHashMap<>();
         final Map<TaskId, Set<TopicPartition>> activeTasksToCreate = new HashMap<>(activeTasks);
         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate = new HashMap<>(standbyTasks);
-        final List<Task> tasksToRecycle = new LinkedList<>();
-        final List<Task> tasksToCloseClean = new LinkedList<>();
-        final List<Task> tasksToCloseDirty = new LinkedList<>();
+        final Comparator<Task> byId = Comparator.comparing(Task::id);
+        final Set<Task> tasksToRecycle = new TreeSet<>(byId);
+        final Set<Task> tasksToCloseClean = new TreeSet<>(byId);
+        final Set<Task> tasksToCloseDirty = new TreeSet<>(byId);
 
         // first rectify all existing tasks
         for (final Task task : tasks.values()) {
@@ -274,8 +277,6 @@ public class TaskManager {
         handleCloseAndRecycle(tasksToRecycle, tasksToCloseClean, tasksToCloseDirty, activeTasksToCreate, standbyTasksToCreate, taskCloseExceptions);
 
         if (!taskCloseExceptions.isEmpty()) {
-            log.error("Hit exceptions while closing / recycling tasks: {}", taskCloseExceptions);
-
             for (final Map.Entry<TaskId, RuntimeException> entry : taskCloseExceptions.entrySet()) {
                 if (!(entry.getValue() instanceof TaskMigratedException)) {
                     if (entry.getValue() instanceof KafkaException) {
@@ -308,9 +309,9 @@ public class TaskManager {
         }
     }
 
-    private void handleCloseAndRecycle(final List<Task> tasksToRecycle,
-                                       final List<Task> tasksToCloseClean,
-                                       final List<Task> tasksToCloseDirty,
+    private void handleCloseAndRecycle(final Set<Task> tasksToRecycle,
+                                       final Set<Task> tasksToCloseClean,
+                                       final Set<Task> tasksToCloseDirty,
                                        final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                        final LinkedHashMap<TaskId, RuntimeException> taskCloseExceptions) {
@@ -348,53 +349,50 @@ public class TaskManager {
                         "Failed to checkpoint task %s. Attempting to close remaining tasks before re-throwing:",
                         task.id());
                 log.error(uncleanMessage, e);
-                taskCloseExceptions.put(task.id(), e);
+                taskCloseExceptions.putIfAbsent(task.id(), e);
                 // We've already recorded the exception (which is the point of clean).
                 // Now, we should go ahead and complete the close because a half-closed task is no good to anyone.
                 tasksToCloseDirty.add(task);
             }
         }
 
+        tasksToCloseClean.removeAll(tasksToCloseDirty);
         for (final Task task : tasksToCloseClean) {
             try {
-                if (!tasksToCloseDirty.contains(task)) {
-                    completeTaskCloseClean(task);
-                    cleanUpTaskProducer(task, taskCloseExceptions);
-                    tasks.remove(task.id());
-                }
+                completeTaskCloseClean(task);
+                cleanUpTaskProducer(task, taskCloseExceptions);
+                tasks.remove(task.id());
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
                         "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
                         task.id());
                 log.error(uncleanMessage, e);
-                taskCloseExceptions.put(task.id(), e);
+                taskCloseExceptions.putIfAbsent(task.id(), e);
                 tasksToCloseDirty.add(task);
             }
         }
 
+        tasksToRecycle.removeAll(tasksToCloseDirty);
         for (final Task task : tasksToRecycle) {
             final Task newTask;
             try {
-                if (!tasksToCloseDirty.contains(task)) {
-                    if (task.isActive()) {
-                        final Set<TopicPartition> partitions = standbyTasksToCreate.remove(task.id());
-                        newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) task, partitions);
-                        cleanUpTaskProducer(task, taskCloseExceptions);
-                    } else {
-                        final Set<TopicPartition> partitions = activeTasksToCreate.remove(task.id());
-                        newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) task, partitions, mainConsumer);
-                    }
-                    tasks.remove(task.id());
-                    addNewTask(newTask);
+                if (task.isActive()) {
+                    final Set<TopicPartition> partitions = standbyTasksToCreate.remove(task.id());
+                    newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) task, partitions);
+                    cleanUpTaskProducer(task, taskCloseExceptions);
+                } else {
+                    final Set<TopicPartition> partitions = activeTasksToCreate.remove(task.id());
+                    newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) task, partitions, mainConsumer);
                 }
+                tasks.remove(task.id());
+                addNewTask(newTask);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
                 log.error(uncleanMessage, e);
-                taskCloseExceptions.put(task.id(), e);
+                taskCloseExceptions.putIfAbsent(task.id(), e);
                 tasksToCloseDirty.add(task);
             }
         }
-
 
         // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
@@ -513,7 +511,7 @@ public class TaskManager {
         final Set<TopicPartition> remainingRevokedPartitions = new HashSet<>(revokedPartitions);
 
         final Set<Task> revokedActiveTasks = new HashSet<>();
-        final Set<Task> nonRevokedActiveTasks = new HashSet<>();
+        final Set<Task> commitNeededActiveTasks = new HashSet<>();
         final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> consumedOffsetsPerTask = new HashMap<>();
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
@@ -524,7 +522,7 @@ public class TaskManager {
                 revokedActiveTasks.add(task);
                 remainingRevokedPartitions.removeAll(task.inputPartitions());
             } else if (task.commitNeeded()) {
-                nonRevokedActiveTasks.add(task);
+                commitNeededActiveTasks.add(task);
             }
         }
 
@@ -536,10 +534,10 @@ public class TaskManager {
 
         prepareCommitAndAddOffsetsToMap(revokedActiveTasks, consumedOffsetsPerTask);
 
-        // if we need to commit any task then we just commit all of them
+        // if we need to commit any revoking task then we just commit all of those needed committing together
         final boolean shouldCommitAdditionalTasks = !consumedOffsetsPerTask.isEmpty();
         if (shouldCommitAdditionalTasks) {
-            prepareCommitAndAddOffsetsToMap(nonRevokedActiveTasks, consumedOffsetsPerTask);
+            prepareCommitAndAddOffsetsToMap(commitNeededActiveTasks, consumedOffsetsPerTask);
         }
 
         // even if commit failed, we should still continue and complete suspending those tasks,
@@ -565,7 +563,7 @@ public class TaskManager {
             }
 
             if (shouldCommitAdditionalTasks) {
-                for (final Task task : nonRevokedActiveTasks) {
+                for (final Task task : commitNeededActiveTasks) {
                     try {
                         // for non-revoking active tasks, we should not enforce checkpoint
                         // since if it is EOS enabled, no checkpoint should be written while

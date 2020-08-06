@@ -268,7 +268,9 @@ public class ProcessorStateManager implements StateManager {
                 log.warn("Some loaded checkpoint offsets cannot find their corresponding state stores: {}", loadedCheckpoints);
             }
 
-            checkpointFile.delete();
+            if (eosEnabled) {
+                checkpointFile.delete();
+            }
         } catch (final TaskCorruptedException e) {
             throw e;
         } catch (final IOException | RuntimeException e) {
@@ -486,7 +488,9 @@ public class ProcessorStateManager implements StateManager {
                             firstException = exception;
                         } else {
                             firstException = new ProcessorStateException(
-                                    format("%sFailed to flush cache of store %s", logPrefix, store.name()), exception);
+                                format("%sFailed to flush cache of store %s", logPrefix, store.name()),
+                                exception
+                            );
                         }
                     }
                     log.error("Failed to flush cache of store {}: ", store.name(), exception);
