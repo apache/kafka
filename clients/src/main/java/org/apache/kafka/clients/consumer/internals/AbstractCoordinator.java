@@ -50,6 +50,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -157,10 +158,9 @@ public abstract class AbstractCoordinator implements Closeable {
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
-        this.dynamicConfig = new DynamicConsumerConfig(client, this, rebalanceConfig, time, logContext);
-        if (!rebalanceConfig.enableDynamicConfig()) {
-            dynamicConfig.disable();
-        } 
+        this.dynamicConfig = new DynamicConsumerConfig(
+            client, rebalanceConfig, time, logContext
+        );
     }
 
     /**
@@ -362,11 +362,8 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         startHeartbeatThreadIfNeeded();
-        if (!dynamicConfig.shouldDisable()) {
-            // This will only return a future and block for it if this is before the first JoinGroupRequest being sent
-            RequestFuture<ClientResponse> configsFuture = dynamicConfig.maybeFetchInitialConfigs();
-            dynamicConfig.maybeWaitForInitialConfigs(configsFuture);
-        }
+        // This will only fetch configs and block for them if this is before the first JoinGroupRequest
+        dynamicConfig.maybeFetchInitialConfigs();
         return joinGroupIfNeeded(timer);
     }
 
@@ -1332,18 +1329,33 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         client.pollNoWakeup();
                         long now = time.milliseconds();
-                        if (!dynamicConfig.shouldDisable()) {
-                            dynamicConfig.maybeFetchConfigs(now);
-                            if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate() && joinFuture == null) {
-                                // Need to rejoin group so that the coordinator changes the session timeout in this 
-                                // group member's metadata
-                                // We also need to reset timers in HB thread with new interval and timeout.
-                                // 1. The heartbeat interval timer is reset below when sentHeartbeat is called.
-                                // 2. The session timeout timer is reset below when receiveHeartbeat is called.
-                                // These methods will use the dynamically updated values in rebalanceConfig to reset the timers.
-                                rejoinNeeded = true;
-                            }
-                        } 
+                        RequestFuture<ClientResponse> configsFuture = dynamicConfig.maybeFetchConfigs(now);
+                        if (configsFuture != null) {
+                            configsFuture.addListener(new RequestFutureListener<ClientResponse>() {
+                                @Override
+                                public void onSuccess(ClientResponse resp) {
+                                    synchronized (AbstractCoordinator.this) {
+                                        dynamicConfig.handleDescribeConfigsResponse((DescribeConfigsResponse) resp.responseBody());
+                                    }
+                                }
+                                @Override
+                                public void onFailure(RuntimeException e) {
+                                    synchronized (AbstractCoordinator.this) {
+                                        dynamicConfig.handleFailedConfigsResponse();
+                                    }
+                                }
+                            });
+                        }
+
+                        if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate() && joinFuture == null) {
+                            // Need to rejoin group so that the coordinator changes the session timeout in this 
+                            // group member's metadata
+                            // Also need to reset timers in HB thread with new interval and timeout.
+                            // 1. The heartbeat interval timer is reset below when sentHeartbeat is called.
+                            // 2. The session timeout timer is reset below when receiveHeartbeat is called.
+                            // These methods will use the dynamically updated values in rebalanceConfig to reset the timers.
+                            rejoinNeeded = true;
+                        }
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null || lookupCoordinator().failed())

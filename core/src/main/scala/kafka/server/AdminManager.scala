@@ -440,19 +440,26 @@ class AdminManager(val config: KafkaConfig,
             val overlayedProps = new Properties()
             overlayedProps.putAll(defaultProps)
             overlayedProps.putAll(clientProps)
-            val configMap = overlayedProps.stringPropertyNames.asScala
-              .filter(ClientConfigs.isClientConfig).map{key => (key -> overlayedProps.getProperty(key))}.toMap
+            val configMap = overlayedProps.asScala.flatMap { case (key, value) =>
+              if (ClientConfigs.isClientConfig(key)) {
+                Some(key.toString -> value.toString)
+              } else {
+                None
+              }
+            }.toMap
 
             // Resort to default dynamic client config if configs are not specified for the client-id
-            if (clientId.nonEmpty) {
-              createResponseConfig(configMap,
-                createClientConfigEntry(clientId, clientProps, defaultProps, perClientIdConfig = true, 
-                  includeSynonyms, includeDocumentation))
-            } else {
-              createResponseConfig(configMap,
-                createClientConfigEntry(clientId, clientProps, defaultProps, perClientIdConfig = false, 
-                  includeSynonyms, includeDocumentation))
-            }
+            createResponseConfig(
+              configMap,
+              createClientConfigEntry(
+                clientId, 
+                clientProps, 
+                defaultProps, 
+                perClientIdConfig = clientId.nonEmpty, 
+                includeSynonyms, 
+                includeDocumentation
+              )
+            )
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }
         configResult.setResourceName(resource.resourceName).setResourceType(resource.resourceType)
@@ -620,13 +627,11 @@ class AdminManager(val config: KafkaConfig,
               alterLogLevelConfigs(alterConfigOps)
             resource -> ApiError.NONE
           case ConfigResource.Type.CLIENT =>
-            val (configType, configKeys) = (ConfigType.Client, DynamicConfig.Client.configKeys)
-
             val entityName = if (resource.name == null || resource.name.isEmpty) ConfigEntityName.Default else resource.name
-            val configProps = adminZkClient.fetchEntityConfig(configType, entityName)
+            val configProps = adminZkClient.fetchEntityConfig(ConfigType.Client, entityName)
             info(s"Config: $configProps Entity: $entityName")
-            prepareIncrementalConfigs(alterConfigOps, configProps, configKeys.asScala)
-            adminZkClient.changeConfigs(configType, entityName, configProps)
+            prepareIncrementalConfigs(alterConfigOps, configProps, DynamicConfig.Client.configKeys.asScala)
+            adminZkClient.changeConfigs(ConfigType.Client, entityName, configProps)
             resource -> ApiError.NONE
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")

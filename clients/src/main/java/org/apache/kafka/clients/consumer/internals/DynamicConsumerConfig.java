@@ -32,15 +32,12 @@ import org.slf4j.Logger;
 /**
  * Handles the request and response of a dynamic client configuration update for the consumer
  */
-public class DynamicConsumerConfig extends DynamicClientConfigUpdater {
+public class DynamicConsumerConfig {
     /* Client to use */
     private ConsumerNetworkClient client;
 
     /* Configs to update */
     private GroupRebalanceConfig rebalanceConfig;
-
-    /* Object to synchronize on when response is recieved */
-    Object lock;
 
     /* Logger to use */
     private Logger log;
@@ -51,59 +48,43 @@ public class DynamicConsumerConfig extends DynamicClientConfigUpdater {
     /* Dynamic Configs recieved from the previous DescribeConfigsResponse */
     private Map<String, String> previousDynamicConfigs;
 
-    /* Indicates if we have recieved the initial dynamic configurations */
-    private boolean initialConfigsFetched;
+    private final DynamicClientConfigUpdater updater;
 
-    public DynamicConsumerConfig(ConsumerNetworkClient client, Object lock, GroupRebalanceConfig config, Time time, LogContext logContext) {
-        super(time);
+    public DynamicConsumerConfig(ConsumerNetworkClient client, GroupRebalanceConfig config, Time time, LogContext logContext) {
         this.rebalanceConfig = config;
+        this.updater = new DynamicClientConfigUpdater(rebalanceConfig.dynamicConfigExpireMs, rebalanceConfig.dynamicConfigEnabled, time);
         this.log = logContext.logger(DynamicConsumerConfig.class);
         this.client = client;
-        this.lock = lock;
         this.clientId = rebalanceConfig.clientId;
         this.previousDynamicConfigs = new HashMap<>();
-        this.initialConfigsFetched = false;
     }
     
     /**
-     * Send a {@link DescribeConfigsRequest} to a node specifically for dynamic client configurations
-     *
-     * @return {@link RequestFuture} 
-     */ 
-    public RequestFuture<ClientResponse> maybeFetchInitialConfigs() {
-        if (!initialConfigsFetched) {
-            Node node = null;
-            while (node == null) {
-                node = client.leastLoadedNode();
-            }
-            log.info("Trying to fetch initial dynamic configs before join group request");
-            RequestFuture<ClientResponse> configsFuture = client.send(node, newRequestBuilder(this.clientId));
-            return configsFuture;
-        }
-        return null;
-    }
-
-    /**
-     * Block for a {@link DescribeConfigsResponse} and process it. Used to fetch the initial dynamic configurations synchronously before sending the initial
-     * {@link org.apache.kafka.common.requests.JoinGroupRequest}. Since this join RPC sends the group member's session timeout
-     * to the group coordinator, we should check if a dynamic configuration for session timeout is set before joining.
-     * If we do not do this initial fetch synchronously, then we could possibly trigger an unnecessary group rebalance operation by 
+     * Send a {@link DescribeConfigsRequest} to a node specifically for dynamic client configurations and
+     * block for a {@link DescribeConfigsResponse}. Used to fetch the initial dynamic configurations synchronously 
+     * before sending the initial {@link org.apache.kafka.common.requests.JoinGroupRequest}. 
+     * Since this join RPC sends the group member's session timeout to the group coordinator, 
+     * it's best to check if a dynamic configuration for session timeout is set before joining.
+     * If this initial fetch is not done synchronously, then an unnecessary group rebalance operation could be triggered by 
      * sending a second join request after the dynamic configs are recieved asynchronously.
      *
-     * @param responseFuture - future to block on
-     * @return true if responseFuture was blocked on and a response was recieved
-     */
-    public boolean maybeWaitForInitialConfigs(RequestFuture<ClientResponse> responseFuture) {
-        if (responseFuture != null) {
-            client.poll(responseFuture);
-            if (responseFuture.isDone()) {
-                DescribeConfigsResponse configsResponse = (DescribeConfigsResponse) responseFuture.value().responseBody();
-                handleSuccessfulResponse(configsResponse);
-                this.initialConfigsFetched = true;
-                return true;
+     * @return true if the {@link DescribeConfigsResponse} was recieved and processed
+     */ 
+    public void maybeFetchInitialConfigs() {
+        if (updater.shouldFetchInitialConfigs()) {
+            Node node = client.leastLoadedNode();
+            if (node != null) {
+                log.info("Trying to fetch initial dynamic configs before join group request");
+                RequestFuture<ClientResponse> configsFuture = client.send(node, updater.newRequestBuilder(this.clientId));
+                updater.sentConfigsRequest();
+                client.poll(configsFuture);
+                if (configsFuture.isDone()) {
+                    DescribeConfigsResponse configsResponse = (DescribeConfigsResponse) configsFuture.value().responseBody();
+                    updater.receiveInitialConfigs();
+                    handleDescribeConfigsResponse(configsResponse);
+                }
             }
         }
-        return false;
     }
 
     /**
@@ -113,36 +94,22 @@ public class DynamicConsumerConfig extends DynamicClientConfigUpdater {
      * @param node Node to send request to
      * @param now  Current time in milliseconds
      */ 
-    @Override
-    public boolean maybeFetchConfigs(long now) {
-        if (shouldUpdateConfigs(now)) {
+    public RequestFuture<ClientResponse> maybeFetchConfigs(long now) {
+        if (updater.shouldUpdateConfigs(now)) {
+            System.out.println("Should update configs");
             Node node = client.leastLoadedNode();
-            // Order matters, if the node is null we should not set updateInProgress to true.
-            // This is lazily evaluated so it is ok as long as order is kept
             if (node != null && client.ready(node, now)) {
-                updateInProgress();
                 log.info("Sending periodic describe configs request for dynamic config update");
-                RequestFuture<ClientResponse> configsFuture = client.send(node, newRequestBuilder(this.clientId));
-                configsFuture.addListener(new RequestFutureListener<ClientResponse>() {
-                    @Override
-                    public void onSuccess(ClientResponse resp) {
-                        synchronized (lock) {
-                            DescribeConfigsResponse configsResponse = (DescribeConfigsResponse) resp.responseBody();
-                            handleSuccessfulResponse(configsResponse);
-                            update();
-                        }
-                    }
-                    @Override
-                    public void onFailure(RuntimeException e) {
-                        synchronized (lock) {
-                            retry();
-                        }
-                    }
-                });
-                return true;
+                RequestFuture<ClientResponse> configsFuture = client.send(node, updater.newRequestBuilder(this.clientId));
+                updater.sentConfigsRequest();
+                return configsFuture;
             }
         }
-        return false;
+        return null;
+    }
+
+    public void handleFailedConfigsResponse() {
+        updater.retry();
     }
 
     /**
@@ -150,19 +117,19 @@ public class DynamicConsumerConfig extends DynamicClientConfigUpdater {
      * or by disabling this feature if the broker is incompatible.
      * @param resp {@link DescribeConfigsResponse}
      */
-    private void handleSuccessfulResponse(DescribeConfigsResponse configsResponse) {
-        Map<String, String> dynamicConfigs = createResultMapAndHandleErrors(configsResponse, log);
+    public void handleDescribeConfigsResponse(DescribeConfigsResponse configsResponse) {
+        Map<String, String> dynamicConfigs = updater.createResultMapAndHandleErrors(configsResponse, log);
         log.info("DescribeConfigsResponse received");
+        updater.receiveConfigs();
 
         // We only want to process them if they have changed since the last time they were fetched.
         if (!dynamicConfigs.equals(previousDynamicConfigs)) {
             previousDynamicConfigs = dynamicConfigs;
             try {
-                rebalanceConfig.setDynamicConfigs(dynamicConfigs);
+                rebalanceConfig.setDynamicConfigs(dynamicConfigs, log);
             } catch (IllegalArgumentException e) {
                 log.info("Rejecting dynamic configs: {}", e.getMessage());
             }
         }
-        update();
     }
 }

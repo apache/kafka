@@ -17,8 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -27,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
@@ -46,6 +43,7 @@ import org.junit.Test;
 
 public class DynamicConsumerConfigTest {
 
+    private static final int METADATA_MAX_AGE = 60 * 5 * 1000;
     private MockTime time = new MockTime();
     private final LogContext logCtx = new LogContext();
     private ConsumerMetadata metadata = new ConsumerMetadata(0, 
@@ -70,83 +68,55 @@ public class DynamicConsumerConfigTest {
         consumerClient = new ConsumerNetworkClient(logCtx, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE);
         rebalanceConfig = new GroupRebalanceConfig(new ConsumerConfig(props), GroupRebalanceConfig.ProtocolType.CONSUMER);
-        dynamicConfigs = new DynamicConsumerConfig(consumerClient, this, rebalanceConfig, time, logCtx);
+        dynamicConfigs = new DynamicConsumerConfig(consumerClient, rebalanceConfig, time, logCtx);
     }
 
 
     @Test
     public void testPeriodicFetch() {
         // Send DescribeConfigsRequest
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
     
         // Respond to trigger callback
         client.prepareResponse(describeConfigsResponse(Errors.NONE));
         consumerClient.poll(time.timer(0));
        
         // Advance clock to before the dynamic config expiration
-        time.sleep(15000);
+        time.sleep(METADATA_MAX_AGE - 1000);
         
         // Not ready to send another request because current configs haven't expired
-        assertFalse(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(0, consumerClient.pendingRequestCount());
 
         // Advance clock to after expiration
-        time.sleep(20000);
+        time.sleep(2000);
 
         // Now another request should be sent
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
-        assertFalse(dynamicConfigs.shouldDisable());
-    }
-
-    @Test
-    public void testInitialAndPeriodicFetch() {
-        // Send first DescribeConfigsRequest
-        RequestFuture<ClientResponse> configsFuture = dynamicConfigs.maybeFetchInitialConfigs();
-        // Respond to trigger callback
-        client.prepareResponse(describeConfigsResponse(Errors.NONE));
-
-        // The client will block on the future in this method call
-        assertTrue(dynamicConfigs.maybeWaitForInitialConfigs(configsFuture));
-
-        // Check that subsequest calls for initial configs don't do anything since this
-        // should only be taking place before the first join group request
-        configsFuture = dynamicConfigs.maybeFetchInitialConfigs();
-        assertEquals(null, configsFuture);
-        assertFalse(dynamicConfigs.maybeWaitForInitialConfigs(configsFuture));
-       
-        // Advance clock to before the dynamic config expiration
-        time.sleep(15000);
-        
-        // Not ready to send another request because current configs haven't expired
-        assertFalse(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
-
-        // Advance clock to after expiration
-        time.sleep(20000);
-
-        // Make sure that initial configs don't get fetched since they already did
-        assertEquals(null, dynamicConfigs.maybeFetchInitialConfigs());
-
-        // Now another request should be sent without blocking
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
-        assertFalse(dynamicConfigs.shouldDisable());
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
     }
 
     @Test
     public void testShouldDisableWithInvalidRequestErrorCode() {
         // Send first DescribeConfigsRequest
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
     
         // Respond with invalid request error code to trigger callback
         client.prepareResponse(describeConfigsResponse(Errors.INVALID_REQUEST));
         consumerClient.poll(time.timer(0));
        
         // Make sure that this is setting itself to be disabled with INVALID_REQUEST code
-        assertTrue(dynamicConfigs.shouldDisable());
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(0, consumerClient.pendingRequestCount());
     }
 
     @Test
     public void testInvalidTimeoutAndHeartbeatConfig() {
         // Send first DescribeConfigsRequest
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
 
         Map<String, String> configs = new HashMap<>();
 
@@ -164,23 +134,25 @@ public class DynamicConsumerConfigTest {
         assertEquals(3000, rebalanceConfig.getHeartbeatInterval());
        
         // Advance clock to before the dynamic config expiration
-        time.sleep(15000);
+        time.sleep(METADATA_MAX_AGE - 1000);
         
         // Not ready to send another request because current configs haven't expired
-        assertFalse(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(0, consumerClient.pendingRequestCount());
 
         // Advance clock to after expiration
-        time.sleep(20000);
+        time.sleep(2000);
 
         // Now another request should be sent
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
-        assertFalse(dynamicConfigs.shouldDisable());
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
     }
 
     @Test
     public void testValidTimeoutAndHeartbeatConfig() {
         // Send first DescribeConfigsRequest
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
 
         Map<String, String> configs = new HashMap<>();
 
@@ -198,22 +170,24 @@ public class DynamicConsumerConfigTest {
         assertEquals(4000, rebalanceConfig.getHeartbeatInterval());
        
         // Advance clock to before the dynamic config expiration
-        time.sleep(15000);
+        time.sleep(METADATA_MAX_AGE - 1000);
         
         // Not ready to send another request because current configs haven't expired
-        assertFalse(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(0, consumerClient.pendingRequestCount());
 
         // Advance clock to after expiration
-        time.sleep(20000);
+        time.sleep(2000);
 
         // Now another request should be sent
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
-        assertFalse(dynamicConfigs.shouldDisable());
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
     }
 
     @Test
     public void testRevertToStaticConfigIfDynamicConfigPairMissing() {
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
 
         Map<String, String> configs = new HashMap<>();
 
@@ -231,17 +205,19 @@ public class DynamicConsumerConfigTest {
         assertEquals(4000, rebalanceConfig.getHeartbeatInterval());
        
         // Advance clock to before the dynamic config expiration
-        time.sleep(15000);
+        time.sleep(METADATA_MAX_AGE - 1000);
         
         // Not ready to send another request because current configs haven't expired
-        assertFalse(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(0, consumerClient.pendingRequestCount());
 
         // Advance clock to after expiration
-        time.sleep(20000);
+        time.sleep(2000);
 
         // Now another request should be sent
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
-        assertFalse(dynamicConfigs.shouldDisable());
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, consumerClient.pendingRequestCount());
+        
 
         // Respond to trigger callback with no dynamic configs
         client.prepareResponse(describeConfigsResponse(new HashMap<>(), Errors.NONE));

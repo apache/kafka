@@ -36,83 +36,83 @@ import org.apache.kafka.common.requests.DescribeConfigsResponse;
 /**
  * Handles the interval for which a dynamic client configuration request should be sent 
  */
-public abstract class DynamicClientConfigUpdater {
+public class DynamicClientConfigUpdater {
     /* Interval to wait before requesting dynamic configs again */
     private final long dynamicConfigurationExpireMs;
 
-    /* Atomic variables used for multithreaded access in the consumer */
     /* Last time dynamic configs were updated */
-    private AtomicLong lastSuccessfulUpdate;
+    private long lastSuccessfulUpdate;
 
     /* Still waiting for a response */
-    private AtomicBoolean updateInProgress;
+    private boolean updateInProgress;
     
     /* Clock to use */
     private Time time;
 
-    /* If we recieve an error code when attempting to fetch configs this will get set */
-    private boolean disable;
+    /* Set to disable the dynamic client config feature */ 
+    private boolean enable;
 
-    public DynamicClientConfigUpdater(Time time) {
-        this.dynamicConfigurationExpireMs = 30000;
-        this.lastSuccessfulUpdate = new AtomicLong();
-        this.updateInProgress = new AtomicBoolean();
+    /* Have initial dynamic configs been discovered */
+    private boolean initialConfigsFetched;
+
+    public DynamicClientConfigUpdater(long dynamicConfigurationExpireMs, boolean enable, Time time) {
+        this.dynamicConfigurationExpireMs = dynamicConfigurationExpireMs;
+        this.lastSuccessfulUpdate = 0;
+        this.updateInProgress = false;
         this.time = time;
-        this.disable = false;
-    }
-
-    public void disable() {
-        this.disable = true;
-    }
-
-    public boolean shouldDisable() {
-        return this.disable;
+        this.enable = enable;
+        this.initialConfigsFetched = false;
     }
 
     /**
-     * Send a {@link DescribeConfigsRequest} to the least loaded node requesting dynamic client configurations
+     * Check if initial configs need to be fetched
      *
-     * @param now  Current time in milliseconds
-     * @return true if configs were fetched
-     */ 
-    public abstract boolean maybeFetchConfigs(long now);
+     * @param now
+     * @return
+     */
+    public boolean shouldFetchInitialConfigs() {
+        return enable && !initialConfigsFetched;
+    }
 
     /**
-     * Check if the current configs have expired
+     * Check if the current configs have expired, the feature is still enabled, and no config update is in progress
      * @param now current time in milliseconds
      * @return true if update is needed
      */
-    protected boolean shouldUpdateConfigs(long now) {
-        if (now > dynamicConfigurationExpireMs + lastSuccessfulUpdate.get() && !updateInProgress.get()) {
-            return true;
-        }
-        return false;
+    public boolean shouldUpdateConfigs(long now) {
+        return enable 
+                && !updateInProgress
+                && now > (dynamicConfigurationExpireMs + lastSuccessfulUpdate);
     }
 
-    protected void updateInProgress() {
-        this.updateInProgress.set(true);
+    public void sentConfigsRequest() {
+        this.updateInProgress = true;
+    }
+
+    public void receiveInitialConfigs() {
+        initialConfigsFetched = true;
     }
 
     /**
      * To be called in {@link RequestCompletionHandler} on successful update
      * @param now current time in milliseconds
      */
-    protected void update() {
-        updateInProgress.set(false);
-        lastSuccessfulUpdate.set(time.milliseconds());
+    public void receiveConfigs() {
+        updateInProgress = false;
+        lastSuccessfulUpdate = time.milliseconds();
     }
 
     /**
      * To be called in {@link RequestCompletionHandler} on failed update
      */
-    protected void retry() {
-        updateInProgress.set(false);
+    public void retry() {
+        updateInProgress = false;
     }
 
     /**
      * @return {@link DescribeConfigsRequest.Builder}
      */
-    protected AbstractRequest.Builder<?> newRequestBuilder(String clientId) {
+    public AbstractRequest.Builder<?> newRequestBuilder(String clientId) {
         DescribeConfigsResource resource = new DescribeConfigsResource()
             .setResourceName(clientId)
             .setResourceType(ConfigResource.Type.CLIENT.id())
@@ -131,12 +131,12 @@ public abstract class DynamicClientConfigUpdater {
      * @param log
      * @return map of dynamic configs
      */
-    protected Map<String, String> createResultMapAndHandleErrors(DescribeConfigsResponse configsResponse, Logger log) {
+    public Map<String, String> createResultMapAndHandleErrors(DescribeConfigsResponse configsResponse, Logger log) {
         Map<String, String> dynamicConfigs = new HashMap<>();
         configsResponse.resultMap().entrySet().forEach(entry -> {
             if (entry.getValue().errorCode() == Errors.INVALID_REQUEST.code()) {
                 log.info("DynamicConfiguration not compatible with the broker, this feature will be disabled");
-                disable();
+                enable = false;
                 return;
             }
             entry.getValue().configs().forEach(config -> dynamicConfigs.put(config.name(), config.value()));

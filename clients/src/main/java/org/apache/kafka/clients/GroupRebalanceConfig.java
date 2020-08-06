@@ -22,6 +22,7 @@ import java.util.Optional;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.slf4j.Logger;
 
 /**
  * Class to extract group rebalance related configs.
@@ -48,7 +49,8 @@ public class GroupRebalanceConfig {
 
     private Map<String, ?> originals;
     public final String clientId;
-    private final boolean enableDynamicConfig;
+    public final boolean dynamicConfigEnabled;
+    public final long dynamicConfigExpireMs;
     private boolean updateCoordinatorSessionTimeout;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
@@ -67,7 +69,8 @@ public class GroupRebalanceConfig {
         this.updateCoordinatorSessionTimeout = false;
 
         this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-        this.enableDynamicConfig = config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG);
+        this.dynamicConfigEnabled = config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG);
+        this.dynamicConfigExpireMs = config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG);
         this.originals = config.values();
 
         // Static membership is only introduced in consumer API.
@@ -110,7 +113,8 @@ public class GroupRebalanceConfig {
         this.leaveGroupOnClose = leaveGroupOnClose;
         validateSessionAndHeartbeat(sessionTimeoutMs, heartbeatIntervalMs);
         this.clientId = "";
-        this.enableDynamicConfig = false;
+        this.dynamicConfigEnabled = false;
+        this.dynamicConfigExpireMs = 0;
     }
 
     /**
@@ -118,7 +122,7 @@ public class GroupRebalanceConfig {
      * @param configs dynamic configs
      * @return true if the session timeout has been dynamically updated and a new join group request needs to be sent to broker
      */
-    public void setDynamicConfigs(Map<String, String> configs) {
+    public void setDynamicConfigs(Map<String, String> configs, Logger log) {
         int newSessionTimeoutMs = Integer.parseInt(
                 configs.getOrDefault(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG, 
                 originals.get(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG).toString()));
@@ -126,11 +130,15 @@ public class GroupRebalanceConfig {
                 configs.getOrDefault(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG,
                 originals.get(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG).toString()));
         validateSessionAndHeartbeat(newSessionTimeoutMs, newHeartbeatIntervalMs);
-        this.heartbeatIntervalMs = newHeartbeatIntervalMs;
         if (newSessionTimeoutMs != sessionTimeoutMs) {
             this.updateCoordinatorSessionTimeout = true;
+            log.info("session.timeout.ms dynamically altered from {} to {}", sessionTimeoutMs, newSessionTimeoutMs);
+            this.sessionTimeoutMs = newSessionTimeoutMs;
         }
-        this.sessionTimeoutMs = newSessionTimeoutMs;
+        if (newHeartbeatIntervalMs != heartbeatIntervalMs) {
+            log.info("heartbeat.interval.ms dynamically altered from {} to {}", heartbeatIntervalMs, newHeartbeatIntervalMs);
+            this.heartbeatIntervalMs = newHeartbeatIntervalMs;
+        }
     }
 
     public boolean coordinatorNeedsSessionTimeoutUpdate() {
@@ -147,10 +155,6 @@ public class GroupRebalanceConfig {
 
     public int getHeartbeatInterval() {
         return this.heartbeatIntervalMs;
-    }
-
-    public boolean enableDynamicConfig() {
-        return this.enableDynamicConfig;
     }
 
     private void validateSessionAndHeartbeat(int sessionTimeoutMs, int heartbeatIntervalMs) {

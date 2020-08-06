@@ -25,6 +25,8 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 
 import scala.jdk.CollectionConverters._
 
@@ -79,9 +81,9 @@ object DynamicConfig {
   }
 
   object ClientConfigs {
-    val AcksOverrideProp = "acks"
-    val SessionTimeoutOverrideProp = "session.timeout.ms"
-    val HeartbeatIntervalOverrideProp = "heartbeat.interval.ms"
+    val AcksOverrideProp = ProducerConfig.ACKS_CONFIG
+    val SessionTimeoutOverrideProp = CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG
+    val HeartbeatIntervalOverrideProp = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG
     private val configNames = Set(AcksOverrideProp,
       SessionTimeoutOverrideProp, HeartbeatIntervalOverrideProp)
 

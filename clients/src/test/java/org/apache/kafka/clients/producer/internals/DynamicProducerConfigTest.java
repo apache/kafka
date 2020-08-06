@@ -17,8 +17,6 @@
 package org.apache.kafka.clients.producer.internals;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,6 +41,7 @@ import org.junit.Test;
 public class DynamicProducerConfigTest {
     private static final long TOPIC_IDLE_MS = 60 * 1000;
     private static final int REQUEST_TIMEOUT = 1000;
+    private static final int METADATA_MAX_AGE = 60 * 5 * 1000;
 
     private MockTime time = new MockTime();
     private final LogContext logCtx = new LogContext();
@@ -65,7 +64,7 @@ public class DynamicProducerConfigTest {
     @Test
     public void testPeriodicFetch() {
         // Send first DescribeConfigsRequest
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, client.inFlightRequestCount());
     
         // Respond to trigger callback
@@ -73,22 +72,24 @@ public class DynamicProducerConfigTest {
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
        
         // Advance clock to before the dynamic config expiration
-        time.sleep(15000);
+        time.sleep(METADATA_MAX_AGE - 1000);
         
         // Not ready to send another request because current configs haven't expired
-        assertFalse(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(0, client.inFlightRequestCount());
 
         // Advance clock to after expiration
-        time.sleep(16000);
+        time.sleep(2000);
 
         // Now another request should be sent
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, client.inFlightRequestCount());
     }
     
     @Test
     public void testShouldDisableWithInvalidRequestErrorCode() {
         // Send first DescribeConfigsRequest
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, client.inFlightRequestCount());
     
         // Respond with invalid request error code
@@ -96,13 +97,15 @@ public class DynamicProducerConfigTest {
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
        
         // Make sure that when the INVALID_REQUEST code is recieved in the callback, 
-        // the dynamicConfig is disabled
-        assertTrue(dynamicConfigs.shouldDisable());
+        // the dynamicConfig is disabled and does not send another DescribeConfigsRequest
+        time.sleep(METADATA_MAX_AGE + 1000);
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(0, client.inFlightRequestCount());
     }
 
     @Test
     public void testSuccessfulAcksOverride() {
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, client.inFlightRequestCount());
         assertEquals(Short.valueOf("-1"), dynamicConfigs.getAcks());
 
@@ -124,7 +127,7 @@ public class DynamicProducerConfigTest {
             new DynamicProducerConfig(client, new ProducerConfig(props), time, logCtx, REQUEST_TIMEOUT);
 
 
-        assertTrue(dynamicConfigsWithUserEnabledIdempotence.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigsWithUserEnabledIdempotence.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, client.inFlightRequestCount());
 
         // Send DescribeConfigsResponse with acks value that is invalid for this client since idempotence was user enabled
@@ -139,7 +142,7 @@ public class DynamicProducerConfigTest {
 
     @Test
     public void testRevertToStaticConfigIfDynamicConfigPairMissing() {
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, client.inFlightRequestCount());
 
         // Send DescribeConfigsResponse with acks set
@@ -149,8 +152,9 @@ public class DynamicProducerConfigTest {
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
         assertEquals(Short.valueOf("0"), dynamicConfigs.getAcks());
         
-        time.sleep(31000);
-        assertTrue(dynamicConfigs.maybeFetchConfigs(time.milliseconds()));
+        time.sleep(METADATA_MAX_AGE + 1000);
+        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        assertEquals(1, client.inFlightRequestCount());
 
         // Send DescribeConfigsResponse without setting acks
         configs.remove("acks");

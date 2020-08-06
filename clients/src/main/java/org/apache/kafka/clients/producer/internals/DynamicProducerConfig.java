@@ -18,16 +18,17 @@ package org.apache.kafka.clients.producer.internals;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.clients.DynamicClientConfigUpdater;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.DynamicClientConfigUpdater;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -35,7 +36,7 @@ import org.slf4j.Logger;
 /**
  * Handles the request and response of a dynamic client configuration update for the producer
  */
-public class DynamicProducerConfig extends DynamicClientConfigUpdater {
+public class DynamicProducerConfig {
     /* CLient to use */
     private KafkaClient client;
 
@@ -57,8 +58,9 @@ public class DynamicProducerConfig extends DynamicClientConfigUpdater {
     /* Resource name to use when constructing a DescribeConfigsRequest */
     private final String clientId;
 
+    private final DynamicClientConfigUpdater updater;
+
     public DynamicProducerConfig(KafkaClient client, ProducerConfig config, Time time, LogContext logContext, int requestTimeoutMs) {
-        super(time);
         this.client = client;
         this.originals = config.originals();
         this.requestTimeoutMs = requestTimeoutMs;
@@ -66,6 +68,11 @@ public class DynamicProducerConfig extends DynamicClientConfigUpdater {
         this.updatedConfigs = config;
         this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
         this.previousDynamicConfigs = new HashMap<>();
+        updater = new DynamicClientConfigUpdater(
+            config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG), 
+            config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG), 
+            time
+        );
     }
 
 
@@ -75,22 +82,19 @@ public class DynamicProducerConfig extends DynamicClientConfigUpdater {
      * @param node Node to send request to
      * @param now  Current time in milliseconds
      */ 
-    @Override
-    public boolean maybeFetchConfigs(long now) {
-        if (shouldUpdateConfigs(now)) {
-            System.out.println(now);
+    public void maybeFetchConfigs(long now) {
+        if (updater.shouldUpdateConfigs(now)) {
+            System.out.println("updating");
             Node node = client.leastLoadedNode(now);
             if (node != null && client.ready(node, now)) {
-                updateInProgress();
+                updater.sentConfigsRequest();
                 RequestCompletionHandler callback = response -> handleDescribeConfigsResponse(response);
                 ClientRequest clientRequest = client
-                    .newClientRequest(node.idString(), newRequestBuilder(this.clientId), now, true, requestTimeoutMs, callback);
+                    .newClientRequest(node.idString(), updater.newRequestBuilder(this.clientId), now, true, requestTimeoutMs, callback);
                 this.client.send(clientRequest, now);
                 log.info("Sent DescribeConfigsRequest");
-                return true;
             }
         }
-        return false;
     }
 
     /**
@@ -100,9 +104,10 @@ public class DynamicProducerConfig extends DynamicClientConfigUpdater {
     private void handleDescribeConfigsResponse(ClientResponse response) {
         if (response.hasResponse()) {
             log.info("Recieved DescribeConfigResponse");
+            updater.receiveConfigs();
 
             DescribeConfigsResponse configsResponse = (DescribeConfigsResponse) response.responseBody();
-            Map<String, String> dynamicConfigs = createResultMapAndHandleErrors(configsResponse, log);
+            Map<String, String> dynamicConfigs = updater.createResultMapAndHandleErrors(configsResponse, log);
 
             // Only parse and validate dynamic configs if they have changed since the last time they were fetched
             if (!dynamicConfigs.equals(previousDynamicConfigs)) {
@@ -122,10 +127,9 @@ public class DynamicProducerConfig extends DynamicClientConfigUpdater {
                     log.info("Rejecting new dynamic configs");
                 }
             }
-            update();
         } else {
             log.info("Did not recieve DescribeConfigResponse");
-            retry();
+            updater.retry();
         }
     }
 

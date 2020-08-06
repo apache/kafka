@@ -19,7 +19,6 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
@@ -149,9 +148,6 @@ public class Sender implements Runnable {
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
         this.dynamicConfig = new DynamicProducerConfig(client, config, time, logContext, requestTimeoutMs);
-        if (!config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG)) {
-            this.dynamicConfig.disable();
-        } 
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {
@@ -325,9 +321,7 @@ public class Sender implements Runnable {
         }
 
         long currentTimeMs = time.milliseconds();
-        if (!dynamicConfig.shouldDisable()) {
-            dynamicConfig.maybeFetchConfigs(currentTimeMs);
-        } 
+        dynamicConfig.maybeFetchConfigs(currentTimeMs);
         currentTimeMs = time.milliseconds();
         long pollTimeout = sendProducerData(currentTimeMs, dynamicConfig.getAcks());
         client.poll(pollTimeout, currentTimeMs);
