@@ -337,17 +337,20 @@ public class GlobalStreamThread extends Thread {
         try {
             final GlobalStateManager stateMgr = new GlobalStateManagerImpl(
                 logContext,
+                time,
                 topology,
                 globalConsumer,
                 stateDirectory,
                 stateRestoreListener,
-                config);
+                config
+            );
 
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
                 config,
                 stateMgr,
                 streamsMetrics,
-                cache);
+                cache
+            );
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 
             final StateConsumer stateConsumer = new StateConsumer(
