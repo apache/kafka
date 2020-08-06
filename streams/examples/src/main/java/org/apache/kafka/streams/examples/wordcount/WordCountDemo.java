@@ -49,10 +49,12 @@ public final class WordCountDemo {
     public static final String INPUT_TOPIC = "streams-plaintext-input";
     public static final String OUTPUT_TOPIC = "streams-wordcount-output";
 
-    static Properties getStreamsConfig(String[] args) throws IOException {
+    static Properties getStreamsConfig(final String[] args) throws IOException {
         final Properties props = new Properties();
         if (args != null && args.length == 1) {
-            props.load(new FileInputStream(args[0]));
+            try (FileInputStream fis = new FileInputStream(args[0])) {
+                props.load(fis);
+            }
         }
         props.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount");
         props.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
