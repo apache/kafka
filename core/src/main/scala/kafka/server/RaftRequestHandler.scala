@@ -23,6 +23,7 @@ import kafka.network.RequestChannel
 import kafka.raft.KafkaNetworkChannel
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.feature.Features
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.MetadataResponseData
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -48,7 +49,7 @@ class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
         case ApiKeys.VOTE
              | ApiKeys.BEGIN_QUORUM_EPOCH
              | ApiKeys.END_QUORUM_EPOCH
-             | ApiKeys.FETCH_QUORUM_RECORDS
+             | ApiKeys.FETCH
              | ApiKeys.FIND_QUORUM =>
           val requestBody = request.body[AbstractRequest]
           networkChannel.postInboundRequest(
@@ -57,7 +58,8 @@ class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
             response => sendResponse(request, Some(response)))
 
         case ApiKeys.API_VERSIONS =>
-          sendResponse(request, Option(ApiVersionsResponse.apiVersionsResponse(0, 2)))
+          sendResponse(request, Option(ApiVersionsResponse.apiVersionsResponse(0, 2,
+            Features.emptySupportedFeatures())))
 
         case ApiKeys.METADATA =>
           val metadataRequest = request.body[MetadataRequest]

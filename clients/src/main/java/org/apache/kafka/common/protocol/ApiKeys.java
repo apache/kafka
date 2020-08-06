@@ -77,8 +77,6 @@ import org.apache.kafka.common.message.EndTxnRequestData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
 import org.apache.kafka.common.message.ExpireDelegationTokenResponseData;
-import org.apache.kafka.common.message.FetchQuorumRecordsRequestData;
-import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
@@ -241,9 +239,8 @@ public enum ApiKeys {
     VOTE(50, "Vote", true, VoteRequestData.SCHEMAS, VoteResponseData.SCHEMAS),
     BEGIN_QUORUM_EPOCH(51, "BeginQuorumEpoch", true, BeginQuorumEpochRequestData.SCHEMAS, BeginQuorumEpochResponseData.SCHEMAS),
     END_QUORUM_EPOCH(52, "EndQuorumEpoch", true, EndQuorumEpochRequestData.SCHEMAS, EndQuorumEpochResponseData.SCHEMAS),
-    FETCH_QUORUM_RECORDS(53, "FetchQuorumRecords", true, FetchQuorumRecordsRequestData.SCHEMAS, FetchQuorumRecordsResponseData.SCHEMAS),
-    FIND_QUORUM(55, "FindQuorum", true, FindQuorumRequestData.SCHEMAS, FindQuorumResponseData.SCHEMAS),
-    DESCRIBE_QUORUM(56, "DescribeQuorum", true, DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS);
+    DESCRIBE_QUORUM(53, "DescribeQuorum", true, DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS),
+    FIND_QUORUM(54, "FindQuorum", true, FindQuorumRequestData.SCHEMAS, FindQuorumResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

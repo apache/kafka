@@ -23,10 +23,8 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class EndQuorumEpochRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<EndQuorumEpochRequest> {
@@ -67,7 +65,8 @@ public class EndQuorumEpochRequest extends AbstractRequest {
 
     @Override
     public EndQuorumEpochResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new EndQuorumEpochResponse(getTopLevelErrorResponse(Errors.forException(e)));
+        return new EndQuorumEpochResponse(new EndQuorumEpochResponseData()
+            .setErrorCode(Errors.forException(e).code()));
     }
 
     public static EndQuorumEpochRequestData singletonRequest(TopicPartition topicPartition,
@@ -99,25 +98,4 @@ public class EndQuorumEpochRequest extends AbstractRequest {
                    );
     }
 
-
-    public static EndQuorumEpochResponseData getPartitionLevelErrorResponse(EndQuorumEpochRequestData data, Errors error) {
-        short errorCode = error.code();
-        List<EndQuorumEpochResponseData.TopicData> topicResponses = new ArrayList<>();
-        for (EndQuorumEpochRequestData.TopicData topic : data.topics()) {
-            topicResponses.add(
-                new EndQuorumEpochResponseData.TopicData()
-                    .setTopicName(topic.topicName())
-                    .setPartitions(topic.partitions().stream().map(
-                        requestPartition -> new EndQuorumEpochResponseData.PartitionData()
-                                                .setPartitionIndex(requestPartition.partitionIndex())
-                                                .setErrorCode(errorCode)
-                    ).collect(Collectors.toList())));
-        }
-
-        return new EndQuorumEpochResponseData().setTopics(topicResponses);
-    }
-
-    public static EndQuorumEpochResponseData getTopLevelErrorResponse(Errors error) {
-        return new EndQuorumEpochResponseData().setErrorCode(error.code());
-    }
 }

@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
@@ -26,8 +27,8 @@ import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
-import org.apache.kafka.common.message.FetchQuorumRecordsRequestData;
-import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
+import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FindQuorumRequestData;
 import org.apache.kafka.common.message.FindQuorumResponseData;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -58,7 +59,6 @@ import org.slf4j.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -114,10 +114,9 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  *    gracefully resign from the current epoch. This causes remaining voters to immediately
  *    begin a new election.
  *
- * 4) {@link FetchQuorumRecordsRequestData}: This is basically the same as the usual Fetch API in
- *    Kafka, however the protocol implements it as a separate request type because there
- *    is additional metadata which we need to piggyback on responses. Unlike partition replication,
- *    we also piggyback truncation detection on this API rather than through a separate state.
+ * 4) {@link FetchRequestData}: This is the same as the usual Fetch API in Kafka, but we piggyback
+ *    some additional metadata on responses (i.e. current leader and epoch). Unlike partition replication,
+ *    we also piggyback truncation detection on this API rather than through a separate truncation state.
  *
  * 5) {@link FindQuorumRequestData}: Sent by observers in order to find the leader. The leader
  *    is responsible for pushing BeginQuorumEpoch requests to other votes, but it is the responsibility
@@ -509,7 +508,8 @@ public class KafkaRaftClient implements RaftClient {
         VoteRequestData request = (VoteRequestData) requestMetadata.data;
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {
-            return VoteRequest.getPartitionLevelErrorResponse(request, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            // Until we support multi-raft, we treat topic partition mismatches as invalid requests
+            return new VoteResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
         }
 
         VoteRequestData.PartitionData partitionRequest =
@@ -576,18 +576,16 @@ public class KafkaRaftClient implements RaftClient {
     ) throws IOException {
         int remoteNodeId = responseMetadata.sourceId();
         VoteResponseData response = (VoteResponseData) responseMetadata.data;
+        Errors topLevelError = Errors.forCode(response.errorCode());
+        if (topLevelError != Errors.NONE) {
+            return handleTopLevelError(topLevelError, responseMetadata);
+        }
 
         if (!hasValidTopicPartition(response, log.topicPartition())) {
             return false;
         }
 
-        Errors topLevelError = Errors.forCode(response.errorCode());
-        if (topLevelError != Errors.NONE) {
-            return handleUnexpectedError(topLevelError, responseMetadata);
-        }
-
         VoteResponseData.PartitionData partitionResponse = response.topics().get(0).partitions().get(0);
-
         Errors error = Errors.forCode(partitionResponse.errorCode());
         OptionalInt responseLeaderId = optionalLeaderId(partitionResponse.leaderId());
         int responseEpoch = partitionResponse.leaderEpoch();
@@ -671,8 +669,8 @@ public class KafkaRaftClient implements RaftClient {
         BeginQuorumEpochRequestData request = (BeginQuorumEpochRequestData) requestMetadata.data;
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {
-            return BeginQuorumEpochRequest.getPartitionLevelErrorResponse(
-                request, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            // Until we support multi-raft, we treat topic partition mismatches as invalid requests
+            return new BeginQuorumEpochResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
         }
 
         BeginQuorumEpochRequestData.PartitionData partitionRequest =
@@ -695,14 +693,13 @@ public class KafkaRaftClient implements RaftClient {
     ) throws IOException {
         int remoteNodeId = responseMetadata.sourceId();
         BeginQuorumEpochResponseData response = (BeginQuorumEpochResponseData) responseMetadata.data;
+        Errors topLevelError = Errors.forCode(response.errorCode());
+        if (topLevelError != Errors.NONE) {
+            return handleTopLevelError(topLevelError, responseMetadata);
+        }
 
         if (!hasValidTopicPartition(response, log.topicPartition())) {
             return false;
-        }
-
-        Errors topLevelError = Errors.forCode(response.errorCode());
-        if (topLevelError != Errors.NONE) {
-            return handleUnexpectedError(topLevelError, responseMetadata);
         }
 
         BeginQuorumEpochResponseData.PartitionData partitionResponse =
@@ -747,8 +744,8 @@ public class KafkaRaftClient implements RaftClient {
         EndQuorumEpochRequestData request = (EndQuorumEpochRequestData) requestMetadata.data;
 
         if (!hasValidTopicPartition(request, log.topicPartition())) {
-            return EndQuorumEpochRequest.getPartitionLevelErrorResponse(
-                request, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+            // Until we support multi-raft, we treat topic partition mismatches as invalid requests
+            return new EndQuorumEpochResponseData().setErrorCode(Errors.INVALID_REQUEST.code());
         }
 
         EndQuorumEpochRequestData.PartitionData partitionRequest =
@@ -797,14 +794,13 @@ public class KafkaRaftClient implements RaftClient {
         RaftResponse.Inbound responseMetadata
     ) throws IOException {
         EndQuorumEpochResponseData response = (EndQuorumEpochResponseData) responseMetadata.data;
+        Errors topLevelError = Errors.forCode(response.errorCode());
+        if (topLevelError != Errors.NONE) {
+            return handleTopLevelError(topLevelError, responseMetadata);
+        }
 
         if (!hasValidTopicPartition(response, log.topicPartition())) {
             return false;
-        }
-
-        Errors topLevelError = Errors.forCode(response.errorCode());
-        if (topLevelError != Errors.NONE) {
-            return handleUnexpectedError(topLevelError, responseMetadata);
         }
 
         EndQuorumEpochResponseData.PartitionData partitionResponse =
@@ -824,29 +820,38 @@ public class KafkaRaftClient implements RaftClient {
         }
     }
 
-    private FetchQuorumRecordsResponseData buildFetchQuorumRecordsResponse(
+    private FetchResponseData buildFetchResponse(
         Errors error,
         Records records,
+        Optional<FetchResponseData.OffsetAndEpoch> nextFetchOffsetAndEpoch,
         Optional<LogOffsetMetadata> highWatermark
-    ) throws IOException {
-        return buildEmptyFetchQuorumRecordsResponse(error, highWatermark)
-            .setRecords(RaftUtil.serializeRecords(records));
+    ) {
+        return RaftUtil.singletonFetchResponse(log.topicPartition(), Errors.NONE, partitionData -> {
+            partitionData
+                .setRecordSet(records)
+                .setErrorCode(error.code())
+                .setLogStartOffset(log.startOffset())
+                .setHighWatermark(highWatermark
+                    .map(offsetMetadata -> offsetMetadata.offset)
+                    .orElse(-1L));
+
+            partitionData.currentLeader()
+                .setLeaderEpoch(quorum.epoch())
+                .setLeaderId(quorum.leaderIdOrNil());
+
+            nextFetchOffsetAndEpoch.ifPresent(partitionData::setNextOffsetAndEpoch);
+        });
     }
 
-    private FetchQuorumRecordsResponseData buildEmptyFetchQuorumRecordsResponse(
+    private FetchResponseData buildEmptyFetchResponse(
         Errors error,
         Optional<LogOffsetMetadata> highWatermark
     ) {
-        return new FetchQuorumRecordsResponseData()
-            .setErrorCode(error.code())
-            .setLeaderEpoch(quorum.epoch())
-            .setLeaderId(quorum.leaderIdOrNil())
-            .setRecords(ByteBuffer.wrap(new byte[0]))
-            .setHighWatermark(highWatermark.map(logOffsetMetadata -> logOffsetMetadata.offset).orElse(-1L));
+        return buildFetchResponse(error, MemoryRecords.EMPTY, Optional.empty(), highWatermark);
     }
 
     /**
-     * Handle a FetchQuorumRecords request. The fetch offset and last fetched epoch are always
+     * Handle a Fetch request. The fetch offset and last fetched epoch are always
      * validated against the current log. In the case that they do not match, the response will
      * indicate the diverging offset/epoch. A follower is expected to truncate its log in this
      * case and resend the fetch.
@@ -858,27 +863,37 @@ public class KafkaRaftClient implements RaftClient {
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
      *     or if either the fetch offset or the last fetched epoch is invalid
      */
-    private CompletableFuture<FetchQuorumRecordsResponseData> handleFetchQuorumRecordsRequest(
+    private CompletableFuture<FetchResponseData> handleFetchRequest(
         RaftRequest.Inbound requestMetadata
-    ) throws IOException {
-        FetchQuorumRecordsRequestData request = (FetchQuorumRecordsRequestData) requestMetadata.data;
-        if (request.maxWaitTimeMs() < 0
-            || request.fetchOffset() < 0
-            || request.lastFetchedEpoch() < 0
-            || request.lastFetchedEpoch() > request.leaderEpoch()) {
-            return completedFuture(buildEmptyFetchQuorumRecordsResponse(
+    ) {
+        FetchRequestData request = (FetchRequestData) requestMetadata.data;
+
+        if (!hasValidTopicPartition(request, log.topicPartition())) {
+            // Until we support multi-raft, we treat topic partition mismatches as invalid requests
+            return completedFuture(new FetchResponseData().setErrorCode(Errors.INVALID_REQUEST.code()));
+        }
+
+        FetchRequestData.FetchPartition fetchPartition = request.topics().get(0).partitions().get(0);
+        if (request.maxWaitMs() < 0
+            || fetchPartition.fetchOffset() < 0
+            || fetchPartition.lastFetchedEpoch() < 0
+            || fetchPartition.lastFetchedEpoch() > fetchPartition.currentLeaderEpoch()) {
+            return completedFuture(buildEmptyFetchResponse(
                 Errors.INVALID_REQUEST, Optional.empty()));
         }
 
-        FetchQuorumRecordsResponseData response = tryCompleteFetchQuorumRecordsRequest(request);
-        if (response.errorCode() != Errors.NONE.code()
-            || response.records().hasRemaining()
-            || request.maxWaitTimeMs() == 0) {
+        FetchResponseData response = tryCompleteFetchRequest(request.replicaId(), fetchPartition);
+        FetchResponseData.FetchablePartitionResponse partitionResponse =
+            response.responses().get(0).partitionResponses().get(0);
+
+        if (partitionResponse.errorCode() != Errors.NONE.code()
+            || partitionResponse.recordSet().sizeInBytes() > 0
+            || request.maxWaitMs() == 0) {
             return completedFuture(response);
         }
 
         CompletableFuture<Void> future = new CompletableFuture<>();
-        purgatory.await(future, request.maxWaitTimeMs());
+        purgatory.await(future, request.maxWaitMs());
 
         return future.handle((nil, exception) -> {
             if (exception != null) {
@@ -890,31 +905,28 @@ public class KafkaRaftClient implements RaftClient {
                 // any other error, we need to return it.
                 Errors error = Errors.forException(cause);
                 if (error != Errors.REQUEST_TIMED_OUT) {
-                    return buildEmptyFetchQuorumRecordsResponse(error, Optional.empty());
+                    return buildEmptyFetchResponse(error, Optional.empty());
                 }
             }
 
             try {
-                return tryCompleteFetchQuorumRecordsRequest(request);
+                return tryCompleteFetchRequest(request.replicaId(), fetchPartition);
             } catch (Exception e) {
                 logger.error("Caught unexpected error in fetch completion of request {}", request, e);
-                return buildEmptyFetchQuorumRecordsResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
+                return buildEmptyFetchResponse(Errors.UNKNOWN_SERVER_ERROR, Optional.empty());
             }
         });
     }
 
-    private FetchQuorumRecordsResponseData tryCompleteFetchQuorumRecordsRequest(
-        FetchQuorumRecordsRequestData request
-    ) throws IOException {
-        Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.leaderEpoch());
+    private FetchResponseData tryCompleteFetchRequest(
+        int replicaId,
+        FetchRequestData.FetchPartition request
+    ) {
+        Optional<Errors> errorOpt = validateLeaderOnlyRequest(request.currentLeaderEpoch());
         if (errorOpt.isPresent()) {
-            return buildFetchQuorumRecordsResponse(
-                errorOpt.get(),
-                MemoryRecords.EMPTY,
-                Optional.empty());
+            return buildEmptyFetchResponse(errorOpt.get(), Optional.empty());
         }
 
-        int replicaId = request.replicaId();
         long fetchOffset = request.fetchOffset();
         int lastFetchedEpoch = request.lastFetchedEpoch();
         LeaderState state = quorum.leaderStateOrThrow();
@@ -922,18 +934,16 @@ public class KafkaRaftClient implements RaftClient {
         Optional<OffsetAndEpoch> nextOffsetOpt = validateFetchOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
 
         if (nextOffsetOpt.isPresent()) {
-            OffsetAndEpoch nextOffsetAndEpoch = nextOffsetOpt.get();
-            return buildEmptyFetchQuorumRecordsResponse(Errors.NONE, highWatermark)
-                .setNextFetchOffset(nextOffsetAndEpoch.offset)
-                .setNextFetchOffsetEpoch(nextOffsetAndEpoch.epoch);
+            Optional<FetchResponseData.OffsetAndEpoch> nextOffsetAndEpoch =
+                nextOffsetOpt.map(offsetAndEpoch ->
+                    new FetchResponseData.OffsetAndEpoch()
+                        .setNextFetchOffset(offsetAndEpoch.offset)
+                        .setNextFetchOffsetEpoch(offsetAndEpoch.epoch));
+            return buildFetchResponse(Errors.NONE, MemoryRecords.EMPTY, nextOffsetAndEpoch, highWatermark);
         } else {
             LogFetchInfo info = log.read(fetchOffset, OptionalLong.empty());
             updateReplicaEndOffset(state, replicaId, info.startOffsetMetadata);
-
-            return buildFetchQuorumRecordsResponse(
-                    Errors.NONE,
-                    info.records,
-                    highWatermark);
+            return buildFetchResponse(Errors.NONE, info.records, Optional.empty(), highWatermark);
         }
     }
 
@@ -957,13 +967,26 @@ public class KafkaRaftClient implements RaftClient {
         return OptionalInt.of(leaderIdOrNil);
     }
 
-    private boolean handleFetchQuorumRecordsResponse(
+    private boolean handleFetchResponse(
         RaftResponse.Inbound responseMetadata
     ) throws IOException {
-        FetchQuorumRecordsResponseData response = (FetchQuorumRecordsResponseData) responseMetadata.data;
-        Errors error = Errors.forCode(response.errorCode());
-        OptionalInt responseLeaderId = optionalLeaderId(response.leaderId());
-        int responseEpoch = response.leaderEpoch();
+        FetchResponseData response = (FetchResponseData) responseMetadata.data;
+        Errors topLevelError = Errors.forCode(response.errorCode());
+        if (topLevelError != Errors.NONE) {
+            return handleTopLevelError(topLevelError, responseMetadata);
+        }
+
+        if (!RaftUtil.hasValidTopicPartition(response, log.topicPartition())) {
+            return false;
+        }
+
+        FetchResponseData.FetchablePartitionResponse partitionResponse =
+            response.responses().get(0).partitionResponses().get(0);
+
+        FetchResponseData.LeaderIdAndEpoch currentLeaderIdAndEpoch = partitionResponse.currentLeader();
+        OptionalInt responseLeaderId = optionalLeaderId(currentLeaderIdAndEpoch.leaderId());
+        int responseEpoch = currentLeaderIdAndEpoch.leaderEpoch();
+        Errors error = Errors.forCode(partitionResponse.errorCode());
 
         Optional<Boolean> handled = maybeHandleCommonResponse(error, responseLeaderId, responseEpoch);
         if (handled.isPresent()) {
@@ -972,18 +995,18 @@ public class KafkaRaftClient implements RaftClient {
 
         FollowerState state = quorum.followerStateOrThrow();
         if (error == Errors.NONE) {
-            if (response.nextFetchOffset() > 0) {
+            FetchResponseData.OffsetAndEpoch nextOffsetAndEpoch = partitionResponse.nextOffsetAndEpoch();
+            if (nextOffsetAndEpoch.nextFetchOffset() > 0) {
                 // The leader is asking us to truncate before continuing
                 OffsetAndEpoch nextFetchOffsetAndEpoch = new OffsetAndEpoch(
-                    response.nextFetchOffset(), response.nextFetchOffsetEpoch());
+                    nextOffsetAndEpoch.nextFetchOffset(), nextOffsetAndEpoch.nextFetchOffsetEpoch());
 
                 log.truncateToEndOffset(nextFetchOffsetAndEpoch).ifPresent(truncationOffset -> {
                     logger.info("Truncated to offset {} after out of range error from leader {}",
                         truncationOffset, quorum.leaderIdOrNil());
                 });
             } else {
-                ByteBuffer recordsBuffer = response.records();
-                MemoryRecords records = MemoryRecords.readableRecords(recordsBuffer);
+                Records records = (Records) partitionResponse.recordSet();
                 if (records.sizeInBytes() > 0) {
                     LogAppendInfo info = log.appendAsFollower(records);
                     OffsetAndEpoch endOffset = endOffset();
@@ -991,8 +1014,8 @@ public class KafkaRaftClient implements RaftClient {
                     kafkaRaftMetrics.updateLogEnd(endOffset);
                     logger.trace("Follower end offset updated to {} after append", endOffset);
                 }
-                OptionalLong highWatermark = response.highWatermark() < 0 ?
-                    OptionalLong.empty() : OptionalLong.of(response.highWatermark());
+                OptionalLong highWatermark = partitionResponse.highWatermark() < 0 ?
+                    OptionalLong.empty() : OptionalLong.of(partitionResponse.highWatermark());
                 updateFollowerHighWatermark(state, highWatermark);
             }
 
@@ -1204,6 +1227,16 @@ public class KafkaRaftClient implements RaftClient {
         }
     }
 
+    private boolean handleTopLevelError(Errors error, RaftResponse.Inbound response) {
+        if (error == Errors.BROKER_NOT_AVAILABLE) {
+            return false;
+        } else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED) {
+            throw new ClusterAuthorizationException("Received cluster authorization error in response " + response);
+        } else {
+            return handleUnexpectedError(error, response);
+        }
+    }
+
     private boolean handleUnexpectedError(Errors error, RaftResponse.Inbound response) {
         logger.error("Unexpected error {} in {} response: {}",
             error, response.data.apiKey(), response);
@@ -1216,8 +1249,8 @@ public class KafkaRaftClient implements RaftClient {
         final boolean handledSuccessfully;
 
         switch (apiKey) {
-            case FETCH_QUORUM_RECORDS:
-                handledSuccessfully = handleFetchQuorumRecordsResponse(response);
+            case FETCH:
+                handledSuccessfully = handleFetchResponse(response);
                 break;
 
             case VOTE:
@@ -1294,8 +1327,8 @@ public class KafkaRaftClient implements RaftClient {
         final CompletableFuture<? extends ApiMessage> responseFuture;
 
         switch (apiKey) {
-            case FETCH_QUORUM_RECORDS:
-                responseFuture = handleFetchQuorumRecordsRequest(request);
+            case FETCH:
+                responseFuture = handleFetchRequest(request);
                 break;
 
             case VOTE:
@@ -1423,17 +1456,20 @@ public class KafkaRaftClient implements RaftClient {
         }
     }
 
-    private FetchQuorumRecordsRequestData buildFetchQuorumRecordsRequest() {
-        return new FetchQuorumRecordsRequestData()
-            .setLeaderEpoch(quorum.epoch())
-            .setReplicaId(quorum.localId)
-            .setFetchOffset(log.endOffset().offset)
-            .setLastFetchedEpoch(log.lastFetchedEpoch())
-            .setMaxWaitTimeMs(fetchMaxWaitMs);
+    private FetchRequestData buildFetchRequest() {
+        FetchRequestData request = RaftUtil.singletonFetchRequest(log.topicPartition(), fetchPartition -> {
+            fetchPartition
+                .setCurrentLeaderEpoch(quorum.epoch())
+                .setLastFetchedEpoch(log.lastFetchedEpoch())
+                .setFetchOffset(log.endOffset().offset);
+        });
+        return request
+            .setMaxWaitMs(fetchMaxWaitMs)
+            .setReplicaId(quorum.localId);
     }
 
-    private void maybeSendFetchQuorumRecords(long currentTimeMs, int leaderId) throws IOException {
-        maybeSendRequest(currentTimeMs, leaderId, this::buildFetchQuorumRecordsRequest);
+    private void maybeSendFetch(long currentTimeMs, int leaderId) throws IOException {
+        maybeSendRequest(currentTimeMs, leaderId, this::buildFetchRequest);
     }
 
     private FindQuorumRequestData buildFindQuorumRequest() {
@@ -1469,7 +1505,7 @@ public class KafkaRaftClient implements RaftClient {
                 maybeSendFindQuorum(currentTimeMs);
             } else if (state.hasLeader()) {
                 int leaderId = state.leaderId();
-                maybeSendFetchQuorumRecords(currentTimeMs, leaderId);
+                maybeSendFetch(currentTimeMs, leaderId);
             }
         }
 

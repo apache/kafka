@@ -167,9 +167,8 @@ class RequestQuotaTest extends BaseRequestTest {
     for (apiKey <- ApiKeys.values) {
       apiKey match {
         case ApiKeys.VOTE | ApiKeys.FIND_QUORUM |
-             ApiKeys.BEGIN_QUORUM_EPOCH | ApiKeys.END_QUORUM_EPOCH |
-             ApiKeys.FETCH_QUORUM_RECORDS =>
-          // Those apis are not implemented yet
+             ApiKeys.BEGIN_QUORUM_EPOCH | ApiKeys.END_QUORUM_EPOCH =>
+          // FIXME: Those apis are not implemented yet
         case _ =>
           submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
       }
@@ -577,14 +576,6 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.END_QUORUM_EPOCH =>
           new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
             tp, 10, 2, 5, Collections.singletonList(3)))
-
-        case ApiKeys.FETCH_QUORUM_RECORDS =>
-          new FetchQuorumRecordsRequest.Builder(new FetchQuorumRecordsRequestData()
-              .setFetchOffset(5)
-              .setLastFetchedEpoch(1)
-              .setLeaderEpoch(1)
-              .setReplicaId(10)
-              .setClusterId("cluster"))
 
         case ApiKeys.FIND_QUORUM =>
           new FindQuorumRequest.Builder(new FindQuorumRequestData()

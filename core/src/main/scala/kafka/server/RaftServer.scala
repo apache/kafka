@@ -253,6 +253,8 @@ class RaftServer(val config: KafkaConfig,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
       raftConfig.requestTimeoutMs,
+      config.connectionSetupTimeoutMs,
+      config.connectionSetupTimeoutMaxMs,
       ClientDnsLookup.USE_ALL_DNS_IPS,
       time,
       discoverBrokerVersions,
@@ -340,7 +342,7 @@ object RaftServer extends Logging {
       val verbose = serverProps.getProperty("verbose").toBoolean
       val server = new RaftServer(config, verbose)
 
-      Exit.addShutdownHook("raft-shutdown-hook", server.shutdown)
+      Exit.addShutdownHook("raft-shutdown-hook", server.shutdown())
 
       server.startup()
       server.awaitShutdown()

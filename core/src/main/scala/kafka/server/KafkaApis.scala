@@ -186,7 +186,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.VOTE => handleVote(request)
         case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginEpoch(request)
         case ApiKeys.END_QUORUM_EPOCH => handleEndEpoch(request)
-        case ApiKeys.FETCH_QUORUM_RECORDS => handleFetchRecords(request)
         case ApiKeys.FIND_QUORUM => handleFindQuorum(request)
         case ApiKeys.DESCRIBE_QUORUM => handleDescribeQuorum(request)
       }

@@ -197,8 +197,6 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new BeginQuorumEpochResponse(struct, version);
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochResponse(struct, version);
-            case FETCH_QUORUM_RECORDS:
-                return new FetchQuorumRecordsResponse(struct, version);
             case FIND_QUORUM:
                 return new FindQuorumResponse(struct, version);
             case DESCRIBE_QUORUM:

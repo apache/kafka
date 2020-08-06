@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 55,
+  "apiKey": 54,
   "type": "response",
   "name": "FindQuorumResponse",
   "validVersions": "0",

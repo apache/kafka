@@ -23,12 +23,12 @@ import java.util.concurrent.atomic.AtomicReference
 
 import org.apache.kafka.clients.MockClient
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
-import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchQuorumRecordsRequestData, FetchQuorumRecordsResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, EndQuorumEpochRequest, RequestHeader, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
-import org.apache.kafka.raft.{RaftRequest, RaftResponse}
+import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.raft.{RaftRequest, RaftResponse, RaftUtil}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -111,7 +111,6 @@ class KafkaNetworkChannelTest {
 
   @Test
   def testReceiveAndSendInboundRequest(): Unit = {
-
     for (apiKey <- RaftApis) {
       val request = KafkaNetworkChannel.buildRequest(buildTestRequest(apiKey)).build()
       val responseRef = new AtomicReference[AbstractResponse]()
@@ -131,7 +130,7 @@ class KafkaNetworkChannelTest {
       channel.receive(1000)
 
       assertNotNull(responseRef.get)
-      assertEquals(1, responseRef.get.errorCounts.get(Errors.INVALID_REQUEST))
+      assertEquals(Errors.INVALID_REQUEST, extractError(KafkaNetworkChannel.responseData(responseRef.get)))
     }
   }
 
@@ -170,13 +169,14 @@ class KafkaNetworkChannelTest {
         val lastEpoch = 4
         VoteRequest.singletonRequest(topicPartition, clusterId, leaderEpoch, leaderId, lastEpoch, 329)
 
-      case ApiKeys.FETCH_QUORUM_RECORDS =>
-        new FetchQuorumRecordsRequestData()
-          .setClusterId(clusterId)
-          .setLeaderEpoch(5)
-          .setReplicaId(1)
-          .setFetchOffset(333)
-          .setLastFetchedEpoch(5)
+      case ApiKeys.FETCH =>
+        val request = RaftUtil.singletonFetchRequest(topicPartition, fetchPartition => {
+          fetchPartition
+            .setCurrentLeaderEpoch(5)
+            .setFetchOffset(333)
+            .setLastFetchedEpoch(5)
+        })
+        request.setReplicaId(1)
 
       case ApiKeys.FIND_QUORUM =>
         new FindQuorumRequestData()
@@ -203,8 +203,8 @@ class KafkaNetworkChannelTest {
       case ApiKeys.VOTE =>
         VoteResponse.singletonResponse(error, topicPartition, Errors.NONE, 1, 5, false);
 
-      case ApiKeys.FETCH_QUORUM_RECORDS =>
-        new FetchQuorumRecordsResponseData()
+      case ApiKeys.FETCH =>
+        new FetchResponseData()
           .setErrorCode(error.code)
 
       case ApiKeys.FIND_QUORUM =>
@@ -220,7 +220,7 @@ class KafkaNetworkChannelTest {
     val code = response match {
       case res: BeginQuorumEpochResponseData => res.errorCode
       case res: EndQuorumEpochResponseData => res.errorCode
-      case res: FetchQuorumRecordsResponseData => res.errorCode
+      case res: FetchResponseData => res.errorCode
       case res: VoteResponseData => res.errorCode
       case res: FindQuorumResponseData => res.errorCode
     }
@@ -234,7 +234,7 @@ object KafkaNetworkChannelTest {
     ApiKeys.VOTE,
     ApiKeys.BEGIN_QUORUM_EPOCH,
     ApiKeys.END_QUORUM_EPOCH,
-    ApiKeys.FETCH_QUORUM_RECORDS,
+    ApiKeys.FETCH,
     ApiKeys.FIND_QUORUM
   )
 

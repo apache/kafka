@@ -43,8 +43,8 @@ object KafkaNetworkChannel {
         new BeginQuorumEpochResponse(beginEpochResponse)
       case endEpochResponse: EndQuorumEpochResponseData =>
         new EndQuorumEpochResponse(endEpochResponse)
-      case fetchRecordsResponse: FetchQuorumRecordsResponseData =>
-        new FetchQuorumRecordsResponse(fetchRecordsResponse)
+      case fetchResponse: FetchResponseData =>
+        new FetchResponse(fetchResponse)
       case findLeaderResponse: FindQuorumResponseData =>
         new FindQuorumResponse(findLeaderResponse)
     }
@@ -58,12 +58,36 @@ object KafkaNetworkChannel {
         new BeginQuorumEpochRequest.Builder(beginEpochRequest)
       case endEpochRequest: EndQuorumEpochRequestData =>
         new EndQuorumEpochRequest.Builder(endEpochRequest)
-      case fetchRecordsRequest: FetchQuorumRecordsRequestData =>
-        new FetchQuorumRecordsRequest.Builder(fetchRecordsRequest)
+      case fetchRequest: FetchRequestData =>
+        // Since we already have the request, we go through a simplified builder
+        new AbstractRequest.Builder[FetchRequest](ApiKeys.FETCH) {
+          override def build(version: Short): FetchRequest = new FetchRequest(fetchRequest, version)
+        }
       case findLeaderRequest: FindQuorumRequestData =>
         new FindQuorumRequest.Builder(findLeaderRequest)
     }
   }
+
+  private[raft] def responseData(response: AbstractResponse): ApiMessage = {
+    response match {
+      case voteResponse: VoteResponse => voteResponse.data
+      case beginEpochResponse: BeginQuorumEpochResponse => beginEpochResponse.data
+      case endEpochResponse: EndQuorumEpochResponse => endEpochResponse.data
+      case fetchResponse: FetchResponse[_] => fetchResponse.data
+      case findLeaderResponse: FindQuorumResponse => findLeaderResponse.data
+    }
+  }
+
+  private[raft] def requestData(request: AbstractRequest): ApiMessage = {
+    request match {
+      case voteRequest: VoteRequest => voteRequest.data
+      case beginEpochRequest: BeginQuorumEpochRequest => beginEpochRequest.data
+      case endEpochRequest: EndQuorumEpochRequest => endEpochRequest.data
+      case fetchRequest: FetchRequest => fetchRequest.data
+      case findLeaderRequest: FindQuorumRequest => findLeaderRequest.data
+    }
+  }
+
 }
 
 class KafkaNetworkChannel(time: Time,
@@ -162,26 +186,6 @@ class KafkaNetworkChannel(time: Time,
       responseData(response.responseBody)
     }
     new RaftResponse.Inbound(header.correlationId, data, response.destination.toInt)
-  }
-
-  private def responseData(response: AbstractResponse): ApiMessage = {
-    response match {
-      case voteResponse: VoteResponse => voteResponse.data
-      case beginEpochResponse: BeginQuorumEpochResponse => beginEpochResponse.data
-      case endEpochResponse: EndQuorumEpochResponse => endEpochResponse.data
-      case fetchRecordsResponse: FetchQuorumRecordsResponse => fetchRecordsResponse.data
-      case findLeaderResponse: FindQuorumResponse => findLeaderResponse.data
-    }
-  }
-
-  private def requestData(request: AbstractRequest): ApiMessage = {
-    request match {
-      case voteRequest: VoteRequest => voteRequest.data
-      case beginEpochRequest: BeginQuorumEpochRequest => beginEpochRequest.data
-      case endEpochRequest: EndQuorumEpochRequest => endEpochRequest.data
-      case fetchRecordsRequest: FetchQuorumRecordsRequest => fetchRecordsRequest.data
-      case findLeaderRequest: FindQuorumRequest => findLeaderRequest.data
-    }
   }
 
   private def pollInboundResponses(timeoutMs: Long): util.List[RaftMessage] = {

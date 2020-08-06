@@ -22,45 +22,29 @@ import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
-import org.apache.kafka.common.message.FetchQuorumRecordsResponseData;
+import org.apache.kafka.common.message.FetchRequestData;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FindQuorumResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.FileRecords;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
-import org.apache.kafka.common.requests.EndQuorumEpochRequest;
-import org.apache.kafka.common.requests.VoteRequest;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.OptionalInt;
+import java.util.function.Consumer;
+
+import static java.util.Collections.singletonList;
 
 public class RaftUtil {
-
-    public static ByteBuffer serializeRecords(Records records) throws IOException {
-        if (records instanceof MemoryRecords) {
-            MemoryRecords memoryRecords = (MemoryRecords) records;
-            return memoryRecords.buffer();
-        } else if (records instanceof FileRecords) {
-            FileRecords fileRecords = (FileRecords) records;
-            ByteBuffer buffer = ByteBuffer.allocate(fileRecords.sizeInBytes());
-            fileRecords.readInto(buffer, 0);
-            return buffer;
-        } else {
-            throw new UnsupportedOperationException("Serialization not yet supported for " + records.getClass());
-        }
-    }
 
     public static ApiMessage errorResponse(ApiKeys apiKey,
                                            Errors error) {
         return errorResponse(apiKey, error, 0, OptionalInt.empty());
     }
 
+    // TODO: Remove epoch/leaderId from parameters after FindQuorum is gone
     public static ApiMessage errorResponse(
         ApiKeys apiKey,
         Errors error,
@@ -70,18 +54,13 @@ public class RaftUtil {
         int leaderId = leaderIdOpt.orElse(-1);
         switch (apiKey) {
             case VOTE:
-                return VoteRequest.getTopLevelErrorResponse(error);
+                return new VoteResponseData().setErrorCode(error.code());
             case BEGIN_QUORUM_EPOCH:
-                return BeginQuorumEpochRequest.getTopLevelErrorResponse(error);
+                return new BeginQuorumEpochResponseData().setErrorCode(error.code());
             case END_QUORUM_EPOCH:
-                return EndQuorumEpochRequest.getTopLevelErrorResponse(error);
-            case FETCH_QUORUM_RECORDS:
-                return new FetchQuorumRecordsResponseData()
-                    .setErrorCode(error.code())
-                    .setLeaderEpoch(epoch)
-                    .setLeaderId(leaderId)
-                    .setHighWatermark(-1)
-                    .setRecords(ByteBuffer.wrap(new byte[0]));
+                return new EndQuorumEpochResponseData().setErrorCode(error.code());
+            case FETCH:
+                return new FetchResponseData().setErrorCode(error.code());
             case FIND_QUORUM:
                 return new FindQuorumResponseData()
                     .setErrorCode(error.code())
@@ -90,6 +69,60 @@ public class RaftUtil {
             default:
                 throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
         }
+    }
+
+    public static FetchRequestData singletonFetchRequest(
+        TopicPartition topicPartition,
+        Consumer<FetchRequestData.FetchPartition> partitionConsumer
+    ) {
+        FetchRequestData.FetchPartition fetchPartition =
+            new FetchRequestData.FetchPartition()
+                .setPartition(topicPartition.partition());
+        partitionConsumer.accept(fetchPartition);
+
+        FetchRequestData.FetchTopic fetchTopic =
+            new FetchRequestData.FetchTopic()
+                .setTopic(topicPartition.topic())
+                .setPartitions(singletonList(fetchPartition));
+
+        return new FetchRequestData()
+            .setTopics(singletonList(fetchTopic));
+    }
+
+    public static FetchResponseData singletonFetchResponse(
+        TopicPartition topicPartition,
+        Errors topLevelError,
+        Consumer<FetchResponseData.FetchablePartitionResponse> partitionConsumer
+    ) {
+        FetchResponseData.FetchablePartitionResponse fetchablePartition =
+            new FetchResponseData.FetchablePartitionResponse();
+
+        fetchablePartition.setPartition(topicPartition.partition());
+
+        partitionConsumer.accept(fetchablePartition);
+
+        FetchResponseData.FetchableTopicResponse fetchableTopic =
+            new FetchResponseData.FetchableTopicResponse()
+                .setTopic(topicPartition.topic())
+                .setPartitionResponses(Collections.singletonList(fetchablePartition));
+
+        return new FetchResponseData()
+            .setErrorCode(topLevelError.code())
+            .setResponses(Collections.singletonList(fetchableTopic));
+    }
+
+    static boolean hasValidTopicPartition(FetchRequestData data, TopicPartition topicPartition) {
+        return data.topics().size() == 1 &&
+            data.topics().get(0).topic().equals(topicPartition.topic()) &&
+            data.topics().get(0).partitions().size() == 1 &&
+            data.topics().get(0).partitions().get(0).partition() == topicPartition.partition();
+    }
+
+    static boolean hasValidTopicPartition(FetchResponseData data, TopicPartition topicPartition) {
+        return data.responses().size() == 1 &&
+            data.responses().get(0).topic().equals(topicPartition.topic()) &&
+            data.responses().get(0).partitionResponses().size() == 1 &&
+            data.responses().get(0).partitionResponses().get(0).partition() == topicPartition.partition();
     }
 
     static boolean hasValidTopicPartition(VoteResponseData data, TopicPartition topicPartition) {
