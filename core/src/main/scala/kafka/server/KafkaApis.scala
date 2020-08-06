@@ -998,8 +998,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           else
             None
 
-          val foundOpt = replicaManager.fetchOffsetForTimestamp(topicPartition,
-            partitionData.timestamp,
+          val eitherOffsetOrTimestamp = (partitionData.offset, partitionData.timestamp) match {
+            case (ListOffsetRequest.ANY_OFFSET, timestamp) => Right(timestamp)
+            case (offset, ListOffsetRequest.EARLIEST_TIMESTAMP | ListOffsetRequest.LATEST_TIMESTAMP) => Left(offset)
+            case _ => sys.error("TODO, Cannot specify both offset & timestamp")
+          }
+
+          val foundOpt = replicaManager.fetchOffset(topicPartition,
+            eitherOffsetOrTimestamp,
             isolationLevelOpt,
             partitionData.currentLeaderEpoch,
             fetchOnlyFromLeader)

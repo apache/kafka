@@ -582,6 +582,18 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
+   * Search the message offset and timestamp based on offset.
+   *
+   * This method returns an option of TimestampOffset. If no message at this offset is found, return None
+   *
+   * @param offset The offset to search for.
+   * @return the timestamp and offset of the message at this offset. None will be returned if there is no such message.
+   */
+  def findOffset(offset: Long): Option[TimestampAndOffset] = {
+    Option(log.searchForOffset(offset, offsetIndex.lookup(offset).position))
+  }
+
+  /**
    * Close this log segment
    */
   def close(): Unit = {
@@ -642,6 +654,11 @@ class LogSegment private[log] (val log: FileRecords,
    * The largest timestamp this segment contains.
    */
   def largestTimestamp = if (maxTimestampSoFar >= 0) maxTimestampSoFar else lastModified
+
+  /**
+   * The largest offset this segment contains.
+   */
+  def largestOffset = offsetIndex.lastOffset
 
   /**
    * Change the last modified time for this log segment

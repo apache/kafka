@@ -386,7 +386,8 @@ class PartitionTest extends AbstractPartitionTest {
     def assertFetchOffsetError(error: Errors,
                                currentLeaderEpochOpt: Optional[Integer]): Unit = {
       try {
-        partition.fetchOffsetForTimestamp(0L,
+        partition.fetchOffset(
+          eitherOffsetOrTimestamp = Right(0L),
           isolationLevel = None,
           currentLeaderEpoch = currentLeaderEpochOpt,
           fetchOnlyFromLeader = true)
@@ -413,7 +414,8 @@ class PartitionTest extends AbstractPartitionTest {
                                currentLeaderEpochOpt: Optional[Integer],
                                fetchOnlyLeader: Boolean): Unit = {
       try {
-        partition.fetchOffsetForTimestamp(0L,
+        partition.fetchOffset(
+          eitherOffsetOrTimestamp = Right(0L),
           isolationLevel = None,
           currentLeaderEpoch = currentLeaderEpochOpt,
           fetchOnlyFromLeader = fetchOnlyLeader)
@@ -441,7 +443,8 @@ class PartitionTest extends AbstractPartitionTest {
     val leaderEpoch = 5
     val partition = setupPartitionWithMocks(leaderEpoch, isLeader = true)
 
-    val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
+    val timestampAndOffsetOpt = partition.fetchOffset(
+      eitherOffsetOrTimestamp = Right(ListOffsetRequest.LATEST_TIMESTAMP),
       isolationLevel = None,
       currentLeaderEpoch = Optional.empty(),
       fetchOnlyFromLeader = true)
@@ -508,8 +511,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
       try {
-        Right(partition.fetchOffsetForTimestamp(
-          timestamp = timestamp,
+        Right(partition.fetchOffset(
+          eitherOffsetOrTimestamp = Right(timestamp),
           isolationLevel = isolation,
           currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
           fetchOnlyFromLeader = true
@@ -748,7 +751,8 @@ class PartitionTest extends AbstractPartitionTest {
     partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0)
 
     def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
+      val res = partition.fetchOffset(
+        eitherOffsetOrTimestamp = Right(ListOffsetRequest.LATEST_TIMESTAMP),
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)
@@ -757,7 +761,8 @@ class PartitionTest extends AbstractPartitionTest {
     }
 
     def fetchEarliestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
-      val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP,
+      val res = partition.fetchOffset(
+        eitherOffsetOrTimestamp = Right(ListOffsetRequest.EARLIEST_TIMESTAMP),
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)

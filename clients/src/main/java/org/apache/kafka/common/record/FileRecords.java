@@ -334,6 +334,28 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
+     * Search forward for a message by offset.
+     *
+     * @param targetOffset The offset to search for.
+     * @param startingPosition The starting position to search.
+     * @return The timestamp and offset of the message found. Null if no message is found.
+     */
+    public TimestampAndOffset searchForOffset(long targetOffset, int startingPosition) {
+        for (RecordBatch batch : batchesFrom(startingPosition)) {
+            if (batch.baseOffset() <= targetOffset && batch.lastOffset() >= targetOffset) {
+                // We found a message
+                for (Record record : batch) {
+                    long timestamp = record.timestamp();
+                    if (record.offset() == targetOffset)
+                        return new TimestampAndOffset(timestamp, record.offset(),
+                                maybeLeaderEpoch(batch.partitionLeaderEpoch()));
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Return the largest timestamp of the messages after a given position in this file message set.
      * @param startingPosition The starting position.
      * @return The largest timestamp of the messages after the given position.

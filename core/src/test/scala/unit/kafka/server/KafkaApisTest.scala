@@ -961,9 +961,9 @@ class KafkaApisTest {
     val isolationLevel = IsolationLevel.READ_UNCOMMITTED
     val currentLeaderEpoch = Optional.of[Integer](15)
 
-    EasyMock.expect(replicaManager.fetchOffsetForTimestamp(
+    EasyMock.expect(replicaManager.fetchOffset(
       EasyMock.eq(tp),
-      EasyMock.eq(ListOffsetRequest.EARLIEST_TIMESTAMP),
+      EasyMock.eq(Right(ListOffsetRequest.EARLIEST_TIMESTAMP)),
       EasyMock.eq(Some(isolationLevel)),
       EasyMock.eq(currentLeaderEpoch),
       fetchOnlyFromLeader = EasyMock.eq(true))
@@ -1964,9 +1964,9 @@ class KafkaApisTest {
     val latestOffset = 15L
     val currentLeaderEpoch = Optional.empty[Integer]()
 
-    EasyMock.expect(replicaManager.fetchOffsetForTimestamp(
+    EasyMock.expect(replicaManager.fetchOffset(
       EasyMock.eq(tp),
-      EasyMock.eq(ListOffsetRequest.LATEST_TIMESTAMP),
+      EasyMock.eq(Right(ListOffsetRequest.LATEST_TIMESTAMP)),
       EasyMock.eq(Some(isolationLevel)),
       EasyMock.eq(currentLeaderEpoch),
       fetchOnlyFromLeader = EasyMock.eq(true))

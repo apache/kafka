@@ -915,13 +915,13 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def fetchOffsetForTimestamp(topicPartition: TopicPartition,
-                              timestamp: Long,
-                              isolationLevel: Option[IsolationLevel],
-                              currentLeaderEpoch: Optional[Integer],
-                              fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = {
+  def fetchOffset(topicPartition: TopicPartition,
+                  eitherOffsetOrTimestamp: Either[Long,Long],
+                  isolationLevel: Option[IsolationLevel],
+                  currentLeaderEpoch: Optional[Integer],
+                  fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = {
     val partition = getPartitionOrException(topicPartition)
-    partition.fetchOffsetForTimestamp(timestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader)
+    partition.fetchOffset(eitherOffsetOrTimestamp, isolationLevel, currentLeaderEpoch, fetchOnlyFromLeader)
   }
 
   def legacyFetchOffsetsForTimestamp(topicPartition: TopicPartition,

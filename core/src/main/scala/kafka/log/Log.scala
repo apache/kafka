@@ -1632,6 +1632,27 @@ class Log(@volatile private var _dir: File,
     }
   }
 
+  /**
+   * Get a timestamp based on the given offset
+   *
+   * @param targetOffset The offset to fetch.
+   * @return The offset and timestamp of the message at this offset.
+   *         None if no such message is found.
+   */
+  def fetchOffset(targetOffset: Long): Option[TimestampAndOffset] = {
+    maybeHandleIOException(s"Error while fetching offset for $topicPartition in dir ${dir.getParent}") {
+      debug(s"Searching offset $targetOffset")
+
+      // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
+      // constant time access while being safe to use with concurrent collections unlike `toArray`.
+      val segmentsCopy = logSegments.toBuffer
+
+      // We need to search the first segment whose largest offset is >= the target offset if there is one.
+      val targetSeg = segmentsCopy.find(_.largestOffset >= targetOffset)
+      targetSeg.flatMap(_.findOffset(targetOffset))
+    }
+  }
+
   def legacyFetchOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
     // constant time access while being safe to use with concurrent collections unlike `toArray`.

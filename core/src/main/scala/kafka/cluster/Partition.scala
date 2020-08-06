@@ -1046,10 +1046,10 @@ class Partition(val topicPartition: TopicPartition,
       lastStableOffset = initialLastStableOffset)
   }
 
-  def fetchOffsetForTimestamp(timestamp: Long,
-                              isolationLevel: Option[IsolationLevel],
-                              currentLeaderEpoch: Optional[Integer],
-                              fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
+  def fetchOffset(eitherOffsetOrTimestamp: Either[Long,Long],
+                  isolationLevel: Option[IsolationLevel],
+                  currentLeaderEpoch: Optional[Integer],
+                  fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localLog = localLogWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
 
@@ -1074,21 +1074,23 @@ class Partition(val topicPartition: TopicPartition,
         s"high watermark (${localLog.highWatermark}) is lagging behind the " +
         s"start offset from the beginning of this epoch ($epochStart)."))
 
-    def getOffsetByTimestamp: Option[TimestampAndOffset] = {
+    def getOffsetByTimestamp(timestamp: Long): Option[TimestampAndOffset] = {
       logManager.getLog(topicPartition).flatMap(log => log.fetchOffsetByTimestamp(timestamp))
     }
 
     // If we're in the lagging HW state after a leader election, throw OffsetNotAvailable for "latest" offset
     // or for a timestamp lookup that is beyond the last fetchable offset.
-    timestamp match {
-      case ListOffsetRequest.LATEST_TIMESTAMP =>
+    eitherOffsetOrTimestamp match {
+      case Right(ListOffsetRequest.LATEST_TIMESTAMP) =>
         maybeOffsetsError.map(e => throw e)
           .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
-      case ListOffsetRequest.EARLIEST_TIMESTAMP =>
-        getOffsetByTimestamp
-      case _ =>
-        getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
+      case Right(ListOffsetRequest.EARLIEST_TIMESTAMP) =>
+        getOffsetByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP)
+      case Right(timestamp) =>
+        getOffsetByTimestamp(timestamp).filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
           .orElse(maybeOffsetsError.map(e => throw e))
+      case Left(offset) =>
+        logManager.getLog(topicPartition).flatMap(log => log.fetchOffset(offset))
     }
   }
 
