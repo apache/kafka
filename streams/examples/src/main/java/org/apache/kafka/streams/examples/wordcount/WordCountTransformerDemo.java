@@ -124,8 +124,13 @@ public final class WordCountTransformerDemo {
 
     public static void main(final String[] args) throws IOException {
         final Properties props = new Properties();
-        if (args != null && args.length == 1) {
-            props.load(new FileInputStream(args[0]));
+        if (args != null && args.length > 0) {
+            try (final FileInputStream fis = new FileInputStream(args[0])) {
+                props.load(fis);
+            }
+            if (args.length > 1) {
+                System.out.println("Warning: Some command line arguments were ignored. This demo only accepts an optional configuration file.");
+            }
         }
         props.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-transformer");
         props.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
