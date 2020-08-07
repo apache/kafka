@@ -421,8 +421,10 @@ public class SubscriptionState {
     }
 
     synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+        // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
+            // Cheap check is first to avoid evaluating the predicate if possible
             if (topicPartitionState.isFetchable() && isAvailable.test(topicPartition)) {
                 result.add(topicPartition);
             }
@@ -640,6 +642,7 @@ public class SubscriptionState {
     }
 
     public synchronized boolean hasAllFetchPositions() {
+        // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
         Iterator<TopicPartitionState> it = assignment.stateIterator();
         while (it.hasNext()) {
             if (!it.next().hasValidPosition()) {
