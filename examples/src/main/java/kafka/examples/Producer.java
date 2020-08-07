@@ -18,9 +18,8 @@ package kafka.examples;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
@@ -32,7 +31,7 @@ public class Producer extends Thread {
     private final KafkaProducer<Integer, String> producer;
     private final String topic;
     private final Boolean isAsync;
-    private int numRecords;
+    private final int numRecords;
     private final CountDownLatch latch;
 
     public Producer(final String topic,
@@ -75,13 +74,13 @@ public class Producer extends Thread {
             long startTime = System.currentTimeMillis();
             if (isAsync) { // Send asynchronously
                 producer.send(new ProducerRecord<>(topic,
-                    messageKey,
-                    messageStr), new DemoCallBack(startTime, messageKey, messageStr));
+                        messageKey,
+                        messageStr), this.createCallback(startTime, messageKey, messageStr));
             } else { // Send synchronously
                 try {
                     producer.send(new ProducerRecord<>(topic,
-                        messageKey,
-                        messageStr)).get();
+                            messageKey,
+                            messageStr)).get();
                     System.out.println("Sent message: (" + messageKey + ", " + messageStr + ")");
                 } catch (InterruptedException | ExecutionException e) {
                     e.printStackTrace();
@@ -93,38 +92,27 @@ public class Producer extends Thread {
         System.out.println("Producer sent " + numRecords + " records successfully");
         latch.countDown();
     }
-}
-
-class DemoCallBack implements Callback {
-
-    private final long startTime;
-    private final int key;
-    private final String message;
-
-    public DemoCallBack(long startTime, int key, String message) {
-        this.startTime = startTime;
-        this.key = key;
-        this.message = message;
-    }
 
     /**
-     * A callback method the user can implement to provide asynchronous handling of request completion. This method will
-     * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
-     * metadata will contain the special -1 value for all fields except for topicPartition, which will be valid.
+     * Factory method for creating a {@link org.apache.kafka.clients.producer.Callback}.
+     * The callback prints information about a sent record such as <i>elapsed time</i>.
      *
-     * @param metadata  The metadata for the record that was sent (i.e. the partition and offset). An empty metadata
-     *                  with -1 value for all fields except for topicPartition will be returned if an error occurred.
-     * @param exception The exception thrown during processing of this record. Null if no error occurred.
+     * @param startTime The time the record has been sent
+     * @param key The key of the message
+     * @param message The message that has been sent
+     * @return The callback for printing message details and record metadata
      */
-    public void onCompletion(RecordMetadata metadata, Exception exception) {
-        long elapsedTime = System.currentTimeMillis() - startTime;
-        if (metadata != null) {
-            System.out.println(
-                "message(" + key + ", " + message + ") sent to partition(" + metadata.partition() +
-                    "), " +
-                    "offset(" + metadata.offset() + ") in " + elapsedTime + " ms");
-        } else {
-            exception.printStackTrace();
-        }
+    Callback createCallback(final Long startTime, final Integer key, final String message) {
+        return (metadata, exception) -> {
+            long elapsedTime = System.currentTimeMillis() - startTime;
+            if (metadata != null) {
+                System.out.println(
+                        "message(" + key + ", " + message + ") sent to partition(" + metadata.partition() +
+                                "), " +
+                                "offset(" + metadata.offset() + ") in " + elapsedTime + " ms");
+            } else {
+                exception.printStackTrace();
+            }
+        };
     }
 }
