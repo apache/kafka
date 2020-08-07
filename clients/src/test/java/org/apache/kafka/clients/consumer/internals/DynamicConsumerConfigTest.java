@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
@@ -71,15 +72,33 @@ public class DynamicConsumerConfigTest {
         dynamicConfigs = new DynamicConsumerConfig(consumerClient, rebalanceConfig, time, logCtx);
     }
 
+    private void addListenerToConfigsFuture(RequestFuture<ClientResponse> configsFuture) {
+        if (configsFuture != null) {
+            configsFuture.addListener(new RequestFutureListener<ClientResponse>() {
+                @Override
+                public void onSuccess(ClientResponse resp) {
+                        dynamicConfigs.handleDescribeConfigsResponse((DescribeConfigsResponse) resp.responseBody());
+                }
+                @Override
+                public void onFailure(RuntimeException e) {
+                        dynamicConfigs.handleFailedConfigsResponse();
+                }
+            });
+        }
+    }
+
 
     @Test
     public void testPeriodicFetch() {
         // Send DescribeConfigsRequest
-        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        RequestFuture<ClientResponse> configsResponse = dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, consumerClient.pendingRequestCount());
-    
+
+        addListenerToConfigsFuture(configsResponse);
         // Respond to trigger callback
         client.prepareResponse(describeConfigsResponse(Errors.NONE));
+
+
         consumerClient.poll(time.timer(0));
        
         // Advance clock to before the dynamic config expiration
@@ -114,9 +133,11 @@ public class DynamicConsumerConfigTest {
 
     @Test
     public void testInvalidTimeoutAndHeartbeatConfig() {
-        // Send first DescribeConfigsRequest
-        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        // Send DescribeConfigsRequest
+        RequestFuture<ClientResponse> configsResponse = dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, consumerClient.pendingRequestCount());
+
+        addListenerToConfigsFuture(configsResponse);
 
         Map<String, String> configs = new HashMap<>();
 
@@ -150,9 +171,11 @@ public class DynamicConsumerConfigTest {
 
     @Test
     public void testValidTimeoutAndHeartbeatConfig() {
-        // Send first DescribeConfigsRequest
-        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        // Send DescribeConfigsRequest
+        RequestFuture<ClientResponse> configsResponse = dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, consumerClient.pendingRequestCount());
+
+        addListenerToConfigsFuture(configsResponse);
 
         Map<String, String> configs = new HashMap<>();
 
@@ -186,8 +209,11 @@ public class DynamicConsumerConfigTest {
 
     @Test
     public void testRevertToStaticConfigIfDynamicConfigPairMissing() {
-        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        // Send DescribeConfigsRequest
+        RequestFuture<ClientResponse> configsResponse = dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, consumerClient.pendingRequestCount());
+
+        addListenerToConfigsFuture(configsResponse);
 
         Map<String, String> configs = new HashMap<>();
 
@@ -215,8 +241,10 @@ public class DynamicConsumerConfigTest {
         time.sleep(2000);
 
         // Now another request should be sent
-        dynamicConfigs.maybeFetchConfigs(time.milliseconds());
+        configsResponse = dynamicConfigs.maybeFetchConfigs(time.milliseconds());
         assertEquals(1, consumerClient.pendingRequestCount());
+
+        addListenerToConfigsFuture(configsResponse);
         
 
         // Respond to trigger callback with no dynamic configs

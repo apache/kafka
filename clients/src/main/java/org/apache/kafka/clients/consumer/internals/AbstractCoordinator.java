@@ -363,7 +363,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
         startHeartbeatThreadIfNeeded();
         // This will only fetch configs and block for them if this is before the first JoinGroupRequest
-        dynamicConfig.maybeFetchInitialConfigs();
+        dynamicConfig.maybeFetchInitialConfigs(time.milliseconds());
         return joinGroupIfNeeded(timer);
     }
 

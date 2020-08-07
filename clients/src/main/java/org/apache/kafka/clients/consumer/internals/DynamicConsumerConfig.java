@@ -70,10 +70,10 @@ public class DynamicConsumerConfig {
      *
      * @return true if the {@link DescribeConfigsResponse} was recieved and processed
      */ 
-    public void maybeFetchInitialConfigs() {
+    public void maybeFetchInitialConfigs(long now) {
         if (updater.shouldFetchInitialConfigs()) {
             Node node = client.leastLoadedNode();
-            if (node != null) {
+            if (node != null && client.ready(node, now)) {
                 log.info("Trying to fetch initial dynamic configs before join group request");
                 RequestFuture<ClientResponse> configsFuture = client.send(node, updater.newRequestBuilder(this.clientId));
                 updater.sentConfigsRequest();
