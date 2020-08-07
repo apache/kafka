@@ -489,7 +489,7 @@ public class Fetcher<K, V> implements Closeable {
 
         // Validate each partition against the current leader and epoch
         // If we see a new metadata version, check all partitions
-        maybeValidateAssignments();
+        validatePositionsOnMetadataChange();
 
         // Collect positions needing validation, with backoff
         Map<TopicPartition, FetchPosition> partitionsToValidate = subscriptions
@@ -1127,7 +1127,7 @@ public class Fetcher<K, V> implements Closeable {
      * If we have seen new metadata (as tracked by {@link org.apache.kafka.clients.Metadata#updateVersion()}), then
      * we should check that all of the assignments have a valid position.
      */
-    private void maybeValidateAssignments() {
+    private void validatePositionsOnMetadataChange() {
         int newMetadataUpdateVersion = metadata.updateVersion();
         if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
             subscriptions.assignedPartitions().forEach(topicPartition -> {
@@ -1144,7 +1144,7 @@ public class Fetcher<K, V> implements Closeable {
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
-        maybeValidateAssignments();
+        validatePositionsOnMetadataChange();
 
         long currentTimeMs = time.milliseconds();
 
@@ -1156,7 +1156,7 @@ public class Fetcher<K, V> implements Closeable {
 
             Optional<Node> leaderOpt = position.currentLeader.leader;
             if (!leaderOpt.isPresent()) {
-                log.info("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
+                log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
                 metadata.requestUpdate();
                 continue;
             }
