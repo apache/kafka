@@ -258,7 +258,7 @@ public class ProduceResponse extends AbstractResponse {
         for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
             Struct topicData = struct.instance(RESPONSES_KEY_NAME);
             topicData.set(TOPIC_NAME, entry.getKey());
-            List<Struct> partitionArray = new ArrayList<>();
+            List<Struct> partitionArray = new ArrayList<>(entry.getValue().size());
             for (Map.Entry<Integer, PartitionResponse> partitionEntry : entry.getValue().entrySet()) {
                 PartitionResponse part = partitionEntry.getValue();
                 short errorCode = part.error.code();
@@ -278,7 +278,7 @@ public class ProduceResponse extends AbstractResponse {
                 if (partStruct.hasField(RECORD_ERRORS_KEY_NAME)) {
                     List<Struct> recordErrors = Collections.emptyList();
                     if (!part.recordErrors.isEmpty()) {
-                        recordErrors = new ArrayList<>();
+                        recordErrors = new ArrayList<>(part.recordErrors.size());
                         for (RecordError indexAndMessage : part.recordErrors) {
                             Struct indexAndMessageStruct = partStruct.instance(RECORD_ERRORS_KEY_NAME)
                                     .set(BATCH_INDEX_KEY_NAME, indexAndMessage.batchIndex)
