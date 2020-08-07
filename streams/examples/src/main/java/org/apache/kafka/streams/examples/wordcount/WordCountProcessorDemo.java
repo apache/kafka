@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.examples.wordcount;
 
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -31,6 +30,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
