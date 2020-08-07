@@ -366,11 +366,6 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    private synchronized void disableHeartbeatThread() {
-        if (heartbeatThread != null)
-            heartbeatThread.disable();
-    }
-
     private void closeHeartbeatThread() {
         HeartbeatThread thread = null;
         synchronized (this) {
@@ -483,10 +478,6 @@ public abstract class AbstractCoordinator implements Closeable {
         // rebalance in the call to poll below. This ensures that we do not mistakenly attempt
         // to rejoin before the pending rebalance has completed.
         if (joinFuture == null) {
-            // fence off the heartbeat thread explicitly so that it cannot interfere with the join group.
-            // Note that this must come after the call to onJoinPrepare since we must be able to continue
-            // sending heartbeats if that callback takes some time.
-            disableHeartbeatThread();
 
             state = MemberState.REBALANCING;
             // a rebalance can be triggered consecutively if the previous one failed,
@@ -1311,7 +1302,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             continue;
                         }
 
-                        if (state != MemberState.STABLE) {
+                    if (!(state == MemberState.STABLE || state == MemberState.REBALANCING)) {
                             // the group is not stable (perhaps because we left the group or because the coordinator
                             // kicked us out), so disable heartbeats and wait for the main thread to rejoin.
                             disable();
