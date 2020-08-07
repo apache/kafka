@@ -90,17 +90,17 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
             materialized,
             builder,
             CogroupedKStreamImpl.AGGREGATE_NAME);
-        return aggregateBuilder.buildTimeWindows(
-            groupPatterns,
-            initializer,
-            new NamedInternal(named),
-            materialize(materializedInternal),
-            materializedInternal.keySerde() != null ?
-                    new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
-                    : null,
-            materializedInternal.valueSerde(),
-            materializedInternal.queryableStoreName(),
-            windows);
+        return aggregateBuilder.processRepartitions(
+                groupPatterns,
+                initializer,
+                new NamedInternal(named),
+                materialize(materializedInternal),
+                materializedInternal.keySerde() != null ?
+                        new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size())
+                        : null,
+                materializedInternal.valueSerde(),
+                materializedInternal.queryableStoreName(),
+                windows);
     }
 
     @SuppressWarnings("deprecation")

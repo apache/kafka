@@ -91,7 +91,8 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                 materialized,
                 builder,
                 CogroupedKStreamImpl.AGGREGATE_NAME);
-        return aggregateBuilder.buildSessionWindows(groupPatterns,
+        return aggregateBuilder.processRepartitions(
+                groupPatterns,
                 initializer,
                 new NamedInternal(named),
                 materialize(materializedInternal),
