@@ -47,13 +47,13 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
     }
-    <KR> KTable<KR, VOut> processRepartitions(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                              final Initializer<VOut> initializer,
-                                              final NamedInternal named,
-                                              final StoreBuilder<?> storeBuilder,
-                                              final Serde<KR> keySerde,
-                                              final Serde<VOut> valueSerde,
-                                              final String queryableName) {
+    <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
+                                final Initializer<VOut> initializer,
+                                final NamedInternal named,
+                                final StoreBuilder<?> storeBuilder,
+                                final Serde<KR> keySerde,
+                                final Serde<VOut> valueSerde,
+                                final String queryableName) {
         processRepartitions(groupPatterns, storeBuilder);
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
@@ -74,14 +74,14 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         return createTable(processors, named, keySerde, valueSerde, queryableName);
     }
 
-    <KR, W extends Window> KTable<KR, VOut> processRepartitions(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                                                final Initializer<VOut> initializer,
-                                                                final NamedInternal named,
-                                                                final StoreBuilder<?> storeBuilder,
-                                                                final Serde<KR> keySerde,
-                                                                final Serde<VOut> valueSerde,
-                                                                final String queryableName,
-                                                                final Windows<W> windows) {
+    <KR, W extends Window> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
+                                                  final Initializer<VOut> initializer,
+                                                  final NamedInternal named,
+                                                  final StoreBuilder<?> storeBuilder,
+                                                  final Serde<KR> keySerde,
+                                                  final Serde<VOut> valueSerde,
+                                                  final String queryableName,
+                                                  final Windows<W> windows) {
         processRepartitions(groupPatterns, storeBuilder);
 
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
@@ -103,15 +103,15 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         return createTable(processors, named, keySerde, valueSerde, queryableName);
     }
 
-    <KR> KTable<KR, VOut> processRepartitions(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
-                                              final Initializer<VOut> initializer,
-                                              final NamedInternal named,
-                                              final StoreBuilder<?> storeBuilder,
-                                              final Serde<KR> keySerde,
-                                              final Serde<VOut> valueSerde,
-                                              final String queryableName,
-                                              final SessionWindows sessionWindows,
-                                              final Merger<? super K, VOut> sessionMerger) {
+    <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
+                                final Initializer<VOut> initializer,
+                                final NamedInternal named,
+                                final StoreBuilder<?> storeBuilder,
+                                final Serde<KR> keySerde,
+                                final Serde<VOut> valueSerde,
+                                final String queryableName,
+                                final SessionWindows sessionWindows,
+                                final Merger<? super K, VOut> sessionMerger) {
         processRepartitions(groupPatterns, storeBuilder);
         final Collection<StreamsGraphNode> processors = new ArrayList<>();
         boolean stateCreated = false;
