@@ -148,6 +148,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       assertEquals(1, results.size)
       assertTrue("Expected error when altering the same credential twice in a single request",
         results.get(0).errorCode == Errors.INVALID_REQUEST.code)
+      assertEquals("\"\" is an illegal user name", results.get(0).errorMessage)
     })
   }
 
@@ -173,6 +174,41 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(5, results.size)
     assertTrue("Expected error when altering the credentials with unknown SCRAM mechanisms",
       results.asScala.filterNot(_.errorCode == Errors.INVALID_REQUEST.code).size == 0)
+    results.asScala.foreach(result => assertEquals("Unknown SCRAM mechanism", result.errorMessage))
+  }
+
+  @Test
+  def testAlterTooFewIterations(): Unit = {
+    val upsertionTooFewIterations = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("user1")
+      .setMechanism(ScramMechanism.SCRAM_SHA_256.getType).setIterations(1)
+      .setSalt("salt".getBytes).setSaltedPassword("saltedPassword".getBytes)
+    val request = new AlterUserScramCredentialsRequest.Builder(
+      new AlterUserScramCredentialsRequestData()
+        .setDeletions(util.Collections.emptyList())
+        .setUpsertions(util.Arrays.asList(upsertionTooFewIterations))).build()
+    val response = sendAlterUserScramCredentialsRequest(request)
+    val results = response.data.results
+    assertEquals(1, results.size)
+    assertTrue("Expected error when altering the credentials with too few iterations",
+      results.asScala.filterNot(_.errorCode == Errors.INVALID_REQUEST.code).size == 0)
+    assertEquals("Too few iterations", results.get(0).errorMessage)
+  }
+
+  @Test
+  def testAlterTooManyIterations(): Unit = {
+    val upsertionTooFewIterations = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("user1")
+      .setMechanism(ScramMechanism.SCRAM_SHA_256.getType).setIterations(Integer.MAX_VALUE)
+      .setSalt("salt".getBytes).setSaltedPassword("saltedPassword".getBytes)
+    val request = new AlterUserScramCredentialsRequest.Builder(
+      new AlterUserScramCredentialsRequestData()
+        .setDeletions(util.Collections.emptyList())
+        .setUpsertions(util.Arrays.asList(upsertionTooFewIterations))).build()
+    val response = sendAlterUserScramCredentialsRequest(request)
+    val results = response.data.results
+    assertEquals(1, results.size)
+    assertTrue("Expected error when altering the credentials with too many iterations",
+      results.asScala.filterNot(_.errorCode == Errors.INVALID_REQUEST.code).size == 0)
+    assertEquals("Too many iterations", results.get(0).errorMessage)
   }
 
   @Test
@@ -276,8 +312,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
         ))).build()
     val response4 = sendAlterUserScramCredentialsRequest(request4)
     val results4 = response4.data.results
-    assertEquals(2, results1.size)
-    assertTrue("Expected no error when creating the credentials",
+    assertEquals(2, results4.size)
+    assertTrue("Expected no error when deleting the credentials",
       results4.asScala.filterNot(_.errorCode == Errors.NONE.code).size == 0)
     assertTrue(results4.asScala.exists(_.user == "user1"))
     assertTrue(results4.asScala.exists(_.user == "user2"))
@@ -293,6 +329,27 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertTrue(results5.asScala.exists(usc => usc.name == "user1"
       && usc.credentialInfos.asScala.exists(info =>
       info.mechanism == ScramMechanism.SCRAM_SHA_512.getType && info.iterations == 8192)))
+    // now delete the last one
+    val request6 = new AlterUserScramCredentialsRequest.Builder(
+      new AlterUserScramCredentialsRequestData()
+        .setDeletions(util.Arrays.asList(
+          new AlterUserScramCredentialsRequestData.ScramCredentialDeletion()
+            .setName("user1").setMechanism(ScramMechanism.SCRAM_SHA_512.getType),
+        ))).build()
+    val response6 = sendAlterUserScramCredentialsRequest(request6)
+    val results6 = response6.data.results
+    assertEquals(1, results6.size)
+    assertTrue("Expected no error when deleting the credentials",
+      results4.asScala.filterNot(_.errorCode == Errors.NONE.code).size == 0)
+    assertTrue(results6.asScala.exists(_.user == "user1"))
+    // now describe them all, which should yield 0 credentials
+    val request7 = new DescribeUserScramCredentialsRequest.Builder(
+      new DescribeUserScramCredentialsRequestData()).build()
+    val response7 = sendDescribeUserScramCredentialsRequest(request7)
+    assertTrue("Expected no error when describing the credentials",
+      response7.data.error == Errors.NONE.code)
+    val results7 = response7.data.userScramCredentials
+    assertEquals(0, results7.size)
   }
 
   private def sendAlterUserScramCredentialsRequest(request: AlterUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): AlterUserScramCredentialsResponse = {

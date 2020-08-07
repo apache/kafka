@@ -21,13 +21,15 @@ import java.util
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
+import org.apache.kafka.common.errors.UnsupportedByAuthenticationException
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
-import org.junit.Before
+import org.junit.Assert._
+import org.junit.{Before, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -75,6 +77,29 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     servers.foreach { server =>
       val cache = server.credentialProvider.credentialCache.cache(kafkaClientSaslMechanism, classOf[ScramCredential])
       TestUtils.waitUntilTrue(() => cache.get(clientPrincipal) != null, s"SCRAM credentials not created for $clientPrincipal")
+    }
+  }
+
+  @Test
+  def testCannotCreateUserWithDelegationToken(): Unit = {
+    val adminClient = Admin.create(adminClientConfig)
+    try {
+      val user = "user"
+      val results = adminClient.alterUserScramCredentials(List[UserScramCredentialAlteration](
+        new UserScramCredentialUpsertion(user, new ScramCredentialInfo(PublicScramMechanism.SCRAM_SHA_256, 4096), "password")).asJava)
+      assertEquals(1, results.values.size)
+      val future = results.values.get(user)
+      future.get
+      fail("Should not be able to alter SCRAM user credentials when authenticated with a delegation token")
+    } catch {
+      case e: Exception => {
+        // expected
+        val cause = e.getCause
+        assertTrue(cause.isInstanceOf[UnsupportedByAuthenticationException])
+        assertEquals("Altering User SCRAM credentials is not allowed when authenticating with a delegation token", cause.getMessage)
+      }
+    } finally {
+      adminClient.close()
     }
   }
 

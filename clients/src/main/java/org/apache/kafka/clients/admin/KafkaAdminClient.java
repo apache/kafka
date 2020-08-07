@@ -4205,7 +4205,7 @@ public class KafkaAdminClient extends AdminClient {
                     } else {
                         Errors error = Errors.forCode(result.errorCode());
                         if (error != Errors.NONE) {
-                            future.completeExceptionally(error.exception());
+                            future.completeExceptionally(error.exception(result.errorMessage()));
                         } else {
                             future.complete(null);
                         }
@@ -4238,9 +4238,9 @@ public class KafkaAdminClient extends AdminClient {
         return new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(d.getUser()).setMechanism(d.getMechanism().getType());
     }
 
-    private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int interations) throws NoSuchAlgorithmException, InvalidKeyException {
+    private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int iterations) throws NoSuchAlgorithmException, InvalidKeyException {
         return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.getMechanismName()))
-                .hi(password, salt, interations);
+                .hi(password, salt, iterations);
     }
 
     /**

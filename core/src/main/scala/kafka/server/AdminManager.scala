@@ -1004,21 +1004,34 @@ class AdminManager(val config: KafkaConfig,
       }
     }
 
-    if (!users.isDefined || users.get.isEmpty)
+    try {
+      if (!users.isDefined || users.get.isEmpty)
       // describe all users
-      adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach { case (user, properties) => addToResults(user, properties) }
-    else {
-      // describe specific users
-      // https://stackoverflow.com/questions/24729544/how-to-find-duplicates-in-a-list
-      val duplicatedUsers = users.get.groupBy(identity).collect { case (x, Seq(_, _, _*)) => x }
-      if (duplicatedUsers.nonEmpty) {
-        retval.setError(Errors.INVALID_REQUEST.code())
-        retval.setErrorMessage(s"Cannot describe SCRAM credentials for the same user twice in a single request: ${duplicatedUsers.mkString("[", ", ", "]")}")
-      } else
-        users.get.foreach { user => addToResults(user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))) }
+        adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach { case (user, properties) => addToResults(user, properties) }
+      else {
+        // describe specific users
+        val duplicatedUsers = users.get.groupBy(identity).collect { case (x, Seq(_, _, _*)) => x }
+        if (duplicatedUsers.nonEmpty) {
+          retval.setError(Errors.INVALID_REQUEST.code())
+          retval.setErrorMessage(s"Cannot describe SCRAM credentials for the same user twice in a single request: ${duplicatedUsers.mkString("[", ", ", "]")}")
+        } else
+          users.get.foreach { user => addToResults(user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))) }
+      }
+    } catch {
+      case e: Throwable => {
+        val message = s"Error processing describe user SCRAM credential configs request"
+        if (e.isInstanceOf[ApiException])
+          info(message, e)
+        else
+          error(message, e)
+        val err = ApiError.fromThrowable(e)
+        retval.setUserScramCredentials(List().asJava).setErrorMessage(err.message).setError(err.error.code)
+      }
     }
     retval
   }
+
+  case class requestStatus(user: String, mechanism: Option[ScramMechanism], legalRequest: Boolean, iterations: Int) {}
 
   def alterUserScramCredentials(upsertions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion],
                                 deletions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialDeletion]): AlterUserScramCredentialsResponseData = {
@@ -1034,25 +1047,60 @@ class AdminManager(val config: KafkaConfig,
     val retval = new AlterUserScramCredentialsResponseData()
 
     // fail any user that is invalid due to an empty user name, an unknown SCRAM mechanism, or not enough iterations
-    val invalidUsers = (
-      upsertions.filter(upsertion => {
-        if (upsertion.name.isEmpty)
-          true
-        else {
-          val publicScramMechanism = scramMechanism(upsertion.mechanism)
-          publicScramMechanism == ScramMechanism.UNKNOWN ||
-            (upsertion.iterations != -1 &&
-              InternalScramMechanism.forMechanismName(publicScramMechanism.getMechanismName).minIterations > upsertion.iterations)
+    val maxIterations = 16384
+    val illegalUpsertions = upsertions.map(upsertion =>
+      if (upsertion.name.isEmpty)
+        requestStatus(upsertion.name, None, false, upsertion.iterations) // no determined mechanism -- empty user is the cause of failure
+      else {
+        val publicScramMechanism = scramMechanism(upsertion.mechanism)
+        if (publicScramMechanism == ScramMechanism.UNKNOWN) {
+          requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // unknown mechanism is the cause of failure
+        } else {
+          if (upsertion.iterations != -1 && (
+            InternalScramMechanism.forMechanismName(publicScramMechanism.getMechanismName).minIterations > upsertion.iterations
+              || upsertion.iterations > maxIterations)) {
+            requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // known mechanism, bad iterations is the cause of failure
+          } else {
+            requestStatus(upsertion.name, Some(publicScramMechanism), true, upsertion.iterations) // legal
+          }
         }
-      }).map(_.name) ++ deletions.filter(deletions => deletions.name.isEmpty || scramMechanism(deletions.mechanism) == ScramMechanism.UNKNOWN).map(_.name))
-      .toSet
-    invalidUsers.foreach(user => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
-      .setErrorCode(Errors.INVALID_REQUEST.code).setErrorMessage("Unknown SCRAM mechanism or too few iterations")))
+      }).filter { !_.legalRequest }
+    val illegalDeletions = deletions.map(deletion =>
+      if (deletion.name.isEmpty) {
+        requestStatus(deletion.name, None, false, 0) // no determined mechanism -- empty user is the cause of failure
+      } else {
+        val publicScramMechanism = scramMechanism(deletion.mechanism)
+        requestStatus(deletion.name, Some(publicScramMechanism), publicScramMechanism != ScramMechanism.UNKNOWN, 0)
+      }).filter { !_.legalRequest }
+    // map user names to error messages
+    val emptyUserMsg = "\"\" is an illegal user name"
+    val unknownMechanismMsg = "Unknown SCRAM mechanism"
+    val tooFewIterationsMsg = "Too few iterations"
+    val tooManyIterationsMsg = "Too many iterations"
+    val illegalRequestsByUser =
+      illegalDeletions.map(requestStatus =>
+        if (requestStatus.user.isEmpty) {
+          (requestStatus.user, emptyUserMsg)
+        } else {
+          (requestStatus.user, unknownMechanismMsg)
+        }
+      ).toMap ++ illegalUpsertions.map(requestStatus =>
+        if (requestStatus.user.isEmpty) {
+          (requestStatus.user, emptyUserMsg)
+        } else if (requestStatus.mechanism == Some(ScramMechanism.UNKNOWN)) {
+          (requestStatus.user, unknownMechanismMsg)
+        } else {
+          (requestStatus.user, if (requestStatus.iterations > maxIterations) {tooManyIterationsMsg} else {tooFewIterationsMsg})
+        }
+      ).toMap
 
+    illegalRequestsByUser.foreach {case (user, errorMessage) => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
+      .setErrorCode(Errors.INVALID_REQUEST.code).setErrorMessage(errorMessage))}
+
+    val invalidUsers = (illegalUpsertions ++ illegalDeletions).map(_.user).toSet
     val initiallyValidUserMechanismPairs = (upsertions.filter(upsertion => !invalidUsers.contains(upsertion.name)).map(upsertion => (upsertion.name, upsertion.mechanism)) ++
       deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism)))
 
-    // https://stackoverflow.com/questions/24729544/how-to-find-duplicates-in-a-list
     val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(p => (p._1, s"${p._1}:${mechanismName(p._2)}")).collect { case (x, Seq(_, _, _*)) => x._1 }.toSet
     usersWithDuplicateUserMechanismPairs.foreach(user => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
       .setErrorCode(Errors.INVALID_REQUEST.code).setErrorMessage("A user credential cannot be altered twice in the same request")))
