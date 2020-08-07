@@ -89,6 +89,9 @@ class SocketServerTest {
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
     kafkaLogger.setLevel(Level.TRACE)
+
+    assertTrue(server.dataPlaneRequestChannel.maybeFromControlPlane)
+    assertTrue(server.controlPlaneRequestChannelOpt.isEmpty)
   }
 
   @After
@@ -303,6 +306,9 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
     testableServer.startup(startProcessingRequests = false)
+
+    assertFalse(testableServer.dataPlaneRequestChannel.maybeFromControlPlane)
+    assertTrue(testableServer.controlPlaneRequestChannelOpt.get.maybeFromControlPlane)
     val updatedEndPoints = config.advertisedListeners.map { endpoint =>
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
@@ -378,11 +384,14 @@ class SocketServerTest {
     testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
     val config = KafkaConfig.fromProps(testProps)
-    withTestableServer(config, { testableServer =>
+    val socketServer = withTestableServer(config, { testableServer =>
       val socket = connect(testableServer, config.controlPlaneListenerName.get,
         localAddr = InetAddress.getLocalHost)
       sendAndReceiveControllerRequest(socket, testableServer)
     })
+
+    assertTrue(socketServer.controlPlaneRequestChannelOpt.get.maybeFromControlPlane)
+    assertFalse(socketServer.dataPlaneRequestChannel.maybeFromControlPlane)
   }
 
   @Test
@@ -1464,6 +1473,10 @@ class SocketServerTest {
     props ++= sslServerProps
     val testableServer = new TestableSocketServer(time = time)
     testableServer.startup()
+
+    assertTrue(testableServer.dataPlaneRequestChannel.maybeFromControlPlane)
+    assertTrue(testableServer.controlPlaneRequestChannelOpt.isEmpty)
+
     val proxyServer = new ProxyServer(testableServer)
     try {
       val testableSelector = testableServer.testableSelector
@@ -1670,7 +1683,7 @@ class SocketServerTest {
   }
 
   private def withTestableServer(config : KafkaConfig = KafkaConfig.fromProps(props),
-                                 testWithServer: TestableSocketServer => Unit): Unit = {
+                                 testWithServer: TestableSocketServer => Unit): TestableSocketServer = {
     val testableServer = new TestableSocketServer(config)
     testableServer.startup()
     try {
@@ -1679,6 +1692,7 @@ class SocketServerTest {
       shutdownServerAndMetrics(testableServer)
       assertEquals(0, testableServer.uncaughtExceptions)
     }
+    testableServer
   }
 
   def sendAndReceiveControllerRequest(socket: Socket, server: SocketServer): RequestChannel.Request = {
