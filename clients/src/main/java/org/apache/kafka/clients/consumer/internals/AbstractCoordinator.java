@@ -512,7 +512,20 @@ public abstract class AbstractCoordinator implements Closeable {
                             log.info("Successfully joined group with generation {}", generation.generationId);
                             state = MemberState.STABLE;
                             rejoinNeeded = false;
-                            rebalanceConfig.coordinatorUpdated();
+
+                            // If session timeout was dynamically updated
+                            if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate()) {
+                                if (rebalanceConfig.readyToUpdateTimeout()) {
+                                    // This join group request was to update the session timeout
+                                    rebalanceConfig.coordinatorTimeoutUpdated(); 
+                                } else {
+                                    // If there was a join group in progress then this is when the in-progress request is completed
+                                    // now another join request needs to be sent to update the session timeout
+                                    rejoinNeeded = true;
+                                    rebalanceConfig.setReadyToUpdateTimeout(true);
+                                }
+                            }
+
                             // record rebalance latency
                             lastRebalanceEndMs = time.milliseconds();
                             sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
@@ -1336,6 +1349,21 @@ public abstract class AbstractCoordinator implements Closeable {
                                 public void onSuccess(ClientResponse resp) {
                                     synchronized (AbstractCoordinator.this) {
                                         dynamicConfig.handleDescribeConfigsResponse((DescribeConfigsResponse) resp.responseBody());
+                                        // Need to rejoin group so that the coordinator changes the session timeout in this 
+                                        // group member's metadata if the session timeout was dynamically updated.
+                                        // Also need to reset timers in HB thread with new interval and timeout.
+                                        // 1. The heartbeat interval timer is reset when sentHeartbeat is called.
+                                        // 2. The session timeout timer is reset when receiveHeartbeat is called.
+                                        if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate()) {
+                                            if (joinFuture == null) {
+                                                // No join group in progress so set the flags to send another
+                                                rejoinNeeded = true;
+                                                rebalanceConfig.setReadyToUpdateTimeout(true);
+                                            } else {
+                                                // If a join group request is in progress, need to wait for it to complete before sending another
+                                                rebalanceConfig.setReadyToUpdateTimeout(false);
+                                            }
+                                        }
                                     }
                                 }
                                 @Override
@@ -1347,15 +1375,6 @@ public abstract class AbstractCoordinator implements Closeable {
                             });
                         }
 
-                        if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate() && joinFuture == null) {
-                            // Need to rejoin group so that the coordinator changes the session timeout in this 
-                            // group member's metadata
-                            // Also need to reset timers in HB thread with new interval and timeout.
-                            // 1. The heartbeat interval timer is reset below when sentHeartbeat is called.
-                            // 2. The session timeout timer is reset below when receiveHeartbeat is called.
-                            // These methods will use the dynamically updated values in rebalanceConfig to reset the timers.
-                            rejoinNeeded = true;
-                        }
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null || lookupCoordinator().failed())

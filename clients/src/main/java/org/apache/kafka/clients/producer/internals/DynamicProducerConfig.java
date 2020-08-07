@@ -84,7 +84,6 @@ public class DynamicProducerConfig {
      */ 
     public void maybeFetchConfigs(long now) {
         if (updater.shouldUpdateConfigs(now)) {
-            System.out.println("updating");
             Node node = client.leastLoadedNode(now);
             if (node != null && client.ready(node, now)) {
                 updater.sentConfigsRequest();

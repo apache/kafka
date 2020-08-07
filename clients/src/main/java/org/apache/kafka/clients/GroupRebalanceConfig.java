@@ -49,9 +49,11 @@ public class GroupRebalanceConfig {
 
     private Map<String, ?> originals;
     public final String clientId;
+
     public final boolean dynamicConfigEnabled;
     public final long dynamicConfigExpireMs;
     private boolean updateCoordinatorSessionTimeout;
+    private boolean readyToUpdateTimeout;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
@@ -67,6 +69,7 @@ public class GroupRebalanceConfig {
         this.groupId = config.getString(CommonClientConfigs.GROUP_ID_CONFIG);
         validateSessionAndHeartbeat(this.sessionTimeoutMs, this.heartbeatIntervalMs);
         this.updateCoordinatorSessionTimeout = false;
+        this.readyToUpdateTimeout = true;
 
         this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
         this.dynamicConfigEnabled = config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG);
@@ -141,12 +144,32 @@ public class GroupRebalanceConfig {
         }
     }
 
+    /**
+     * @return true if session timeout was dynamically altered and the coordinator update hasn't taken place
+     */
     public boolean coordinatorNeedsSessionTimeoutUpdate() {
         return this.updateCoordinatorSessionTimeout;
     }
 
-    public void coordinatorUpdated() {
+    /**
+     * Set after {@link org.apache.kafka.common.requests.JoinGroupResponse} is recieved from updating session timeout
+     */
+    public void coordinatorTimeoutUpdated() {
         this.updateCoordinatorSessionTimeout = false;
+    }
+
+    /**
+     * If {@link JoinGroupRequest} was in progress when session timeout was dynamically updated this is set to false
+     */
+    public void setReadyToUpdateTimeout(boolean ready) {
+        this.readyToUpdateTimeout = ready;
+    }
+
+    /**
+     * @return true if a {@link JoinGroupRequest} to update session timeout is ready to be sent
+     */
+    public boolean readyToUpdateTimeout() {
+        return this.readyToUpdateTimeout;
     }
 
     public int getSessionTimout() {
