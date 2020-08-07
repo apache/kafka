@@ -131,7 +131,7 @@ public class KafkaRaftClientTest {
             .collect(Collectors.toList());
 
         KafkaRaftClient client = new KafkaRaftClient(channel, log, quorum, time, metrics,
-            new MockFuturePurgatory<>(time), mockAddress(localId), bootstrapServers,
+            new MockFuturePurgatory<>(time), new MockFuturePurgatory<>(time), mockAddress(localId), bootstrapServers,
             electionTimeoutMs, electionJitterMs, fetchTimeoutMs, retryBackoffMs, requestTimeoutMs,
             fetchMaxWaitMs, logContext, random);
         client.initialize(stateMachine);
@@ -594,7 +594,7 @@ public class KafkaRaftClientTest {
         pollUntilSend(client);
         assertEquals(OptionalLong.of(0L), client.highWatermark());
 
-        // Append some records
+        // Append some records with leader commit mode
         SimpleRecord[] appendRecords = new SimpleRecord[] {
             new SimpleRecord("a".getBytes()),
             new SimpleRecord("b".getBytes()),
@@ -618,6 +618,72 @@ public class KafkaRaftClientTest {
         client.poll();
         assertEquals(OptionalLong.of(4L), client.highWatermark());
         assertEquals(new OffsetAndEpoch(4, epoch), stateMachine.position());
+
+        // Append more records with quorum commit mode
+        appendRecords = new SimpleRecord[] {
+            new SimpleRecord("a".getBytes()),
+            new SimpleRecord("b".getBytes()),
+            new SimpleRecord("c".getBytes())
+        };
+        records = MemoryRecords.withRecords(0L, CompressionType.NONE, 1, appendRecords);
+        future = stateMachine.append(records, AckMode.QUORUM);
+
+        // Appending locally should not complete the future
+        client.poll();
+        assertFalse(future.isDone());
+
+        // Let follower send a fetch, it should not yet advance the high watermark
+        deliverRequest(fetchQuorumRecordsRequest(epoch, otherNodeId, 4L, epoch, 500));
+        pollUntilSend(client);
+        assertFalse(future.isDone());
+        assertEquals(OptionalLong.of(4L), client.highWatermark());
+        assertEquals(new OffsetAndEpoch(4, epoch), stateMachine.position());
+
+        // Let the follower to send another fetch at 7, which should not advance the high watermark and complete the future
+        deliverRequest(fetchQuorumRecordsRequest(epoch, otherNodeId, 7L, epoch, 500));
+        client.poll();
+        assertEquals(OptionalLong.of(7L), client.highWatermark());
+        assertEquals(new OffsetAndEpoch(7, epoch), stateMachine.position());
+
+        assertTrue(future.isDone());
+        assertEquals(new OffsetAndEpoch(6, epoch), future.get());
+    }
+
+    @Test
+    public void testStateMachineExpireAppendedRecords() throws Exception {
+        int otherNodeId = 1;
+        int epoch = 5;
+
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+        KafkaRaftClient client = initializeAsLeader(voters, epoch);
+
+        // First poll has no high watermark advance
+        client.poll();
+        assertEquals(OptionalLong.empty(), client.highWatermark());
+
+        // Let follower send a fetch to initialize the high watermark,
+        // note the offset 0 would be a control message for becoming the leader
+        deliverRequest(fetchQuorumRecordsRequest(epoch, otherNodeId, 0L, epoch, 500));
+        pollUntilSend(client);
+        assertEquals(OptionalLong.of(0L), client.highWatermark());
+
+        // Append some records with quorum commit mode
+        SimpleRecord[] appendRecords = new SimpleRecord[] {
+            new SimpleRecord("a".getBytes()),
+            new SimpleRecord("b".getBytes()),
+            new SimpleRecord("c".getBytes())
+        };
+        Records records = MemoryRecords.withRecords(0L, CompressionType.NONE, 1, appendRecords);
+        CompletableFuture<OffsetAndEpoch> future = stateMachine.append(records, AckMode.QUORUM);
+
+        client.poll();
+        assertFalse(future.isDone());
+
+        time.sleep(requestTimeoutMs - 1);
+        assertFalse(future.isDone());
+
+        time.sleep(1);
+        assertTrue(future.isCompletedExceptionally());
     }
 
     @Test
@@ -1007,7 +1073,7 @@ public class KafkaRaftClientTest {
 
         // The fetch should be satisfied immediately and return an error
         MemoryRecords fetchedRecords = assertSentFetchResponse(
-            Errors.FENCED_LEADER_EPOCH, epoch + 1, OptionalInt.of(voter3));
+            Errors.NOT_LEADER_OR_FOLLOWER, epoch + 1, OptionalInt.of(voter3));
         assertEquals(0, fetchedRecords.sizeInBytes());
     }
 

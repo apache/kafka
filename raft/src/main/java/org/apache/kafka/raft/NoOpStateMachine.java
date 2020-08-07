@@ -36,6 +36,7 @@ public class NoOpStateMachine implements ReplicatedStateMachine {
 
     private final int nodeId;
     private final TopicPartition partition;
+    private final AckMode ackMode;
     private final boolean verbose;
 
     private OffsetAndEpoch position = new OffsetAndEpoch(0, 0);
@@ -44,9 +45,11 @@ public class NoOpStateMachine implements ReplicatedStateMachine {
 
     public NoOpStateMachine(int nodeId,
                             TopicPartition partition,
+                            AckMode ackMode,
                             boolean verbose) {
         this.nodeId = nodeId;
         this.partition = partition;
+        this.ackMode = ackMode;
         this.verbose = verbose;
     }
 
@@ -100,6 +103,6 @@ public class NoOpStateMachine implements ReplicatedStateMachine {
             throw new IllegalStateException("The record appender is not initialized");
         }
 
-        return appender.append(records).thenApply(offsetAndEpoch -> records.sizeInBytes());
+        return appender.append(records, ackMode).thenApply(offsetAndEpoch -> records.sizeInBytes());
     }
 }

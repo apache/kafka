@@ -700,7 +700,8 @@ public class RaftEventSimulationTest {
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             QuorumState quorum = new QuorumState(nodeId, voters(), persistentState.store, logContext);
-            MockFuturePurgatory<Void> purgatory = new MockFuturePurgatory<>(time);
+            MockFuturePurgatory<Long> fetchPurgatory = new MockFuturePurgatory<>(time);
+            MockFuturePurgatory<Long> appendPurgatory = new MockFuturePurgatory<>(time);
             Metrics metrics = new Metrics(time);
 
             // For the bootstrap server, we use a pretend VIP which internally routes
@@ -709,7 +710,7 @@ public class RaftEventSimulationTest {
                 new InetSocketAddress("localhost", 9000));
 
             KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time, metrics,
-                purgatory, new InetSocketAddress("localhost", 9990 + nodeId), bootstrapServers,
+                fetchPurgatory, appendPurgatory, new InetSocketAddress("localhost", 9990 + nodeId), bootstrapServers,
                 ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
                 FETCH_MAX_WAIT_MS, logContext, random);
             RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,

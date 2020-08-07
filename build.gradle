@@ -1178,7 +1178,7 @@ project(':raft') {
     args = [ "org.apache.kafka.raft.generated",
              "src/generated/java/org/apache/kafka/raft/generated",
              "src/main/resources/common/message",
-	     "none"]
+             "none"]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/raft/generated")
   }

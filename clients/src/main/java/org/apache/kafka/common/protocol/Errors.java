@@ -343,7 +343,7 @@ public enum Errors {
     DUPLICATE_RESOURCE(92, "A request illegally referred to the same resource twice.", DuplicateResourceException::new),
     UNACCEPTABLE_CREDENTIAL(93, "Requested credential would not meet criteria for acceptability.", UnacceptableCredentialException::new),
     INCONSISTENT_VOTER_SET(91, "Indicates that the either the sender or recipient of a " +
-        "voter-only request is not one of the expected voters", InconsistentVoterSetException::new);
+            "voter-only request is not one of the expected voters", InconsistentVoterSetException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

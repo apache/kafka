@@ -21,10 +21,8 @@ import org.apache.kafka.common.utils.MockTime;
 
 import java.util.PriorityQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicLong;
 
-public class MockFuturePurgatory<T> implements FuturePurgatory<T>, MockTime.Listener {
-    private final AtomicLong idGenerator = new AtomicLong(1L);
+public class MockFuturePurgatory<T extends Comparable<T>> implements FuturePurgatory<T>, MockTime.Listener {
     private final MockTime time;
     private final PriorityQueue<DelayedFuture> delayedFutures = new PriorityQueue<>();
 
@@ -34,20 +32,31 @@ public class MockFuturePurgatory<T> implements FuturePurgatory<T>, MockTime.List
     }
 
     @Override
-    public void await(
-        CompletableFuture<T> future,
-        long maxWaitTimeMs
-    ) {
-        long id = idGenerator.getAndIncrement();
+    public CompletableFuture<Long> await(T value, long maxWaitTimeMs) {
+        CompletableFuture<Long> future = new CompletableFuture<>();
         long expirationTimeMs = time.milliseconds() + maxWaitTimeMs;
-        delayedFutures.add(new DelayedFuture(id, expirationTimeMs, future));
+        delayedFutures.add(new DelayedFuture(value, expirationTimeMs, future));
+
+        return future;
     }
 
     @Override
-    public void completeAll(T value) {
+    public void complete(T value, long currentTimeMs) {
+        while (!delayedFutures.isEmpty()) {
+            if (delayedFutures.peek().id.compareTo(value) < 0) {
+                DelayedFuture delayedFuture = delayedFutures.poll();
+                delayedFuture.future.complete(currentTimeMs);
+            } else {
+                break;
+            }
+        }
+    }
+
+    @Override
+    public void completeAllExceptionally(Throwable exception) {
         while (!delayedFutures.isEmpty()) {
             DelayedFuture delayedFuture = delayedFutures.poll();
-            delayedFuture.future.complete(value);
+            delayedFuture.future.completeExceptionally(exception);
         }
     }
 
@@ -73,14 +82,14 @@ public class MockFuturePurgatory<T> implements FuturePurgatory<T>, MockTime.List
     }
 
     private class DelayedFuture implements Comparable<DelayedFuture> {
-        private final long id;
+        private final T id;
         private final long expirationTime;
-        private final CompletableFuture<T> future;
+        private final CompletableFuture<Long> future;
 
         private DelayedFuture(
-            long id,
+            T id,
             long expirationTime,
-            CompletableFuture<T> future
+            CompletableFuture<Long> future
         ) {
             this.id = id;
             this.expirationTime = expirationTime;
@@ -92,7 +101,7 @@ public class MockFuturePurgatory<T> implements FuturePurgatory<T>, MockTime.List
             int compare = Long.compare(expirationTime, o.expirationTime);
             if (compare != 0)
                 return compare;
-            return Long.compare(id, o.id);
+            return id.compareTo(o.id);
         }
     }
 }

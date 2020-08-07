@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.lang
 import java.io.File
 import java.net.{InetAddress, InetSocketAddress}
 import java.nio.file.Files
@@ -39,11 +40,12 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, NoOpStateMachine, QuorumState, RaftConfig}
+import org.apache.kafka.raft.{AckMode, FileBasedStateStore, KafkaRaftClient, NoOpStateMachine, QuorumState, RaftConfig}
 
 import scala.jdk.CollectionConverters._
 
 class RaftServer(val config: KafkaConfig,
+                 val ackMode: AckMode,
                  val verbose: Boolean) extends Logging {
 
   private val partition = new TopicPartition("__cluster_metadata", 0)
@@ -88,7 +90,7 @@ class RaftServer(val config: KafkaConfig,
       logDir
     )
 
-    val stateMachine = new NoOpStateMachine(config.brokerId, partition, verbose)
+    val stateMachine = new NoOpStateMachine(config.brokerId, partition, ackMode, verbose)
 
     raftClient.initialize(stateMachine)
 
@@ -192,10 +194,13 @@ class RaftServer(val config: KafkaConfig,
       logContext
     )
 
-    val purgatory = new KafkaFuturePurgatory(
+    val fetchPurgatory = new KafkaFuturePurgatory[lang.Long](
       config.brokerId,
-      new SystemTimer("raft-purgatory-reaper"),
-      reaperEnabled = true)
+      new SystemTimer("raft-fetch-purgatory-reaper"))
+
+    val appendPurgatory = new KafkaFuturePurgatory[lang.Long](
+      config.brokerId,
+      new SystemTimer("raft-append-purgatory-reaper"))
 
     new KafkaRaftClient(
       raftConfig,
@@ -203,7 +208,8 @@ class RaftServer(val config: KafkaConfig,
       metadataLog,
       quorumState,
       time,
-      purgatory,
+      fetchPurgatory,
+      appendPurgatory,
       advertisedListener,
       logContext
     )
@@ -340,7 +346,8 @@ object RaftServer extends Logging {
       val config = KafkaConfig.fromProps(serverProps, false)
 
       val verbose = serverProps.getProperty("verbose").toBoolean
-      val server = new RaftServer(config, verbose)
+      val ackMode = AckMode.forConfig(serverProps.getProperty("ack.mode"))
+      val server = new RaftServer(config, ackMode, verbose)
 
       Exit.addShutdownHook("raft-shutdown-hook", server.shutdown())
 

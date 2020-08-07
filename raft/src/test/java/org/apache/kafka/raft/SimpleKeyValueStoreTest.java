@@ -51,7 +51,8 @@ public class SimpleKeyValueStoreTest {
         QuorumStateStore store = new MockQuorumStateStore();
 
         MockTime time = new MockTime();
-        MockFuturePurgatory<Void> purgatory = new MockFuturePurgatory<>(time);
+        MockFuturePurgatory<Long> fetchPurgatory = new MockFuturePurgatory<>(time);
+        MockFuturePurgatory<Long> appendPurgatory = new MockFuturePurgatory<>(time);
 
         store.writeElectionState(ElectionState.withElectedLeader(epoch, localId, Collections.singleton(localId)));
 
@@ -64,7 +65,7 @@ public class SimpleKeyValueStoreTest {
             .map(id -> new InetSocketAddress("localhost", 9990 + id))
             .collect(Collectors.toList());
 
-        return new KafkaRaftClient(channel, log, quorum, time, new Metrics(time), purgatory,
+        return new KafkaRaftClient(channel, log, quorum, time, new Metrics(time), fetchPurgatory, appendPurgatory,
             new InetSocketAddress("localhost", 9990 + localId), bootstrapServers,
             electionTimeoutMs, electionJitterMs, fetchTimeoutMs, retryBackoffMs, requestTimeoutMs,
             fetchMaxWaitMs, logContext, new Random());

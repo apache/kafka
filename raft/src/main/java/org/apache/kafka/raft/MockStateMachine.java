@@ -72,13 +72,17 @@ public class MockStateMachine implements ReplicatedStateMachine {
     }
 
     public CompletableFuture<OffsetAndEpoch> append(Records records) {
+        return append(records, AckMode.LEADER);
+    }
+
+    public CompletableFuture<OffsetAndEpoch> append(Records records, AckMode ackMode) {
         if (recordAppender == null) {
             throw new IllegalStateException("Record appender is not set");
         }
         if (!isLeader) {
             throw new IllegalStateException("The raft client is not leader yet");
         }
-        return recordAppender.append(records);
+        return recordAppender.append(records, ackMode);
     }
 
     @Override

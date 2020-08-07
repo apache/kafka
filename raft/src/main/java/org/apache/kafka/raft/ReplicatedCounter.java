@@ -129,7 +129,7 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
             value() + 1;
         log.trace("Attempt to increment counter from: {} -> {}", uncommitted.get(), incremented);
         Records records = MemoryRecords.withRecords(CompressionType.NONE, serialize(incremented));
-        CompletableFuture<OffsetAndEpoch> future = appender.append(records);
+        CompletableFuture<OffsetAndEpoch> future = appender.append(records, AckMode.LEADER);
         return future.thenApply(offsetAndEpoch -> incremented);
     }
 

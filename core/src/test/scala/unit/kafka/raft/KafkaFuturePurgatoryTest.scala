@@ -16,7 +16,8 @@
  */
 package unit.kafka.raft
 
-import java.util.concurrent.CompletableFuture
+
+import java.util.concurrent.ExecutionException
 
 import kafka.raft.KafkaFuturePurgatory
 import kafka.utils.timer.MockTimer
@@ -24,6 +25,7 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions.assertThrows
 
 class KafkaFuturePurgatoryTest {
 
@@ -31,19 +33,16 @@ class KafkaFuturePurgatoryTest {
   def testExpiration(): Unit = {
     val brokerId = 0
     val timer = new MockTimer()
-    val purgatory = new KafkaFuturePurgatory(brokerId, timer, reaperEnabled = false)
+    val purgatory = new KafkaFuturePurgatory[Integer](brokerId, timer, reaperEnabled = false)
     assertEquals(0, purgatory.numWaiting())
 
-    val future1 = new CompletableFuture[Void]()
-    purgatory.await(future1, 500)
+    val future1 = purgatory.await(1, 500)
     assertEquals(1, purgatory.numWaiting())
 
-    val future2 = new CompletableFuture[Void]()
-    purgatory.await(future2, 500)
+    val future2 = purgatory.await(2, 500)
     assertEquals(2, purgatory.numWaiting())
 
-    val future3 = new CompletableFuture[Void]()
-    purgatory.await(future3, 1000)
+    val future3 = purgatory.await(3, 1000)
     assertEquals(3, purgatory.numWaiting())
 
     timer.advanceClock(501)
@@ -60,29 +59,63 @@ class KafkaFuturePurgatoryTest {
   def testCompletion(): Unit = {
     val brokerId = 0
     val timer = new MockTimer()
-    val purgatory = new KafkaFuturePurgatory(brokerId, timer, reaperEnabled = false)
+
+    val purgatory = new KafkaFuturePurgatory[Integer](brokerId, timer, reaperEnabled = false)
     assertEquals(0, purgatory.numWaiting())
 
-    val future1 = new CompletableFuture[Void]()
-    purgatory.await(future1, 500)
+    val future1 = purgatory.await(1, 500)
     assertEquals(1, purgatory.numWaiting())
 
-    val future2 = new CompletableFuture[Void]()
-    purgatory.await(future2, 500)
+    val future2 = purgatory.await(2, 500)
     assertEquals(2, purgatory.numWaiting())
 
-    val future3 = new CompletableFuture[Void]()
-    purgatory.await(future3, 1000)
+    val future3 = purgatory.await(3, 1000)
     assertEquals(3, purgatory.numWaiting())
 
-    purgatory.completeAll(null)
+    purgatory.complete(4, 100L)
     assertTrue(future1.isDone)
-    assertEquals(null, future1.get())
+    assertEquals(100L, future1.get())
 
     assertTrue(future2.isDone)
-    assertEquals(null, future2.get())
+    assertEquals(100L, future2.get())
 
     assertTrue(future3.isDone)
-    assertEquals(null, future3.get())
+    assertEquals(100L, future3.get())
+  }
+
+  @Test
+  def testCompletionExceptionally(): Unit = {
+    val brokerId = 0
+    val timer = new MockTimer()
+
+    val purgatory = new KafkaFuturePurgatory[Integer](brokerId, timer, reaperEnabled = false)
+    assertEquals(0, purgatory.numWaiting())
+
+    val future1 = purgatory.await(1, 500)
+    assertEquals(1, purgatory.numWaiting())
+
+    val future2 = purgatory.await(2, 500)
+    assertEquals(2, purgatory.numWaiting())
+
+    val future3 = purgatory.await(3, 1000)
+    assertEquals(3, purgatory.numWaiting())
+
+    val exception = new Throwable("kaboom")
+    purgatory.completeAllExceptionally(exception)
+
+    assertTrue(future1.isDone)
+    assertThrows[ExecutionException] {
+      future1.get()
+    }
+
+    assertTrue(future2.isDone)
+    assertThrows[ExecutionException] {
+      future2.get()
+    }
+
+    assertTrue(future3.isDone)
+    assertThrows[ExecutionException] {
+      future3.get()
+    }
   }
 }

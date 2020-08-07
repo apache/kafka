@@ -68,7 +68,7 @@ public class SimpleKeyValueStore<K, V> implements ReplicatedStateMachine {
             throw new IllegalStateException("The record appender is not initialized");
         }
 
-        CompletableFuture<OffsetAndEpoch> appendFuture = appender.append(buildRecords(map));
+        CompletableFuture<OffsetAndEpoch> appendFuture = appender.append(buildRecords(map), AckMode.LEADER);
         return appendFuture.thenCompose(offsetAndEpoch -> {
             synchronized (this) {
                 // It is possible when this is invoked that the operation has already been applied to

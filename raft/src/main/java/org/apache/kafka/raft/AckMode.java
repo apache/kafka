@@ -16,23 +16,12 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.record.Records;
+import java.util.Locale;
 
-import java.util.concurrent.CompletableFuture;
+public enum AckMode {
+    LEADER, QUORUM;
 
-public interface RecordAppender {
-
-    /**
-     * Append a new entry to the log. The client must be in the leader state to
-     * accept an append: it is up to the {@link ReplicatedStateMachine} implementation
-     * to ensure this using {@link ReplicatedStateMachine#becomeLeader(int)}.
-     *
-     * This method must be thread-safe.
-     *
-     * @param records The records to append to the log
-     * @param ackMode The commit mode for the appended records
-     * @return A future containing the last offset and epoch of the appended records (if successful),
-     *         when the future would be completed depends on the commit mode.
-     */
-    CompletableFuture<OffsetAndEpoch> append(Records records, AckMode ackMode);
+    public static AckMode forConfig(String config) {
+        return AckMode.valueOf(config.toUpperCase(Locale.ROOT));
+    }
 }

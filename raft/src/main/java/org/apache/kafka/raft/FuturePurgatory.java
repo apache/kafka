@@ -20,31 +20,48 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * Simple purgatory interface which allows tracking a set of expirable futures.
+ * Each future will be associated with a comparable value which are used to determine
+ * if the future object can be completed.
+ *
+ * Note that the future objects should be organized in order so that completing awaiting
+ * futures would stop early and not traverse all the futures
  *
  * @param <T> Type completion type
  */
-public interface FuturePurgatory<T> {
+public interface FuturePurgatory<T extends Comparable<T>> {
 
     /**
      * Add a future to this purgatory for tracking.
      *
-     * @param future the future tracking the expected completion. A subsequent call
-     *               to {@link #completeAll(Object)} will complete this future
-     *               if it does not expire first.
+     * @param value         the comparable value of the future object that will be used to determine
+     *                      if the future can be completed or not
      * @param maxWaitTimeMs the maximum time to wait for completion. If this
-     *               timeout is reached, then the future will be completed exceptionally
-     *               with a {@link org.apache.kafka.common.errors.TimeoutException}
+     *                      timeout is reached, then the future will be completed exceptionally
+     *                      with a {@link org.apache.kafka.common.errors.TimeoutException}
+     *
+     * @return              the future tracking the expected completion. A subsequent call
+     *                      to {@link #complete(Comparable, long)} will complete this future
+     *                      with the completion time in milliseconds if it does not expire first
      */
-    void await(CompletableFuture<T> future, long maxWaitTimeMs);
+    CompletableFuture<Long> await(T value, long maxWaitTimeMs);
 
     /**
-     * Complete all awaiting futures. The completion callbacks will be triggered
-     * from the calling thread.
+     * Complete awaiting futures whose associated values are larger than the given threshold value.
+     * The completion callbacks will be triggered from the calling thread.
      *
-     * @param value the value that will be passed to {@link CompletableFuture#complete(Object)}
-     *              when the futures are completed
+     * @param value         the threshold value used to determine which futures can be completed
+     * @param currentTimeMs the current time in milliseconds that will be passed to {@link CompletableFuture#complete(Object)}
+     *                      when the futures are completed
      */
-    void completeAll(T value);
+    void complete(T value, long currentTimeMs);
+
+    /**
+     * Complete awaiting futures whose associated values are larger than the given threshold value exceptionally.
+     * The completion callbacks will be triggered with the passed in exception.
+     *
+     * @param exception     the current time in milliseconds that will be passed to {@link CompletableFuture#completeExceptionally(Throwable)}
+     */
+    void completeAllExceptionally(Throwable exception);
 
     /**
      * The number of currently waiting futures.
@@ -52,5 +69,4 @@ public interface FuturePurgatory<T> {
      * @return the n
      */
     int numWaiting();
-
 }
