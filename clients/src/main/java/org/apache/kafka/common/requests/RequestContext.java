@@ -40,6 +40,7 @@ public class RequestContext implements AuthorizableRequestContext {
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
     public final ClientInformation clientInformation;
+    public final boolean maybeFromControlPlane;
 
     public RequestContext(RequestHeader header,
                           String connectionId,
@@ -47,13 +48,15 @@ public class RequestContext implements AuthorizableRequestContext {
                           KafkaPrincipal principal,
                           ListenerName listenerName,
                           SecurityProtocol securityProtocol,
-                          ClientInformation clientInformation) {
+                          ClientInformation clientInformation,
+                          boolean maybeFromControlPlane) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
         this.principal = principal;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
+        this.maybeFromControlPlane = maybeFromControlPlane;
         this.clientInformation = clientInformation;
     }
 
@@ -74,7 +77,9 @@ public class RequestContext implements AuthorizableRequestContext {
                         ", apiVersion: " + header.apiVersion() +
                         ", connectionId: " + connectionId +
                         ", listenerName: " + listenerName +
-                        ", principal: " + principal, ex);
+                        ", principal: " + principal +
+                        ", initial principal: " + initialPrincipalName() +
+                        ", initial client id: " + header.initialClientId(), ex);
             }
         }
     }
@@ -133,5 +138,10 @@ public class RequestContext implements AuthorizableRequestContext {
     @Override
     public int correlationId() {
         return header.correlationId();
+    }
+
+    @Override
+    public String initialPrincipalName() {
+        return header.initialPrincipalName();
     }
 }

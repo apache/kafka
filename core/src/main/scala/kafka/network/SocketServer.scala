@@ -88,15 +88,17 @@ class SocketServer(val config: KafkaConfig,
   private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", MetricsGroup)
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
-  // data-plane
-  private val dataPlaneProcessors = new ConcurrentHashMap[Int, Processor]()
-  private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, Acceptor]()
-  val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneMetricPrefix, time)
   // control-plane
   private var controlPlaneProcessorOpt : Option[Processor] = None
   private[network] var controlPlaneAcceptorOpt : Option[Acceptor] = None
   val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ =>
-    new RequestChannel(20, ControlPlaneMetricPrefix, time))
+    new RequestChannel(20, ControlPlaneMetricPrefix, time, true))
+  // data-plane
+  private val dataPlaneProcessors = new ConcurrentHashMap[Int, Processor]()
+  private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, Acceptor]()
+  // If the control plane processor is not defined, just set the flag to true in data plane to bypass the check for whether a given
+  // request is from the control plane or not.
+  val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneMetricPrefix, time, controlPlaneRequestChannelOpt.isEmpty)
 
   private var nextProcessorId = 0
   private var connectionQuotas: ConnectionQuotas = _
@@ -640,8 +642,8 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
   }
 
   /**
-  * Create a server socket to listen for connections on.
-  */
+   * Create a server socket to listen for connections on.
+   */
   private def openServerSocket(host: String, port: Int): ServerSocketChannel = {
     val socketAddress =
       if (host == null || host.trim.isEmpty)
@@ -759,7 +761,7 @@ private[kafka] class Processor(val id: Int,
   newGauge(IdlePercentMetricName, () => {
     Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags))).fold(0.0)(m =>
       Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-    },
+  },
     // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
     // also includes the listener name)
     Map(NetworkProcessorMetricTag -> id.toString)
@@ -939,7 +941,7 @@ private[kafka] class Processor(val id: Int,
                 val connectionId = receive.source
                 val context = new RequestContext(header, connectionId, channel.socketAddress,
                   channel.principal, listenerName, securityProtocol,
-                  channel.channelMetadataRegistry.clientInformation)
+                  channel.channelMetadataRegistry.clientInformation, requestChannel.maybeFromControlPlane)
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
                 // KIP-511: ApiVersionsRequest is intercepted here to catch the client software name

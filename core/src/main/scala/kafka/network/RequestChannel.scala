@@ -309,7 +309,10 @@ object RequestChannel extends Logging {
   }
 }
 
-class RequestChannel(val queueSize: Int, val metricNamePrefix : String, time: Time) extends KafkaMetricsGroup {
+class RequestChannel(val queueSize: Int,
+                     val metricNamePrefix : String,
+                     time: Time,
+                     val maybeFromControlPlane: Boolean) extends KafkaMetricsGroup {
   import RequestChannel._
   val metrics = new RequestChannel.Metrics
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
