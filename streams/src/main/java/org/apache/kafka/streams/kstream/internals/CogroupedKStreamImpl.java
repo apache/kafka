@@ -123,12 +123,12 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
                                         final NamedInternal named,
                                         final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         return aggregateBuilder.build(
-                groupPatterns,
-                initializer,
-                named,
-                new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
-                materializedInternal.keySerde(),
-                materializedInternal.valueSerde(),
-                materializedInternal.queryableStoreName());
+            groupPatterns,
+            initializer,
+            named,
+            new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
+            materializedInternal.keySerde(),
+            materializedInternal.valueSerde(),
+            materializedInternal.queryableStoreName());
     }
 }
