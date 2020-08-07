@@ -90,7 +90,7 @@ public class TimeWindowedCogroupedKStreamImpl<K, V, W extends Window> extends Ab
             materialized,
             builder,
             CogroupedKStreamImpl.AGGREGATE_NAME);
-        return aggregateBuilder.processRepartitions(
+        return aggregateBuilder.build(
                 groupPatterns,
                 initializer,
                 new NamedInternal(named),

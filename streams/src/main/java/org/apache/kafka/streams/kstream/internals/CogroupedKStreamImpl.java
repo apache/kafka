@@ -122,7 +122,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     private KTable<K, VOut> doAggregate(final Initializer<VOut> initializer,
                                         final NamedInternal named,
                                         final MaterializedInternal<K, VOut, KeyValueStore<Bytes, byte[]>> materializedInternal) {
-        return aggregateBuilder.processRepartitions(
+        return aggregateBuilder.build(
             groupPatterns,
             initializer,
             named,

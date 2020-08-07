@@ -47,7 +47,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
     CogroupedStreamAggregateBuilder(final InternalStreamsBuilder builder) {
         this.builder = builder;
     }
-    <KR> KTable<KR, VOut> processRepartitions(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
+    <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                               final Initializer<VOut> initializer,
                                               final NamedInternal named,
                                               final StoreBuilder<?> storeBuilder,
@@ -74,7 +74,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         return createTable(processors, named, keySerde, valueSerde, queryableName);
     }
 
-    <KR, W extends Window> KTable<KR, VOut> processRepartitions(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
+    <KR, W extends Window> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                                                 final Initializer<VOut> initializer,
                                                                 final NamedInternal named,
                                                                 final StoreBuilder<?> storeBuilder,
@@ -103,7 +103,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         return createTable(processors, named, keySerde, valueSerde, queryableName);
     }
 
-    <KR> KTable<KR, VOut> processRepartitions(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
+    <KR> KTable<KR, VOut> build(final Map<KGroupedStreamImpl<K, ?>, Aggregator<? super K, ? super Object, VOut>> groupPatterns,
                                               final Initializer<VOut> initializer,
                                               final NamedInternal named,
                                               final StoreBuilder<?> storeBuilder,
