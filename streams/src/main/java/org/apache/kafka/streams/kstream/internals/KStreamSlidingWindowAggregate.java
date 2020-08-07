@@ -81,7 +81,6 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
         private Sensor lateRecordDropSensor;
         private Sensor droppedRecordsSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
-        private boolean reverseIteratorImplemented = false;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -127,94 +126,10 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 droppedRecordsSensor.record();
                 return;
             }
-
-            if (reverseIteratorImplemented) {
-                processReverse(key, value, timestamp);
-            } else {
-                processInOrder(key, value, timestamp);
-            }
+            processInOrder(key, value, timestamp);
         }
 
-        public void processReverse(final K key, final V value, final long timestamp) {
-            //TODO: Change in-order iterator call to window store to reverse call
-            observedStreamTime = Math.max(observedStreamTime, timestamp);
-            final long closeTime = observedStreamTime - windows.gracePeriodMs();
-            //store start times of windows we find
-            final HashSet<Long> windowStartTimes = new HashSet<Long>();
-            // aggregate that will go in the current record’s left/right window (if needed)
-            ValueAndTimestamp<Agg> leftWinAgg = null;
-            ValueAndTimestamp<Agg> rightWinAgg = null;
 
-            //if current record's left/right windows already exist
-            boolean leftWinAlreadyCreated = false;
-            boolean rightWinAlreadyCreated = false;
-
-            try (
-                    final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(
-                            key,
-                            key,
-                            timestamp - 2 * windows.timeDifferenceMs(),
-                            timestamp + 1)
-            ) {
-                KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next;
-                //if we've already seen the window with the closest start time to the record
-                boolean foundRightWinAgg = false;
-                //if we've already seen the window with the closest end time to the record
-                boolean foundLeftWinAgg = false;
-                while (iterator.hasNext()) {
-                    next = iterator.next();
-                    windowStartTimes.add(next.key.window().start());
-
-                    //determine if current record's right window exists, will only be true at most once, on the first pass
-                    if (next.key.window().start() == timestamp + 1) {
-                        rightWinAlreadyCreated = true;
-                    } else if (next.key.window().end() > timestamp) {
-                        if (!foundRightWinAgg) {
-                            foundRightWinAgg = true;
-                            rightWinAgg = next.value;
-                        }
-                        putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
-                    } else if (next.key.window().end() == timestamp) {
-                        putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
-                        leftWinAlreadyCreated = true;
-                    } else {
-                        if (!foundLeftWinAgg) {
-                            leftWinAgg = next.value;
-                            foundLeftWinAgg = true;
-                        }
-                        //If it's a left window, there is a record at this window's end time who may need a corresponding right window
-                        if (isLeftWindow(next)) {
-                            final long rightWinStart = next.key.window().end() + 1;
-                            if (!windowStartTimes.contains(rightWinStart)) {
-                                final TimeWindow window = new TimeWindow(rightWinStart, rightWinStart + windows.timeDifferenceMs());
-                                final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
-                                putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
-                            }
-                            break;
-                        }
-                    }
-                }
-            }
-            //create the left window of the current record if it's not created
-            if (!leftWinAlreadyCreated) {
-                final ValueAndTimestamp<Agg> valueAndTime;
-                //confirms that the left window contains more than the current record
-                if (leftWinAgg != null) {
-                    valueAndTime = ValueAndTimestamp.make(leftWinAgg.value(), timestamp);
-                } else {
-                    //left window just contains the current record
-                    valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
-                }
-                final TimeWindow window = new TimeWindow(windows.timeDifferenceMs(), timestamp);
-                putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
-            }
-            //create the right window for the current record, if need be
-            if (!rightWinAlreadyCreated && rightWinIsNotEmpty(rightWinAgg, timestamp)) {
-                final TimeWindow window = new TimeWindow(timestamp + 1, timestamp + 1 + windows.timeDifferenceMs());
-                final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(getValueOrNull(rightWinAgg), Math.max(rightWinAgg.timestamp(), timestamp));
-                putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
-            }
-        }
 
         public void processInOrder(final K key, final V value, final long timestamp) {
 
