@@ -36,17 +36,15 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
-import java.util.stream.Collector;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.Fetcher.hasUsableOffsetForLeaderEpochVersion;
 
@@ -331,7 +329,7 @@ public class SubscriptionState {
     }
 
     public synchronized Set<TopicPartition> pausedPartitions() {
-        return collectPartitions(TopicPartitionState::isPaused, Collectors.toSet());
+        return collectPartitions(TopicPartitionState::isPaused);
     }
 
     /**
@@ -407,10 +405,6 @@ public class SubscriptionState {
         return new HashSet<>(this.assignment.partitionSet());
     }
 
-    public synchronized void forEachAssignedPartition(Consumer<TopicPartition> consumer) {
-        this.assignment.partitionSet().forEach(consumer);
-    }
-
     /**
      * @return a modifiable copy of the currently assigned partitions as a list
      */
@@ -427,10 +421,13 @@ public class SubscriptionState {
     }
 
     synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
-        return assignment.stream()
-                .filter(tpState -> isAvailable.test(tpState.topicPartition()) && tpState.value().isFetchable())
-                .map(PartitionStates.PartitionState::topicPartition)
-                .collect(Collectors.toList());
+        List<TopicPartition> result = new ArrayList<>();
+        assignment.forEach((topicPartition, topicPartitionState) -> {
+            if (topicPartitionState.isFetchable() && isAvailable.test(topicPartition)) {
+                result.add(topicPartition);
+            }
+        });
+        return result;
     }
 
     public synchronized boolean hasAutoAssignedPartitions() {
@@ -601,10 +598,9 @@ public class SubscriptionState {
 
     public synchronized Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
-        assignment.stream().forEach(state -> {
-            TopicPartitionState partitionState = state.value();
+        assignment.forEach((topicPartition, partitionState) -> {
             if (partitionState.hasValidPosition())
-                allConsumed.put(state.topicPartition(), new OffsetAndMetadata(partitionState.position.offset,
+                allConsumed.put(topicPartition, new OffsetAndMetadata(partitionState.position.offset,
                         partitionState.position.offsetEpoch, ""));
         });
         return allConsumed;
@@ -644,26 +640,33 @@ public class SubscriptionState {
     }
 
     public synchronized boolean hasAllFetchPositions() {
-        return assignment.stream().allMatch(state -> state.value().hasValidPosition());
+        Iterator<TopicPartitionState> it = assignment.stateIterator();
+        while (it.hasNext()) {
+            if (!it.next().hasValidPosition()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public synchronized Set<TopicPartition> initializingPartitions() {
-        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING), Collectors.toSet());
+        return collectPartitions(state -> state.fetchState.equals(FetchStates.INITIALIZING));
     }
 
-    private <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
-        return assignment.stream()
-                .filter(state -> filter.test(state.value()))
-                .map(PartitionStates.PartitionState::topicPartition)
-                .collect(collector);
+    private Set<TopicPartition> collectPartitions(Predicate<TopicPartitionState> filter) {
+        Set<TopicPartition> result = new HashSet<>();
+        assignment.forEach((topicPartition, topicPartitionState) -> {
+            if (filter.test(topicPartitionState)) {
+                result.add(topicPartition);
+            }
+        });
+        return result;
     }
 
 
     public synchronized void resetInitializingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
-        assignment.stream().forEach(state -> {
-            TopicPartition tp = state.topicPartition();
-            TopicPartitionState partitionState = state.value();
+        assignment.forEach((tp, partitionState) -> {
             if (partitionState.fetchState.equals(FetchStates.INITIALIZING)) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
@@ -677,13 +680,11 @@ public class SubscriptionState {
     }
 
     public synchronized Set<TopicPartition> partitionsNeedingReset(long nowMs) {
-        return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs),
-                Collectors.toSet());
+        return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs));
     }
 
     public synchronized Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
-        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs),
-                Collectors.toSet());
+        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs));
     }
 
     public synchronized boolean isAssigned(TopicPartition tp) {
