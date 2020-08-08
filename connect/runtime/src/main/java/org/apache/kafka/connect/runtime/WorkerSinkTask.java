@@ -95,6 +95,7 @@ class WorkerSinkTask extends WorkerTask {
     private boolean pausedForRedelivery;
     private boolean committing;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
+    private boolean isPartitionAssigned = false;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -289,7 +290,6 @@ class WorkerSinkTask extends WorkerTask {
      */
     protected void initializeAndStart() {
         SinkConnectorConfig.validate(taskConfig);
-
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
             List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
             consumer.subscribe(topics, new HandleRebalance());
@@ -614,7 +614,7 @@ class WorkerSinkTask extends WorkerTask {
 
     private void rewind() {
         Map<TopicPartition, Long> offsets = context.offsets();
-        if (offsets.isEmpty()) {
+        if (offsets.isEmpty() || !isPartitionAssigned) {
             return;
         }
         for (Map.Entry<TopicPartition, Long> entry: offsets.entrySet()) {
@@ -680,6 +680,21 @@ class WorkerSinkTask extends WorkerTask {
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
                 log.debug("{} Assigned topic partition {} with offset {}", WorkerSinkTask.this, tp, pos);
             }
+
+            isPartitionAssigned = true;
+            if (!context.offsets().isEmpty()) {
+                for (TopicPartition tp : partitions) {
+                    Long offset = context.offsets().get(tp);
+                    if (offset != null) {
+                        log.trace("{} Rewind {} to offset {}", this, tp, offset);
+                        consumer.seek(tp, offset);
+                    } else {
+                        log.warn("{} Cannot rewind {} to null offset", this, tp);
+                    }
+                }
+                context.clearOffsets();
+            }
+
             sinkTaskMetricsGroup.assignedOffsets(currentOffsets);
 
             // If we paused everything for redelivery (which is no longer relevant since we discarded the data), make
