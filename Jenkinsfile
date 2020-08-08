@@ -25,6 +25,8 @@ def config = jobConfig {
     timeoutHours = 4
     runMergeCheck = false
     downStreamValidate = true
+    downStreamRepos = ["common",]
+    disableConcurrentBuilds = true
 }
 
 def retryFlagsString(jobConfig) {
@@ -38,6 +40,7 @@ def publishStep(String vaultSecret) {
         sh "./gradlewAll --init-script ${GRADLE_NEXUS_SETTINGS} --no-daemon uploadArchives"
     }
 }
+
 def job = {
     // https://github.com/confluentinc/common-tools/blob/master/confluent/config/dev/versions.json
     def kafkaMuckrakeVersionMap = [
@@ -48,10 +51,14 @@ def job = {
             "master": "master"
     ]
 
+    if (!config.isReleaseJob) {
+        ciTool("ci-update-version ${env.WORKSPACE} kafka")
+    }
+
     stage("Check compilation compatibility with Scala 2.12") {
         sh "./gradlew clean assemble spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain " +
                  "--no-daemon --stacktrace -PxmlSpotBugsReport=true -PscalaVersion=2.12"
-        }
+    }
 
 
     stage("Compile and validate") {
@@ -61,6 +68,10 @@ def job = {
 
     if (config.publish) {
       stage("Publish to artifactory") {
+        if (!config.isReleaseJob && !config.isPrJob) {
+            ciTool("ci-push-tag ${env.WORKSPACE} kafka")
+        }
+
         if (config.isDevJob) {
           publishStep('artifactory_snapshots_settings')
         } else if (config.isPreviewJob) {
