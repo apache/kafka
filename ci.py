@@ -42,7 +42,7 @@ class CI:
         log.info("Updating ducktape version.py")
         ducktape_version_file = os.path.join(self.repo_path, "tests/kafkatest/version.py")
         # The version in this file does not contain the qualifier
-        ducktape_version = self.new_version.split(kafka_qualifier)[0]
+        ducktape_version = self.new_version.split("-{}".format(kafka_qualifier))[0]
         regex_replace(ducktape_version_file,
             "^DEV_VERSION = KafkaVersion.*",
             "DEV_VERSION = KafkaVersion(\"{}\")".format(ducktape_version))
