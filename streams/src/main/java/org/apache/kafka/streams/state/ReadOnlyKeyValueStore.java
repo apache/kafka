@@ -49,9 +49,9 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * and must not return null values.
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      *
-     * @param from The first key that could be in the range
-     * @param to   The last key that could be in the range
-     * @return The iterator for this range.
+     * @param from The first key that could be in the range, where iteration starts from.
+     * @param to   The last key that could be in the range, where iteration ends.
+     * @return The iterator for this range, from smallest to largest bytes.
      * @throws NullPointerException       If null is used for from or to.
      * @throws InvalidStateStoreException if the store is not initialized
      */
@@ -63,9 +63,9 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * and must not return null values.
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      *
-     * @param from The last key that could be in the range
-     * @param to   The first key that could be in the range
-     * @return The reverse iterator for this range.
+     * @param from The first key that could be in the range, where iteration ends.
+     * @param to   The last key that could be in the range, where iteration starts from.
+     * @return The reverse iterator for this range, from largest to smallest key bytes.
      * @throws NullPointerException       If null is used for from or to.
      * @throws InvalidStateStoreException if the store is not initialized
      */
@@ -79,7 +79,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * and must not return null values.
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      *
-     * @return An iterator of all key/value pairs in the store.
+     * @return An iterator of all key/value pairs in the store, from smallest to largest bytes.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<K, V> all();
@@ -90,7 +90,7 @@ public interface ReadOnlyKeyValueStore<K, V> {
      * and must not return null values.
      * Order is not guaranteed as bytes lexicographical ordering might not represent key order.
      *
-     * @return An reverse iterator of all key/value pairs in the store.
+     * @return An reverse iterator of all key/value pairs in the store, from largest to smallest key bytes.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     default KeyValueIterator<K, V> reverseAll() {
