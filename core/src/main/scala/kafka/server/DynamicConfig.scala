@@ -89,7 +89,7 @@ object DynamicConfig {
     val DefaultProducerOverride = ClientQuotaManagerConfig.QuotaDefault
     val DefaultConsumerOverride = ClientQuotaManagerConfig.QuotaDefault
     val DefaultRequestOverride = ClientRequestQuotaManager.QuotaRequestPercentDefault
-    val DefaultControllerMutationOverride = ClientQuotaManagerConfig.QuotaDefault
+    val DefaultControllerMutationOverride = ControllerMutationQuotaManager.QuotaControllerMutationDefault
 
     // Documentation
     val ProducerOverrideDoc = "A rate representing the upper bound (bytes/sec) for producer traffic."
@@ -103,7 +103,7 @@ object DynamicConfig {
       .define(ProducerByteRateOverrideProp, LONG, DefaultProducerOverride, MEDIUM, ProducerOverrideDoc)
       .define(ConsumerByteRateOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ConsumerOverrideDoc)
       .define(RequestPercentageOverrideProp, DOUBLE, DefaultRequestOverride, MEDIUM, RequestOverrideDoc)
-      .define(ControllerMutationOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ControllerMutationOverrideDoc)
+      .define(ControllerMutationOverrideProp, DOUBLE, DefaultControllerMutationOverride, MEDIUM, ControllerMutationOverrideDoc)
 
     def configKeys = clientConfigs.configKeys
 
@@ -118,7 +118,7 @@ object DynamicConfig {
       .define(Client.ProducerByteRateOverrideProp, LONG, Client.DefaultProducerOverride, MEDIUM, Client.ProducerOverrideDoc)
       .define(Client.ConsumerByteRateOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ConsumerOverrideDoc)
       .define(Client.RequestPercentageOverrideProp, DOUBLE, Client.DefaultRequestOverride, MEDIUM, Client.RequestOverrideDoc)
-      .define(Client.ControllerMutationOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ControllerMutationOverrideDoc)
+      .define(Client.ControllerMutationOverrideProp, DOUBLE, Client.DefaultControllerMutationOverride, MEDIUM, Client.ControllerMutationOverrideDoc)
 
     def configKeys = userConfigs.configKeys
 

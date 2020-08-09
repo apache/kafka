@@ -209,8 +209,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         return data.toStruct(version());
     }
 
-    // Visible for testing
-    UpdateMetadataRequestData data() {
+    public UpdateMetadataRequestData data() {
         return data;
     }
 

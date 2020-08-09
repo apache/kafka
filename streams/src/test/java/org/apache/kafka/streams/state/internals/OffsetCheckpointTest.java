@@ -104,14 +104,15 @@ public class OffsetCheckpointTest {
     public void shouldReadAndWriteSentinelOffset() throws IOException {
         final File f = TestUtils.tempFile();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(f);
+        final long sentinelOffset = -4L;
 
         try {
             final Map<TopicPartition, Long> offsetsToWrite = new HashMap<>();
-            offsetsToWrite.put(new TopicPartition(topic, 1), -2L);
+            offsetsToWrite.put(new TopicPartition(topic, 1), sentinelOffset);
             checkpoint.write(offsetsToWrite);
 
             final Map<TopicPartition, Long> readOffsets = checkpoint.read();
-            assertThat(readOffsets.get(new TopicPartition(topic, 1)), equalTo(-2L));
+            assertThat(readOffsets.get(new TopicPartition(topic, 1)), equalTo(sentinelOffset));
         } finally {
             checkpoint.delete();
         }

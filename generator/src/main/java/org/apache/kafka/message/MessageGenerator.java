@@ -51,7 +51,11 @@ public final class MessageGenerator {
 
     static final String READABLE_CLASS = "org.apache.kafka.common.protocol.Readable";
 
+    static final String RECORDS_READABLE_CLASS = "org.apache.kafka.common.protocol.RecordsReadable";
+
     static final String WRITABLE_CLASS = "org.apache.kafka.common.protocol.Writable";
+
+    static final String RECORDS_WRITABLE_CLASS = "org.apache.kafka.common.protocol.RecordsWritable";
 
     static final String ARRAYS_CLASS = "java.util.Arrays";
 
@@ -87,6 +91,10 @@ public final class MessageGenerator {
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
 
     static final String UUID_CLASS = "java.util.UUID";
+
+    static final String BASE_RECORDS_CLASS = "org.apache.kafka.common.record.BaseRecords";
+
+    static final String MEMORY_RECORDS_CLASS = "org.apache.kafka.common.record.MemoryRecords";
 
     static final String REQUEST_SUFFIX = "Request";
 
