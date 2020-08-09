@@ -35,11 +35,11 @@ import java.time.Duration;
 import java.util.Map;
 
 public final class ProcessorContextReverseAdapter implements InternalProcessorContext {
-    final InternalApiProcessorContext<Object, Object> delegate;
+    private final InternalApiProcessorContext<Object, Object> delegate;
 
     static InternalProcessorContext adapt(final InternalApiProcessorContext<Object, Object> delegate) {
         if (delegate instanceof ProcessorContextAdapter) {
-            return ((ProcessorContextAdapter<Object, Object>) delegate).delegate;
+            return ((ProcessorContextAdapter<Object, Object>) delegate).delegate();
         } else {
             return new ProcessorContextReverseAdapter(delegate);
         }
@@ -240,5 +240,9 @@ public final class ProcessorContextReverseAdapter implements InternalProcessorCo
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return delegate.appConfigsWithPrefix(prefix);
+    }
+
+    InternalApiProcessorContext<Object, Object> delegate() {
+        return delegate;
     }
 }

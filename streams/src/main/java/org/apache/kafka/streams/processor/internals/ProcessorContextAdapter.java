@@ -38,12 +38,12 @@ import java.util.Map;
 public final class ProcessorContextAdapter<KForward, VForward>
     implements ProcessorContext<KForward, VForward>, InternalApiProcessorContext<KForward, VForward> {
 
-    final InternalProcessorContext delegate;
+    private final InternalProcessorContext delegate;
 
     @SuppressWarnings("unchecked")
     static <KForward, VForward> InternalApiProcessorContext<KForward, VForward> shim(final InternalProcessorContext delegate) {
         if (delegate instanceof ProcessorContextReverseAdapter) {
-            return (InternalApiProcessorContext<KForward, VForward>) ((ProcessorContextReverseAdapter) delegate).delegate;
+            return (InternalApiProcessorContext<KForward, VForward>) ((ProcessorContextReverseAdapter) delegate).delegate();
         } else {
             return new ProcessorContextAdapter<>(delegate);
         }
@@ -226,5 +226,9 @@ public final class ProcessorContextAdapter<KForward, VForward>
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return delegate.appConfigsWithPrefix(prefix);
+    }
+
+    InternalProcessorContext delegate() {
+        return delegate;
     }
 }

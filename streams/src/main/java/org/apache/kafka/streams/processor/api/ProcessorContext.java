@@ -236,5 +236,4 @@ public interface ProcessorContext<KForward, VForward> {
      * @return the key/values matching the given prefix from the StreamsConfig properties.
      */
     Map<String, Object> appConfigsWithPrefix(final String prefix);
-
 }

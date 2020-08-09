@@ -763,13 +763,17 @@ public class InternalTopologyBuilder {
         }
 
         if (!sourceTopics.isEmpty()) {
-            stateStoreNameToSourceTopics.put(stateStoreName,
-                                             Collections.unmodifiableSet(sourceTopics));
+            stateStoreNameToSourceTopics.put(
+                stateStoreName,
+                Collections.unmodifiableSet(sourceTopics)
+            );
         }
 
         if (!sourcePatterns.isEmpty()) {
-            stateStoreNameToSourceRegex.put(stateStoreName,
-                                            Collections.unmodifiableSet(sourcePatterns));
+            stateStoreNameToSourceRegex.put(
+                stateStoreName,
+                Collections.unmodifiableSet(sourcePatterns)
+            );
         }
 
     }

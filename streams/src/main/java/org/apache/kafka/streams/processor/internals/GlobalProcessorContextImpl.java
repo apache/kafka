@@ -62,7 +62,7 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         try {
             for (final ProcessorNode<?, ?, ?, ?> child : currentNode().children()) {
                 setCurrentNode(child);
-                ((ProcessorNode<KIn, VIn, KIn, VIn>) child).process(key, value); // FIXME
+                ((ProcessorNode<KIn, VIn, ?, ?>) child).process(key, value);
             }
         } finally {
             setCurrentNode(previousNode);
