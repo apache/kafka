@@ -18,8 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -370,12 +370,12 @@ class CachingSessionStore
         }
 
         private Bytes segmentLowerRangeFixedSize(final Bytes key, final long segmentBeginTime) {
-            final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, segmentBeginTime)));
+            final Windowed<Bytes> sessionKey = new Windowed<>(key, Window.withBounds(0, Math.max(0, segmentBeginTime)));
             return SessionKeySchema.toBinary(sessionKey);
         }
 
         private Bytes segmentUpperRangeFixedSize(final Bytes key, final long segmentEndTime) {
-            final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(Math.min(latestSessionStartTime, segmentEndTime), segmentEndTime));
+            final Windowed<Bytes> sessionKey = new Windowed<>(key, Window.withBounds(Math.min(latestSessionStartTime, segmentEndTime), segmentEndTime));
             return SessionKeySchema.toBinary(sessionKey);
         }
     }

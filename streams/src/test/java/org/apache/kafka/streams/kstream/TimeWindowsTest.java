@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.junit.Test;
 
 import java.util.Map;
@@ -128,27 +127,27 @@ public class TimeWindowsTest {
     @Test
     public void shouldComputeWindowsForHoppingWindows() {
         final TimeWindows windows = TimeWindows.of(ofMillis(12L)).advanceBy(ofMillis(5L));
-        final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
+        final Map<Long, Window> matched = windows.windowsFor(21L);
         assertEquals(12L / 5L + 1, matched.size());
-        assertEquals(new TimeWindow(10L, 22L), matched.get(10L));
-        assertEquals(new TimeWindow(15L, 27L), matched.get(15L));
-        assertEquals(new TimeWindow(20L, 32L), matched.get(20L));
+        assertEquals(Window.withBounds(10L, 22L), matched.get(10L));
+        assertEquals(Window.withBounds(15L, 27L), matched.get(15L));
+        assertEquals(Window.withBounds(20L, 32L), matched.get(20L));
     }
 
     @Test
     public void shouldComputeWindowsForBarelyOverlappingHoppingWindows() {
         final TimeWindows windows = TimeWindows.of(ofMillis(6L)).advanceBy(ofMillis(5L));
-        final Map<Long, TimeWindow> matched = windows.windowsFor(7L);
+        final Map<Long, Window> matched = windows.windowsFor(7L);
         assertEquals(1, matched.size());
-        assertEquals(new TimeWindow(5L, 11L), matched.get(5L));
+        assertEquals(Window.withBounds(5L, 11L), matched.get(5L));
     }
 
     @Test
     public void shouldComputeWindowsForTumblingWindows() {
         final TimeWindows windows = TimeWindows.of(ofMillis(12L));
-        final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
+        final Map<Long, Window> matched = windows.windowsFor(21L);
         assertEquals(1, matched.size());
-        assertEquals(new TimeWindow(12L, 24L), matched.get(12L));
+        assertEquals(Window.withBounds(12L, 24L), matched.get(12L));
     }
 
 

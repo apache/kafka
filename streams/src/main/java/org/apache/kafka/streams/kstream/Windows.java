@@ -20,7 +20,6 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
 import java.time.Duration;
-import java.util.Map;
 
 import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
@@ -39,8 +38,10 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see JoinWindows
  * @see SessionWindows
  * @see TimestampExtractor
+ * @deprecated since 2.7 Implement EnumerableWindowDefinition instead.
  */
-public abstract class Windows<W extends Window> {
+@Deprecated
+public abstract class Windows<W extends Window> implements EnumerableWindowDefinition {
 
     private long maintainDurationMs = DEFAULT_RETENTION_MS;
     @Deprecated public int segments = 3;
@@ -103,25 +104,23 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Create all windows that contain the provided timestamp, indexed by non-negative window start timestamps.
+     * Return an upper bound on the size of the specified windows in milliseconds.
+     * Used to determine the lower bound on store retention time.
      *
-     * @param timestamp the timestamp window should get created for
-     * @return a map of {@code windowStartTimestamp -> Window} entries
+     * @return the size of the specified window
      */
-    public abstract Map<Long, W> windowsFor(final long timestamp);
+    public long maxSize() {
+        // Adding an implementation to deleagate to the existing
+        // equivalent API so that existing subclasses will still compile.
+        return size();
+    }
 
     /**
      * Return the size of the specified windows in milliseconds.
      *
      * @return the size of the specified windows
+     * @deprecated since 2.7 Implement EnumerableWindowDefinition instead.
      */
+    @Deprecated
     public abstract long size();
-
-    /**
-     * Return the window grace period (the time to admit
-     * out-of-order events after the end of the window.)
-     *
-     * Delay is defined as (stream_time - record_timestamp).
-     */
-    public abstract long gracePeriodMs();
 }

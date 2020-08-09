@@ -32,8 +32,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -96,8 +96,8 @@ public class MeteredSessionStoreTest {
     private static final String CHANGELOG_TOPIC = "changelog-topic";
     private static final String KEY = "key";
     private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
-    private static final Windowed<String> WINDOWED_KEY = new Windowed<>(KEY, new SessionWindow(0, 0));
-    private static final Windowed<Bytes> WINDOWED_KEY_BYTES = new Windowed<>(KEY_BYTES, new SessionWindow(0, 0));
+    private static final Windowed<String> WINDOWED_KEY = new Windowed<>(KEY, Window.withBounds(0, 0));
+    private static final Windowed<Bytes> WINDOWED_KEY_BYTES = new Windowed<>(KEY_BYTES, Window.withBounds(0, 0));
     private static final String VALUE = "value";
     private static final byte[] VALUE_BYTES = VALUE.getBytes();
     private static final long START_TIMESTAMP = 24L;
@@ -284,7 +284,7 @@ public class MeteredSessionStoreTest {
 
         init();
 
-        store.remove(new Windowed<>(KEY, new SessionWindow(0, 0)));
+        store.remove(new Windowed<>(KEY, Window.withBounds(0, 0)));
 
         final KafkaMetric metric = metric("remove-rate");
         assertTrue((Double) metric.metricValue() > 0);

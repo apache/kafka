@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
@@ -55,12 +55,12 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldRemoveExpired() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
-        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(10, 20)), 3L);
 
         // Advance stream time to expire the first record
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, RETENTION_PERIOD)), 4L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(10, RETENTION_PERIOD)), 4L);
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
             sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
@@ -72,14 +72,14 @@ public class InMemorySessionStoreTest extends AbstractSessionBytesStoreTest {
     @Test
     public void shouldNotExpireFromOpenIterator() {
 
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
-        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(10, 20)), 3L);
 
         final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", "b", 0L, RETENTION_PERIOD);
 
         // Advance stream time to expire the first three record
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(100, 2 * RETENTION_PERIOD)), 4L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(100, 2 * RETENTION_PERIOD)), 4L);
 
         assertEquals(valuesToSet(iterator), new HashSet<>(Arrays.asList(1L, 2L, 3L, 4L)));
         assertFalse(iterator.hasNext());

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -35,14 +36,14 @@ public class SessionCacheFlushListenerTest {
         context.setCurrentNode(null);
         context.setCurrentNode(null);
         context.forward(
-            new Windowed<>("key", new SessionWindow(21L, 73L)),
+            new Windowed<>("key", Window.withBounds(21L, 73L)),
             new Change<>("newValue", "oldValue"),
             To.all().withTimestamp(73L));
         expectLastCall();
         replay(context);
 
         new SessionCacheFlushListener<>(context).apply(
-            new Windowed<>("key", new SessionWindow(21L, 73L)),
+            new Windowed<>("key", Window.withBounds(21L, 73L)),
             "newValue",
             "oldValue",
             42L);

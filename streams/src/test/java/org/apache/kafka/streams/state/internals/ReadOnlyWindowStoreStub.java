@@ -19,8 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.internals.ApiUtils;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -96,7 +96,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.entrySet()) {
-                    results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
+                    results.add(new KeyValue<>(new Windowed<>(entry.getKey(), Window.withBounds(now, now + windowSize)), entry.getValue()));
                 }
             }
         }
@@ -138,7 +138,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.entrySet()) {
-                    results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
+                    results.add(new KeyValue<>(new Windowed<>(entry.getKey(), Window.withBounds(now, now + windowSize)), entry.getValue()));
                 }
             }
         }
@@ -184,7 +184,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.subMap(from, true, to, true).entrySet()) {
-                    results.add(new KeyValue<>(new Windowed<>(entry.getKey(), new TimeWindow(now, now + windowSize)), entry.getValue()));
+                    results.add(new KeyValue<>(new Windowed<>(entry.getKey(), Window.withBounds(now, now + windowSize)), entry.getValue()));
                 }
             }
         }

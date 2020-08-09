@@ -25,8 +25,8 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -568,40 +568,40 @@ public class StoreUpgradeIntegrationTest {
         kafkaStreams.start();
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 1L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 1L)));
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L)));
         final long lastUpdateKeyOne = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processWindowedKeyValueAndVerifyPlainCount(2, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L)));
         final long lastUpdateKeyTwo = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processWindowedKeyValueAndVerifyPlainCount(3, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L)));
         final long lastUpdateKeyThree = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processWindowedKeyValueAndVerifyPlainCount(4, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 1L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), 1L)));
 
         processWindowedKeyValueAndVerifyPlainCount(4, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 2L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), 2L)));
 
         processWindowedKeyValueAndVerifyPlainCount(4, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), 3L)));
         final long lastUpdateKeyFour = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         kafkaStreams.close();
@@ -611,88 +611,88 @@ public class StoreUpgradeIntegrationTest {
         kafkaStreams = kafkaStreamsNew;
         kafkaStreams.start();
 
-        verifyWindowedCountWithTimestamp(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L, lastUpdateKeyOne);
-        verifyWindowedCountWithTimestamp(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L, lastUpdateKeyTwo);
-        verifyWindowedCountWithTimestamp(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L, lastUpdateKeyThree);
-        verifyWindowedCountWithTimestamp(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L, lastUpdateKeyFour);
+        verifyWindowedCountWithTimestamp(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L, lastUpdateKeyOne);
+        verifyWindowedCountWithTimestamp(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L, lastUpdateKeyTwo);
+        verifyWindowedCountWithTimestamp(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L, lastUpdateKeyThree);
+        verifyWindowedCountWithTimestamp(new Windowed<>(4, Window.withBounds(0L, 1000L)), 3L, lastUpdateKeyFour);
 
         final long currentTime = CLUSTER.time.milliseconds();
         processKeyValueAndVerifyWindowedCountWithTimestamp(1, currentTime + 42L, asList(
             KeyValue.pair(
-                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                new Windowed<>(1, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(3L, currentTime + 42L)),
             KeyValue.pair(
-                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                new Windowed<>(2, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(1L, lastUpdateKeyTwo)),
             KeyValue.pair(
-                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                new Windowed<>(3, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
             KeyValue.pair(
-                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                new Windowed<>(4, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(3L, lastUpdateKeyFour))));
 
         processKeyValueAndVerifyWindowedCountWithTimestamp(2, currentTime + 45L, asList(
             KeyValue.pair(
-                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                new Windowed<>(1, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(3L, currentTime + 42L)),
             KeyValue.pair(
-                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                new Windowed<>(2, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(2L, currentTime + 45L)),
             KeyValue.pair(
-                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                new Windowed<>(3, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
             KeyValue.pair(
-                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                new Windowed<>(4, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(3L, lastUpdateKeyFour))));
 
         // can process "out of order" record for different key
         processKeyValueAndVerifyWindowedCountWithTimestamp(4, currentTime + 21L, asList(
             KeyValue.pair(
-                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                new Windowed<>(1, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(3L, currentTime + 42L)),
             KeyValue.pair(
-                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                new Windowed<>(2, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(2L, currentTime + 45L)),
             KeyValue.pair(
-                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                new Windowed<>(3, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
             KeyValue.pair(
-                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                new Windowed<>(4, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(4L, currentTime + 21L))));
 
         processKeyValueAndVerifyWindowedCountWithTimestamp(4, currentTime + 42L, asList(
             KeyValue.pair(
-                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                new Windowed<>(1, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(3L, currentTime + 42L)),
             KeyValue.pair(
-                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                new Windowed<>(2, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(2L, currentTime + 45L)),
             KeyValue.pair(
-                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                new Windowed<>(3, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
             KeyValue.pair(
-                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                new Windowed<>(4, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(5L, currentTime + 42L))));
 
         // out of order (same key) record should not reduce result timestamp
         processKeyValueAndVerifyWindowedCountWithTimestamp(4, currentTime + 10L, asList(
             KeyValue.pair(
-                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                new Windowed<>(1, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(3L, currentTime + 42L)),
             KeyValue.pair(
-                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                new Windowed<>(2, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(2L, currentTime + 45L)),
             KeyValue.pair(
-                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                new Windowed<>(3, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
             KeyValue.pair(
-                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                new Windowed<>(4, Window.withBounds(0L, 1000L)),
                 ValueAndTimestamp.make(6L, currentTime + 42L))));
 
         // test new segment
         processKeyValueAndVerifyWindowedCountWithTimestamp(10, currentTime + 100001L, singletonList(
             KeyValue.pair(
-                new Windowed<>(10, new TimeWindow(100000L, 101000L)), ValueAndTimestamp.make(1L, currentTime + 100001L))));
+                new Windowed<>(10, Window.withBounds(100000L, 101000L)), ValueAndTimestamp.make(1L, currentTime + 100001L))));
 
 
         kafkaStreams.close();
@@ -719,37 +719,37 @@ public class StoreUpgradeIntegrationTest {
         kafkaStreams.start();
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 1L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 1L)));
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L)));
 
         processWindowedKeyValueAndVerifyPlainCount(2, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L)));
 
         processWindowedKeyValueAndVerifyPlainCount(3, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L)));
 
         processWindowedKeyValueAndVerifyPlainCount(4, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 1L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), 1L)));
 
         processWindowedKeyValueAndVerifyPlainCount(4, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 2L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), 2L)));
 
         processWindowedKeyValueAndVerifyPlainCount(4, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L)));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), 3L)));
 
         kafkaStreams.close();
         kafkaStreams = null;
@@ -773,46 +773,46 @@ public class StoreUpgradeIntegrationTest {
         kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
-        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L);
-        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L);
-        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L);
-        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L);
+        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(1, Window.withBounds(0L, 1000L)), 2L);
+        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(2, Window.withBounds(0L, 1000L)), 1L);
+        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(3, Window.withBounds(0L, 1000L)), 1L);
+        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(4, Window.withBounds(0L, 1000L)), 3L);
 
         processKeyValueAndVerifyWindowedCountWithTimestamp(1, 42L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L))));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(3L, -1L))));
 
         processKeyValueAndVerifyWindowedCountWithTimestamp(2, 45L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, -1L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L))));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(2L, -1L)),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(3L, -1L))));
 
         // can process "out of order" record for different key
         processKeyValueAndVerifyWindowedCountWithTimestamp(4, 21L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, -1L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(4L, -1L))));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(2L, -1L)),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(4L, -1L))));
 
         processKeyValueAndVerifyWindowedCountWithTimestamp(4, 42L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, -1L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(5L, -1L))));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(2L, -1L)),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(5L, -1L))));
 
         // out of order (same key) record should not reduce result timestamp
         processKeyValueAndVerifyWindowedCountWithTimestamp(4, 10L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, -1L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(6L, -1L))));
+            KeyValue.pair(new Windowed<>(1, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(3L, -1L)),
+            KeyValue.pair(new Windowed<>(2, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(2L, -1L)),
+            KeyValue.pair(new Windowed<>(3, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
+            KeyValue.pair(new Windowed<>(4, Window.withBounds(0L, 1000L)), ValueAndTimestamp.make(6L, -1L))));
 
         // test new segment
         processKeyValueAndVerifyWindowedCountWithTimestamp(10, 100001L, singletonList(
-            KeyValue.pair(new Windowed<>(10, new TimeWindow(100000L, 101000L)), ValueAndTimestamp.make(1L, -1L))));
+            KeyValue.pair(new Windowed<>(10, Window.withBounds(100000L, 101000L)), ValueAndTimestamp.make(1L, -1L))));
 
 
         kafkaStreams.close();

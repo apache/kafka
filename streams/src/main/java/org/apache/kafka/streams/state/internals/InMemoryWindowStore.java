@@ -20,8 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
@@ -493,7 +493,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                 endTime = Long.MAX_VALUE;
             }
 
-            final TimeWindow timeWindow = new TimeWindow(super.currentTime, endTime);
+            final Window timeWindow = Window.withBounds(super.currentTime, endTime);
             return new Windowed<>(key, timeWindow);
         }
     }

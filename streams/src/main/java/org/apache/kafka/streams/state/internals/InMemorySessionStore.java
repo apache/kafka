@@ -20,8 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -351,7 +351,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             }
 
             final Map.Entry<Long, byte[]> nextRecord = recordIterator.next();
-            final SessionWindow sessionWindow = new SessionWindow(nextRecord.getKey(), currentEndTime);
+            final Window sessionWindow = Window.withBounds(nextRecord.getKey(), currentEndTime);
             final Windowed<Bytes> windowedKey = new Windowed<>(currentKey, sessionWindow);
 
             return new KeyValue<>(windowedKey, nextRecord.getValue());

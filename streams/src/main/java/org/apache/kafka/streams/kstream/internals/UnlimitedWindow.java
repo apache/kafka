@@ -30,7 +30,9 @@ import org.apache.kafka.streams.kstream.Window;
  * @see SessionWindow
  * @see org.apache.kafka.streams.kstream.UnlimitedWindows
  * @see org.apache.kafka.streams.processor.TimestampExtractor
+ * @deprecated Use Window instead
  */
+@Deprecated
 public class UnlimitedWindow extends Window {
 
     /**

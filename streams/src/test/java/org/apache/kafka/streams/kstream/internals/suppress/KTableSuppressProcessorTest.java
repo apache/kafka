@@ -17,17 +17,14 @@
 package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
-import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
@@ -119,7 +116,7 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = ARBITRARY_LONG;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0L, 100L));
+        final Windowed<String> key = new Windowed<>("hey", Window.withBounds(0L, 100L));
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
 
@@ -161,7 +158,7 @@ public class KTableSuppressProcessorTest {
         final long recordTime = 99L;
         final long windowEnd = 100L;
         context.setRecordMetadata("topic", 0, 0, null, recordTime);
-        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(windowStart, windowEnd));
+        final Windowed<String> key = new Windowed<>("hey", Window.withBounds(windowStart, windowEnd));
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
         assertThat(context.forwarded(), hasSize(0));
@@ -172,7 +169,7 @@ public class KTableSuppressProcessorTest {
         final long recordTime2 = 100L;
         final long windowEnd2 = 101L;
         context.setRecordMetadata("topic", 0, 1, null, recordTime2);
-        harness.processor.process(new Windowed<>("dummyKey1", new TimeWindow(windowStart2, windowEnd2)), ARBITRARY_CHANGE);
+        harness.processor.process(new Windowed<>("dummyKey1", Window.withBounds(windowStart2, windowEnd2)), ARBITRARY_CHANGE);
         assertThat(context.forwarded(), hasSize(0));
 
         // ok, now it's time to emit "hey"
@@ -180,7 +177,7 @@ public class KTableSuppressProcessorTest {
         final long recordTime3 = 101L;
         final long windowEnd3 = 102L;
         context.setRecordMetadata("topic", 0, 1, null, recordTime3);
-        harness.processor.process(new Windowed<>("dummyKey2", new TimeWindow(windowStart3, windowEnd3)), ARBITRARY_CHANGE);
+        harness.processor.process(new Windowed<>("dummyKey2", Window.withBounds(windowStart3, windowEnd3)), ARBITRARY_CHANGE);
 
         assertThat(context.forwarded(), hasSize(1));
         final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
@@ -204,13 +201,13 @@ public class KTableSuppressProcessorTest {
         final long timestamp = 5L;
         final long windowEnd = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, windowEnd));
+        final Windowed<String> key = new Windowed<>("hey", Window.withBounds(0, windowEnd));
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
         assertThat(context.forwarded(), hasSize(0));
 
         context.setRecordMetadata("", 0, 1L, null, windowEnd);
-        harness.processor.process(new Windowed<>("dummyKey", new TimeWindow(windowEnd, windowEnd + 100L)), ARBITRARY_CHANGE);
+        harness.processor.process(new Windowed<>("dummyKey", Window.withBounds(windowEnd, windowEnd + 100L)), ARBITRARY_CHANGE);
 
         assertThat(context.forwarded(), hasSize(1));
         final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
@@ -226,7 +223,7 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, 100L));
+        final Windowed<String> key = new Windowed<>("hey", Window.withBounds(0, 100L));
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
 
@@ -248,7 +245,7 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, 100L));
+        final Windowed<String> key = new Windowed<>("hey", Window.withBounds(0, 100L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
@@ -268,7 +265,7 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new SessionWindow(0L, 0L));
+        final Windowed<String> key = new Windowed<>("hey", Window.withBounds(0L, 0L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
@@ -287,7 +284,7 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0L, 100L));
+        final Windowed<String> key = new Windowed<>("hey", Window.withBounds(0L, 100L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
@@ -310,7 +307,7 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        final Windowed<String> key = new Windowed<>("hey", new SessionWindow(0L, 0L));
+        final Windowed<String> key = new Windowed<>("hey", Window.withBounds(0L, 0L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
@@ -455,10 +452,6 @@ public class KTableSuppressProcessorTest {
     }
 
     private static <K> Serde<Windowed<K>> timeWindowedSerdeFrom(final Class<K> rawType, final long windowSize) {
-        final Serde<K> kSerde = Serdes.serdeFrom(rawType);
-        return new Serdes.WrapperSerde<>(
-            new TimeWindowedSerializer<>(kSerde.serializer()),
-            new TimeWindowedDeserializer<>(kSerde.deserializer(), windowSize)
-        );
+        return WindowedSerdes.timeWindowedSerdeFrom(rawType, windowSize);
     }
 }

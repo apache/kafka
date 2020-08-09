@@ -50,11 +50,9 @@ import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.UnlimitedWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
@@ -237,21 +235,21 @@ public class KStreamAggregationIntegrationTest {
         final long secondBatchWindow = secondBatchTimestamp / 500 * 500;
 
         final List<KeyValueTimestamp<Windowed<String>, String>> expectResult = Arrays.asList(
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "A", firstBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "A", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "A:A", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "B", firstBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "B", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "B:B", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "C", firstBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "C", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "C:C", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "D", firstBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "D", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "D:D", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "E", firstBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "E", secondBatchTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "E:E", secondBatchTimestamp)
+                new KeyValueTimestamp<>(new Windowed<>("A", Window.withBounds(firstBatchWindow, Long.MAX_VALUE)), "A", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("A", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "A", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("A", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "A:A", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", Window.withBounds(firstBatchWindow, Long.MAX_VALUE)), "B", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "B", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "B:B", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", Window.withBounds(firstBatchWindow, Long.MAX_VALUE)), "C", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "C", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "C:C", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", Window.withBounds(firstBatchWindow, Long.MAX_VALUE)), "D", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "D", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "D:D", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", Window.withBounds(firstBatchWindow, Long.MAX_VALUE)), "E", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "E", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", Window.withBounds(secondBatchWindow, Long.MAX_VALUE)), "E:E", secondBatchTimestamp)
         );
         assertThat(windowedOutput, is(expectResult));
 
@@ -347,21 +345,21 @@ public class KStreamAggregationIntegrationTest {
         final long secondWindow = secondTimestamp / 500 * 500;
 
         final List<KeyValueTimestamp<Windowed<String>, Integer>> expectResult = Arrays.asList(
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
-                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp));
+                new KeyValueTimestamp<>(new Windowed<>("A", Window.withBounds(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("A", Window.withBounds(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("A", Window.withBounds(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", Window.withBounds(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", Window.withBounds(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", Window.withBounds(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", Window.withBounds(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", Window.withBounds(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", Window.withBounds(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", Window.withBounds(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", Window.withBounds(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", Window.withBounds(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", Window.withBounds(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", Window.withBounds(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", Window.withBounds(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp));
 
         assertThat(windowedMessages, is(expectResult));
 
@@ -558,13 +556,13 @@ public class KStreamAggregationIntegrationTest {
         startStreams();
         latch.await(30, TimeUnit.SECONDS);
 
-        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
-        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
-        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
-        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t5, t4))), equalTo(KeyValue.pair(2L, t4)));
-        assertThat(results.get(new Windowed<>("emily", new SessionWindow(t1, t2))), equalTo(KeyValue.pair(2L, t2)));
-        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t3, t4))), equalTo(KeyValue.pair(2L, t4)));
-        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair(1L, t3)));
+        assertThat(results.get(new Windowed<>("bob", Window.withBounds(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
+        assertThat(results.get(new Windowed<>("penny", Window.withBounds(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
+        assertThat(results.get(new Windowed<>("jo", Window.withBounds(t1, t1))), equalTo(KeyValue.pair(1L, t1)));
+        assertThat(results.get(new Windowed<>("jo", Window.withBounds(t5, t4))), equalTo(KeyValue.pair(2L, t4)));
+        assertThat(results.get(new Windowed<>("emily", Window.withBounds(t1, t2))), equalTo(KeyValue.pair(2L, t2)));
+        assertThat(results.get(new Windowed<>("bob", Window.withBounds(t3, t4))), equalTo(KeyValue.pair(2L, t4)));
+        assertThat(results.get(new Windowed<>("penny", Window.withBounds(t3, t3))), equalTo(KeyValue.pair(1L, t3)));
     }
 
     @Test
@@ -667,21 +665,21 @@ public class KStreamAggregationIntegrationTest {
         latch.await(30, TimeUnit.SECONDS);
 
         // verify correct data received
-        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t1, t1))), equalTo(KeyValue.pair("start", t1)));
-        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t1, t1))), equalTo(KeyValue.pair("start", t1)));
-        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t1, t1))), equalTo(KeyValue.pair("pause", t1)));
-        assertThat(results.get(new Windowed<>("jo", new SessionWindow(t5, t4))), equalTo(KeyValue.pair("resume:late", t4)));
-        assertThat(results.get(new Windowed<>("emily", new SessionWindow(t1, t2))), equalTo(KeyValue.pair("pause:resume", t2)));
-        assertThat(results.get(new Windowed<>("bob", new SessionWindow(t3, t4))), equalTo(KeyValue.pair("pause:resume", t4)));
-        assertThat(results.get(new Windowed<>("penny", new SessionWindow(t3, t3))), equalTo(KeyValue.pair("stop", t3)));
+        assertThat(results.get(new Windowed<>("bob", Window.withBounds(t1, t1))), equalTo(KeyValue.pair("start", t1)));
+        assertThat(results.get(new Windowed<>("penny", Window.withBounds(t1, t1))), equalTo(KeyValue.pair("start", t1)));
+        assertThat(results.get(new Windowed<>("jo", Window.withBounds(t1, t1))), equalTo(KeyValue.pair("pause", t1)));
+        assertThat(results.get(new Windowed<>("jo", Window.withBounds(t5, t4))), equalTo(KeyValue.pair("resume:late", t4)));
+        assertThat(results.get(new Windowed<>("emily", Window.withBounds(t1, t2))), equalTo(KeyValue.pair("pause:resume", t2)));
+        assertThat(results.get(new Windowed<>("bob", Window.withBounds(t3, t4))), equalTo(KeyValue.pair("pause:resume", t4)));
+        assertThat(results.get(new Windowed<>("penny", Window.withBounds(t3, t3))), equalTo(KeyValue.pair("stop", t3)));
 
         // verify can query data via IQ
         final ReadOnlySessionStore<String, String> sessionStore =
             IntegrationTestUtils.getStore(userSessionsStore, kafkaStreams, QueryableStoreTypes.sessionStore());
 
         final KeyValueIterator<Windowed<String>, String> bob = sessionStore.fetch("bob");
-        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t1, t1)), "start")));
-        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", new SessionWindow(t3, t4)), "pause:resume")));
+        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", Window.withBounds(t1, t1)), "start")));
+        assertThat(bob.next(), equalTo(KeyValue.pair(new Windowed<>("bob", Window.withBounds(t3, t4)), "pause:resume")));
         assertFalse(bob.hasNext());
     }
 
@@ -766,10 +764,10 @@ public class KStreamAggregationIntegrationTest {
         startStreams();
         assertTrue(latch.await(30, TimeUnit.SECONDS));
 
-        assertThat(results.get(new Windowed<>("bob", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(2L, t4)));
-        assertThat(results.get(new Windowed<>("penny", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(1L, t3)));
-        assertThat(results.get(new Windowed<>("jo", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(1L, t4)));
-        assertThat(results.get(new Windowed<>("emily", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(1L, t2)));
+        assertThat(results.get(new Windowed<>("bob", Window.withBounds(startTime, Long.MAX_VALUE))), equalTo(KeyValue.pair(2L, t4)));
+        assertThat(results.get(new Windowed<>("penny", Window.withBounds(startTime, Long.MAX_VALUE))), equalTo(KeyValue.pair(1L, t3)));
+        assertThat(results.get(new Windowed<>("jo", Window.withBounds(startTime, Long.MAX_VALUE))), equalTo(KeyValue.pair(1L, t4)));
+        assertThat(results.get(new Windowed<>("emily", Window.withBounds(startTime, Long.MAX_VALUE))), equalTo(KeyValue.pair(1L, t2)));
     }
 
 

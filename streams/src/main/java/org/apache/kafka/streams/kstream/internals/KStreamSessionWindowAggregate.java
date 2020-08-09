@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
@@ -124,8 +125,8 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             final List<KeyValue<Windowed<K>, Agg>> merged = new ArrayList<>();
-            final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
-            SessionWindow mergedWindow = newSessionWindow;
+            final Window newSessionWindow = Window.withBounds(timestamp, timestamp);
+            Window mergedWindow = newSessionWindow;
             Agg agg = initializer.apply();
 
             try (
@@ -139,7 +140,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                     final KeyValue<Windowed<K>, Agg> next = iterator.next();
                     merged.add(next);
                     agg = sessionMerger.apply(key, agg, next.value);
-                    mergedWindow = mergeSessionWindow(mergedWindow, (SessionWindow) next.key.window());
+                    mergedWindow = mergeSessionWindow(mergedWindow, next.key.window());
                 }
             }
 
@@ -181,10 +182,10 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         }
     }
 
-    private SessionWindow mergeSessionWindow(final SessionWindow one, final SessionWindow two) {
-        final long start = one.start() < two.start() ? one.start() : two.start();
-        final long end = one.end() > two.end() ? one.end() : two.end();
-        return new SessionWindow(start, end);
+    private Window mergeSessionWindow(final Window one, final Window two) {
+        final long start = Math.min(one.start(), two.start());
+        final long end = Math.max(one.end(), two.end());
+        return Window.withBounds(start, end);
     }
 
     @Override

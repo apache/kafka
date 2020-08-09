@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
@@ -78,15 +79,15 @@ public class TimeWindowedKStreamImplTest {
         }
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
+                .get(new Windowed<>("1", Window.withBounds(0L, 500L))),
             equalTo(ValueAndTimestamp.make(2L, 15L)));
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
+                .get(new Windowed<>("2", Window.withBounds(500L, 1000L))),
             equalTo(ValueAndTimestamp.make(2L, 550L)));
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
+                .get(new Windowed<>("1", Window.withBounds(500L, 1000L))),
             equalTo(ValueAndTimestamp.make(1L, 500L)));
     }
 
@@ -103,15 +104,15 @@ public class TimeWindowedKStreamImplTest {
         }
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
+                .get(new Windowed<>("1", Window.withBounds(0L, 500L))),
             equalTo(ValueAndTimestamp.make("1+2", 15L)));
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
+                .get(new Windowed<>("2", Window.withBounds(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("10+20", 550L)));
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
+                .get(new Windowed<>("1", Window.withBounds(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("3", 500L)));
     }
 
@@ -131,15 +132,15 @@ public class TimeWindowedKStreamImplTest {
         }
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
+                .get(new Windowed<>("1", Window.withBounds(0L, 500L))),
             equalTo(ValueAndTimestamp.make("0+1+2", 15L)));
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
+                .get(new Windowed<>("2", Window.withBounds(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("0+10+20", 550L)));
         assertThat(
             supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
+                .get(new Windowed<>("1", Window.withBounds(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("0+3", 500L)));
     }
 
@@ -158,9 +159,9 @@ public class TimeWindowedKStreamImplTest {
                     StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
                 assertThat(data, equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 2L),
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
-                    KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(0, 500)), 2L),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(500, 1000)), 1L),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(500, 1000)), 2L))));
             }
             {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
@@ -169,9 +170,9 @@ public class TimeWindowedKStreamImplTest {
                     StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
                 assertThat(data, equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make(2L, 15L)),
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make(1L, 500L)),
-                    KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make(2L, 550L)))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(0, 500)), ValueAndTimestamp.make(2L, 15L)),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(500, 1000)), ValueAndTimestamp.make(1L, 500L)),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(500, 1000)), ValueAndTimestamp.make(2L, 550L)))));
             }
         }
     }
@@ -192,9 +193,9 @@ public class TimeWindowedKStreamImplTest {
                     StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
                 assertThat(data, equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "1+2"),
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "3"),
-                    KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "10+20"))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(0, 500)), "1+2"),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(500, 1000)), "3"),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(500, 1000)), "10+20"))));
             }
             {
                 final WindowStore<String, ValueAndTimestamp<String>> windowStore = driver.getTimestampedWindowStore("reduced");
@@ -202,9 +203,9 @@ public class TimeWindowedKStreamImplTest {
                     StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
                 assertThat(data, equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make("1+2", 15L)),
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make("3", 500L)),
-                    KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make("10+20", 550L)))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(0, 500)), ValueAndTimestamp.make("1+2", 15L)),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(500, 1000)), ValueAndTimestamp.make("3", 500L)),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(500, 1000)), ValueAndTimestamp.make("10+20", 550L)))));
             }
         }
     }
@@ -226,9 +227,9 @@ public class TimeWindowedKStreamImplTest {
                     StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
                 assertThat(data, equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "0+1+2"),
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "0+3"),
-                    KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "0+10+20"))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(0, 500)), "0+1+2"),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(500, 1000)), "0+3"),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(500, 1000)), "0+10+20"))));
             }
             {
                 final WindowStore<String, ValueAndTimestamp<String>> windowStore = driver.getTimestampedWindowStore("aggregated");
@@ -236,9 +237,9 @@ public class TimeWindowedKStreamImplTest {
                     StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
                 assertThat(data, equalTo(Arrays.asList(
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make("0+1+2", 15L)),
-                    KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+3", 500L)),
-                    KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+10+20", 550L)))));
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(0, 500)), ValueAndTimestamp.make("0+1+2", 15L)),
+                    KeyValue.pair(new Windowed<>("1", Window.withBounds(500, 1000)), ValueAndTimestamp.make("0+3", 500L)),
+                    KeyValue.pair(new Windowed<>("2", Window.withBounds(500, 1000)), ValueAndTimestamp.make("0+10+20", 550L)))));
             }
         }
     }

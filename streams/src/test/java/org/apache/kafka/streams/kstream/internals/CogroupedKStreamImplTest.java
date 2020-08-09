@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-
-import java.util.Properties;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -35,6 +31,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.EnumerableWindowDefinition;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
@@ -43,8 +40,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
@@ -52,6 +47,11 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Properties;
+
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 public class CogroupedKStreamImplTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
@@ -137,7 +137,7 @@ public class CogroupedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullWindowOnWindowedByTime() {
-        cogroupedStream.windowedBy((Windows<? extends Window>) null);
+        cogroupedStream.windowedBy((EnumerableWindowDefinition) null);
     }
 
     @Test(expected = NullPointerException.class)

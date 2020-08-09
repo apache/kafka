@@ -19,8 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -64,12 +64,12 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test
     public void shouldFetchResulstFromUnderlyingSessionStore() {
-        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(10, 10)), 2L);
+        underlyingSessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 1L);
+        underlyingSessionStore.put(new Windowed<>("a", Window.withBounds(10, 10)), 2L);
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(sessionStore.fetch("a"));
-        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
-                                   KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L)),
+        assertEquals(Arrays.asList(KeyValue.pair(new Windowed<>("a", Window.withBounds(0, 0)), 1L),
+                                   KeyValue.pair(new Windowed<>("a", Window.withBounds(10, 10)), 2L)),
                      results);
     }
 
@@ -85,8 +85,8 @@ public class CompositeReadOnlySessionStoreTest {
                 ReadOnlySessionStoreStub<>();
         stubProviderTwo.addStore(storeName, secondUnderlying);
 
-        final Windowed<String> keyOne = new Windowed<>("key-one", new SessionWindow(0, 0));
-        final Windowed<String> keyTwo = new Windowed<>("key-two", new SessionWindow(0, 0));
+        final Windowed<String> keyOne = new Windowed<>("key-one", Window.withBounds(0, 0));
+        final Windowed<String> keyTwo = new Windowed<>("key-two", Window.withBounds(0, 0));
         underlyingSessionStore.put(keyOne, 0L);
         secondUnderlying.put(keyTwo, 10L);
 
@@ -99,8 +99,8 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test
     public void shouldNotGetValueFromOtherStores() {
-        final Windowed<String> expectedKey = new Windowed<>("foo", new SessionWindow(0, 0));
-        otherUnderlyingStore.put(new Windowed<>("foo", new SessionWindow(10, 10)), 10L);
+        final Windowed<String> expectedKey = new Windowed<>("foo", Window.withBounds(0, 0));
+        otherUnderlyingStore.put(new Windowed<>("foo", Window.withBounds(10, 10)), 10L);
         underlyingSessionStore.put(expectedKey, 1L);
 
         final KeyValueIterator<Windowed<String>, Long> result = sessionStore.fetch("foo");
@@ -140,8 +140,8 @@ public class CompositeReadOnlySessionStoreTest {
         final ReadOnlySessionStoreStub<String, Long> secondUnderlying = new
                 ReadOnlySessionStoreStub<>();
         stubProviderTwo.addStore(storeName, secondUnderlying);
-        underlyingSessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 0L);
-        secondUnderlying.put(new Windowed<>("b", new SessionWindow(0, 0)), 10L);
+        underlyingSessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 0L);
+        secondUnderlying.put(new Windowed<>("b", Window.withBounds(0, 0)), 10L);
         final List<KeyValue<Windowed<String>, Long>> results = StreamsTestUtils.toList(sessionStore.fetch("a", "b"));
         assertThat(results.size(), equalTo(2));
     }

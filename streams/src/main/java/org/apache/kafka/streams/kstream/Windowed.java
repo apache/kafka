@@ -26,7 +26,7 @@ package org.apache.kafka.streams.kstream;
  * Thus, a windowed {@link KTable} has type {@code <Windowed<K>,V>}.
  *
  * @param <K> type of the key
- * @see KGroupedStream#windowedBy(Windows)
+ * @see KGroupedStream#windowedBy(EnumerableWindowDefinition)
  * @see KGroupedStream#windowedBy(SessionWindows)
  */
 public class Windowed<K> {

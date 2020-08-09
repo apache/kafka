@@ -25,7 +25,6 @@ import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.junit.Test;
@@ -48,7 +47,7 @@ public class WindowKeySchemaTest {
     final private long endTime = 100L;
     final private Serde<String> serde = Serdes.String();
 
-    final private Window window = new TimeWindow(startTime, endTime);
+    final private Window window = Window.withBounds(startTime, endTime);
     final private Windowed<String> windowedKey = new Windowed<>(key, window);
     final private WindowKeySchema windowKeySchema = new WindowKeySchema();
     final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde);
@@ -57,12 +56,12 @@ public class WindowKeySchemaTest {
     @Test
     public void testHasNextConditionUsingNullKeys() {
         final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(
-                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(0, 1)), 0), 1),
-                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(0, 1)), 0), 2),
-                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(0, 1)), 0), 3),
-                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(10, 20)), 4), 4),
-                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(10, 20)), 5), 5),
-                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(10, 20)), 6), 6));
+                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), Window.withBounds(0, 1)), 0), 1),
+                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), Window.withBounds(0, 1)), 0), 2),
+                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), Window.withBounds(0, 1)), 0), 3),
+                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), Window.withBounds(10, 20)), 4), 4),
+                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), Window.withBounds(10, 20)), 5), 5),
+                KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), Window.withBounds(10, 20)), 6), 6));
         final DelegatingPeekingKeyValueIterator<Bytes, Integer> iterator = new DelegatingPeekingKeyValueIterator<>("foo", new KeyValueIteratorStub<>(keys.iterator()));
 
         final HasNextCondition hasNextCondition = windowKeySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE);
@@ -180,7 +179,7 @@ public class WindowKeySchemaTest {
         final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
         final Windowed<String> result = keySerde.deserializer().deserialize(topic, bytes);
         // TODO: fix this part as last bits of KAFKA-4468
-        assertEquals(new Windowed<>(key, new TimeWindow(startTime, Long.MAX_VALUE)), result);
+        assertEquals(new Windowed<>(key, Window.withBounds(startTime, Long.MAX_VALUE)), result);
     }
 
     @Test
@@ -188,7 +187,7 @@ public class WindowKeySchemaTest {
         final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
         final Windowed<String> result = new TimeWindowedDeserializer<>(serde.deserializer(), Long.MAX_VALUE - 1)
                 .deserialize(topic, bytes);
-        assertEquals(new Windowed<>(key, new TimeWindow(startTime, Long.MAX_VALUE)), result);
+        assertEquals(new Windowed<>(key, Window.withBounds(startTime, Long.MAX_VALUE)), result);
     }
 
     @Test
@@ -203,9 +202,9 @@ public class WindowKeySchemaTest {
     public void shouldSerializeDeserializeExpectedChangelogWindowSize() {
         // Key-value containing serialized store key binary and the key's window size
         final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(
-            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(0, 1)), 0), 1),
-            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(0, 10)), 0), 10),
-            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(10, 30)), 6), 20));
+            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), Window.withBounds(0, 1)), 0), 1),
+            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), Window.withBounds(0, 10)), 0), 10),
+            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), Window.withBounds(10, 30)), 6), 20));
 
         final List<Long> results = new ArrayList<>();
         for (final KeyValue<Bytes, Integer> keyValue : keys) {

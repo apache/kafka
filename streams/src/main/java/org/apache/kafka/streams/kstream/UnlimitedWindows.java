@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.internals.ApiUtils;
-import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
+
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.time.Instant;
@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.kstream.internals.DeprecatedWindowsUtils.asWindowSubclass;
 
 /**
  * The unlimited window specifications used for aggregations.
@@ -39,10 +40,11 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * @see TimeWindows
  * @see SessionWindows
  * @see JoinWindows
- * @see KGroupedStream#windowedBy(Windows)
+ * @see KGroupedStream#windowedBy(EnumerableWindowDefinition)
  * @see TimestampExtractor
  */
-public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
+@SuppressWarnings("deprecation") // Remove this suppression when Windows is removed
+public final class UnlimitedWindows extends Windows<org.apache.kafka.streams.kstream.internals.UnlimitedWindow> implements EnumerableWindowDefinition {
 
     private static final long DEFAULT_START_TIMESTAMP_MS = 0L;
 
@@ -90,13 +92,13 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
     }
 
     @Override
-    public Map<Long, UnlimitedWindow> windowsFor(final long timestamp) {
+    public <W extends Window> Map<Long, W> windowsFor(final long timestamp) {
         // always return the single unlimited window
 
         // we cannot use Collections.singleMap since it does not support remove()
-        final Map<Long, UnlimitedWindow> windows = new HashMap<>();
+        final Map<Long, W> windows = new HashMap<>();
         if (timestamp >= startMs) {
-            windows.put(startMs, new UnlimitedWindow(startMs));
+            windows.put(startMs, asWindowSubclass(Window.withBounds(startMs, Long.MAX_VALUE)));
         }
         return windows;
     }

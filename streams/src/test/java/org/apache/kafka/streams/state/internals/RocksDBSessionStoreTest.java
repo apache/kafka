@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
@@ -55,12 +55,12 @@ public class RocksDBSessionStoreTest extends AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldRemoveExpired() {
-        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, SEGMENT_INTERVAL)), 2L);
-        sessionStore.put(new Windowed<>("a", new SessionWindow(10, SEGMENT_INTERVAL)), 3L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(0, SEGMENT_INTERVAL)), 2L);
+        sessionStore.put(new Windowed<>("a", Window.withBounds(10, SEGMENT_INTERVAL)), 3L);
 
         // Advance stream time to expire the first record
-        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 2 * SEGMENT_INTERVAL)), 4L);
+        sessionStore.put(new Windowed<>("aa", Window.withBounds(10, 2 * SEGMENT_INTERVAL)), 4L);
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
             sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)

@@ -30,8 +30,8 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -260,11 +260,11 @@ public class CachingWindowStoreTest {
             cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(10), ofEpochMilli(10));
         verifyWindowedKeyValue(
             iterator.next(),
-            new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+            new Windowed<>(bytesKey("a"), Window.withBounds(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
             "a");
         verifyWindowedKeyValue(
             iterator.next(),
-            new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+            new Windowed<>(bytesKey("b"), Window.withBounds(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
             "b");
         assertFalse(iterator.hasNext());
         assertEquals(2, cache.size());
@@ -287,7 +287,7 @@ public class CachingWindowStoreTest {
         for (final String s : array) {
             verifyWindowedKeyValue(
                 iterator.next(),
-                new Windowed<>(bytesKey(s), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                new Windowed<>(bytesKey(s), Window.withBounds(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
                 s);
         }
         assertFalse(iterator.hasNext());
@@ -308,7 +308,7 @@ public class CachingWindowStoreTest {
             final String str = array[i];
             verifyWindowedKeyValue(
                 iterator.next(),
-                new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
+                new Windowed<>(bytesKey(str), Window.withBounds(i, i + WINDOW_SIZE)),
                 str);
         }
         assertFalse(iterator.hasNext());
@@ -319,7 +319,7 @@ public class CachingWindowStoreTest {
             final String str = array[i];
             verifyWindowedKeyValue(
                 iterator1.next(),
-                new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
+                new Windowed<>(bytesKey(str), Window.withBounds(i, i + WINDOW_SIZE)),
                 str);
         }
         assertFalse(iterator1.hasNext());
@@ -330,7 +330,7 @@ public class CachingWindowStoreTest {
             final String str = array[i];
             verifyWindowedKeyValue(
                 iterator2.next(),
-                new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
+                new Windowed<>(bytesKey(str), Window.withBounds(i, i + WINDOW_SIZE)),
                 str);
         }
         assertFalse(iterator2.hasNext());
@@ -355,7 +355,7 @@ public class CachingWindowStoreTest {
     @SuppressWarnings("deprecation")
     public void shouldForwardDirtyItemsWhenFlushCalled() {
         final Windowed<String> windowedKey =
-            new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
+            new Windowed<>("1", Window.withBounds(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"));
         cachingStore.flush();
         assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
@@ -373,7 +373,7 @@ public class CachingWindowStoreTest {
     public void shouldForwardOldValuesWhenEnabled() {
         cachingStore.setFlushListener(cacheListener, true);
         final Windowed<String> windowedKey =
-            new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
+            new Windowed<>("1", Window.withBounds(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"));
         cachingStore.put(bytesKey("1"), bytesValue("b"));
         cachingStore.flush();
@@ -401,7 +401,7 @@ public class CachingWindowStoreTest {
     @SuppressWarnings("deprecation")
     public void shouldForwardOldValuesWhenDisabled() {
         final Windowed<String> windowedKey =
-            new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
+            new Windowed<>("1", Window.withBounds(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"));
         cachingStore.put(bytesKey("1"), bytesValue("b"));
         cachingStore.flush();
@@ -476,11 +476,11 @@ public class CachingWindowStoreTest {
             cachingStore.fetch(key, bytesKey("2"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
         verifyWindowedKeyValue(
             fetchRange.next(),
-            new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+            new Windowed<>(key, Window.withBounds(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
             "a");
         verifyWindowedKeyValue(
             fetchRange.next(),
-            new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP + WINDOW_SIZE, DEFAULT_TIMESTAMP + WINDOW_SIZE + WINDOW_SIZE)),
+            new Windowed<>(key, Window.withBounds(DEFAULT_TIMESTAMP + WINDOW_SIZE, DEFAULT_TIMESTAMP + WINDOW_SIZE + WINDOW_SIZE)),
             "b");
         assertFalse(fetchRange.hasNext());
     }
@@ -691,7 +691,7 @@ public class CachingWindowStoreTest {
 
     private static KeyValue<Windowed<Bytes>, byte[]> windowedPair(final String key, final String value, final long timestamp) {
         return KeyValue.pair(
-            new Windowed<>(bytesKey(key), new TimeWindow(timestamp, timestamp + WINDOW_SIZE)),
+            new Windowed<>(bytesKey(key), Window.withBounds(timestamp, timestamp + WINDOW_SIZE)),
             bytesValue(value));
     }
 

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.CogroupedKStream;
+import org.apache.kafka.streams.kstream.EnumerableWindowDefinition;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -27,8 +28,6 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -95,7 +94,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
     }
 
     @Override
-    public <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows) {
+    public TimeWindowedCogroupedKStream<K, VOut> windowedBy(final EnumerableWindowDefinition windows) {
         Objects.requireNonNull(windows, "windows can't be null");
         return new TimeWindowedCogroupedKStreamImpl<>(
             windows,

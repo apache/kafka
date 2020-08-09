@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.state.internals.WindowKeySchema;
 
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  *  The inner serde class can be specified by setting the property
@@ -33,29 +34,31 @@ import java.util.Map;
  */
 public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
-    private final Long windowSize;
     private boolean isChangelogTopic;
 
     private Deserializer<T> inner;
-    
+    private final Function<Long, Window> windowEndForStartFunction;
+
     // Default constructor needed by Kafka
     public TimeWindowedDeserializer() {
-        this(null, Long.MAX_VALUE);
+        this(null, null);
     }
 
     // TODO: fix this part as last bits of KAFKA-4468
     public TimeWindowedDeserializer(final Deserializer<T> inner) {
-        this(inner, Long.MAX_VALUE);
+        this(inner, null);
+    }
+
+    public TimeWindowedDeserializer(final Deserializer<T> inner, final Function<Long, Window> windowEndForStartFunction) {
+        this.inner = inner;
+        this.windowEndForStartFunction = windowEndForStartFunction;
+        this.isChangelogTopic = false;
     }
 
     public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
         this.inner = inner;
-        this.windowSize = windowSize;
+        this.windowEndForStartFunction = start -> Window.withBounds(start, start + windowSize);
         this.isChangelogTopic = false;
-    }
-
-    public Long getWindowSize() {
-        return this.windowSize;
     }
 
     @SuppressWarnings("unchecked")
@@ -83,11 +86,11 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
         // toStoreKeyBinary was used to serialize the data.
         if (this.isChangelogTopic) {
-            return WindowKeySchema.fromStoreKey(data, windowSize, inner, topic);
+            return WindowKeySchema.fromStoreKey(data, windowEndForStartFunction, inner, topic);
+        } else {
+            // toBinary was used to serialize the data
+            return WindowKeySchema.from(data, windowEndForStartFunction, inner, topic);
         }
-
-        // toBinary was used to serialize the data
-        return WindowKeySchema.from(data, windowSize, inner, topic);
     }
 
     @Override

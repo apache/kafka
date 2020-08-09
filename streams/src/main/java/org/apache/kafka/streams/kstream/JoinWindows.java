@@ -68,7 +68,7 @@ import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAU
  * @see KStream#outerJoin(KStream, ValueJoiner, JoinWindows, StreamJoined)
  * @see TimestampExtractor
  */
-public final class JoinWindows extends Windows<Window> {
+public final class JoinWindows {
 
     private final long maintainDurationMs;
 
@@ -83,22 +83,6 @@ public final class JoinWindows extends Windows<Window> {
                         final long afterMs,
                         final long graceMs,
                         final long maintainDurationMs) {
-        if (beforeMs + afterMs < 0) {
-            throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative.");
-        }
-        this.afterMs = afterMs;
-        this.beforeMs = beforeMs;
-        this.graceMs = graceMs;
-        this.maintainDurationMs = maintainDurationMs;
-    }
-
-    @Deprecated // removing segments from Windows will fix this
-    private JoinWindows(final long beforeMs,
-                        final long afterMs,
-                        final long graceMs,
-                        final long maintainDurationMs,
-                        final int segments) {
-        super(segments);
         if (beforeMs + afterMs < 0) {
             throw new IllegalArgumentException("Window interval (ie, beforeMs+afterMs) must not be negative.");
         }
@@ -149,7 +133,7 @@ public final class JoinWindows extends Windows<Window> {
      */
     @Deprecated
     public JoinWindows before(final long timeDifferenceMs) throws IllegalArgumentException {
-        return new JoinWindows(timeDifferenceMs, afterMs, graceMs, maintainDurationMs, segments);
+        return new JoinWindows(timeDifferenceMs, afterMs, graceMs, maintainDurationMs);
     }
 
     /**
@@ -180,7 +164,7 @@ public final class JoinWindows extends Windows<Window> {
      */
     @Deprecated
     public JoinWindows after(final long timeDifferenceMs) throws IllegalArgumentException {
-        return new JoinWindows(beforeMs, timeDifferenceMs, graceMs, maintainDurationMs, segments);
+        return new JoinWindows(beforeMs, timeDifferenceMs, graceMs, maintainDurationMs);
     }
 
     /**
@@ -204,12 +188,10 @@ public final class JoinWindows extends Windows<Window> {
      *
      * @throws UnsupportedOperationException at every invocation
      */
-    @Override
     public Map<Long, Window> windowsFor(final long timestamp) {
         throw new UnsupportedOperationException("windowsFor() is not supported by JoinWindows.");
     }
 
-    @Override
     public long size() {
         return beforeMs + afterMs;
     }
@@ -231,10 +213,9 @@ public final class JoinWindows extends Windows<Window> {
         if (afterWindowEndMs < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
-        return new JoinWindows(beforeMs, afterMs, afterWindowEndMs, maintainDurationMs, segments);
+        return new JoinWindows(beforeMs, afterMs, afterWindowEndMs, maintainDurationMs);
     }
 
-    @Override
     public long gracePeriodMs() {
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
@@ -248,13 +229,12 @@ public final class JoinWindows extends Windows<Window> {
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size
      * @deprecated since 2.1. Use {@link JoinWindows#grace(Duration)} instead.
      */
-    @Override
     @Deprecated
     public JoinWindows until(final long durationMs) throws IllegalArgumentException {
         if (durationMs < size()) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
         }
-        return new JoinWindows(beforeMs, afterMs, graceMs, durationMs, segments);
+        return new JoinWindows(beforeMs, afterMs, graceMs, durationMs);
     }
 
     /**
@@ -266,7 +246,6 @@ public final class JoinWindows extends Windows<Window> {
      * @deprecated since 2.1. This function should not be used anymore, since {@link JoinWindows#until(long)}
      *             is deprecated in favor of {@link JoinWindows#grace(Duration)}.
      */
-    @Override
     @Deprecated
     public long maintainMs() {
         return Math.max(maintainDurationMs, size());
@@ -285,14 +264,13 @@ public final class JoinWindows extends Windows<Window> {
         return beforeMs == that.beforeMs &&
             afterMs == that.afterMs &&
             maintainDurationMs == that.maintainDurationMs &&
-            segments == that.segments &&
             graceMs == that.graceMs;
     }
 
     @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public int hashCode() {
-        return Objects.hash(beforeMs, afterMs, graceMs, maintainDurationMs, segments);
+        return Objects.hash(beforeMs, afterMs, graceMs, maintainDurationMs);
     }
 
     @SuppressWarnings("deprecation") // removing segments from Windows will fix this
@@ -303,7 +281,6 @@ public final class JoinWindows extends Windows<Window> {
             ", afterMs=" + afterMs +
             ", graceMs=" + graceMs +
             ", maintainDurationMs=" + maintainDurationMs +
-            ", segments=" + segments +
             '}';
     }
 }
