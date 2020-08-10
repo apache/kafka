@@ -29,23 +29,23 @@ import java.util.Objects;
  */
 public class UserScramCredentialsDescription {
     private final String name;
-    private final List<ScramCredentialInfo> infos;
+    private final List<ScramCredentialInfo> credentialInfos;
 
     /**
      *
      * @param name the required user name
-     * @param infos the required SASL/SCRAM credential representations for the user
+     * @param credentialInfos the required SASL/SCRAM credential representations for the user
      */
-    public UserScramCredentialsDescription(String name, List<ScramCredentialInfo> infos) {
+    public UserScramCredentialsDescription(String name, List<ScramCredentialInfo> credentialInfos) {
         this.name = Objects.requireNonNull(name);
-        this.infos = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(infos)));
+        this.credentialInfos = Collections.unmodifiableList(new ArrayList<>(Objects.requireNonNull(credentialInfos)));
     }
 
     /**
      *
      * @return the user name
      */
-    public String getName() {
+    public String name() {
         return name;
     }
 
@@ -53,7 +53,7 @@ public class UserScramCredentialsDescription {
      *
      * @return the unmodifiable list of SASL/SCRAM credential representations for the user
      */
-    public List<ScramCredentialInfo> getInfos() {
-        return infos;
+    public List<ScramCredentialInfo> credentialInfos() {
+        return credentialInfos;
     }
 }

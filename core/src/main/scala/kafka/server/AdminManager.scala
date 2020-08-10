@@ -990,14 +990,14 @@ class AdminManager(val config: KafkaConfig,
 
     def addToResults(user: String, userConfig: Properties) = {
       val configKeys = userConfig.stringPropertyNames
-      val hasScramCredential = !ScramMechanism.values().toList.filter(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.getMechanismName)).isEmpty
+      val hasScramCredential = !ScramMechanism.values().toList.filter(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.mechanismName)).isEmpty
       if (hasScramCredential) {
         val userScramCredentials = new UserScramCredential().setName(user)
         ScramMechanism.values().foreach(mechanism => if (mechanism != ScramMechanism.UNKNOWN) {
-          val propertyValue = userConfig.getProperty(mechanism.getMechanismName)
+          val propertyValue = userConfig.getProperty(mechanism.mechanismName)
           if (propertyValue != null) {
             val iterations = ScramCredentialUtils.credentialFromString(propertyValue).iterations
-            userScramCredentials.credentialInfos.add(new CredentialInfo().setMechanism(mechanism.getType).setIterations(iterations))
+            userScramCredentials.credentialInfos.add(new CredentialInfo().setMechanism(mechanism.`type`).setIterations(iterations))
           }
         })
         retval.userScramCredentials.add(userScramCredentials)
@@ -1041,7 +1041,7 @@ class AdminManager(val config: KafkaConfig,
     }
 
     def mechanismName(mechanism: Byte): String = {
-      scramMechanism(mechanism).getMechanismName
+      scramMechanism(mechanism).mechanismName
     }
 
     val retval = new AlterUserScramCredentialsResponseData()
@@ -1057,7 +1057,7 @@ class AdminManager(val config: KafkaConfig,
           requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // unknown mechanism is the cause of failure
         } else {
           if (upsertion.iterations != -1 && (
-            InternalScramMechanism.forMechanismName(publicScramMechanism.getMechanismName).minIterations > upsertion.iterations
+            InternalScramMechanism.forMechanismName(publicScramMechanism.mechanismName).minIterations > upsertion.iterations
               || upsertion.iterations > maxIterations)) {
             requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // known mechanism, bad iterations is the cause of failure
           } else {

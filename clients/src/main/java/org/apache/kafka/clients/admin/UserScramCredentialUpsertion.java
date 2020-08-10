@@ -36,35 +36,35 @@ public class UserScramCredentialUpsertion extends UserScramCredentialAlteration 
      * Constructor that generates a random salt
      *
      * @param user the user for which the credential is to be updated/inserted
-     * @param info the mechanism and iterations to be used
+     * @param credentialInfo the mechanism and iterations to be used
      * @param password the password
      */
-    public UserScramCredentialUpsertion(String user, ScramCredentialInfo info, String password) {
-        this(user, info, password.getBytes(StandardCharsets.UTF_8));
+    public UserScramCredentialUpsertion(String user, ScramCredentialInfo credentialInfo, String password) {
+        this(user, credentialInfo, password.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
      * Constructor that generates a random salt
      *
      * @param user the user for which the credential is to be updated/inserted
-     * @param info the mechanism and iterations to be used
+     * @param credentialInfo the mechanism and iterations to be used
      * @param password the password
      */
-    public UserScramCredentialUpsertion(String user, ScramCredentialInfo info, byte[] password) {
-        this(user, info, password, generateRandomSalt());
+    public UserScramCredentialUpsertion(String user, ScramCredentialInfo credentialInfo, byte[] password) {
+        this(user, credentialInfo, password, generateRandomSalt());
     }
 
     /**
      * Constructor that accepts an explicit salt
      *
      * @param user the user for which the credential is to be updated/inserted
-     * @param info the mechanism and iterations to be used
+     * @param credentialInfo the mechanism and iterations to be used
      * @param password the password
      * @param salt the salt to be used
      */
-    public UserScramCredentialUpsertion(String user, ScramCredentialInfo info, byte[] password, byte[] salt) {
+    public UserScramCredentialUpsertion(String user, ScramCredentialInfo credentialInfo, byte[] password, byte[] salt) {
         super(Objects.requireNonNull(user));
-        this.info = Objects.requireNonNull(info);
+        this.info = Objects.requireNonNull(credentialInfo);
         this.password = Objects.requireNonNull(password);
         this.salt = Objects.requireNonNull(salt);
     }
@@ -73,7 +73,7 @@ public class UserScramCredentialUpsertion extends UserScramCredentialAlteration 
      *
      * @return the mechanism and iterations
      */
-    public ScramCredentialInfo getInfo() {
+    public ScramCredentialInfo credentialInfo() {
         return info;
     }
 
@@ -81,7 +81,7 @@ public class UserScramCredentialUpsertion extends UserScramCredentialAlteration 
      *
      * @return the salt
      */
-    public byte[] getSalt() {
+    public byte[] salt() {
         return salt;
     }
 
@@ -89,7 +89,7 @@ public class UserScramCredentialUpsertion extends UserScramCredentialAlteration 
      *
      * @return the password
      */
-    public byte[] getPassword() {
+    public byte[] password() {
         return password;
     }
 

@@ -569,7 +569,7 @@ object ConfigCommand extends Config {
     // and we are not given either --entity-default or --user-defaults
     if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
       getUserScramCredentialConfigs(adminClient, entityNames).foreach { case (user, description) =>
-        val descriptionText = description.getInfos.asScala.map(info => s"${info.getMechanism.getMechanismName}=iterations=${info.getIterations}").mkString(", ")
+        val descriptionText = description.credentialInfos.asScala.map(info => s"${info.mechanism.mechanismName}=iterations=${info.iterations}").mkString(", ")
         println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
       }
     }

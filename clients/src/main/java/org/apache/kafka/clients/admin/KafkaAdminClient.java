@@ -4134,27 +4134,27 @@ public class KafkaAdminClient extends AdminClient {
         final long now = time.milliseconds();
         final Map<String, KafkaFutureImpl<Void>> futures = new HashMap<>();
         for (UserScramCredentialAlteration alteration: alterations) {
-            futures.put(alteration.getUser(), new KafkaFutureImpl<>());
+            futures.put(alteration.user(), new KafkaFutureImpl<>());
         }
         final Map<String, Exception> userIllegalAlterationExceptions = new HashMap<>();
         // We need to keep track of users with deletions of an unknown SCRAM mechanism
         alterations.stream().filter(a -> a instanceof UserScramCredentialDeletion).forEach(alteration -> {
             UserScramCredentialDeletion deletion = (UserScramCredentialDeletion) alteration;
-            ScramMechanism mechanism = deletion.getMechanism();
+            ScramMechanism mechanism = deletion.mechanism();
             if (mechanism == null || mechanism == ScramMechanism.UNKNOWN) {
-                userIllegalAlterationExceptions.put(deletion.getUser(), new InvalidRequestException("Unknown SCRAM mechanism"));
+                userIllegalAlterationExceptions.put(deletion.user(), new InvalidRequestException("Unknown SCRAM mechanism"));
             }
         });
         // Creating an upsertion may throw InvalidKeyException or NoSuchAlgorithmException,
         // so keep track of which users are affected by such a failure and immediately fail all their alterations
         final Map<String, Map<ScramMechanism, AlterUserScramCredentialsRequestData.ScramCredentialUpsertion>> userInsertions = new HashMap<>();
         alterations.stream().filter(a -> a instanceof UserScramCredentialUpsertion)
-                .filter(alteration -> !userIllegalAlterationExceptions.containsKey(alteration.getUser()))
+                .filter(alteration -> !userIllegalAlterationExceptions.containsKey(alteration.user()))
                 .forEach(alteration -> {
                     UserScramCredentialUpsertion upsertion = (UserScramCredentialUpsertion) alteration;
-                    String user = upsertion.getUser();
+                    String user = upsertion.user();
                     try {
-                        ScramMechanism mechanism = upsertion.getInfo().getMechanism();
+                        ScramMechanism mechanism = upsertion.credentialInfo().mechanism();
                         if (mechanism == null || mechanism == ScramMechanism.UNKNOWN)
                             throw new InvalidRequestException("Unknown SCRAM mechanism");
                         userInsertions.putIfAbsent(user, new HashMap<>());
@@ -4179,12 +4179,12 @@ public class KafkaAdminClient extends AdminClient {
                 return new AlterUserScramCredentialsRequest.Builder(
                         new AlterUserScramCredentialsRequestData().setUpsertions(alterations.stream()
                                 .filter(a -> a instanceof UserScramCredentialUpsertion)
-                                .filter(a -> !userIllegalAlterationExceptions.containsKey(a.getUser()))
-                                .map(a -> userInsertions.get(a.getUser()).get(((UserScramCredentialUpsertion) a).getInfo().getMechanism()))
+                                .filter(a -> !userIllegalAlterationExceptions.containsKey(a.user()))
+                                .map(a -> userInsertions.get(a.user()).get(((UserScramCredentialUpsertion) a).credentialInfo().mechanism()))
                                 .collect(Collectors.toList()))
                         .setDeletions(alterations.stream()
                                 .filter(a -> a instanceof UserScramCredentialDeletion)
-                                .filter(a -> !userIllegalAlterationExceptions.containsKey(a.getUser()))
+                                .filter(a -> !userIllegalAlterationExceptions.containsKey(a.user()))
                                 .map(d ->
                                 getScramCredentialDeletion((UserScramCredentialDeletion) d)).collect(Collectors.toList())));
             }
@@ -4227,19 +4227,19 @@ public class KafkaAdminClient extends AdminClient {
 
     private static AlterUserScramCredentialsRequestData.ScramCredentialUpsertion getScramCredentialUpsertion(UserScramCredentialUpsertion u) throws InvalidKeyException, NoSuchAlgorithmException {
         AlterUserScramCredentialsRequestData.ScramCredentialUpsertion retval = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion();
-        return retval.setName(u.getUser())
-                .setMechanism(u.getInfo().getMechanism().getType())
-                .setIterations(u.getInfo().getIterations())
-                .setSalt(u.getSalt())
-                .setSaltedPassword(getSaltedPasword(u.getInfo().getMechanism(), u.getPassword(), u.getSalt(), u.getInfo().getIterations()));
+        return retval.setName(u.user())
+                .setMechanism(u.credentialInfo().mechanism().type())
+                .setIterations(u.credentialInfo().iterations())
+                .setSalt(u.salt())
+                .setSaltedPassword(getSaltedPasword(u.credentialInfo().mechanism(), u.password(), u.salt(), u.credentialInfo().iterations()));
     }
 
     private static AlterUserScramCredentialsRequestData.ScramCredentialDeletion getScramCredentialDeletion(UserScramCredentialDeletion d) {
-        return new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(d.getUser()).setMechanism(d.getMechanism().getType());
+        return new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(d.user()).setMechanism(d.mechanism().type());
     }
 
     private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int iterations) throws NoSuchAlgorithmException, InvalidKeyException {
-        return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.getMechanismName()))
+        return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.mechanismName()))
                 .hi(password, salt, iterations);
     }
 

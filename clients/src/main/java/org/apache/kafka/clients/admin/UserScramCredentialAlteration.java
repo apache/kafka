@@ -39,7 +39,7 @@ public abstract class UserScramCredentialAlteration {
      *
      * @return the always non-null user
      */
-    public String getUser() {
+    public String user() {
         return this.user;
     }
 }

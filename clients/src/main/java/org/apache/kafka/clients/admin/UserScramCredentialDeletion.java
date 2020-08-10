@@ -40,7 +40,7 @@ public class UserScramCredentialDeletion extends UserScramCredentialAlteration {
      *
      * @return the always non-null mechanism
      */
-    public ScramMechanism getMechanism() {
+    public ScramMechanism mechanism() {
         return mechanism;
     }
 }

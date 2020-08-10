@@ -4431,10 +4431,10 @@ public class KafkaAdminClientTest {
             int user0Iterations1 = 8192;
 
             final CredentialInfo user0CredentialInfo0 = new CredentialInfo();
-            user0CredentialInfo0.setMechanism(user0ScramMechanism0.getType());
+            user0CredentialInfo0.setMechanism(user0ScramMechanism0.type());
             user0CredentialInfo0.setIterations(user0Iterations0);
             final CredentialInfo user0CredentialInfo1 = new CredentialInfo();
-            user0CredentialInfo1.setMechanism(user0ScramMechanism1.getType());
+            user0CredentialInfo1.setMechanism(user0ScramMechanism1.type());
             user0CredentialInfo1.setIterations(user0Iterations1);
             UserScramCredential user0 = new UserScramCredential();
             user0.setName(user0Name);
@@ -4445,7 +4445,7 @@ public class KafkaAdminClientTest {
             int user1Iterations = 4096;
 
             final CredentialInfo user1CredentialInfo = new CredentialInfo();
-            user1CredentialInfo.setMechanism(user1ScramMechanism.getType());
+            user1CredentialInfo.setMechanism(user1ScramMechanism.type());
             user1CredentialInfo.setIterations(user1Iterations);
 
             UserScramCredential user1 = new UserScramCredential();
@@ -4462,18 +4462,18 @@ public class KafkaAdminClientTest {
             assertEquals(2, resultData.size());
             assertTrue(resultData.containsKey(user0Name) && resultData.containsKey(user1Name));
             UserScramCredentialsDescription userScramCredentialsDescription0 = resultData.get(user0Name);
-            assertEquals(user0Name, userScramCredentialsDescription0.getName());
-            assertEquals(2, userScramCredentialsDescription0.getInfos().size());
-            assertEquals(user0ScramMechanism0, userScramCredentialsDescription0.getInfos().get(0).getMechanism());
-            assertEquals(user0Iterations0, userScramCredentialsDescription0.getInfos().get(0).getIterations());
-            assertEquals(user0ScramMechanism1, userScramCredentialsDescription0.getInfos().get(1).getMechanism());
-            assertEquals(user0Iterations1, userScramCredentialsDescription0.getInfos().get(1).getIterations());
+            assertEquals(user0Name, userScramCredentialsDescription0.name());
+            assertEquals(2, userScramCredentialsDescription0.credentialInfos().size());
+            assertEquals(user0ScramMechanism0, userScramCredentialsDescription0.credentialInfos().get(0).mechanism());
+            assertEquals(user0Iterations0, userScramCredentialsDescription0.credentialInfos().get(0).iterations());
+            assertEquals(user0ScramMechanism1, userScramCredentialsDescription0.credentialInfos().get(1).mechanism());
+            assertEquals(user0Iterations1, userScramCredentialsDescription0.credentialInfos().get(1).iterations());
 
             UserScramCredentialsDescription userScramCredentialsDescription1 = resultData.get(user1Name);
-            assertEquals(user1Name, userScramCredentialsDescription1.getName());
-            assertEquals(1, userScramCredentialsDescription1.getInfos().size());
-            assertEquals(user1ScramMechanism, userScramCredentialsDescription1.getInfos().get(0).getMechanism());
-            assertEquals(user1Iterations, userScramCredentialsDescription1.getInfos().get(0).getIterations());
+            assertEquals(user1Name, userScramCredentialsDescription1.name());
+            assertEquals(1, userScramCredentialsDescription1.credentialInfos().size());
+            assertEquals(user1ScramMechanism, userScramCredentialsDescription1.credentialInfos().get(0).mechanism());
+            assertEquals(user1Iterations, userScramCredentialsDescription1.credentialInfos().get(0).iterations());
         }
     }
 

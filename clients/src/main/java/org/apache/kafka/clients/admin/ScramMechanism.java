@@ -59,7 +59,7 @@ public enum ScramMechanism {
      * @see <a href="https://tools.ietf.org/html/rfc5802#section-4>
      *     Salted Challenge Response Authentication Mechanism (SCRAM) SASL and GSS-API Mechanisms, Section 4</a>
      */
-    public String getMechanismName() {
+    public String mechanismName() {
         return this.mechanismName;
     }
 
@@ -67,7 +67,7 @@ public enum ScramMechanism {
      *
      * @return the type indicator for this SASL SCRAM mechanism
      */
-    public byte getType() {
+    public byte type() {
         return this.type;
     }
 

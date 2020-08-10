@@ -42,7 +42,7 @@ public class ScramCredentialInfo {
      *
      * @return the mechanism
      */
-    public ScramMechanism getMechanism() {
+    public ScramMechanism mechanism() {
         return mechanism;
     }
 
@@ -50,7 +50,7 @@ public class ScramCredentialInfo {
      *
      * @return the number of iterations used when creating the credential
      */
-    public int getIterations() {
+    public int iterations() {
         return iterations;
     }
 }
