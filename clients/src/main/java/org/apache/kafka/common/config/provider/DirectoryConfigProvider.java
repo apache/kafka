@@ -22,14 +22,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
+
+import static java.util.Collections.emptyMap;
 
 /**
  * An implementation of {@link ConfigProvider} based on a directory of files.
@@ -39,7 +41,7 @@ import java.util.Set;
  */
 public class DirectoryConfigProvider implements ConfigProvider {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private static final Logger log = LoggerFactory.getLogger(DirectoryConfigProvider.class);
 
     @Override
     public void configure(Map<String, ?> configs) { }
@@ -55,7 +57,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
      */
     @Override
     public ConfigData get(String path) {
-        return get(path, File::isFile);
+        return get(path, Files::isRegularFile);
     }
 
     /**
@@ -68,30 +70,38 @@ public class DirectoryConfigProvider implements ConfigProvider {
     @Override
     public ConfigData get(String path, Set<String> keys) {
         return get(path, pathname ->
-                pathname.isFile()
-                        && keys.contains(pathname.getName()));
+                Files.isRegularFile(pathname)
+                        && keys.contains(pathname.getFileName().toString()));
     }
 
-    private ConfigData get(String path, FileFilter fileFilter) {
-        Map<String, String> map = new HashMap<>();
+    private static ConfigData get(String path, Predicate<Path> fileFilter) {
+        Map<String, String> map = emptyMap();
         if (path != null && !path.isEmpty()) {
-            File dir = new File(path);
-            if (!dir.isDirectory()) {
+            Path dir = new File(path).toPath();
+            if (!Files.isDirectory(dir)) {
                 log.warn("The path {} is not a directory", path);
             } else {
-                for (File file : dir.listFiles(fileFilter)) {
-                    try {
-                        map.put(file.getName(), read(file.toPath()));
-                    } catch (IOException e) {
-                        throw new ConfigException("Could not read file " + file.getAbsolutePath() + " for property " + file.getName(), e);
-                    }
+                try {
+                    map = Files.list(dir)
+                        .filter(fileFilter)
+                        .collect(Collectors.toMap(
+                            p -> p.getFileName().toString(),
+                            p -> {
+                                try {
+                                    return read(p);
+                                } catch (IOException e) {
+                                    throw new ConfigException("Could not read file " + p + " for property " + p.getFileName(), e);
+                                }
+                            }));
+                } catch (IOException e) {
+                    throw new ConfigException("Could not list directory " + dir, e);
                 }
             }
         }
         return new ConfigData(map);
     }
 
-    private String read(Path path) throws IOException {
+    private static String read(Path path) throws IOException {
         return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
     }
 
