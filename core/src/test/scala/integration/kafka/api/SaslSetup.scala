@@ -27,6 +27,7 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.clients.admin.{Admin, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
@@ -34,6 +35,8 @@ import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.client.ZKClientConfig
+
+import scala.jdk.CollectionConverters._
 
 /*
  * Implements an enumeration for the modes enabled here:
@@ -146,6 +149,17 @@ trait SaslSetup {
       JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile, serviceName.get)
     else
       JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+  }
+
+  def jaasScramClientLoginModule(clientSaslScramMechanism: String, scramUser: String, scramPassword: String): String = {
+    JaasTestUtils.scramClientLoginModule(clientSaslScramMechanism, scramUser, scramPassword)
+  }
+
+  def createScramCredentials(adminClient: Admin, userName: String, password: String): Unit = {
+    val results = adminClient.alterUserScramCredentials(PublicScramMechanism.values().filter(_ != PublicScramMechanism.UNKNOWN).map(mechanism =>
+      new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(mechanism, 4096), password)
+        .asInstanceOf[UserScramCredentialAlteration]).toList.asJava)
+    results.all.get
   }
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {

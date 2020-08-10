@@ -169,6 +169,18 @@ object JaasTestUtils {
     jaasFile
   }
 
+  // Returns a SASL/SCRAM configuration using credentials for the given user and password
+  def scramClientLoginModule(mechanism: String, scramUser: String, scramPassword: String): String = {
+    mechanism match {
+      case "SCRAM-SHA-256" | "SCRAM-SHA-512" =>
+        ScramLoginModule(
+          scramUser,
+          scramPassword
+        ).toString
+      case mechanism => throw new IllegalArgumentException("Unsupported SCRAM mechanism " + mechanism)
+    }
+  }
+
   // Returns the dynamic configuration, using credentials for user #1
   def clientLoginModule(mechanism: String, keytabLocation: Option[File], serviceName: String = serviceName): String =
     kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword, KafkaOAuthBearerUser, serviceName).toString

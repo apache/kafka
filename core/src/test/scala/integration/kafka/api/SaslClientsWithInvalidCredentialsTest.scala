@@ -14,6 +14,7 @@ package kafka.api
 
 import java.nio.file.Files
 import java.time.Duration
+import java.util
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
@@ -29,6 +30,7 @@ import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGr
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
+import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with SaslSetup {
@@ -202,7 +204,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   private def createClientCredential(): Unit = {
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+    createScramCredentialWithScramAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
   }
 
   private def sendOneRecord(producer: KafkaProducer[Array[Byte], Array[Byte]], maxWaitMs: Long = 15000): Unit = {
@@ -247,5 +249,26 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1")
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     createProducer()
+  }
+
+  private def createScramAdminClient(user: String, password: String): Admin = {
+    val config = new util.HashMap[String, Object]
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val securityProps: util.Map[Object, Object] =
+      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
+    config.put(SaslConfigs.SASL_JAAS_CONFIG, jaasScramClientLoginModule(kafkaClientSaslMechanism, user, password))
+    Admin.create(config)
+  }
+
+  private def createScramCredentialWithScramAdminClient(user: String, password: String) = {
+    // connect with the admin credentials
+    val adminClient = createScramAdminClient(JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+    try {
+      // create the SCRAM credential for the given user
+      createScramCredentials(adminClient, user, password)
+    } finally {
+      adminClient.close()
+    }
   }
 }
