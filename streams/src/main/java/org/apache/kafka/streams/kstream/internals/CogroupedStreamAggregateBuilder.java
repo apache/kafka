@@ -61,9 +61,9 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
                     named.suffixWithOrElseGet(
-                            "-cogroup-agg-" + counter++,
-                            builder,
-                            CogroupedKStreamImpl.AGGREGATE_NAME),
+                        "-cogroup-agg-" + counter++,
+                        builder,
+                        CogroupedKStreamImpl.AGGREGATE_NAME),
                     stateCreated,
                     storeBuilder,
                     new KStreamAggregate<>(storeBuilder.name(), initializer, kGroupedStream.getValue()));
@@ -89,13 +89,13 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
-                    named.suffixWithOrElseGet(
-                            "-cogroup-agg-" + counter++,
-                            builder,
-                            CogroupedKStreamImpl.AGGREGATE_NAME),
-                    stateCreated,
-                    storeBuilder,
-                    new KStreamWindowAggregate<>(windows, storeBuilder.name(), initializer, kGroupedStream.getValue()));
+                named.suffixWithOrElseGet(
+                    "-cogroup-agg-" + counter++,
+                    builder,
+                    CogroupedKStreamImpl.AGGREGATE_NAME),
+                stateCreated,
+                storeBuilder,
+                new KStreamWindowAggregate<>(windows, storeBuilder.name(), initializer, kGroupedStream.getValue()));
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(parentNodes.get(kGroupedStream.getKey()), statefulProcessorNode);
@@ -118,13 +118,13 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         int counter = 0;
         for (final Entry<KGroupedStreamImpl<K, ?>, Aggregator<? super K, Object, VOut>> kGroupedStream : groupPatterns.entrySet()) {
             final StatefulProcessorNode<K, ?> statefulProcessorNode = getStatefulProcessorNode(
-                    named.suffixWithOrElseGet(
-                            "-cogroup-agg-" + counter++,
-                            builder,
-                            CogroupedKStreamImpl.AGGREGATE_NAME),
-                    stateCreated,
-                    storeBuilder,
-                    new KStreamSessionWindowAggregate<>(sessionWindows, storeBuilder.name(), initializer, kGroupedStream.getValue(), sessionMerger));
+                named.suffixWithOrElseGet(
+                    "-cogroup-agg-" + counter++,
+                    builder,
+                    CogroupedKStreamImpl.AGGREGATE_NAME),
+                stateCreated,
+                storeBuilder,
+                new KStreamSessionWindowAggregate<>(sessionWindows, storeBuilder.name(), initializer, kGroupedStream.getValue(), sessionMerger));
             stateCreated = true;
             processors.add(statefulProcessorNode);
             builder.addGraphNode(parentNodes.get(kGroupedStream.getKey()), statefulProcessorNode);
@@ -141,7 +141,7 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                 final OptimizableRepartitionNodeBuilder<K, ?> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
 
                 final String repartionNamePrefix = repartitionReqs.userProvidedRepartitionTopicName != null ?
-                        repartitionReqs.userProvidedRepartitionTopicName : storeBuilder.name();
+                    repartitionReqs.userProvidedRepartitionTopicName : storeBuilder.name();
 
                 createRepartitionSource(repartionNamePrefix, repartitionNodeBuilder, repartitionReqs.keySerde, repartitionReqs.valueSerde);
 
@@ -167,10 +167,11 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
                                            final Serde<KR> keySerde,
                                            final Serde<VOut> valueSerde,
                                            final String queryableName) {
+
         final String mergeProcessorName = named.suffixWithOrElseGet(
-                "-cogroup-merge",
-                builder,
-                CogroupedKStreamImpl.MERGE_NAME);
+            "-cogroup-merge",
+            builder,
+            CogroupedKStreamImpl.MERGE_NAME);
         final ProcessorSupplier<K, VOut> passThrough = new PassThrough<>();
         final ProcessorGraphNode<K, VOut> mergeNode =
                 new ProcessorGraphNode<>(mergeProcessorName, new ProcessorParameters<>(passThrough, mergeProcessorName));
@@ -178,14 +179,14 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         builder.addGraphNode(processors, mergeNode);
 
         return new KTableImpl<KR, VIn, VOut>(
-                mergeProcessorName,
-                keySerde,
-                valueSerde,
-                Collections.singleton(mergeNode.nodeName()),
-                queryableName,
-                passThrough,
-                mergeNode,
-                builder);
+            mergeProcessorName,
+            keySerde,
+            valueSerde,
+            Collections.singleton(mergeNode.nodeName()),
+            queryableName,
+            passThrough,
+            mergeNode,
+            builder);
     }
 
     private StatefulProcessorNode<K, ?> getStatefulProcessorNode(final String processorName,
@@ -196,16 +197,16 @@ class CogroupedStreamAggregateBuilder<K, VOut> {
         if (!stateCreated) {
             statefulProcessorNode =
                     new StatefulProcessorNode<>(
-                            processorName,
-                            new ProcessorParameters<>(kStreamAggregate, processorName),
-                            storeBuilder
+                        processorName,
+                        new ProcessorParameters<>(kStreamAggregate, processorName),
+                        storeBuilder
                     );
         } else {
             statefulProcessorNode =
                     new StatefulProcessorNode<>(
-                            processorName,
-                            new ProcessorParameters<>(kStreamAggregate, processorName),
-                            new String[]{storeBuilder.name()}
+                        processorName,
+                        new ProcessorParameters<>(kStreamAggregate, processorName),
+                        new String[]{storeBuilder.name()}
                     );
         }
 
