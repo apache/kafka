@@ -420,7 +420,8 @@ public class SubscriptionState {
         return this.assignment.size();
     }
 
-    synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+    // Visible for testing
+    public synchronized List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
         // Since this is in the hot-path for fetching, we do this instead of using java.util.stream API
         List<TopicPartition> result = new ArrayList<>();
         assignment.forEach((topicPartition, topicPartitionState) -> {
