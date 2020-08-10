@@ -145,7 +145,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void initTransactions() {
+    public synchronized void initTransactions() {
         verifyProducerState();
         if (this.transactionInitialized) {
             throw new IllegalStateException("MockProducer has already been initialized for transactions.");
@@ -161,7 +161,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void beginTransaction() throws ProducerFencedException {
+    public synchronized void beginTransaction() throws ProducerFencedException {
         verifyProducerState();
         verifyTransactionsInitialized();
 
@@ -180,7 +180,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+    public synchronized void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
         Objects.requireNonNull(consumerGroupId);
         verifyProducerState();
@@ -201,7 +201,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+    public synchronized void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
         Objects.requireNonNull(groupMetadata);
         sendOffsetsToTransaction(offsets, groupMetadata.groupId());
@@ -233,7 +233,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void abortTransaction() throws ProducerFencedException {
+    public synchronized void abortTransaction() throws ProducerFencedException {
         verifyProducerState();
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
@@ -369,12 +369,12 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         close(Duration.ofMillis(0));
     }
 
     @Override
-    public void close(Duration timeout) {
+    public synchronized void close(Duration timeout) {
         if (this.closeException != null) {
             throw this.closeException;
         }
