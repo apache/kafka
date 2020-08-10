@@ -24,7 +24,7 @@ def config = jobConfig {
     slackChannel = '#kafka-warn'
     timeoutHours = 4
     runMergeCheck = false
-    downStreamValidate = true
+    downStreamValidate = false
     downStreamRepos = ["common",]
     disableConcurrentBuilds = true
 }
