@@ -79,7 +79,8 @@ allprojects {
         resolutionStrategy {
           force(
             // ensure we have a single scala-library version since we inline it (the core dependency is not mean to be used as a library)
-            libs.scalaLibrary
+            libs.scalaLibrary,
+            libs.scalaReflect,
             // ensures we have a single version of jackson-annotations in the classpath even if
             // some modules only have a transitive reference to an older version
             libs.jacksonAnnotations,
