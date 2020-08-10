@@ -208,7 +208,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void commitTransaction() throws ProducerFencedException {
+    public synchronized void commitTransaction() throws ProducerFencedException {
         verifyProducerState();
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
