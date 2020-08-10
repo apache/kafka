@@ -471,6 +471,7 @@ public class RocksDBMetricsRecorderTest {
             .andReturn(numberOfOpenFilesSensor);
         expect(RocksDBMetrics.numberOfFileErrorsSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(numberOfFileErrorsSensor);
+        RocksDBMetrics.addNumEntriesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         replay(RocksDBMetrics.class);
     }
 
@@ -502,6 +503,7 @@ public class RocksDBMetricsRecorderTest {
             .andStubReturn(numberOfOpenFilesSensor);
         expect(RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricsContext))
             .andStubReturn(numberOfFileErrorsSensor);
+        RocksDBMetrics.addNumEntriesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         replay(RocksDBMetrics.class);
     }
 }

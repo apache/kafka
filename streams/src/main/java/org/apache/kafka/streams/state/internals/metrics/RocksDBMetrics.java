@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
+import java.math.BigInteger;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_SUFFIX;
@@ -33,7 +35,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
-public class RocksDBMetrics {
+public class  RocksDBMetrics {
     private RocksDBMetrics() {}
 
     private static final String BYTES_WRITTEN_TO_DB = "bytes-written";
@@ -56,6 +58,7 @@ public class RocksDBMetrics {
     private static final String COMPACTION_TIME_MAX = COMPACTION_TIME + MAX_SUFFIX;
     private static final String NUMBER_OF_OPEN_FILES = "number-open-files";
     private static final String NUMBER_OF_FILE_ERRORS = "number-file-errors";
+    static final String NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE = "num-entries-active-mem-table";
 
     private static final String BYTES_WRITTEN_TO_DB_RATE_DESCRIPTION =
         "Average number of bytes written per second to the RocksDB state store";
@@ -94,6 +97,8 @@ public class RocksDBMetrics {
     private static final String COMPACTION_TIME_MAX_DESCRIPTION = "Maximum time spent on compaction in ms";
     private static final String NUMBER_OF_OPEN_FILES_DESCRIPTION = "Number of currently open files";
     private static final String NUMBER_OF_FILE_ERRORS_DESCRIPTION = "Total number of file errors occurred";
+    private static final String NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE_DESCRIPTION =
+            "Current total number of entries in the active memtable";
 
     public static class RocksDBMetricContext {
         private final String threadId;
@@ -472,6 +477,21 @@ public class RocksDBMetrics {
             NUMBER_OF_FILE_ERRORS_DESCRIPTION
         );
         return sensor;
+    }
+
+    public static void addNumEntriesActiveMemTableMetric(final StreamsMetricsImpl streamsMetrics,
+                                                         final RocksDBMetricContext metricContext,
+                                                         final Gauge<BigInteger> valueProvider) {
+        streamsMetrics.addStoreLevelMutableMetric(
+            metricContext.threadId(),
+            metricContext.taskName(),
+            metricContext.metricsScope(),
+            metricContext.storeName(),
+            NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE,
+            NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE_DESCRIPTION,
+            RecordingLevel.INFO,
+            valueProvider
+        );
     }
 
     private static Sensor createSensor(final StreamsMetricsImpl streamsMetrics,

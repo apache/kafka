@@ -429,7 +429,7 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldAddStoreLevelMutableMetric() {
+    public void shouldAddNewStoreLevelMutableMetric() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
@@ -456,7 +456,7 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void shouldThrowWhenStoreLevelMutableMetricAlreadyExists() {
+    public void shouldNotAddStoreLevelMutableMetricIfAlreadyExists() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
             new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
@@ -466,19 +466,15 @@ public class StreamsMetricsImplTest {
         replay(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-        assertThrows(
-            "Store level metric " + metricName + " has already been added!",
-            IllegalStateException.class,
-            () -> streamsMetrics.addStoreLevelMutableMetric(
-                THREAD_ID1,
-                TASK_ID1,
-                SCOPE_NAME,
-                STORE_NAME1,
-                METRIC_NAME1,
-                DESCRIPTION1,
-                INFO_RECORDING_LEVEL,
-                VALUE_PROVIDER
-            )
+        streamsMetrics.addStoreLevelMutableMetric(
+            THREAD_ID1,
+            TASK_ID1,
+            SCOPE_NAME,
+            STORE_NAME1,
+            METRIC_NAME1,
+            DESCRIPTION1,
+            INFO_RECORDING_LEVEL,
+            VALUE_PROVIDER
         );
 
         verify(metrics);

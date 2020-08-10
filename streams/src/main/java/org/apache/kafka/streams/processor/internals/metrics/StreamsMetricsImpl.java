@@ -437,8 +437,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 metrics.addMetric(metricName, metricConfig, valueProvider);
                 storeLevelMetrics.computeIfAbsent(key, ignored -> new LinkedList<>()).push(metricName);
             }
-        } else {
-            throw new IllegalStateException("Store level metric " + metricName + " has already been added!");
         }
     }
 
