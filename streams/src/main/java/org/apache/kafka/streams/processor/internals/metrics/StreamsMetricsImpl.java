@@ -96,6 +96,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> storeLevelSensors = new HashMap<>();
+    private final Map<String, Deque<MetricName>> storeLevelMetrics = new HashMap<>();
 
     private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
@@ -415,14 +416,59 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    public final void removeAllStoreLevelSensors(final String threadId,
-                                                 final String taskId,
-                                                 final String storeName) {
+    public <T> void addStoreLevelMutableMetric(final String threadId,
+                                               final String taskId,
+                                               final String metricsScope,
+                                               final String storeName,
+                                               final String name,
+                                               final String description,
+                                               final RecordingLevel recordingLevel,
+                                               final Gauge<T> valueProvider) {
+        final MetricName metricName = metrics.metricName(
+            name,
+            STATE_STORE_LEVEL_GROUP,
+            description,
+            storeLevelTagMap(threadId, taskId, metricsScope, storeName)
+        );
+        if (metrics.metric(metricName) == null) {
+            final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
+            final String key = storeSensorPrefix(threadId, taskId, storeName);
+            synchronized (storeLevelMetrics) {
+                metrics.addMetric(metricName, metricConfig, valueProvider);
+                storeLevelMetrics.computeIfAbsent(key, ignored -> new LinkedList<>()).push(metricName);
+            }
+        } else {
+            throw new IllegalStateException("Store level metric " + metricName + " has already been added!");
+        }
+    }
+
+    public final void removeAllStoreLevelSensorsAndMetrics(final String threadId,
+                                                           final String taskId,
+                                                           final String storeName) {
+        removeAllStoreLevelMetrics(threadId, taskId, storeName);
+        removeAllStoreLevelSensors(threadId, taskId, storeName);
+    }
+
+    private void removeAllStoreLevelSensors(final String threadId,
+                                            final String taskId,
+                                            final String storeName) {
         final String key = storeSensorPrefix(threadId, taskId, storeName);
         synchronized (storeLevelSensors) {
             final Deque<String> sensors = storeLevelSensors.remove(key);
             while (sensors != null && !sensors.isEmpty()) {
                 metrics.removeSensor(sensors.pop());
+            }
+        }
+    }
+
+    private void removeAllStoreLevelMetrics(final String threadId,
+                                            final String taskId,
+                                            final String storeName) {
+        final String key = storeSensorPrefix(threadId, taskId, storeName);
+        synchronized (storeLevelMetrics) {
+            final Deque<MetricName> metricNames = storeLevelMetrics.remove(key);
+            while (metricNames != null && !metricNames.isEmpty()) {
+                metrics.removeMetric(metricNames.pop());
             }
         }
     }

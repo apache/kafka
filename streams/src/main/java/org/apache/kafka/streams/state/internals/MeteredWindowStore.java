@@ -210,7 +210,7 @@ public class MeteredWindowStore<K, V>
         try {
             wrapped().close();
         } finally {
-            streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(threadId, taskId, name());
         }
     }
 
