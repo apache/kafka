@@ -363,6 +363,7 @@ class WorkerSourceTask extends WorkerTask {
             try {
                 maybeCreateTopic(record.topic());
                 final String topic = producerRecord.topic();
+                log.debug("{} is going to send record to {}", WorkerSourceTask.this, topic);
                 producer.send(
                     producerRecord,
                     (recordMetadata, e) -> {
@@ -409,6 +410,9 @@ class WorkerSourceTask extends WorkerTask {
     // RegexRouter) topic creation can not be batched for multiple topics
     private void maybeCreateTopic(String topic) {
         if (!topicCreation.isTopicCreationRequired(topic)) {
+            log.trace("The topic creation setting is disabled or the topic name {} is already in the topic cache." +
+                "If the topic doesn't exist, we'll rely on the auto.create.topics.enable setting in broker side " +
+                "to see if the topic can be auto created or not", topic);
             return;
         }
         log.info("The task will send records to topic '{}' for the first time. Checking "
@@ -430,7 +434,7 @@ class WorkerSourceTask extends WorkerTask {
             log.info("Created topic '{}' using creation group {}", newTopic, topicGroup);
         } else {
             log.warn("Request to create new topic '{}' failed", topic);
-            throw new ConnectException("Task failed to create new topic " + topic + ". Ensure "
+            throw new ConnectException("Task failed to create new topic " + newTopic + ". Ensure "
                     + "that the task is authorized to create topics or that the topic exists and "
                     + "restart the task");
         }
