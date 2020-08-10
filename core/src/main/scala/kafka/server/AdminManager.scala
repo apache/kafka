@@ -433,29 +433,31 @@ class AdminManager(val config: KafkaConfig,
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
-          case ConfigResource.Type.CLIENT =>
-            val clientId = resource.resourceName
-            val defaultProps = adminZkClient.fetchEntityConfig(ConfigType.Client, ConfigEntityName.Default)
-            val clientProps = adminZkClient.fetchEntityConfig(ConfigType.Client, if (clientId.isEmpty) ConfigEntityName.Default else clientId)
+          case ConfigResource.Type.USER_CLIENT =>
+            val (userSanitizedEntityName, sanitizedClientIdEntity) = encodedEntityToSanitizedUserClientId(resource.resourceName)
+            val fullSanitizedEntityName = userSanitizedEntityName.concat("/clients/").concat(sanitizedClientIdEntity)
+
+            val userClientIdProps = adminZkClient.fetchEntityConfig(ConfigType.User, fullSanitizedEntityName)
+            val userDefaultClientIdProps = adminZkClient.fetchEntityConfig(ConfigType.User, s"$userSanitizedEntityName/clients/<default>")
             val overlayedProps = new Properties()
-            overlayedProps.putAll(defaultProps)
-            overlayedProps.putAll(clientProps)
+            overlayedProps.putAll(userDefaultClientIdProps)
+            overlayedProps.putAll(userClientIdProps)
             val configMap = overlayedProps.asScala.flatMap { case (key, value) =>
               if (ClientConfigs.isClientConfig(key)) {
                 Some(key.toString -> value.toString)
               } else {
                 None
               }
-            }.toMap
+            }
 
             // Resort to default dynamic client config if configs are not specified for the client-id
             createResponseConfig(
               configMap,
               createClientConfigEntry(
-                clientId, 
-                clientProps, 
-                defaultProps, 
-                perClientIdConfig = clientId.nonEmpty, 
+                resource.resourceName, 
+                userClientIdProps, 
+                userDefaultClientIdProps, 
+                perClientIdConfig = (sanitizedClientIdEntity != ConfigEntityName.Default),
                 includeSynonyms, 
                 includeDocumentation
               )
@@ -626,12 +628,12 @@ class AdminManager(val config: KafkaConfig,
             if (!validateOnly)
               alterLogLevelConfigs(alterConfigOps)
             resource -> ApiError.NONE
-          case ConfigResource.Type.CLIENT =>
-            val entityName = if (resource.name == null || resource.name.isEmpty) ConfigEntityName.Default else resource.name
-            val configProps = adminZkClient.fetchEntityConfig(ConfigType.Client, entityName)
-            info(s"Config: $configProps Entity: $entityName")
+          case ConfigResource.Type.USER_CLIENT =>
+            val (userSanitizedEntityName, sanitizedClientIdEntity) = encodedEntityToSanitizedUserClientId(resource.name)
+            val fullSanitizedEntityName = userSanitizedEntityName.concat("/clients/").concat(sanitizedClientIdEntity)
+            val configProps = adminZkClient.fetchEntityConfig(ConfigType.User, fullSanitizedEntityName)
             prepareIncrementalConfigs(alterConfigOps, configProps, DynamicConfig.Client.configKeys.asScala)
-            adminZkClient.changeConfigs(ConfigType.Client, entityName, configProps)
+            adminZkClient.changeConfigs(ConfigType.User, fullSanitizedEntityName, configProps)
             resource -> ApiError.NONE
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
@@ -776,7 +778,7 @@ class AdminManager(val config: KafkaConfig,
     allSynonyms.dropWhile(s => s.name != name).toList // e.g. drop listener overrides when describing base config
   }
 
-  def createClientConfigEntry(clientId: String, dynamicProps: Properties, dynamicDefaultProps: Properties,
+  def createClientConfigEntry(entityName: String, dynamicProps: Properties, dynamicDefaultProps: Properties,
                              perClientIdConfig: Boolean, includeSynonyms: Boolean, includeDocumentation: Boolean)
                              (name: String, value: Any) = {
     val allSynonyms = {
@@ -804,7 +806,6 @@ class AdminManager(val config: KafkaConfig,
     .setConfigSource(source)
     .setSynonyms(synonyms.asJava)
     .setConfigType(dataType.id)
-
   }
 
   private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
@@ -867,6 +868,17 @@ class AdminManager(val config: KafkaConfig,
       case ConfigEntityName.Default => null
       case name => Sanitizer.desanitize(name)
     }
+
+  private def encodedEntityToSanitizedUserClientId(encodedEntity: String): (String, String) = {
+    val entityNames = encodedEntity.split(":")
+    val userEntity = entityNames(0)
+    val clientEntity = if (entityNames.length == 2) entityNames(1) else null
+
+    val sanitizedUserEntity = sanitizeEntityName(userEntity)
+    val sanitizedClientId = sanitizeEntityName(clientEntity)
+
+    (sanitizedUserEntity, sanitizedClientId)
+  }
 
   private def entityToSanitizedUserClientId(entity: ClientQuotaEntity): (Option[String], Option[String]) = {
     if (entity.entries.isEmpty)

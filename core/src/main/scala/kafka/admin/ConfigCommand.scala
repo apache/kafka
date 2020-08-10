@@ -416,20 +416,25 @@ object ConfigCommand extends Config {
 
         // Handle dynamic client config alterations
         if (clientConfigsToBeAdded.nonEmpty || clientConfigsToBeDeleted.nonEmpty) {
-          val entityName = if (entityNameHead.isEmpty) ConfigEntityName.Default else entityNameHead
-          val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityName, includeSynonyms = false, describeAll = false)
-                    .map { entry => (entry.name, entry) }.toMap
+          if (entityTypes.contains(ConfigType.User)) {
+            val entityMap = entityTypes.zip(entityNames).toMap
+            val entityName = entityMap
+              .apply(ConfigType.User).concat(":").concat(entityMap.getOrElse(ConfigType.Client, ""))
 
-          // fail the command if any of the configs to be deleted does not exist
-          val invalidConfigs = clientConfigsToBeDeleted.filterNot(oldConfig.contains)
-          if (invalidConfigs.nonEmpty)
-            throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
-          val configResource = new ConfigResource(ConfigResource.Type.CLIENT, entityNameHead)
-          val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
-          val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
-            ++ clientConfigsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
-          ).asJavaCollection
-          adminClient.incrementalAlterConfigs(Map(configResource -> alterEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+            val oldConfig = getResourceConfig(adminClient, ConfigType.User, entityName, includeSynonyms = false, describeAll = false)
+                      .map { entry => (entry.name, entry) }.toMap
+
+            // fail the command if any of the configs to be deleted does not exist
+            val invalidConfigs = clientConfigsToBeDeleted.filterNot(oldConfig.contains)
+            if (invalidConfigs.nonEmpty)
+              throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+            val configResource = new ConfigResource(ConfigResource.Type.USER_CLIENT, entityName)
+            val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+            val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
+              ++ clientConfigsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
+            ).asJavaCollection
+            adminClient.incrementalAlterConfigs(Map(configResource -> alterEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
+          }
         }
 
 
@@ -451,8 +456,13 @@ object ConfigCommand extends Config {
       case ConfigType.Topic | ConfigType.Broker | BrokerLoggerConfigType =>
         describeResourceConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
       case ConfigType.User | ConfigType.Client =>
-        if (entityTypes.head == ConfigType.Client && entityTypes.length == 1) {
-          describeResourceConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
+        // Describe dynamic client configs only if user is specified
+        if (entityTypes.contains(ConfigType.User)) {
+          val entityMap = entityTypes.zip(entityNames).toMap
+          val entityName = entityMap
+            .apply(ConfigType.User).concat(":").concat(entityMap.getOrElse(ConfigType.Client, ""))
+
+          describeResourceConfig(adminClient, ConfigType.User, Option(entityName), describeAll)
         }
         describeClientQuotasConfig(adminClient, entityTypes, entityNames)
     }
@@ -466,7 +476,7 @@ object ConfigCommand extends Config {
           adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get().asScala.toSeq
         case ConfigType.Broker | BrokerLoggerConfigType =>
           adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
-        case ConfigType.Client =>
+        case ConfigType.User =>
           List("")
       })
 
@@ -507,11 +517,13 @@ object ConfigCommand extends Config {
         if (!entityName.isEmpty)
           validateBrokerId()
         (ConfigResource.Type.BROKER_LOGGER, None)
-      case ConfigType.Client => entityName match {
-        case "" =>
-          (ConfigResource.Type.CLIENT, Some(ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_CLIENT_CONFIG))
-        case _ =>
-          (ConfigResource.Type.CLIENT, Some(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_CONFIG))
+      case ConfigType.User => {
+        val names = entityName.split(":")
+        if (names.length == 2) {
+          (ConfigResource.Type.USER_CLIENT, Some(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_CONFIG))
+        } else {
+          (ConfigResource.Type.USER_CLIENT, Some(ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_CLIENT_CONFIG))
+        }
       }
     }
 

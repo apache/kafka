@@ -2595,7 +2595,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
         case ConfigResource.Type.TOPIC =>
           authorize(request.context, ALTER_CONFIGS, TOPIC, resource.name)
-        case ConfigResource.Type.CLIENT =>
+        case ConfigResource.Type.USER_CLIENT =>
           authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
@@ -2619,7 +2619,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ConfigResource.Type.TOPIC =>
           authorize(request.context, DESCRIBE_CONFIGS, TOPIC, resource.resourceName)
         case ConfigResource.Type.CLIENT =>
+          // Encode the principal and client id into same resource name when an application fetches dynamic configs
+          resource.setResourceName(request.session.principal.getName.concat(":").concat(resource.resourceName))
+          resource.setResourceType(ConfigResource.Type.USER_CLIENT.id)
           authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)
+        case ConfigResource.Type.USER_CLIENT => 
+          // This is the handler for the admin client to describe/alter dynamic application configs
+          authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)
+
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
       }
     }
