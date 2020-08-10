@@ -194,7 +194,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
-        return new KTableImpl<>(
+        final KTableImpl<K, Object, V> kTable = new KTableImpl<>(
             name,
             keySerde,
             valueSerde,
@@ -203,6 +203,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             processorSupplier,
             tableNode,
             builder);
+
+        kTable.enableSendingOldValues();
+
+        return kTable;
     }
 
     @Override

@@ -125,11 +125,8 @@ public class KTableImplTest {
                 new KeyValueTimestamp<>("D", 4, 0),
                 new KeyValueTimestamp<>("A", 5, 10),
                 new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed);
-        assertEquals(asList(new KeyValueTimestamp<>("A", null, 5),
-                new KeyValueTimestamp<>("B", 2, 100),
-                new KeyValueTimestamp<>("C", null, 0),
+        assertEquals(asList(new KeyValueTimestamp<>("B", 2, 100),
                 new KeyValueTimestamp<>("D", 4, 0),
-                new KeyValueTimestamp<>("A", null, 10),
                 new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed);
         assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
                 new KeyValueTimestamp<>("B", "02", 100),
@@ -278,7 +275,7 @@ public class KTableImplTest {
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            assertEquals(0, driver.getAllStateStores().size());
+            assertEquals(1, driver.getAllStateStores().size());
         }
     }
 
