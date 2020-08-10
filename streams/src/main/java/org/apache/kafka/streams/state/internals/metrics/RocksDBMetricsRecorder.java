@@ -41,6 +41,7 @@ public class RocksDBMetricsRecorder {
 
         public DbAndCacheAndStatistics(final RocksDB db, final Cache cache, final Statistics statistics) {
             Objects.requireNonNull(db, "database instance must not be null");
+            Objects.requireNonNull(cache, "cache must not be null");
             this.db = db;
             this.cache = cache;
             if (statistics != null) {

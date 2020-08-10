@@ -51,7 +51,6 @@ import org.rocksdb.Cache;
 import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
-import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
 
 import java.io.File;
@@ -64,7 +63,6 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.mock;
@@ -101,10 +99,12 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(dir,
+        context = new InternalMockProcessorContext(
+            dir,
             Serdes.String(),
             Serdes.String(),
-            new StreamsConfig(props));
+            new StreamsConfig(props)
+        );
         rocksDBStore = getRocksDBStore();
     }
 
@@ -149,12 +149,7 @@ public class RocksDBStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.INFO);
         reset(metricsRecorder);
-        metricsRecorder.addValueProviders(
-            eq(DB_NAME),
-            notNull(),
-            notNull(),
-            isNull()
-        );
+        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
         replay(metricsRecorder);
 
         rocksDBStore.openDB(context);
@@ -168,12 +163,7 @@ public class RocksDBStoreTest {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG);
         reset(metricsRecorder);
-        metricsRecorder.addValueProviders(
-            eq(DB_NAME),
-            notNull(),
-            notNull(),
-            notNull()
-        );
+        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
         replay(metricsRecorder);
 
         rocksDBStore.openDB(context);
@@ -214,12 +204,7 @@ public class RocksDBStoreTest {
     public void shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
-        metricsRecorder.addValueProviders(
-            eq(DB_NAME),
-            notNull(),
-            notNull(),
-            isNull()
-        );
+        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
         replay(metricsRecorder);
 
         rocksDBStore.openDB(context);
@@ -240,20 +225,17 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldNotSetCacheInValueProvidersWhenUserProvidesNewTableFormatConfig() {
+    public void shouldThrowWhenUserProvidesNewTableFormatConfig() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedNewTableFormatConfig.class);
-        metricsRecorder.addValueProviders(
-            eq(DB_NAME),
-            notNull(),
-            isNull(),
-            notNull()
+        assertThrows(
+            "A table format configuration is used that does not expose the block cache. " +
+                "Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
+                "the internal table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
+                "the RocksDB options.",
+            ProcessorStateException.class,
+            () -> rocksDBStore.openDB(context)
         );
-        replay(metricsRecorder);
-
-        rocksDBStore.openDB(context);
-        verify(metricsRecorder);
-        reset(metricsRecorder);
     }
 
     @Test
@@ -615,7 +597,7 @@ public class RocksDBStoreTest {
 
         @Override
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+            final BlockBasedTableConfig tableConfig = (BlockBasedTableConfig) options.tableFormatConfig();
             cache = new LRUCache(50 * 1024 * 1024L);
             tableConfig.setBlockCache(cache);
             tableConfig.setBlockSize(4096L);
