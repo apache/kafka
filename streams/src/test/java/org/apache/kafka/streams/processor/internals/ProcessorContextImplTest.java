@@ -150,7 +150,7 @@ public class ProcessorContextImplTest {
         ((InternalProcessorContext) context).transitionToActive(task, null, null);
         EasyMock.expect(task.recordCollector()).andStubReturn(recordCollector);
 
-        context.setCurrentNode(new ProcessorNode<String, Long>("fake", null,
+        context.setCurrentNode(new ProcessorNode<String, Long, Object, Object>("fake", null,
             new HashSet<>(asList(
                 "LocalKeyValueStore",
                 "LocalTimestampedKeyValueStore",

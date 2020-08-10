@@ -298,12 +298,12 @@ public class InternalMockProcessorContext
         if (toInternal.hasTimestamp()) {
             setTime(toInternal.timestamp());
         }
-        final ProcessorNode<?, ?> thisNode = currentNode;
+        final ProcessorNode<?, ?, ?, ?> thisNode = currentNode;
         try {
-            for (final ProcessorNode<?, ?> childNode : thisNode.children()) {
+            for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    ((ProcessorNode<Object, Object>) childNode).process(key, value);
+                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(key, value);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
                                            // Processors and toInternal might have been modified
                 }
