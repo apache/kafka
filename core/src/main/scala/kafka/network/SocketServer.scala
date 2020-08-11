@@ -1333,14 +1333,20 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
   }
 
+  /**
+   * Records a new connection into a given connection acceptance rate sensor 'sensor' and returns throttle time
+   * in milliseconds if quota got violated
+   * @param sensor sensor to record connection
+   * @param timeMs current time in milliseconds
+   * @return throttle time in milliseconds if quota got violated, otherwise 0
+   */
   private def recordAndGetThrottleTimeMs(sensor: Sensor, timeMs: Long): Int = {
     try {
       sensor.record(1.0, timeMs)
       0
     } catch {
       case e: QuotaViolationException =>
-        val throttleTimeMs = QuotaUtils.boundedThrottleTime(
-          e.value, e.bound, e.metric, maxThrottleTimeMs).toInt
+        val throttleTimeMs = QuotaUtils.boundedThrottleTime(e, maxThrottleTimeMs, timeMs).toInt
         debug(s"Quota violated for sensor (${sensor.name}). Delay time: $throttleTimeMs ms")
         throttleTimeMs
     }
@@ -1353,25 +1359,30 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
    * @param listenerOpt listener name if sensor is for a listener
    */
   private def createConnectionRateQuotaSensor(quotaLimit: Int, listenerOpt: Option[String] = None): Sensor = {
-    val quotaEntity = listenerOpt.getOrElse("broker")
-    val sensor = metrics.sensor(s"ConnectionCreationRate-$quotaEntity", rateQuotaMetricConfig(quotaLimit))
-    sensor.add(connectionRateMetricName(quotaEntity), new Rate, null)
-    info(s"Created ConnectionCreationRate-$quotaEntity sensor, quotaLimit=$quotaLimit")
+    val sensorName = listenerOpt.map(listener => s"ConnectionAcceptRate-$listener").getOrElse("ConnectionAcceptRate")
+    val sensor = metrics.sensor(sensorName, rateQuotaMetricConfig(quotaLimit))
+    sensor.add(connectionRateMetricName(listenerOpt), new Rate, null)
+    info(s"Created $sensorName sensor, quotaLimit=$quotaLimit")
     sensor
   }
 
+  /**
+   * Updates quota configuration for a given listener or broker-wide (if 'listenerOpt' is None)
+   */
   private def updateConnectionRateQuota(quotaLimit: Int, listenerOpt: Option[String] = None): Unit = {
-    val quotaEntity = listenerOpt.getOrElse("broker")
-    val metric = metrics.metric(connectionRateMetricName(quotaEntity))
+    val metric = metrics.metric(connectionRateMetricName(listenerOpt))
     metric.config(rateQuotaMetricConfig(quotaLimit))
-    info(s"Updated $quotaEntity max connection creation rate to $quotaLimit")
+    info(s"Updated ${listenerOpt.getOrElse("broker-wide")} max connection creation rate to $quotaLimit")
   }
 
-  private def connectionRateMetricName(quotaEntity: String): MetricName = {
+  private def connectionRateMetricName(listenerOpt: Option[String]): MetricName = {
+    val tags = listenerOpt.map(listener => Map("listener" -> listener)).getOrElse(Map())
+    val namePrefix = listenerOpt.map(_ => "").getOrElse("broker-")
     metrics.metricName(
-      s"connection-creation-rate-$quotaEntity",
-      "connection-quota",
-      s"Tracking $quotaEntity connection creation rate")
+      s"${namePrefix}connection-accept-rate",
+      "socket-server-metrics",
+      s"Tracking rate of accepting new connections (per second)",
+      tags.asJava)
   }
 
   private def rateQuotaMetricConfig(quotaLimit: Int): MetricConfig = {
@@ -1379,15 +1390,13 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       .timeWindow(config.quotaWindowSizeSeconds.toLong, TimeUnit.SECONDS)
       .samples(config.numQuotaSamples)
       .quota(new Quota(quotaLimit, true))
-      .skipReporting(true)
   }
 
   class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable {
     @volatile private var _maxConnections = Int.MaxValue
-    private val _connectionRateSensor = createConnectionRateQuotaSensor(Int.MaxValue, Some(listener.value))
+    val connectionRateSensor = createConnectionRateQuotaSensor(Int.MaxValue, Some(listener.value))
 
     def maxConnections: Int = _maxConnections
-    def connectionRateSensor: Sensor = _connectionRateSensor
 
     override def listenerName(): ListenerName = listener
 

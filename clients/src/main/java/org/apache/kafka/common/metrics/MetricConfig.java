@@ -31,7 +31,6 @@ public class MetricConfig {
     private long timeWindowMs;
     private Map<String, String> tags;
     private Sensor.RecordingLevel recordingLevel;
-    private boolean skipReporting;
 
     public MetricConfig() {
         this.quota = null;
@@ -40,7 +39,6 @@ public class MetricConfig {
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
         this.tags = new LinkedHashMap<>();
         this.recordingLevel = Sensor.RecordingLevel.INFO;
-        this.skipReporting = false;
     }
 
     public Quota quota() {
@@ -99,13 +97,5 @@ public class MetricConfig {
         return this;
     }
 
-    public boolean skipReporting() {
-        return this.skipReporting;
-    }
-
-    public MetricConfig skipReporting(boolean skipReporting) {
-        this.skipReporting = skipReporting;
-        return this;
-    }
 
 }

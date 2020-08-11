@@ -20,7 +20,7 @@ package kafka.utils
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig}
+import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Quota, QuotaViolationException}
 import org.apache.kafka.common.metrics.stats.{Rate, Value}
 
 import scala.jdk.CollectionConverters._
@@ -31,85 +31,108 @@ import org.scalatest.Assertions.assertThrows
 class QuotaUtilsTest {
 
   private val time = new MockTime
-  private val windowSizeMs = 1000
+  private val numSamples = 10
+  private val sampleWindowSec = 1
   private val maxThrottleTimeMs = 500
+  private val metricName = new MetricName("test-metric", "groupA", "testA", Map.empty.asJava)
 
   @Test
   def testThrottleTimeObservedRateEqualsQuota(): Unit = {
+    val numSamples = 10
     val observedValue = 16.5
-    assertEquals(0, QuotaUtils.throttleTime(observedValue, observedValue, windowSizeMs))
+
+    assertEquals(0, throttleTime(observedValue, observedValue, numSamples))
 
     // should be independent of window size
-    assertEquals(0, QuotaUtils.throttleTime(observedValue, observedValue, windowSizeMs + 1))
+    assertEquals(0, throttleTime(observedValue, observedValue, numSamples + 1))
   }
 
   @Test
   def testThrottleTimeObservedRateBelowQuota(): Unit = {
     val observedValue = 16.5
     val quota = 20.4
-    assertTrue(QuotaUtils.throttleTime(observedValue, quota, windowSizeMs) < 0)
+    assertTrue(throttleTime(observedValue, quota, numSamples) < 0)
 
     // should be independent of window size
-    assertTrue(QuotaUtils.throttleTime(observedValue, quota, windowSizeMs + 1) < 0)
+    assertTrue(throttleTime(observedValue, quota, numSamples + 1) < 0)
   }
 
   @Test
   def testThrottleTimeObservedRateAboveQuota(): Unit = {
     val quota = 50.0
     val observedValue = 100.0
-    assertEquals(windowSizeMs, QuotaUtils.throttleTime(observedValue, quota, windowSizeMs))
+    assertEquals(2000, throttleTime(observedValue, quota, 3))
   }
 
   @Test
   def testBoundedThrottleTimeObservedRateEqualsQuota(): Unit = {
     val observedValue = 18.2
-    assertEquals(0, QuotaUtils.boundedThrottleTime(observedValue, observedValue, windowSizeMs, maxThrottleTimeMs))
+    assertEquals(0, boundedThrottleTime(observedValue, observedValue, numSamples, maxThrottleTimeMs))
 
     // should be independent of window size
-    assertEquals(0, QuotaUtils.boundedThrottleTime(observedValue, observedValue, windowSizeMs + 1, maxThrottleTimeMs))
+    assertEquals(0, boundedThrottleTime(observedValue, observedValue, numSamples + 1, maxThrottleTimeMs))
   }
 
   @Test
   def testBoundedThrottleTimeObservedRateBelowQuota(): Unit = {
     val observedValue = 16.5
     val quota = 22.4
-    assertTrue(QuotaUtils.boundedThrottleTime(observedValue, quota, windowSizeMs, maxThrottleTimeMs) < 0)
+
+    assertTrue(boundedThrottleTime(observedValue, quota, numSamples, maxThrottleTimeMs) < 0)
 
     // should be independent of window size
-    assertTrue(QuotaUtils.boundedThrottleTime(observedValue, quota, windowSizeMs + 1, maxThrottleTimeMs) < 0)
+    assertTrue(boundedThrottleTime(observedValue, quota, numSamples + 1, maxThrottleTimeMs) < 0)
   }
 
   @Test
   def testBoundedThrottleTimeObservedRateAboveQuotaBelowLimit(): Unit = {
     val quota = 50.0
     val observedValue = 55.0
-    assertEquals(100, QuotaUtils.boundedThrottleTime(observedValue, quota, windowSizeMs, maxThrottleTimeMs))
+    assertEquals(100, boundedThrottleTime(observedValue, quota, 2, maxThrottleTimeMs))
   }
 
   @Test
   def testBoundedThrottleTimeObservedRateAboveQuotaAboveLimit(): Unit = {
     val quota = 50.0
     val observedValue = 100.0
-    assertEquals(maxThrottleTimeMs, QuotaUtils.boundedThrottleTime(observedValue, quota, windowSizeMs, maxThrottleTimeMs))
+    assertEquals(maxThrottleTimeMs, boundedThrottleTime(observedValue, quota, numSamples, maxThrottleTimeMs))
   }
 
   @Test
-  def testRateMetricWindowSizeReturnsWindowForRateMetric(): Unit = {
-    val metricName = new MetricName("rate-metric", "test-group", "test metric", Map.empty.asJava)
-    val windowSizeSeconds = 2
-    val cfg = new MetricConfig().timeWindow(windowSizeSeconds, TimeUnit.SECONDS)
-    val testMetric = new KafkaMetric(new Object(), metricName, new Rate(), cfg, time);
-
-    assertEquals(windowSizeSeconds * 1000, QuotaUtils.rateMetricWindowSize(testMetric, time.milliseconds()))
-  }
-
-  @Test
-  def testRateMetricWindowSizeThrowsExceptionIfProvidedNonRateMetric(): Unit = {
-    val metricName = new MetricName("value-metric", "test-group", "test metric", Map.empty.asJava)
+  def testThrottleTimeThrowsExceptionIfProvidedNonRateMetric(): Unit = {
     val testMetric = new KafkaMetric(new Object(), metricName, new Value(), new MetricConfig, time);
 
     assertThrows[IllegalArgumentException] {
-      QuotaUtils.rateMetricWindowSize(testMetric, time.milliseconds())
+      QuotaUtils.throttleTime(new QuotaViolationException(testMetric, 10.0, 20.0), time.milliseconds)
     }
+  }
+
+  @Test
+  def testBoundedThrottleTimeThrowsExceptionIfProvidedNonRateMetric(): Unit = {
+    val testMetric = new KafkaMetric(new Object(), metricName, new Value(), new MetricConfig, time);
+
+    assertThrows[IllegalArgumentException] {
+      QuotaUtils.boundedThrottleTime(new QuotaViolationException(testMetric, 10.0, 20.0), maxThrottleTimeMs, time.milliseconds)
+    }
+  }
+
+  // the `metric` passed into the returned QuotaViolationException will return windowSize = 'numSamples' - 1
+  private def quotaViolationException(observedValue: Double, quota: Double, numSamples: Int): QuotaViolationException = {
+    val metricConfig = new MetricConfig()
+      .timeWindow(sampleWindowSec, TimeUnit.SECONDS)
+      .samples(numSamples)
+      .quota(new Quota(quota, true))
+    val metric = new KafkaMetric(new Object(), metricName, new Rate(), metricConfig, time)
+    new QuotaViolationException(metric, observedValue, quota)
+  }
+
+  private def throttleTime(observedValue: Double, quota: Double, numSamples: Int): Long = {
+    val e = quotaViolationException(observedValue, quota, numSamples)
+    QuotaUtils.throttleTime(e, time.milliseconds)
+  }
+
+  private def boundedThrottleTime(observedValue: Double, quota: Double, numSamples: Int, maxThrottleTime: Long): Long = {
+    val e = quotaViolationException(observedValue, quota, numSamples)
+    QuotaUtils.boundedThrottleTime(e, maxThrottleTime, time.milliseconds)
   }
 }

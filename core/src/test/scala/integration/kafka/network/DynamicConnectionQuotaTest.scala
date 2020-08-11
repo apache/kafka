@@ -202,7 +202,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val futures = newListenerNames.map { listener =>
       executor.submit((() => verifyConnectionRate(3, listenerConnRateLimit, listener)): Runnable)
     }
-    futures.foreach(_.get(35, TimeUnit.SECONDS))
+    futures.foreach(_.get(40, TimeUnit.SECONDS))
 
     // increase connection rate limit on PLAINTEXT (inter-broker) listener to 22 and verify that it will be able to
     // achieve this rate even though total connection rate may exceed broker-wide rate limit, while EXTERNAL listener
@@ -215,8 +215,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
       verifyConnectionRate(18, newPlaintextRateLimit, "PLAINTEXT")): Runnable)
     val externalFuture = executor.submit((() =>
       verifyConnectionRate(5, listenerConnRateLimit, "EXTERNAL")): Runnable)
-    plaintextFuture.get(35, TimeUnit.SECONDS)
-    externalFuture.get(35, TimeUnit.SECONDS)
+    plaintextFuture.get(40, TimeUnit.SECONDS)
+    externalFuture.get(40, TimeUnit.SECONDS)
   }
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String)): Unit = {
@@ -308,6 +308,15 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Connections not closed")
   }
 
+  private def connectAndVerify(listener: String): Unit = {
+    val socket = connect(listener)
+    try {
+      sendAndReceive[ProduceResponse](produceRequest, socket)
+    } finally {
+      socket.close()
+    }
+  }
+
   /**
    * this method simulates a workload that creates connection, sends produce request, closes connection,
    * and verifies that rate does not exceed the given maximum limit `maxConnectionRate`
@@ -327,7 +336,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     var connCount = 0
     while (System.currentTimeMillis < endTimeMs) {
-      createAndVerifyConnection(listener)
+      connectAndVerify(listener)
       connCount += 1
     }
     val elapsedMs = System.currentTimeMillis - startTimeMs
@@ -337,6 +346,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     assertTrue(s"Listener $listener connection rate $actualRate must be above $minConnectionRate", actualRate >= minConnectionRate)
 
     // make sure the state is the same as before the method call
-    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount, "Connections not closed")
+    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
+      s"Connections not closed (initial = $initialConnectionCount current = $connectionCount)")
   }
 }

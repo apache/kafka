@@ -957,23 +957,4 @@ public class MetricsTest {
     public void testDeprecatedMetricValueMethod() {
         verifyStats(KafkaMetric::value);
     }
-
-    @Test
-    public void testMetricUnregisteredWithReporters() {
-        Sensor sensor = metrics.sensor("test");
-        MetricName metricWithoutReporters = metrics.metricName("test-rate", "group-1");
-        String mBeanNameNoReporters = JmxReporter.getMBeanName("", metricWithoutReporters);
-        MetricName metricWithReporters = metrics.metricName("metric-to-report", "group-2");
-        String mBeanName = JmxReporter.getMBeanName("", metricWithReporters);
-
-        sensor.add(metricWithoutReporters, new Rate(), new MetricConfig().skipReporting(true));
-        sensor.add(metricWithReporters, new Rate(), null);
-        for (MetricsReporter reporter : metrics.reporters()) {
-            if (reporter instanceof JmxReporter) {
-                JmxReporter jmxReporter = (JmxReporter) reporter;
-                assertFalse("JMX reporter should not contain Mbean for metric", jmxReporter.containsMbean(mBeanNameNoReporters));
-                assertTrue("JMX reporter should contain Mbean for metric", jmxReporter.containsMbean(mBeanName));
-            }
-        }
-    }
 }

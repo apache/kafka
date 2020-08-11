@@ -76,7 +76,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   override protected def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
-    QuotaUtils.boundedThrottleTime(e.value, e.bound, e.metric, maxThrottleTimeMs, timeMs)
+    QuotaUtils.boundedThrottleTime(e, maxThrottleTimeMs, timeMs)
   }
 
   override protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {

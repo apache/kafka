@@ -18,7 +18,7 @@
 package kafka.utils
 
 import org.apache.kafka.common.MetricName
-import org.apache.kafka.common.metrics.{KafkaMetric, Measurable}
+import org.apache.kafka.common.metrics.{KafkaMetric, Measurable, QuotaViolationException}
 import org.apache.kafka.common.metrics.stats.Rate
 
 /**
@@ -34,15 +34,13 @@ object QuotaUtils {
    * we need to add a delay of X to W such that O * W / (W + X) = T.
    * Solving for X, we get X = (O - T)/T * W.
    *
-   * @param observedValue Observed rate
-   * @param quotaBound Target rate (quota)
    * @param timeMs current time in milliseconds
    * @return Delay in milliseconds
    */
-  def throttleTime(observedValue: Double, quotaBound: Double, metric: KafkaMetric, timeMs: Long): Long = {
-    val difference = observedValue - quotaBound
+  def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
+    val difference = e.value - e.bound
     // Use the precise window used by the rate calculation
-    val throttleTimeMs = difference / quotaBound * rateMetricWindowSize(metric, timeMs)
+    val throttleTimeMs = difference / e.bound * windowSize(e.metric, timeMs)
     Math.round(throttleTimeMs)
   }
 
@@ -50,8 +48,8 @@ object QuotaUtils {
    * Calculates the amount of time needed to bring the observed rate within quota using the same algorithm as
    * throttleTime() utility method but the returned value is capped to given maxThrottleTime
    */
-  def boundedThrottleTime(observedValue: Double, quotaBound: Double, metric: KafkaMetric, maxThrottleTime: Long, timeMs: Long): Long = {
-    math.min(throttleTime(observedValue, quotaBound, metric, timeMs), maxThrottleTime)
+  def boundedThrottleTime(e: QuotaViolationException, maxThrottleTime: Long, timeMs: Long): Long = {
+    math.min(throttleTime(e, timeMs), maxThrottleTime)
   }
 
   /**
@@ -61,7 +59,7 @@ object QuotaUtils {
    * @param timeMs current time in milliseconds
    * @throws IllegalArgumentException if given measurable is not Rate
    */
-  def rateMetricWindowSize(metric: KafkaMetric, timeMs: Long): Long =
+  private def windowSize(metric: KafkaMetric, timeMs: Long): Long =
     measurableAsRate(metric.metricName, metric.measurable).windowSize(metric.config, timeMs)
 
   /**

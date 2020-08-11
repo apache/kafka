@@ -577,13 +577,11 @@ public class Metrics implements Closeable {
         if (this.metrics.containsKey(metricName))
             throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
         this.metrics.put(metricName, metric);
-        if (!metric.config().skipReporting()) {
-            for (MetricsReporter reporter : reporters) {
-                try {
-                    reporter.metricChange(metric);
-                } catch (Exception e) {
-                    log.error("Error when registering metric on " + reporter.getClass().getName(), e);
-                }
+        for (MetricsReporter reporter : reporters) {
+            try {
+                reporter.metricChange(metric);
+            } catch (Exception e) {
+                log.error("Error when registering metric on " + reporter.getClass().getName(), e);
             }
         }
         log.trace("Registered metric named {}", metricName);

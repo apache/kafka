@@ -375,7 +375,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * See {QuotaUtils.throttleTime} for the details.
    */
   protected def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
-    QuotaUtils.throttleTime(e.value, e.bound, e.metric, timeMs)
+    QuotaUtils.throttleTime(e, timeMs)
   }
 
   /**
