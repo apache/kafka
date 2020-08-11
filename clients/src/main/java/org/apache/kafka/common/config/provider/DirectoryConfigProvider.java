@@ -86,13 +86,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
                         .filter(fileFilter)
                         .collect(Collectors.toMap(
                             p -> p.getFileName().toString(),
-                            p -> {
-                                try {
-                                    return read(p);
-                                } catch (IOException e) {
-                                    throw new ConfigException("Could not read file " + p + " for property " + p.getFileName(), e);
-                                }
-                            }));
+                            p -> read(p)));
                 } catch (IOException e) {
                     throw new ConfigException("Could not list directory " + dir, e);
                 }
@@ -101,8 +95,12 @@ public class DirectoryConfigProvider implements ConfigProvider {
         return new ConfigData(map);
     }
 
-    private static String read(Path path) throws IOException {
-        return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+    private static String read(Path path) {
+        try {
+            return new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new ConfigException("Could not read file " + path + " for property " + path.getFileName(), e);
+        }
     }
 
 }
