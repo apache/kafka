@@ -222,7 +222,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                         subjects.get(clientSaslMechanism));
             }
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry);
+                memoryPool != null ? memoryPool : MemoryPool.NONE, metadataRegistry, isInterBrokerListener);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
             throw new KafkaException(e);
