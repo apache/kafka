@@ -154,10 +154,11 @@ class MetadataCacheTest {
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
         .setListener(listenerName.value)).asJava))
+    val metadataCacheBrokerId = 9
     // leader is not available. expect LEADER_NOT_AVAILABLE for any metadata version.
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, listenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = true)
   }
 
@@ -190,22 +191,24 @@ class MetadataCacheTest {
       new UpdateMetadataBroker()
         .setId(1)
         .setEndpoints(broker1Endpoints.asJava))
+    val metadataCacheBrokerId = 9
     // leader available in cache but listener name not present. expect LISTENER_NOT_FOUND error for new metadata version
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, sslListenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LISTENER_NOT_FOUND, errorUnavailableListeners = true)
     // leader available in cache but listener name not present. expect LEADER_NOT_AVAILABLE error for old metadata version
-    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers, sslListenerName,
+    verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
   }
 
-  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(brokers: Seq[UpdateMetadataBroker],
+  private def verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId: Int,
+                                                                       brokers: Seq[UpdateMetadataBroker],
                                                                        listenerName: ListenerName,
                                                                        leader: Int,
                                                                        expectedError: Errors,
                                                                        errorUnavailableListeners: Boolean): Unit = {
     val topic = "topic"
 
-    val cache = new MetadataCache(9)
+    val cache = new MetadataCache(metadataCacheBrokerId)
 
     val zkVersion = 3
     val controllerId = 2
