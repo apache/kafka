@@ -80,6 +80,17 @@ def job = {
       }
     }
 
+    if (config.publish && config.isDevJob && !config.isReleaseJob && !config.isPrJob) {
+        stage("Start Downstream Builds") {
+            config.downStreamRepos.each { repo ->
+                build(job: "confluentinc/${repo}/${env.BRANCH_NAME}",
+                    wait: false,
+                    propagate: false
+                )
+            }
+        }
+    }
+
     def runTestsStepName = "Step run-tests"
     def downstreamBuildsStepName = "Step cp-downstream-builds"
     def testTargets = [
