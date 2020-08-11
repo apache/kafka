@@ -448,12 +448,12 @@ class CachingWindowStore
     private class CacheIteratorWrapper implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {
 
         private final long segmentInterval;
-
         private final Bytes keyFrom;
         private final Bytes keyTo;
         private final long timeTo;
-        private long lastSegmentId;
+        private final boolean reverse;
 
+        private long lastSegmentId;
         private long currentSegmentId;
         private Bytes cacheKeyFrom;
         private Bytes cacheKeyTo;
@@ -476,6 +476,7 @@ class CachingWindowStore
             this.keyTo = keyTo;
             this.timeTo = timeTo;
             this.lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
+            this.reverse = reverse;
 
             this.segmentInterval = cacheFunction.getSegmentInterval();
             this.currentSegmentId = cacheFunction.segmentId(timeFrom);
@@ -554,7 +555,8 @@ class CachingWindowStore
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
 
             current.close();
-            current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            if (reverse) current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+            else current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
         }
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {
