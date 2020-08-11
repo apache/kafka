@@ -36,9 +36,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * This iterator must be closed after use.
      *
      * @param key                    the key to return sessions for
-     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
-     * @param latestSessionStartTime the end timestamp of the latest session to search for
-     * @return iterator of sessions with the matching key and aggregated values
+     * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where iteration starts.
+     * @param latestSessionStartTime the end timestamp of the latest session to search for, where iteration ends.
+     * @return iterator of sessions with the matching key and aggregated values, from earliest to latest session time.
      * @throws NullPointerException If null is used for key.
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
@@ -54,9 +54,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      * This iterator must be closed after use.
      *
      * @param key                    the key to return sessions for
-     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
-     * @param latestSessionStartTime the end timestamp of the latest session to search for
-     * @return backward iterator of sessions with the matching key and aggregated values
+     * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where iteration ends.
+     * @param latestSessionStartTime the end timestamp of the latest session to search for, where iteration starts.
+     * @return backward iterator of sessions with the matching key and aggregated values, from latest to earliest session time.
      * @throws NullPointerException If null is used for key.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K key,
@@ -73,9 +73,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      *
      * @param keyFrom                The first key that could be in the range
      * @param keyTo                  The last key that could be in the range
-     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
-     * @param latestSessionStartTime the end timestamp of the latest session to search for
-     * @return iterator of sessions with the matching keys and aggregated values
+     * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where iteration starts.
+     * @param latestSessionStartTime the end timestamp of the latest session to search for, where iteration ends.
+     * @return iterator of sessions with the matching keys and aggregated values, from earliest to latest session time.
      * @throws NullPointerException If null is used for any key.
      */
     default KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
@@ -94,9 +94,9 @@ public interface ReadOnlySessionStore<K, AGG> {
      *
      * @param keyFrom                The first key that could be in the range
      * @param keyTo                  The last key that could be in the range
-     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
-     * @param latestSessionStartTime the end timestamp of the latest session to search for
-     * @return backward iterator of sessions with the matching keys and aggregated values
+     * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where iteration ends.
+     * @param latestSessionStartTime the end timestamp of the latest session to search for, where iteration starts.
+     * @return backward iterator of sessions with the matching keys and aggregated values, from latest to earliest session time.
      * @throws NullPointerException If null is used for any key.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFindSessions(final K keyFrom,
@@ -127,7 +127,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * available session to the newest/latest session.
      *
      * @param key record key to find aggregated session values for
-     * @return KeyValueIterator containing all sessions for the provided key.
+     * @return KeyValueIterator containing all sessions for the provided key, from oldest to newest session.
      * @throws NullPointerException If null is used for key.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K key);
@@ -140,7 +140,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * available session to the oldest/earliest session.
      *
      * @param key record key to find aggregated session values for
-     * @return backward KeyValueIterator containing all sessions for the provided key.
+     * @return backward KeyValueIterator containing all sessions for the provided key, from newest to oldest session.
      * @throws NullPointerException If null is used for key.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K key) {
@@ -156,7 +156,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      *
      * @param from first key in the range to find aggregated session values for
      * @param to   last key in the range to find aggregated session values for
-     * @return KeyValueIterator containing all sessions for the provided key.
+     * @return KeyValueIterator containing all sessions for the provided key, from oldest to newest session.
      * @throws NullPointerException If null is used for any of the keys.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K from, final K to);
@@ -170,7 +170,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      *
      * @param from first key in the range to find aggregated session values for
      * @param to   last key in the range to find aggregated session values for
-     * @return backward KeyValueIterator containing all sessions for the provided key.
+     * @return backward KeyValueIterator containing all sessions for the provided key, from newest to oldest session.
      * @throws NullPointerException If null is used for any of the keys.
      */
     default KeyValueIterator<Windowed<K>, AGG> backwardFetch(final K from, final K to) {
