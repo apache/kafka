@@ -68,9 +68,9 @@ public interface ReadOnlyWindowStore<K, V> {
      * available window to the newest/latest window.
      *
      * @param key      the key to fetch
-     * @param timeFrom time range start (inclusive)
-     * @param timeTo   time range end (inclusive)
-     * @return an iterator over key-value pairs {@code <timestamp, value>}
+     * @param timeFrom time range start (inclusive), where iteration starts.
+     * @param timeTo   time range end (inclusive), where iteration ends.
+     * @return an iterator over key-value pairs {@code <timestamp, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       If {@code null} is used for key.
      * @deprecated Use {@link #fetch(Object, Instant, Instant)} instead
@@ -105,9 +105,9 @@ public interface ReadOnlyWindowStore<K, V> {
      * available window to the newest/latest window.
      *
      * @param key  the key to fetch
-     * @param from time range start (inclusive)
-     * @param to   time range end (inclusive)
-     * @return an iterator over key-value pairs {@code <timestamp, value>}
+     * @param from time range start (inclusive), where iteration starts.
+     * @param to   time range end (inclusive), where iteration ends.
+     * @return an iterator over key-value pairs {@code <timestamp, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       If {@code null} is used for key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
@@ -143,9 +143,9 @@ public interface ReadOnlyWindowStore<K, V> {
      * available window to the oldest/earliest window.
      *
      * @param key  the key to fetch
-     * @param from time range start (inclusive)
-     * @param to   time range end (inclusive)
-     * @return an iterator over key-value pairs {@code <timestamp, value>}
+     * @param from time range start (inclusive), where iteration ends.
+     * @param to   time range end (inclusive), where iteration starts.
+     * @return an iterator over key-value pairs {@code <timestamp, value>}, from end to beginning of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       If {@code null} is used for key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
@@ -161,9 +161,9 @@ public interface ReadOnlyWindowStore<K, V> {
      *
      * @param from     the first key in the range
      * @param to       the last key in the range
-     * @param timeFrom time range start (inclusive)
-     * @param timeTo   time range end (inclusive)
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @param timeFrom time range start (inclusive), where iteration starts.
+     * @param timeTo   time range end (inclusive), where iteration ends.
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       If {@code null} is used for any key.
      * @deprecated Use {@link #fetch(Object, Object, Instant, Instant)} instead
@@ -178,9 +178,9 @@ public interface ReadOnlyWindowStore<K, V> {
      *
      * @param from     the first key in the range
      * @param to       the last key in the range
-     * @param fromTime time range start (inclusive)
-     * @param toTime   time range end (inclusive)
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @param fromTime time range start (inclusive), where iteration starts.
+     * @param toTime   time range end (inclusive), where iteration ends.
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       If {@code null} is used for any key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
@@ -196,9 +196,9 @@ public interface ReadOnlyWindowStore<K, V> {
      *
      * @param from     the first key in the range
      * @param to       the last key in the range
-     * @param fromTime time range start (inclusive)
-     * @param toTime   time range end (inclusive)
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @param fromTime time range start (inclusive), where iteration ends.
+     * @param toTime   time range end (inclusive), where iteration starts.
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from end to beginning of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       If {@code null} is used for any key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
@@ -211,7 +211,7 @@ public interface ReadOnlyWindowStore<K, V> {
     /**
      * Gets all the key-value pairs in the existing windows.
      *
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     KeyValueIterator<Windowed<K>, V> all();
@@ -220,7 +220,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * Gets all the key-value pairs in the existing windows in backward order
      * with respect to time (from end to beginning of time).
      *
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @return an backward iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from the end to beginning of time.
      * @throws InvalidStateStoreException if the store is not initialized
      */
     default KeyValueIterator<Windowed<K>, V> backwardAll() {
@@ -230,9 +230,9 @@ public interface ReadOnlyWindowStore<K, V> {
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
-     * @param timeFrom the beginning of the time slot from which to search (inclusive)
-     * @param timeTo   the end of the time slot from which to search (inclusive)
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @param timeFrom the beginning of the time slot from which to search (inclusive), where iteration starts.
+     * @param timeTo   the end of the time slot from which to search (inclusive), where iteration ends.
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if {@code null} is used for any key
      * @deprecated Use {@link #fetchAll(Instant, Instant)} instead
@@ -243,9 +243,9 @@ public interface ReadOnlyWindowStore<K, V> {
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
      *
-     * @param from the beginning of the time slot from which to search (inclusive)
-     * @param to   the end of the time slot from which to search (inclusive)
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @param from the beginning of the time slot from which to search (inclusive), where iteration starts.
+     * @param to   the end of the time slot from which to search (inclusive), where iteration ends.
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if {@code null} is used for any key
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
@@ -256,9 +256,9 @@ public interface ReadOnlyWindowStore<K, V> {
      * Gets all the key-value pairs that belong to the windows within in the given time range in backward order
      * with respect to time (from end to beginning of time).
      *
-     * @param from the beginning of the time slot from which to search (inclusive)
-     * @param to   the end of the time slot from which to search (inclusive)
-     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @param from the beginning of the time slot from which to search (inclusive), where iteration ends.
+     * @param to   the end of the time slot from which to search (inclusive), where iteration starts.
+     * @return an backward iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from end to beginning of time.
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException       if {@code null} is used for any key
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
