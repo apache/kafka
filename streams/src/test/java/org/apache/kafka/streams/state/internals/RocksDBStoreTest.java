@@ -51,6 +51,7 @@ import org.rocksdb.Cache;
 import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
+import org.rocksdb.PlainTableConfig;
 import org.rocksdb.Statistics;
 
 import java.io.File;
@@ -212,8 +213,8 @@ public class RocksDBStoreTest {
         reset(metricsRecorder);
     }
 
-    public static class RocksDBConfigSetterWithUserProvidedNewTableFormatConfig implements RocksDBConfigSetter {
-        public RocksDBConfigSetterWithUserProvidedNewTableFormatConfig(){}
+    public static class RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig implements RocksDBConfigSetter {
+        public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig(){}
 
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
             options.setTableFormatConfig(new BlockBasedTableConfig());
@@ -225,17 +226,47 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldThrowWhenUserProvidesNewTableFormatConfig() {
+    public void shouldThrowWhenUserProvidesNewBlockBasedTableFormatConfig() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
-        context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedNewTableFormatConfig.class);
+        context = getProcessorContext(
+            RecordingLevel.DEBUG,
+            RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig.class
+        );
         assertThrows(
-            "A table format configuration is used that does not expose the block cache. " +
-                "Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
-                "the internal table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
+            "The used block-based table format configuration does not expose the " +
+                "block cache. Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
+                "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
                 "the RocksDB options.",
             ProcessorStateException.class,
             () -> rocksDBStore.openDB(context)
         );
+    }
+
+    public static class RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig implements RocksDBConfigSetter {
+        public RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig(){}
+
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            options.setTableFormatConfig(new PlainTableConfig());
+        }
+
+        public void close(final String storeName, final Options options) {
+            options.statistics().close();
+        }
+    }
+
+    @Test
+    public void shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig() {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(
+            RecordingLevel.DEBUG,
+            RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig.class
+        );
+        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
+        replay(metricsRecorder);
+
+        rocksDBStore.openDB(context);
+        verify(metricsRecorder);
+        reset(metricsRecorder);
     }
 
     @Test

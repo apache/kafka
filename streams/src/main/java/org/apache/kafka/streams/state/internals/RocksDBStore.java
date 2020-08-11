@@ -31,6 +31,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
+import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -207,14 +208,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     private void addValueProvidersToMetricsRecorder() {
         final TableFormatConfig tableFormatConfig = userSpecifiedOptions.tableFormatConfig();
         final Statistics statistics = userSpecifiedStatistics ? null : userSpecifiedOptions.statistics();
-        if (!(tableFormatConfig instanceof BlockBasedTableConfigWithAccessibleCache)) {
-            throw new ProcessorStateException("A table format configuration is used that does not expose the block cache. " +
-                "Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
-                "the internal table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
+        if (tableFormatConfig instanceof BlockBasedTableConfigWithAccessibleCache) {
+            final Cache cache = ((BlockBasedTableConfigWithAccessibleCache) tableFormatConfig).blockCache();
+            metricsRecorder.addValueProviders(name, db, cache, statistics);
+        } else if (tableFormatConfig instanceof BlockBasedTableConfig) {
+            throw new ProcessorStateException("The used block-based table format configuration does not expose the " +
+                "block cache. Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
+                "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
                 "the RocksDB options.");
+        } else {
+            metricsRecorder.addValueProviders(name, db, null, statistics);
         }
-        final Cache cache = ((BlockBasedTableConfigWithAccessibleCache) tableFormatConfig).blockCache();
-        metricsRecorder.addValueProviders(name, db, cache, statistics);
     }
 
     void openRocksDB(final DBOptions dbOptions,
