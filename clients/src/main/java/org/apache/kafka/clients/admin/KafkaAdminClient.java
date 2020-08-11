@@ -349,9 +349,9 @@ public class KafkaAdminClient extends AdminClient {
 
     private ExponentialBackoff retryBackoff;
 
-    final static double RETRY_BACKOFF_JITTER = 0.2;
+    final static double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
 
-    final static int RETRY_BACKOFF_EXP_BASE = 2;
+    final static int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
 
     /**
      * Get or create a list value from a map.
@@ -731,8 +731,13 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         final void incrementRetryBackoff(Call failedCall, long now) {
-            this.nextAllowedTryMs = now + retryBackoff.backoff(tries);
+            this.nextAllowedTryMs = now + retryBackoff.backoff(failedCall.tries);
             this.tries = failedCall.tries + 1;
+        }
+
+        final void cloneRetryBackoff(Call toClone) {
+            this.nextAllowedTryMs = toClone.nextAllowedTryMs;
+            this.tries = toClone.tries;
         }
 
         /**
@@ -1309,7 +1314,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Ensure that we use a small poll timeout if there are pending calls which need to be sent
                 if (!pendingCalls.isEmpty())
-                    pollTimeout = Math.min(pollTimeout, retryBackoff.backoff(0));
+                    pollTimeout = Math.min(pollTimeout, retryBackoff.baseBackoff());
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
@@ -2751,20 +2756,18 @@ public class KafkaAdminClient extends AdminClient {
                 context.node().orElse(null));
         // Requeue the task so that we can try with new coordinator
         context.setNode(null);
-
-        Call call = nextCall.get();
-
-        call.incrementRetryBackoff(failedCall, time.milliseconds());
-
+        long now = time.milliseconds();
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
+        findCoordinatorCall.incrementRetryBackoff(failedCall, now);
         runnable.call(findCoordinatorCall, time.milliseconds());
     }
 
-    private void rescheduleMetadataTask(MetadataOperationContext<?, ?> context, Supplier<List<Call>> nextCalls) {
+    private void rescheduleMetadataTask(MetadataOperationContext<?, ?> context, Supplier<List<Call>> nextCalls, Call failedCall) {
         log.info("Retrying to fetch metadata.");
         // Requeue the task so that we can re-attempt fetching metadata
         context.setResponse(Optional.empty());
         Call metadataCall = getMetadataCall(context, nextCalls);
+        metadataCall.incrementRetryBackoff(failedCall, time.milliseconds());
         runnable.call(metadataCall, time.milliseconds());
     }
 
@@ -2839,8 +2842,9 @@ public class KafkaAdminClient extends AdminClient {
                     return;
 
                 context.setNode(response.node());
-
-                runnable.call(nextCall.get(), time.milliseconds());
+                Call call = nextCall.get();
+                call.cloneRetryBackoff(this);
+                runnable.call(call, time.milliseconds());
             }
 
             @Override
@@ -2964,6 +2968,7 @@ public class KafkaAdminClient extends AdminClient {
                 context.setResponse(Optional.of(response));
 
                 for (Call call : nextCalls.get()) {
+                    call.cloneRetryBackoff(this);
                     runnable.call(call, time.milliseconds());
                 }
             }
@@ -3916,12 +3921,8 @@ public class KafkaAdminClient extends AdminClient {
                             TopicPartition::topic).collect(Collectors.toSet());
                         MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> operationContext =
                             new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
-                        rescheduleMetadataTask(operationContext, () -> {
-                            List<Call> listOffsetsCalls = getListOffsetsCalls(operationContext, retryTopicPartitionOffsets, futures);
-                            listOffsetsCalls.forEach(call ->
-                                call.incrementRetryBackoff(this, time.milliseconds()));
-                            return listOffsetsCalls;
-                        });
+                        rescheduleMetadataTask(operationContext, () ->
+                                getListOffsetsCalls(operationContext, retryTopicPartitionOffsets, futures), this);
                     }
                 }
 

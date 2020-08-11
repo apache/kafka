@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -105,9 +106,9 @@ public class SubscriptionState {
 
     private final ExponentialBackoff retryBackoff;
 
-    private final static double RETRY_BACKOFF_JITTER = 0.2;
+    private final static double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
 
-    private final static int RETRY_BACKOFF_EXP_BASE = 2;
+    private final static int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
 
     @Override
     public synchronized String toString() {
@@ -739,8 +740,6 @@ public class SubscriptionState {
     private void incrementRetryBackoff(TopicPartitionState state, long now) {
         int attempts = state.getAndIncrementAttempts();
         long retryBackoffMs = retryBackoff.backoff(attempts);
-        // TODO: Remove the line below before merging
-        System.out.println("retryBackoffMs = " + retryBackoffMs + " now = " + now);
         long nextRetryTimeMs = now + retryBackoffMs;
         state.setNextAllowedRetry(nextRetryTimeMs);
     }

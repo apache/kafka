@@ -155,7 +155,7 @@ final class ClusterConnectionStates {
         // Create a new NodeConnectionState if nodeState does not already contain one
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-            reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host, clientDnsLookup));
+            reconnectBackoff.baseBackoff(), connectionSetupTimeout.baseBackoff(), host, clientDnsLookup));
         connectingNodes.add(id);
     }
 
@@ -332,7 +332,7 @@ final class ClusterConnectionStates {
      */
     private void resetReconnectBackoff(NodeConnectionState nodeState) {
         nodeState.failedAttempts = 0;
-        nodeState.reconnectBackoffMs = reconnectBackoff.backoff(0);
+        nodeState.reconnectBackoffMs = reconnectBackoff.baseBackoff();
     }
 
     /**
@@ -343,7 +343,7 @@ final class ClusterConnectionStates {
      */
     private void resetConnectionSetupTimeout(NodeConnectionState nodeState) {
         nodeState.failedConnectAttempts = 0;
-        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.backoff(0);
+        nodeState.connectionSetupTimeoutMs = connectionSetupTimeout.baseBackoff();
     }
 
     /**
