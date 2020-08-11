@@ -296,7 +296,7 @@ public final class AssignorConfiguration {
     }
 
     public InternalTopicManager internalTopicManager() {
-        return new InternalTopicManager(adminClient, streamsConfig);
+        return new InternalTopicManager(time(), adminClient, streamsConfig);
     }
 
     public CopartitionedTopicsEnforcer copartitionedTopicsEnforcer() {

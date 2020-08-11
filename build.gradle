@@ -78,6 +78,12 @@ allprojects {
       runtime {
         resolutionStrategy {
           force(
+            // ensure we have a single version of scala jars in the classpath, we enable inlining
+            // in the scala compiler for the `core` module so binary compatibility is only
+            // guaranteed if the exact same version of the scala jars is used for compilation
+            // and at runtime
+            libs.scalaLibrary,
+            libs.scalaReflect,
             // ensures we have a single version of jackson-annotations in the classpath even if
             // some modules only have a transitive reference to an older version
             libs.jacksonAnnotations,

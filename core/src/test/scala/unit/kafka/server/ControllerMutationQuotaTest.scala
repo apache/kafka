@@ -94,8 +94,8 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.PrincipalBuilderClassProp,
       classOf[ControllerMutationQuotaTest.TestPrincipalBuilder].getName)
-    // We use the default number of samples and window size.
-    properties.put(KafkaConfig.NumControllerQuotaSamplesProp, "11")
+    // Specify number of samples and window size.
+    properties.put(KafkaConfig.NumControllerQuotaSamplesProp, "10")
     properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, "1")
   }
 
@@ -130,7 +130,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Create two topics worth of 30 partitions each. As we use a strict quota, we
       // expect one to be created and one to be rejected.
       // Theoretically, the throttle time should be below or equal to:
-      // ((30 / 10) - 2) / 2 * 10 = 5s
+      // -(-10) / 2 = 5s
       val (throttleTimeMs1, errors1) = createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
       // Ordering is not guaranteed so we only check the errors
@@ -153,7 +153,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
       // Theoretically, the throttle time should be below or equal to:
-      // ((60 / 10) - 2) / 2 * 10 = 20s
+      // -(-40) / 2 = 20s
       val (throttleTimeMs, errors) = createTopics(TopicsWith30Partitions, PermissiveCreateTopicsRequestVersion)
       assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.NONE), errors)
@@ -181,7 +181,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Delete two topics worth of 30 partitions each. As we use a strict quota, we
       // expect the first topic to be deleted and the second to be rejected.
       // Theoretically, the throttle time should be below or equal to:
-      // ((30 / 10) - 2) / 2 * 10 = 5s
+      // -(-10) / 2 = 5s
       val (throttleTimeMs1, errors1) = deleteTopics(TopicsWith30Partitions, StrictDeleteTopicsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
       // Ordering is not guaranteed so we only check the errors
@@ -208,7 +208,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Delete two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be deleted.
       // Theoretically, the throttle time should be below or equal to:
-      // ((60 / 10) - 2) / 2 * 10 = 20s
+      // -(-40) / 2 = 20s
       val (throttleTimeMs, errors) = deleteTopics(TopicsWith30Partitions, PermissiveDeleteTopicsRequestVersion)
       assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.NONE), errors)
@@ -238,7 +238,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Add 30 partitions to each topic. As we use a strict quota, we
       // expect the first topic to be extended and the second to be rejected.
       // Theoretically, the throttle time should be below or equal to:
-      // ((30 / 10) - 2) / 2 * 10 = 5s
+      // -(-10) / 2 = 5s
       val (throttleTimeMs1, errors1) = createPartitions(TopicsWith31Partitions, StrictCreatePartitionsRequestVersion)
       assertThrottleTime(5000, throttleTimeMs1)
       // Ordering is not guaranteed so we only check the errors
@@ -265,7 +265,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
       // Theoretically, the throttle time should be below or equal to:
-      // ((60 / 10) - 2) / 2 * 10 = 20s
+      // -(-40) / 2 = 20s
       val (throttleTimeMs, errors) = createPartitions(TopicsWith31Partitions, PermissiveCreatePartitionsRequestVersion)
       assertThrottleTime(20000, throttleTimeMs)
       assertEquals(Map(Topic1 -> Errors.NONE, Topic2 -> Errors.NONE), errors)
