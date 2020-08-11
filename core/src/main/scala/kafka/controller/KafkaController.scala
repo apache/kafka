@@ -875,8 +875,15 @@ class KafkaController(val config: KafkaConfig,
       case Some(updatedLeaderIsrAndControllerEpoch) =>
         try {
           brokerRequestBatch.newBatch()
-          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(assignment.replicas, topicPartition,
+          // the isNew flag, when set to true, makes sure that when a replica possibly resided
+          // in a logDir that is offline, we refrain from just creating a new replica in a good
+          // logDir. This is exactly the behavior we want for the original replicas, but not
+          // for the replicas we add in this reassignment. For new replicas, want to be able
+          // to assign to one of the good logDirs.
+          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(assignment.originReplicas, topicPartition,
             updatedLeaderIsrAndControllerEpoch, assignment, isNew = false)
+          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(assignment.addingReplicas, topicPartition,
+            updatedLeaderIsrAndControllerEpoch, assignment, isNew = true)
           brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
         } catch {
           case e: IllegalStateException =>
