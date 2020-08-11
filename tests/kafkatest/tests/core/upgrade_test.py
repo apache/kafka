@@ -51,7 +51,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.logger.info("Upgrade ZooKeeper from %s to %s" % (str(self.zk.nodes[0].version), str(DEV_BRANCH)))
         self.zk.set_version(DEV_BRANCH)
         self.zk.restart_cluster()
-        # Confirm we have a successful ZoKeeper upgrade by describing the topic.
+        # Confirm we have a successful ZooKeeper upgrade by describing the topic.
         # Not trying to detect a problem here leads to failure in the ensuing Kafka roll, which would be a less
         # intuitive failure than seeing a problem here, so detect ZooKeeper upgrade problems before involving Kafka.
         self.zk.describe(self.topic)
