@@ -1056,9 +1056,8 @@ class AdminManager(val config: KafkaConfig,
         if (publicScramMechanism == ScramMechanism.UNKNOWN) {
           requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // unknown mechanism is the cause of failure
         } else {
-          if (upsertion.iterations != -1 && (
-            InternalScramMechanism.forMechanismName(publicScramMechanism.mechanismName).minIterations > upsertion.iterations
-              || upsertion.iterations > maxIterations)) {
+          if (upsertion.iterations < InternalScramMechanism.forMechanismName(publicScramMechanism.mechanismName).minIterations
+            || upsertion.iterations > maxIterations) {
             requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // known mechanism, bad iterations is the cause of failure
           } else {
             requestStatus(upsertion.name, Some(publicScramMechanism), true, upsertion.iterations) // legal
@@ -1129,8 +1128,7 @@ class AdminManager(val config: KafkaConfig,
         upsertions.filter(upsertion => usersToTryToAlter.contains(upsertion.name)).foreach(upsertion => {
           val mechanism = InternalScramMechanism.forMechanismName(mechanismName(upsertion.mechanism))
           val credential = new ScramFormatter(mechanism)
-            .generateCredential(upsertion.salt, upsertion.saltedPassword,
-              if (upsertion.iterations != -1) upsertion.iterations else mechanism.minIterations)
+            .generateCredential(upsertion.salt, upsertion.saltedPassword, upsertion.iterations)
           configsByPotentiallyValidUser(upsertion.name).put(mechanismName(upsertion.mechanism), ScramCredentialUtils.credentialToString(credential))
         })
         (user) // success, 1 element, won't be matched
