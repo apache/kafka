@@ -22,11 +22,11 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
@@ -192,19 +192,19 @@ public class InternalTopologyBuilder {
     }
 
     private static class ProcessorNodeFactory<KIn, VIn, KOut, VOut> extends NodeFactory<KIn, VIn, KOut, VOut> {
-        private final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, KOut, VOut> supplier;
+        private final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier;
         private final Set<String> stateStoreNames = new HashSet<>();
 
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
-                             final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, KOut, VOut> supplier) {
+                             final ProcessorSupplier<KIn, VIn, KOut, VOut> supplier) {
             super(name, predecessors.clone());
             this.supplier = supplier;
         }
 
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
-                             final ProcessorSupplier<KIn, VIn> supplier) {
+                             final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> supplier) {
             super(name, predecessors.clone());
             this.supplier = () -> ProcessorAdapter.adapt(supplier.get());
         }
@@ -483,7 +483,7 @@ public class InternalTopologyBuilder {
     }
 
     public final void addProcessor(final String name,
-                                   final ProcessorSupplier<?, ?> supplier,
+                                   final org.apache.kafka.streams.processor.ProcessorSupplier<?, ?> supplier,
                                    final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(supplier, "supplier must not be null");
@@ -540,13 +540,13 @@ public class InternalTopologyBuilder {
     }
 
     public final <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                            final String sourceName,
-                                                            final TimestampExtractor timestampExtractor,
-                                                            final Deserializer<KIn> keyDeserializer,
-                                                            final Deserializer<VIn> valueDeserializer,
-                                                            final String topic,
-                                                            final String processorName,
-                                                            final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+                                                final String sourceName,
+                                                final TimestampExtractor timestampExtractor,
+                                                final Deserializer<KIn> keyDeserializer,
+                                                final Deserializer<VIn> valueDeserializer,
+                                                final String topic,
+                                                final String processorName,
+                                                final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "store builder must not be null");
         validateGlobalStoreArguments(sourceName,
                                      topic,
@@ -674,7 +674,7 @@ public class InternalTopologyBuilder {
     private void validateGlobalStoreArguments(final String sourceName,
                                               final String topic,
                                               final String processorName,
-                                              final org.apache.kafka.streams.processor.api.ProcessorSupplier<?, ?, ?, ?> stateUpdateSupplier,
+                                              final ProcessorSupplier<?, ?, ?, ?> stateUpdateSupplier,
                                               final String storeName,
                                               final boolean loggingEnabled) {
         Objects.requireNonNull(sourceName, "sourceName must not be null");
