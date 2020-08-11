@@ -77,8 +77,8 @@ public class Metadata implements Closeable {
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
     private final ExponentialBackoff refreshBackoff;
-    final static double RETRY_BACKOFF_JITTER = 0.2;
-    final static int RETRY_BACKOFF_EXP_BASE = 2;
+    final static double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
+    final static int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
 
     /**
      * Create a new Metadata instance
@@ -478,7 +478,7 @@ public class Metadata implements Closeable {
 
     private void resetRefreshBackoff(long now) {
         this.attempts = 0;
-        this.refreshBackoffMs = this.refreshBackoff.backoff(0);
+        this.refreshBackoffMs = this.refreshBackoff.baseBackoff();
         this.lastRefreshMs = now;
     }
 

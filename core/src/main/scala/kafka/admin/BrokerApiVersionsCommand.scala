@@ -281,7 +281,9 @@ object BrokerApiVersionsCommand {
       val logContext = new LogContext(s"[LegacyAdminClient clientId=$clientId] ")
       val time = Time.SYSTEM
       val metrics = new Metrics(time)
-      val metadata = new Metadata(100L, 100L, 60 * 60 * 1000L, logContext, new ClusterResourceListeners)
+      val metadata = new Metadata(CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+        60 * 60 * 1000L, logContext, new ClusterResourceListeners)
       val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
       val connectionSetupTimeoutMs = config.getLong(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)

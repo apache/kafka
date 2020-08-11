@@ -50,4 +50,8 @@ public class ExponentialBackoff {
         double randomFactor = ThreadLocalRandom.current().nextDouble(1 - jitter, 1 + jitter);
         return (long) (randomFactor * term);
     }
+
+    public long baseBackoff() {
+        return initialInterval;
+    }
 }

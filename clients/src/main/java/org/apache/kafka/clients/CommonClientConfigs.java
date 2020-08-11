@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -88,6 +89,9 @@ public class CommonClientConfigs {
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = "retry.backoff.max.ms";
     public static final String RETRY_BACKOFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when retrying a request to the broker that has repeatedly failed. If provided, the backoff per client will increase exponentially for each failed request, up to this maximum. To prevent all clients from being synchronized upon retry, a randomized jitter with a factor of 0.2 will be applied to the backoff, resulting in the backoff falling within a range between 20% below and 20% above the computed value. If retry.backoff.ms is set to be higher than retry.backoff.max.ms, then retry.backoff.max.ms will be used as a constant backoff from the beginning without any exponential increase";
     public static final Long DEFAULT_RETRY_BACKOFF_MAX_MS = 1000L;
+
+    public static final Double RETRY_BACKOFF_JITTER = 0.2;
+    public static final int RETRY_BACKOFF_EXP_BASE = 2;
 
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
     public static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The window of time a metrics sample is computed over.";
@@ -197,5 +201,25 @@ public class CommonClientConfigs {
                 "future version. Please use '{}' or another non-deprecated value.",
                 CLIENT_DNS_LOOKUP_CONFIG, ClientDnsLookup.DEFAULT,
                 ClientDnsLookup.USE_ALL_DNS_IPS);
+    }
+
+    public static void warnInconsistentConfigs(AbstractConfig config) {
+        long retryBackoffMs = config.getLong(RETRY_BACKOFF_MS_CONFIG);
+        long retryBackoffMaxMs = config.getLong(RETRY_BACKOFF_MAX_MS_CONFIG);
+        if (retryBackoffMs > retryBackoffMaxMs) {
+            log.warn("Configuration '{}' with value '{}' is greater than Configuration '{}' with" +
+                            " value '{}'. A static backoff with value '{}' will be applied.",
+                    RETRY_BACKOFF_MS_CONFIG, retryBackoffMs,
+                    RETRY_BACKOFF_MAX_MS_CONFIG, retryBackoffMaxMs, retryBackoffMs);
+        }
+
+        long connectionSetupTimeoutMs = config.getLong(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG);
+        long connectionSetupTimeoutMaxMs = config.getLong(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG);
+        if (connectionSetupTimeoutMs > connectionSetupTimeoutMaxMs) {
+            log.warn("Configuration '{}' with value '{}' is greater than Configuration '{}' with" +
+                            " value '{}'. A static backoff with value '{}' will be applied.",
+                    SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, connectionSetupTimeoutMs,
+                    SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, connectionSetupTimeoutMaxMs, retryBackoffMs);
+        }
     }
 }
