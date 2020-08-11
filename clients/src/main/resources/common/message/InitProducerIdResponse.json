@@ -23,7 +23,7 @@
   //
   // Version 3 is the same as version 2.
   //
-  // Version 4 adds the support for new error code PRODUCER_FENCED(89).
+  // Version 4 adds the support for new error code PRODUCER_FENCED.
   "validVersions": "0-4",
   "flexibleVersions": "2+",
   "fields": [

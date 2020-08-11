@@ -19,7 +19,7 @@
   "name": "AddOffsetsToTxnRequest",
   // Version 1 is the same as version 0.
   //
-  // Version 2 adds the support for new error code PRODUCER_FENCED(89).
+  // Version 2 adds the support for new error code PRODUCER_FENCED.
   "validVersions": "0-2",
   "flexibleVersions": "none",
   "fields": [
