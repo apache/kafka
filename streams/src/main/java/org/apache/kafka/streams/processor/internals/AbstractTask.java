@@ -59,12 +59,6 @@ public abstract class AbstractTask implements Task {
         this.stateDirectory = stateDirectory;
     }
 
-    protected void initializeCheckpoint() {
-        // we will delete the local checkpoint file after registering the state stores and loading them into the
-        // state manager, therefore we should initialize the snapshot as empty to indicate over-write checkpoint needed
-        offsetSnapshotSinceLastFlush = stateMgr.changelogOffsets();
-    }
-
     /**
      * The following exceptions maybe thrown from the state manager flushing call
      *

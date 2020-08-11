@@ -90,7 +90,11 @@ public class StandbyTask extends AbstractTask implements Task {
     public void initializeIfNeeded() {
         if (state() == State.CREATED) {
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
-            initializeCheckpoint();
+
+            // with and without EOS we would check for checkpointing at each commit during running,
+            // and the file may be deleted in which case we should checkpoint immediately,
+            // therefore we initialize the snapshot as empty
+            offsetSnapshotSinceLastFlush = Collections.emptyMap();
 
             // no topology needs initialized, we can transit to RUNNING
             // right after registered the stores
