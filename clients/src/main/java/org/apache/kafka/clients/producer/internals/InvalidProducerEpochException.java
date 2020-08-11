@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.internals;
+package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.errors.RetriableException;
 
