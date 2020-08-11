@@ -199,6 +199,27 @@ You can run spotbugs using:
 The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
 directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
 
+### JMH microbenchmarks ###
+We use [JMH](https://openjdk.java.net/projects/code-tools/jmh/) to write microbenchmarks that produce reliable results in the JVM.
+You can run all the benchmarks using:
+
+    ./jmh-benchmarks/jmh.sh
+    
+Pass a pattern or name after the command to select the benchmarks, for example:
+
+    ./jmh-benchmarks/jmh.sh LRUCacheBenchmark
+
+It's good practice to check profiler output for microbenchmarks in order to verify that they are valid.
+JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy:
+ 
+    LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async
+    
+A number of arguments can be passed to async-profiler, run the following for a description: 
+
+    ./jmh-benchmarks/jmh.sh -prof async:help
+    
+See [jmh-benchmarks/README.md](https://github.com/apache/kafka/blob/trunk/jmh-benchmarks/README.md) for more details.
+
 ### Common build options ###
 
 The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.

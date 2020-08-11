@@ -34,7 +34,18 @@ the jmh.sh script from the jmh-benchmarks module.
 * By default all JMH output goes to stdout.  To run a benchmark and capture the results in a file:
 `./jmh.sh -f 2 -o benchmarkResults.txt LRUCacheBenchmark`
 NOTE: For now this script needs to be run from the jmh-benchmarks directory.
+
+### Using JMH with async-profiler
+
+It's good practice to check profiler output for microbenchmarks in order to verify that they are valid.
+JMH includes [async-profiler](https://github.com/jvm-profiling-tools/async-profiler) integration that makes this easy:
  
+    LD_LIBRARY_PATH=/path/to/async-profiler ./jmh-benchmarks/jmh.sh -prof async
+    
+A number of arguments can be passed to async-profiler, run the following for a description: 
+
+    ./jmh-benchmarks/jmh.sh -prof async:help
+
 ### Running JMH outside of gradle
 The JMH benchmarks can be run outside of gradle as you would with any executable jar file:
 `java -jar <kafka-repo-dir>/jmh-benchmarks/build/libs/kafka-jmh-benchmarks-all.jar -f2 LRUCacheBenchmark`
@@ -53,9 +64,12 @@ Some common JMH options are:
  
    -o <filename>               Redirect human-readable output to a given file. 
  
-  
- 
    -v <mode>                   Verbosity mode. Available modes are: [SILENT, NORMAL, 
-                               EXTRA] 
+                               EXTRA]
+
+   -prof <profiler>            Use profilers to collect additional benchmark data. 
+                               Some profilers are not available on all JVMs and/or 
+                               all OSes. Please see the list of available profilers 
+                               with -lprof. 
 ```
 To view all options run jmh with the -h flag. 

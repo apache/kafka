@@ -1714,7 +1714,7 @@ project(':jmh-benchmarks') {
 
   dependencies {
     compile(project(':core')) {
-      // jmh requires jopt 4.x while we `core` depends on 5.0, they are not binary compatible
+      // jmh requires jopt 4.x while `core` depends on 5.0, they are not binary compatible
       exclude group: 'net.sf.jopt-simple', module: 'jopt-simple'
     }
     compile project(':clients')
