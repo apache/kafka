@@ -733,9 +733,9 @@ public class InternalTopologyBuilderTest {
         builder.addStateStore(null);
     }
 
-    private Set<String> nodeNames(final Collection<ProcessorNode<?, ?>> nodes) {
+    private Set<String> nodeNames(final Collection<ProcessorNode<?, ?, ?, ?>> nodes) {
         final Set<String> nodeNames = new HashSet<>();
-        for (final ProcessorNode<?, ?> node : nodes) {
+        for (final ProcessorNode<?, ?, ?, ?> node : nodes) {
             nodeNames.add(node.name());
         }
         return nodeNames;

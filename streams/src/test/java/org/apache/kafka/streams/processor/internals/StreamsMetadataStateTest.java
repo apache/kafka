@@ -240,7 +240,7 @@ public class StreamsMetadataStateTest {
                 "the-key",
                 partitioner);
         assertEquals(expected, actual);
-        assertEquals(1, actual.getPartition());
+        assertEquals(1, actual.partition());
     }
 
     @Test
@@ -317,8 +317,8 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetQueryMetadataForGlobalStoreWithKey() {
         final KeyQueryMetadata metadata = metadataState.getKeyQueryMetadataForKey(globalTable, "key", Serdes.String().serializer());
-        assertEquals(hostOne, metadata.getActiveHost());
-        assertTrue(metadata.getStandbyHosts().isEmpty());
+        assertEquals(hostOne, metadata.activeHost());
+        assertTrue(metadata.standbyHosts().isEmpty());
     }
 
     @Test
@@ -331,8 +331,8 @@ public class StreamsMetadataStateTest {
     @Test
     public void shouldGetQueryMetadataForGlobalStoreWithKeyAndPartitioner() {
         final KeyQueryMetadata metadata = metadataState.getKeyQueryMetadataForKey(globalTable, "key", partitioner);
-        assertEquals(hostOne, metadata.getActiveHost());
-        assertTrue(metadata.getStandbyHosts().isEmpty());
+        assertEquals(hostOne, metadata.activeHost());
+        assertTrue(metadata.standbyHosts().isEmpty());
     }
 
     @Test

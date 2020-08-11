@@ -1580,9 +1580,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
@@ -1609,9 +1609,9 @@ public class KStreamImplTest {
 
         final ProcessorTopology topology = TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").buildTopology();
 
-        final SourceNode<?, ?> originalSourceNode = topology.source("topic-1");
+        final SourceNode<?, ?, ?, ?> originalSourceNode = topology.source("topic-1");
 
-        for (final SourceNode<?, ?> sourceNode : topology.sources()) {
+        for (final SourceNode<?, ?, ?, ?> sourceNode : topology.sources()) {
             if (sourceNode.name().equals(originalSourceNode.name())) {
                 assertNull(sourceNode.getTimestampExtractor());
             } else {
