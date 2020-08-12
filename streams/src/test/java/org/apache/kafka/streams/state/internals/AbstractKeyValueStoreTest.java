@@ -556,4 +556,36 @@ public abstract class AbstractKeyValueStoreTest {
             );
         }
     }
+
+    @Test
+    public void shouldNotThrowInvalidRangeExceptionWithFromLargerThanTo() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            final KeyValueIterator<Integer, String> iterator = store.range(2, 1);
+            assertFalse(iterator.hasNext());
+
+            final List<String> messages = appender.getMessages();
+            assertThat(
+                messages,
+                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+            );
+        }
+    }
+
+    @Test
+    public void shouldNotThrowInvalidReverseRangeExceptionWithFromLargerThanTo() {
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
+            final KeyValueIterator<Integer, String> iterator = store.reverseRange(2, 1);
+            assertFalse(iterator.hasNext());
+
+            final List<String> messages = appender.getMessages();
+            assertThat(
+                messages,
+                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+            );
+        }
+    }
 }
