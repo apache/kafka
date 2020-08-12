@@ -92,7 +92,7 @@ class KafkaController(val config: KafkaConfig,
 
   // have a separate scheduler for the controller to be able to start and stop independently of the kafka server
   // visible for testing
-  private[controller] val kafkaScheduler = new KafkaScheduler(1)
+  private[controller] val kafkaScheduler = new KafkaScheduler(1, threadNamePrefix = "auto-leader-rebalancer-")
 
   // visible for testing
   private[controller] val eventManager = new ControllerEventManager(config.brokerId, this, time,
