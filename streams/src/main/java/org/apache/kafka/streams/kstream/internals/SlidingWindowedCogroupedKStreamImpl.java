@@ -81,56 +81,55 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
         Objects.requireNonNull(named, "named can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(
-                materialized,
-                builder,
-                CogroupedKStreamImpl.AGGREGATE_NAME);
+            materialized,
+            builder,
+            CogroupedKStreamImpl.AGGREGATE_NAME);
         return aggregateBuilder.build(
-                groupPatterns,
-                initializer,
-                new NamedInternal(named),
-                materialize(materializedInternal),
-                materializedInternal.keySerde() != null ?
-                        new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs())
-                        : null,
-                materializedInternal.valueSerde(),
-                materializedInternal.queryableStoreName(),
-                null,
-                windows,
-                null,
-                null);
+            groupPatterns,
+            initializer,
+            new NamedInternal(named),
+            materialize(materializedInternal),
+            materializedInternal.keySerde() != null ?
+                new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs())
+                : null,
+            materializedInternal.valueSerde(),
+            materializedInternal.queryableStoreName(),
+            null,
+            windows,
+            null,
+            null);
     }
 
-    private StoreBuilder<TimestampedWindowStore<K, V>> materialize(
-            final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
+    private StoreBuilder<TimestampedWindowStore<K, V>> materialize(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
 
             if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
                 throw new IllegalArgumentException("The retention period of the window store "
-                        + name
-                        + " must be no smaller than 2 * time difference plus the grace period."
-                        + " Got time difference=[" + windows.timeDifferenceMs() + "],"
-                        + " grace=[" + windows.gracePeriodMs()
-                        + "],"
-                        + " retention=[" + retentionPeriod
-                        + "]");
+                    + name
+                    + " must be no smaller than 2 * time difference plus the grace period."
+                    + " Got time difference=[" + windows.timeDifferenceMs() + "],"
+                    + " grace=[" + windows.gracePeriodMs()
+                    + "],"
+                    + " retention=[" + retentionPeriod
+                    + "]");
             }
 
             supplier = Stores.persistentTimestampedWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.timeDifferenceMs()),
-                    false
-                );
+                materialized.storeName(),
+                Duration.ofMillis(retentionPeriod),
+                Duration.ofMillis(windows.timeDifferenceMs()),
+                false
+            );
 
         }
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
-                .timestampedWindowStoreBuilder(
-                        supplier,
-                        materialized.keySerde(),
-                        materialized.valueSerde()
-                );
+            .timestampedWindowStoreBuilder(
+                supplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

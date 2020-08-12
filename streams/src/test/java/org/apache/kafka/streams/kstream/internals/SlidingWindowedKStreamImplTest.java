@@ -31,7 +31,9 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockAggregator;
@@ -63,215 +65,211 @@ public class SlidingWindowedKStreamImplTest {
     public void before() {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
         windowedStream = stream.
-                groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(100L), ofMillis(1000L)));
+            groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(100L), ofMillis(1000L)));
     }
 
     @Test
     public void shouldCountSlidingWindows() {
         final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         windowedStream
-                .count()
-                .toStream()
-                .process(supplier);
+            .count()
+            .toStream()
+            .process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
-                equalTo(ValueAndTimestamp.make(1L, 100L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
+            equalTo(ValueAndTimestamp.make(1L, 100L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
-                equalTo(ValueAndTimestamp.make(1L, 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
+            equalTo(ValueAndTimestamp.make(1L, 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
-                equalTo(ValueAndTimestamp.make(2L, 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
+            equalTo(ValueAndTimestamp.make(2L, 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
-                equalTo(ValueAndTimestamp.make(1L, 500L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
+            equalTo(ValueAndTimestamp.make(1L, 500L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
-                equalTo(ValueAndTimestamp.make(2L, 200L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
+            equalTo(ValueAndTimestamp.make(2L, 200L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
-                equalTo(ValueAndTimestamp.make(1L, 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
+            equalTo(ValueAndTimestamp.make(1L, 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
-                equalTo(ValueAndTimestamp.make(1L, 200L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
+            equalTo(ValueAndTimestamp.make(1L, 200L)));
     }
 
     @Test
     public void shouldReduceSlidingWindows() {
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         windowedStream
-                .reduce(MockReducer.STRING_ADDER)
-                .toStream()
-                .process(supplier);
+            .reduce(MockReducer.STRING_ADDER)
+            .toStream()
+            .process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
-                equalTo(ValueAndTimestamp.make("1", 100L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
+            equalTo(ValueAndTimestamp.make("1", 100L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
-                equalTo(ValueAndTimestamp.make("2", 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
+            equalTo(ValueAndTimestamp.make("2", 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
-                equalTo(ValueAndTimestamp.make("1+2", 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
+            equalTo(ValueAndTimestamp.make("1+2", 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
-                equalTo(ValueAndTimestamp.make("3", 500L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
+            equalTo(ValueAndTimestamp.make("3", 500L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
-                equalTo(ValueAndTimestamp.make("10+20", 200L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
+            equalTo(ValueAndTimestamp.make("10+20", 200L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
-                equalTo(ValueAndTimestamp.make("20", 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
+            equalTo(ValueAndTimestamp.make("20", 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
-                equalTo(ValueAndTimestamp.make("10", 200L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
+            equalTo(ValueAndTimestamp.make("10", 200L)));
     }
 
     @Test
     public void shouldAggregateSlidingWindows() {
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         windowedStream
-                .aggregate(
-                        MockInitializer.STRING_INIT,
-                        MockAggregator.TOSTRING_ADDER,
-                        Materialized.with(Serdes.String(), Serdes.String()))
-                .toStream()
-                .process(supplier);
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                Materialized.with(Serdes.String(), Serdes.String()))
+            .toStream()
+            .process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
-                equalTo(ValueAndTimestamp.make("0+1", 100L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
+            equalTo(ValueAndTimestamp.make("0+1", 100L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
-                equalTo(ValueAndTimestamp.make("0+2", 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
+            equalTo(ValueAndTimestamp.make("0+2", 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
-                equalTo(ValueAndTimestamp.make("0+1+2", 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
+            equalTo(ValueAndTimestamp.make("0+1+2", 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
-                equalTo(ValueAndTimestamp.make("0+3", 500L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
+            equalTo(ValueAndTimestamp.make("0+3", 500L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
-                equalTo(ValueAndTimestamp.make("0+10+20", 200L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
+            equalTo(ValueAndTimestamp.make("0+10+20", 200L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
-                equalTo(ValueAndTimestamp.make("0+20", 150L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
+            equalTo(ValueAndTimestamp.make("0+20", 150L)));
         assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
-                        .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
-                equalTo(ValueAndTimestamp.make("0+10", 200L)));
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
+            equalTo(ValueAndTimestamp.make("0+10", 200L)));
     }
 
     @Test
     public void shouldMaterializeCount() {
         windowedStream.count(
-                Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
-                        .withKeySerde(Serdes.String())
-                        .withValueSerde(Serdes.Long()));
+            Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             {
                 final WindowStore<String, Long> windowStore = driver.getWindowStore("count-store");
                 final List<KeyValue<Windowed<String>, Long>> data =
-                        StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
                 assertThat(data, equalTo(Arrays.asList(
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), 1L),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), 2L),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), 1L),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), 1L),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), 1L),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), 2L),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), 1L))));
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), 1L),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), 2L),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), 1L),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), 1L),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), 1L),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), 2L),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), 1L))));
             }
             {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
-                        driver.getTimestampedWindowStore("count-store");
+                    driver.getTimestampedWindowStore("count-store");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
-                        StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
-
+                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make(1L, 100L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make(2L, 150L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), ValueAndTimestamp.make(1L, 150L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), ValueAndTimestamp.make(1L, 500L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), ValueAndTimestamp.make(1L, 150L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), ValueAndTimestamp.make(2L, 200L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), ValueAndTimestamp.make(1L, 200L)))));
-            }
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make(1L, 100L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make(2L, 150L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), ValueAndTimestamp.make(1L, 150L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), ValueAndTimestamp.make(1L, 500L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), ValueAndTimestamp.make(1L, 150L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), ValueAndTimestamp.make(2L, 200L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), ValueAndTimestamp.make(1L, 200L)))));            }
         }
     }
 
     @Test
     public void shouldMaterializeReduced() {
         windowedStream.reduce(
-                MockReducer.STRING_ADDER,
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
-                        .withKeySerde(Serdes.String())
-                        .withValueSerde(Serdes.String()));
+            MockReducer.STRING_ADDER,
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("reduced");
                 final List<KeyValue<Windowed<String>, String>> data =
-                        StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
-
+                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), "1"),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), "1+2"),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), "2"),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), "3"),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), "20"),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), "10+20"),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), "10"))));
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), "1"),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), "1+2"),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), "2"),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), "3"),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), "20"),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), "10+20"),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), "10"))));
             }
             {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
-                        driver.getTimestampedWindowStore("reduced");
+                    driver.getTimestampedWindowStore("reduced");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
-                        StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
-
+                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make("1", 100L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make("1+2", 150L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), ValueAndTimestamp.make("2", 150L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), ValueAndTimestamp.make("3", 500L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), ValueAndTimestamp.make("20", 150L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), ValueAndTimestamp.make("10+20", 200L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), ValueAndTimestamp.make("10", 200L)))));
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make("1", 100L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make("1+2", 150L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), ValueAndTimestamp.make("2", 150L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), ValueAndTimestamp.make("3", 500L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), ValueAndTimestamp.make("20", 150L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), ValueAndTimestamp.make("10+20", 200L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), ValueAndTimestamp.make("10", 200L)))));
             }
         }
     }
@@ -279,105 +277,158 @@ public class SlidingWindowedKStreamImplTest {
     @Test
     public void shouldMaterializeAggregated() {
         windowedStream.aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
-                        .withKeySerde(Serdes.String())
-                        .withValueSerde(Serdes.String()));
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             {
                 final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
                 final List<KeyValue<Windowed<String>, String>> data =
-                        StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
-
+                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), "0+1"),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), "0+1+2"),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), "0+2"),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), "0+3"),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), "0+20"),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), "0+10+20"),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), "0+10"))));
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), "0+1"),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), "0+1+2"),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), "0+2"),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), "0+3"),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), "0+20"),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), "0+10+20"),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), "0+10"))));
             }
             {
                 final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
-                        driver.getTimestampedWindowStore("aggregated");
+                    driver.getTimestampedWindowStore("aggregated");
                 final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
-                        StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
-
+                    StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
                 assertThat(data, equalTo(Arrays.asList(
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make("0+1", 100L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make("0+1+2", 150L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), ValueAndTimestamp.make("0+2", 150L)),
-                        KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), ValueAndTimestamp.make("0+3", 500L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), ValueAndTimestamp.make("0+20", 150L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), ValueAndTimestamp.make("0+10+20", 200L)),
-                        KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), ValueAndTimestamp.make("0+10", 200L)))));
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 100)), ValueAndTimestamp.make("0+1", 100L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(50, 150)), ValueAndTimestamp.make("0+1+2", 150L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(101, 201)), ValueAndTimestamp.make("0+2", 150L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(400, 500)), ValueAndTimestamp.make("0+3", 500L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(50, 150)), ValueAndTimestamp.make("0+20", 150L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(100, 200)), ValueAndTimestamp.make("0+10+20", 200L)),
+                    KeyValue.pair(new Windowed<>("2", new TimeWindow(151, 251)), ValueAndTimestamp.make("0+10", 200L)))));
             }
         }
     }
 
     @Test
     public void shouldThrowNullPointerOnAggregateIfInitializerIsNull() {
-        assertThrows(NullPointerException.class, () ->    windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER));
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER));
     }
 
     @Test
     public void shouldThrowNullPointerOnAggregateIfAggregatorIsNull() {
-        assertThrows(NullPointerException.class, () ->    windowedStream.aggregate(MockInitializer.STRING_INIT, null));
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(MockInitializer.STRING_INIT, null));
     }
 
     @Test
     public void shouldThrowNullPointerOnReduceIfReducerIsNull() {
-        assertThrows(NullPointerException.class, () ->    windowedStream.reduce(null));
+        assertThrows(NullPointerException.class, () -> windowedStream.reduce(null));
     }
 
     @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
-        assertThrows(NullPointerException.class, () ->   windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, Materialized.as("store")));
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(null, MockAggregator.TOSTRING_ADDER, Materialized.as("store")));
     }
 
     @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
-        assertThrows(NullPointerException.class, () ->    windowedStream.aggregate(
-                MockInitializer.STRING_INIT,
-                null,
-                Materialized.as("store")));
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(
+            MockInitializer.STRING_INIT,
+            null,
+            Materialized.as("store")));
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
-        assertThrows(NullPointerException.class, () ->   windowedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, (Materialized) null));
+        assertThrows(NullPointerException.class, () -> windowedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, (Materialized) null));
     }
 
     @Test
     public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
-        assertThrows(NullPointerException.class, () ->   windowedStream.reduce(null, Materialized.as("store")));
+        assertThrows(NullPointerException.class, () -> windowedStream.reduce(null, Materialized.as("store")));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
-        assertThrows(NullPointerException.class, () ->   windowedStream.reduce(MockReducer.STRING_ADDER, (Materialized) null));
+        assertThrows(NullPointerException.class, () -> windowedStream.reduce(MockReducer.STRING_ADDER, (Materialized) null));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowNullPointerOnMaterializedReduceIfNamedIsNull() {
-        assertThrows(NullPointerException.class, () ->  windowedStream.reduce(MockReducer.STRING_ADDER, (Named) null));
+        assertThrows(NullPointerException.class, () -> windowedStream.reduce(MockReducer.STRING_ADDER, (Named) null));
     }
 
     @Test
     public void shouldThrowNullPointerOnCountIfMaterializedIsNull() {
-        assertThrows(NullPointerException.class, () ->  windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null));
+        assertThrows(NullPointerException.class, () -> windowedStream.count((Materialized<String, Long, WindowStore<Bytes, byte[]>>) null));
+    }
+
+    @Test
+    public void shouldThrowIllegalArgumentWhenRetentionIsTooSmall() {
+        assertThrows(IllegalArgumentException.class, () -> windowedStream
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                Materialized
+                    .<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.String())
+                    .withRetention(ofMillis(1L))
+            )
+        );
+    }
+
+    @Test
+    public void ShouldDropWindowsOutsideOfRetention() {
+        final WindowBytesStoreSupplier storeSupplies = Stores.inMemoryWindowStore("aggregated", ofMillis(1200L), ofMillis(100L), false);
+        windowedStream.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            Materialized.<String, String>as(storeSupplies)
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String())
+                .withCachingDisabled());
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+
+            inputTopic.pipeInput("1", "2", 100L);
+            inputTopic.pipeInput("1", "3", 500L);
+            inputTopic.pipeInput("1", "4", 1000L);
+            inputTopic.pipeInput("1", "5", 2000L);
+
+            {
+                final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
+                final List<KeyValue<Windowed<String>, String>> data =
+                    StreamsTestUtils.toList(windowStore.fetch("1", "1", ofEpochMilli(0), ofEpochMilli(10000L)));
+                assertThat(data, equalTo(Arrays.asList(
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(900, 1000)), "0+4"),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(1900, 2000)), "0+5"))));
+            }
+            {
+                final WindowStore<String, ValueAndTimestamp<Long>> windowStore =
+                    driver.getTimestampedWindowStore("aggregated");
+                final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
+                    StreamsTestUtils.toList(windowStore.fetch("1", "1", ofEpochMilli(0), ofEpochMilli(2000L)));
+                assertThat(data, equalTo(Arrays.asList(
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(900, 1000)), ValueAndTimestamp.make("0+4", 1000L)),
+                    KeyValue.pair(new Windowed<>("1", new TimeWindow(1900, 2000)), ValueAndTimestamp.make("0+5", 2000L)))));
+            }
+        }
     }
 
     private void processData(final TopologyTestDriver driver) {
         final TestInputTopic<String, String> inputTopic =
-                driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
+            driver.createInputTopic(TOPIC, new StringSerializer(), new StringSerializer());
         inputTopic.pipeInput("1", "1", 100L);
         inputTopic.pipeInput("1", "2", 150L);
         inputTopic.pipeInput("1", "3", 500L);

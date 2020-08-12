@@ -163,9 +163,6 @@
     <suppress checks="(FinalLocalVariable|UnnecessaryParentheses|BooleanExpressionComplexity|CyclomaticComplexity|WhitespaceAfter|LocalVariableName)"
               files="Murmur3.java"/>
 
-    <suppress checks="(NPathComplexity|MethodLength|CyclomaticComplexity)"
-              files="KStreamSlidingWindowAggregate.java"/>
-
     <suppress checks="(CyclomaticComplexity)"
               files="CogroupedStreamAggregateBuilder.java"/>
 

@@ -25,8 +25,8 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 /**
  * A sliding window used for aggregating events.
  * <p>
- * Sliding windows are defined by a record's timestamp, with window size based on the given maximum time difference (inclusive) between
- * records in the same window and a given window grace period. While the window is sliding over the input data stream, a new window is
+ * Sliding Windows are defined based on a record's timestamp, the window size based on the given maximum time difference (inclusive) between
+ * records in the same window, and the given window grace period. While the window is sliding over the input data stream, a new window is
  * created each time a record enters the sliding window or a record drops out of the sliding window.
  * <p>
  * Records that come after set grace period will be ignored, i.e., a window is closed when
@@ -88,7 +88,7 @@ public final class SlidingWindows {
      * @param timeDifference the max time difference (inclusive) between two records in a window
      * @param grace the grace period to admit out-of-order events to a window
      * @return a new window definition
-     * @throws IllegalArgumentException if the specified window size is < 0 or grace <= 0, or either can't be represented as {@code long milliseconds}
+     * @throws IllegalArgumentException if the specified window size is < 0 or grace < 0, or either can't be represented as {@code long milliseconds}
      */
     public static SlidingWindows withTimeDifferenceAndGrace(final Duration timeDifference, final Duration grace) throws IllegalArgumentException {
         final String msgPrefixSize = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
@@ -122,19 +122,19 @@ public final class SlidingWindows {
         }
         final SlidingWindows that = (SlidingWindows) o;
         return timeDifferenceMs == that.timeDifferenceMs &&
-                graceMs == that.graceMs;
+            graceMs == that.graceMs;
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(timeDifferenceMs, graceMs);
     }
-    
+
     @Override
     public String toString() {
         return "SlidingWindows{" +
-                ", sizeMs=" + timeDifferenceMs +
-                ", graceMs=" + graceMs +
-                '}';
+            ", sizeMs=" + timeDifferenceMs +
+            ", graceMs=" + graceMs +
+            '}';
     }
 }
