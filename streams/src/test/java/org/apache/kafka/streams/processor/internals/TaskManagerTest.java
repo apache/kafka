@@ -561,9 +561,19 @@ public class TaskManagerTest {
     public void shouldReviveCorruptTasks() {
         final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
+        EasyMock.expectLastCall().once();
         replay(stateManager);
 
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        final AtomicBoolean enforcedCheckpoint = new AtomicBoolean(false);
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
+            @Override
+            public void postCommit(final boolean enforceCheckpoint) {
+                if (enforceCheckpoint) {
+                    enforcedCheckpoint.set(true);
+                }
+                super.postCommit(enforceCheckpoint);
+            }
+        };
 
         // `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
@@ -586,6 +596,7 @@ public class TaskManagerTest {
 
         taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
         assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(enforcedCheckpoint.get(), is(true));
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 

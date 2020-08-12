@@ -193,6 +193,7 @@ public class TaskManager {
 
             try {
                 task.suspend();
+                // we need to enforce a checkpoint that removes the corrupted partitions
                 task.postCommit(true);
             } catch (final RuntimeException swallow) {
                 log.error("Error suspending corrupted task {} ", task.id(), swallow);
