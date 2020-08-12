@@ -40,7 +40,7 @@ public class RequestContext implements AuthorizableRequestContext {
     public final ListenerName listenerName;
     public final SecurityProtocol securityProtocol;
     public final ClientInformation clientInformation;
-    public final boolean maybeFromControlPlane;
+    public final boolean fromPrivilegedListener;
 
     public RequestContext(RequestHeader header,
                           String connectionId,
@@ -49,15 +49,15 @@ public class RequestContext implements AuthorizableRequestContext {
                           ListenerName listenerName,
                           SecurityProtocol securityProtocol,
                           ClientInformation clientInformation,
-                          boolean maybeFromControlPlane) {
+                          boolean fromPrivilegedListener) {
         this.header = header;
         this.connectionId = connectionId;
         this.clientAddress = clientAddress;
         this.principal = principal;
         this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
-        this.maybeFromControlPlane = maybeFromControlPlane;
         this.clientInformation = clientInformation;
+        this.fromPrivilegedListener = fromPrivilegedListener;
     }
 
     public RequestAndSize parseRequest(ByteBuffer buffer) {

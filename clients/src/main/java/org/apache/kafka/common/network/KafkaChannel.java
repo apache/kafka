@@ -133,7 +133,7 @@ public class KafkaChannel implements AutoCloseable {
     private int successfulAuthentications;
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
-    private final boolean isInterBrokerListener;
+    private final boolean isForwardChannel;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
                         int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) {
@@ -141,7 +141,7 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator,
-                        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry, boolean isInterBrokerListener) {
+                        int maxReceiveSize, MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry, boolean isForwardChannel) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticatorCreator = authenticatorCreator;
@@ -153,7 +153,7 @@ public class KafkaChannel implements AutoCloseable {
         this.disconnected = false;
         this.muteState = ChannelMuteState.NOT_MUTED;
         this.state = ChannelState.NOT_CONNECTED;
-        this.isInterBrokerListener = isInterBrokerListener;
+        this.isForwardChannel = isForwardChannel;
     }
 
     public void close() throws IOException {
@@ -674,7 +674,7 @@ public class KafkaChannel implements AutoCloseable {
         return metadataRegistry;
     }
 
-    public boolean isInterBrokerListener() {
-        return isInterBrokerListener;
+    public boolean isForwardChannel() {
+        return isForwardChannel;
     }
 }
