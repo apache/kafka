@@ -576,8 +576,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public KeyValueIterator<Bytes, byte[]> all(final boolean reverse) {
             final RocksIterator innerIterWithTimestamp = db.newIterator(columnFamily);
-            if (reverse) innerIterWithTimestamp.seekToLast();
-            else innerIterWithTimestamp.seekToFirst();
+            if (reverse) {
+                innerIterWithTimestamp.seekToLast();
+            } else {
+                innerIterWithTimestamp.seekToFirst();
+            }
             return new RocksDbIterator(name, innerIterWithTimestamp, openIterators, reverse);
         }
 

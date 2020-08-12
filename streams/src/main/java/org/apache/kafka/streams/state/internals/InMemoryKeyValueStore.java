@@ -119,7 +119,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return range(from, to, true);
     }
 
-    KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean reverse) {
+    private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean reverse) {
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -167,8 +167,11 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         private final Iterator<Bytes> iter;
 
         private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean reverse) {
-            if (reverse) this.iter = new TreeSet<>(keySet).descendingIterator();
-            else this.iter = new TreeSet<>(keySet).iterator();
+            if (reverse) {
+                this.iter = new TreeSet<>(keySet).descendingIterator();
+            } else {
+                this.iter = new TreeSet<>(keySet).iterator();
+            }
         }
 
         @Override

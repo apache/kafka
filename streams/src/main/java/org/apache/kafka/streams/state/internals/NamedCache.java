@@ -289,8 +289,11 @@ class NamedCache {
     }
 
     private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet, final boolean reverse) {
-        if (reverse) return new TreeSet<>(keySet).descendingIterator();
-        else return new TreeSet<>(keySet).iterator();
+        if (reverse) {
+            return new TreeSet<>(keySet).descendingIterator();
+        } else {
+            return new TreeSet<>(keySet).iterator();
+        }
     }
 
     synchronized Iterator<Bytes> allKeys() {

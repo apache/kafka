@@ -61,8 +61,11 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
             return allDone();
         } else {
             next = getKeyValue();
-            if (reverse) iter.prev();
-            else iter.next();
+            if (reverse) {
+                iter.prev();
+            } else {
+                iter.next();
+            }
             return next;
         }
     }

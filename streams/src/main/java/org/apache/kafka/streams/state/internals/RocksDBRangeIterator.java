@@ -43,12 +43,15 @@ class RocksDBRangeIterator extends RocksDbIterator {
         if (reverse) {
             iter.seekForPrev(to.get());
             rawLastKey = from.get();
+            if (rawLastKey == null) {
+                throw new NullPointerException("RocksDBRangeIterator: RawLastKey is null for key " + from);
+            }
         } else {
             iter.seek(from.get());
             rawLastKey = to.get();
-        }
-        if (rawLastKey == null) {
-            throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
+            if (rawLastKey == null) {
+                throw new NullPointerException("RocksDBRangeIterator: RawLastKey is null for key " + to);
+            }
         }
     }
 
@@ -59,11 +62,17 @@ class RocksDBRangeIterator extends RocksDbIterator {
             return allDone();
         } else {
             if (!reverse) {
-                if (comparator.compare(next.key.get(), rawLastKey) <= 0) return next;
-                else return allDone();
+                if (comparator.compare(next.key.get(), rawLastKey) <= 0) {
+                    return next;
+                } else {
+                    return allDone();
+                }
             } else {
-                if (comparator.compare(next.key.get(), rawLastKey) >= 0) return next;
-                else return allDone();
+                if (comparator.compare(next.key.get(), rawLastKey) >= 0) {
+                    return next;
+                } else {
+                    return allDone();
+                }
             }
         }
     }
