@@ -18,6 +18,7 @@
 package org.apache.kafka.common.message;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.Optional;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
@@ -704,6 +705,26 @@ public final class MessageTest {
         duplicate.setMyTaggedIntArray(Collections.singletonList(123));
         assertNotEquals(duplicate, message);
         assertNotEquals(message, duplicate);
+
+        testAllMessageRoundTripsFromVersion((short) 2, message);
+    }
+
+    @Test
+    public void testSimpleMessageOptional() throws Exception {
+        final SimpleExampleMessageData message = new SimpleExampleMessageData();
+
+        message.setMyOptionalNullableString(Optional.of("non empty"));
+        message.setMyOptionalInt16(Optional.of((short) 1));
+        message.setMyOptionalFloat64(Optional.of(2.2));
+        message.setMyOptionalString(Optional.of("non empty"));
+        message.setMyOptionalNullableIntArray(Optional.of(Arrays.asList(1, 2, 3)));
+        message.setMyOptionalIntArray(Optional.of(Arrays.asList(1, 2, 3)));
+
+        message.setMyOptionalNullableTaggedString(Optional.of("non empty"));
+        message.setMyOptionalTaggedInt16(Optional.of((short) 1));
+        message.setMyOptionalTaggedFloat64(Optional.of(2.2));
+        message.setMyOptionalTaggedString(Optional.of("non empty"));
+        message.setMyOptionalTaggedIntArray(Optional.of(Arrays.asList(1, 2, 3)));
 
         testAllMessageRoundTripsFromVersion((short) 2, message);
     }

@@ -49,6 +49,25 @@
       "taggedVersions": "2+", "tag": 8,
       "fields": [
         { "name": "structId", "type": "string", "versions": "2+", "about": "String field in struct"}
-    ]}
+    ]},
+
+    { "name": "myOptionalNullableTaggedString", "type": "string", "default": "null", "optional": true,
+      "nullableVersions": "1+", "taggedVersions": "1+", "tag": 9 },
+    { "name": "myOptionalTaggedInt16", "type": "int16", "default": "123", "optional": true,
+      "taggedVersions": "1+", "tag": 10 },
+    { "name": "myOptionalTaggedFloat64", "type": "float64", "default": "12.34", "optional": true,
+      "taggedVersions": "1+", "tag": 11 },
+    { "name": "myOptionalTaggedString", "type": "string", "taggedVersions": "1+", "tag": 12, "optional": true},
+    { "name": "myOptionalTaggedIntArray", "type": "[]int32", "default": "null", "optional": true,
+      "nullableVersions": "0+", "taggedVersions": "1+", "tag": 13 },
+
+    { "name": "myOptionalNullableString", "versions": "1+", "type": "string", "default": "null", "optional": true,
+      "nullableVersions": "1+"},
+    { "name": "myOptionalInt16", "versions": "0+", "type": "int16", "default": "123", "optional": true},
+    { "name": "myOptionalFloat64", "versions": "0+", "type": "float64", "default": "12.34", "optional": true},
+    { "name": "myOptionalString", "versions": "0+", "type": "string", "optional": true},
+    { "name": "myOptionalNullableIntArray", "versions": "0+", "type": "[]int32", "default": "null", "optional": true,
+      "nullableVersions": "0+"},
+    { "name": "myOptionalIntArray", "versions": "0+", "type": "[]int32", "optional": true}
   ]
 }
