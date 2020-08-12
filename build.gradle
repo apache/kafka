@@ -74,8 +74,10 @@ allprojects {
         }
       }
     }
-    configurations {
-      runtime {
+    configurations.all {
+      // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+      // that are unrelated to the project dependencies, we should not change them
+      if (name != "zinc") {
         resolutionStrategy {
           force(
             // ensure we have a single version of scala jars in the classpath, we enable inlining
