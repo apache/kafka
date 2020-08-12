@@ -101,6 +101,10 @@ public interface Task {
 
     State state();
 
+    default boolean needsInitializationOrRestoration() {
+        return state() == State.CREATED || state() == State.RESTORING;
+    }
+
     boolean isActive();
 
     boolean isClosed();
@@ -125,7 +129,7 @@ public interface Task {
      */
     Map<TopicPartition, OffsetAndMetadata> prepareCommit();
 
-    void postCommit();
+    void postCommit(boolean enforceCheckpoint);
 
     void suspend();
 

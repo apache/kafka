@@ -34,11 +34,19 @@ import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListe
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
+    private final GlobalStateManager stateManager;
+
     public GlobalProcessorContextImpl(final StreamsConfig config,
-                                      final StateManager stateMgr,
+                                      final GlobalStateManager stateMgr,
                                       final StreamsMetricsImpl metrics,
                                       final ThreadCache cache) {
-        super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
+        super(new TaskId(-1, -1), config, metrics, cache);
+        stateManager = stateMgr;
+    }
+
+    @Override
+    protected StateManager stateManager() {
+        return stateManager;
     }
 
     @Override
@@ -49,12 +57,12 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode<?, ?> previousNode = currentNode();
+    public <KIn, VIn> void forward(final KIn key, final VIn value) {
+        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         try {
-            for (final ProcessorNode<?, ?> child : currentNode().children()) {
+            for (final ProcessorNode<?, ?, ?, ?> child : currentNode().children()) {
                 setCurrentNode(child);
-                ((ProcessorNode<K, V>) child).process(key, value);
+                ((ProcessorNode<KIn, VIn, ?, ?>) child).process(key, value);
             }
         } finally {
             setCurrentNode(previousNode);

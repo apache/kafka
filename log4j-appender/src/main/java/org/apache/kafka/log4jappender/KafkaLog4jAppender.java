@@ -252,6 +252,7 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         this.sslEngineFactoryClass = sslEngineFactoryClass;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public void activateOptions() {
         // check for config parameter validity

@@ -30,9 +30,6 @@ import org.hamcrest.core.IsInstanceOf;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Collections;
-
-import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
@@ -54,7 +51,7 @@ public class GlobalProcessorContextImplTest {
 
     private GlobalProcessorContextImpl globalContext;
 
-    private ProcessorNode<?, ?> child;
+    private ProcessorNode<Object, Object, Object, Object> child;
     private ProcessorRecordContext recordContext;
 
     @Before
@@ -65,7 +62,7 @@ public class GlobalProcessorContextImplTest {
         expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
         replay(streamsConfig);
 
-        final StateManager stateManager = mock(StateManager.class);
+        final GlobalStateManager stateManager = mock(GlobalStateManager.class);
         expect(stateManager.getGlobalStore(GLOBAL_STORE_NAME)).andReturn(mock(StateStore.class));
         expect(stateManager.getGlobalStore(GLOBAL_KEY_VALUE_STORE_NAME)).andReturn(mock(KeyValueStore.class));
         expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).andReturn(mock(TimestampedKeyValueStore.class));
@@ -82,20 +79,12 @@ public class GlobalProcessorContextImplTest {
             null,
             null);
 
-        final ProcessorNode<?, ?> processorNode = mock(ProcessorNode.class);
-        globalContext.setCurrentNode(processorNode);
+        final ProcessorNode<Object, Object, Object, Object> processorNode = new ProcessorNode<>("testNode");
 
         child = mock(ProcessorNode.class);
+        processorNode.addChild(child);
 
-        expect(processorNode.children())
-            .andReturn(Collections.singletonList(child))
-            .anyTimes();
-        expect(processorNode.getChild(CHILD_PROCESSOR))
-            .andReturn(child);
-        expect(processorNode.getChild(anyString()))
-            .andReturn(null);
-        replay(processorNode);
-
+        globalContext.setCurrentNode(processorNode);
         recordContext = mock(ProcessorRecordContext.class);
         globalContext.setRecordContext(recordContext);
     }

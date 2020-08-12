@@ -17,7 +17,10 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -38,11 +41,32 @@ import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimes
  */
 final class StateManagerUtil {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
+    static final long OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT = 10_000L;
 
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
         return isTimestamped(store) ? rawValueToTimestampedValue() : identity();
+    }
+
+    static boolean checkpointNeeded(final boolean enforceCheckpoint,
+                                    final Map<TopicPartition, Long> oldOffsetSnapshot,
+                                    final Map<TopicPartition, Long> newOffsetSnapshot) {
+        // we should always have the old snapshot post completing the register state stores;
+        // if it is null it means the registration is not done and hence we should not overwrite the checkpoint
+        if (oldOffsetSnapshot == null) {
+            return false;
+        }
+
+        // we can checkpoint if the the difference between the current and the previous snapshot is large enough
+        long totalOffsetDelta = 0L;
+        for (final Map.Entry<TopicPartition, Long> entry : newOffsetSnapshot.entrySet()) {
+            totalOffsetDelta += entry.getValue() - oldOffsetSnapshot.getOrDefault(entry.getKey(), 0L);
+        }
+
+        // when enforcing checkpoint is required, we should overwrite the checkpoint if it is different from the old one;
+        // otherwise, we only overwrite the checkpoint if it is largely different from the old one
+        return enforceCheckpoint ? totalOffsetDelta > 0 : totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
     }
 
     /**
@@ -104,18 +128,20 @@ final class StateManagerUtil {
             if (stateDirectory.lock(id)) {
                 try {
                     stateMgr.close();
-
-                    if (wipeStateStore) {
-                        log.debug("Wiping state stores for {} task {}", taskType, id);
-                        // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
-                        // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
-                        // need to re-bootstrap the restoration from the beginning
-                        Utils.delete(stateMgr.baseDir());
-                    }
                 } catch (final ProcessorStateException e) {
                     firstException.compareAndSet(null, e);
                 } finally {
-                    stateDirectory.unlock(id);
+                    try {
+                        if (wipeStateStore) {
+                            log.debug("Wiping state stores for {} task {}", taskType, id);
+                            // we can just delete the whole dir of the task, including the state store images and the checkpoint files,
+                            // and then we write an empty checkpoint file indicating that the previous close is graceful and we just
+                            // need to re-bootstrap the restoration from the beginning
+                            Utils.delete(stateMgr.baseDir());
+                        }
+                    } finally {
+                        stateDirectory.unlock(id);
+                    }
                 }
             }
         } catch (final IOException e) {
@@ -123,7 +149,6 @@ final class StateManagerUtil {
                 String.format("%sFatal error while trying to close the state manager for task %s", logPrefix, id), e
             );
             firstException.compareAndSet(null, exception);
-
         }
 
         final ProcessorStateException exception = firstException.get();

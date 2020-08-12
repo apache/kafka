@@ -176,7 +176,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       k -> v.keys.toSeq
     }
     val brokers = (0 until brokerCount).map(Integer.valueOf)
-    val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).all.get
+    val logDirInfosByBroker = client.describeLogDirs(brokers.asJava).allDescriptions.get
 
     (0 until brokerCount).foreach { brokerId =>
       val server = servers.find(_.config.brokerId == brokerId).get
@@ -698,7 +698,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         lowWatermark.contains(5L)
       } catch {
         case e: ExecutionException if e.getCause.isInstanceOf[LeaderNotAvailableException] ||
-          e.getCause.isInstanceOf[NotLeaderForPartitionException] => false
+          e.getCause.isInstanceOf[NotLeaderOrFollowerException] => false
         }
     }, s"Expected low watermark of the partition to be 5 but got ${lowWatermark.getOrElse("no response within the timeout")}")
   }

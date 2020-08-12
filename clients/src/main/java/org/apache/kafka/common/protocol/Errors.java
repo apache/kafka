@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
+import org.apache.kafka.common.internals.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -72,12 +73,13 @@ import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
-import org.apache.kafka.common.errors.NotLeaderForPartitionException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
@@ -139,13 +141,15 @@ public enum Errors {
             InvalidFetchSizeException::new),
     LEADER_NOT_AVAILABLE(5, "There is no leader for this topic-partition as we are in the middle of a leadership election.",
             LeaderNotAvailableException::new),
-    NOT_LEADER_FOR_PARTITION(6, "This server is not the leader for that topic-partition.",
-            NotLeaderForPartitionException::new),
+    NOT_LEADER_OR_FOLLOWER(6, "For requests intended only for the leader, this error indicates that the broker is not the current leader. " +
+            "For requests intended for any replica, this error indicates that the broker is not a replica of the topic partition.",
+            NotLeaderOrFollowerException::new),
     REQUEST_TIMED_OUT(7, "The request timed out.",
             TimeoutException::new),
     BROKER_NOT_AVAILABLE(8, "The broker is not available.",
             BrokerNotAvailableException::new),
-    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition.",
+    REPLICA_NOT_AVAILABLE(9, "The replica is not available for the requested topic-partition. Produce/Fetch requests and other requests " +
+            "intended only for the leader or follower return NOT_LEADER_OR_FOLLOWER if the broker is not a replica of the topic-partition.",
             ReplicaNotAvailableException::new),
     MESSAGE_TOO_LARGE(10, "The request included a message larger than the max message size the server will accept.",
             RecordTooLargeException::new),
@@ -225,9 +229,8 @@ public enum Errors {
             OutOfOrderSequenceException::new),
     DUPLICATE_SEQUENCE_NUMBER(46, "The broker received a duplicate sequence number.",
             DuplicateSequenceException::new),
-    INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch. Either there is a newer producer " +
-            "with the same transactionalId, or the producer's transaction has been expired by the broker.",
-            ProducerFencedException::new),
+    INVALID_PRODUCER_EPOCH(47, "Producer attempted to produce with an old epoch.",
+            InvalidProducerEpochException::new),
     INVALID_TXN_STATE(48, "The producer attempted a transactional operation in an invalid state.",
             InvalidTxnStateException::new),
     INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producer id which is not currently assigned to " +
@@ -317,9 +320,12 @@ public enum Errors {
     NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
             NoReassignmentInProgressException::new),
     GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
-        GroupSubscribedToTopicException::new),
+            GroupSubscribedToTopicException::new),
     INVALID_RECORD(87, "This record has failed the validation on broker and hence will be rejected.", InvalidRecordException::new),
-    UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared.", UnstableOffsetCommitException::new);
+    UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared.", UnstableOffsetCommitException::new),
+    THROTTLING_QUOTA_EXCEEDED(89, "The throttling quota has been exceeded.", ThrottlingQuotaExceededException::new),
+    PRODUCER_FENCED(90, "There is a newer producer with the same transactionalId " +
+            "which fences the current one.", ProducerFencedException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

@@ -42,26 +42,25 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final Serde<?> valueSerde;
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
-    protected ProcessorNode<?, ?> currentNode;
+    protected ProcessorNode<?, ?, ?, ?> currentNode;
     private long currentSystemTimeMs;
 
-    final StateManager stateManager;
     protected ThreadCache cache;
 
     public AbstractProcessorContext(final TaskId taskId,
                                     final StreamsConfig config,
                                     final StreamsMetricsImpl metrics,
-                                    final StateManager stateManager,
                                     final ThreadCache cache) {
         this.taskId = taskId;
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         this.metrics = metrics;
-        this.stateManager = stateManager;
         valueSerde = config.defaultValueSerde();
         keySerde = config.defaultKeySerde();
         this.cache = cache;
     }
+
+    protected abstract StateManager stateManager();
 
     @Override
     public void setSystemTimeMs(final long timeMs) {
@@ -95,7 +94,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public File stateDir() {
-        return stateManager.baseDir();
+        return stateManager().baseDir();
     }
 
     @Override
@@ -110,7 +109,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
             throw new IllegalStateException("Can only create state stores during initialization.");
         }
         Objects.requireNonNull(store, "store must not be null");
-        stateManager.registerStore(store, stateRestoreCallback);
+        stateManager().registerStore(store, stateRestoreCallback);
     }
 
     /**
@@ -124,7 +123,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
         final String topic = recordContext.topic();
 
-        if (topic.equals(NONEXIST_TOPIC)) {
+        if (NONEXIST_TOPIC.equals(topic)) {
             return null;
         }
 
@@ -197,12 +196,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public void setCurrentNode(final ProcessorNode<?, ?> currentNode) {
+    public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
         this.currentNode = currentNode;
     }
 
     @Override
-    public ProcessorNode<?, ?> currentNode() {
+    public ProcessorNode<?, ?, ?, ?> currentNode() {
         return currentNode;
     }
 
@@ -223,6 +222,11 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
 
     @Override
     public TaskType taskType() {
-        return stateManager.taskType();
+        return stateManager().taskType();
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return stateManager().changelogFor(storeName);
     }
 }

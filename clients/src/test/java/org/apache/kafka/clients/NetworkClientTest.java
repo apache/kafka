@@ -469,19 +469,28 @@ public class NetworkClientTest {
 
     @Test
     public void testConnectionSetupTimeout() {
-        client.ready(node, time.milliseconds());
-        selector.serverConnectionBlocked(node.idString());
+        // Use two nodes to ensure that the logic iterate over a set of more than one
+        // element. ConcurrentModificationException is not triggered otherwise.
+        final Cluster cluster = TestUtils.clusterWith(2);
+        final Node node0 = cluster.nodeById(0);
+        final Node node1 = cluster.nodeById(1);
+
+        client.ready(node0, time.milliseconds());
+        selector.serverConnectionBlocked(node0.idString());
+
+        client.ready(node1, time.milliseconds());
+        selector.serverConnectionBlocked(node1.idString());
 
         client.poll(0, time.milliseconds());
         assertFalse(
-                "The connection should not fail before the socket connection setup timeout elapsed",
+                "The connections should not fail before the socket connection setup timeout elapsed",
                 client.connectionFailed(node)
         );
 
         time.sleep((long) (connectionSetupTimeoutMsTest * 1.2) + 1);
         client.poll(0, time.milliseconds());
         assertTrue(
-                "Expected the connection to fail due to the socket connection setup timeout",
+                "Expected the connections to fail due to the socket connection setup timeout",
                 client.connectionFailed(node)
         );
     }
