@@ -95,6 +95,7 @@ import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.SnapshotNotFoundException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -341,7 +342,8 @@ public enum Errors {
     INVALID_UPDATE_VERSION(95, "The given update version was invalid.", InvalidUpdateVersionException::new),
     FEATURE_UPDATE_FAILED(96, "Unable to update finalized features due to an unexpected server error.", FeatureUpdateFailedException::new),
     PRINCIPAL_DESERIALIZATION_FAILURE(97, "Request principal deserialization failed during forwarding. " +
-         "This indicates an internal error on the broker cluster security setup.", PrincipalDeserializationException::new);
+         "This indicates an internal error on the broker cluster security setup.", PrincipalDeserializationException::new),
+    SNAPSHOT_NOT_FOUND(98, "Requested snapshot was not found", SnapshotNotFoundException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

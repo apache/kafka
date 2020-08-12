@@ -20,14 +20,15 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -45,6 +46,7 @@ import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
+import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -540,6 +542,19 @@ public final class RaftClientTestContext {
         assertEquals(leaderEpoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(highWatermark, partitionResponse.highWatermark());
         return (MemoryRecords) partitionResponse.recordSet();
+    }
+
+    Optional<FetchSnapshotResponseData.PartitionSnapshot> assertSentFetchSnapshotResponse(TopicPartition topicPartition) {
+        List<RaftResponse.Outbound> sentMessages = channel.drainSentResponses(ApiKeys.FETCH_SNAPSHOT);
+        assertEquals(1, sentMessages.size());
+
+        RaftMessage message = sentMessages.get(0);
+        assertTrue(message.data() instanceof FetchSnapshotResponseData);
+
+        FetchSnapshotResponseData response = (FetchSnapshotResponseData) message.data();
+        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
+
+        return FetchSnapshotResponse.forTopicPartition(response, topicPartition);
     }
 
     void buildFollowerSet(

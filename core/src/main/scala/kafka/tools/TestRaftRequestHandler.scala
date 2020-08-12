@@ -45,7 +45,8 @@ class TestRaftRequestHandler(
         case ApiKeys.VOTE
              | ApiKeys.BEGIN_QUORUM_EPOCH
              | ApiKeys.END_QUORUM_EPOCH
-             | ApiKeys.FETCH =>
+             | ApiKeys.FETCH
+             | ApiKeys.FETCH_SNAPSHOT =>
           val requestBody = request.body[AbstractRequest]
           networkChannel.postInboundRequest(requestBody, response =>
             sendResponse(request, Some(response)))
