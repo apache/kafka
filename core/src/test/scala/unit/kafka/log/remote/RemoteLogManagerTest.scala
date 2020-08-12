@@ -222,23 +222,22 @@ class MockRemoteStorageManager extends RemoteStorageManager {
 class MockRemoteLogMetadataManager extends RemoteLogMetadataManager {
   override def putRemoteLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {}
 
-  override def remoteLogSegmentMetadata(topicPartition: TopicPartition,
-                                        offset: Long): RemoteLogSegmentMetadata = {
+  override def remoteLogSegmentMetadata(topicPartition: TopicPartition, offset: Long, epochForOffset: Int): RemoteLogSegmentMetadata = {
     null
   }
 
-  override def earliestLogOffset(tp: TopicPartition): Optional[lang.Long] = {
+  override def earliestLogOffset(tp: TopicPartition, leaderEpoch: Int): Optional[lang.Long] = {
     Optional.empty()
   }
 
-  override def highestLogOffset(tp: TopicPartition): Optional[lang.Long] = {
+  override def highestLogOffset(tp: TopicPartition, leaderEpoch: Int): Optional[lang.Long] = {
     Optional.empty()
   }
 
   override def deleteRemoteLogSegmentMetadata(remoteLogSegmentId: RemoteLogSegmentId): Unit = {}
 
   override def listRemoteLogSegments(topicPartition: TopicPartition,
-                                     minOffset: Long): util.List[RemoteLogSegmentMetadata] = Collections.emptyList()
+                                     minOffset: Long): util.Iterator[RemoteLogSegmentMetadata] = Collections.emptyIterator()
 
   override def onPartitionLeadershipChanges(leaderPartitions: util.Set[TopicPartition],
                                             followerPartitions: util.Set[TopicPartition]): Unit = {}

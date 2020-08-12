@@ -38,19 +38,13 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
@@ -61,6 +55,12 @@ import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 /**
  * This is an implementation of {@link RemoteLogMetadataManager} based on internal topic storage.
@@ -133,8 +133,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
             final ProducerCallback callback = new ProducerCallback();
             producer.send(new ProducerRecord<>(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, partitionNo,
                             remoteLogSegmentId.topicPartition().toString(), remoteLogSegmentMetadata),
-                    callback)
-                    .get(PUBLISH_TIMEOUT_SECS, TimeUnit.SECONDS);
+                    callback).get(PUBLISH_TIMEOUT_SECS, TimeUnit.SECONDS);
 
             final RecordMetadata recordMetadata = callback.recordMetadata();
             if (!recordMetadata.hasOffset()) {
@@ -168,12 +167,12 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         while (consumerTask.committedOffset(partition) < offset) {
             log.debug("Did not receive the messages till the expected offset [{}] for partition [{}], Sleeping for [{}]",
                     offset, partition, sleepTimeMs);
-            Thread.sleep(sleepTimeMs);
+            Utils.sleep(sleepTimeMs);
         }
     }
 
     @Override
-    public RemoteLogSegmentMetadata remoteLogSegmentMetadata(TopicPartition topicPartition, long offset) throws RemoteStorageException {
+    public RemoteLogSegmentMetadata remoteLogSegmentMetadata(TopicPartition topicPartition, long offset, int epochForOffset) throws RemoteStorageException {
         ensureInitialized();
 
         NavigableMap<Long, RemoteLogSegmentId> remoteLogSegmentIdMap = partitionsWithSegmentIds.get(topicPartition);
@@ -203,7 +202,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public Optional<Long> earliestLogOffset(TopicPartition tp) throws RemoteStorageException {
+    public Optional<Long> earliestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException {
         ensureInitialized();
 
         NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(tp);
@@ -211,7 +210,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         return map == null || map.isEmpty() ? Optional.empty() : Optional.of(map.firstEntry().getKey());
     }
 
-    public Optional<Long> highestLogOffset(TopicPartition tp) throws RemoteStorageException {
+    public Optional<Long> highestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException {
         ensureInitialized();
 
         NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(tp);
@@ -230,18 +229,18 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public List<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset) {
+    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset) {
         ensureInitialized();
 
         NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(topicPartition);
         if (map == null) {
-            return Collections.emptyList();
+            return Collections.emptyIterator();
         }
 
         return map.tailMap(minOffset, true).values().stream()
                 .filter(id -> idWithSegmentMetadata.get(id) != null)
                 .map(remoteLogSegmentId -> idWithSegmentMetadata.get(remoteLogSegmentId))
-                .collect(Collectors.toList());
+                .collect(Collectors.toList()).iterator();
     }
 
     @Override

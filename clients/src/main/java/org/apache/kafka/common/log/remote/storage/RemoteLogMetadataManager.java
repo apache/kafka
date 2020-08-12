@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.io.Closeable;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -53,16 +53,18 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
-     * Fetches RemoteLogSegmentMetadata for the given topic partition and offset.
+     * Fetches RemoteLogSegmentMetadata for the given topic partition, offset and leader-epoch for the offset.
      *
      * This will evolve to refactor TopicPartition to TopicPartitionId which contains a unique identifier and TopicPartition.
      *
      * @param topicPartition
      * @param offset
+     * @param epochForOffset
+     *
      * @return
      * @throws RemoteStorageException
      */
-    RemoteLogSegmentMetadata remoteLogSegmentMetadata(TopicPartition topicPartition, long offset) throws RemoteStorageException;
+    RemoteLogSegmentMetadata remoteLogSegmentMetadata(TopicPartition topicPartition, long offset, int epochForOffset) throws RemoteStorageException;
 
     /**
      * Returns earliest log offset if there are segments in the remote storage for the given topic partition, else
@@ -70,21 +72,21 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      *
      * This is treated as the effective log-start-offset of the topic partition's log.
      *
-     * todo check whether we need to pass leader-epoch.
-     *
      * @param tp
+     * @param leaderEpoch
      * @return
      */
-    Optional<Long> earliestLogOffset(TopicPartition tp) throws RemoteStorageException;
+    Optional<Long> earliestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException;
 
     /**
-     * Returns highest log offset of topic partition in remote storage.
+     * Returns highest log offset of topic partition for the given leader epoch in remote storage.
      *
      * @param tp
+     * @param leaderEpoch
      * @return
      * @throws RemoteStorageException
      */
-    Optional<Long> highestLogOffset(TopicPartition tp) throws RemoteStorageException;
+    Optional<Long> highestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException;
 
     /**
      * Deletes the log segment metadata for the given remoteLogSegmentId.
@@ -101,21 +103,21 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * This is used in while deleting a given topic partition to fetch all the remote log segments for the given  topic
      * partition and set a tombstone marker for them to be deleted.
      *
-     * @return List of remote segments, sorted by baseOffset in ascending order.
+     * @return Iterator of remote segments, sorted by baseOffset in ascending order.
      */
-    default List<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition) {
+    default Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition) {
         return listRemoteLogSegments(topicPartition, 0);
     }
 
     /**
-     * Returns list of remote segments, sorted by {@link RemoteLogSegmentMetadata#startOffset()} in ascending order
+     * Returns iterator of remote segments, sorted by {@link RemoteLogSegmentMetadata#startOffset()} in ascending order
      * which are >= the given min Offset.
      *
      * @param topicPartition
      * @param minOffset
-     * @return List of remote segments, sorted by baseOffset in ascending order.
+     * @return Iterator of remote segments, sorted by baseOffset in ascending order.
      */
-    List<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset);
+    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset);
 
     /**
      * This method is invoked only when there are changes in leadership of the topic partitions that this broker is

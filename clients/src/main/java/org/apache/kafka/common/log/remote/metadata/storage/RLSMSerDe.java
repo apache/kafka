@@ -54,10 +54,10 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
             "Leader epoch value of the remote log segment");
     private static final Field.Int64 MAX_TIMESTAMP_FIELD = new Field.Int64("max-timestamp",
             "Max time stamp in the remote log segment");
-    private static final Field.Int64 CREATED_TIMESTAMP_FIELD = new Field.Int64("created-timestamp",
+    private static final Field.Int64 EVENT_TIMESTAMP_FIELD = new Field.Int64("event-timestamp",
             "Created timestamp value of the remote log segment");
-    private static final Field.Bool MARKED_FOR_DELETION_FIELD = new Field.Bool("marked-for-deletion",
-            "Whether this segment is marked for deletion or not.");
+    private static final Field.Int8 STATE_FIELD = new Field.Int8("state",
+            "State of this segment");
     private static final Field.Int64 SEGMENT_SIZE_FIELD = new Field.Int64("segment-size",
             "Size of the remote log segment");
 
@@ -67,8 +67,8 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
             END_OFFSET_FIELD,
             LEADER_EPOCH_FIELD,
             MAX_TIMESTAMP_FIELD,
-            CREATED_TIMESTAMP_FIELD,
-            MARKED_FOR_DELETION_FIELD,
+            EVENT_TIMESTAMP_FIELD,
+            STATE_FIELD,
             SEGMENT_SIZE_FIELD);
 
     private static final Schema[] SCHEMAS = {SCHEMA_V0};
@@ -99,8 +99,8 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
             rlsmStruct.set(END_OFFSET_FIELD, data.endOffset());
             rlsmStruct.set(LEADER_EPOCH_FIELD, data.leaderEpoch());
             rlsmStruct.set(MAX_TIMESTAMP_FIELD, data.maxTimestamp());
-            rlsmStruct.set(CREATED_TIMESTAMP_FIELD, data.createdTimestamp());
-            rlsmStruct.set(MARKED_FOR_DELETION_FIELD, data.markedForDeletion());
+            rlsmStruct.set(EVENT_TIMESTAMP_FIELD, data.createdTimestamp());
+            rlsmStruct.set(STATE_FIELD, (byte) data.state().ordinal());
             rlsmStruct.set(SEGMENT_SIZE_FIELD, data.segmentSizeInBytes());
 
             final int size = SCHEMA_V0.sizeOf(rlsmStruct);
@@ -141,8 +141,9 @@ public class RLSMSerDe extends Serdes.WrapperSerde<RemoteLogSegmentMetadata> {
                     struct.get(END_OFFSET_FIELD),
                     struct.get(MAX_TIMESTAMP_FIELD),
                     struct.get(LEADER_EPOCH_FIELD),
-                    struct.get(CREATED_TIMESTAMP_FIELD),
-                    struct.get(SEGMENT_SIZE_FIELD), struct.get(MARKED_FOR_DELETION_FIELD), Collections.emptyMap()
+                    struct.get(EVENT_TIMESTAMP_FIELD),
+                    struct.get(SEGMENT_SIZE_FIELD), RemoteLogSegmentMetadata.State.values()[struct.get(STATE_FIELD)],
+                    Collections.emptyMap()
             );
         }
     }

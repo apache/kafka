@@ -19,7 +19,7 @@ package org.apache.kafka.common.log.remote.storage;
 import org.apache.kafka.common.TopicPartition;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -45,34 +45,34 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
-    public RemoteLogSegmentMetadata remoteLogSegmentMetadata(TopicPartition topicPartition, long offset)
+    public RemoteLogSegmentMetadata remoteLogSegmentMetadata(TopicPartition topicPartition, long offset, int epochForOffset)
             throws RemoteStorageException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            return delegate.remoteLogSegmentMetadata(topicPartition, offset);
+            return delegate.remoteLogSegmentMetadata(topicPartition, offset, 0);
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
     }
 
     @Override
-    public Optional<Long> earliestLogOffset(TopicPartition tp) throws RemoteStorageException {
+    public Optional<Long> earliestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            return delegate.earliestLogOffset(tp);
+            return delegate.earliestLogOffset(tp, leaderEpoch);
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
     }
 
     @Override
-    public Optional<Long> highestLogOffset(TopicPartition tp) throws RemoteStorageException {
+    public Optional<Long> highestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            return delegate.highestLogOffset(tp);
+            return delegate.highestLogOffset(tp, 0);
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
@@ -90,7 +90,7 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
-    public List<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset) {
+    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset) {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
