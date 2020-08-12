@@ -52,6 +52,8 @@ class IsrExpirationTest {
 
   var replicaManager: ReplicaManager = null
 
+  var alterIsrManager: AlterIsrChannelManager = null // TODO implement this
+
   @Before
   def setUp(): Unit = {
     val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
@@ -60,7 +62,7 @@ class IsrExpirationTest {
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, logManager, new AtomicBoolean(false),
       QuotaFactory.instantiate(configs.head, metrics, time, ""), new BrokerTopicStats, new MetadataCache(configs.head.brokerId),
-      new LogDirFailureChannel(configs.head.logDirs.size))
+      new LogDirFailureChannel(configs.head.logDirs.size), alterIsrManager)
   }
 
   @After

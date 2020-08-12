@@ -151,7 +151,8 @@ class PartitionTest extends AbstractPartitionTest {
       stateStore,
       delayedOperations,
       metadataCache,
-      logManager) {
+      logManager,
+      alterIsrManager) {
 
       override def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Log = {
         val log = super.createLog(isNew, isFutureReplica, offsetCheckpoints)
@@ -919,7 +920,12 @@ class PartitionTest extends AbstractPartitionTest {
     when(stateStore.expandIsr(controllerEpoch, new LeaderAndIsr(leader, leaderEpoch + 2,
       List(leader, follower2, follower1), 1))).thenReturn(Some(2))
     updateFollowerFetchState(follower1, LogOffsetMetadata(currentLeaderEpochStartOffset))
-    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.inSyncReplicaIds)
+
+    // Expansion does not affect the ISR
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
+    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.effectiveInSyncReplicaIds)
+    assertEquals("AlterIsr", alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr.toSet,
+      Set(leader, follower1, follower2))
   }
 
   /**
@@ -952,7 +958,8 @@ class PartitionTest extends AbstractPartitionTest {
         stateStore,
         delayedOperations,
         metadataCache,
-        logManager)
+        logManager,
+        alterIsrManager)
 
       when(delayedOperations.checkAndCompleteFetch())
         .thenAnswer((invocation: InvocationOnMock) => {
@@ -1184,7 +1191,10 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L)
 
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(alterIsrManager.isrUpdates.size, 1)
+    assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId, remoteBrokerId))
+    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.effectiveInSyncReplicaIds)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
   }
@@ -1290,8 +1300,12 @@ class PartitionTest extends AbstractPartitionTest {
     when(stateStore.shrinkIsr(controllerEpoch, updatedLeaderAndIsr)).thenReturn(Some(2))
 
     partition.maybeShrinkIsr()
-    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
-    assertEquals(10L, partition.localLogOrException.highWatermark)
+
+    assertEquals(alterIsrManager.isrUpdates.size, 1)
+    assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId))
+    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.effectiveInSyncReplicaIds)
+    assertEquals(0L, partition.localLogOrException.highWatermark)
   }
 
   @Test
@@ -1540,7 +1554,7 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
       new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[DelayedOperations]),
-      mock(classOf[MetadataCache]), mock(classOf[LogManager]))
+      mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrChannelManager]))
 
     val replicas = Seq(0, 1, 2, 3)
     val isr = Set(0, 1, 2, 3)
@@ -1584,7 +1598,8 @@ class PartitionTest extends AbstractPartitionTest {
       stateStore,
       delayedOperations,
       metadataCache,
-      spyLogManager)
+      spyLogManager,
+      alterIsrManager)
 
     partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints)
 
@@ -1618,7 +1633,8 @@ class PartitionTest extends AbstractPartitionTest {
       stateStore,
       delayedOperations,
       metadataCache,
-      spyLogManager)
+      spyLogManager,
+      alterIsrManager)
 
     partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints)
 
@@ -1653,7 +1669,8 @@ class PartitionTest extends AbstractPartitionTest {
       stateStore,
       delayedOperations,
       metadataCache,
-      spyLogManager)
+      spyLogManager,
+      alterIsrManager)
 
     partition.createLog(isNew = true, isFutureReplica = false, offsetCheckpoints)
 

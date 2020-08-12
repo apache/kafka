@@ -1061,6 +1061,26 @@ object TestUtils extends Logging {
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
 
+  class TestAlterIsrManager extends AlterIsrChannelManager {
+    val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
+
+    override def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Unit = {
+      isrUpdates.addOne(alterIsrItem)
+    }
+
+    override def clearPending(topicPartition: TopicPartition): Unit = {
+      isrUpdates.clear()
+    }
+
+    override def startup(): Unit = { }
+
+    override def shutdown(): Unit = { }
+  }
+
+  def createAlterIsrManager(): TestAlterIsrManager = {
+    new TestAlterIsrManager()
+  }
+
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
                       acks: Int = -1): Unit = {

@@ -2232,6 +2232,7 @@ case object IsrChangeNotification extends ControllerEvent {
 case class AlterIsrReceived(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr],
                             callback: AlterIsrCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.IsrChange
+  override def preempt(): Unit = {}
 }
 
 case class ReplicaLeaderElection(
