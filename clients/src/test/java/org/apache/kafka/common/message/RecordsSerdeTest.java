@@ -39,7 +39,7 @@ import static org.junit.Assert.assertNull;
 public class RecordsSerdeTest {
 
     @Test
-    public void testSerde() throws Exception {
+    public void testSerdeRecords() throws Exception {
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
             new SimpleRecord("foo".getBytes()),
             new SimpleRecord("bar".getBytes()));
@@ -48,7 +48,7 @@ public class RecordsSerdeTest {
             .setTopic("foo")
             .setRecordSet(records);
 
-        testSerdeAllVerions(message);
+        testAllRoundTrips(message);
     }
 
     @Test
@@ -57,21 +57,40 @@ public class RecordsSerdeTest {
             .setTopic("foo");
         assertNull(message.recordSet());
 
-        testSerdeAllVerions(message);
+        testAllRoundTrips(message);
     }
 
-    private void testSerdeAllVerions(SimpleRecordsMessageData message) throws Exception {
+    @Test
+    public void testSerdeEmptyRecords() throws Exception {
+        SimpleRecordsMessageData message = new SimpleRecordsMessageData()
+            .setTopic("foo")
+            .setRecordSet(MemoryRecords.EMPTY);
+        testAllRoundTrips(message);
+    }
+
+    private void testAllRoundTrips(SimpleRecordsMessageData message) throws Exception {
         for (short version = SimpleRecordsMessageData.LOWEST_SUPPORTED_VERSION;
              version <= SimpleRecordsMessageData.HIGHEST_SUPPORTED_VERSION;
              version++) {
-            ByteBuffer buffer = serialize(message, version);
-            assertEquals(buffer, serializeAsStruct(message, version));
-            assertEquals(message, deserialize(buffer.duplicate(), version));
-            assertEquals(message, deserializeFromStruct(buffer.duplicate(), version));
+            testRoundTrip(message, version);
         }
     }
 
-    private SimpleRecordsMessageData deserializeFromStruct(ByteBuffer buffer, short version) {
+    private void testRoundTrip(SimpleRecordsMessageData message, short version) throws IOException {
+        ByteBuffer buf = serialize(message, version);
+
+        SimpleRecordsMessageData message2 = deserialize(buf.duplicate(), version);
+        assertEquals(message, message2);
+        assertEquals(message.hashCode(), message2.hashCode());
+
+        // Check struct serialization as well
+        assertEquals(buf, serializeThroughStruct(message, version));
+        SimpleRecordsMessageData messageFromStruct = deserializeThroughStruct(buf.duplicate(), version);
+        assertEquals(message, messageFromStruct);
+        assertEquals(message.hashCode(), messageFromStruct.hashCode());
+    }
+
+    private SimpleRecordsMessageData deserializeThroughStruct(ByteBuffer buffer, short version) {
         Schema schema = SimpleRecordsMessageData.SCHEMAS[version];
         Struct struct = schema.read(buffer);
         return new SimpleRecordsMessageData(struct, version);
@@ -82,7 +101,7 @@ public class RecordsSerdeTest {
         return new SimpleRecordsMessageData(readable, version);
     }
 
-    private ByteBuffer serializeAsStruct(SimpleRecordsMessageData message, short version) {
+    private ByteBuffer serializeThroughStruct(SimpleRecordsMessageData message, short version) {
         Struct struct = message.toStruct(version);
         ByteBuffer buffer = ByteBuffer.allocate(struct.sizeOf());
         struct.writeTo(buffer);
