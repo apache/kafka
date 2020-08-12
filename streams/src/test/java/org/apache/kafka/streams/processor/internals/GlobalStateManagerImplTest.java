@@ -508,7 +508,8 @@ public class GlobalStateManagerImplTest {
         final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
         stateManager.initialize();
 
-        stateManager.checkpoint(offsets);
+        stateManager.updateChangelogOffsets(offsets);
+        stateManager.checkpoint();
 
         final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
         assertThat(result, equalTo(offsets));
@@ -524,7 +525,8 @@ public class GlobalStateManagerImplTest {
         stateManager.registerStore(store2, stateRestoreCallback);
 
         final Map<TopicPartition, Long> initialCheckpoint = stateManager.changelogOffsets();
-        stateManager.checkpoint(Collections.singletonMap(t1, 101L));
+        stateManager.updateChangelogOffsets(Collections.singletonMap(t1, 101L));
+        stateManager.checkpoint();
 
         final Map<TopicPartition, Long> updatedCheckpoint = stateManager.changelogOffsets();
         assertThat(updatedCheckpoint.get(t2), equalTo(initialCheckpoint.get(t2)));
@@ -557,7 +559,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         initializeConsumer(10, 0, t1);
         stateManager.registerStore(store1, stateRestoreCallback);
-        stateManager.checkpoint(Collections.emptyMap());
+        stateManager.checkpoint();
         stateManager.close();
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.changelogOffsets();

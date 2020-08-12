@@ -58,7 +58,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
@@ -101,13 +100,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor enforcedProcessingSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
     private final InternalProcessorContext processorContext;
-
     private final RecordQueueCreator recordQueueCreator;
 
     private long idleStartTimeMs;
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
-    private boolean checkpointNeededForSuspended = false;
 
     public StreamTask(final TaskId id,
                       final Set<TopicPartition> partitions,
@@ -210,6 +207,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
+            // without EOS the checkpoint file would not be deleted after loading, and
+            // with EOS we would not checkpoint ever during running state anyways.
+            // therefore we can initialize the snapshot as empty so that we would checkpoint right after loading
+            offsetSnapshotSinceLastFlush = Collections.emptyMap();
+
             transitionTo(State.RESTORING);
 
             log.info("Initialized");
@@ -252,14 +254,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         switch (state()) {
             case CREATED:
                 log.info("Suspended created");
-                checkpointNeededForSuspended = false;
                 transitionTo(State.SUSPENDED);
 
                 break;
 
             case RESTORING:
                 log.info("Suspended restoring");
-                checkpointNeededForSuspended = true;
                 transitionTo(State.SUSPENDED);
 
                 break;
@@ -268,7 +268,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 try {
                     // use try-catch to ensure state transition to SUSPENDED even if user code throws in `Processor#close()`
                     closeTopology();
-                    checkpointNeededForSuspended = true;
+
+                    // we must clear the buffered records when suspending because upon resuming the consumer would
+                    // re-fetch those records starting from the committed position
+                    partitionGroup.clear();
                 } finally {
                     transitionTo(State.SUSPENDED);
                     log.info("Suspended running");
@@ -280,7 +283,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 log.info("Skip suspending since state is {}", state());
 
                 break;
-
 
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while suspending active task " + id);
@@ -344,31 +346,34 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     /**
+     * @throws StreamsException fatal error that should cause the thread to die
+     * @throws TaskMigratedException recoverable error that would cause the task to be removed
      * @return offsets that should be committed for this task
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
-        final Map<TopicPartition, OffsetAndMetadata> offsetsToCommit;
         switch (state()) {
             case CREATED:
             case RESTORING:
             case RUNNING:
             case SUSPENDED:
-                stateMgr.flush();
                 // the commitNeeded flag just indicates whether we have reached RUNNING and processed any new data,
                 // so it only indicates whether the record collector should be flushed or not, whereas the state
                 // manager should always be flushed; either there is newly restored data or the flush will be a no-op
                 if (commitNeeded) {
+                    // we need to flush the store caches before flushing the record collector since it may cause some
+                    // cached records to be processed and hence generate more records to be sent out
+                    //
+                    // TODO: this should be removed after we decouple caching with emitting
+                    stateMgr.flushCache();
                     recordCollector.flush();
 
                     log.debug("Prepared {} task for committing", state());
-                    offsetsToCommit = committableOffsetsAndMetadata();
+                    return committableOffsetsAndMetadata();
                 } else {
                     log.debug("Skipped preparing {} task for commit since there is nothing to commit", state());
-                    offsetsToCommit = Collections.emptyMap();
+                    return Collections.emptyMap();
                 }
-
-                break;
 
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while preparing active task " + id + " for committing");
@@ -376,8 +381,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while preparing active task " + id + " for committing");
         }
-
-        return offsetsToCommit;
     }
 
     private Map<TopicPartition, OffsetAndMetadata> committableOffsetsAndMetadata() {
@@ -428,53 +431,28 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return committableOffsets;
     }
 
-    /**
-     * This should only be called if the attempted commit succeeded for this task
-     */
     @Override
-    public void postCommit() {
-        commitRequested = false;
-
+    public void postCommit(final boolean enforceCheckpoint) {
         switch (state()) {
             case CREATED:
                 // We should never write a checkpoint for a CREATED task as we may overwrite an existing checkpoint
                 // with empty uninitialized offsets
-                log.debug("Skipped writing checkpoint for created task");
+                log.debug("Skipped writing checkpoint for {} task", state());
 
                 break;
 
             case RESTORING:
-                writeCheckpoint();
-                log.debug("Finalized commit for restoring task");
+            case SUSPENDED:
+                maybeWriteCheckpoint(enforceCheckpoint);
+                log.debug("Finalized commit for {} task with enforce checkpoint {}", state(), enforceCheckpoint);
 
                 break;
 
             case RUNNING:
-                if (!eosEnabled) {
-                    writeCheckpoint();
+                if (enforceCheckpoint || !eosEnabled) {
+                    maybeWriteCheckpoint(enforceCheckpoint);
                 }
-                log.debug("Finalized commit for running task");
-
-                break;
-
-            case SUSPENDED:
-                /*
-                 * We must clear the `PartitionGroup` only after committing, and not in `suspend()`,
-                 * because otherwise we lose the partition-time information.
-                 * We also must clear it when the task is revoked, and not in `close()`, as the consumer will clear
-                 * its internal buffer when the corresponding partition is revoked but the task may be reassigned
-                 */
-                partitionGroup.clear();
-
-                if (checkpointNeededForSuspended) {
-                    // Make sure we don't overwrite the checkpoint if the suspended task was still in CREATED
-                    // and had not yet initialized offsets
-                    writeCheckpoint();
-                    log.debug("Finalized commit for suspended task");
-                    checkpointNeededForSuspended = false;
-                } else {
-                    log.debug("Skipped writing checkpoint for uninitialized suspended task");
-                }
+                log.debug("Finalized commit for {} task with eos {} enforce checkpoint {}", state(), eosEnabled, enforceCheckpoint);
 
                 break;
 
@@ -484,6 +462,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             default:
                 throw new IllegalStateException("Unknown state " + state() + " while post committing active task " + id);
         }
+
+        commitRequested = false;
+        commitNeeded = false;
     }
 
     private Map<TopicPartition, Long> extractPartitionTimes() {
@@ -542,13 +523,22 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         log.info("Closed clean and recycled state");
     }
 
-    private void writeCheckpoint() {
+    /**
+     * The following exceptions maybe thrown from the state manager flushing call
+     *
+     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
+     *                          or flushing state store get IO errors; such error should cause the thread to die
+     */
+    @Override
+    protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
+        // commitNeeded indicates we may have processed some records since last commit
+        // and hence we need to refresh checkpointable offsets regardless whether we should checkpoint or not
         if (commitNeeded) {
-            stateMgr.checkpoint(checkpointableOffsets());
-        } else {
-            stateMgr.checkpoint(emptyMap());
+            stateMgr.updateChangelogOffsets(checkpointableOffsets());
         }
-        commitNeeded = false;
+
+        super.maybeWriteCheckpoint(enforceCheckpoint);
     }
 
     private void validateClean() {
@@ -784,6 +774,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
         }
+
+        log.debug("Checkpointable offsets {}", checkpointableOffsets);
+
         return checkpointableOffsets;
     }
 

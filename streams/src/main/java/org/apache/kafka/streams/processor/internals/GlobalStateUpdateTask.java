@@ -115,7 +115,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         // but in practice this shouldn't happen for global state update tasks, since the stores are not
         // logged and there are no downstream operators after global stores.
         stateMgr.flush();
-        stateMgr.checkpoint(offsets);
+        stateMgr.updateChangelogOffsets(offsets);
+        stateMgr.checkpoint();
     }
 
     public void close(final boolean wipeStateStore) throws IOException {

@@ -426,9 +426,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+    public void updateChangelogOffsets(final Map<TopicPartition, Long> offsets) {
         checkpointFileCache.putAll(offsets);
+    }
 
+    @Override
+    public void checkpoint() {
         final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
 
         // Skip non persistent store
