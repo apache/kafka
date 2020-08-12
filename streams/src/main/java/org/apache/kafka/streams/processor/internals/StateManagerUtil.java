@@ -58,6 +58,9 @@ final class StateManagerUtil {
             return false;
         }
 
+        if (enforceCheckpoint)
+            return true;
+
         // we can checkpoint if the the difference between the current and the previous snapshot is large enough
         long totalOffsetDelta = 0L;
         for (final Map.Entry<TopicPartition, Long> entry : newOffsetSnapshot.entrySet()) {
@@ -66,7 +69,7 @@ final class StateManagerUtil {
 
         // when enforcing checkpoint is required, we should overwrite the checkpoint if it is different from the old one;
         // otherwise, we only overwrite the checkpoint if it is largely different from the old one
-        return enforceCheckpoint ? totalOffsetDelta > 0 : totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
+        return totalOffsetDelta > OFFSET_DELTA_THRESHOLD_FOR_CHECKPOINT;
     }
 
     /**
