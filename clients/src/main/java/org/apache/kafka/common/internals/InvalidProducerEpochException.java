@@ -14,28 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.common.internals;
+
+import org.apache.kafka.common.errors.RetriableException;
 
 /**
- * A retriable exception is a transient exception that if retried may succeed.
+ * This exception indicates that the produce request sent to the partition leader
+ * contains a non-matching producer epoch. When encountering this exception, the ongoing transaction
+ * will be aborted and can be retried.
  */
-public abstract class RetriableException extends ApiException {
+public class InvalidProducerEpochException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public RetriableException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public RetriableException(String message) {
+    public InvalidProducerEpochException(String message) {
         super(message);
     }
-
-    public RetriableException(Throwable cause) {
-        super(cause);
-    }
-
-    public RetriableException() {
-    }
-
 }
