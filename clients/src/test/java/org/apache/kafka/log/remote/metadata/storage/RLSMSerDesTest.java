@@ -42,8 +42,8 @@ public class RLSMSerDesTest {
                 System.currentTimeMillis() - 10000,
                 1,
                 System.currentTimeMillis(),
-                false,
-                1000);
+                1000, false, Collections.emptyMap()
+        );
         doTestSerDes(topic, rlsmWithNoContext);
 
         // RLSM with context as non-null.
@@ -54,8 +54,8 @@ public class RLSMSerDesTest {
                 System.currentTimeMillis() - 10000,
                 1,
                 System.currentTimeMillis(),
-                false,
-                1000);
+                1000, false, Collections.emptyMap()
+        );
         doTestSerDes(topic, rlsmWithContext);
 
         //RLSM marked with deletion
@@ -66,8 +66,8 @@ public class RLSMSerDesTest {
                 System.currentTimeMillis() - 10000,
                 1,
                 System.currentTimeMillis(),
-                true,
-                1000);
+                1000, true, Collections.emptyMap()
+        );
         doTestSerDes(topic, rlsmMarkedDelete);
 
     }

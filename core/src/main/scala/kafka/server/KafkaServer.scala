@@ -374,12 +374,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         isStartingUp.set(false)
         AppInfoParser.registerAppInfo(jmxPrefix, config.brokerId.toString, metrics, time.milliseconds())
 
-        remoteLogManager.foreach ( rlm => {
-//          val listener = remoteLogManagerConfig.listenerName.map(ListenerName.normalised)
-//            .getOrElse(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
-//          val serverEndpoint = brokerInfo.broker.endPoint(listener)
-          rlm.onServerStarted(null)
-        })
+        remoteLogManager.foreach(rlm => rlm.onServerStarted())
 
         info("started")
       }

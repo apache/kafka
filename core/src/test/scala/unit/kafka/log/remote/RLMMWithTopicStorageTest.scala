@@ -22,11 +22,12 @@ import java.util
 import java.util.{Collections, UUID}
 
 import kafka.api.IntegrationTestHarness
+import kafka.server.KafkaConfig
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.log.remote.metadata.storage.RLMMWithTopicStorage
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata.remoteLogSegmentId
-import org.apache.kafka.common.log.remote.storage.{RemoteLogMetadataManager, RemoteLogSegmentId, RemoteLogSegmentMetadata}
+import org.apache.kafka.common.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata}
 import org.junit.{Assert, Before, Test}
 
 import scala.jdk.CollectionConverters._
@@ -50,28 +51,28 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
   val segSize: Long = 1024 * 1024
 
   val rlSegIdTp0_0_100 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
-  val rlSegMetTp0_0_100 = new RemoteLogSegmentMetadata(rlSegIdTp0_0_100, 0L, 100L, -1L, 1, segSize)
+  val rlSegMetTp0_0_100 = new RemoteLogSegmentMetadata(rlSegIdTp0_0_100, 0L, 100L, -1L, 1, segSize, Collections.emptyMap())
 
   val rlSegIdTp0_101_200 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
-  val rlSegMetTp0_101_200 = new RemoteLogSegmentMetadata(rlSegIdTp0_101_200, 101L, 200L, -1L, 1, segSize)
+  val rlSegMetTp0_101_200 = new RemoteLogSegmentMetadata(rlSegIdTp0_101_200, 101L, 200L, -1L, 1, segSize, Collections.emptyMap())
 
   val rlSegIdTp1_101_300 = new RemoteLogSegmentId(tp1, UUID.randomUUID)
-  val rlSegMetTp1_101_300 = new RemoteLogSegmentMetadata(rlSegIdTp1_101_300, 101L, 300L, -1L, 1, segSize)
+  val rlSegMetTp1_101_300 = new RemoteLogSegmentMetadata(rlSegIdTp1_101_300, 101L, 300L, -1L, 1, segSize, Collections.emptyMap())
 
   val rlSegIdTp2_150_400 = new RemoteLogSegmentId(tp2, UUID.randomUUID)
-  val rlSegMetTp2_150_400 = new RemoteLogSegmentMetadata(rlSegIdTp2_150_400, 150L, 400L, -1L, 1, segSize)
+  val rlSegMetTp2_150_400 = new RemoteLogSegmentMetadata(rlSegIdTp2_150_400, 150L, 400L, -1L, 1, segSize, Collections.emptyMap())
 
   val rlSegIdTp2_401_700 = new RemoteLogSegmentId(tp2, UUID.randomUUID)
-  val rlSegMetTp2_401_700 = new RemoteLogSegmentMetadata(rlSegIdTp2_401_700, 401L, 700L, -1L, 1, segSize)
+  val rlSegMetTp2_401_700 = new RemoteLogSegmentMetadata(rlSegIdTp2_401_700, 401L, 700L, -1L, 1, segSize, Collections.emptyMap())
 
   val rlSegIdTp2_501_1000 = new RemoteLogSegmentId(tp2, UUID.randomUUID)
-  val rlSegMetTp2_501_1000 = new RemoteLogSegmentMetadata(rlSegIdTp2_501_1000, 501L, 1000L, -1L, 1, segSize)
+  val rlSegMetTp2_501_1000 = new RemoteLogSegmentMetadata(rlSegIdTp2_501_1000, 501L, 1000L, -1L, 1, segSize, Collections.emptyMap())
 
   val rlSegIdTp3_101_700 = new RemoteLogSegmentId(tp3, UUID.randomUUID)
-  val rlSegMetTp3_101 = new RemoteLogSegmentMetadata(rlSegIdTp3_101_700, 101L, 700L, -1L, 1, segSize)
+  val rlSegMetTp3_101 = new RemoteLogSegmentMetadata(rlSegIdTp3_101_700, 101L, 700L, -1L, 1, segSize, Collections.emptyMap())
 
   val rlSegIdTp3_701_1900 = new RemoteLogSegmentId(tp3, UUID.randomUUID)
-  val rlSegMetTp3_701_1900 = new RemoteLogSegmentMetadata(rlSegIdTp3_701_1900, 701L, 1900L, -1L, 1, segSize)
+  val rlSegMetTp3_701_1900 = new RemoteLogSegmentMetadata(rlSegIdTp3_701_1900, 701L, 1900L, -1L, 1, segSize, Collections.emptyMap())
 
   def tmpLogDirPathAsStr: String = tmpLogDirPath.toString
 
@@ -141,7 +142,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
   def testNonExistingOffsets(): Unit = {
 
     val rlSegIdTp0_10 = new RemoteLogSegmentId(tp0, UUID.randomUUID)
-    val rlSegMetTp0_10 = new RemoteLogSegmentMetadata(rlSegIdTp0_10, 10L, 100L, -1L, 1, segSize)
+    val rlSegMetTp0_10 = new RemoteLogSegmentMetadata(rlSegIdTp0_10, 10L, 100L, -1L, 1, segSize, Collections.emptyMap())
     var mayBeRlmmWithTopicStorage: Option[RLMMWithTopicStorage] = None
     try {
       val rlmmWithTopicStorage = createRLMMWithTopicStorage(tmpLogDirPathAsStr, 1)
@@ -201,10 +202,10 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     val logDir = new File(tmpLogDirPath, 1.toString)
     logDir.mkdirs()
     configs.put("log.dir", logDir.toString)
-    configs.put(RemoteLogMetadataManager.BROKER_ID, brokerId)
+    configs.put(KafkaConfig.BrokerIdProp, brokerId)
     configs.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     rlmmWithTopicStorage.configure(configs)
-    rlmmWithTopicStorage.onServerStarted(null)
+    rlmmWithTopicStorage.onServerStarted()
   }
 
   def waitTillReceiveExpected(fn: () => RemoteLogSegmentId, expected: RemoteLogSegmentId, waitTimeInMillis: Long = 30000): Boolean = {
@@ -263,9 +264,9 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
 
       // check whether the published events from rlmm1 are available.
       val rlSegMetTp0_0_1 = rlmm1.remoteLogSegmentMetadata(tp0, 10);
-      Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_0_1);
-      val rlSegIdTp0_101_1 = rlmm1.remoteLogSegmentMetadata(tp0, 190);
-      Assert.assertEquals(rlSegIdTp0_101_200, rlSegIdTp0_101_1);
+      Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_0_1.remoteLogSegmentId());
+      val rlSegMatTp0_101_1 = rlmm1.remoteLogSegmentMetadata(tp0, 190);
+      Assert.assertEquals(rlSegIdTp0_101_200, rlSegMatTp0_101_1.remoteLogSegmentId());
 
       // check whether these events are received in rlmm2 as it is a follower.
       Assert.assertTrue(waitTillReceiveExpected(() => remoteLogSegmentId(rlmm2.remoteLogSegmentMetadata(tp0, 10)), rlSegIdTp0_0_100))
@@ -312,10 +313,10 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       rlmm1.putRemoteLogSegmentData(rlSegMetTp3_101)
 
       val rlSegMetTp0_10 = rlmm1.remoteLogSegmentMetadata(tp0, 10);
-      Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_10);
+      Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_10.remoteLogSegmentId());
 
       val rlSegMetTp3_140 = rlmm1.remoteLogSegmentMetadata(tp3, 140);
-      Assert.assertEquals(rlSegIdTp3_101_700, rlSegMetTp3_140);
+      Assert.assertEquals(rlSegIdTp3_101_700, rlSegMetTp3_140.remoteLogSegmentId());
 
       val rlmm2 = new RLMMWithTopicStorageWithCustomPartitioner()
       mayBeRlmm2 = Some(rlmm2)

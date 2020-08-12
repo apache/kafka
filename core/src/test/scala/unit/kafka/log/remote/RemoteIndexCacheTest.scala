@@ -51,13 +51,20 @@ class RemoteIndexCacheTest {
     EasyMock.expect(rlsm.fetchTimestampIndex(EasyMock.anyObject(classOf[RemoteLogSegmentMetadata])))
       .andReturn(new FileInputStream(timeIndex.file))
       .times(1)
+    EasyMock.expect(rlsm.fetchTransactionIndex(EasyMock.anyObject(classOf[RemoteLogSegmentMetadata])))
+      .andReturn(new FileInputStream(File.createTempFile("kafka-test-", ".txnIndex")))
+      .times(1)
+    EasyMock.expect(rlsm.fetchProducerSnapshotIndex(EasyMock.anyObject(classOf[RemoteLogSegmentMetadata])))
+      .andReturn(new FileInputStream(File.createTempFile("kafka-test-", ".pid")))
+      .times(1)
+
     EasyMock.replay(rlsm)
 
     val logDir = Files.createTempDirectory("kafka-").toString
     cache = new RemoteIndexCache(remoteStorageManager = rlsm, logDir = logDir)
 
     rlsMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(new TopicPartition("foo", 0),
-      UUID.randomUUID()), baseOffset, offsetIndex.lastOffset, -1L, 1, 1024)
+          UUID.randomUUID()), baseOffset, offsetIndex.lastOffset, -1L, 1, 1024, java.util.Collections.emptyMap())
   }
 
   private def appendIndexEntries(): Unit = {

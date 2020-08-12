@@ -51,8 +51,7 @@ class RemoteLogManagerTest {
 
   val rsmConfig: Map[String, Any] = Map(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "url" -> "foo.url",
     REMOTE_STORAGE_MANAGER_CONFIG_PREFIX + "timout.ms" -> 1000L)
-  val rlmConfig = RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager", "",
-    1024, 60000, 2, 10, rsmConfig, 10, 30000, "kafka.log.remote.MockRemoteLogMetadataManager")
+  val rlmConfig = RemoteLogManagerConfig(remoteLogStorageEnable = true, "kafka.log.remote.MockRemoteStorageManager", "", rsmConfig, 1024, 60000, 2, 10, 10, 30000, "kafka.log.remote.MockRemoteLogMetadataManager", rlmmProps = Map.empty)
 
   var logConfig: LogConfig = _
   var tmpDir: File = _
@@ -204,8 +203,7 @@ class MockRemoteStorageManager extends RemoteStorageManager {
     MockRemoteStorageManager.configs = configs
   }
 
-  override def copyLogSegment(remoteLogSegmentId: RemoteLogSegmentId,
-                              logSegmentData: LogSegmentData): Unit = {
+  override def copyLogSegment(remoteLogSegmentMetadata: RemoteLogSegmentMetadata, logSegmentData: LogSegmentData): Unit = {
   }
 
   override def fetchLogSegmentData(remoteLogSegmentMetadata: RemoteLogSegmentMetadata,
@@ -247,7 +245,7 @@ class MockRemoteLogMetadataManager extends RemoteLogMetadataManager {
 
   override def onStopPartitions(partitions: util.Set[TopicPartition]): Unit = {}
 
-  override def onServerStarted(serverEndpoint: String): Unit = {}
+  override def onServerStarted(): Unit = {}
 
   override def configure(configs: util.Map[String, _]): Unit = {}
 

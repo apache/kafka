@@ -26,11 +26,11 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.replica.{ClientMetadata, PartitionView, ReplicaSelector, ReplicaView}
 import org.junit.Assert.assertEquals
 import org.junit.runner.RunWith
-import org.junit.runners.Suite.SuiteClasses
 import org.junit.runners.Suite
+import org.junit.runners.Suite.SuiteClasses
 
-import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
+import scala.jdk.CollectionConverters._
 
 @SuiteClasses(Array[Class[_]](
   classOf[OffloadAndConsumeFromLeaderTest],

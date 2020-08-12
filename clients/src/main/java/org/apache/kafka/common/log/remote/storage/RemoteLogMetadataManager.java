@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.io.Closeable;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,25 +29,18 @@ import java.util.Set;
 /**
  * This interface provides storing and fetching remote log segment metadata with strongly consistent semantics.
  * <p>
- * When {@link #configure(Map)} is invoked on this instance, {@link #BROKER_ID}, {@link #CLUSTER_ID} properties are
- * passed which can be used by this instance if needed. These propertiess can be used if there is a single storage used
- * for different clusters. For ex: MySQL storage can be used as metadata store for all the clusters across the org.
+ * "cluster.id", "broker.id" and all the properties prefixed with "remote.log.metadata." are passed when
+ * {@link #configure(Map)} is invoked on this instance,.
+ *
+ * "cluster.id", "broker.id" properties can be used if there is a single storage used for different clusters.
+ * For ex: MySQL storage can be used as metadata store for all the clusters across the org.
  * <p>
  *
+ * {@link #onServerStarted()}
  * todo-tier cleanup the abstractions in this interface.
  */
 @InterfaceStability.Unstable
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
-
-    /**
-     * Property name for broker id.
-     */
-    String BROKER_ID = "broker.id";
-
-    /**
-     * Property name for cluster id.
-     */
-    String CLUSTER_ID = "cluster.id";
 
     /**
      * Stores RemoteLogSegmentMetadata with the containing RemoteLogSegmentId into RemoteLogMetadataManager.
@@ -146,5 +138,5 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * Callback to receive once server is started so that this class can run tasks which should be run only when the
      * server is started.
      */
-    void onServerStarted(final String serverEndpoint);
+    void onServerStarted();
 }

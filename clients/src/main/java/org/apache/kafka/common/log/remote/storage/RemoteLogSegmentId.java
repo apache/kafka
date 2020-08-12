@@ -26,7 +26,7 @@ import java.util.UUID;
 
 /**
  * This represents a universally unique identifier associated to a topic partition's log segment. This will be
- * regenerated for every attempt of copying a specific log segment in {@link RemoteStorageManager#copyLogSegment(RemoteLogSegmentId, LogSegmentData)}.
+ * regenerated for every attempt of copying a specific log segment in {@link RemoteStorageManager#copyLogSegment(RemoteLogSegmentMetadata, LogSegmentData)}.
  */
 public class RemoteLogSegmentId implements Comparable<RemoteLogSegmentId>, Serializable {
     private static final long serialVersionUID = 1L;

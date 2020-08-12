@@ -89,13 +89,13 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public void copyLogSegment(final RemoteLogSegmentId remoteLogSegmentId,
+    public void copyLogSegment(final RemoteLogSegmentMetadata remoteLogSegmentMetadata,
                                final LogSegmentData logSegmentData) throws RemoteStorageException {
-        Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId must not be null");
+        Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentId must not be null");
         Objects.requireNonNull(logSegmentData, "logSegmentData must not be null");
 
         final long baseOffset = offsetFromFileName(logSegmentData.logSegment().getName());
-
+        final RemoteLogSegmentId remoteLogSegmentId = remoteLogSegmentMetadata.remoteLogSegmentId();
         final String logFileKey = logFileKey(remoteLogSegmentId, baseOffset);
         final String offsetIndexFileKey = offsetIndexFileKey(remoteLogSegmentId, baseOffset);
         final String timeIndexFileKey = timeIndexFileKey(remoteLogSegmentId, baseOffset);
@@ -114,7 +114,7 @@ public class S3RemoteStorageManager implements RemoteStorageManager {
             timeIndexFileUpload.waitForUploadResult();
 
         } catch (final Exception e) {
-            final String message = "Error uploading remote log segment " + remoteLogSegmentId;
+            final String message = "Error uploading remote log segment " + remoteLogSegmentMetadata;
             log.error(message, e);
 
             log.info("Attempt to clean up partial upload");

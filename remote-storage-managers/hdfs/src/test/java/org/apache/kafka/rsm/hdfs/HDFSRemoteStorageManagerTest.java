@@ -45,6 +45,7 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.UUID;
 
@@ -124,7 +125,7 @@ public class HDFSRemoteStorageManagerTest {
     }
 
     private LogSegmentData getLogSegmentData(LogSegment seg) {
-        return new LogSegmentData(seg.log().file(), seg.offsetIndex().file(), seg.timeIndex().file(), , , leaderEpochCache);
+        return new LogSegmentData(seg.log().file(), seg.offsetIndex().file(), seg.timeIndex().file(), seg.txnIndex().file(), null, null);
     }
 
     private void assertFileEquals(InputStream is, File f) throws Exception {
@@ -153,7 +154,8 @@ public class HDFSRemoteStorageManagerTest {
         UUID uuid0 = UUID.randomUUID();
         RemoteLogSegmentId id0 = new RemoteLogSegmentId(tp, uuid0);
         LogSegmentData seg0 = getLogSegmentData(segments.get(0));
-        rsm.copyLogSegment(id0, seg0);
+        RemoteLogSegmentMetadata seg0metadata = new RemoteLogSegmentMetadata(id0, 0, 299, 0, 0, 1L, Collections.emptyMap());
+        rsm.copyLogSegment(seg0metadata, seg0);
 
         assertTrue(hdfs.exists(new Path(baseDir + "/test-1")));
         assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid0 + "/log")));
@@ -162,11 +164,11 @@ public class HDFSRemoteStorageManagerTest {
 
         UUID uuid1 = UUID.randomUUID();
         RemoteLogSegmentId id1 = new RemoteLogSegmentId(tp, uuid1);
+        RemoteLogSegmentMetadata seg1metadata = new RemoteLogSegmentMetadata(id1, 300, 499, 0, 0, 1L, Collections.emptyMap());
         LogSegmentData seg1 = getLogSegmentData(segments.get(1));
-        rsm.copyLogSegment(id1, seg1);
+        rsm.copyLogSegment(seg1metadata, seg1);
         assertTrue(hdfs.exists(new Path(baseDir + "/test-1/" + uuid1 + "/index")));
 
-        RemoteLogSegmentMetadata seg0metadata = new RemoteLogSegmentMetadata(id0, 0, 299, 0, 0, new byte[]{});
         try (InputStream is = rsm.fetchLogSegmentData(seg0metadata, 0L, Long.MAX_VALUE)) {
             assertFileEquals(is, segments.get(0).log().file());
         }
@@ -177,7 +179,6 @@ public class HDFSRemoteStorageManagerTest {
             assertFileEquals(is, segments.get(0).timeIndex().file());
         }
 
-        RemoteLogSegmentMetadata seg1metadata = new RemoteLogSegmentMetadata(id1, 300, 499, 0, 0, new byte[]{});
         try (InputStream is = rsm.fetchLogSegmentData(seg1metadata, 0L, Long.MAX_VALUE)) {
             assertFileEquals(is, segments.get(1).log().file());
         }

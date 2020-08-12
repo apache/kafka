@@ -124,11 +124,11 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
-    public void onServerStarted(final String serverEndpoint) {
+    public void onServerStarted() {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            delegate.onServerStarted(serverEndpoint);
+            delegate.onServerStarted();
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }

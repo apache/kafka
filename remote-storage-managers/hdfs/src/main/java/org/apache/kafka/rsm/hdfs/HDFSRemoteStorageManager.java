@@ -22,7 +22,6 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.kafka.common.log.remote.storage.LogSegmentData;
-import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentContext;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.common.log.remote.storage.RemoteStorageException;
@@ -51,9 +50,9 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     private LRUCache readCache;
 
     @Override
-    public void copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData) throws RemoteStorageException {
+    public void copyLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata, LogSegmentData logSegmentData) throws RemoteStorageException {
         try {
-            String desDir = getSegmentRemoteDir(remoteLogSegmentId);
+            String desDir = getSegmentRemoteDir(remoteLogSegmentMetadata.remoteLogSegmentId());
 
             File logFile = logSegmentData.logSegment();
             File offsetIdxFile = logSegmentData.offsetIndex();

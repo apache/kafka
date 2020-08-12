@@ -69,10 +69,9 @@ public final class RemoteLogSegmentFileset {
      * The name of each of the files under the scope of a log segment (the log file, its indexes, etc.)
      * follows the structure UUID-BrokerId-FileType.
      */
-    private static final Pattern FILENAME_FORMAT = compile("(\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12})-(\\d+)-([a-z_]+)");
+    private static final Pattern FILENAME_FORMAT = compile("(\\w{8}-\\w{4}-\\w{4}-\\w{4}-\\w{12})-([a-z_]+)");
     private static final int GROUP_UUID = 1;
-    private static final int GROUP_BROKER_ID = 2;
-    private static final int GROUP_FILE_TYPE = 3;
+    private static final int GROUP_FILE_TYPE = 2;
 
     /**
      * Characterises the type of a file in the local tiered storage copied from Apache Kafka's standard storage.
@@ -109,13 +108,6 @@ public final class RemoteLogSegmentFileset {
          */
         public static UUID getUUID(final String filename) {
             return UUID.fromString(substr(filename, GROUP_UUID));
-        }
-
-        /**
-         * Extracts the broker id this file was offloaded from.
-         */
-        public static int getBrokerId(final String filename) {
-            return Integer.parseInt(substr(filename, GROUP_BROKER_ID));
         }
 
         private static String substr(final String filename, final int group) {

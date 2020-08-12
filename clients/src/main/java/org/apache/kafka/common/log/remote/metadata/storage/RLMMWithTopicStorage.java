@@ -253,7 +253,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         log.info("Received leadership notifications with leader partitions {} and follower partitions {}",
                 leaderPartitions, followerPartitions);
 
-        initialize(null);
+        initialize();
 
         final HashSet<TopicPartition> allPartitions = new HashSet<>(leaderPartitions);
         allPartitions.addAll(followerPartitions);
@@ -264,32 +264,20 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     public void onStopPartitions(Set<TopicPartition> partitions) {
         ensureInitialized();
 
-        initialize(null);
+        initialize();
 
         // remove these partitions from the currently assigned topic partitions.
         consumerTask.removeAssignmentsForPartitions(partitions);
     }
 
     @Override
-    public void onServerStarted(final String endpoint) {
-        initialize(endpoint);
+    public void onServerStarted() {
+        initialize();
     }
 
-    private synchronized void initialize(final String endpoint) {
+    private synchronized void initialize() {
         if (!initialized) {
             log.info("Initializing all the clients and resources.");
-
-            if (endpoint != null) {
-                final String configuredEndpoint = String.valueOf(configs.get(BOOTSTRAP_SERVERS_CONFIG));
-
-                if (!endpoint.equals(configuredEndpoint)) {
-                    final Map<String, Object> newConfigs = new HashMap<>(configs);
-                    newConfigs.put(BOOTSTRAP_SERVERS_CONFIG, endpoint);
-                    configs = Collections.unmodifiableMap(newConfigs);
-
-                    log.info("Replaced endpoint {} with the override {}", configuredEndpoint, endpoint);
-                }
-            }
 
             if (configs.get(BOOTSTRAP_SERVERS_CONFIG) == null) {
                 throw new InvalidConfigurationException("Broker endpoint must be configured for the remote log " +

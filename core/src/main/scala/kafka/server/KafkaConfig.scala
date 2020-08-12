@@ -130,20 +130,24 @@ object Defaults {
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
   val MessageDownConversionEnable = true
+
+  // tiered storage defaults
   val RemoteLogStorageEnable = false
   val RemoteStorageManager = ""
   val RemoteStorageManagerClassPath = ""
-  val RemoteLogMetadataManager = ""
-  val RemoteLogMetadataTopicReplicationFactor = RLMMWithTopicStorage.DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR
-  val RemoteLogMetadataTopicPartitions = RLMMWithTopicStorage.DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS
-  val RemoteLogMetadataTopicRetentionMins = RLMMWithTopicStorage.DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MINS
-  val RemoteLogMetadataManagerClassPath = ""
   val RemoteLogRetentionMinutes = 7 * 24 * 60L
   val RemoteLogRetentionBytes = 1024 * 1024 * 1024L
   val RemoteLogManagerThreadPoolSize = 10
   val RemoteLogManagerTaskIntervalMs = 30 * 1000L
   val RemoteLogReaderThreads = 5
   val RemoteLogReaderMaxPendingTasks = 100
+
+  // RLMM implementation defaults
+  val RemoteLogMetadataManager = classOf[RLMMWithTopicStorage].getName
+  val RemoteLogMetadataTopicReplicationFactor = RLMMWithTopicStorage.DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR
+  val RemoteLogMetadataTopicPartitions = RLMMWithTopicStorage.DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS
+  val RemoteLogMetadataTopicRetentionMins = RLMMWithTopicStorage.DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MINS
+  val RemoteLogMetadataManagerClassPath = ""
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -443,6 +447,7 @@ object KafkaConfig {
   val RemoteLogManagerTaskIntervalMsProp = "remote.log.manager.task.interval.ms"
   val RemoteLogReaderThreadsProp = "remote.log.reader.threads"
   val RemoteLogReaderMaxPendingTasksProp = "remote.log.reader.max.pending.tasks"
+  // configs for default RLMM implementation properties
   val RemoteLogMetadataTopicReplicationFactorProp = RLMMWithTopicStorage.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP
   val RemoteLogMetadataTopicPartitionsProp = RLMMWithTopicStorage.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP
   val RemoteLogMetadataTopicRetentionMinsProp = RLMMWithTopicStorage.REMOTE_LOG_METADATA_TOPIC_RETENTION_MINS_PROP

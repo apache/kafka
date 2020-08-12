@@ -47,11 +47,11 @@ public interface RemoteStorageManager extends Configurable, Closeable {
      * Invoker of this API should always send a unique id as part of {@link RemoteLogSegmentId#id()} even when it
      * retries to invoke this method for the same log segment data.
      *
-     * @param remoteLogSegmentId
+     * @param remoteLogSegmentMetadata
      * @param logSegmentData
      * @throws IOException
      */
-    void copyLogSegment(RemoteLogSegmentId remoteLogSegmentId, LogSegmentData logSegmentData)
+    void copyLogSegment(RemoteLogSegmentMetadata remoteLogSegmentMetadata, LogSegmentData logSegmentData)
             throws RemoteStorageException;
 
     /**
