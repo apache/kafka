@@ -59,7 +59,7 @@ private[group] class MemberMetadata(var memberId: String,
                                     val clientId: String,
                                     val clientHost: String,
                                     val rebalanceTimeoutMs: Int,
-                                    val sessionTimeoutMs: Int,
+                                    var sessionTimeoutMs: Int,
                                     val protocolType: String,
                                     var supportedProtocols: List[(String, Array[Byte])]) {
 

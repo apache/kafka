@@ -513,24 +513,27 @@ public abstract class AbstractCoordinator implements Closeable {
                             state = MemberState.STABLE;
                             rejoinNeeded = false;
 
+                            boolean shouldRecordRebalanceLatency = true;
+
                             // If session timeout was dynamically updated
                             if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate()) {
                                 if (rebalanceConfig.readyToUpdateTimeout()) {
                                     // This join group request was to update the session timeout
                                     rebalanceConfig.coordinatorTimeoutUpdated(); 
+                                    shouldRecordRebalanceLatency = false;
                                 } else {
                                     // If there was a join group in progress then this is when the in-progress request is completed
                                     // now another join request needs to be sent to update the session timeout
-                                    rejoinNeeded = true;
+                                    requestRejoin();
                                     rebalanceConfig.setReadyToUpdateTimeout(true);
                                 }
                             }
-
-                            // record rebalance latency
-                            lastRebalanceEndMs = time.milliseconds();
-                            sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
-                            lastRebalanceStartMs = -1L;
-
+                            if (shouldRecordRebalanceLatency) {
+                                // record rebalance latency
+                                lastRebalanceEndMs = time.milliseconds();
+                                sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
+                                lastRebalanceStartMs = -1L;
+                            }
                             if (heartbeatThread != null)
                                 heartbeatThread.enable();
                         } else {
@@ -1355,9 +1358,9 @@ public abstract class AbstractCoordinator implements Closeable {
                                         // 1. The heartbeat interval timer is reset when sentHeartbeat is called.
                                         // 2. The session timeout timer is reset when receiveHeartbeat is called.
                                         if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate()) {
-                                            if (joinFuture == null) {
+                                            if (!rejoinNeededOrPending()) {
                                                 // No join group in progress so set the flags to send another
-                                                rejoinNeeded = true;
+                                                requestRejoin();
                                                 rebalanceConfig.setReadyToUpdateTimeout(true);
                                             } else {
                                                 // If a join group request is in progress, need to wait for it to complete before sending another

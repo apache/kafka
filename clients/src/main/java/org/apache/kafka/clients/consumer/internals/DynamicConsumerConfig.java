@@ -96,7 +96,6 @@ public class DynamicConsumerConfig {
      */ 
     public RequestFuture<ClientResponse> maybeFetchConfigs(long now) {
         if (updater.shouldUpdateConfigs(now)) {
-            System.out.println("Should update configs");
             Node node = client.leastLoadedNode();
             if (node != null && client.ready(node, now)) {
                 log.info("Sending periodic describe configs request for dynamic config update");

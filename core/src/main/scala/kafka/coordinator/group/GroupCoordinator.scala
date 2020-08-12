@@ -313,7 +313,7 @@ class GroupCoordinator(val brokerId: Int,
 
             case Stable =>
               val member = group.get(memberId)
-              if (group.isLeader(memberId) || !member.matches(protocols)) {
+              if ((group.isLeader(memberId) || !member.matches(protocols)) && member.sessionTimeoutMs == sessionTimeoutMs) {
                 // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
                 // The latter allows the leader to trigger rebalances for changes affecting assignment
                 // which do not affect the member metadata (such as topic metadata changes for the consumer)
@@ -321,6 +321,12 @@ class GroupCoordinator(val brokerId: Int,
               } else {
                 // for followers with no actual change to their metadata, just return group information
                 // for the current generation which will allow them to issue SyncGroup
+
+                // Update session timeout if needed
+                if (member.sessionTimeoutMs != sessionTimeoutMs) {
+                  member.sessionTimeoutMs = sessionTimeoutMs
+                }
+
                 responseCallback(JoinGroupResult(
                   members = List.empty,
                   memberId = memberId,
