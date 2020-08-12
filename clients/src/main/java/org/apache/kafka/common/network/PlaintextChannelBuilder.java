@@ -35,7 +35,6 @@ import java.util.function.Supplier;
 public class PlaintextChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
     private final ListenerName listenerName;
-    private final boolean isInterBrokerListener;
     private Map<String, ?> configs;
 
     /**
@@ -43,12 +42,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
      * it's instantiated in the broker and null otherwise.
      */
     public PlaintextChannelBuilder(ListenerName listenerName) {
-        this(listenerName, false);
-    }
-
-    public PlaintextChannelBuilder(ListenerName listenerName, boolean isInterBrokerListener) {
         this.listenerName = listenerName;
-        this.isInterBrokerListener = isInterBrokerListener;
     }
 
     public void configure(Map<String, ?> configs) throws KafkaException {

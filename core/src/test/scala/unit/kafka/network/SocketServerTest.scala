@@ -1730,7 +1730,7 @@ class SocketServerTest {
   }
 
   private def withTestableServer(config : KafkaConfig = KafkaConfig.fromProps(props),
-                                 testWithServer: TestableSocketServer => Unit): TestableSocketServer = {
+                                 testWithServer: TestableSocketServer => Unit): Unit = {
     val testableServer = new TestableSocketServer(config)
     testableServer.startup()
     try {
@@ -1739,7 +1739,6 @@ class SocketServerTest {
       shutdownServerAndMetrics(testableServer)
       assertEquals(0, testableServer.uncaughtExceptions)
     }
-    testableServer
   }
 
   def sendAndReceiveControllerRequest(socket: Socket, server: SocketServer): RequestChannel.Request = {

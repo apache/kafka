@@ -78,8 +78,8 @@ public class RequestContext implements AuthorizableRequestContext {
                         ", connectionId: " + connectionId +
                         ", listenerName: " + listenerName +
                         ", principal: " + principal +
-                        ", initial principal: " + initialPrincipalName() +
-                        ", initial client id: " + header.initialClientId(), ex);
+                        ", initialPrincipal: " + initialPrincipalName() +
+                        ", initialClientId: " + header.initialClientId(), ex);
             }
         }
     }

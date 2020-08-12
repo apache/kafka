@@ -234,15 +234,12 @@ public class SaslServerAuthenticator implements Authenticator {
         if (saslState != SaslState.REAUTH_PROCESS_HANDSHAKE) {
             if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
                 return;
-
             if (saslServer != null && saslServer.isComplete()) {
                 setSaslState(SaslState.COMPLETE);
                 return;
             }
-
             // allocate on heap (as opposed to any socket server memory pool)
             if (netInBuffer == null) netInBuffer = new NetworkReceive(MAX_RECEIVE_SIZE, connectionId);
-
             netInBuffer.readFrom(transportLayer);
             if (!netInBuffer.complete())
                 return;

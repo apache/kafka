@@ -44,8 +44,8 @@ public final class ClientRequest {
      * @param clientId The client ID to use for the header
      * @param createdTimeMs The unix timestamp in milliseconds for the time at which this request was created.
      * @param expectResponse Should we expect a response message or is this request complete once it is sent?
-     * @param initialPrincipalName The initial principal name if this is a redirect request
-     * @param initialClientId The initial client id if this is a redirect request
+     * @param initialPrincipalName The initial principal name if this is a redirect request, or null if this was not redirected
+     * @param initialClientId The initial client id if this is a redirect request, or null if this was not redirected
      * @param callback A callback to execute when the response has been received (or null if no callback is necessary)
      */
     public ClientRequest(String destination,
