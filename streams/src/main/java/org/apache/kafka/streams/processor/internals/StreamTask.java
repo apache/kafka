@@ -36,6 +36,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -150,7 +151,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         for (final String terminalNodeName : topology.terminalNodes()) {
             e2eLatencySensors.put(
                 terminalNodeName,
-                TaskMetrics.e2ELatencySensor(threadId, taskId, terminalNodeName, streamsMetrics)
+                ProcessorNodeMetrics.e2ELatencySensor(threadId, taskId, terminalNodeName, streamsMetrics)
             );
         }
 
@@ -158,7 +159,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             final String sourceNodeName = sourceNode.name();
             e2eLatencySensors.put(
                 sourceNodeName,
-                TaskMetrics.e2ELatencySensor(threadId, taskId, sourceNodeName, streamsMetrics)
+                ProcessorNodeMetrics.e2ELatencySensor(threadId, taskId, sourceNodeName, streamsMetrics)
             );
         }
 

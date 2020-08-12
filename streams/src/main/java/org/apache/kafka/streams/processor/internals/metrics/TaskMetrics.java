@@ -24,16 +24,10 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_E2E_LATENCY;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_E2E_LATENCY_AVG_DESCRIPTION;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_E2E_LATENCY_MAX_DESCRIPTION;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_E2E_LATENCY_MIN_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMinAndMaxToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCountToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
@@ -135,25 +129,6 @@ public class TaskMetrics {
             streamsMetrics.taskLevelTagMap(threadId, taskId),
             name,
             NUM_BUFFERED_RECORDS_DESCRIPTION
-        );
-        return sensor;
-    }
-
-    public static Sensor e2ELatencySensor(final String threadId,
-                                          final String taskId,
-                                          final String processorNodeId,
-                                          final StreamsMetricsImpl streamsMetrics) {
-        final String sensorName = processorNodeId + "-" + RECORD_E2E_LATENCY;
-        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, sensorName, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
-        addAvgAndMinAndMaxToSensor(
-            sensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            tagMap,
-            RECORD_E2E_LATENCY,
-            RECORD_E2E_LATENCY_AVG_DESCRIPTION,
-            RECORD_E2E_LATENCY_MIN_DESCRIPTION,
-            RECORD_E2E_LATENCY_MAX_DESCRIPTION
         );
         return sensor;
     }
