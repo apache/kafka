@@ -18,15 +18,20 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.transforms.Cast;
+import org.apache.kafka.connect.transforms.Transformation;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -484,5 +489,38 @@ public class TopicCreationTest {
         assertEquals(DEFAULT_REPLICATION_FACTOR, barTopicSpec.replicationFactor());
         assertEquals(barPartitions, barTopicSpec.numPartitions());
         assertThat(barTopicSpec.configs(), is(barTopicProps));
+    }
+
+    @Test
+    public void testTopicCreationWithSingleTransformation() {
+        sourceProps = defaultConnectorPropsWithTopicCreation();
+        sourceProps.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", FOO_GROUP, BAR_GROUP));
+        String xformName = "example";
+        String castType = "int8";
+        sourceProps.put("transforms", xformName);
+        sourceProps.put("transforms." + xformName + ".type", Cast.Value.class.getName());
+        sourceProps.put("transforms." + xformName + ".spec", castType);
+
+        sourceConfig = new SourceConnectorConfig(MOCK_PLUGINS, sourceProps, true);
+
+        Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
+        TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
+
+        assertTrue(topicCreation.isTopicCreationEnabled());
+        assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
+        assertThat(topicCreation.defaultTopicGroup(), is(groups.get(DEFAULT_TOPIC_CREATION_GROUP)));
+        assertEquals(2, topicCreation.topicGroups().size());
+        assertThat(topicCreation.topicGroups().keySet(), hasItems(FOO_GROUP, BAR_GROUP));
+        assertEquals(topicCreation.defaultTopicGroup(), topicCreation.findFirstGroup(FOO_TOPIC));
+        topicCreation.addTopic(FOO_TOPIC);
+        assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
+
+        List<Transformation<SourceRecord>> transformations = sourceConfig.transformations();
+        assertEquals(1, transformations.size());
+        Cast<SourceRecord> xform = (Cast<SourceRecord>) transformations.get(0);
+        xform.configure(Collections.singletonMap(Cast.SPEC_CONFIG, castType));
+        SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
+        assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
+        assertEquals((byte) 42, transformed.value());
     }
 }
