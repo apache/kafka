@@ -40,6 +40,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +55,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -280,6 +280,11 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
             results.add(all.next().key);
         }
         assertEquals(items, results.size());
+        assertEquals(Arrays.asList(
+            Bytes.wrap("0".getBytes()),
+            Bytes.wrap("1".getBytes()),
+            Bytes.wrap("2".getBytes())
+        ), results);
     }
 
     @Test
@@ -291,6 +296,11 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
             results.add(all.next().key);
         }
         assertEquals(items, results.size());
+        assertEquals(Arrays.asList(
+            Bytes.wrap("2".getBytes()),
+            Bytes.wrap("1".getBytes()),
+            Bytes.wrap("0".getBytes())
+        ), results);
     }
 
     @Test
@@ -303,6 +313,11 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
             results.add(range.next().key);
         }
         assertEquals(items, results.size());
+        assertEquals(Arrays.asList(
+            Bytes.wrap("0".getBytes()),
+            Bytes.wrap("1".getBytes()),
+            Bytes.wrap("2".getBytes())
+        ), results);
     }
 
     @Test
@@ -315,6 +330,11 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
             results.add(range.next().key);
         }
         assertEquals(items, results.size());
+        assertEquals(Arrays.asList(
+            Bytes.wrap("2".getBytes()),
+            Bytes.wrap("1".getBytes()),
+            Bytes.wrap("0".getBytes())
+        ), results);
     }
 
     @Test
@@ -348,79 +368,94 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertEquals(0, cache.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToGetFromClosedCachingStore() {
-        store.close();
-        store.get(bytesKey("a"));
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.get(bytesKey("a"));
+        });
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
-        store.close();
-        store.put(bytesKey("a"), bytesValue("a"));
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.put(bytesKey("a"), bytesValue("a"));
+        });
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToDoRangeQueryOnClosedCachingStore() {
-        store.close();
-        store.range(bytesKey("a"), bytesKey("b"));
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.range(bytesKey("a"), bytesKey("b"));
+        });
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToDoReverseRangeQueryOnClosedCachingStore() {
-        store.close();
-        store.reverseRange(bytesKey("a"), bytesKey("b"));
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.reverseRange(bytesKey("a"), bytesKey("b"));
+        });
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToDoAllQueryOnClosedCachingStore() {
-        store.close();
-        store.all();
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.all();
+        });
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToDoReverseAllQueryOnClosedCachingStore() {
-        store.close();
-        store.reverseAll();
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.reverseAll();
+        });
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToDoGetApproxSizeOnClosedCachingStore() {
-        store.close();
-        store.approximateNumEntries();
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.close();
+            store.approximateNumEntries();
+        });
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToDoPutAllClosedCachingStore() {
-        store.close();
-        store.putAll(Collections.singletonList(KeyValue.pair(bytesKey("a"), bytesValue("a"))));
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.putAll(Collections.singletonList(KeyValue.pair(bytesKey("a"), bytesValue("a"))));
+        });
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToDoPutIfAbsentClosedCachingStore() {
-        store.close();
-        store.putIfAbsent(bytesKey("b"), bytesValue("c"));
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.putIfAbsent(bytesKey("b"), bytesValue("c"));
+        });
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnPutWithNullKey() {
-        store.put(null, bytesValue("c"));
+        assertThrows(NullPointerException.class, () -> store.put(null, bytesValue("c")));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnPutIfAbsentWithNullKey() {
-        store.putIfAbsent(null, bytesValue("c"));
+        assertThrows(NullPointerException.class, () -> store.putIfAbsent(null, bytesValue("c")));
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnPutAllWithNullKey() {
         final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(null, bytesValue("a")));
-        try {
-            store.putAll(entries);
-            fail("Should have thrown NullPointerException while putAll null key");
-        } catch (final NullPointerException expected) {
-        }
+        assertThrows(NullPointerException.class, () -> store.putAll(entries));
     }
 
     @Test
@@ -447,10 +482,12 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertEquals(underlyingStore, store.wrapped());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToDeleteFromClosedCachingStore() {
-        store.close();
-        store.delete(bytesKey("key"));
+        assertThrows(InvalidStateStoreException.class, () -> {
+            store.close();
+            store.delete(bytesKey("key"));
+        });
     }
 
     private int addItemsToCache() {
@@ -466,13 +503,13 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     public static class CacheFlushListenerStub<K, V> implements CacheFlushListener<byte[], byte[]> {
         final Deserializer<K> keyDeserializer;
-        final Deserializer<V> valueDesializer;
+        final Deserializer<V> valueDeserializer;
         final Map<K, Change<V>> forwarded = new HashMap<>();
 
         CacheFlushListenerStub(final Deserializer<K> keyDeserializer,
-                               final Deserializer<V> valueDesializer) {
+                               final Deserializer<V> valueDeserializer) {
             this.keyDeserializer = keyDeserializer;
-            this.valueDesializer = valueDesializer;
+            this.valueDeserializer = valueDeserializer;
         }
 
         @Override
@@ -483,8 +520,8 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
             forwarded.put(
                 keyDeserializer.deserialize(null, key),
                 new Change<>(
-                    valueDesializer.deserialize(null, newValue),
-                    valueDesializer.deserialize(null, oldValue)));
+                    valueDeserializer.deserialize(null, newValue),
+                    valueDeserializer.deserialize(null, oldValue)));
         }
     }
 }
