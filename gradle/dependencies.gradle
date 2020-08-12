@@ -72,7 +72,7 @@ versions += [
   jersey: "2.31",
   jmh: "1.23",
   hamcrest: "2.2",
-  log4j: "1.2.17-cp1",
+  log4j: "1.2.17-cp2",
   scalaLogging: "3.9.2",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
