@@ -105,11 +105,13 @@ public class RocksDBMetricsRecorder {
         Objects.requireNonNull(streamsMetrics, "task ID must not be null");
         if (this.taskId != null && !this.taskId.equals(taskId)) {
             throw new IllegalStateException("Metrics recorder is re-initialised with different task: previous task is " +
-                this.taskId + " whereas current task is " + taskId + ". This is a bug in Kafka Streams.");
+                this.taskId + " whereas current task is " + taskId + ". This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
         if (this.streamsMetrics != null && this.streamsMetrics != streamsMetrics) {
             throw new IllegalStateException("Metrics recorder is re-initialised with different Streams metrics. "
-                + "This is a bug in Kafka Streams.");
+                + "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
         initSensors(streamsMetrics, taskId);
         this.taskId = taskId;
@@ -128,8 +130,25 @@ public class RocksDBMetricsRecorder {
                 " has been already added. This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
+        verifyStatistics(segmentName, statistics);
         logger.debug("Adding value providers for store {} of task {}", segmentName, taskId);
         storeToValueProviders.put(segmentName, new DbAndCacheAndStatistics(db, cache, statistics));
+    }
+
+    private void verifyStatistics(final String segmentName, final Statistics statistics) {
+        if (!storeToValueProviders.isEmpty() && (
+                statistics == null &&
+                storeToValueProviders.values().stream().anyMatch(valueProviders -> valueProviders.statistics != null)
+                ||
+                statistics != null &&
+                storeToValueProviders.values().stream().anyMatch(valueProviders -> valueProviders.statistics == null))) {
+
+            throw new IllegalStateException("Statistics for store \"" + segmentName + "\" of task " + taskId +
+                " is" + (statistics == null ? " " : " not ") + "null although the statistics of another store in this " +
+                "metrics recorder is" + (statistics != null ? " " : " not ") + "null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
+        }
     }
 
     private void initSensors(final StreamsMetricsImpl streamsMetrics, final TaskId taskId) {
@@ -187,37 +206,39 @@ public class RocksDBMetricsRecorder {
         long bytesReadDuringCompaction = 0;
         long numberOfOpenFiles = 0;
         long numberOfFileErrors = 0;
-        for (final DbAndCacheAndStatistics valueProviders : storeToValueProviders.values()) {
-            bytesWrittenToDatabase += valueProviders.statistics.getAndResetTickerCount(TickerType.BYTES_WRITTEN);
-            bytesReadFromDatabase += valueProviders.statistics.getAndResetTickerCount(TickerType.BYTES_READ);
-            memtableBytesFlushed += valueProviders.statistics.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES);
-            memtableHits += valueProviders.statistics.getAndResetTickerCount(TickerType.MEMTABLE_HIT);
-            memtableMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.MEMTABLE_MISS);
-            blockCacheDataHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT);
-            blockCacheDataMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_MISS);
-            blockCacheIndexHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_HIT);
-            blockCacheIndexMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS);
-            blockCacheFilterHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT);
-            blockCacheFilterMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS);
-            writeStallDuration += valueProviders.statistics.getAndResetTickerCount(TickerType.STALL_MICROS);
-            bytesWrittenDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES);
-            bytesReadDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES);
-            numberOfOpenFiles += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_OPENS)
-                - valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_CLOSES);
-            numberOfFileErrors += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
+        if (storeToValueProviders.values().stream().anyMatch(valueProviders -> valueProviders.statistics != null)) {
+            for (final DbAndCacheAndStatistics valueProviders : storeToValueProviders.values()) {
+                bytesWrittenToDatabase += valueProviders.statistics.getAndResetTickerCount(TickerType.BYTES_WRITTEN);
+                bytesReadFromDatabase += valueProviders.statistics.getAndResetTickerCount(TickerType.BYTES_READ);
+                memtableBytesFlushed += valueProviders.statistics.getAndResetTickerCount(TickerType.FLUSH_WRITE_BYTES);
+                memtableHits += valueProviders.statistics.getAndResetTickerCount(TickerType.MEMTABLE_HIT);
+                memtableMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.MEMTABLE_MISS);
+                blockCacheDataHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_HIT);
+                blockCacheDataMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_DATA_MISS);
+                blockCacheIndexHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_HIT);
+                blockCacheIndexMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_INDEX_MISS);
+                blockCacheFilterHits += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_HIT);
+                blockCacheFilterMisses += valueProviders.statistics.getAndResetTickerCount(TickerType.BLOCK_CACHE_FILTER_MISS);
+                writeStallDuration += valueProviders.statistics.getAndResetTickerCount(TickerType.STALL_MICROS);
+                bytesWrittenDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_WRITE_BYTES);
+                bytesReadDuringCompaction += valueProviders.statistics.getAndResetTickerCount(TickerType.COMPACT_READ_BYTES);
+                numberOfOpenFiles += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_OPENS)
+                    - valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_CLOSES);
+                numberOfFileErrors += valueProviders.statistics.getAndResetTickerCount(TickerType.NO_FILE_ERRORS);
+            }
+            bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase, now);
+            bytesReadFromDatabaseSensor.record(bytesReadFromDatabase, now);
+            memtableBytesFlushedSensor.record(memtableBytesFlushed, now);
+            memtableHitRatioSensor.record(computeHitRatio(memtableHits, memtableMisses), now);
+            blockCacheDataHitRatioSensor.record(computeHitRatio(blockCacheDataHits, blockCacheDataMisses), now);
+            blockCacheIndexHitRatioSensor.record(computeHitRatio(blockCacheIndexHits, blockCacheIndexMisses), now);
+            blockCacheFilterHitRatioSensor.record(computeHitRatio(blockCacheFilterHits, blockCacheFilterMisses), now);
+            writeStallDurationSensor.record(writeStallDuration, now);
+            bytesWrittenDuringCompactionSensor.record(bytesWrittenDuringCompaction, now);
+            bytesReadDuringCompactionSensor.record(bytesReadDuringCompaction, now);
+            numberOfOpenFilesSensor.record(numberOfOpenFiles, now);
+            numberOfFileErrorsSensor.record(numberOfFileErrors, now);
         }
-        bytesWrittenToDatabaseSensor.record(bytesWrittenToDatabase, now);
-        bytesReadFromDatabaseSensor.record(bytesReadFromDatabase, now);
-        memtableBytesFlushedSensor.record(memtableBytesFlushed, now);
-        memtableHitRatioSensor.record(computeHitRatio(memtableHits, memtableMisses), now);
-        blockCacheDataHitRatioSensor.record(computeHitRatio(blockCacheDataHits, blockCacheDataMisses), now);
-        blockCacheIndexHitRatioSensor.record(computeHitRatio(blockCacheIndexHits, blockCacheIndexMisses), now);
-        blockCacheFilterHitRatioSensor.record(computeHitRatio(blockCacheFilterHits, blockCacheFilterMisses), now);
-        writeStallDurationSensor.record(writeStallDuration, now);
-        bytesWrittenDuringCompactionSensor.record(bytesWrittenDuringCompaction, now);
-        bytesReadDuringCompactionSensor.record(bytesReadDuringCompaction, now);
-        numberOfOpenFilesSensor.record(numberOfOpenFiles, now);
-        numberOfFileErrorsSensor.record(numberOfFileErrors, now);
     }
 
     private double computeHitRatio(final long hits, final long misses) {

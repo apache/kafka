@@ -54,6 +54,8 @@ import static org.powermock.api.easymock.PowerMock.verify;
 public class RocksDBMetricsRecorderTest {
     private final static String METRICS_SCOPE = "metrics-scope";
     private final static String THREAD_ID = "thread-id";
+    private final static TaskId TASK_ID1 = new TaskId(0, 0);
+    private final static TaskId TASK_ID2 = new TaskId(0, 1);
     private final static String STORE_NAME = "store-name";
     private final static String SEGMENT_STORE_NAME_1 = "segment-store-name-1";
     private final static String SEGMENT_STORE_NAME_2 = "segment-store-name-2";
@@ -80,8 +82,6 @@ public class RocksDBMetricsRecorderTest {
 
     private final StreamsMetricsImpl streamsMetrics = niceMock(StreamsMetricsImpl.class);
     private final RocksDBMetricsRecordingTrigger recordingTrigger = mock(RocksDBMetricsRecordingTrigger.class);
-    private final TaskId taskId1 = new TaskId(0, 0);
-    private final TaskId taskId2 = new TaskId(0, 1);
 
     private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, THREAD_ID, STORE_NAME);
 
@@ -90,40 +90,40 @@ public class RocksDBMetricsRecorderTest {
         setUpMetricsStubMock();
         expect(streamsMetrics.rocksDBMetricsRecordingTrigger()).andStubReturn(recordingTrigger);
         replay(streamsMetrics);
-        recorder.init(streamsMetrics, taskId1);
+        recorder.init(streamsMetrics, TASK_ID1);
     }
 
     @Test
     public void shouldInitMetricsRecorder() {
         setUpMetricsMock();
 
-        recorder.init(streamsMetrics, taskId1);
+        recorder.init(streamsMetrics, TASK_ID1);
 
         verify(RocksDBMetrics.class);
-        assertThat(recorder.taskId(), is(taskId1));
+        assertThat(recorder.taskId(), is(TASK_ID1));
     }
 
     @Test
     public void shouldThrowIfMetricRecorderIsReInitialisedWithDifferentTask() {
         setUpMetricsStubMock();
-        recorder.init(streamsMetrics, taskId1);
+        recorder.init(streamsMetrics, TASK_ID1);
 
         assertThrows(
             IllegalStateException.class,
-            () -> recorder.init(streamsMetrics, taskId2)
+            () -> recorder.init(streamsMetrics, TASK_ID2)
         );
     }
 
     @Test
     public void shouldThrowIfMetricRecorderIsReInitialisedWithDifferentStreamsMetrics() {
         setUpMetricsStubMock();
-        recorder.init(streamsMetrics, taskId1);
+        recorder.init(streamsMetrics, TASK_ID1);
 
         assertThrows(
             IllegalStateException.class,
             () -> recorder.init(
                 new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
-                taskId1
+                TASK_ID1
             )
         );
     }
@@ -139,7 +139,7 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldSetStatsLevelToExceptDetailedTimersWhenValueProvidersWithoutStatisticsAreAdded() {
+    public void shouldNotSetStatsLevelToExceptDetailedTimersWhenValueProvidersWithoutStatisticsAreAdded() {
         replay(statisticsToAdd1);
 
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
@@ -148,12 +148,52 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldThrowIfStatisticsToAddHasBeenAlreadyAdded() {
+    public void shouldThrowIfValueProvidersForASegmentHasBeenAlreadyAdded() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
-        assertThrows(
+        final Throwable exception = assertThrows(
             IllegalStateException.class,
-            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null)
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd2)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("Value providers for store \"" + SEGMENT_STORE_NAME_1 + "\" of task " + TASK_ID1 +
+                    " has been already added. This is a bug in Kafka Streams. " +
+                    "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+        );
+    }
+
+    @Test
+    public void shouldThrowIfStatisticsForOnlyOneSegmentOutOfMultipleIsNull() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd1, cacheToAdd1, null)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("Statistics for store \"" + SEGMENT_STORE_NAME_2 + "\" of task " + TASK_ID1 +
+                    " is null although the statistics of another store in this metrics recorder is not null. " +
+                    "This is a bug in Kafka Streams. " +
+                    "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+        );
+    }
+
+    @Test
+    public void shouldThrowIfStatisticsForOnlyOneSegmentOutOfMultipleIsNotNull() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd1, cacheToAdd1, statisticsToAdd1)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("Statistics for store \"" + SEGMENT_STORE_NAME_2 + "\" of task " + TASK_ID1 +
+                    " is not null although the statistics of another store in this metrics recorder is null. " +
+                    "This is a bug in Kafka Streams. " +
+                    "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -245,7 +285,7 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldRecordMetrics() {
+    public void shouldRecordStatisticsBasedMetrics() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
         recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
         reset(statisticsToAdd1);
@@ -328,7 +368,56 @@ public class RocksDBMetricsRecorderTest {
 
         verify(statisticsToAdd1);
         verify(statisticsToAdd2);
-        verify(bytesWrittenToDatabaseSensor);
+        verify(
+            bytesWrittenToDatabaseSensor,
+            bytesReadFromDatabaseSensor,
+            memtableBytesFlushedSensor,
+            memtableHitRatioSensor,
+            writeStallDurationSensor,
+            blockCacheDataHitRatioSensor,
+            blockCacheIndexHitRatioSensor,
+            blockCacheFilterHitRatioSensor,
+            bytesWrittenDuringCompactionSensor,
+            bytesReadDuringCompactionSensor,
+            numberOfOpenFilesSensor,
+            numberOfFileErrorsSensor
+        );
+    }
+
+    @Test
+    public void shouldNotRecordStatisticsBasedMetricsIfStatisticsIsNull() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
+        replay(
+            bytesWrittenToDatabaseSensor,
+            bytesReadFromDatabaseSensor,
+            memtableBytesFlushedSensor,
+            memtableHitRatioSensor,
+            writeStallDurationSensor,
+            blockCacheDataHitRatioSensor,
+            blockCacheIndexHitRatioSensor,
+            blockCacheFilterHitRatioSensor,
+            bytesWrittenDuringCompactionSensor,
+            bytesReadDuringCompactionSensor,
+            numberOfOpenFilesSensor,
+            numberOfFileErrorsSensor
+        );
+
+        recorder.record(0L);
+
+        verify(
+            bytesWrittenToDatabaseSensor,
+            bytesReadFromDatabaseSensor,
+            memtableBytesFlushedSensor,
+            memtableHitRatioSensor,
+            writeStallDurationSensor,
+            blockCacheDataHitRatioSensor,
+            blockCacheIndexHitRatioSensor,
+            blockCacheFilterHitRatioSensor,
+            bytesWrittenDuringCompactionSensor,
+            bytesReadDuringCompactionSensor,
+            numberOfOpenFilesSensor,
+            numberOfFileErrorsSensor
+        );
     }
 
     @Test
@@ -357,7 +446,7 @@ public class RocksDBMetricsRecorderTest {
     private void setUpMetricsMock() {
         mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
-            new RocksDBMetricContext(THREAD_ID, taskId1.toString(), METRICS_SCOPE, STORE_NAME);
+            new RocksDBMetricContext(THREAD_ID, TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
         expect(RocksDBMetrics.bytesWrittenToDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(bytesWrittenToDatabaseSensor);
         expect(RocksDBMetrics.bytesReadFromDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))
@@ -388,7 +477,7 @@ public class RocksDBMetricsRecorderTest {
     private void setUpMetricsStubMock() {
         mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
-            new RocksDBMetricContext(THREAD_ID, taskId1.toString(), METRICS_SCOPE, STORE_NAME);
+            new RocksDBMetricContext(THREAD_ID, TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
         expect(RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricsContext))
             .andStubReturn(bytesWrittenToDatabaseSensor);
         expect(RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricsContext))
