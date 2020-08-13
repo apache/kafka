@@ -63,7 +63,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     @Test
     public void testInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -105,7 +104,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     @Test
     public void testInnerRepartitioned() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner-repartitioned");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -150,7 +148,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     @Test
     public void testLeft() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -192,7 +189,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     @Test
     public void testLeftRepartitioned() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left-repartitioned");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -237,7 +233,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     @Test
     public void testOuter() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -279,7 +274,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     @Test
     public void testOuterRepartitioned() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
@@ -324,7 +318,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     @Test
     public void testMultiInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-multi-inner");
-        STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "topology_driver:0000");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
             null,
