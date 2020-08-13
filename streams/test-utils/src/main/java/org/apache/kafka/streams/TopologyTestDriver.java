@@ -808,7 +808,7 @@ public class TopologyTestDriver implements Closeable {
         if (outputRecords == null && !processorTopology.sinkTopics().contains(topicName)) {
             log.warn("Unrecognized topic: {}, this can occur if dynamic routing is used and no output has been "
                          + "sent to this topic yet. If not using a TopicNameExtractor, check that the output topic "
-                         + "is correct. ", topicName);
+                         + "is correct.", topicName);
         }
         return outputRecords;
     }
