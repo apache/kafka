@@ -130,8 +130,8 @@ public class SourceConnectorConfig extends ConnectorConfig {
                     .removeIf(e -> e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + INCLUDE_REGEX_CONFIG)
                             || e.getKey().equals(DEFAULT_TOPIC_CREATION_PREFIX + EXCLUDE_REGEX_CONFIG));
             enrichedSourceConfig = new EnrichedSourceConnectorConfig(plugins,
-                    enrich(defaultConfigDef, props,
-                    defaultGroup), propsWithoutRegexForDefaultGroup);
+                    enrich(defaultConfigDef, props, defaultGroup),
+                    propsWithoutRegexForDefaultGroup);
         } else {
             enrichedSourceConfig = null;
         }
