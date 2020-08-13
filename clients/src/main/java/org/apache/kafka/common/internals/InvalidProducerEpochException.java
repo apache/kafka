@@ -14,22 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.common.internals;
 
-public interface CachedStateStore<K, V> {
-    /**
-     * Set the {@link CacheFlushListener} to be notified when entries are flushed from the
-     * cache to the underlying {@link org.apache.kafka.streams.processor.StateStore}
-     * @param listener
-     * @param sendOldValues
-     */
-    boolean setFlushListener(final CacheFlushListener<K, V> listener,
-                             final boolean sendOldValues);
+import org.apache.kafka.common.errors.RetriableException;
 
-    /**
-     * Flush only the cache but not the underlying state stores
-     *
-     * TODO: this is a hacky workaround for now, should be removed when we decouple caching with emitting
-     */
-    void flushCache();
+/**
+ * This exception indicates that the produce request sent to the partition leader
+ * contains a non-matching producer epoch. When encountering this exception, the ongoing transaction
+ * will be aborted and can be retried.
+ */
+public class InvalidProducerEpochException extends RetriableException {
+
+    private static final long serialVersionUID = 1L;
+
+    public InvalidProducerEpochException(String message) {
+        super(message);
+    }
 }

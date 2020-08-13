@@ -34,7 +34,7 @@ import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.SyncGroupCallback
 import kafka.coordinator.group.JoinGroupResult
 import kafka.coordinator.group.SyncGroupResult
 import kafka.coordinator.group.{GroupCoordinator, GroupSummary, MemberSummary}
-import kafka.coordinator.transaction.TransactionCoordinator
+import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.AppendOrigin
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.SendResponse
@@ -68,6 +68,7 @@ import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.server.authorizer.Action
 import org.apache.kafka.server.authorizer.AuthorizationResult
 import org.apache.kafka.server.authorizer.Authorizer
@@ -438,46 +439,283 @@ class KafkaApisTest {
     val topic = "topic"
     setupBasicMetadataCache(topic, numPartitions = 2)
 
-    EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
+    for (version <- ApiKeys.TXN_OFFSET_COMMIT.oldestVersion to ApiKeys.TXN_OFFSET_COMMIT.latestVersion) {
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
 
-    val topicPartition = new TopicPartition(topic, 1)
-    val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
-    val responseCallback: Capture[Map[TopicPartition, Errors] => Unit] = EasyMock.newCapture()
+      val topicPartition = new TopicPartition(topic, 1)
+      val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+      val responseCallback: Capture[Map[TopicPartition, Errors] => Unit] = EasyMock.newCapture()
 
-    val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
-    val groupId = "groupId"
+      val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
+      val groupId = "groupId"
 
-    val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
-      "txnId",
-      groupId,
-      15L,
-      0.toShort,
-      Map(topicPartition -> partitionOffsetCommitData).asJava,
-      false
-    ).build(1)
-    val request = buildRequest(offsetCommitRequest)
+      val producerId = 15L
+      val epoch = 0.toShort
 
-    EasyMock.expect(groupCoordinator.handleTxnCommitOffsets(
-      EasyMock.eq(groupId),
-      EasyMock.eq(15L),
-      EasyMock.eq(0),
-      EasyMock.anyString(),
-      EasyMock.eq(Option.empty),
-      EasyMock.anyInt(),
-      EasyMock.anyObject(),
-      EasyMock.capture(responseCallback)
-    )).andAnswer(
-      () => responseCallback.getValue.apply(Map(topicPartition -> Errors.COORDINATOR_LOAD_IN_PROGRESS)))
+      val offsetCommitRequest = new TxnOffsetCommitRequest.Builder(
+        "txnId",
+        groupId,
+        producerId,
+        epoch,
+        Map(topicPartition -> partitionOffsetCommitData).asJava,
+        false
+      ).build(version.toShort)
+      val request = buildRequest(offsetCommitRequest)
+
+      EasyMock.expect(groupCoordinator.handleTxnCommitOffsets(
+        EasyMock.eq(groupId),
+        EasyMock.eq(producerId),
+        EasyMock.eq(epoch),
+        EasyMock.anyString(),
+        EasyMock.eq(Option.empty),
+        EasyMock.anyInt(),
+        EasyMock.anyObject(),
+        EasyMock.capture(responseCallback)
+      )).andAnswer(
+        () => responseCallback.getValue.apply(Map(topicPartition -> Errors.COORDINATOR_LOAD_IN_PROGRESS)))
 
     EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
 
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator)
 
-    createKafkaApis().handleTxnOffsetCommitRequest(request)
+      createKafkaApis().handleTxnOffsetCommitRequest(request)
 
-    val response = readResponse(ApiKeys.TXN_OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
-      .asInstanceOf[TxnOffsetCommitResponse]
-    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors().get(topicPartition))
+      val response = readResponse(ApiKeys.TXN_OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
+        .asInstanceOf[TxnOffsetCommitResponse]
+
+      if (version < 2) {
+        assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, response.errors().get(topicPartition))
+      } else {
+        assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, response.errors().get(topicPartition))
+      }
+    }
+  }
+
+  @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInInitProducerIdWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.INIT_PRODUCER_ID.oldestVersion to ApiKeys.INIT_PRODUCER_ID.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+      val responseCallback: Capture[InitProducerIdResult => Unit] = EasyMock.newCapture()
+
+      val transactionalId = "txnId"
+      val producerId = if (version < 3)
+        RecordBatch.NO_PRODUCER_ID
+      else
+        15
+
+      val epoch = if (version < 3)
+        RecordBatch.NO_PRODUCER_EPOCH
+      else
+        0.toShort
+
+      val txnTimeoutMs = TimeUnit.MINUTES.toMillis(15).toInt
+
+      val initProducerIdRequest = new InitProducerIdRequest.Builder(
+        new InitProducerIdRequestData()
+          .setTransactionalId(transactionalId)
+          .setTransactionTimeoutMs(txnTimeoutMs)
+          .setProducerId(producerId)
+          .setProducerEpoch(epoch)
+      ).build(version.toShort)
+
+      val request = buildRequest(initProducerIdRequest)
+
+      val expectedProducerIdAndEpoch = if (version < 3)
+        Option.empty
+      else
+        Option(new ProducerIdAndEpoch(producerId, epoch))
+
+      EasyMock.expect(txnCoordinator.handleInitProducerId(
+        EasyMock.eq(transactionalId),
+        EasyMock.eq(txnTimeoutMs),
+        EasyMock.eq(expectedProducerIdAndEpoch),
+        EasyMock.capture(responseCallback)
+      )).andAnswer(
+        () => responseCallback.getValue.apply(InitProducerIdResult(producerId, epoch, Errors.PRODUCER_FENCED)))
+
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      createKafkaApis().handleInitProducerIdRequest(request)
+
+      val response = readResponse(ApiKeys.INIT_PRODUCER_ID, initProducerIdRequest, capturedResponse)
+        .asInstanceOf[InitProducerIdResponse]
+
+      if (version < 4) {
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+      } else {
+        assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+      }
+    }
+  }
+
+  @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInAddOffsetToTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.ADD_OFFSETS_TO_TXN.oldestVersion to ApiKeys.ADD_OFFSETS_TO_TXN.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, groupCoordinator, txnCoordinator)
+
+      val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+      val responseCallback: Capture[Errors => Unit] = EasyMock.newCapture()
+
+      val groupId = "groupId"
+      val transactionalId = "txnId"
+      val producerId = 15L
+      val epoch = 0.toShort
+
+      val addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(
+        new AddOffsetsToTxnRequestData()
+          .setGroupId(groupId)
+          .setTransactionalId(transactionalId)
+          .setProducerId(producerId)
+          .setProducerEpoch(epoch)
+      ).build(version.toShort)
+      val request = buildRequest(addOffsetsToTxnRequest)
+
+      val partition = 1
+      EasyMock.expect(groupCoordinator.partitionFor(
+        EasyMock.eq(groupId)
+      )).andReturn(partition)
+
+      EasyMock.expect(txnCoordinator.handleAddPartitionsToTransaction(
+        EasyMock.eq(transactionalId),
+        EasyMock.eq(producerId),
+        EasyMock.eq(epoch),
+        EasyMock.eq(Set(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))),
+        EasyMock.capture(responseCallback)
+      )).andAnswer(
+        () => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, groupCoordinator)
+
+      createKafkaApis().handleAddOffsetsToTxnRequest(request)
+
+      val response = readResponse(ApiKeys.ADD_OFFSETS_TO_TXN, addOffsetsToTxnRequest, capturedResponse)
+        .asInstanceOf[AddOffsetsToTxnResponse]
+
+      if (version < 2) {
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+      } else {
+        assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+      }
+    }
+  }
+
+  @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInAddPartitionToTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.ADD_PARTITIONS_TO_TXN.oldestVersion to ApiKeys.ADD_PARTITIONS_TO_TXN.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+      val responseCallback: Capture[Errors => Unit] = EasyMock.newCapture()
+
+      val transactionalId = "txnId"
+      val producerId = 15L
+      val epoch = 0.toShort
+
+      val partition = 1
+      val topicPartition = new TopicPartition(topic, partition)
+
+      val addPartitionsToTxnRequest = new AddPartitionsToTxnRequest.Builder(
+        transactionalId,
+        producerId,
+        epoch,
+        Collections.singletonList(topicPartition)
+      ).build(version.toShort)
+      val request = buildRequest(addPartitionsToTxnRequest)
+
+      EasyMock.expect(txnCoordinator.handleAddPartitionsToTransaction(
+        EasyMock.eq(transactionalId),
+        EasyMock.eq(producerId),
+        EasyMock.eq(epoch),
+        EasyMock.eq(Set(topicPartition)),
+
+        EasyMock.capture(responseCallback)
+      )).andAnswer(
+        () => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      createKafkaApis().handleAddPartitionToTxnRequest(request)
+
+      val response = readResponse(ApiKeys.ADD_PARTITIONS_TO_TXN, addPartitionsToTxnRequest, capturedResponse)
+        .asInstanceOf[AddPartitionsToTxnResponse]
+
+      if (version < 2) {
+        assertEquals(Collections.singletonMap(topicPartition, Errors.INVALID_PRODUCER_EPOCH), response.errors())
+      } else {
+        assertEquals(Collections.singletonMap(topicPartition, Errors.PRODUCER_FENCED), response.errors())
+      }
+    }
+  }
+
+  @Test
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInEndTxnWithOlderClient(): Unit = {
+    val topic = "topic"
+    setupBasicMetadataCache(topic, numPartitions = 2)
+
+    for (version <- ApiKeys.END_TXN.oldestVersion to ApiKeys.END_TXN.latestVersion) {
+
+      EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
+      val responseCallback: Capture[Errors => Unit]  = EasyMock.newCapture()
+
+      val transactionalId = "txnId"
+      val producerId = 15L
+      val epoch = 0.toShort
+
+      val endTxnRequest = new EndTxnRequest.Builder(
+        new EndTxnRequestData()
+          .setTransactionalId(transactionalId)
+          .setProducerId(producerId)
+          .setProducerEpoch(epoch)
+          .setCommitted(true)
+      ).build(version.toShort)
+      val request = buildRequest(endTxnRequest)
+
+      EasyMock.expect(txnCoordinator.handleEndTransaction(
+        EasyMock.eq(transactionalId),
+        EasyMock.eq(producerId),
+        EasyMock.eq(epoch),
+        EasyMock.eq(TransactionResult.COMMIT),
+        EasyMock.capture(responseCallback)
+      )).andAnswer(
+        () => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
+
+      EasyMock.expect(requestChannel.sendResponse(EasyMock.capture(capturedResponse)))
+
+      EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      createKafkaApis().handleEndTxnRequest(request)
+
+      val response = readResponse(ApiKeys.END_TXN, endTxnRequest, capturedResponse)
+        .asInstanceOf[EndTxnResponse]
+
+      if (version < 2) {
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH.code, response.data.errorCode)
+      } else {
+        assertEquals(Errors.PRODUCER_FENCED.code, response.data.errorCode)
+      }
+    }
   }
 
   @Test
@@ -609,25 +847,25 @@ class KafkaApisTest {
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndLeaderEpoch(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.initialLeaderEpoch + 2, true)
+      LeaderAndIsr.initialLeaderEpoch + 2, deletePartition = true)
   }
 
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndDeleteSentinel(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.EpochDuringDelete, true)
+      LeaderAndIsr.EpochDuringDelete, deletePartition = true)
   }
 
   @Test
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlagAndNoEpochSentinel(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.NoEpoch, true)
+      LeaderAndIsr.NoEpoch, deletePartition = true)
   }
 
   @Test
   def shouldNotResignCoordinatorsIfStopReplicaReceivedWithoutDeleteFlag(): Unit = {
     shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(
-      LeaderAndIsr.initialLeaderEpoch + 2, false)
+      LeaderAndIsr.initialLeaderEpoch + 2, deletePartition = false)
   }
 
   def shouldResignCoordinatorsIfStopReplicaReceivedWithDeleteFlag(leaderEpoch: Int,

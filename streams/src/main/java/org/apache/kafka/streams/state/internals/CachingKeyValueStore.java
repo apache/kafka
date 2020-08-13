@@ -287,6 +287,18 @@ public class CachingKeyValueStore
     }
 
     @Override
+    public void flushCache() {
+        validateStoreOpen();
+        lock.writeLock().lock();
+        try {
+            validateStoreOpen();
+            context.cache().flush(cacheName);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
     public void close() {
         lock.writeLock().lock();
         try {

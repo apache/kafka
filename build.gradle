@@ -94,15 +94,10 @@ allprojects {
         }
       }
     }
-    configurations {
-      all {
-        resolutionStrategy {
-          dependencySubstitution {
-            substitute module("log4j:log4j:1.2.17") because "we use a custom version with security patches" with module("io.confluent:confluent-log4j:1.2.17-cp2")
-          }
-        }
-      }
-      runtime {
+    configurations.all {
+      // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+      // that are unrelated to the project dependencies, we should not change them
+      if (name != "zinc") {
         resolutionStrategy {
           force(
             // ensure we have a single version of scala jars in the classpath, we enable inlining
@@ -119,6 +114,9 @@ allprojects {
             libs.nettyHandler,
             libs.nettyTransportNativeEpoll
           )
+          dependencySubstitution {
+            substitute module("log4j:log4j:1.2.17") because "we use a custom version with security patches" with module("io.confluent:confluent-log4j:1.2.17-cp2")
+          }
         }
       }
     }
