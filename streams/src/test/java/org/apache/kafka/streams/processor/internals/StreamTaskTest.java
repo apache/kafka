@@ -1609,12 +1609,11 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldCheckpointWithCreatedStateOnClose() {
+    public void shouldNotCheckpointOnCloseCreated() {
         stateManager.flush();
         EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
         stateManager.checkpoint();
-        EasyMock.expectLastCall();
-        EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition1));
+        EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.replay(stateManager, recordCollector);
 
@@ -1629,16 +1628,18 @@ public class StreamTaskTest {
         assertFalse(source1.initialized);
         assertFalse(source1.closed);
 
+        EasyMock.verify(stateManager, recordCollector);
+
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
     }
 
     @Test
-    public void shouldNotCheckpointOnCloseRestoringIfNoProgress() {
+    public void shouldCheckpointOnCloseRestoringIfNoProgress() {
         stateManager.flush();
-        EasyMock.expectLastCall().andThrow(new AssertionError("Flush should not be called")).anyTimes();
+        EasyMock.expectLastCall().once();
         stateManager.checkpoint();
-        EasyMock.expectLastCall().andThrow(new AssertionError("Checkpoint should not be called")).anyTimes();
+        EasyMock.expectLastCall().once();
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.emptySet()).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets()).andReturn(Collections.emptyMap()).anyTimes();
         EasyMock.expect(recordCollector.offsets()).andReturn(Collections.emptyMap()).anyTimes();

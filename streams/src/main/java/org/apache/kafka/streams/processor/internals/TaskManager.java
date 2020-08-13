@@ -193,13 +193,17 @@ public class TaskManager {
 
             try {
                 task.suspend();
+                // we need to enforce a checkpoint that removes the corrupted partitions
+                task.postCommit(true);
             } catch (final RuntimeException swallow) {
                 log.error("Error suspending corrupted task {} ", task.id(), swallow);
             }
             task.closeDirty();
+
+            // For active tasks pause their input partitions so we won't poll any more records
+            // for this task until it has been re-initialized;
+            // Note, closeDirty already clears the partitiongroup for the task.
             if (task.isActive()) {
-                // Pause so we won't poll any more records for this task until it has been re-initialized
-                // Note, closeDirty already clears the partitiongroup for the task.
                 final Set<TopicPartition> currentAssignment = mainConsumer().assignment();
                 final Set<TopicPartition> taskInputPartitions = task.inputPartitions();
                 final Set<TopicPartition> assignedToPauseAndReset =
