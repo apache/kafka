@@ -27,9 +27,14 @@ import static org.junit.Assert.assertEquals;
 public class RegexRouterTest {
 
     private static String apply(String regex, String replacement, String topic) {
+        return apply(regex, replacement, topic, false);
+    }
+
+    private static String apply(String regex, String replacement, String topic, Boolean replaceAll) {
         final Map<String, String> props = new HashMap<>();
         props.put("regex", regex);
         props.put("replacement", replacement);
+        props.put("replaceAll", replaceAll.toString());
         final RegexRouter<SinkRecord> router = new RegexRouter<>();
         router.configure(props);
         String sinkTopic = router.apply(new SinkRecord(topic, 0, null, null, null, null, 0)).topic();
@@ -65,6 +70,16 @@ public class RegexRouterTest {
     @Test
     public void slice() {
         assertEquals("index", apply("(.*)-(\\d\\d\\d\\d\\d\\d\\d\\d)", "$1", "index-20160117"));
+    }
+
+    @Test
+    public void replaceFirstDash() {
+        assertEquals("sample-table_name", apply("([^\\_]*)_(.*)", "$1-$2", "sample_table_name"));
+    }
+
+    @Test
+    public void replaceAllDashes() {
+        assertEquals("sample-table-name", apply("_", "-", "sample_table_name", true));
     }
 
 }
