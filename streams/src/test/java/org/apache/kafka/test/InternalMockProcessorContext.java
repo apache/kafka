@@ -22,7 +22,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -46,7 +46,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
-import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 
 import java.io.File;
 import java.time.Duration;
@@ -79,7 +78,7 @@ public class InternalMockProcessorContext
         this(null,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null
@@ -92,7 +91,12 @@ public class InternalMockProcessorContext
             stateDir,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+            new StreamsMetricsImpl(
+                new Metrics(),
+                "mock",
+                config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
+                new MockTime()
+            ),
             config,
             null,
             null
@@ -118,7 +122,12 @@ public class InternalMockProcessorContext
             stateDir,
             null,
             null,
-            new StreamsMetricsImpl(new Metrics(), "mock", config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG)),
+            new StreamsMetricsImpl(
+                new Metrics(),
+                "mock",
+                config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
+                new MockTime()
+            ),
             config,
             () -> collector,
             null
@@ -133,7 +142,7 @@ public class InternalMockProcessorContext
             stateDir,
             keySerde,
             valueSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             config,
             null,
             null
@@ -152,7 +161,7 @@ public class InternalMockProcessorContext
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(metrics, "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null
@@ -168,7 +177,7 @@ public class InternalMockProcessorContext
             stateDir,
             keySerde,
             valueSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache
@@ -193,7 +202,6 @@ public class InternalMockProcessorContext
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
-        this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
     }
 
     @Override
