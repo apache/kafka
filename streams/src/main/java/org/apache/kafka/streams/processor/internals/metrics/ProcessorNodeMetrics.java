@@ -299,7 +299,7 @@ public class ProcessorNodeMetrics {
                                           final String processorNodeId,
                                           final StreamsMetricsImpl streamsMetrics) {
         final String sensorName = processorNodeId + "-" + RECORD_E2E_LATENCY;
-        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, sensorName, RecordingLevel.INFO);
+        final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorName, RecordingLevel.INFO);
         final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
         addAvgAndMinAndMaxToSensor(
             sensor,
