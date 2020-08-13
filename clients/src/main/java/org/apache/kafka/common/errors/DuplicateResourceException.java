@@ -17,9 +17,10 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Exception thrown due to a request for a resource that does not exist.
+ * Exception thrown due to a request that illegally refers to the same resource twice
+ * (for example, trying to both create and delete the same SCRAM credential for a particular user in a single request).
  */
-public class ResourceNotFoundException extends ApiException {
+public class DuplicateResourceException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
@@ -30,7 +31,7 @@ public class ResourceNotFoundException extends ApiException {
      *
      * @param message the exception's message
      */
-    public ResourceNotFoundException(String message) {
+    public DuplicateResourceException(String message) {
         this(null, message);
     }
 
@@ -39,17 +40,17 @@ public class ResourceNotFoundException extends ApiException {
      * @param message the exception's message
      * @param cause the exception's cause
      */
-    public ResourceNotFoundException(String message, Throwable cause) {
+    public DuplicateResourceException(String message, Throwable cause) {
         this(null, message, cause);
     }
 
     /**
      * Constructor
      *
-     * @param resource the (potentially null) resource that was not found
+     * @param resource the (potentially null) resource that was referred to twice
      * @param message the exception's message
      */
-    public ResourceNotFoundException(String resource, String message) {
+    public DuplicateResourceException(String resource, String message) {
         super(message);
         this.resource = resource;
     }
@@ -57,18 +58,18 @@ public class ResourceNotFoundException extends ApiException {
     /**
      * Constructor
      *
-     * @param resource the (potentially null) resource that was not found
+     * @param resource the (potentially null) resource that was referred to twice
      * @param message the exception's message
      * @param cause the exception's cause
      */
-    public ResourceNotFoundException(String resource, String message, Throwable cause) {
+    public DuplicateResourceException(String resource, String message, Throwable cause) {
         super(message, cause);
         this.resource = resource;
     }
 
     /**
      *
-     * @return the (potentially null) resource that was not found
+     * @return the (potentially null) resource that was referred to twice
      */
     public String resource() {
         return this.resource;

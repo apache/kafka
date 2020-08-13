@@ -47,10 +47,10 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
       ConfigCommandResult(byteArrayOutputStream.toString(utf8))
     } catch {
       case e: Exception => {
-        printStream.close
         ConfigCommandResult("", exitStatus)
       }
     } finally {
+      printStream.close
       Exit.resetExitProcedure()
     }
   }

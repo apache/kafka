@@ -17,60 +17,28 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Exception thrown due to a request for a resource that does not exist.
+ * Exception thrown when attempting to define a credential that does not meet the criteria for acceptability
+ * (for example, attempting to create a SCRAM credential with an empty username or password or too few/many iterations).
  */
-public class ResourceNotFoundException extends ApiException {
+public class UnacceptableCredentialException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    private final String resource;
-
     /**
      * Constructor
      *
      * @param message the exception's message
      */
-    public ResourceNotFoundException(String message) {
-        this(null, message);
-    }
-
-    /**
-     *
-     * @param message the exception's message
-     * @param cause the exception's cause
-     */
-    public ResourceNotFoundException(String message, Throwable cause) {
-        this(null, message, cause);
-    }
-
-    /**
-     * Constructor
-     *
-     * @param resource the (potentially null) resource that was not found
-     * @param message the exception's message
-     */
-    public ResourceNotFoundException(String resource, String message) {
+    public UnacceptableCredentialException(String message) {
         super(message);
-        this.resource = resource;
     }
 
     /**
-     * Constructor
      *
-     * @param resource the (potentially null) resource that was not found
      * @param message the exception's message
      * @param cause the exception's cause
      */
-    public ResourceNotFoundException(String resource, String message, Throwable cause) {
+    public UnacceptableCredentialException(String message, Throwable cause) {
         super(message, cause);
-        this.resource = resource;
-    }
-
-    /**
-     *
-     * @return the (potentially null) resource that was not found
-     */
-    public String resource() {
-        return this.resource;
     }
 }

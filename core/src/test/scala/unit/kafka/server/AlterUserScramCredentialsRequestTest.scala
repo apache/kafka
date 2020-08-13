@@ -24,15 +24,14 @@ import java.util.Properties
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
 import org.apache.kafka.clients.admin.ScramMechanism
-import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.message.{AlterUserScramCredentialsRequestData, DescribeUserScramCredentialsRequestData}
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse, DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
-import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.rules.TestName
+import org.junit.{Rule, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -45,14 +44,16 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[AlterCredentialsTest.TestPrincipalBuilder].getName)
+    properties.put(KafkaConfig.PrincipalBuilderClassProp,
+      if (testName.getMethodName.endsWith("NotAuthorized")) {
+        classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName
+      } else {
+        classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName
+      })
   }
 
-  @Before
-  override def setUp(): Unit = {
-    AlterCredentialsTest.principal = KafkaPrincipal.ANONYMOUS // default is to be authorized
-    super.setUp()
-  }
+  private val _testName = new TestName
+  @Rule def testName = _testName
 
   @Test
   def testAlterNothing(): Unit = {
@@ -68,8 +69,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
   @Test
   def testAlterNothingNotAuthorized(): Unit = {
-    AlterCredentialsTest.principal = AlterCredentialsTest.UnauthorizedPrincipal
-
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
@@ -82,7 +81,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
   @Test
   def testAlterSomethingNotAuthorized(): Unit = {
-    AlterCredentialsTest.principal = AlterCredentialsTest.UnauthorizedPrincipal
 
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
@@ -120,8 +118,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       val results = response.data.results
       assertEquals(2, results.size)
       val msg = "Expected error when altering the same credential twice in a single request"
-      assertEquals(msg, Errors.INVALID_REQUEST.code, results.get(0).errorCode)
-      assertEquals(msg, Errors.INVALID_REQUEST.code, results.get(1).errorCode)
+      assertEquals(msg, Errors.DUPLICATE_RESOURCE.code, results.get(0).errorCode)
+      assertEquals(msg, Errors.DUPLICATE_RESOURCE.code, results.get(1).errorCode)
     })
   }
 
@@ -148,8 +146,8 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       val response = sendAlterUserScramCredentialsRequest(request)
       val results = response.data.results
       assertEquals(1, results.size)
-      assertEquals("Expected error when altering an empty user", Errors.INVALID_REQUEST.code, results.get(0).errorCode)
-      assertEquals("\"\" is an illegal user name", results.get(0).errorMessage)
+      assertEquals("Expected error when altering an empty user", Errors.UNACCEPTABLE_CREDENTIAL.code, results.get(0).errorCode)
+      assertEquals("Username must not be empty", results.get(0).errorMessage)
     })
   }
 
@@ -180,7 +178,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val results = response.data.results
     assertEquals(5, results.size)
     assertEquals("Expected error when altering the credentials with unknown SCRAM mechanisms",
-      0, results.asScala.filterNot(_.errorCode == Errors.INVALID_REQUEST.code).size)
+      0, results.asScala.filterNot(_.errorCode == Errors.UNSUPPORTED_SASL_MECHANISM.code).size)
     results.asScala.foreach(result => assertEquals("Unknown SCRAM mechanism", result.errorMessage))
   }
 
@@ -197,7 +195,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val results = response.data.results
     assertEquals(1, results.size)
     assertEquals("Expected error when altering the credentials with too few iterations",
-      0, results.asScala.filterNot(_.errorCode == Errors.INVALID_REQUEST.code).size)
+      0, results.asScala.filterNot(_.errorCode == Errors.UNACCEPTABLE_CREDENTIAL.code).size)
     assertEquals("Too few iterations", results.get(0).errorMessage)
   }
 
@@ -214,7 +212,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val results = response.data.results
     assertEquals(1, results.size)
     assertEquals("Expected error when altering the credentials with too many iterations",
-      0, results.asScala.filterNot(_.errorCode == Errors.INVALID_REQUEST.code).size)
+      0, results.asScala.filterNot(_.errorCode == Errors.UNACCEPTABLE_CREDENTIAL.code).size)
     assertEquals("Too many iterations", results.get(0).errorMessage)
   }
 
@@ -372,15 +370,12 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
 object AlterCredentialsTest {
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
-  // Principal used for all client connections. This is modified by tests which
-  // check unauthorized code path
-  var principal = KafkaPrincipal.ANONYMOUS
+  val AuthorizedPrincipal = KafkaPrincipal.ANONYMOUS
 
   class TestAuthorizer extends AclAuthorizer {
     override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-      // UnauthorizedPrincipal is not authorized for ALTER permission on CLUSTER resource
-      actions.asScala.map { action =>
-        if (requestContext.principal == UnauthorizedPrincipal && action.operation == AclOperation.ALTER && action.resourcePattern.resourceType == ResourceType.CLUSTER)
+      actions.asScala.map { _ =>
+        if (requestContext.requestType == ApiKeys.ALTER_USER_SCRAM_CREDENTIALS.id && requestContext.principal == UnauthorizedPrincipal)
           AuthorizationResult.DENIED
         else
           AuthorizationResult.ALLOWED
@@ -388,9 +383,15 @@ object AlterCredentialsTest {
     }
   }
 
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestPrincipalBuilderReturningAuthorized extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      principal
+      AuthorizedPrincipal
+    }
+  }
+
+  class TestPrincipalBuilderReturningUnauthorized extends KafkaPrincipalBuilder {
+    override def build(context: AuthenticationContext): KafkaPrincipal = {
+      UnauthorizedPrincipal
     }
   }
 }

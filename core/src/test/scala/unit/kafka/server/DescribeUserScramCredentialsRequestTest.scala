@@ -21,16 +21,15 @@ import java.util.Properties
 
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
-import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
-import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.Assert._
-import org.junit.{Before, Test}
+import org.junit.rules.TestName
+import org.junit.{Rule, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -43,14 +42,16 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[DescribeCredentialsTest.TestPrincipalBuilder].getName)
+    properties.put(KafkaConfig.PrincipalBuilderClassProp,
+      if (testName.getMethodName.endsWith("NotAuthorized")) {
+        classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName
+      } else {
+        classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName
+      })
   }
 
-  @Before
-  override def setUp(): Unit = {
-    DescribeCredentialsTest.principal = KafkaPrincipal.ANONYMOUS // default is to be authorized
-    super.setUp()
-  }
+  private val _testName = new TestName
+  @Rule def testName = _testName
 
   @Test
   def testDescribeNothing(): Unit = {
@@ -70,13 +71,11 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     val response = sendDescribeUserScramCredentialsRequest(request, notControllerSocketServer)
 
     val error = response.data.error
-    assertEquals("Expected controller error when routed incorrectly", Errors.NOT_CONTROLLER.code, error)
+    assertEquals("Did not expect controller error when routed to non-controller", Errors.NONE.code, error)
   }
 
   @Test
   def testDescribeNotAuthorized(): Unit = {
-    DescribeCredentialsTest.principal = DescribeCredentialsTest.UnauthorizedPrincipal
-
     val request = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()
     val response = sendDescribeUserScramCredentialsRequest(request)
@@ -93,7 +92,7 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     val response = sendDescribeUserScramCredentialsRequest(request)
 
     val error = response.data.error
-    assertEquals("Expected invalid request error", Errors.INVALID_REQUEST.code, error)
+    assertEquals("Expected invalid request error", Errors.DUPLICATE_RESOURCE.code, error)
   }
 
 
@@ -104,15 +103,12 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
 
 object DescribeCredentialsTest {
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
-  // Principal used for all client connections. This is modified by tests which
-  // check unauthorized code path
-  var principal = KafkaPrincipal.ANONYMOUS
+  val AuthorizedPrincipal = KafkaPrincipal.ANONYMOUS
 
   class TestAuthorizer extends AclAuthorizer {
     override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
-      // UnauthorizedPrincipal is not authorized for DESCRIBE permission on CLUSTER resource
-      actions.asScala.map { action =>
-        if (requestContext.principal == UnauthorizedPrincipal && action.operation == AclOperation.DESCRIBE && action.resourcePattern.resourceType == ResourceType.CLUSTER)
+      actions.asScala.map { _ =>
+        if (requestContext.requestType == ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS.id && requestContext.principal == UnauthorizedPrincipal)
           AuthorizationResult.DENIED
         else
           AuthorizationResult.ALLOWED
@@ -120,9 +116,15 @@ object DescribeCredentialsTest {
     }
   }
 
-  class TestPrincipalBuilder extends KafkaPrincipalBuilder {
+  class TestPrincipalBuilderReturningAuthorized extends KafkaPrincipalBuilder {
     override def build(context: AuthenticationContext): KafkaPrincipal = {
-      principal
+      AuthorizedPrincipal
+    }
+  }
+
+  class TestPrincipalBuilderReturningUnauthorized extends KafkaPrincipalBuilder {
+    override def build(context: AuthenticationContext): KafkaPrincipal = {
+      UnauthorizedPrincipal
     }
   }
 }

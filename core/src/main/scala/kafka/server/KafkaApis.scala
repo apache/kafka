@@ -3013,10 +3013,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
     val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
 
-    if (!controller.isActive) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
-    } else if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
+    if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.describeUserScramCredentials(
         Option(describeUserScramCredentialsRequest.data.users.asScala.map(_.name).toList))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
