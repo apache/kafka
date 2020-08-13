@@ -154,7 +154,7 @@ class MetadataCacheTest {
         .setPort(9092)
         .setSecurityProtocol(securityProtocol.id)
         .setListener(listenerName.value)).asJava))
-    val metadataCacheBrokerId = 9
+    val metadataCacheBrokerId = 0
     // leader is not available. expect LEADER_NOT_AVAILABLE for any metadata version.
     verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, listenerName,
       leader = 1, Errors.LEADER_NOT_AVAILABLE, errorUnavailableListeners = false)
@@ -191,7 +191,7 @@ class MetadataCacheTest {
       new UpdateMetadataBroker()
         .setId(1)
         .setEndpoints(broker1Endpoints.asJava))
-    val metadataCacheBrokerId = 9
+    val metadataCacheBrokerId = 0
     // leader available in cache but listener name not present. expect LISTENER_NOT_FOUND error for new metadata version
     verifyTopicMetadataPartitionLeaderOrEndpointNotAvailable(metadataCacheBrokerId, brokers, sslListenerName,
       leader = 1, Errors.LISTENER_NOT_FOUND, errorUnavailableListeners = true)
