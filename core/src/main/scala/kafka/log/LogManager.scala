@@ -199,27 +199,22 @@ class LogManager(logDirs: Seq[File],
       if (cleaner != null)
         cleaner.handleLogDirFailure(dir)
 
-      val offlineCurrentTopicPartitions = currentLogs.collect {
-        case (tp, log) if log.parentDir == dir => tp
-      }
-      offlineCurrentTopicPartitions.foreach { topicPartition => {
-        val removedLog = currentLogs.remove(topicPartition)
-        if (removedLog != null) {
-          removedLog.closeHandlers()
-          removedLog.removeLogMetrics()
+      def removeOfflineLogs(logs: Pool[TopicPartition, Log]): Iterable[TopicPartition] = {
+        val offlineTopicPartitions: Iterable[TopicPartition] = logs.collect {
+          case (tp, log) if log.parentDir == dir => tp
         }
-      }}
+        offlineTopicPartitions.foreach { topicPartition => {
+          val removedLog = removeLogAndMetrics(logs, topicPartition)
+          removedLog.foreach {
+            log => log.closeHandlers()
+          }
+        }}
 
-      val offlineFutureTopicPartitions = futureLogs.collect {
-        case (tp, log) if log.parentDir == dir => tp
+        offlineTopicPartitions
       }
-      offlineFutureTopicPartitions.foreach { topicPartition => {
-        val removedLog = futureLogs.remove(topicPartition)
-        if (removedLog != null) {
-          removedLog.closeHandlers()
-          removedLog.removeLogMetrics()
-        }
-      }}
+
+      val offlineCurrentTopicPartitions = removeOfflineLogs(currentLogs)
+      val offlineFutureTopicPartitions = removeOfflineLogs(futureLogs)
 
       warn(s"Logs for partitions ${offlineCurrentTopicPartitions.mkString(",")} are offline and " +
            s"logs for future partitions ${offlineFutureTopicPartitions.mkString(",")} are offline due to failure on log directory $dir")
@@ -932,6 +927,7 @@ class LogManager(logDirs: Seq[File],
         val logsToCheckpoint = logsInDir(logDir)
         checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
         checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
+        sourceLog.removeLogMetrics()
         addLogToBeDeleted(sourceLog)
       } catch {
         case e: KafkaStorageException =>
@@ -957,32 +953,34 @@ class LogManager(logDirs: Seq[File],
     */
   def asyncDelete(topicPartition: TopicPartition,
                   isFuture: Boolean = false,
-                  checkpoint: Boolean = true): Log = {
-    val removedLog: Log = logCreationOrDeletionLock synchronized {
-      if (isFuture)
-        futureLogs.remove(topicPartition)
-      else
-        currentLogs.remove(topicPartition)
+                  checkpoint: Boolean = true): Option[Log] = {
+    val removedLog: Option[Log] = logCreationOrDeletionLock synchronized {
+      removeLogAndMetrics(if (isFuture) futureLogs else currentLogs, topicPartition)
     }
-    if (removedLog != null) {
-      // We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
-      if (cleaner != null && !isFuture) {
-        cleaner.abortCleaning(topicPartition)
-        if (checkpoint)
-          cleaner.updateCheckpoints(removedLog.parentDirFile)
-      }
-      removedLog.renameDir(Log.logDeleteDirName(topicPartition))
-      if (checkpoint) {
-        val logDir = removedLog.parentDirFile
-        val logsToCheckpoint = logsInDir(logDir)
-        checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
-        checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
-      }
-      addLogToBeDeleted(removedLog)
-      info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
-    } else if (offlineLogDirs.nonEmpty) {
-      throw new KafkaStorageException(s"Failed to delete log for ${if (isFuture) "future" else ""} $topicPartition because it may be in one of the offline directories ${offlineLogDirs.mkString(",")}")
+    removedLog match {
+      case Some(removedLog) =>
+        // We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
+        if (cleaner != null && !isFuture) {
+          cleaner.abortCleaning(topicPartition)
+          if (checkpoint)
+            cleaner.updateCheckpoints(removedLog.parentDirFile)
+        }
+        removedLog.renameDir(Log.logDeleteDirName(topicPartition))
+        if (checkpoint) {
+          val logDir = removedLog.parentDirFile
+          val logsToCheckpoint = logsInDir(logDir)
+          checkpointRecoveryOffsetsAndCleanSnapshotsInDir(logDir, logsToCheckpoint, ArrayBuffer.empty)
+          checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
+        }
+        addLogToBeDeleted(removedLog)
+        info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
+
+      case None =>
+        if (offlineLogDirs.nonEmpty) {
+          throw new KafkaStorageException(s"Failed to delete log for ${if (isFuture) "future" else ""} $topicPartition because it may be in one of the offline directories ${offlineLogDirs.mkString(",")}")
+        }
     }
+
     removedLog
   }
 
@@ -1149,6 +1147,16 @@ class LogManager(logDirs: Seq[File],
         case e: Throwable =>
           error(s"Error flushing topic ${topicPartition.topic}", e)
       }
+    }
+  }
+
+  private def removeLogAndMetrics(logs: Pool[TopicPartition, Log], tp: TopicPartition): Option[Log] = {
+    val removedLog = logs.remove(tp)
+    if (removedLog != null) {
+      removedLog.removeLogMetrics()
+      Some(removedLog)
+    } else {
+      None
     }
   }
 }

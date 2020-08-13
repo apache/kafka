@@ -196,7 +196,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                final V value,
                                final To to) {
         throwUnsupportedOperationExceptionIfStandby("forward");
-        final ProcessorNode<?, ?> previousNode = currentNode();
+        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         final ProcessorRecordContext previousContext = recordContext;
 
         try {
@@ -212,12 +212,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
             final String sendTo = toInternal.child();
             if (sendTo == null) {
-                final List<ProcessorNode<?, ?>> children = currentNode().children();
-                for (final ProcessorNode<?, ?> child : children) {
-                    forward((ProcessorNode<K, V>) child, key, value);
+                final List<? extends ProcessorNode<?, ?, ?, ?>> children = currentNode().children();
+                for (final ProcessorNode<?, ?, ?, ?> child : children) {
+                    forward((ProcessorNode<K, V, ?, ?>) child, key, value);
                 }
             } else {
-                final ProcessorNode<K, V> child = currentNode().getChild(sendTo);
+                final ProcessorNode<K, V, ?, ?> child = currentNode().getChild(sendTo);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + sendTo
                         + " either does not exist or is not connected to this processor.");
@@ -230,7 +230,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private <K, V> void forward(final ProcessorNode<K, V> child,
+    private <K, V> void forward(final ProcessorNode<K, V, ?, ?> child,
                                 final K key,
                                 final V value) {
         setCurrentNode(child);
@@ -293,7 +293,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public ProcessorNode<?, ?> currentNode() {
+    public ProcessorNode<?, ?, ?, ?> currentNode() {
         throwUnsupportedOperationExceptionIfStandby("currentNode");
         return super.currentNode();
     }

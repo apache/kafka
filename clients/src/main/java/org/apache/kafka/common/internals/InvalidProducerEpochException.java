@@ -14,20 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.internals;
+package org.apache.kafka.common.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
-
-import java.util.Map;
+import org.apache.kafka.common.errors.RetriableException;
 
 /**
- * A {@link StreamsConfig} that does not log its configuration on construction.
- *
- * This producer cleaner output for unit tests using the {@code test-utils},
- * since logging the config is not really valuable in this context.
+ * This exception indicates that the produce request sent to the partition leader
+ * contains a non-matching producer epoch. When encountering this exception, the ongoing transaction
+ * will be aborted and can be retried.
  */
-public class QuietStreamsConfig extends StreamsConfig {
-    public QuietStreamsConfig(final Map<?, ?> props) {
-        super(props, false);
+public class InvalidProducerEpochException extends RetriableException {
+
+    private static final long serialVersionUID = 1L;
+
+    public InvalidProducerEpochException(String message) {
+        super(message);
     }
 }

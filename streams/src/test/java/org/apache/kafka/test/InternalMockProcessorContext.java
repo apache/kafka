@@ -61,6 +61,7 @@ public class InternalMockProcessorContext
     extends AbstractProcessorContext
     implements RecordCollector.Supplier {
 
+    private StateManager stateManager = new StateManagerStub();
     private final File stateDir;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
@@ -205,7 +206,11 @@ public class InternalMockProcessorContext
 
     @Override
     protected StateManager stateManager() {
-        return new StateManagerStub();
+        return stateManager;
+    }
+
+    public void setStateManger(final StateManager stateManger) {
+        this.stateManager = stateManger;
     }
 
     @Override
@@ -253,6 +258,7 @@ public class InternalMockProcessorContext
                          final StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
+        stateManager().registerStore(store, func);
     }
 
     @Override
@@ -300,12 +306,12 @@ public class InternalMockProcessorContext
         if (toInternal.hasTimestamp()) {
             setTime(toInternal.timestamp());
         }
-        final ProcessorNode<?, ?> thisNode = currentNode;
+        final ProcessorNode<?, ?, ?, ?> thisNode = currentNode;
         try {
-            for (final ProcessorNode<?, ?> childNode : thisNode.children()) {
+            for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    ((ProcessorNode<Object, Object>) childNode).process(key, value);
+                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(key, value);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
                                            // Processors and toInternal might have been modified
                 }

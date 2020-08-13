@@ -246,7 +246,7 @@ public class StreamsMetricsImplTest {
     }
 
     private Capture<String> setupGetNewSensorTest(final Metrics metrics,
-                                       final RecordingLevel recordingLevel) {
+                                                  final RecordingLevel recordingLevel) {
         final Capture<String> sensorKey = newCapture(CaptureType.ALL);
         expect(metrics.getSensor(capture(sensorKey))).andStubReturn(null);
         final Sensor[] parents = {};

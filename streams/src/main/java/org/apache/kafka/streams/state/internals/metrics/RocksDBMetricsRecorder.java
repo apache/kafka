@@ -62,9 +62,12 @@ public class RocksDBMetricsRecorder {
         }
     }
 
+<<<<<<< HEAD
     private static final String ROCKSDB_PROPERTIES_PREFIX = "rocksdb.";
     private static final ByteBuffer CONVERSION_BUFFER = ByteBuffer.allocate(Long.BYTES);
 
+=======
+>>>>>>> upstream/trunk
     private final Logger logger;
 
     private Sensor bytesWrittenToDatabaseSensor;

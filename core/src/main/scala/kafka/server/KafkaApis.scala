@@ -674,6 +674,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+    def maybeDownConvertStorageError(error: Errors, version: Short): Errors = {
+      // If consumer sends FetchRequest V5 or earlier, the client library is not guaranteed to recognize the error code
+      // for KafkaStorageException. In this case the client library will translate KafkaStorageException to
+      // UnknownServerException which is not retriable. We can ensure that consumer will update metadata and retry
+      // by converting the KafkaStorageException to NotLeaderForPartitionException in the response if FetchRequest version <= 5
+      if (error == Errors.KAFKA_STORAGE_ERROR && versionId <= 5) {
+        Errors.NOT_LEADER_OR_FOLLOWER
+      } else {
+        error
+      }
+    }
+
     def maybeConvertFetchedData(tp: TopicPartition,
                                 partitionData: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
       val logConfig = replicaManager.getLogConfig(tp)
@@ -713,7 +725,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
-                new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
+                val error = maybeDownConvertStorageError(partitionData.error, versionId)
+                new FetchResponse.PartitionData[BaseRecords](error, partitionData.highWatermark,
                   partitionData.lastStableOffset, partitionData.logStartOffset,
                   partitionData.preferredReadReplica, partitionData.abortedTransactions,
                   new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
@@ -723,10 +736,13 @@ class KafkaApis(val requestChannel: RequestChannel,
                   errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
               }
             }
-          case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-            partitionData.lastStableOffset, partitionData.logStartOffset,
-            partitionData.preferredReadReplica, partitionData.abortedTransactions,
-            unconvertedRecords)
+          case None => {
+            val error = maybeDownConvertStorageError(partitionData.error, versionId)
+            new FetchResponse.PartitionData[BaseRecords](error, partitionData.highWatermark,
+              partitionData.lastStableOffset, partitionData.logStartOffset,
+              partitionData.preferredReadReplica, partitionData.abortedTransactions,
+              unconvertedRecords)
+          }
         }
       }
     }
@@ -740,7 +756,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.isReassignmentFetch)
           reassigningPartitions.add(tp)
-        partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+        val error = maybeDownConvertStorageError(data.error, versionId)
+        partitions.put(tp, new FetchResponse.PartitionData(error, data.highWatermark, lastStableOffset,
           data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
           abortedTransactions, data.records))
       }
@@ -1972,11 +1989,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(result: InitProducerIdResult): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        val finalError =
+          if (initProducerIdRequest.version < 4 && result.error == Errors.PRODUCER_FENCED) {
+            // For older clients, they could not understand the new PRODUCER_FENCED error code,
+            // so we need to return the INVALID_PRODUCER_EPOCH to have the same client handling logic.
+            Errors.INVALID_PRODUCER_EPOCH
+          } else {
+            result.error
+          }
         val responseData = new InitProducerIdResponseData()
           .setProducerId(result.producerId)
           .setProducerEpoch(result.producerEpoch)
           .setThrottleTimeMs(requestThrottleMs)
-          .setErrorCode(result.error.code)
+          .setErrorCode(finalError.code)
         val responseBody = new InitProducerIdResponse(responseData)
         trace(s"Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
         responseBody
@@ -2005,8 +2030,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
+          val finalError =
+            if (endTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
+              // For older clients, they could not understand the new PRODUCER_FENCED error code,
+              // so we need to return the INVALID_PRODUCER_EPOCH to have the same client handling logic.
+              Errors.INVALID_PRODUCER_EPOCH
+            } else {
+              error
+            }
           val responseBody = new EndTxnResponse(new EndTxnResponseData()
-            .setErrorCode(error.code())
+            .setErrorCode(finalError.code)
             .setThrottleTimeMs(requestThrottleMs))
           trace(s"Completed ${endTxnRequest.data.transactionalId}'s EndTxnRequest " +
             s"with committed: ${endTxnRequest.data.committed}, " +
@@ -2174,11 +2207,21 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         def sendResponseCallback(error: Errors): Unit = {
           def createResponse(requestThrottleMs: Int): AbstractResponse = {
+            val finalError =
+              if (addPartitionsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
+                // For older clients, they could not understand the new PRODUCER_FENCED error code,
+                // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
+                Errors.INVALID_PRODUCER_EPOCH
+              } else {
+                error
+              }
+
             val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
-              partitionsToAdd.map{tp => (tp, error)}.toMap.asJava)
+              partitionsToAdd.map{tp => (tp, finalError)}.toMap.asJava)
             trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
             responseBody
           }
+
 
           sendResponseMaybeThrottle(request, createResponse)
         }
@@ -2213,9 +2256,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
+          val finalError =
+            if (addOffsetsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
+              // For older clients, they could not understand the new PRODUCER_FENCED error code,
+              // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
+              Errors.INVALID_PRODUCER_EPOCH
+            } else {
+              error
+            }
+
           val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(
             new AddOffsetsToTxnResponseData()
-              .setErrorCode(error.code)
+              .setErrorCode(finalError.code)
               .setThrottleTimeMs(requestThrottleMs))
           trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId on partition " +
             s"$offsetTopicPartition: errors: $error from client ${request.header.clientId}")

@@ -394,21 +394,25 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       sensorAccessor.getOrCreate(
         getQuotaSensorName(metricTags),
         ClientQuotaManager.InactiveSensorExpirationTimeSeconds,
-        clientRateMetricName(metricTags),
-        Some(getQuotaMetricConfig(metricTags)),
-        new Rate
+        registerQuotaMetrics(metricTags)
       ),
       sensorAccessor.getOrCreate(
         getThrottleTimeSensorName(metricTags),
         ClientQuotaManager.InactiveSensorExpirationTimeSeconds,
-        throttleMetricName(metricTags),
-        None,
-        new Avg
+        sensor => sensor.add(throttleMetricName(metricTags), new Avg)
       )
     )
     if (quotaCallback.quotaResetRequired(clientQuotaType))
       updateQuotaMetricConfigs()
     sensors
+  }
+
+  protected def registerQuotaMetrics(metricTags: Map[String, String])(sensor: Sensor): Unit = {
+    sensor.add(
+      clientRateMetricName(metricTags),
+      new Rate,
+      getQuotaMetricConfig(metricTags)
+    )
   }
 
   private def metricTagsToSensorSuffix(metricTags: Map[String, String]): String =
@@ -420,7 +424,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private def getQuotaSensorName(metricTags: Map[String, String]): String =
     s"$quotaType-${metricTagsToSensorSuffix(metricTags)}"
 
-  private def getQuotaMetricConfig(metricTags: Map[String, String]): MetricConfig = {
+  protected def getQuotaMetricConfig(metricTags: Map[String, String]): MetricConfig = {
     getQuotaMetricConfig(quotaLimit(metricTags.asJava))
   }
 
@@ -435,9 +439,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     sensorAccessor.getOrCreate(
       sensorName,
       ClientQuotaManager.InactiveSensorExpirationTimeSeconds,
-      metricName,
-      None,
-      new Rate
+      sensor => sensor.add(metricName, new Rate)
     )
   }
 
