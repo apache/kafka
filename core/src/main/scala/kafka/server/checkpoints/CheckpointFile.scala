@@ -75,6 +75,9 @@ class CheckpointReadBuffer[T](location: String,
   }
 }
 
+/**
+ * This class interacts with the log file to read or write [TopicPartition, Offset] entries
+ */
 class CheckpointFile[T](val file: File,
                         version: Int,
                         formatter: CheckpointFileFormatter[T],

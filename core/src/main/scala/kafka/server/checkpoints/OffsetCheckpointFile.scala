@@ -60,6 +60,9 @@ class OffsetCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureCh
 
   def read(): Map[TopicPartition, Long] = checkpoint.read().toMap
 
+  override def toString: String = {
+    "OffsetCheckpointFile dir is " + file.getAbsolutePath
+  }
 }
 
 trait OffsetCheckpoints {
