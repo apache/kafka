@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent._
 
-import kafka.api.{ApiVersion, LeaderAndIsr}
+import kafka.api.{ApiVersion}
 import kafka.log._
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
@@ -283,10 +283,10 @@ class PartitionLockTest extends Logging {
     when(stateStore.fetchTopicConfig()).thenReturn(createLogProperties(Map.empty))
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
-    when(stateStore.shrinkIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
-      .thenReturn(Some(2))
-    when(stateStore.expandIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
-      .thenReturn(Some(2))
+    //when(stateStore.shrinkIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
+    //  .thenReturn(Some(2))
+    //when(stateStore.expandIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
+    //  .thenReturn(Some(2))
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
 

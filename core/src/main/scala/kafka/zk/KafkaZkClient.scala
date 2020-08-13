@@ -452,6 +452,17 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }
   }
 
+  def getBrokerEpoch(brokerId: Int): Option[Long] = {
+    val existsRequest = ExistsRequest(BrokerIdZNode.path(brokerId))
+    val existsResponse = retryRequestUntilConnected(existsRequest)
+    existsResponse.resultCode match {
+      case Code.OK =>
+        Some(existsResponse.stat.getCzxid)
+      case Code.NONODE => None
+      case _ => throw existsResponse.resultException.get
+    }
+  }
+
   /**
    * Gets the list of sorted broker Ids
    */

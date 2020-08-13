@@ -424,7 +424,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean, brokerEpoch: Long): ReplicaManager = {
     val alterIsrManager = new AlterIsrChannelManagerImpl(brokerToControllerChannelManager, zkClient, kafkaScheduler,
-      config.brokerId, brokerEpoch)
+      time, config.brokerId)
     new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
       brokerTopicStats, metadataCache, logDirFailureChannel, alterIsrManager)
   }

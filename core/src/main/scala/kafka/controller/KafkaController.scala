@@ -1876,9 +1876,6 @@ class KafkaController(val config: KafkaConfig,
     // Update our cache
     updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
 
-    // Send back AlterIsr response
-    callback.apply(Left(partitionErrors))
-
     // Send out LeaderAndIsr for successful updates
     brokerRequestBatch.newBatch()
 
@@ -1892,8 +1889,10 @@ class KafkaController(val config: KafkaConfig,
         case None => warn(s"No leadership info for $partition, not including in LeaderAndIsr request")
       }
     })
-
     brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
+
+    // Send back AlterIsr response
+    callback.apply(Left(partitionErrors))
   }
 
   private def processControllerChange(): Unit = {

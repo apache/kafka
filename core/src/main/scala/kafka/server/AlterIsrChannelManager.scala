@@ -1,3 +1,19 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package kafka.server
 
 import java.util
@@ -14,6 +30,7 @@ import org.apache.kafka.common.message.AlterIsrRequestData.{AlterIsrRequestParti
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -23,9 +40,6 @@ import scala.jdk.CollectionConverters._
  * so partitions will learn about updates through LeaderAndIsr messages sent from the controller
  */
 trait AlterIsrChannelManager {
-  val IsrChangePropagationBlackOut = 5000L
-  val IsrChangePropagationInterval = 60000L
-
   def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Unit
 
   def clearPending(topicPartition: TopicPartition): Unit
@@ -35,13 +49,13 @@ trait AlterIsrChannelManager {
   def shutdown(): Unit
 }
 
-case class AlterIsrItem(topicPartition: TopicPartition, leaderAndIsr: LeaderAndIsr)
+case class AlterIsrItem(topicPartition: TopicPartition, leaderAndIsr: LeaderAndIsr, callback: Errors => Unit)
 
 class AlterIsrChannelManagerImpl(val controllerChannelManager: BrokerToControllerChannelManager,
                                  val zkClient: KafkaZkClient,
                                  val scheduler: Scheduler,
-                                 val brokerId: Int,
-                                 val brokerEpoch: Long) extends AlterIsrChannelManager with Logging with KafkaMetricsGroup {
+                                 val time: Time,
+                                 val brokerId: Int) extends AlterIsrChannelManager with Logging with KafkaMetricsGroup {
 
   private val pendingIsrUpdates: mutable.Map[TopicPartition, AlterIsrItem] = new mutable.HashMap[TopicPartition, AlterIsrItem]()
   private val lastIsrChangeMs = new AtomicLong(0)
@@ -52,7 +66,7 @@ class AlterIsrChannelManagerImpl(val controllerChannelManager: BrokerToControlle
   override def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Unit = {
     pendingIsrUpdates synchronized {
       pendingIsrUpdates(alterIsrItem.topicPartition) = alterIsrItem
-      lastIsrChangeMs.set(System.currentTimeMillis())
+      lastIsrChangeMs.set(time.milliseconds())
       // Rather than sending right away, we'll delay at most 50ms to allow for batching of ISR changes happening
       // in fast succession
       if (scheduledRequest.isEmpty) {
@@ -77,15 +91,20 @@ class AlterIsrChannelManagerImpl(val controllerChannelManager: BrokerToControlle
   }
 
   private def propagateIsrChanges(): Unit = {
-    val now = System.currentTimeMillis()
+    val now = time.milliseconds()
     pendingIsrUpdates synchronized {
       if (pendingIsrUpdates.nonEmpty) {
-        // Max ISRs to send?
+        val brokerEpoch: Long = zkClient.getBrokerEpoch(brokerId) match {
+          case Some(brokerEpoch) => brokerEpoch
+          case None => throw new RuntimeException("Cannot send AlterIsr because we cannot determine broker epoch")
+        }
+
         val message = new AlterIsrRequestData()
           .setBrokerId(brokerId)
           .setBrokerEpoch(brokerEpoch)
           .setTopics(new util.ArrayList())
 
+        val callbacks = new mutable.HashMap[TopicPartition, Errors => Unit]()
         pendingIsrUpdates.values.groupBy(_.topicPartition.topic()).foreachEntry((topic, items) => {
           val topicPart = new AlterIsrRequestTopics()
             .setName(topic)
@@ -99,11 +118,11 @@ class AlterIsrChannelManagerImpl(val controllerChannelManager: BrokerToControlle
               .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
               .setCurrentIsrVersion(item.leaderAndIsr.zkVersion)
             )
+            callbacks(item.topicPartition) = item.callback
           })
         })
 
         def responseHandler(response: ClientResponse): Unit = {
-          println(response.responseBody().toString(response.requestHeader().apiVersion()))
           val body: AlterIsrResponse = response.responseBody().asInstanceOf[AlterIsrResponse]
           val data: AlterIsrResponseData = body.data()
           Errors.forCode(data.errorCode()) match {
@@ -111,11 +130,9 @@ class AlterIsrChannelManagerImpl(val controllerChannelManager: BrokerToControlle
             case e: Errors => warn(s"Controller returned an error when handling AlterIsr request: $e")
           }
           data.topics().forEach(topic => {
-            topic.partitions().forEach(topicPartition => {
-              Errors.forCode(topicPartition.errorCode()) match {
-                case Errors.NONE => info(s"Controller handled AlterIsr for $topicPartition")
-                case e: Errors => warn(s"Controlled had an error handling AlterIsr for $topicPartition: $e")
-              }
+            topic.partitions().forEach(partition => {
+              callbacks(new TopicPartition(topic.name(), partition.partitionIndex()))(
+                Errors.forCode(partition.errorCode()))
             })
           })
         }
