@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -168,6 +169,11 @@ public class CandidateState implements EpochState {
     @Override
     public ElectionState election() {
         return ElectionState.withVotedCandidate(epoch, localId, voteStates.keySet());
+    }
+
+    @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(OptionalInt.empty(), epoch);
     }
 
     @Override

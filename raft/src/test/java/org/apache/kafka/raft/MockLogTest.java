@@ -37,7 +37,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
 import java.util.UUID;
 
 import static org.junit.Assert.assertEquals;
@@ -68,7 +67,7 @@ public class MockLogTest {
         assertEquals(0L, log.startOffset());
         assertEquals(1L, log.endOffset().offset);
 
-        Records records = log.read(0, OptionalLong.of(1)).records;
+        Records records = log.read(0, Isolation.UNCOMMITTED).records;
         List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
 
         RecordBatch batch = batches.get(0);
@@ -86,7 +85,7 @@ public class MockLogTest {
         assertEquals(0L, log.startOffset());
         assertEquals(3L, log.endOffset().offset);
 
-        records = log.read(0, OptionalLong.empty()).records;
+        records = log.read(0, Isolation.UNCOMMITTED).records;
         batches = Utils.toList(records.batches().iterator());
         assertEquals(2, batches.size());
 
@@ -163,7 +162,7 @@ public class MockLogTest {
         assertEquals(1, log.endOffset().offset);
         assertEquals(currentEpoch, log.lastFetchedEpoch());
 
-        Records records = log.read(0, OptionalLong.empty()).records;
+        Records records = log.read(0, Isolation.UNCOMMITTED).records;
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
             extractRecords.add(record.value());
@@ -186,7 +185,7 @@ public class MockLogTest {
         assertEquals(1, log.endOffset().offset);
         assertEquals(currentEpoch, log.lastFetchedEpoch());
 
-        Records records = log.read(0, OptionalLong.empty()).records;
+        Records records = log.read(0, Isolation.UNCOMMITTED).records;
         for (RecordBatch batch : records.batches()) {
             assertTrue(batch.isControlBatch());
         }
@@ -212,7 +211,7 @@ public class MockLogTest {
         assertEquals(6L, log.endOffset().offset);
         assertEquals(3, log.lastFetchedEpoch());
 
-        Records records = log.read(5L, OptionalLong.empty()).records;
+        Records records = log.read(5L, Isolation.UNCOMMITTED).records;
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
             extractRecords.add(record.value());
@@ -238,7 +237,7 @@ public class MockLogTest {
 
         log.appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
 
-        Records records = log.read(0, OptionalLong.empty()).records;
+        Records records = log.read(0, Isolation.UNCOMMITTED).records;
 
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
@@ -248,28 +247,58 @@ public class MockLogTest {
     }
 
     @Test
-    public void testReadCompleteBatches() {
+    public void testReadUpToLogEnd() {
         appendBatch(20, 1);
         appendBatch(10, 1);
         appendBatch(30, 1);
 
-        assertEquals(Optional.empty(), readOffsets(0L, OptionalLong.of(15L)));
-        assertEquals(Optional.of(new OffsetRange(0L, 19L)), readOffsets(0L, OptionalLong.of(20L)));
-        assertEquals(Optional.of(new OffsetRange(0L, 19L)), readOffsets(10L, OptionalLong.of(20L)));
-        assertEquals(Optional.of(new OffsetRange(0L, 19L)), readOffsets(10L, OptionalLong.of(25L)));
+        assertEquals(Optional.of(new OffsetRange(0L, 59L)), readOffsets(0L, Isolation.UNCOMMITTED));
+        assertEquals(Optional.of(new OffsetRange(0L, 59L)), readOffsets(10L, Isolation.UNCOMMITTED));
+        assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(20L, Isolation.UNCOMMITTED));
+        assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(25L, Isolation.UNCOMMITTED));
+        assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(30L, Isolation.UNCOMMITTED));
+        assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(33L, Isolation.UNCOMMITTED));
+        assertEquals(Optional.empty(), readOffsets(60L, Isolation.UNCOMMITTED));
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(61L, Isolation.UNCOMMITTED));
 
-        assertEquals(Optional.empty(), readOffsets(25L, OptionalLong.of(27L)));
-        assertEquals(Optional.of(new OffsetRange(0L, 29L)), readOffsets(0L, OptionalLong.of(30L)));
-        assertEquals(Optional.of(new OffsetRange(0L, 29L)), readOffsets(10L, OptionalLong.of(30L)));
-        assertEquals(Optional.of(new OffsetRange(0L, 29L)), readOffsets(10L, OptionalLong.of(35L)));
-        assertEquals(Optional.of(new OffsetRange(20L, 29L)), readOffsets(20L, OptionalLong.of(30L)));
-        assertEquals(Optional.of(new OffsetRange(20L, 29L)), readOffsets(20L, OptionalLong.of(35L)));
+        // Verify range after truncation
+        log.truncateTo(20L);
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(21L, Isolation.UNCOMMITTED));
+    }
 
-        assertEquals(Optional.of(new OffsetRange(0L, 59L)), readOffsets(10L, OptionalLong.of(60L)));
-        assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(20L, OptionalLong.of(60L)));
-        assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(25L, OptionalLong.of(60L)));
-        assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(30L, OptionalLong.of(60L)));
-        assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(35L, OptionalLong.of(60L)));
+    @Test
+    public void testReadUpToHighWatermark() {
+        appendBatch(20, 1);
+        appendBatch(10, 1);
+        appendBatch(30, 1);
+
+        log.updateHighWatermark(new LogOffsetMetadata(0L));
+        assertEquals(Optional.empty(), readOffsets(0L, Isolation.COMMITTED));
+        assertEquals(Optional.empty(), readOffsets(10L, Isolation.COMMITTED));
+
+        log.updateHighWatermark(new LogOffsetMetadata(20L));
+        assertEquals(Optional.of(new OffsetRange(0L, 19L)), readOffsets(0L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(0L, 19L)), readOffsets(10L, Isolation.COMMITTED));
+        assertEquals(Optional.empty(), readOffsets(20L, Isolation.COMMITTED));
+        assertEquals(Optional.empty(), readOffsets(30L, Isolation.COMMITTED));
+
+        log.updateHighWatermark(new LogOffsetMetadata(30L));
+        assertEquals(Optional.of(new OffsetRange(0L, 29L)), readOffsets(0L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(0L, 29L)), readOffsets(10L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(20L, 29L)), readOffsets(20L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(20L, 29L)), readOffsets(25L, Isolation.COMMITTED));
+        assertEquals(Optional.empty(), readOffsets(30L, Isolation.COMMITTED));
+        assertEquals(Optional.empty(), readOffsets(50L, Isolation.COMMITTED));
+
+        log.updateHighWatermark(new LogOffsetMetadata(60L));
+        assertEquals(Optional.of(new OffsetRange(0L, 59L)), readOffsets(0L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(0L, 59L)), readOffsets(10L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(20L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(20L, 59L)), readOffsets(25L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(30, 59L)), readOffsets(30L, Isolation.COMMITTED));
+        assertEquals(Optional.of(new OffsetRange(30L, 59L)), readOffsets(50L, Isolation.COMMITTED));
+        assertEquals(Optional.empty(), readOffsets(60L, Isolation.COMMITTED));
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(61L, Isolation.COMMITTED));
     }
 
     @Test
@@ -278,7 +307,7 @@ public class MockLogTest {
         appendBatch(5, 1);
         appendBatch(5, 1);
 
-        LogFetchInfo readInfo = log.read(5, OptionalLong.empty());
+        LogFetchInfo readInfo = log.read(5, Isolation.UNCOMMITTED);
         assertEquals(5L, readInfo.startOffsetMetadata.offset);
         assertTrue(readInfo.startOffsetMetadata.metadata.isPresent());
         MockLog.MockOffsetMetadata offsetMetadata = (MockLog.MockOffsetMetadata)
@@ -294,7 +323,7 @@ public class MockLogTest {
                 Optional.of(new MockLog.MockOffsetMetadata(UUID.randomUUID())))));
 
         // Ensure we can update the high watermark to the end offset
-        LogFetchInfo readFromEndInfo = log.read(15L, OptionalLong.empty());
+        LogFetchInfo readFromEndInfo = log.read(15L, Isolation.UNCOMMITTED);
         assertEquals(15, readFromEndInfo.startOffsetMetadata.offset);
         assertTrue(readFromEndInfo.startOffsetMetadata.metadata.isPresent());
         log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
@@ -304,7 +333,7 @@ public class MockLogTest {
         log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
 
         // Check handling of a fetch from the middle of a batch
-        LogFetchInfo readFromMiddleInfo = log.read(16L, OptionalLong.of(18L));
+        LogFetchInfo readFromMiddleInfo = log.read(16L, Isolation.UNCOMMITTED);
         assertEquals(readFromEndInfo.startOffsetMetadata, readFromMiddleInfo.startOffsetMetadata);
     }
 
@@ -335,12 +364,14 @@ public class MockLogTest {
         final int epoch = 3;
         SimpleRecord recordFoo = new SimpleRecord("foo".getBytes());
         log.appendAsFollower(MemoryRecords.withRecords(initialOffset, CompressionType.NONE, epoch, recordFoo));
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.startOffset() - 1, OptionalLong.empty()));
-        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset + 1, OptionalLong.empty()));
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.startOffset() - 1,
+            Isolation.UNCOMMITTED));
+        assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset + 1,
+            Isolation.UNCOMMITTED));
     }
 
-    private Optional<OffsetRange> readOffsets(long startOffset, OptionalLong maxOffset) {
-        Records records = log.read(startOffset, maxOffset).records;
+    private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {
+        Records records = log.read(startOffset, isolation).records;
         long firstReadOffset = -1L;
         long lastReadOffset = -1L;
         for (Record record : records.records()) {

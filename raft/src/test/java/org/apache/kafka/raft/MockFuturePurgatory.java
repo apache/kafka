@@ -19,10 +19,14 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 
+import java.util.Iterator;
 import java.util.PriorityQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 
-public class MockFuturePurgatory<T extends Comparable<T>> implements FuturePurgatory<T>, MockTime.Listener {
+public class MockFuturePurgatory<T> implements FuturePurgatory<T>, MockTime.Listener {
+    private static final AtomicInteger ID_GENERATOR = new AtomicInteger();
     private final MockTime time;
     private final PriorityQueue<DelayedFuture> delayedFutures = new PriorityQueue<>();
 
@@ -32,22 +36,21 @@ public class MockFuturePurgatory<T extends Comparable<T>> implements FuturePurga
     }
 
     @Override
-    public CompletableFuture<Long> await(T value, long maxWaitTimeMs) {
+    public CompletableFuture<Long> await(Predicate<T> condition, long maxWaitTimeMs) {
         CompletableFuture<Long> future = new CompletableFuture<>();
         long expirationTimeMs = time.milliseconds() + maxWaitTimeMs;
-        delayedFutures.add(new DelayedFuture(value, expirationTimeMs, future));
-
+        delayedFutures.add(new DelayedFuture(expirationTimeMs, condition, future));
         return future;
     }
 
     @Override
-    public void complete(T value, long currentTimeMs) {
-        while (!delayedFutures.isEmpty()) {
-            if (delayedFutures.peek().id.compareTo(value) < 0) {
-                DelayedFuture delayedFuture = delayedFutures.poll();
+    public void maybeComplete(T value, long currentTimeMs) {
+        Iterator<DelayedFuture> iterator = delayedFutures.iterator();
+        while (iterator.hasNext()) {
+            DelayedFuture delayedFuture = iterator.next();
+            if (delayedFuture.canComplete(value)) {
                 delayedFuture.future.complete(currentTimeMs);
-            } else {
-                break;
+                iterator.remove();
             }
         }
     }
@@ -67,12 +70,13 @@ public class MockFuturePurgatory<T extends Comparable<T>> implements FuturePurga
 
     @Override
     public void onTimeUpdated() {
-        while (true) {
-            DelayedFuture delayedFuture = delayedFutures.peek();
+        Iterator<DelayedFuture> iterator = delayedFutures.iterator();
+        while (iterator.hasNext()) {
+            DelayedFuture delayedFuture = iterator.next();
             if (delayedFuture == null || time.milliseconds() < delayedFuture.expirationTime) {
-                return;
+                break;
             } else {
-                delayedFutures.poll();
+                iterator.remove();
 
                 if (!delayedFuture.future.isDone()) {
                     delayedFuture.future.completeExceptionally(new TimeoutException());
@@ -82,18 +86,24 @@ public class MockFuturePurgatory<T extends Comparable<T>> implements FuturePurga
     }
 
     private class DelayedFuture implements Comparable<DelayedFuture> {
-        private final T id;
+        private final long id;
         private final long expirationTime;
+        private final Predicate<T> condition;
         private final CompletableFuture<Long> future;
 
         private DelayedFuture(
-            T id,
             long expirationTime,
+            Predicate<T> condition,
             CompletableFuture<Long> future
         ) {
-            this.id = id;
+            this.id = ID_GENERATOR.incrementAndGet();
             this.expirationTime = expirationTime;
+            this.condition = condition;
             this.future = future;
+        }
+
+        public boolean canComplete(T value) {
+            return condition.test(value);
         }
 
         @Override
@@ -101,7 +111,7 @@ public class MockFuturePurgatory<T extends Comparable<T>> implements FuturePurga
             int compare = Long.compare(expirationTime, o.expirationTime);
             if (compare != 0)
                 return compare;
-            return id.compareTo(o.id);
+            return Long.compare(id, o.id);
         }
     }
 }

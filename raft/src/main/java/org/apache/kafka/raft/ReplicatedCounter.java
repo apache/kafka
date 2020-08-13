@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -27,110 +28,94 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
+import java.util.OptionalInt;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * This is the simplest interesting state machine. It maintains a simple counter which can only
- * be incremented by one.
- */
-public class ReplicatedCounter implements ReplicatedStateMachine {
+public class ReplicatedCounter {
+    private final int localBrokerId;
     private final Logger log;
-    private final int nodeId;
+    private final RaftClient client;
+
     private final AtomicInteger committed = new AtomicInteger(0);
-    private final boolean verbose;
+    private final AtomicInteger uncommitted = new AtomicInteger(0);
     private OffsetAndEpoch position = new OffsetAndEpoch(0, 0);
-    private AtomicInteger uncommitted;
-    protected RecordAppender appender = null;
+    private LeaderAndEpoch currentLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), 0);
 
-    public ReplicatedCounter(int nodeId,
-                             LogContext logContext,
-                             boolean verbose) {
-        this.nodeId = nodeId;
+    public ReplicatedCounter(int localBrokerId,
+                             RaftClient client,
+                             LogContext logContext) {
+        this.localBrokerId = localBrokerId;
+        this.client = client;
         this.log = logContext.logger(ReplicatedCounter.class);
-        this.verbose = verbose;
     }
 
-    @Override
-    public void initialize(RecordAppender recordAppender) {
-        appender = recordAppender;
+    private Records tryRead(long durationMs) {
+        CompletableFuture<Records> future = client.read(position, Isolation.COMMITTED, durationMs);
+        try {
+            return future.get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    @Override
-    public synchronized void becomeLeader(int epoch) {
-        uncommitted = new AtomicInteger(committed.get());
+    private void apply(Record record) {
+        int value = deserialize(record);
+        if (value != committed.get() + 1) {
+            log.debug("Ignoring non-sequential append at offset {}: {} -> {}",
+                record.offset(), committed.get(), value);
+            return;
+        }
+
+        log.debug("Applied increment at offset {}: {} -> {}", record.offset(), committed.get(), value);
+        committed.set(value);
+
+        if (value > uncommitted.get()) {
+            uncommitted.set(value);
+        }
     }
 
-    @Override
-    public synchronized void becomeFollower(int epoch, int newLeaderId) {
-        uncommitted = null;
-    }
+    public synchronized void poll(long durationMs) {
+        // Check for leader changes
+        LeaderAndEpoch latestLeaderAndEpoch = client.currentLeaderAndEpoch();
+        if (!currentLeaderAndEpoch.equals(latestLeaderAndEpoch)) {
+            if (localBrokerId == latestLeaderAndEpoch.leaderId.orElse(-1)) {
+                uncommitted.set(committed.get());
+            }
+            this.currentLeaderAndEpoch = latestLeaderAndEpoch;
+        }
 
-    @Override
-    public synchronized OffsetAndEpoch position() {
-        return position;
-    }
-
-    @Override
-    public synchronized void apply(Records records) {
+        Records records = tryRead(durationMs);
         for (RecordBatch batch : records.batches()) {
             if (!batch.isControlBatch()) {
-                for (Record record : batch) {
-                    int value = deserialize(record);
-
-                    if (value != committed.get() + 1) {
-                        throw new IllegalStateException("Node " + nodeId + " detected invalid increment in record at offset " + record.offset() +
-                                                            ", epoch " + batch.partitionLeaderEpoch() + ": " + committed.get() + " -> " + value);
-                    }
-                    log.trace("Applied counter update at offset {}: {} -> {}", record.offset(), committed.get(), value);
-                    committed.set(value);
-
-                    if (verbose) {
-                        System.out.println(value);
-                    }
-                }
+                batch.forEach(this::apply);
             }
             this.position = new OffsetAndEpoch(batch.lastOffset() + 1, batch.partitionLeaderEpoch());
         }
-
-        if (uncommitted != null && committed.get() > uncommitted.get()) {
-            uncommitted.set(committed.get());
-        }
     }
 
-    @Override
-    public synchronized boolean accept(Records records) {
-        int lastUncommitted = uncommitted.get();
-        for (RecordBatch batch : records.batches()) {
-            for (Record record : batch) {
-                int value = deserialize(record);
-                if (value != lastUncommitted + 1)
-                    return false;
-                lastUncommitted = value;
+    public synchronized boolean isWritable() {
+        // We only accept appends if we are the leader and we have caught up to a position
+        // within the current leader epoch
+        return localBrokerId == currentLeaderAndEpoch.leaderId.orElse(-1);
+    }
+
+    public synchronized void increment() {
+        if (!isWritable())
+            throw new KafkaException("Counter is not currently writable");
+        int initialValue = uncommitted.get();
+        int incrementedValue = uncommitted.incrementAndGet();
+        Records records = MemoryRecords.withRecords(CompressionType.NONE, serialize(incrementedValue));
+        client.append(records, AckMode.LEADER, Integer.MAX_VALUE).whenComplete((offsetAndEpoch, throwable) -> {
+            if (offsetAndEpoch != null) {
+                log.debug("Appended increment at offset {}: {} -> {}",
+                    offsetAndEpoch.offset, initialValue, incrementedValue);
+            } else {
+                uncommitted.set(initialValue);
+                log.debug("Failed append of increment: {} -> {}", initialValue, incrementedValue, throwable);
             }
-        }
-
-        log.trace("Accept counter update: {} -> {}", uncommitted.get(), lastUncommitted);
-        uncommitted.set(lastUncommitted);
-        return true;
-    }
-
-    public synchronized int value() {
-        return committed.get();
-    }
-
-    public synchronized CompletableFuture<Integer> increment() {
-        if (appender == null) {
-            throw new IllegalStateException("The record appender is not initialized");
-        }
-
-        int incremented = uncommitted != null ?
-            uncommitted.get() + 1 :
-            value() + 1;
-        log.trace("Attempt to increment counter from: {} -> {}", uncommitted.get(), incremented);
-        Records records = MemoryRecords.withRecords(CompressionType.NONE, serialize(incremented));
-        CompletableFuture<OffsetAndEpoch> future = appender.append(records, AckMode.LEADER);
-        return future.thenApply(offsetAndEpoch -> incremented);
+        });
     }
 
     private SimpleRecord serialize(int value) {
@@ -141,13 +126,7 @@ public class ReplicatedCounter implements ReplicatedStateMachine {
     }
 
     private int deserialize(Record record) {
-        return (Integer) Type.INT32.read(record.value());
+        return (int) Type.INT32.read(record.value());
     }
 
-    @Override
-    public void close() {
-        committed.set(0);
-        uncommitted = null;
-        appender = null;
-    }
 }

@@ -36,13 +36,13 @@ class KafkaFuturePurgatoryTest {
     val purgatory = new KafkaFuturePurgatory[Integer](brokerId, timer, reaperEnabled = false)
     assertEquals(0, purgatory.numWaiting())
 
-    val future1 = purgatory.await(1, 500)
+    val future1 = purgatory.await(_ > 1, 500)
     assertEquals(1, purgatory.numWaiting())
 
-    val future2 = purgatory.await(2, 500)
+    val future2 = purgatory.await(_ > 2, 500)
     assertEquals(2, purgatory.numWaiting())
 
-    val future3 = purgatory.await(3, 1000)
+    val future3 = purgatory.await(_ > 3, 1000)
     assertEquals(3, purgatory.numWaiting())
 
     timer.advanceClock(501)
@@ -63,16 +63,16 @@ class KafkaFuturePurgatoryTest {
     val purgatory = new KafkaFuturePurgatory[Integer](brokerId, timer, reaperEnabled = false)
     assertEquals(0, purgatory.numWaiting())
 
-    val future1 = purgatory.await(1, 500)
+    val future1 = purgatory.await(_ > 1, 500)
     assertEquals(1, purgatory.numWaiting())
 
-    val future2 = purgatory.await(2, 500)
+    val future2 = purgatory.await(_ > 2, 500)
     assertEquals(2, purgatory.numWaiting())
 
-    val future3 = purgatory.await(3, 1000)
+    val future3 = purgatory.await(_ > 3, 1000)
     assertEquals(3, purgatory.numWaiting())
 
-    purgatory.complete(4, 100L)
+    purgatory.maybeComplete(4, 100L)
     assertTrue(future1.isDone)
     assertEquals(100L, future1.get())
 
@@ -91,13 +91,13 @@ class KafkaFuturePurgatoryTest {
     val purgatory = new KafkaFuturePurgatory[Integer](brokerId, timer, reaperEnabled = false)
     assertEquals(0, purgatory.numWaiting())
 
-    val future1 = purgatory.await(1, 500)
+    val future1 = purgatory.await(_ > 1, 500)
     assertEquals(1, purgatory.numWaiting())
 
-    val future2 = purgatory.await(2, 500)
+    val future2 = purgatory.await(_ > 2, 500)
     assertEquals(2, purgatory.numWaiting())
 
-    val future3 = purgatory.await(3, 1000)
+    val future3 = purgatory.await(_ > 3, 1000)
     assertEquals(3, purgatory.numWaiting())
 
     val exception = new Throwable("kaboom")
@@ -118,4 +118,5 @@ class KafkaFuturePurgatoryTest {
       future3.get()
     }
   }
+
 }

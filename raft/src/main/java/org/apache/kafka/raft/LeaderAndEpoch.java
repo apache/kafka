@@ -16,23 +16,29 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.record.Records;
+import java.util.Objects;
+import java.util.OptionalInt;
 
-import java.util.concurrent.CompletableFuture;
+public class LeaderAndEpoch {
+    public final OptionalInt leaderId;
+    public final int epoch;
 
-public interface RecordAppender {
+    public LeaderAndEpoch(OptionalInt leaderId, int epoch) {
+        this.leaderId = Objects.requireNonNull(leaderId);
+        this.epoch = epoch;
+    }
 
-    /**
-     * Append a new entry to the log. The client must be in the leader state to
-     * accept an append: it is up to the {@link ReplicatedStateMachine} implementation
-     * to ensure this using {@link ReplicatedStateMachine#becomeLeader(int)}.
-     *
-     * This method must be thread-safe.
-     *
-     * @param records The records to append to the log
-     * @param ackMode The commit mode for the appended records
-     * @return A future containing the last offset and epoch of the appended records (if successful),
-     *         when the future would be completed depends on the commit mode.
-     */
-    CompletableFuture<OffsetAndEpoch> append(Records records, AckMode ackMode);
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        LeaderAndEpoch that = (LeaderAndEpoch) o;
+        return epoch == that.epoch &&
+            leaderId.equals(that.leaderId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(leaderId, epoch);
+    }
 }

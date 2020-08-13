@@ -48,7 +48,7 @@ public interface ReplicatedLog extends Closeable {
     /**
      * Read a set of records within a range of offsets.
      */
-    LogFetchInfo read(long startOffsetInclusive, OptionalLong endOffsetExclusive);
+    LogFetchInfo read(long startOffsetInclusive, Isolation isolation);
 
     /**
      * Return the latest epoch. For an empty log, the latest epoch is defined

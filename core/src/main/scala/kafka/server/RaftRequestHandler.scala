@@ -30,14 +30,14 @@ import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePar
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsResponse, MetadataRequest, MetadataResponse, ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.raft.NoOpStateMachine
+import org.apache.kafka.raft.{AckMode, RaftClient}
 
 import scala.jdk.CollectionConverters._
 
 class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
                          requestChannel: RequestChannel,
                          time: Time,
-                         counter: NoOpStateMachine,
+                         client: RaftClient,
                          metadataPartition: TopicPartition)
   extends ApiRequestHandler with Logging {
 
@@ -63,33 +63,34 @@ class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
 
         case ApiKeys.METADATA =>
           val metadataRequest = request.body[MetadataRequest]
-          if (metadataRequest.data().topics().size() != 1 ||
-            !metadataRequest.data().topics().get(0).name().equals(metadataPartition.topic())) {
-            throw new IllegalArgumentException(s"Should only handle metadata request querying for " +
-              s"cluster metadata, but get ${metadataRequest.data().topics()}")
-          }
-
           val topics = new MetadataResponseData.MetadataResponseTopicCollection
-          val leaderConnection = networkChannel.getConnectionInfo(counter.leaderId())
-          if (leaderConnection != null) {
+
+          if (!metadataRequest.data.topics.isEmpty) {
+            val leaderAndEpoch = client.currentLeaderAndEpoch()
+
+            if (metadataRequest.data.topics.size != 1
+              || !metadataRequest.data.topics.get(0).name().equals(metadataPartition.topic)) {
+              throw new IllegalArgumentException(s"Should only handle metadata request querying for " +
+                s"`${metadataPartition.topic}, but found ${metadataRequest.data.topics}")
+            }
+
             topics.add(new MetadataResponseTopic()
               .setErrorCode(Errors.NONE.code)
-              .setName(metadataPartition.topic())
+              .setName(metadataPartition.topic)
               .setIsInternal(true)
               .setPartitions(Collections.singletonList(new MetadataResponsePartition()
-                .setErrorCode(Errors.NONE.code())
-                .setPartitionIndex(metadataPartition.partition())
-                .setLeaderId(leaderConnection.id()))))
+                .setErrorCode(Errors.NONE.code)
+                .setPartitionIndex(metadataPartition.partition)
+                .setLeaderId(leaderAndEpoch.leaderId.orElse(-1)))))
           }
 
           val brokers = new MetadataResponseData.MetadataResponseBrokerCollection
-
-          networkChannel.allConnections().foreach( connection => {
+          networkChannel.allConnections().foreach { connection =>
             brokers.add(new MetadataResponseData.MetadataResponseBroker()
-              .setNodeId(connection.id())
-              .setHost(connection.host())
-              .setPort(connection.port()))
-          })
+              .setNodeId(connection.id)
+              .setHost(connection.host)
+              .setPort(connection.port))
+          }
 
           sendResponse(request, Option(new MetadataResponse(
             new MetadataResponseData()
@@ -98,16 +99,22 @@ class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
 
         case ApiKeys.PRODUCE =>
           val produceRequest = request.body[ProduceRequest]
+          val records = produceRequest.partitionRecordsOrFail().get(metadataPartition)
 
-          counter.appendRecords(produceRequest.partitionRecordsOrFail().get(metadataPartition))
+          val ackMode = produceRequest.acks match {
+            case 1 => AckMode.LEADER
+            case -1 => AckMode.QUORUM
+            case _ => throw new IllegalArgumentException(s"Unsupported ack mode ${produceRequest.acks} " +
+              s"in Produce request (the only supported modes are acks=1 and acks=-1)")
+          }
+
+          client.append(records, ackMode, produceRequest.timeout)
             .whenComplete { (_, exception) =>
               val error = if (exception == null)
                 Errors.NONE
               else
                 Errors.forException(exception)
 
-              if (error != Errors.NONE)
-                warn(s"Encountered error when applying records: $error")
               sendResponse(request, Option(new ProduceResponse(
                 Collections.singletonMap(metadataPartition,
                   new ProduceResponse.PartitionResponse(error)))))

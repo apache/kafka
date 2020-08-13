@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
+import org.apache.kafka.raft.internals.LogOffset;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -88,7 +89,7 @@ public class RaftEventSimulationTest {
     }
 
     private void testInitialLeaderElection(QuorumConfig config) {
-        for (int seed = 0; seed < 100; seed++) {
+        for (int seed = 0; seed < 200; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -96,43 +97,37 @@ public class RaftEventSimulationTest {
             cluster.startAll();
             schedulePolling(scheduler, cluster, 3, 5);
             scheduler.schedule(router::deliverAll, 0, 2, 1);
-            scheduler.runUntil(() -> {
-                try {
-                    return cluster.hasConsistentLeader();
-                } catch (IOException e) {
-                    return false;
-                }
-            });
+            scheduler.runUntil(cluster::hasConsistentLeader);
         }
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeOne() throws IOException {
+    public void testReplicationNoLeaderChangeQuorumSizeOne() {
         testReplicationNoLeaderChange(new QuorumConfig(1));
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeTwo() throws IOException {
+    public void testReplicationNoLeaderChangeQuorumSizeTwo() {
         testReplicationNoLeaderChange(new QuorumConfig(2));
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeThree() throws IOException {
+    public void testReplicationNoLeaderChangeQuorumSizeThree() {
         testReplicationNoLeaderChange(new QuorumConfig(3, 0));
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeFour() throws IOException {
+    public void testReplicationNoLeaderChangeQuorumSizeFour() {
         testReplicationNoLeaderChange(new QuorumConfig(4));
     }
 
     @Test
-    public void testReplicationNoLeaderChangeQuorumSizeFive() throws IOException {
+    public void testReplicationNoLeaderChangeQuorumSizeFive() {
         testReplicationNoLeaderChange(new QuorumConfig(5));
     }
 
-    private void testReplicationNoLeaderChange(QuorumConfig config) throws IOException {
-        for (int seed = 0; seed < 100; seed++) {
+    private void testReplicationNoLeaderChange(QuorumConfig config) {
+        for (int seed = 0; seed < 200; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -151,78 +146,78 @@ public class RaftEventSimulationTest {
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeThree() throws IOException {
+    public void testElectionAfterLeaderFailureQuorumSizeThree() {
         testElectionAfterLeaderFailure(new QuorumConfig(3, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeThreeAndTwoObservers() throws IOException {
+    public void testElectionAfterLeaderFailureQuorumSizeThreeAndTwoObservers() {
         testElectionAfterLeaderFailure(new QuorumConfig(3, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeFour() throws IOException {
+    public void testElectionAfterLeaderFailureQuorumSizeFour() {
         testElectionAfterLeaderFailure(new QuorumConfig(4, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeFourAndTwoObservers() throws IOException {
+    public void testElectionAfterLeaderFailureQuorumSizeFourAndTwoObservers() {
         testElectionAfterLeaderFailure(new QuorumConfig(4, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeFive() throws IOException {
+    public void testElectionAfterLeaderFailureQuorumSizeFive() {
         testElectionAfterLeaderFailure(new QuorumConfig(5, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderFailureQuorumSizeFiveAndThreeObservers() throws IOException {
+    public void testElectionAfterLeaderFailureQuorumSizeFiveAndThreeObservers() {
         testElectionAfterLeaderFailure(new QuorumConfig(5, 3));
     }
 
-    private void testElectionAfterLeaderFailure(QuorumConfig config) throws IOException {
+    private void testElectionAfterLeaderFailure(QuorumConfig config) {
         testElectionAfterLeaderShutdown(config, false);
     }
 
     @Test
-    public void testElectionAfterLeaderGracefulShutdownQuorumSizeThree() throws IOException {
+    public void testElectionAfterLeaderGracefulShutdownQuorumSizeThree() {
         testElectionAfterLeaderGracefulShutdown(new QuorumConfig(3, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderGracefulShutdownQuorumSizeThreeAndTwoObservers() throws IOException {
+    public void testElectionAfterLeaderGracefulShutdownQuorumSizeThreeAndTwoObservers() {
         testElectionAfterLeaderGracefulShutdown(new QuorumConfig(3, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderGracefulShutdownQuorumSizeFour() throws IOException {
+    public void testElectionAfterLeaderGracefulShutdownQuorumSizeFour() {
         testElectionAfterLeaderGracefulShutdown(new QuorumConfig(4, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderGracefulShutdownQuorumSizeFourAndTwoObservers() throws IOException {
+    public void testElectionAfterLeaderGracefulShutdownQuorumSizeFourAndTwoObservers() {
         testElectionAfterLeaderGracefulShutdown(new QuorumConfig(4, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderGracefulShutdownQuorumSizeFive() throws IOException {
+    public void testElectionAfterLeaderGracefulShutdownQuorumSizeFive() {
         testElectionAfterLeaderGracefulShutdown(new QuorumConfig(5, 0));
     }
 
     @Test
-    public void testElectionAfterLeaderGracefulShutdownQuorumSizeFiveAndThreeObservers() throws IOException {
+    public void testElectionAfterLeaderGracefulShutdownQuorumSizeFiveAndThreeObservers() {
         testElectionAfterLeaderGracefulShutdown(new QuorumConfig(5, 3));
     }
 
-    private void testElectionAfterLeaderGracefulShutdown(QuorumConfig config) throws IOException {
+    private void testElectionAfterLeaderGracefulShutdown(QuorumConfig config) {
         testElectionAfterLeaderShutdown(config, true);
     }
 
-    private void testElectionAfterLeaderShutdown(QuorumConfig config, boolean isGracefulShutdown) throws IOException {
+    private void testElectionAfterLeaderShutdown(QuorumConfig config, boolean isGracefulShutdown) {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
-        for (int seed = 0; seed < 100; seed++) {
+        for (int seed = 0; seed < 200; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -253,40 +248,40 @@ public class RaftEventSimulationTest {
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeThree() throws IOException {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeThree() {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(3));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeThreeAndTwoObservers() throws IOException {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeThreeAndTwoObservers() {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(3, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFour() throws IOException {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFour() {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(4));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFourAndTwoObservers() throws IOException {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFourAndTwoObservers() {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(4, 2));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFive() throws IOException {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFive() {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(5));
     }
 
     @Test
-    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFiveAndThreeObservers() throws IOException {
+    public void testElectionAfterLeaderNetworkPartitionQuorumSizeFiveAndThreeObservers() {
         testElectionAfterLeaderNetworkPartition(new QuorumConfig(5, 3));
     }
 
-    private void testElectionAfterLeaderNetworkPartition(QuorumConfig config) throws IOException {
+    private void testElectionAfterLeaderNetworkPartition(QuorumConfig config) {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
-        for (int seed = 0; seed < 100; seed++) {
+        for (int seed = 0; seed < 200; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -315,20 +310,20 @@ public class RaftEventSimulationTest {
     }
 
     @Test
-    public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFive() throws IOException {
+    public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFive() {
         testElectionAfterMultiNodeNetworkPartition(new QuorumConfig(5));
     }
 
     @Test
-    public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFiveAndTwoObservers() throws IOException {
+    public void testElectionAfterMultiNodeNetworkPartitionQuorumSizeFiveAndTwoObservers() {
         testElectionAfterMultiNodeNetworkPartition(new QuorumConfig(5, 2));
     }
 
-    private void testElectionAfterMultiNodeNetworkPartition(QuorumConfig config) throws IOException {
+    private void testElectionAfterMultiNodeNetworkPartition(QuorumConfig config) {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
-        for (int seed = 0; seed < 100; seed++) {
+        for (int seed = 0; seed < 200; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -368,6 +363,49 @@ public class RaftEventSimulationTest {
             router.filter(4, new PermitAllTraffic());
 
             scheduler.runUntil(() -> cluster.allReachedHighWatermark(30));
+        }
+    }
+
+    @Test
+    public void testBackToBackLeaderFailuresQuorumSizeThree() {
+        testBackToBackLeaderFailures(new QuorumConfig(3));
+    }
+
+    @Test
+    public void testBackToBackLeaderFailuresQuorumSizeFiveAndTwoObservers() {
+        testBackToBackLeaderFailures(new QuorumConfig(5, 2));
+    }
+
+    private void testBackToBackLeaderFailures(QuorumConfig config) {
+        for (int seed = 0; seed < 200; seed++) {
+            Cluster cluster = new Cluster(config, seed);
+            MessageRouter router = new MessageRouter(cluster);
+            EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+
+            // Start with node 1 as the leader
+            Set<Integer> voters = cluster.voters();
+            cluster.initializeElection(ElectionState.withElectedLeader(2, 1, voters));
+            cluster.startAll();
+            assertTrue(cluster.hasConsistentLeader());
+
+            // Seed the cluster with some data
+            schedulePolling(scheduler, cluster, 3, 5);
+            scheduler.schedule(router::deliverAll, 0, 2, 5);
+            scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 3);
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(10));
+
+            // Now partition off node 1 and wait for a new leader
+            router.filter(1, new DropAllTraffic());
+            scheduler.runUntil(() -> cluster.latestLeader().isPresent() && cluster.latestLeader().getAsInt() != 1);
+
+            // As soon as we have a new leader, restore traffic to node 1 and partition the new leader
+            int newLeaderId = cluster.latestLeader().getAsInt();
+            router.filter(1, new PermitAllTraffic());
+            router.filter(newLeaderId, new DropAllTraffic());
+
+            // Verify now that we can make progress
+            long targetHighWatermark = cluster.maxHighWatermarkReached() + 10;
+            scheduler.runUntil(() -> cluster.anyReachedHighWatermark(targetHighWatermark));
         }
     }
 
@@ -455,7 +493,7 @@ public class RaftEventSimulationTest {
         @Override
         public void execute() {
             cluster.withCurrentLeader(node -> {
-                if (!node.client.isShuttingDown())
+                if (!node.client.isShuttingDown() && node.counter.isWritable())
                     node.counter.increment();
             });
         }
@@ -588,6 +626,13 @@ public class RaftEventSimulationTest {
                     .anyMatch(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
         }
 
+        long maxHighWatermarkReached() {
+            return running.values().stream()
+                .map(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L))
+                .max(Long::compareTo)
+                .orElse(0L);
+        }
+
         long maxHighWatermarkReached(Set<Integer> nodeIds) {
             return running.values().stream()
                 .filter(node -> nodeIds.contains(node.nodeId))
@@ -607,7 +652,21 @@ public class RaftEventSimulationTest {
                 .allMatch(node -> node.quorum.highWatermark().map(hw -> hw.offset).orElse(0L) > offset);
         }
 
-        boolean hasConsistentLeader() throws IOException {
+        OptionalInt latestLeader() {
+            OptionalInt latestLeader = OptionalInt.empty();
+            int latestEpoch = 0;
+
+            for (RaftNode node : running.values()) {
+                if (node.quorum.epoch() > latestEpoch) {
+                    latestLeader = node.quorum.leaderId();
+                } else if (node.quorum.epoch() == latestEpoch && node.quorum.leaderId().isPresent()) {
+                    latestLeader = node.quorum.leaderId();
+                }
+            }
+            return latestLeader;
+        }
+
+        boolean hasConsistentLeader() {
             Iterator<RaftNode> iter = running.values().iterator();
             if (!iter.hasNext())
                 return false;
@@ -700,8 +759,8 @@ public class RaftEventSimulationTest {
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
             QuorumState quorum = new QuorumState(nodeId, voters(), persistentState.store, logContext);
-            MockFuturePurgatory<Long> fetchPurgatory = new MockFuturePurgatory<>(time);
-            MockFuturePurgatory<Long> appendPurgatory = new MockFuturePurgatory<>(time);
+            MockFuturePurgatory<LogOffset> fetchPurgatory = new MockFuturePurgatory<>(time);
+            MockFuturePurgatory<LogOffset> appendPurgatory = new MockFuturePurgatory<>(time);
             Metrics metrics = new Metrics(time);
 
             // For the bootstrap server, we use a pretend VIP which internally routes
@@ -728,7 +787,7 @@ public class RaftEventSimulationTest {
         final MockQuorumStateStore store;
         final QuorumState quorum;
         final LogContext logContext;
-        ReplicatedCounter counter;
+        final ReplicatedCounter counter;
 
         private RaftNode(int nodeId,
                          KafkaRaftClient client,
@@ -744,12 +803,12 @@ public class RaftEventSimulationTest {
             this.store = store;
             this.quorum = quorum;
             this.logContext = logContext;
+            this.counter = new ReplicatedCounter(nodeId, client, logContext);
         }
 
         void initialize() {
-            this.counter = new ReplicatedCounter(nodeId, logContext, false);
             try {
-                client.initialize(counter);
+                client.initialize();
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -758,6 +817,7 @@ public class RaftEventSimulationTest {
         void poll() {
             try {
                 client.poll();
+                counter.poll(0L);
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -962,7 +1022,6 @@ public class RaftEventSimulationTest {
                 return;
             }
 
-            int nextExpectedSequence = 1;
             for (LogBatch batch : log.readBatches(0L, highWatermark)) {
                 if (batch.isControlBatch) {
                     continue;
@@ -973,16 +1032,11 @@ public class RaftEventSimulationTest {
                     assertTrue(offset < highWatermark.getAsLong());
 
                     int sequence = parseSequenceNumber(entry.record.value().duplicate());
-                    assertEquals("Unexpected sequence found at offset " + offset + " on node " + nodeId,
-                        nextExpectedSequence, sequence);
-
                     committedSequenceNumbers.putIfAbsent(offset, sequence);
 
                     int committedSequence = committedSequenceNumbers.get(offset);
                     assertEquals("Committed sequence at offset " + offset + " changed on node " + nodeId,
                         committedSequence, sequence);
-
-                    nextExpectedSequence++;
                 }
             }
         }

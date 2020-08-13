@@ -24,14 +24,49 @@ import java.util.concurrent.CompletableFuture;
 public interface RaftClient {
 
     /**
-     * Initialize the state machine that will be used by this client. This should
-     * only be called once after creation and calls to {@link RecordAppender#append(Records)} should
-     * be made until this method returns.
+     * Initialize the client. This should only be called once and it must be
+     * called before any of the other APIs can be invoked.
      *
-     * @param stateMachine The state machine implementation
      * @throws IOException For any IO errors during initialization
      */
-    void initialize(ReplicatedStateMachine stateMachine) throws IOException;
+    void initialize() throws IOException;
+
+    /**
+     * Append a new entry to the log. The client must be in the leader state to
+     * accept an append: it is up to the state machine implementation
+     * to ensure this using {@link #currentLeaderAndEpoch()}.
+     *
+     * TODO: One improvement we can make here is to allow the caller to specify
+     * the current leader epoch in the record set. That would ensure that each
+     * leader change must be "observed" by the state machine before new appends
+     * are accepted.
+     *
+     * @param records The records to append to the log
+     * @param timeoutMs Maximum time to wait for the append to complete
+     * @return A future containing the last offset and epoch of the appended records (if successful)
+     */
+    CompletableFuture<OffsetAndEpoch> append(Records records, AckMode ackMode, long timeoutMs);
+
+    /**
+     * Read a set of records from the log. Note that it is the responsibility of the state machine
+     * to filter control records added by the Raft client itself.
+     *
+     * If the fetch offset is no longer valid, then the future will be completed exceptionally
+     * with a {@link LogTruncationException}.
+     *
+     * @param position The position to fetch from
+     * @param isolation The isolation level to apply to the read
+     * @param maxWaitTimeMs The maximum time to wait for new data to become available before completion
+     * @return The record set, which may be empty if fetching from the end of the log
+     */
+    CompletableFuture<Records> read(OffsetAndEpoch position, Isolation isolation, long maxWaitTimeMs);
+
+    /**
+     * Get the current leader (if known) and the current epoch.
+     *
+     * @return Current leader and epoch information
+     */
+    LeaderAndEpoch currentLeaderAndEpoch();
 
     /**
      * Shutdown the client.
@@ -40,4 +75,5 @@ public interface RaftClient {
      * @return A future which is completed when shutdown completes successfully or the timeout expires.
      */
     CompletableFuture<Void> shutdown(int timeoutMs);
+
 }

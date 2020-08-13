@@ -51,6 +51,12 @@ public class FollowerState implements EpochState {
     }
 
     @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        // TODO: Do we need to make `leaderIdOpt` volatile?
+        return new LeaderAndEpoch(leaderIdOpt, epoch);
+    }
+
+    @Override
     public int epoch() {
         return epoch;
     }

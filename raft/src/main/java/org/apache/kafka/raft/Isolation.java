@@ -16,18 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
-
-public interface EpochState {
-
-    default Optional<LogOffsetMetadata> highWatermark() {
-        return Optional.empty();
-    }
-
-    ElectionState election();
-
-    LeaderAndEpoch leaderAndEpoch();
-
-    int epoch();
-
+public enum Isolation {
+    COMMITTED,
+    UNCOMMITTED
 }

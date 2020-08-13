@@ -17,33 +17,37 @@
 package org.apache.kafka.raft;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Predicate;
 
 /**
- * Simple purgatory interface which allows tracking a set of expirable futures.
- * Each future will be associated with a comparable value which are used to determine
- * if the future object can be completed.
+ * Simple purgatory interface which supports conditional waiting with expiration.
+ * The condition is specified through {@link #await(Predicate, long)}, which returns
+ * a {@link CompletableFuture} which is associated with the condition. The future
+ * will complete when either the predicate passed through {@link #await(Predicate, long)}
+ * is satisfied by a call to {@link #maybeComplete(Object, long)} or when the expiration
+ * time is reached.
  *
  * Note that the future objects should be organized in order so that completing awaiting
  * futures would stop early and not traverse all the futures
  *
- * @param <T> Type completion type
+ * @param <T> Completed value type
  */
-public interface FuturePurgatory<T extends Comparable<T>> {
+public interface FuturePurgatory<T> {
 
     /**
      * Add a future to this purgatory for tracking.
      *
-     * @param value         the comparable value of the future object that will be used to determine
-     *                      if the future can be completed or not
+     * @param condition     the condition that must be satisfied by {@link #maybeComplete(Object, long)}
+     *                      in order for the future to be successfully completed
      * @param maxWaitTimeMs the maximum time to wait for completion. If this
      *                      timeout is reached, then the future will be completed exceptionally
      *                      with a {@link org.apache.kafka.common.errors.TimeoutException}
      *
      * @return              the future tracking the expected completion. A subsequent call
-     *                      to {@link #complete(Comparable, long)} will complete this future
+     *                      to {@link #maybeComplete(Object, long)} will complete this future
      *                      with the completion time in milliseconds if it does not expire first
      */
-    CompletableFuture<Long> await(T value, long maxWaitTimeMs);
+    CompletableFuture<Long> await(Predicate<T> condition, long maxWaitTimeMs);
 
     /**
      * Complete awaiting futures whose associated values are larger than the given threshold value.
@@ -53,7 +57,7 @@ public interface FuturePurgatory<T extends Comparable<T>> {
      * @param currentTimeMs the current time in milliseconds that will be passed to {@link CompletableFuture#complete(Object)}
      *                      when the futures are completed
      */
-    void complete(T value, long currentTimeMs);
+    void maybeComplete(T value, long currentTimeMs);
 
     /**
      * Complete awaiting futures whose associated values are larger than the given threshold value exceptionally.

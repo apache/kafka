@@ -19,7 +19,8 @@
   "name": "BeginQuorumEpochRequest",
   "validVersions": "0",
   "fields": [
-    { "name": "ClusterId", "type": "string", "versions": "0+"},
+    { "name": "ClusterId", "type": "string", "versions": "0+",
+      "nullableVersions": "0+", "default": "null"},
     { "name": "Topics", "type": "[]TopicData",
       "versions": "0+", "fields": [
       { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",

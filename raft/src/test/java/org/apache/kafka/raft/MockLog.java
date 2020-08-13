@@ -266,11 +266,15 @@ public class MockLog implements ReplicatedLog {
     }
 
     @Override
-    public LogFetchInfo read(long startOffset, OptionalLong maxOffsetOpt) {
+    public LogFetchInfo read(long startOffset, Isolation isolation) {
+        OptionalLong maxOffsetOpt = isolation == Isolation.COMMITTED ?
+            OptionalLong.of(highWatermark.offset) :
+            OptionalLong.empty();
+
         verifyOffsetInRange(startOffset);
 
         long maxOffset = maxOffsetOpt.orElse(endOffset().offset);
-        if (startOffset == maxOffset) {
+        if (startOffset >= maxOffset) {
             return new LogFetchInfo(MemoryRecords.EMPTY, new LogOffsetMetadata(
                 startOffset, metadataForOffset(startOffset)));
         }

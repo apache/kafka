@@ -16,14 +16,14 @@
  */
 package kafka.raft
 
-import java.util.{Optional, OptionalLong}
+import java.util.Optional
 
 import kafka.log.{AppendOrigin, Log}
 import kafka.server.{FetchHighWatermark, FetchLogEnd}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.raft
-import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, ReplicatedLog}
+import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Isolation, ReplicatedLog}
 
 import scala.compat.java8.OptionConverters._
 
@@ -31,11 +31,12 @@ class KafkaMetadataLog(log: Log,
                        topicPartition: TopicPartition,
                        maxFetchSizeInBytes: Int = 1024 * 1024) extends ReplicatedLog {
 
-  override def read(startOffset: Long, endOffsetExclusive: OptionalLong): LogFetchInfo = {
-    val isolation = if (endOffsetExclusive.isPresent)
-      FetchHighWatermark
-    else
-      FetchLogEnd
+  override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
+    val isolation = readIsolation match {
+      case Isolation.COMMITTED => FetchHighWatermark
+      case Isolation.UNCOMMITTED => FetchLogEnd
+      case _ => throw new IllegalArgumentException(s"Unhandled read isolation $readIsolation")
+    }
 
     val fetchInfo = log.read(startOffset,
       maxLength = maxFetchSizeInBytes,
@@ -118,7 +119,9 @@ class KafkaMetadataLog(log: Log,
           segmentPosition.baseOffset,
           segmentPosition.relativePosition)
       )
-      case _ => log.updateHighWatermark(offsetMetadata.offset)
+      case _ =>
+        // FIXME: This API returns the new high watermark, which may be different from the passed offset
+        log.updateHighWatermark(offsetMetadata.offset)
     }
   }
 

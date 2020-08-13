@@ -23,6 +23,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -60,6 +61,11 @@ public class LeaderState implements EpochState {
     }
 
     @Override
+    public LeaderAndEpoch leaderAndEpoch() {
+        return new LeaderAndEpoch(OptionalInt.of(localId), epoch);
+    }
+
+    @Override
     public int epoch() {
         return epoch;
     }
@@ -92,10 +98,24 @@ public class LeaderState implements EpochState {
             // When a leader is first elected, it cannot know the high watermark of the previous
             // leader. In order to avoid exposing a non-monotonically increasing value, we have
             // to wait for followers to catch up to the start of the leader's epoch.
-            long highWatermarkUpdate = highWatermarkUpdateOpt.get().offset;
+            LogOffsetMetadata highWatermarkUpdateMetadata = highWatermarkUpdateOpt.get();
+            long highWatermarkUpdate = highWatermarkUpdateMetadata.offset;
+
             if (highWatermarkUpdate >= epochStartOffset) {
-                highWatermark = highWatermarkUpdateOpt;
-                return true;
+                if (highWatermark.isPresent()) {
+                    LogOffsetMetadata currentHighWatermarkMetadata = highWatermark.get();
+                    if (highWatermarkUpdate > currentHighWatermarkMetadata.offset
+                        || (highWatermarkUpdate == currentHighWatermarkMetadata.offset &&
+                            !highWatermarkUpdateMetadata.metadata.equals(currentHighWatermarkMetadata.metadata))) {
+                        highWatermark = highWatermarkUpdateOpt;
+                        return true;
+                    } else {
+                        return false;
+                    }
+                } else {
+                    highWatermark = highWatermarkUpdateOpt;
+                    return true;
+                }
             }
         }
         return false;
@@ -115,7 +135,7 @@ public class LeaderState implements EpochState {
      * See {@link #updateReplicaState(int, long, Consumer, LogOffsetMetadata)}
      */
     public boolean updateLocalState(long fetchTimestamp,
-                                    java.util.function.Consumer<Long> onMajorityFetchTimeUpdated,
+                                    Consumer<Long> onMajorityFetchTimeUpdated,
                                     LogOffsetMetadata logOffsetMetadata) {
         return updateReplicaState(localId, fetchTimestamp, onMajorityFetchTimeUpdated, logOffsetMetadata);
     }
@@ -131,7 +151,7 @@ public class LeaderState implements EpochState {
      */
     public boolean updateReplicaState(int replicaId,
                                       long fetchTimestamp,
-                                      java.util.function.Consumer<Long> onMajorityFetchTimeUpdated,
+                                      Consumer<Long> onMajorityFetchTimeUpdated,
                                       LogOffsetMetadata logOffsetMetadata) {
         // Ignore fetches from negative replica id, as it indicates
         // the fetch is from non-replica. For example, a consumer.

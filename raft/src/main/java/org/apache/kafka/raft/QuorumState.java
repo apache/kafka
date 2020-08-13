@@ -36,7 +36,7 @@ public class QuorumState {
     private final Logger log;
     private final QuorumStateStore store;
     private final Set<Integer> voters;
-    private EpochState state;
+    private volatile EpochState state;
 
     public QuorumState(int localId,
                        Set<Integer> voters,
@@ -79,9 +79,9 @@ public class QuorumState {
             state = new FollowerState(election.epoch, voters);
             becomeUnattachedFollower(logEndOffsetAndEpoch.epoch);
         } else if (election.isLeader(localId)) {
-            state = new LeaderState(localId, election.epoch, logEndOffsetAndEpoch.offset, voters);
+            becomeLeader(new LeaderState(localId, election.epoch, logEndOffsetAndEpoch.offset, voters));
         } else if (election.isCandidate(localId)) {
-            state = new CandidateState(localId, election.epoch, voters, 1);
+            becomeCandidate(new CandidateState(localId, election.epoch, voters, 1));
         } else {
             state = new FollowerState(election.epoch, voters);
             if (election.hasLeader()) {
@@ -232,11 +232,15 @@ public class QuorumState {
         int retries = isCandidate() ? candidateStateOrThrow().retries() + 1 : 1;
 
         int newEpoch = epoch() + 1;
-        log.info("Become candidate in epoch {} to election for the {}th time ", newEpoch, retries + 1);
         CandidateState state = new CandidateState(localId, newEpoch, voters, retries);
         store.writeElectionState(state.election());
-        this.state = state;
+        becomeCandidate(state);
         return state;
+    }
+
+    private void becomeCandidate(CandidateState state) {
+        this.state = state;
+        log.info("Become candidate in epoch {} to election (retry number {})", epoch(), state.retries());
     }
 
     public LeaderState becomeLeader(long epochStartOffset) throws IOException {
@@ -247,11 +251,15 @@ public class QuorumState {
         if (!candidateState.isVoteGranted())
             throw new IllegalStateException("Cannot become leader without majority votes granted");
 
-        log.info("Become leader in epoch {}", epoch());
         LeaderState state = new LeaderState(localId, epoch(), epochStartOffset, voters);
         store.writeElectionState(state.election());
-        this.state = state;
+        becomeLeader(state);
         return state;
+    }
+
+    private void becomeLeader(LeaderState state) {
+        this.state = state;
+        log.info("Become leader in epoch {}", epoch());
     }
 
     public FollowerState followerStateOrThrow() {
@@ -270,5 +278,9 @@ public class QuorumState {
         if (isCandidate())
             return (CandidateState) state;
         throw new IllegalStateException("Expected to be a candidate, but current state is " + state);
+    }
+
+    public LeaderAndEpoch leaderAndEpoch() {
+        return state.leaderAndEpoch();
     }
 }

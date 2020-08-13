@@ -19,6 +19,7 @@ package kafka.raft
 import java.lang
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.function.Predicate
 
 import kafka.server.{DelayedOperation, DelayedOperationPurgatory}
 import kafka.utils.Logging
@@ -27,15 +28,14 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.raft.FuturePurgatory
 
 /**
- * Simple purgatory shim for integration with the Raft library. We assume that
- * both [[await()]] and [[complete()]] are called in the same thread.
+ * Simple purgatory shim for integration with the Raft library.
  */
-class KafkaFuturePurgatory[T <: Comparable[T]](brokerId: Int,
-                                               timer: Timer,
-                                               reaperEnabled: Boolean = true)
+class KafkaFuturePurgatory[T](brokerId: Int,
+                              timer: Timer,
+                              reaperEnabled: Boolean = true)
   extends FuturePurgatory[T] with Logging {
 
-  private val key = new Object()
+  private val key = new Object
   private val purgatory = new DelayedOperationPurgatory[DelayedRaftRequest](
     "raft-request-purgatory", timer, brokerId, reaperEnabled = reaperEnabled)
 
@@ -43,39 +43,46 @@ class KafkaFuturePurgatory[T <: Comparable[T]](brokerId: Int,
   private val completionTime: AtomicLong = new AtomicLong(-1)
   private val completionException: AtomicReference[Throwable] = new AtomicReference[Throwable]()
 
-  override def await(value: T, maxWaitTimeMs: Long): CompletableFuture[lang.Long] = {
+  override def await(condition: Predicate[T], maxWaitTimeMs: Long): CompletableFuture[lang.Long] = {
     val future: CompletableFuture[lang.Long] = new CompletableFuture[lang.Long]()
-    val op = new DelayedRaftRequest(future, value, maxWaitTimeMs)
-    completionException.set(null)
-    purgatory.tryCompleteElseWatch(op, Seq(key))
+    val op = new DelayedRaftRequest(future, condition, maxWaitTimeMs)
+    synchronized {
+      completionException.set(null)
+      purgatory.tryCompleteElseWatch(op, Seq(key))
+    }
     future
   }
 
-  override def complete(value: T, currentTime: Long): Unit = {
+  override def maybeComplete(value: T, currentTime: Long): Unit = {
     // all delayed request equal or smaller than the complete value can be completed
     // we assume the futures are added to the watcher list in order of the value so
     // we can stop early if the completion check failed
-    thresholdValue.set(value)
-    completionTime.set(currentTime)
-    completionException.set(null)
-    purgatory.checkAndComplete(key)
+    synchronized {
+      thresholdValue.set(value)
+      completionTime.set(currentTime)
+      completionException.set(null)
+      purgatory.checkAndComplete(key)
+    }
   }
 
   override def completeAllExceptionally(exception: Throwable): Unit = {
     // all delayed request equal or smaller than the complete value can be completed
     // we assume the futures are added to the watcher list in order of the value so
     // we can stop early if the completion check failed
-    completionTime.set(-1)
-    completionException.set(exception)
-    purgatory.checkAndComplete(key)
+    synchronized {
+      completionTime.set(-1)
+      completionException.set(exception)
+      purgatory.checkAndComplete(key)
+    }
   }
-
 
   override def numWaiting(): Int = {
     purgatory.numDelayed
   }
 
-  private class DelayedRaftRequest(future: CompletableFuture[lang.Long], value: T, delayMs: Long)
+  private class DelayedRaftRequest(future: CompletableFuture[lang.Long],
+                                   condition: Predicate[T],
+                                   delayMs: Long)
     extends DelayedOperation(delayMs) {
 
     val isExpired = new AtomicBoolean(false)
@@ -103,7 +110,7 @@ class KafkaFuturePurgatory[T <: Comparable[T]](brokerId: Int,
       } else {
         // the request is completable if its future result
         // is smaller than the complete value
-        thresholdValue.get().compareTo(value) > 0 && forceComplete()
+        condition.test(thresholdValue.get()) && forceComplete()
       }
     }
 
