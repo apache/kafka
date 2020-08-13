@@ -168,6 +168,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var kafkaController: KafkaController = null
 
+  var brokerToControllerChannelManager: BrokerToControllerChannelManager = null
+
   var kafkaScheduler: KafkaScheduler = null
 
   var metadataCache: MetadataCache = null
@@ -314,6 +316,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, threadNamePrefix)
         kafkaController.startup()
 
+        brokerToControllerChannelManager = new BrokerToControllerChannelManager(metadataCache, time, metrics, config, threadNamePrefix)
+
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
 
         /* start group coordinator */
@@ -457,7 +461,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   }
 
   private def getOrGenerateClusterId(zkClient: KafkaZkClient): String = {
-    zkClient.getClusterId.getOrElse(zkClient.createOrGetClusterId(CoreUtils.generateUuidAsBase64))
+    zkClient.getClusterId.getOrElse(zkClient.createOrGetClusterId(CoreUtils.generateUuidAsBase64()))
   }
 
   private[server] def createBrokerInfo: BrokerInfo = {
@@ -531,6 +535,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           config.requestTimeoutMs,
+          config.connectionSetupTimeoutMs,
+          config.connectionSetupTimeoutMaxMs,
           ClientDnsLookup.USE_ALL_DNS_IPS,
           time,
           false,
@@ -745,7 +751,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
    */
   def awaitShutdown(): Unit = shutdownLatch.await()
 
-  def getLogManager(): LogManager = logManager
+  def getLogManager: LogManager = logManager
 
   def boundPort(listenerName: ListenerName): Int = socketServer.boundPort(listenerName)
 

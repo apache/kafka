@@ -37,6 +37,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.StateManager;
+import org.apache.kafka.streams.processor.internals.StateManagerStub;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.ToInternal;
@@ -60,6 +62,7 @@ public class InternalMockProcessorContext
     extends AbstractProcessorContext
     implements RecordCollector.Supplier {
 
+    private StateManager stateManager = new StateManagerStub();
     private final File stateDir;
     private final RecordCollector.Supplier recordCollectorSupplier;
     private final Map<String, StateStore> storeMap = new LinkedHashMap<>();
@@ -70,6 +73,7 @@ public class InternalMockProcessorContext
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private long timestamp = -1L;
+    private final Map<String, String> storeToChangelogTopic = new HashMap<>();
 
     public InternalMockProcessorContext() {
         this(null,
@@ -182,7 +186,6 @@ public class InternalMockProcessorContext
             new TaskId(0, 0),
             config,
             metrics,
-            null,
             cache
         );
         super.setCurrentNode(new ProcessorNode<>("TESTING_NODE"));
@@ -191,6 +194,15 @@ public class InternalMockProcessorContext
         this.valueSerde = valueSerde;
         this.recordCollectorSupplier = collectorSupplier;
         this.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(new SystemTime()));
+    }
+
+    @Override
+    protected StateManager stateManager() {
+        return stateManager;
+    }
+
+    public void setStateManger(final StateManager stateManger) {
+        this.stateManager = stateManger;
     }
 
     @Override
@@ -238,6 +250,7 @@ public class InternalMockProcessorContext
                          final StateRestoreCallback func) {
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
+        stateManager().registerStore(store, func);
     }
 
     @Override
@@ -285,12 +298,12 @@ public class InternalMockProcessorContext
         if (toInternal.hasTimestamp()) {
             setTime(toInternal.timestamp());
         }
-        final ProcessorNode<?, ?> thisNode = currentNode;
+        final ProcessorNode<?, ?, ?, ?> thisNode = currentNode;
         try {
-            for (final ProcessorNode<?, ?> childNode : thisNode.children()) {
+            for (final ProcessorNode<?, ?, ?, ?> childNode : thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
-                    ((ProcessorNode<Object, Object>) childNode).process(key, value);
+                    ((ProcessorNode<Object, Object, ?, ?>) childNode).process(key, value);
                     toInternal.update(to); // need to reset because MockProcessorContext is shared over multiple
                                            // Processors and toInternal might have been modified
                 }
@@ -399,5 +412,14 @@ public class InternalMockProcessorContext
             records.add(new ConsumerRecord<>("", 0, 0L, keyValue.key, keyValue.value));
         }
         restoreCallback.restoreBatch(records);
+    }
+
+    public void addChangelogForStore(final String storeName, final String changelogTopic) {
+        storeToChangelogTopic.put(storeName, changelogTopic);
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return storeToChangelogTopic.get(storeName);
     }
 }

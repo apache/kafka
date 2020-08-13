@@ -280,6 +280,8 @@ final class SchemaGenerator {
             } else {
                 return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
             }
+        } else if (type.isRecords()) {
+            return "Type.RECORDS";
         } else if (type.isArray()) {
             if (fieldFlexibleVersions.contains(version)) {
                 headerGenerator.addImport(MessageGenerator.COMPACT_ARRAYOF_CLASS);
@@ -347,6 +349,10 @@ final class SchemaGenerator {
         }
         buffer.decrementIndent();
         buffer.printf("};%n");
+        buffer.printf("%n");
+
+        buffer.printf("public static final short LOWEST_SUPPORTED_VERSION = %d;%n", versions.lowest());
+        buffer.printf("public static final short HIGHEST_SUPPORTED_VERSION = %d;%n", versions.highest());
         buffer.printf("%n");
     }
 }

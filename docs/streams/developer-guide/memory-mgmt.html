@@ -206,7 +206,10 @@
        <span class="o">}</span>
     <span class="o">}</span>
       </div>
-        <sup id="fn1">1. INDEX_FILTER_BLOCK_RATIO can be used to set a fraction of the block cache to set aside for "high priority" (aka index and filter) blocks, preventing them from being evicted by data blocks. See the full signature of the <a class="reference external" href="https://github.com/facebook/rocksdb/blob/master/java/src/main/java/org/rocksdb/LRUCache.java#L72">LRUCache constructor</a>. </sup>
+        <sup id="fn1">1. INDEX_FILTER_BLOCK_RATIO can be used to set a fraction of the block cache to set aside for "high priority" (aka index and filter) blocks, preventing them from being evicted by data blocks. See the full signature of the <a class="reference external" href="https://github.com/facebook/rocksdb/blob/master/java/src/main/java/org/rocksdb/LRUCache.java#L72">LRUCache constructor</a>.
+                        NOTE: the boolean parameter in the cache constructor lets you control whether the cache should enforce a strict memory limit by failing the read or iteration in the rare cases where it might go larger than its capacity. Due to a
+                        <a class="reference external" href="https://github.com/facebook/rocksdb/issues/6247">bug in RocksDB</a>, this option cannot be used
+                        if the write buffer memory is also counted against the cache. If you set this to true, you should NOT pass the cache in to the <code>WriteBufferManager</code> and just control the write buffer and cache memory separately.</sup>
         <br>
         <sup id="fn2">2. This must be set in order for INDEX_FILTER_BLOCK_RATIO to take effect (see footnote 1) as described in the <a class="reference external" href="https://github.com/facebook/rocksdb/wiki/Block-Cache#caching-index-and-filter-blocks">RocksDB docs</a></sup>
         <br>

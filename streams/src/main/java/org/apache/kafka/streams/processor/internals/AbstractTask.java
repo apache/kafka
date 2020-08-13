@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -31,9 +34,16 @@ import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 public abstract class AbstractTask implements Task {
     private Task.State state = CREATED;
     protected Set<TopicPartition> inputPartitions;
-    protected ProcessorTopology topology;
+
+    /**
+     * If the checkpoint has not been loaded from the file yet (null), then we should not overwrite the checkpoint;
+     * If the checkpoint has been loaded from the file but has not been updated since, then we do not need to checkpoint;
+     * If the checkpoint has been loaded from the file and has been updated since, then we could overwrite the checkpoint;
+     */
+    protected Map<TopicPartition, Long> offsetSnapshotSinceLastFlush = null;
 
     protected final TaskId id;
+    protected final ProcessorTopology topology;
     protected final StateDirectory stateDirectory;
     protected final ProcessorStateManager stateMgr;
 
@@ -48,6 +58,24 @@ public abstract class AbstractTask implements Task {
         this.inputPartitions = inputPartitions;
         this.stateDirectory = stateDirectory;
     }
+
+    /**
+     * The following exceptions maybe thrown from the state manager flushing call
+     *
+     * @throws TaskMigratedException recoverable error sending changelog records that would cause the task to be removed
+     * @throws StreamsException fatal error when flushing the state store, for example sending changelog records failed
+     *                          or flushing state store get IO errors; such error should cause the thread to die
+     */
+    protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
+        final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
+        if (StateManagerUtil.checkpointNeeded(enforceCheckpoint, offsetSnapshotSinceLastFlush, offsetSnapshot)) {
+            // the state's current offset would be used to checkpoint
+            stateMgr.flush();
+            stateMgr.checkpoint();
+            offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
+        }
+    }
+
 
     @Override
     public TaskId id() {

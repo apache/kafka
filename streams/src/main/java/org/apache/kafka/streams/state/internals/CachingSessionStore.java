@@ -45,6 +45,7 @@ class CachingSessionStore
 
     private final SessionKeySchema keySchema;
     private final SegmentedCacheFunction cacheFunction;
+
     private String cacheName;
     private InternalProcessorContext context;
     private CacheFlushListener<byte[], byte[]> flushListener;
@@ -232,6 +233,11 @@ class CachingSessionStore
     public void flush() {
         context.cache().flush(cacheName);
         wrapped().flush();
+    }
+
+    @Override
+    public void flushCache() {
+        context.cache().flush(cacheName);
     }
 
     public void close() {

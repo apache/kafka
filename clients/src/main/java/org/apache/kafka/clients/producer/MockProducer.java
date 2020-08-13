@@ -69,7 +69,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean producerFenced;
     private boolean sentOffsets;
     private long commitCount = 0L;
-    private Map<MetricName, Metric> mockMetrics;
+    private final Map<MetricName, Metric> mockMetrics;
 
     public RuntimeException initTransactionException = null;
     public RuntimeException beginTransactionException = null;

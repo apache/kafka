@@ -182,7 +182,7 @@ class LogCleanerTest {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
 
     assertTrue("Cleaned segment file should be trimmed to its real size.",
-      log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize)
+      log.logSegments.iterator.next().log.channel.size < originalMaxFileSize)
   }
 
   @Test
