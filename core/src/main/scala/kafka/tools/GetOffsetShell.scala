@@ -36,9 +36,14 @@ object GetOffsetShell {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser(false)
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
+    val brokerListOpt = parser.accepts("broker-list", "DEPRECATED, use --bootstrap-server instead; ignored if --bootstrap-server is specified. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
                            .withRequiredArg
-                           .describedAs("hostname:port,...,hostname:port")
+                           .describedAs("HOST1:PORT1,...,HOST3:PORT3")
+                           .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED. The server(s) to connect to in the form HOST1:PORT1,HOST2:PORT2.")
+                           .requiredUnless("broker-list")
+                           .withRequiredArg
+                           .describedAs("HOST1:PORT1,...,HOST3:PORT3")
                            .ofType(classOf[String])
     val topicPartitionOpt = parser.accepts("topic-partitions", "Comma separated list of topic-partition specifications to get the offsets for, with the format of topic:partition. The 'topic' part can be a regex or may be omitted to only specify the partitions, and query all authorized topics." +
                                             " The 'partition' part can be: a number, a range in the format of 'NUMBER-NUMBER' (lower inclusive, upper exclusive), an inclusive lower bound in the format of 'NUMBER-', an exclusive upper bound in the format of '-NUMBER' or may be omitted to accept all partitions of the specified topic.")
@@ -71,10 +76,16 @@ object GetOffsetShell {
 
     val options = parser.parse(args : _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
+    val effectiveBrokerListOpt = if (options.has(bootstrapServerOpt))
+      bootstrapServerOpt
+    else
+      brokerListOpt
+
+    CommandLineUtils.checkRequiredArgs(parser, options, effectiveBrokerListOpt)
 
     val clientId = "GetOffsetShell"
-    val brokerList = options.valueOf(brokerListOpt)
+    val brokerList = options.valueOf(effectiveBrokerListOpt)
+
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val excludeInternalTopics = options.has(excludeInternalTopicsOpt)
 
