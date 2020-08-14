@@ -86,11 +86,10 @@ object Log4jController {
  */
 class Log4jController extends Log4jControllerMBean {
 
-  def getLoggers: util.List[String] = {
-    Log4jController.loggers.map {
+  def getLoggers: util.List[String] =
+    new util.ArrayList[String](Log4jController.loggers.map {
       case (logger, level) => s"$logger=$level"
-    }.toList.asJava
-  }
+    }.toSeq.asJava)
 
 
   def getLogLevel(loggerName: String): String = {
