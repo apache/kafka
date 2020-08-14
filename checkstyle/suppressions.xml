@@ -176,6 +176,7 @@
               files="streams[\\/]src[\\/](generated|generated-test)[\\/].+.java$"/>
 
     <suppress checks="ImportControl" files="FetchResponseData.java"/>
+    <suppress checks="ImportControl" files="RecordsSerdeTest.java"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"

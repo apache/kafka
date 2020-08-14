@@ -28,7 +28,7 @@ import static org.junit.Assert.assertEquals;
 
 public class PunctuationQueueTest {
 
-    private final MockProcessorNode<String, String> node = new MockProcessorNode<>();
+    private final MockProcessorNode<String, String, ?, ?> node = new MockProcessorNode<>();
     private final PunctuationQueue queue = new PunctuationQueue();
     private final Punctuator punctuator = new Punctuator() {
         @Override

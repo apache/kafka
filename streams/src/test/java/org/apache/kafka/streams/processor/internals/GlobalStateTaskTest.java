@@ -58,14 +58,14 @@ public class GlobalStateTaskTest {
     private final String topic2 = "t2";
     private final TopicPartition t1 = new TopicPartition(topic1, 1);
     private final TopicPartition t2 = new TopicPartition(topic2, 1);
-    private final MockSourceNode<String, String> sourceOne = new MockSourceNode<>(
+    private final MockSourceNode<String, String, ?, ?> sourceOne = new MockSourceNode<>(
         new StringDeserializer(),
         new StringDeserializer());
-    private final MockSourceNode<Integer, Integer>  sourceTwo = new MockSourceNode<>(
+    private final MockSourceNode<Integer, Integer, ?, ?>  sourceTwo = new MockSourceNode<>(
         new IntegerDeserializer(),
         new IntegerDeserializer());
-    private final MockProcessorNode<?, ?> processorOne = new MockProcessorNode<>();
-    private final MockProcessorNode<?, ?> processorTwo = new MockProcessorNode<>();
+    private final MockProcessorNode<?, ?, ?, ?> processorOne = new MockProcessorNode<>();
+    private final MockProcessorNode<?, ?, ?, ?> processorTwo = new MockProcessorNode<>();
 
     private final Map<TopicPartition, Long> offsets = new HashMap<>();
     private File testDirectory = TestUtils.tempDirectory("global-store");
@@ -78,7 +78,7 @@ public class GlobalStateTaskTest {
     @Before
     public void before() {
         final Set<String> storeNames = Utils.mkSet("t1-store", "t2-store");
-        final Map<String, SourceNode<?, ?>> sourceByTopics = new HashMap<>();
+        final Map<String, SourceNode<?, ?, ?, ?>> sourceByTopics = new HashMap<>();
         sourceByTopics.put(topic1, sourceOne);
         sourceByTopics.put(topic2, sourceTwo);
         final Map<String, String> storeToTopic = new HashMap<>();

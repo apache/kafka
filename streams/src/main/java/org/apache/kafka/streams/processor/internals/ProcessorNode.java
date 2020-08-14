@@ -20,7 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -33,13 +33,13 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
-public class ProcessorNode<K, V> {
+public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
     // TODO: 'children' can be removed when #forward() via index is removed
-    private final List<ProcessorNode<?, ?>> children;
-    private final Map<String, ProcessorNode<?, ?>> childByName;
+    private final List<ProcessorNode<KOut, VOut, ?, ?>> children;
+    private final Map<String, ProcessorNode<KOut, VOut, ?, ?>> childByName;
 
-    private final Processor<K, V> processor;
+    private final Processor<KIn, VIn, KOut, VOut> processor;
     private final String name;
     private final Time time;
 
@@ -57,9 +57,12 @@ public class ProcessorNode<K, V> {
         this(name, null, null);
     }
 
-    public ProcessorNode(final String name, final Processor<K, V> processor, final Set<String> stateStores) {
+    public ProcessorNode(final String name,
+                         final org.apache.kafka.streams.processor.Processor<KIn, VIn> processor,
+                         final Set<String> stateStores) {
+
         this.name = name;
-        this.processor = processor;
+        this.processor = ProcessorAdapter.adapt(processor);
         this.children = new ArrayList<>();
         this.childByName = new HashMap<>();
         this.stateStores = stateStores;
@@ -70,11 +73,11 @@ public class ProcessorNode<K, V> {
         return name;
     }
 
-    public final Processor<K, V> processor() {
+    public final Processor<KIn, VIn, KOut, VOut> processor() {
         return processor;
     }
 
-    public List<ProcessorNode<?, ?>> children() {
+    public List<ProcessorNode<KOut, VOut, ?, ?>> children() {
         return children;
     }
 
@@ -82,7 +85,7 @@ public class ProcessorNode<K, V> {
         return childByName.get(childName);
     }
 
-    public void addChild(final ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<KOut, VOut, ?, ?> child) {
         children.add(child);
         childByName.put(child.name, child);
     }
@@ -94,7 +97,7 @@ public class ProcessorNode<K, V> {
             maybeMeasureLatency(
                 () -> {
                     if (processor != null) {
-                        processor.init(context);
+                        processor.init(ProcessorContextAdapter.shim(context));
                     }
                 },
                 time,
@@ -137,7 +140,7 @@ public class ProcessorNode<K, V> {
     }
 
 
-    public void process(final K key, final V value) {
+    public void process(final KIn key, final VIn value) {
         try {
             maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
         } catch (final ClassCastException e) {
