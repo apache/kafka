@@ -157,10 +157,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RECORD_E2E_LATENCY_MIN_DESCRIPTION = "The minimum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
     public static final String RECORD_E2E_LATENCY_MAX_DESCRIPTION = "The maximum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
 
-   public StreamsMetricsImpl(final Metrics metrics,
-        final String clientId,
-        final String builtInMetricsVersion,
-        final Time time) {
+    public StreamsMetricsImpl(final Metrics metrics,
+                              final String clientId,
+                              final String builtInMetricsVersion,
+                              final Time time) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;

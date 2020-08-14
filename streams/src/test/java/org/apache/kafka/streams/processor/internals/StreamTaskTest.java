@@ -2227,7 +2227,7 @@ public class StreamTaskTest {
             topology,
             consumer,
             config,
-            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST),
+            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, time),
             stateDirectory,
             cache,
             time,
