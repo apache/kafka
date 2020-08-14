@@ -80,11 +80,8 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ApiError apiError = ApiError.fromThrowable(e);
-
-        DescribeUserScramCredentialsResponseData responseData = new DescribeUserScramCredentialsResponseData()
-                .setError(apiError.error().code())
-                .setErrorMessage(apiError.message())
-                .setThrottleTimeMs(throttleTimeMs);
-        return new DescribeUserScramCredentialsResponse(responseData);
+        return new DescribeUserScramCredentialsResponse(new DescribeUserScramCredentialsResponseData()
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message()));
     }
 }

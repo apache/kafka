@@ -430,6 +430,8 @@ object ConfigCommand extends Config {
       val (iterations, passwordBytes) = iterationsAndPasswordBytes(ScramMechanism.forMechanismName(mechanismName), configEntry.value)
       new UserScramCredentialUpsertion(user, new ScramCredentialInfo(PublicScramMechanism.fromMechanismName(mechanismName), iterations), passwordBytes)
     }
+    // we are altering only a single user by definition, so we don't have to worry about one user succeeding and another
+    // failing; therefore just check the success of all the futures (since there will only be 1)
     adminClient.alterUserScramCredentials((deletions ++ upsertions).toList.asJava).all.get(60, TimeUnit.SECONDS)
   }
 
@@ -569,8 +571,15 @@ object ConfigCommand extends Config {
     // and we are not given either --entity-default or --user-defaults
     if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
       getUserScramCredentialConfigs(adminClient, entityNames).foreach { case (user, description) =>
-        val descriptionText = description.credentialInfos.asScala.map(info => s"${info.mechanism.mechanismName}=iterations=${info.iterations}").mkString(", ")
-        println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
+        // we support per-user errors, so we have to check each one
+        val optionalException = description.exception
+        if (optionalException.isPresent) {
+          val exception = optionalException.get
+          println(s"Error retrieving SCRAM credential configs for user-principal '$user': ${exception.getClass.getSimpleName}: ${exception.getMessage}")
+        } else {
+          val descriptionText = description.credentialInfos.asScala.map(info => s"${info.mechanism.mechanismName}=iterations=${info.iterations}").mkString(", ")
+          println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
+        }
       }
     }
   }

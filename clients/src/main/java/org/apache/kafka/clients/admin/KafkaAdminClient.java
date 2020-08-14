@@ -4099,22 +4099,26 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 DescribeUserScramCredentialsResponse response = (DescribeUserScramCredentialsResponse) abstractResponse;
-                Errors error = Errors.forCode(response.data().error());
-                switch (error) {
-                    case NONE:
-                        DescribeUserScramCredentialsResponseData data = response.data();
-                        future.complete(data.userScramCredentials().stream().collect(Collectors.toMap(
-                            DescribeUserScramCredentialsResponseData.UserScramCredential::name,
-                            userScramCredential -> {
-                                List<ScramCredentialInfo> scramCredentialInfos = userScramCredential.credentialInfos().stream().map(
-                                    credentialInfo -> new ScramCredentialInfo(ScramMechanism.fromType(credentialInfo.mechanism()), credentialInfo.iterations()))
-                                        .collect(Collectors.toList());
-                                return new UserScramCredentialsDescription(userScramCredential.name(), scramCredentialInfos);
-                            })));
-                        break;
-                    default:
-                        future.completeExceptionally(new ApiError(error, response.data().errorMessage()).exception());
-                        break;
+                DescribeUserScramCredentialsResponseData data = response.data();
+                short messageLevelErrorCode = data.errorCode();
+                if (messageLevelErrorCode != Errors.NONE.code()) {
+                    future.completeExceptionally(Errors.forCode(messageLevelErrorCode).exception(data.errorMessage()));
+                } else {
+                    future.complete(data.results().stream().collect(Collectors.toMap(
+                        DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult::user,
+                        result -> {
+                            short errorCode = result.errorCode();
+                            if (errorCode != Errors.NONE.code()) {
+                                return new UserScramCredentialsDescription(result.user(),
+                                        Errors.forCode(errorCode).exception(result.errorMessage()));
+                            } else {
+                                return new UserScramCredentialsDescription(result.user(),
+                                        result.credentialInfos().stream().map(credentialInfo ->
+                                                new ScramCredentialInfo(ScramMechanism.fromType(credentialInfo.mechanism()),
+                                                        credentialInfo.iterations()))
+                                                .collect(Collectors.toList()));
+                            }
+                        })));
                 }
             }
 

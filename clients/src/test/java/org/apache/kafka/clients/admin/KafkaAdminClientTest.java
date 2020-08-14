@@ -92,7 +92,6 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
-import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.UserScramCredential;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
@@ -4436,9 +4435,6 @@ public class KafkaAdminClientTest {
             final CredentialInfo user0CredentialInfo1 = new CredentialInfo();
             user0CredentialInfo1.setMechanism(user0ScramMechanism1.type());
             user0CredentialInfo1.setIterations(user0Iterations1);
-            UserScramCredential user0 = new UserScramCredential();
-            user0.setName(user0Name);
-            user0.setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1));
 
             final String user1Name = "user1";
             ScramMechanism user1ScramMechanism = ScramMechanism.SCRAM_SHA_256;
@@ -4448,12 +4444,14 @@ public class KafkaAdminClientTest {
             user1CredentialInfo.setMechanism(user1ScramMechanism.type());
             user1CredentialInfo.setIterations(user1Iterations);
 
-            UserScramCredential user1 = new UserScramCredential();
-            user1.setName(user1Name);
-            user1.setCredentialInfos(Arrays.asList(user1CredentialInfo));
-
             DescribeUserScramCredentialsResponseData responseData = new DescribeUserScramCredentialsResponseData();
-            responseData.setUserScramCredentials(Arrays.asList(user0, user1));
+            responseData.setResults(Arrays.asList(
+                    new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+                            .setUser(user0Name)
+                            .setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1)),
+                    new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+                            .setUser(user1Name)
+                            .setCredentialInfos(Arrays.asList(user1CredentialInfo))));
 
             env.kafkaClient().prepareResponse(new DescribeUserScramCredentialsResponse(responseData));
 
@@ -4488,6 +4486,9 @@ public class KafkaAdminClientTest {
             final String user1Name = "user1";
             ScramMechanism user1ScramMechanism0 = ScramMechanism.UNKNOWN;
 
+            final String user2Name = "user2";
+            ScramMechanism user2ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
+
             AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
             responseData.setResults(Collections.emptyList());
 
@@ -4495,13 +4496,22 @@ public class KafkaAdminClientTest {
 
             AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(Arrays.asList(
                     new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
-                    new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password")));
+                    new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password"),
+                    new UserScramCredentialUpsertion(user2Name, new ScramCredentialInfo(user2ScramMechanism0, 4096), "password")));
             Map<String, KafkaFuture<Void>> resultData = result.values();
-            assertEquals(2, resultData.size());
+            assertEquals(3, resultData.size());
             Arrays.asList(user0Name, user1Name).stream().forEach(u -> {
                 assertTrue(resultData.containsKey(u));
                 assertTrue(resultData.get(u).isCompletedExceptionally());
             });
+            assertTrue(resultData.containsKey(user2Name));
+            assertTrue(!resultData.get(user2Name).isCompletedExceptionally());
+            try {
+                result.all().get();
+                fail("Expected 'result.all().get()' to throw an exception since at least one user failed, but it did not");
+            } catch (final Exception expected) {
+                // ignore, expected
+            }
         }
     }
 

@@ -16,6 +16,7 @@
   */
 package kafka.server
 
+import java.util
 import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminOperationException, AdminUtils}
@@ -39,7 +40,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
 import org.apache.kafka.common.message.{AlterUserScramCredentialsRequestData, AlterUserScramCredentialsResponseData, DescribeConfigsResponseData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
-import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.{CredentialInfo, UserScramCredential}
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.scram.internals.{ScramMechanism => InternalScramMechanism}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -985,50 +986,105 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def describeUserScramCredentials(users: Option[Seq[String]]): DescribeUserScramCredentialsResponseData = {
-    val retval = new DescribeUserScramCredentialsResponseData()
+  private val usernameMustNotBeEmptyMsg = "Username must not be empty"
+  private val errorProcessingDescribe = "Error processing describe user SCRAM credential configs request"
+  private val attemptToDescribeUserThatDoesNotExist = "Attempt to describe a user credential that does not exist"
 
-    def addToResultsIfHasScramCredential(user: String, userConfig: Properties): Unit = {
+  def describeUserScramCredentials(users: Option[Seq[String]]): DescribeUserScramCredentialsResponseData = {
+    val describingAllUsers = !users.isDefined || users.get.isEmpty
+    val retval = new DescribeUserScramCredentialsResponseData()
+    val userResults = mutable.Map[String, DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult]()
+
+    def addToResultsIfHasScramCredential(user: String, userConfig: Properties, explicitUser: Boolean = false): Unit = {
+      val result = new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(user)
       val configKeys = userConfig.stringPropertyNames
-      val hasScramCredential = !ScramMechanism.values().toList.filter(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.mechanismName)).isEmpty
+      val hasScramCredential = ScramMechanism.values().toList.exists(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.mechanismName))
       if (hasScramCredential) {
-        val userScramCredentials = new UserScramCredential().setName(user)
-        ScramMechanism.values().foreach(mechanism => if (mechanism != ScramMechanism.UNKNOWN) {
-          val propertyValue = userConfig.getProperty(mechanism.mechanismName)
-          if (propertyValue != null) {
-            val iterations = ScramCredentialUtils.credentialFromString(propertyValue).iterations
-            userScramCredentials.credentialInfos.add(new CredentialInfo().setMechanism(mechanism.`type`).setIterations(iterations))
+        val credentialInfos = new util.ArrayList[CredentialInfo]
+        try {
+          ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach { mechanism =>
+            val propertyValue = userConfig.getProperty(mechanism.mechanismName)
+            if (propertyValue != null) {
+              val iterations = ScramCredentialUtils.credentialFromString(propertyValue).iterations
+              credentialInfos.add(new CredentialInfo().setMechanism(mechanism.`type`).setIterations(iterations))
+            }
           }
-        })
-        retval.userScramCredentials.add(userScramCredentials)
+          result.setCredentialInfos(credentialInfos)
+        } catch {
+          case e: Exception => { // should generally never happen, but just in case bad data gets in...
+            val apiError = apiErrorFrom(e, errorProcessingDescribe)
+            result.setErrorCode(apiError.error.code).setErrorMessage(apiError.error.message)
+          }
+        }
+        userResults += (user -> result)
+      } else if (explicitUser) {
+        // it is an error to request credentials for a user that has no credentials
+        result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code).setErrorMessage(attemptToDescribeUserThatDoesNotExist)
+        userResults += (user -> result)
+      }
+    }
+
+    def collectRetrievedResults(): Unit = {
+      if (describingAllUsers) {
+        val usersSorted = SortedSet.empty[String] ++ userResults.keys
+        usersSorted.foreach { user => retval.results.add(userResults(user)) }
+      } else {
+        // be sure to only include a single copy of a result for any user requested multiple times
+        users.get.distinct.foreach { user =>  retval.results.add(userResults(user)) }
       }
     }
 
     try {
-      if (!users.isDefined || users.get.isEmpty)
-      // describe all users
-        adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach { case (user, properties) => addToResultsIfHasScramCredential(user, properties) }
+      if (describingAllUsers)
+        adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
+          case (user, properties) => addToResultsIfHasScramCredential(user, properties) }
       else {
-        // describe specific users
+        // describing specific users
+        val illegalUsers = users.get.filter(_.isEmpty).toSet
+        illegalUsers.foreach { user =>
+          userResults += (user -> new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+            .setUser(user)
+            .setErrorCode(Errors.RESOURCE_NOT_FOUND.code)
+            .setErrorMessage(usernameMustNotBeEmptyMsg)) }
         val duplicatedUsers = users.get.groupBy(identity).collect { case (x, Seq(_, _, _*)) => x }
-        if (duplicatedUsers.nonEmpty) {
-          retval.setError(Errors.DUPLICATE_RESOURCE.code())
-          retval.setErrorMessage(s"Cannot describe SCRAM credentials for the same user twice in a single request: ${duplicatedUsers.mkString("[", ", ", "]")}")
-        } else
-          users.get.foreach { user => addToResultsIfHasScramCredential(user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))) }
+        duplicatedUsers.filterNot(illegalUsers.contains).foreach { user =>
+          userResults += (user -> new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+            .setUser(user)
+            .setErrorCode(Errors.DUPLICATE_RESOURCE.code)
+            .setErrorMessage(s"Cannot describe SCRAM credentials for the same user twice in a single request: $user")) }
+        val usersToSkip = illegalUsers ++ duplicatedUsers
+        users.get.filterNot(usersToSkip.contains).foreach { user =>
+          try {
+            val userConfigs = adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))
+            addToResultsIfHasScramCredential(user, userConfigs, true)
+          } catch {
+            case e: Exception => {
+              val apiError = apiErrorFrom(e, errorProcessingDescribe)
+              userResults += (user -> new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+                .setUser(user)
+                .setErrorCode(apiError.error.code)
+                .setErrorMessage(apiError.error.message))
+            }
+          }
+        }
       }
+      collectRetrievedResults()
     } catch {
-      case e: Throwable => {
-        val message = s"Error processing describe user SCRAM credential configs request"
-        if (e.isInstanceOf[ApiException])
-          info(message, e)
-        else
-          error(message, e)
-        val err = ApiError.fromThrowable(e)
-        retval.setUserScramCredentials(List().asJava).setErrorMessage(err.message).setError(err.error.code)
+      case e: Exception => {
+        // this should generally only happen when we get a failure trying to retrieve all user configs from ZooKeeper
+        val apiError = apiErrorFrom(e, errorProcessingDescribe)
+        retval.setErrorCode(apiError.error.code).setErrorMessage(apiError.messageWithFallback())
       }
     }
     retval
+  }
+
+  def apiErrorFrom(e: Exception, message: String): ApiError = {
+    if (e.isInstanceOf[ApiException])
+      info(message, e)
+    else
+      error(message, e)
+    ApiError.fromThrowable(e)
   }
 
   case class requestStatus(user: String, mechanism: Option[ScramMechanism], legalRequest: Boolean, iterations: Int) {}
@@ -1072,7 +1128,6 @@ class AdminManager(val config: KafkaConfig,
         requestStatus(deletion.name, Some(publicScramMechanism), publicScramMechanism != ScramMechanism.UNKNOWN, 0)
       }).filter { !_.legalRequest }
     // map user names to error messages
-    val usernameMustNotBeEmptyMsg = "Username must not be empty"
     val unknownScramMechanismMsg = "Unknown SCRAM mechanism"
     val tooFewIterationsMsg = "Too few iterations"
     val tooManyIterationsMsg = "Too many iterations"
@@ -1093,17 +1148,20 @@ class AdminManager(val config: KafkaConfig,
         }
       ).toMap
 
-    illegalRequestsByUser.foreach {case (user, errorMessage) => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
-      .setErrorCode(if (errorMessage == unknownScramMechanismMsg) {Errors.UNSUPPORTED_SASL_MECHANISM.code} else {Errors.UNACCEPTABLE_CREDENTIAL.code})
-      .setErrorMessage(errorMessage))}
+    illegalRequestsByUser.foreach { case (user, errorMessage) =>
+      retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
+        .setErrorCode(if (errorMessage == unknownScramMechanismMsg) {Errors.UNSUPPORTED_SASL_MECHANISM.code} else {Errors.UNACCEPTABLE_CREDENTIAL.code})
+        .setErrorMessage(errorMessage)) }
 
     val invalidUsers = (illegalUpsertions ++ illegalDeletions).map(_.user).toSet
     val initiallyValidUserMechanismPairs = (upsertions.filter(upsertion => !invalidUsers.contains(upsertion.name)).map(upsertion => (upsertion.name, upsertion.mechanism)) ++
       deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism)))
 
     val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(p => (p._1, s"${p._1}:${mechanismName(p._2)}")).collect { case (x, Seq(_, _, _*)) => x._1 }.toSet
-    usersWithDuplicateUserMechanismPairs.foreach(user => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
-      .setErrorCode(Errors.DUPLICATE_RESOURCE.code).setErrorMessage("A user credential cannot be altered twice in the same request")))
+    usersWithDuplicateUserMechanismPairs.foreach { user =>
+      retval.results.add(new AlterUserScramCredentialsResult()
+        .setUser(user)
+        .setErrorCode(Errors.DUPLICATE_RESOURCE.code).setErrorMessage("A user credential cannot be altered twice in the same request")) }
 
     def potentiallyValidUserMechanismPairs = initiallyValidUserMechanismPairs.filter(pair => !usersWithDuplicateUserMechanismPairs.contains(pair._1))
 
@@ -1114,8 +1172,10 @@ class AdminManager(val config: KafkaConfig,
     val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name)).filter(deletion =>
       configsByPotentiallyValidUser(deletion.name).getProperty(mechanismName(deletion.mechanism)) == null)
     val invalidUsersDueToInvalidDeletions = invalidDeletions.map(_.name).toSet
-    invalidUsersDueToInvalidDeletions.foreach(user => retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
-      .setErrorCode(Errors.RESOURCE_NOT_FOUND.code).setErrorMessage("Attempt to delete a user credential that does not exist")))
+    invalidUsersDueToInvalidDeletions.foreach { user =>
+      retval.results.add(new AlterUserScramCredentialsResult()
+        .setUser(user)
+        .setErrorCode(Errors.RESOURCE_NOT_FOUND.code).setErrorMessage("Attempt to delete a user credential that does not exist")) }
 
     // now prepare the new set of property values for users that don't have any issues identified above,
     // keeping track of ones that fail
@@ -1123,18 +1183,17 @@ class AdminManager(val config: KafkaConfig,
     val usersFailedToPrepareProperties = usersToTryToAlter.map(user => {
       try {
         // deletions: remove property keys
-        deletions.filter(deletion => usersToTryToAlter.contains(deletion.name)).foreach(deletion =>
-          configsByPotentiallyValidUser(deletion.name).remove(mechanismName(deletion.mechanism)))
+        deletions.filter(deletion => usersToTryToAlter.contains(deletion.name)).foreach { deletion =>
+          configsByPotentiallyValidUser(deletion.name).remove(mechanismName(deletion.mechanism)) }
         // upsertions: put property key/value
-        upsertions.filter(upsertion => usersToTryToAlter.contains(upsertion.name)).foreach(upsertion => {
+        upsertions.filter(upsertion => usersToTryToAlter.contains(upsertion.name)).foreach { upsertion =>
           val mechanism = InternalScramMechanism.forMechanismName(mechanismName(upsertion.mechanism))
           val credential = new ScramFormatter(mechanism)
             .generateCredential(upsertion.salt, upsertion.saltedPassword, upsertion.iterations)
-          configsByPotentiallyValidUser(upsertion.name).put(mechanismName(upsertion.mechanism), ScramCredentialUtils.credentialToString(credential))
-        })
+          configsByPotentiallyValidUser(upsertion.name).put(mechanismName(upsertion.mechanism), ScramCredentialUtils.credentialToString(credential)) }
         (user) // success, 1 element, won't be matched
       } catch {
-        case e: Throwable =>
+        case e: Exception =>
           info(s"Error encountered while altering user SCRAM credentials", e)
           (user, e) // fail, 2 elements, will be matched
       }
@@ -1146,7 +1205,7 @@ class AdminManager(val config: KafkaConfig,
         adminZkClient.changeConfigs(ConfigType.User, Sanitizer.sanitize(user), configsByPotentiallyValidUser(user))
         (user) // success, 1 element, won't be matched
       } catch {
-        case e: Throwable =>
+        case e: Exception =>
           info(s"Error encountered while altering user SCRAM credentials", e)
           (user, e) // fail, 2 elements, will be matched
       }
@@ -1155,12 +1214,16 @@ class AdminManager(val config: KafkaConfig,
     // report failures
     usersFailedToPrepareProperties.++(usersFailedToPersist).foreach { case (user, exception) =>
       val error = Errors.forException(exception)
-      retval.results.add(new AlterUserScramCredentialsResult().setUser(user).setErrorCode(error.code).setErrorMessage(error.message))
-    }
+      retval.results.add(new AlterUserScramCredentialsResult()
+        .setUser(user)
+        .setErrorCode(error.code)
+        .setErrorMessage(error.message)) }
 
     // report successes
-    usersToTryToAlter.filterNot(usersFailedToPrepareProperties.contains).filterNot(usersFailedToPersist.contains).foreach(user =>
-      retval.results.add(new AlterUserScramCredentialsResult().setUser(user).setErrorCode(Errors.NONE.code)))
+    usersToTryToAlter.filterNot(usersFailedToPrepareProperties.contains).filterNot(usersFailedToPersist.contains).foreach { user =>
+      retval.results.add(new AlterUserScramCredentialsResult()
+        .setUser(user)
+        .setErrorCode(Errors.NONE.code)) }
 
     retval
   }

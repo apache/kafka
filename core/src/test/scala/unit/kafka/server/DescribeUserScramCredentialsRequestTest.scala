@@ -21,7 +21,7 @@ import java.util.Properties
 
 import kafka.network.SocketServer
 import kafka.security.authorizer.AclAuthorizer
-import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
+import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
@@ -59,9 +59,11 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
       new DescribeUserScramCredentialsRequestData()).build()
     val response = sendDescribeUserScramCredentialsRequest(request)
 
-    val error = response.data.error
-    assertEquals("Expected no error when routed correctly", Errors.NONE.code, error)
-    assertEquals("Expected no credentials", 0, response.data.userScramCredentials.size)
+    val error = response.data.errorCode
+    assertEquals("Expected no error when describing evrything and there are no credentials",
+      Errors.NONE.code, error)
+    assertEquals("Expected no credentials when describing evrything and there are no credentials",
+      0, response.data.results.size)
   }
 
   @Test
@@ -70,7 +72,7 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
       new DescribeUserScramCredentialsRequestData()).build()
     val response = sendDescribeUserScramCredentialsRequest(request, notControllerSocketServer)
 
-    val error = response.data.error
+    val error = response.data.errorCode
     assertEquals("Did not expect controller error when routed to non-controller", Errors.NONE.code, error)
   }
 
@@ -80,19 +82,23 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
       new DescribeUserScramCredentialsRequestData()).build()
     val response = sendDescribeUserScramCredentialsRequest(request)
 
-    val error = response.data.error
+    val error = response.data.errorCode
     assertEquals("Expected not authorized error", Errors.CLUSTER_AUTHORIZATION_FAILED.code, error)
   }
 
   @Test
   def testDescribeSameUserTwice(): Unit = {
-    val user = new UserName().setName("user1")
+    val user = "user1"
+    val userName = new UserName().setName(user)
     val request = new DescribeUserScramCredentialsRequest.Builder(
-      new DescribeUserScramCredentialsRequestData().setUsers(List(user, user).asJava)).build()
+      new DescribeUserScramCredentialsRequestData().setUsers(List(userName, userName).asJava)).build()
     val response = sendDescribeUserScramCredentialsRequest(request)
 
-    val error = response.data.error
-    assertEquals("Expected invalid request error", Errors.DUPLICATE_RESOURCE.code, error)
+    assertEquals("Expected no top-level error", Errors.NONE.code, response.data.errorCode)
+    assertEquals(1, response.data.results.size)
+    val result: DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult = response.data.results.get(0)
+    assertEquals(s"Expected duplicate resource error for $user", Errors.DUPLICATE_RESOURCE.code, result.errorCode)
+    assertEquals(s"Cannot describe SCRAM credentials for the same user twice in a single request: $user", result.errorMessage)
   }
 
 

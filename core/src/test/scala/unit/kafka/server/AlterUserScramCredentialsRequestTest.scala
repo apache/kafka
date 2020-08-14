@@ -277,36 +277,36 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val request2 = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()
     val response2 = sendDescribeUserScramCredentialsRequest(request2)
-    assertEquals("Expected no error when describing the credentials",
-      Errors.NONE.code, response2.data.error)
-    val results2 = response2.data.userScramCredentials
+    assertEquals("Expected no top-level error when describing the credentials",
+      Errors.NONE.code, response2.data.errorCode)
+    val results2 = response2.data.results
     assertEquals(2, results2.size)
     assertTrue(s"Expected result to contain '$user1' with 2 credentials: $results2",
-      results2.asScala.exists(usc => usc.name == user1 && usc.credentialInfos.size == 2))
+      results2.asScala.exists(result => result.user == user1 && result.credentialInfos.size == 2 && result.errorCode == Errors.NONE.code))
     assertTrue(s"Expected result to contain '$user2' with 1 credential: $results2",
-      results2.asScala.exists(usc => usc.name == user2 && usc.credentialInfos.size == 1))
+      results2.asScala.exists(result => result.user == user2 && result.credentialInfos.size == 1 && result.errorCode == Errors.NONE.code))
     assertTrue(s"Expected result to contain '$user1' with SCRAM_SHA_256/4096 and SCRAM_SHA_512/8192 credentials: $results2",
-      results2.asScala.exists(usc => usc.name == user1 && usc.credentialInfos.asScala.exists(info =>
+      results2.asScala.exists(result => result.user == user1 && result.credentialInfos.asScala.exists(info =>
         info.mechanism == ScramMechanism.SCRAM_SHA_256.`type` && info.iterations == 4096)
-        && usc.credentialInfos.asScala.exists(info =>
+        && result.credentialInfos.asScala.exists(info =>
         info.mechanism == ScramMechanism.SCRAM_SHA_512.`type` && info.iterations == 8192)))
     assertTrue(s"Expected result to contain '$user2' with SCRAM_SHA_512/8192 credential: $results2",
-      results2.asScala.exists(usc => usc.name == user2 && usc.credentialInfos.asScala.exists(info =>
+      results2.asScala.exists(result => result.user == user2 && result.credentialInfos.asScala.exists(info =>
         info.mechanism == ScramMechanism.SCRAM_SHA_512.`type` && info.iterations == 8192)))
     // now describe just one
     val request3 = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData().setUsers(util.Arrays.asList(
         new DescribeUserScramCredentialsRequestData.UserName().setName(user1)))).build()
     val response3 = sendDescribeUserScramCredentialsRequest(request3)
-    assertEquals("Expected no error when describing the credentials",Errors.NONE.code, response3.data.error)
-    val results3 = response3.data.userScramCredentials
+    assertEquals("Expected no top-level error when describing the credentials", Errors.NONE.code, response3.data.errorCode)
+    val results3 = response3.data.results
     assertEquals(1, results3.size)
     assertTrue(s"Expected result to contain '$user1' with 2 credentials: $results3",
-      results3.asScala.exists(usc => usc.name == user1 && usc.credentialInfos.size == 2))
+      results3.asScala.exists(result => result.user == user1 && result.credentialInfos.size == 2 && result.errorCode == Errors.NONE.code))
     assertTrue(s"Expected result to contain '$user1' with SCRAM_SHA_256/4096 and SCRAM_SHA_512/8192 credentials: $results3",
-      results3.asScala.exists(usc => usc.name == user1 && usc.credentialInfos.asScala.exists(info =>
+      results3.asScala.exists(result => result.user == user1 && result.credentialInfos.asScala.exists(info =>
         info.mechanism == ScramMechanism.SCRAM_SHA_256.`type` && info.iterations == 4096)
-        && usc.credentialInfos.asScala.exists(info =>
+        && result.credentialInfos.asScala.exists(info =>
         info.mechanism == ScramMechanism.SCRAM_SHA_512.`type` && info.iterations == 8192)))
     // now delete a couple of credentials
     val request4 = new AlterUserScramCredentialsRequest.Builder(
@@ -328,13 +328,13 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val request5 = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()
     val response5 = sendDescribeUserScramCredentialsRequest(request5)
-    assertEquals("Expected no error when describing the credentials", Errors.NONE.code, response5.data.error)
-    val results5 = response5.data.userScramCredentials
+    assertEquals("Expected no top-level error when describing the credentials", Errors.NONE.code, response5.data.errorCode)
+    val results5 = response5.data.results
     assertEquals(1, results5.size)
     assertTrue(s"Expected result to contain '$user1' with 1 credential: $results5",
-      results5.asScala.exists(usc => usc.name == user1 && usc.credentialInfos.size == 1))
+      results5.asScala.exists(result => result.user == user1 && result.credentialInfos.size == 1 && result.errorCode == Errors.NONE.code))
     assertTrue(s"Expected result to contain '$user1' with SCRAM_SHA_512/8192 credential: $results5",
-      results5.asScala.exists(usc => usc.name == user1 && usc.credentialInfos.asScala.exists(info =>
+      results5.asScala.exists(result => result.user == user1 && result.credentialInfos.asScala.exists(info =>
         info.mechanism == ScramMechanism.SCRAM_SHA_512.`type` && info.iterations == 8192)))
     // now delete the last one
     val request6 = new AlterUserScramCredentialsRequest.Builder(
@@ -353,9 +353,9 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val request7 = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()
     val response7 = sendDescribeUserScramCredentialsRequest(request7)
-    assertEquals("Expected no error when describing the credentials",
-      Errors.NONE.code, response7.data.error)
-    val results7 = response7.data.userScramCredentials
+    assertEquals("Expected no top-level error when describing the credentials",
+      Errors.NONE.code, response7.data.errorCode)
+    val results7 = response7.data.results
     assertEquals(0, results7.size)
   }
 

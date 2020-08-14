@@ -17,7 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.math.BigInteger;
+import org.apache.kafka.common.security.scram.internals.ScramFormatter;
+
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Objects;
@@ -94,6 +95,6 @@ public class UserScramCredentialUpsertion extends UserScramCredentialAlteration 
     }
 
     private static byte[] generateRandomSalt() {
-        return new BigInteger(130, new SecureRandom()).toString(Character.MAX_RADIX).getBytes(StandardCharsets.UTF_8);
+        return ScramFormatter.secureRandomBytes(new SecureRandom());
     }
 }

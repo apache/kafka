@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets
 
 import kafka.server.BaseRequestTest
 import kafka.utils.Exit
+import org.apache.kafka.common.errors.ResourceNotFoundException
 import org.junit.Assert._
 import org.junit.Test
 
@@ -118,10 +119,21 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
   }
 
   @Test
-  def testEmptyPassword(): Unit = {
+  def testAlterWithEmptyPassword(): Unit = {
     val user1 = "user1"
     val result = runConfigCommandViaBroker(Array("--user", user1, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=]"))
     assertTrue("Expected System.exit() to be called with an empty password", result.exitStatus.isDefined)
     assertEquals("Expected empty password to cause failure with exit status=1", 1, result.exitStatus.get)
+  }
+
+  @Test
+  def testDescribeUnknownUser(): Unit = {
+    val unknownUser = "unknwonUser"
+    val result = runConfigCommandViaBroker(Array("--user", unknownUser, "--describe"))
+    assertTrue("Expected System.exit() to not be called with an unknown user", result.exitStatus.isEmpty)
+    val expectedExceptionMessage = "Attempt to describe a user credential that does not exist"
+    val expectedException = new ResourceNotFoundException(expectedExceptionMessage)
+    assertEquals(s"Error retrieving SCRAM credential configs for user-principal '$unknownUser': ${expectedException.getClass.getSimpleName}: ${expectedException.getMessage}\n",
+      result.stdout)
   }
 }

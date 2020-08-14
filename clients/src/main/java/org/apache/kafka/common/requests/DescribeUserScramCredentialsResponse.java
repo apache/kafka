@@ -60,7 +60,7 @@ public class DescribeUserScramCredentialsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(Errors.forCode(data.error()));
+        return errorCounts(data.results().stream().map(r -> Errors.forCode(r.errorCode())));
     }
 
     @Override

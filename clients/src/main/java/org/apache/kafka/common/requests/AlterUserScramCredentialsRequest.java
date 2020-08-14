@@ -91,10 +91,11 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
                 this.data.upsertions().stream().map(upsertion -> upsertion.name()))
                 .collect(Collectors.toSet());
         List<AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult> results =
-                users.stream().map(user -> new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
-                        .setUser(user)
-                        .setErrorCode(errorCode)
-                        .setErrorMessage(errorMessage))
+                users.stream().sorted().map(user ->
+                        new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
+                                .setUser(user)
+                                .setErrorCode(errorCode)
+                                .setErrorMessage(errorMessage))
                         .collect(Collectors.toList());
         return new AlterUserScramCredentialsResponse(new AlterUserScramCredentialsResponseData().setResults(results));
     }
