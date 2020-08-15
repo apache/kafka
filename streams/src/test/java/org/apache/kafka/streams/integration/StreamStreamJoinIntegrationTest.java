@@ -61,34 +61,6 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
     }
 
     @Test
-    public void shouldNotAccessJoinStoresWhenGivingName() throws InterruptedException {
-        STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-no-store-access");
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KStream<String, Integer> left = builder.stream(INPUT_TOPIC_LEFT, Consumed.with(Serdes.String(), Serdes.Integer()));
-        final KStream<String, Integer> right = builder.stream(INPUT_TOPIC_RIGHT, Consumed.with(Serdes.String(), Serdes.Integer()));
-        final CountDownLatch latch = new CountDownLatch(1);
-
-        left.join(
-            right,
-            (value1, value2) -> value1 + value2,
-            JoinWindows.of(ofMillis(100)),
-            StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer()).withStoreName("join-store"));
-
-        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
-            kafkaStreams.setStateListener((newState, oldState) -> {
-                if (newState == KafkaStreams.State.RUNNING) {
-                    latch.countDown();
-                }
-            });
-
-            kafkaStreams.start();
-            latch.await();
-            assertThrows(InvalidStateStoreException.class, () -> kafkaStreams.store(StoreQueryParameters.fromNameAndType("join-store", QueryableStoreTypes.keyValueStore())).get("1"));
-        }
-    }
-
-    @Test
     public void testInner() {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-inner");
 
