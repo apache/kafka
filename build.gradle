@@ -1649,7 +1649,7 @@ project(':connect:api') {
     include "**/org/apache/kafka/connect/**" // needed for the `aggregatedJavadoc` task
     // The URL structure was changed to include the locale after Java 8
     if (JavaVersion.current().isJava11Compatible())
-      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+      options.links "https://docs.oracle.com/en/java/javase/11/docs/api/"
     else
       options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
@@ -2019,7 +2019,7 @@ task aggregatedJavadoc(type: Javadoc) {
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
   // The URL structure was changed to include the locale after Java 8
   if (JavaVersion.current().isJava11Compatible())
-    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+    options.links "https://docs.oracle.com/en/java/javase/11/docs/api/"
   else
     options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
