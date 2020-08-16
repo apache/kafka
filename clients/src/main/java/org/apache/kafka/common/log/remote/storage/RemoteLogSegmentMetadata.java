@@ -44,6 +44,12 @@ public class RemoteLogSegmentMetadata implements Serializable {
         COPY_FINISHED(),
 
         /**
+         * This segment is marked for delete. That means, it is eligible for deletion. This is used when a topic/partition
+         * is deleted so that deletion agents can start deleting them as the leader/follower does not exist.
+         */
+        DELETE_MARKED(),
+
+        /**
          * This state indicates that the segment deletion is started but not yet finished.
          */
         DELETE_STARTED(),
@@ -52,7 +58,6 @@ public class RemoteLogSegmentMetadata implements Serializable {
          * This state indicates that the segment is deleted successfully.
          */
         DELETE_FINISHED();
-
     }
 
     private static final long serialVersionUID = 1L;
@@ -186,6 +191,42 @@ public class RemoteLogSegmentMetadata implements Serializable {
 
     public Map<Long, Long> segmentLeaderEpochs() {
         return segmentLeaderEpochs;
+    }
+
+    @Override
+    public String toString() {
+        return "RemoteLogSegmentMetadata{" +
+                "remoteLogSegmentId=" + remoteLogSegmentId +
+                ", startOffset=" + startOffset +
+                ", endOffset=" + endOffset +
+                ", leaderEpoch=" + leaderEpoch +
+                ", maxTimestamp=" + maxTimestamp +
+                ", eventTimestamp=" + eventTimestamp +
+                ", segmentLeaderEpochs=" + segmentLeaderEpochs +
+                ", segmentSizeInBytes=" + segmentSizeInBytes +
+                ", state=" + state +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RemoteLogSegmentMetadata metadata = (RemoteLogSegmentMetadata) o;
+        return startOffset == metadata.startOffset &&
+                endOffset == metadata.endOffset &&
+                leaderEpoch == metadata.leaderEpoch &&
+                maxTimestamp == metadata.maxTimestamp &&
+                eventTimestamp == metadata.eventTimestamp &&
+                segmentSizeInBytes == metadata.segmentSizeInBytes &&
+                Objects.equals(remoteLogSegmentId, metadata.remoteLogSegmentId) &&
+                Objects.equals(segmentLeaderEpochs, metadata.segmentLeaderEpochs) &&
+                state == metadata.state;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(remoteLogSegmentId, startOffset, endOffset, leaderEpoch, maxTimestamp, eventTimestamp, segmentLeaderEpochs, segmentSizeInBytes, state);
     }
 
     public static RemoteLogSegmentMetadata markForDeletion(RemoteLogSegmentMetadata original) {

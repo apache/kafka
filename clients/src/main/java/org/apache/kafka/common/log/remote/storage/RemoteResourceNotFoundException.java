@@ -19,13 +19,15 @@ package org.apache.kafka.common.log.remote.storage;
 import static java.lang.String.format;
 
 /**
- * Exception thrown when a resource cannot be found on the remote storage.
- * A resource can be a log segment or an offset or time index.
+ * Exception thrown when a resource can not be found on the remote storage.
+ *
+ * A resource can be a log segment, any of the indexes or any which was stored in remote storage for a particular log
+ * segment.
  */
 public class RemoteResourceNotFoundException extends RemoteStorageException {
 
     public RemoteResourceNotFoundException(final RemoteLogSegmentId id, final String resourceName) {
-        super(format("One of the resource associated to the remote log segment was not found. " +
+        super(format("Requested resource associated to the remote log segment was not found. " +
                 "ID: %s Resource name: %s", id.id(), resourceName));
     }
 
@@ -34,6 +36,6 @@ public class RemoteResourceNotFoundException extends RemoteStorageException {
     }
 
     public RemoteResourceNotFoundException(final Throwable cause) {
-        super("One of the requested remote resource was not found", cause);
+        super("Requested remote resource was not found", cause);
     }
 }

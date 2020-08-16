@@ -18,6 +18,7 @@ package kafka.log.remote
 
 import java.io.{Closeable, File, InputStream}
 import java.nio.ByteBuffer
+import java.nio.file.Files
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
@@ -28,6 +29,7 @@ import kafka.cluster.Partition
 import kafka.common.KafkaException
 import kafka.log.Log
 import kafka.log.remote.RemoteLogManager.CLUSTER_ID
+import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.{Defaults, FetchDataInfo, FetchTxnCommitted, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
 import kafka.utils.Logging
 import org.apache.kafka.clients.CommonClientConfigs
@@ -347,28 +349,43 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                   return
                 }
 
-                val file = segment.log.file()
-                val fileName = file.getName
+                val logFile = segment.log.file()
+                val fileName = logFile.getName
                 info(s"Copying $fileName to remote storage.");
                 val id = new RemoteLogSegmentId(tp, java.util.UUID.randomUUID())
 
+                val nextOffset = segment.readNextOffset
                 //todo-tier double check on this
-                val endOffset = segment.readNextOffset - 1
+                val endOffset = nextOffset - 1
 
                 remoteLogMetadataManager.putRemoteLogSegmentData(new RemoteLogSegmentMetadata(id, segment.baseOffset,
                   endOffset, segment.maxTimestampSoFar, leaderEpochVal, segment.log.sizeInBytes(), Collections.emptyMap()))
 
-                // todo-tier get producerIdSnapshotIndex if it matches with the current segments file
-                val producerIdSnapshotFile =  log.producerStateManager.fetchSnapshot(endOffset + 1).orNull
+                val producerIdSnapshotFile = log.producerStateManager.fetchSnapshot(nextOffset).orNull
 
-                //todo-tier create a tmp file of cache till this offset by taking readlock
-                //val leaderEpochs = log.leaderEpochCache.map( x => x.epochEntries)
-                val leaderEpochs:File = null
+                // todo-tier build segment leader epochs
                 val remoteLogSegmentMetadata = new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset,
                   segment.maxTimestampSoFar, leaderEpochVal, segment.log.sizeInBytes(), Collections.emptyMap())
-                val segmentData = new LogSegmentData(file, segment.lazyOffsetIndex.get.file,
-                  segment.lazyTimeIndex.get.file, segment.txnIndex.file, producerIdSnapshotFile, leaderEpochs)
-                remoteLogStorageManager.copyLogSegment(remoteLogSegmentMetadata, segmentData)
+
+                val leaderEpochStateFile = new File(logFile.getParentFile, "leader-epoch-checkpoint-" + nextOffset)
+
+                try {
+                  val leaderEpochs: File = log.leaderEpochCache.map(x => {
+                    x.writeTo(new LeaderEpochCheckpointFile(leaderEpochStateFile))
+                    x.truncateFromEnd(nextOffset)
+                    leaderEpochStateFile
+                  }).get
+
+                  val segmentData = new LogSegmentData(logFile, segment.lazyOffsetIndex.get.file,
+                    segment.lazyTimeIndex.get.file, segment.txnIndex.file, producerIdSnapshotFile, leaderEpochs)
+                  remoteLogStorageManager.copyLogSegment(remoteLogSegmentMetadata, segmentData)
+                } finally {
+                  try {
+                    Files.delete(leaderEpochStateFile.toPath)
+                  } catch {
+                    case ex: Exception => warn(s"Error occurred while deleting leader epoch file: $leaderEpochStateFile", ex)
+                  }
+                }
 
                 val rlsmAfterCreate = new RemoteLogSegmentMetadata(id, segment.baseOffset, endOffset,
                   segment.maxTimestampSoFar, leaderEpochVal, System.currentTimeMillis(), segment.log.sizeInBytes(),
