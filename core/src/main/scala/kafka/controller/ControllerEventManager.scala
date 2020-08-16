@@ -17,8 +17,9 @@
 
 package kafka.controller
 
+import java.util.ArrayList
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
+import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
@@ -69,14 +70,15 @@ class QueuedEvent(val event: ControllerEvent,
 class ControllerEventManager(controllerId: Int,
                              processor: ControllerEventProcessor,
                              time: Time,
-                             rateAndTimeMetrics: Map[ControllerState, KafkaTimer]) extends KafkaMetricsGroup {
+                             rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
+                             eventQueueTimeTimeoutMs: Long = 300000) extends KafkaMetricsGroup {
   import ControllerEventManager._
 
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[QueuedEvent]
   // Visible for test
-  private[controller] val thread = new ControllerEventThread(ControllerEventThreadName)
+  private[controller] var thread = new ControllerEventThread(ControllerEventThreadName)
 
   private val eventQueueTimeHist = newHistogram(EventQueueTimeMetricName)
 
@@ -103,9 +105,10 @@ class ControllerEventManager(controllerId: Int,
     queuedEvent
   }
 
-  def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock) {
-    queue.forEach(_.preempt(processor))
-    queue.clear()
+  def clearAndPut(event: ControllerEvent): QueuedEvent = inLock(putLock){
+    val preemptedEvents = new ArrayList[QueuedEvent]()
+    queue.drainTo(preemptedEvents)
+    preemptedEvents.forEach(_.preempt(processor))
     put(event)
   }
 
@@ -115,7 +118,7 @@ class ControllerEventManager(controllerId: Int,
     logIdent = s"[ControllerEventThread controllerId=$controllerId] "
 
     override def doWork(): Unit = {
-      val dequeued = queue.take()
+      val dequeued = pollFromEventQueue()
       dequeued.event match {
         case ShutdownEventThread => // The shutting down of the thread has been initiated at this point. Ignore this event.
         case controllerEvent =>
@@ -136,6 +139,21 @@ class ControllerEventManager(controllerId: Int,
 
           _state = ControllerState.Idle
       }
+    }
+  }
+
+  private def pollFromEventQueue(): QueuedEvent = {
+    val count = eventQueueTimeHist.count()
+    if (count != 0) {
+      val event  = queue.poll(eventQueueTimeTimeoutMs, TimeUnit.MILLISECONDS)
+      if (event == null) {
+        eventQueueTimeHist.clear()
+        queue.take()
+      } else {
+        event
+      }
+    } else {
+      queue.take()
     }
   }
 

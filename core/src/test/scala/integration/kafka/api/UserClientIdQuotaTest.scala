@@ -15,7 +15,6 @@
 package kafka.api
 
 import java.io.File
-import java.util.Properties
 
 import kafka.server._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
@@ -36,43 +35,51 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     super.setUp()
-    val defaultProps = quotaTestClients.quotaProperties(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
-    adminZkClient.changeUserOrUserClientIdConfig(ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default, defaultProps)
+    quotaTestClients.alterClientQuotas(
+      quotaTestClients.clientQuotaAlteration(
+        quotaTestClients.clientQuotaEntity(Some(QuotaTestClients.DefaultEntity), Some(QuotaTestClients.DefaultEntity)),
+        Some(defaultProducerQuota), Some(defaultConsumerQuota), Some(defaultRequestQuota)
+      )
+    )
     quotaTestClients.waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
 
   override def createQuotaTestClients(topic: String, leaderNode: KafkaServer): QuotaTestClients = {
     val producer = createProducer()
     val consumer = createConsumer()
+    val adminClient = createAdminClient()
 
-    new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer) {
+    new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer, adminClient) {
       override def userPrincipal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "O=A client,CN=localhost")
+
       override def quotaMetricTags(clientId: String): Map[String, String] = {
         Map("user" -> Sanitizer.sanitize(userPrincipal.getName), "client-id" -> clientId)
       }
 
       override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit = {
-        val producerProps = new Properties()
-        producerProps.setProperty(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.toString)
-        producerProps.setProperty(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota.toString)
-        updateQuotaOverride(userPrincipal.getName, producerClientId, producerProps)
-
-        val consumerProps = new Properties()
-        consumerProps.setProperty(DynamicConfig.Client.ConsumerByteRateOverrideProp, consumerQuota.toString)
-        consumerProps.setProperty(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota.toString)
-        updateQuotaOverride(userPrincipal.getName, consumerClientId, consumerProps)
+        alterClientQuotas(
+          clientQuotaAlteration(
+            clientQuotaEntity(Some(userPrincipal.getName), Some(producerClientId)),
+            Some(producerQuota), None, Some(requestQuota)
+          ),
+          clientQuotaAlteration(
+            clientQuotaEntity(Some(userPrincipal.getName), Some(consumerClientId)),
+            None, Some(consumerQuota), Some(requestQuota)
+          )
+        )
       }
 
       override def removeQuotaOverrides(): Unit = {
-        val emptyProps = new Properties
-        adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal.getName) +
-          "/clients/" + Sanitizer.sanitize(producerClientId), emptyProps)
-        adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal.getName) +
-          "/clients/" + Sanitizer.sanitize(consumerClientId), emptyProps)
-      }
-
-      private def updateQuotaOverride(userPrincipal: String, clientId: String, properties: Properties): Unit = {
-        adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal) + "/clients/" + Sanitizer.sanitize(clientId), properties)
+        alterClientQuotas(
+          clientQuotaAlteration(
+            clientQuotaEntity(Some(userPrincipal.getName), Some(producerClientId)),
+            None, None, None
+          ),
+          clientQuotaAlteration(
+            clientQuotaEntity(Some(userPrincipal.getName), Some(consumerClientId)),
+            None, None, None
+          )
+        )
       }
     }
   }

@@ -81,10 +81,21 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     brokerMetadatas.sortBy(_.id)
   }
 
+  /**
+   * Create topic and optionally validate its parameters. Note that this method is used by the
+   * TopicCommand as well.
+   *
+   * @param topic The name of the topic
+   * @param config The config of the topic
+   * @param partitionReplicaAssignment The assignments of the topic
+   * @param validate Boolean indicating if parameters must be validated or not (true by default)
+   */
   def createTopicWithAssignment(topic: String,
                                 config: Properties,
-                                partitionReplicaAssignment: Map[Int, Seq[Int]]): Unit = {
-    validateTopicCreate(topic, partitionReplicaAssignment, config)
+                                partitionReplicaAssignment: Map[Int, Seq[Int]],
+                                validate: Boolean = true): Unit = {
+    if (validate)
+      validateTopicCreate(topic, partitionReplicaAssignment, config)
 
     info(s"Creating topic $topic with configuration $config and initial partition " +
       s"assignment $partitionReplicaAssignment")
@@ -98,7 +109,12 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
-   * Validate topic creation parameters
+   * Validate topic creation parameters. Note that this method is indirectly used by the
+   * TopicCommand via the `createTopicWithAssignment` method.
+   *
+   * @param topic The name of the topic
+   * @param partitionReplicaAssignment The assignments of the topic
+   * @param config The config of the topic
    */
   def validateTopicCreate(topic: String,
                           partitionReplicaAssignment: Map[Int, Seq[Int]],
@@ -171,22 +187,57 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   /**
-  * Add partitions to existing topic with optional replica assignment
-  *
-  * @param topic Topic for adding partitions to
-  * @param existingAssignment A map from partition id to its assignment
-  * @param allBrokers All brokers in the cluster
-  * @param numPartitions Number of partitions to be set
-  * @param replicaAssignment Manual replica assignment, or none
-  * @param validateOnly If true, validate the parameters without actually adding the partitions
-  * @return the updated replica assignment
-  */
+   * Add partitions to existing topic with optional replica assignment. Note that this
+   * method is used by the TopicCommand.
+   *
+   * @param topic Topic for adding partitions to
+   * @param existingAssignment A map from partition id to its assignment
+   * @param allBrokers All brokers in the cluster
+   * @param numPartitions Number of partitions to be set
+   * @param replicaAssignment Manual replica assignment, or none
+   * @param validateOnly If true, validate the parameters without actually adding the partitions
+   * @return the updated replica assignment
+   */
   def addPartitions(topic: String,
                     existingAssignment: Map[Int, ReplicaAssignment],
                     allBrokers: Seq[BrokerMetadata],
                     numPartitions: Int = 1,
                     replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
                     validateOnly: Boolean = false): Map[Int, Seq[Int]] = {
+
+    val proposedAssignmentForNewPartitions = createNewPartitionsAssignment(
+      topic,
+      existingAssignment,
+      allBrokers,
+      numPartitions,
+      replicaAssignment
+    )
+
+    if (validateOnly) {
+      (existingAssignment ++ proposedAssignmentForNewPartitions)
+        .map { case (k, v) => k -> v.replicas }
+    } else {
+      createPartitionsWithAssignment(topic, existingAssignment, proposedAssignmentForNewPartitions)
+        .map { case (k, v) => k -> v.replicas }
+    }
+  }
+
+  /**
+   * Create assignment to add the given number of partitions while validating the
+   * provided arguments.
+   *
+   * @param topic Topic for adding partitions to
+   * @param existingAssignment A map from partition id to its assignment
+   * @param allBrokers All brokers in the cluster
+   * @param numPartitions Number of partitions to be set
+   * @param replicaAssignment Manual replica assignment, or none
+   * @return the assignment for the new partitions
+   */
+  def createNewPartitionsAssignment(topic: String,
+                                    existingAssignment: Map[Int, ReplicaAssignment],
+                                    allBrokers: Seq[BrokerMetadata],
+                                    numPartitions: Int = 1,
+                                    replicaAssignment: Option[Map[Int, Seq[Int]]] = None): Map[Int, ReplicaAssignment] = {
     val existingAssignmentPartition0 = existingAssignment.getOrElse(0,
       throw new AdminOperationException(
         s"Unexpected existing replica assignment for topic '$topic', partition id 0 is missing. " +
@@ -210,16 +261,32 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         startIndex, existingAssignment.size)
     }
 
-    val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions.map { case (tp, replicas) =>
+    proposedAssignmentForNewPartitions.map { case (tp, replicas) =>
       tp -> ReplicaAssignment(replicas, List(), List())
     }
-    if (!validateOnly) {
-      info(s"Creating $partitionsToAdd partitions for '$topic' with the following replica assignment: " +
-        s"$proposedAssignmentForNewPartitions.")
+  }
 
-      writeTopicPartitionAssignment(topic, proposedAssignment, isUpdate = true)
-    }
-    proposedAssignment.map { case (k, v) => k -> v.replicas }
+  /**
+   * Add partitions to the existing topic with the provided assignment. This method does
+   * not validate the provided assignments. Validation must be done beforehand.
+   *
+   * @param topic Topic for adding partitions to
+   * @param existingAssignment A map from partition id to its assignment
+   * @param newPartitionAssignment The assignments to add
+   * @return the updated replica assignment
+   */
+  def createPartitionsWithAssignment(topic: String,
+                                     existingAssignment: Map[Int, ReplicaAssignment],
+                                     newPartitionAssignment: Map[Int, ReplicaAssignment]): Map[Int, ReplicaAssignment] = {
+
+    info(s"Creating ${newPartitionAssignment.size} partitions for '$topic' with the following replica assignment: " +
+      s"$newPartitionAssignment.")
+
+    val combinedAssignment = existingAssignment ++ newPartitionAssignment
+
+    writeTopicPartitionAssignment(topic, combinedAssignment, isUpdate = true)
+
+    combinedAssignment
   }
 
   private def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],

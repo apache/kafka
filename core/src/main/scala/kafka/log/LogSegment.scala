@@ -413,7 +413,7 @@ class LogSegment private[log] (val log: FileRecords,
   override def toString: String = "LogSegment(baseOffset=" + baseOffset +
     ", size=" + size +
     ", lastModifiedTime=" + lastModified +
-    ", largestTime=" + largestTimestamp +
+    ", largestRecordTimestamp=" + largestRecordTimestamp +
     ")"
 
   /**

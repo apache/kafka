@@ -80,6 +80,7 @@ public class GarbageCollectedMemoryPoolTest {
         GarbageCollectedMemoryPool pool = new GarbageCollectedMemoryPool(1000, 10, true, null);
         ByteBuffer fellOffATruck = ByteBuffer.allocate(1);
         pool.release(fellOffATruck);
+        pool.close();
     }
 
     @Test

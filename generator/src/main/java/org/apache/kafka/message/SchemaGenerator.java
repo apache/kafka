@@ -280,6 +280,13 @@ final class SchemaGenerator {
             } else {
                 return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
             }
+        } else if (type.isRecords()) {
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (fieldFlexibleVersions.contains(version)) {
+                return "Type.COMPACT_RECORDS";
+            } else {
+                return "Type.RECORDS";
+            }
         } else if (type.isArray()) {
             if (fieldFlexibleVersions.contains(version)) {
                 headerGenerator.addImport(MessageGenerator.COMPACT_ARRAYOF_CLASS);

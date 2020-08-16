@@ -16,17 +16,10 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.StreamJoined;
-import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -40,11 +33,8 @@ import org.junit.runners.Parameterized;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
-import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
-import static org.junit.Assert.assertThrows;
 
 /**
  * Tests all available joins of Kafka Streams DSL.

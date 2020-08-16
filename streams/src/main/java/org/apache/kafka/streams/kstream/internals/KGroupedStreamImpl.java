@@ -230,9 +230,9 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     }
 
     @Override
-    public <Vout> CogroupedKStream<K, Vout> cogroup(final Aggregator<? super K, ? super V, Vout> aggregator) {
+    public <VOut> CogroupedKStream<K, VOut> cogroup(final Aggregator<? super K, ? super V, VOut> aggregator) {
         Objects.requireNonNull(aggregator, "aggregator can't be null");
-        return new CogroupedKStreamImpl<K, Vout>(name, subTopologySourceNodes, streamsGraphNode, builder)
+        return new CogroupedKStreamImpl<K, VOut>(name, subTopologySourceNodes, streamsGraphNode, builder)
             .cogroup(this, aggregator);
     }
 }

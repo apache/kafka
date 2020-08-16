@@ -591,7 +591,7 @@ public class KafkaConsumerTest {
                 return timestamps.get(tp0).timestamp == ListOffsetRequest.LATEST_TIMESTAMP &&
                         timestamps.get(tp1).timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP;
             }, listOffsetsResponse(Collections.singletonMap(tp0, 50L),
-                        Collections.singletonMap(tp1, Errors.NOT_LEADER_FOR_PARTITION)));
+                        Collections.singletonMap(tp1, Errors.NOT_LEADER_OR_FOLLOWER)));
         client.prepareResponse(
             body -> {
                 FetchRequest request = (FetchRequest) body;

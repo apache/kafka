@@ -30,7 +30,7 @@ import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
-import kafka.security.auth.{Acl, Authorizer => LegacyAuthorizer, Resource}
+import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
@@ -64,6 +64,7 @@ import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 import org.scalatest.Assertions.fail
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
@@ -580,6 +581,7 @@ object TestUtils extends Logging {
   /**
    * Create a (new) producer with a few pre-configured properties.
    */
+  @nowarn("cat=deprecation")
   def createProducer[K, V](brokerList: String,
                            acks: Int = -1,
                            maxBlockMs: Long = 60 * 1000L,
@@ -825,7 +827,7 @@ object TestUtils extends Logging {
   }
 
   /**
-    *  Wait until the given condition is true or throw an exception if the given wait time elapses.
+    * Wait until the given condition is true or throw an exception if the given wait time elapses.
     *
     * @param condition condition to check
     * @param msg error message
@@ -855,7 +857,7 @@ object TestUtils extends Logging {
     * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
     */
   def computeUntilTrue[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
-                    predicate: T => Boolean): (T, Boolean) = {
+                          predicate: T => Boolean): (T, Boolean) = {
     val startTime = System.currentTimeMillis()
     while (true) {
       val result = compute
