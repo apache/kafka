@@ -23,7 +23,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
-import kafka.utils.{Logging, ShutdownableThread}
+import kafka.utils.{Logging, QuotaUtils, ShutdownableThread}
 import org.apache.kafka.common.{Cluster, MetricName}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
@@ -372,10 +372,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * This calculates the amount of time needed to bring the metric within quota
    * assuming that no new metrics are recorded.
    *
-   * See {ClientQuotaManager.throttleTime} for the details.
+   * See {QuotaUtils.throttleTime} for the details.
    */
   protected def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
-    ClientQuotaManager.throttleTime(e, timeMs)
+    QuotaUtils.throttleTime(e, timeMs)
   }
 
   /**
