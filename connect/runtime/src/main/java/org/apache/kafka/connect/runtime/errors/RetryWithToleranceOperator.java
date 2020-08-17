@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -81,6 +82,23 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         this.errorMaxDelayInMillis = errorMaxDelayInMillis;
         this.errorToleranceType = toleranceType;
         this.time = time;
+    }
+
+    public Future<Void> executeFailed(Stage stage, Class<?> executingClass,
+                                      ConsumerRecord<byte[], byte[]> consumerRecord,
+                                      Throwable error) {
+
+        markAsFailed();
+        context.consumerRecord(consumerRecord);
+        context.currentContext(stage, executingClass);
+        context.error(error);
+        errorHandlingMetrics.recordFailure();
+        Future<Void> errantRecordFuture = context.report();
+        if (!withinToleranceLimits()) {
+            errorHandlingMetrics.recordError();
+            throw new ConnectException("Tolerance exceeded in error handler", error);
+        }
+        return errantRecordFuture;
     }
 
     /**
@@ -189,9 +207,8 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         totalFailures++;
     }
 
-    // Visible for testing
     @SuppressWarnings("fallthrough")
-    boolean withinToleranceLimits() {
+    public boolean withinToleranceLimits() {
         switch (errorToleranceType) {
             case NONE:
                 if (totalFailures > 0) return false;
@@ -269,6 +286,15 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      */
     public boolean failed() {
         return this.context.failed();
+    }
+
+    /**
+     * Returns the error encountered when processing the current stage.
+     *
+     * @return the error encountered when processing the current stage
+     */
+    public Throwable error() {
+        return this.context.error();
     }
 
     @Override

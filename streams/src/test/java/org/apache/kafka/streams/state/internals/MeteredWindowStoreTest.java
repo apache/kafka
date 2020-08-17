@@ -19,15 +19,21 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -59,6 +65,7 @@ import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.niceMock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -79,14 +86,20 @@ public class MeteredWindowStoreTest {
     private static final String THREAD_ID_TAG_KEY_FROM_0100_TO_24 = "client-id";
     private static final String THREAD_ID_TAG_KEY = "thread-id";
     private static final String STORE_NAME = "mocked-store";
+    private static final String CHANGELOG_TOPIC = "changelog-topic";
+    private static final String KEY = "key";
+    private static final Bytes KEY_BYTES = Bytes.wrap(KEY.getBytes());
+    private static final String VALUE = "value";
+    private static final byte[] VALUE_BYTES = VALUE.getBytes();
+    private static final int WINDOW_SIZE_MS = 10;
+    private static final long TIMESTAMP = 42L;
 
     private final String threadId = Thread.currentThread().getName();
     private InternalMockProcessorContext context;
-    @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = createNiceMock(WindowStore.class);
-    private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
+    private MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
-        10L, // any size
+        WINDOW_SIZE_MS, // any size
         STORE_TYPE,
         new MockTime(),
         Serdes.String(),
@@ -115,8 +128,7 @@ public class MeteredWindowStoreTest {
     @Before
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion);
-
+            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -138,10 +150,56 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
+    public void shouldPassChangelogTopicNameToStateStoreSerde() {
+        context.addChangelogForStore(STORE_NAME, CHANGELOG_TOPIC);
+        doShouldPassChangelogTopicNameToStateStoreSerde(CHANGELOG_TOPIC);
+    }
+
+    @Test
+    public void shouldPassDefaultChangelogTopicNameToStateStoreSerdeIfLoggingDisabled() {
+        final String defaultChangelogTopicName =
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), STORE_NAME);
+        doShouldPassChangelogTopicNameToStateStoreSerde(defaultChangelogTopicName);
+    }
+
+    private void doShouldPassChangelogTopicNameToStateStoreSerde(final String topic) {
+        final Serde<String> keySerde = niceMock(Serde.class);
+        final Serializer<String> keySerializer = mock(Serializer.class);
+        final Serde<String> valueSerde = niceMock(Serde.class);
+        final Deserializer<String> valueDeserializer = mock(Deserializer.class);
+        final Serializer<String> valueSerializer = mock(Serializer.class);
+        expect(keySerde.serializer()).andStubReturn(keySerializer);
+        expect(keySerializer.serialize(topic, KEY)).andStubReturn(KEY.getBytes());
+        expect(valueSerde.deserializer()).andStubReturn(valueDeserializer);
+        expect(valueDeserializer.deserialize(topic, VALUE_BYTES)).andStubReturn(VALUE);
+        expect(valueSerde.serializer()).andStubReturn(valueSerializer);
+        expect(valueSerializer.serialize(topic, VALUE)).andStubReturn(VALUE_BYTES);
+        expect(innerStoreMock.fetch(KEY_BYTES, TIMESTAMP)).andStubReturn(VALUE_BYTES);
+        replay(innerStoreMock, keySerializer, keySerde, valueDeserializer, valueSerializer, valueSerde);
+        store = new MeteredWindowStore<>(
+            innerStoreMock,
+            WINDOW_SIZE_MS,
+            STORE_TYPE,
+            new MockTime(),
+            keySerde,
+            valueSerde
+        );
+        store.init(context, store);
+
+        store.fetch(KEY, TIMESTAMP);
+        store.put(KEY, VALUE, TIMESTAMP);
+
+        verify(keySerializer, valueDeserializer, valueSerializer);
+    }
+
+    @Test
     public void testMetrics() {
         replay(innerStoreMock);
         store.init(context, store);
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        final JmxReporter reporter = new JmxReporter();
+        final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
+        reporter.contextChange(metricsContext);
+
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format(
             "kafka.streams:type=%s,%s=%s,task-id=%s,%s-state-id=%s",

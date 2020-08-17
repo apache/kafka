@@ -52,7 +52,7 @@ class FetchSessionTest {
     assertEquals(sessionIds.size, cache.size)
   }
 
-  private def dummyCreate(size: Int)() = {
+  private def dummyCreate(size: Int): FetchSession.CACHE_MAP = {
     val cacheMap = new FetchSession.CACHE_MAP(size)
     for (i <- 0 until size) {
       cacheMap.add(new CachedPartition("test", i))

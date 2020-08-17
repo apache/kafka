@@ -423,6 +423,8 @@ public interface Admin extends AutoCloseable {
      * if the authenticated user didn't have alter access to the cluster.</li>
      * <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
      * if the authenticated user didn't have alter access to the Topic.</li>
+     * <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     * if the Topic doesn't exist.</li>
      * <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
      * if the request details are invalid. e.g., a configuration key was specified more than once for a resource</li>
      * </ul>

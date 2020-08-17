@@ -217,6 +217,7 @@ public class VerifiableProducer implements AutoCloseable {
     }
 
     /** Construct a VerifiableProducer object from command-line arguments. */
+    @SuppressWarnings("deprecation")
     public static VerifiableProducer createFromArgs(ArgumentParser parser, String[] args) throws ArgumentParserException {
         Namespace res = parser.parseArgs(args);
 

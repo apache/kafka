@@ -64,14 +64,14 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     val nonReplica = servers.map(_.config.brokerId).find(!replicas.contains(_)).get
 
     // Follower
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, follower, consumerRequest)
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, follower, replicaRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, follower, consumerRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, follower, replicaRequest)
     assertResponseError(Errors.NONE, follower, debugReplicaRequest)
 
     // Non-replica
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, nonReplica, consumerRequest)
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, nonReplica, replicaRequest)
-    assertResponseError(Errors.REPLICA_NOT_AVAILABLE, nonReplica, debugReplicaRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, consumerRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, replicaRequest)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, debugReplicaRequest)
   }
 
   @Test
@@ -105,8 +105,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     // Check follower error codes
     val followerId = TestUtils.findFollowerId(topicPartition, servers)
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.empty())
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }

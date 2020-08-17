@@ -59,6 +59,14 @@ class ConsoleProducerTest {
     "--topic",
     "t3",
   )
+  val clientIdOverride: Array[String] = Array(
+    "--broker-list",
+    "localhost:1001",
+    "--topic",
+    "t3",
+    "--producer-property",
+    "client.id=producer-1"
+  )
 
   @Test
   def testValidConfigsBrokerList(): Unit = {
@@ -101,5 +109,13 @@ class ConsoleProducerTest {
     val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
     assertEquals(util.Arrays.asList("localhost:1002"),
       producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
+  }
+
+  @Test
+  def testClientIdOverride(): Unit = {
+    val config = new ConsoleProducer.ProducerConfig(clientIdOverride)
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals("producer-1",
+      producerConfig.getString(ProducerConfig.CLIENT_ID_CONFIG))
   }
 }

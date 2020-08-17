@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.io.File;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
@@ -41,7 +42,6 @@ import org.junit.runners.Parameterized;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLParameters;
-import javax.net.ssl.SSLServerSocketFactory;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -578,26 +578,6 @@ public class SslTransportLayerTest {
         server.verifyAuthenticationMetrics(1, 2);
     }
 
-    @Test
-    public void testUnsupportedCipher() throws Exception {
-        String[] cipherSuites = ((SSLServerSocketFactory) SSLServerSocketFactory.getDefault()).getSupportedCipherSuites();
-        if (cipherSuites != null && cipherSuites.length > 1) {
-            sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
-            sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
-            sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
-            sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[1]));
-
-            server = createEchoServer(SecurityProtocol.SSL);
-            createSelector(sslClientConfigs);
-
-            checkAuthentiationFailed("1", "TLSv1.1");
-            server.verifyAuthenticationMetrics(0, 1);
-
-            checkAuthentiationFailed("2", "TLSv1");
-            server.verifyAuthenticationMetrics(0, 2);
-        }
-    }
-
     /** Checks connection failed using the specified {@code tlsVersion}. */
     private void checkAuthentiationFailed(String node, String tlsVersion) throws IOException {
         sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList(tlsVersion));
@@ -627,7 +607,6 @@ public class SslTransportLayerTest {
      */
     @Test
     public void testUnsupportedCiphers() throws Exception {
-        String node = "0";
         SSLContext context = SSLContext.getInstance(tlsProtocol);
         context.init(null, null, null);
         String[] cipherSuites = context.getDefaultSSLParameters().getCipherSuites();
@@ -636,10 +615,8 @@ public class SslTransportLayerTest {
 
         sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
         createSelector(sslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
-        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
-        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
+        checkAuthentiationFailed("1", tlsProtocol);
         server.verifyAuthenticationMetrics(0, 1);
     }
 
@@ -927,6 +904,7 @@ public class SslTransportLayerTest {
             NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
             server.close();
             selector.close();
+            serverChannelBuilder.close();
         }
     }
 
@@ -1079,6 +1057,55 @@ public class SslTransportLayerTest {
         // Verify that new connections continue to work with the server with previously configured keystore after failed reconfiguration
         newClientSelector.connect("3", addr, BUFFER_SIZE, BUFFER_SIZE);
         NetworkTestUtils.checkClientConnection(newClientSelector, "3", 100, 10);
+    }
+
+    @Test
+    public void testServerKeystoreDynamicUpdateWithNewSubjectAltName() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
+            false, securityProtocol, config, null, null, time, new LogContext());
+        server = new NioEchoServer(listenerName, securityProtocol, config,
+            "localhost", serverChannelBuilder, null, time);
+        server.start();
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+
+        Selector selector = createSelector(sslClientConfigs);
+        String node1 = "1";
+        selector.connect(node1, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node1, 100, 10);
+        selector.close();
+
+        TestSslUtils.CertificateBuilder certBuilder = new TestSslUtils.CertificateBuilder().sanDnsNames("localhost", "*.example.com");
+        File truststoreFile = new File((String) sslClientConfigs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
+        Map<String, Object> newConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, truststoreFile, "server", "server", certBuilder);
+        Map<String, Object> newKeystoreConfigs = new HashMap<>();
+        for (String propName : CertStores.KEYSTORE_PROPS) {
+            newKeystoreConfigs.put(propName, newConfigs.get(propName));
+        }
+        ListenerReconfigurable reconfigurableBuilder = (ListenerReconfigurable) serverChannelBuilder;
+        reconfigurableBuilder.validateReconfiguration(newKeystoreConfigs);
+        reconfigurableBuilder.reconfigure(newKeystoreConfigs);
+
+        for (String propName : CertStores.TRUSTSTORE_PROPS) {
+            sslClientConfigs.put(propName, newConfigs.get(propName));
+        }
+        selector = createSelector(sslClientConfigs);
+        String node2 = "2";
+        selector.connect(node2, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node2, 100, 10);
+
+        TestSslUtils.CertificateBuilder invalidBuilder = new TestSslUtils.CertificateBuilder().sanDnsNames("localhost");
+        Map<String, Object> invalidConfig = TestSslUtils.createSslConfig(false, false, Mode.SERVER, truststoreFile, "server", "server", invalidBuilder);
+        Map<String, Object> invalidKeystoreConfigs = new HashMap<>();
+        for (String propName : CertStores.KEYSTORE_PROPS) {
+            invalidKeystoreConfigs.put(propName, invalidConfig.get(propName));
+        }
+        verifyInvalidReconfigure(reconfigurableBuilder, invalidKeystoreConfigs, "keystore without existing SubjectAltName");
+        String node3 = "3";
+        selector.connect(node3, addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, node3, 100, 10);
     }
 
     /**
@@ -1250,7 +1277,7 @@ public class SslTransportLayerTest {
         void run() throws IOException;
     }
 
-    private static class TestSslChannelBuilder extends SslChannelBuilder {
+    static class TestSslChannelBuilder extends SslChannelBuilder {
 
         private Integer netReadBufSizeOverride;
         private Integer netWriteBufSizeOverride;
@@ -1361,7 +1388,7 @@ public class SslTransportLayerTest {
             }
         }
 
-        private static class ResizeableBufferSize {
+        static class ResizeableBufferSize {
             private Integer bufSizeOverride;
             ResizeableBufferSize(Integer bufSizeOverride) {
                 this.bufSizeOverride = bufSizeOverride;

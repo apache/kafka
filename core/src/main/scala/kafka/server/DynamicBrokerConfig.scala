@@ -653,9 +653,12 @@ class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Brok
     val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
     newConfig.valuesFromThisConfig.forEach { (k, v) =>
-      if (DynamicLogConfig.ReconfigurableConfigs.contains(k) && v != null) {
+      if (DynamicLogConfig.ReconfigurableConfigs.contains(k)) {
         DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
-          newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
+          if (v == null)
+             newBrokerDefaults.remove(configName)
+          else
+            newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
         }
       }
     }
@@ -793,6 +796,7 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconf
       currentReporters += reporter.getClass.getName -> reporter
     }
     server.notifyClusterListeners(reporters.asScala)
+    server.notifyMetricsReporters(reporters.asScala)
   }
 
   private def removeReporter(className: String): Unit = {

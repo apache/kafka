@@ -35,8 +35,8 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
-import scala.jdk.CollectionConverters._
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 /**
  * Unit tests for the log cleaning logic
@@ -128,7 +128,7 @@ class LogCleanerTest {
       override def run(): Unit = {
         deleteStartLatch.await(5000, TimeUnit.MILLISECONDS)
         log.updateHighWatermark(log.activeSegment.baseOffset)
-        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset)
+        log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset, LeaderOffsetIncremented)
         log.updateHighWatermark(log.activeSegment.baseOffset)
         log.deleteOldSegments()
         deleteCompleteLatch.countDown()
@@ -182,7 +182,7 @@ class LogCleanerTest {
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
 
     assertTrue("Cleaned segment file should be trimmed to its real size.",
-      log.logSegments.iterator.next.log.channel().size() < originalMaxFileSize)
+      log.logSegments.iterator.next().log.channel.size < originalMaxFileSize)
   }
 
   @Test
@@ -1602,6 +1602,28 @@ class LogCleanerTest {
       assertEquals("Cleaning point should pass offset gap in multiple segments", log.activeSegment.baseOffset, nextDirtyOffset)
     }
   }
+
+  @Test
+  def testMaxCleanTimeSecs(): Unit = {
+    val logCleaner = new LogCleaner(new CleanerConfig,
+      logDirs = Array(TestUtils.tempDir()),
+      logs = new Pool[TopicPartition, Log](),
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = time)
+
+    def checkGauge(name: String): Unit = {
+      val gauge = logCleaner.newGauge(name, () => 999)
+      // if there is no cleaners, 0 is default value
+      assertEquals(0, gauge.value())
+    }
+
+    try {
+      checkGauge("max-buffer-utilization-percent")
+      checkGauge("max-clean-time-secs")
+      checkGauge("max-compaction-delay-secs")
+    } finally logCleaner.shutdown()
+  }
+
 
   private def writeToLog(log: Log, keysAndValues: Iterable[(Int, Int)], offsetSeq: Iterable[Long]): Iterable[Long] = {
     for(((key, value), offset) <- keysAndValues.zip(offsetSeq))

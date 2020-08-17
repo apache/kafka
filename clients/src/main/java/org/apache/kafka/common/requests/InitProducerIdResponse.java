@@ -26,11 +26,14 @@ import java.util.Map;
 
 /**
  * Possible error codes:
- * - {@link Errors#NOT_COORDINATOR}
- * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
- * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
- * - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
- * - {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
+ *
+ *   - {@link Errors#NOT_COORDINATOR}
+ *   - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
+ *   - {@link Errors#CLUSTER_AUTHORIZATION_FAILED}
+ *   - {@link Errors#INVALID_PRODUCER_EPOCH} // for version <=3
+ *   - {@link Errors#PRODUCER_FENCED}
  */
 public class InitProducerIdResponse extends AbstractResponse {
     public final InitProducerIdResponseData data;

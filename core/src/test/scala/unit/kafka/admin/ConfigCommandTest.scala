@@ -472,6 +472,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     EasyMock.reset(alterResult, describeResult)
   }
 
+
   @Test
   def shouldAddClientConfig(): Unit = {
     testShouldAddClientConfig(Some("test-user-1"), Some("test-client-1"))
@@ -482,6 +483,27 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     testShouldAddClientConfig(Some(null), None)
     testShouldAddClientConfig(None, Some("test-client-3"))
     testShouldAddClientConfig(None, Some(null))
+  }
+
+  @Test
+  def shouldNotAlterNonQuotaClientConfigUsingBootstrapServer(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
+
+    def verifyCommand(entityType: String, alterOpts: String*): Unit = {
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+        "--entity-type", entityType, "--entity-name", "admin",
+        "--alter") ++ alterOpts)
+      val e = intercept[IllegalArgumentException] {
+        ConfigCommand.alterConfig(mockAdminClient, opts)
+      }
+      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("some_config"))
+    }
+
+    verifyCommand("users", "--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10")
+    verifyCommand("clients", "--add-config", "some_config=10")
+    verifyCommand("users", "--delete-config", "consumer_byte_rate=20000,some_config=10")
+    verifyCommand("clients", "--delete-config", "some_config=10")
   }
 
   @Test
@@ -629,12 +651,6 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldAddBrokerDynamicConfig(): Unit = {
-    val node = new Node(1, "localhost", 9092)
-    verifyAlterBrokerConfig(node, "1", List("--entity-name", "1"))
-  }
-
-  @Test
   def shouldAddBrokerLoggerConfig(): Unit = {
     val node = new Node(1, "localhost", 9092)
     verifyAlterBrokerLoggerConfig(node, "1", "1", List(
@@ -646,7 +662,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
-    val optsList = List("--zookeeper", "localhost:9092",
+    val optsList = List("--zookeeper", zkConnect,
       "--entity-type", ConfigType.Broker,
       "--describe"
     )
@@ -736,6 +752,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     verifyAlterBrokerConfig(node, "", List("--entity-default"))
   }
 
+  @Test
+  def shouldAddBrokerDynamicConfig(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    verifyAlterBrokerConfig(node, "1", List("--entity-name", "1"))
+  }
+
   def verifyAlterBrokerConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
       "--entity-type", "brokers",
@@ -780,6 +802,40 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     ConfigCommand.alterConfig(mockAdminClient, alterOpts)
     assertEquals(Map("message.max.bytes" -> "10", "num.io.threads" -> "5"), brokerConfigs.toMap)
     EasyMock.reset(alterResult, describeResult)
+  }
+
+  @Test
+  def shouldDescribeConfigBrokerWithoutEntityName(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-type", "brokers",
+      "--describe"))
+
+    val BrokerDefaultEntityName = ""
+    val resourceCustom = new ConfigResource(ConfigResource.Type.BROKER, "1")
+    val resourceDefault = new ConfigResource(ConfigResource.Type.BROKER, BrokerDefaultEntityName)
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    val emptyConfig = new Config(util.Collections.emptyList[ConfigEntry])
+    val resultMap = Map(resourceCustom -> emptyConfig, resourceDefault -> emptyConfig).asJava
+    future.complete(resultMap)
+    val describeResult: DescribeConfigsResult = EasyMock.createNiceMock(classOf[DescribeConfigsResult])
+    // make sure it will be called 2 times: (1) for broker "1" (2) for default broker ""
+    EasyMock.expect(describeResult.all()).andReturn(future).times(2)
+
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertTrue("Synonyms not requested", options.includeSynonyms())
+        val resource = resources.iterator.next
+        assertEquals(ConfigResource.Type.BROKER, resource.`type`)
+        assertTrue(resourceCustom.name == resource.name || resourceDefault.name == resource.name)
+        assertEquals(1, resources.size)
+        describeResult
+      }
+    }
+    EasyMock.replay(describeResult)
+    ConfigCommand.describeConfig(mockAdminClient, describeOpts)
+    EasyMock.verify(describeResult)
+    EasyMock.reset(describeResult)
   }
 
   def verifyAlterBrokerLoggerConfig(node: Node, resourceName: String, entityName: String,

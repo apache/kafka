@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
@@ -46,18 +47,16 @@ class CachingWindowStore
     private static final Logger LOG = LoggerFactory.getLogger(CachingWindowStore.class);
 
     private final long windowSize;
+    private final SegmentedCacheFunction cacheFunction;
     private final SegmentedBytesStore.KeySchema keySchema = new WindowKeySchema();
 
-    private String name;
-    private ThreadCache cache;
+    private String cacheName;
     private boolean sendOldValues;
     private InternalProcessorContext context;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
     private CacheFlushListener<byte[], byte[]> flushListener;
 
-    private long maxObservedTimestamp;
-
-    private final SegmentedCacheFunction cacheFunction;
+    private AtomicLong maxObservedTimestamp;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
                        final long windowSize,
@@ -65,11 +64,16 @@ class CachingWindowStore
         super(underlying);
         this.windowSize = windowSize;
         this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
-        this.maxObservedTimestamp = RecordQueue.UNKNOWN;
+        this.maxObservedTimestamp = new AtomicLong(RecordQueue.UNKNOWN);
     }
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
+        if (!(context instanceof InternalProcessorContext)) {
+            throw new IllegalArgumentException(
+                "Caching requires internal features of KafkaStreams and must be disabled for unit tests."
+            );
+        }
         initInternal((InternalProcessorContext) context);
         super.init(context, root);
     }
@@ -83,10 +87,9 @@ class CachingWindowStore
             topic,
             Serdes.Bytes(),
             Serdes.ByteArray());
-        name = context.taskId() + "-" + name();
-        cache = this.context.getCache();
+        cacheName = context.taskId() + "-" + name();
 
-        cache.addDirtyEntryFlushListener(name, entries -> {
+        context.registerCacheFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, context);
             }
@@ -161,9 +164,9 @@ class CachingWindowStore
                 context.timestamp(),
                 context.partition(),
                 context.topic());
-        cache.put(name, cacheFunction.cacheKey(keyBytes), entry);
+        context.cache().put(cacheName, cacheFunction.cacheKey(keyBytes), entry);
 
-        maxObservedTimestamp = Math.max(keySchema.segmentTimestamp(keyBytes), maxObservedTimestamp);
+        maxObservedTimestamp.set(Math.max(keySchema.segmentTimestamp(keyBytes), maxObservedTimestamp.get()));
     }
 
     @Override
@@ -172,10 +175,10 @@ class CachingWindowStore
         validateStoreOpen();
         final Bytes bytesKey = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
         final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
-        if (cache == null) {
+        if (context.cache() == null) {
             return wrapped().fetch(key, timestamp);
         }
-        final LRUCacheEntry entry = cache.get(name, cacheKey);
+        final LRUCacheEntry entry = context.cache().get(cacheName, cacheKey);
         if (entry == null) {
             return wrapped().fetch(key, timestamp);
         } else {
@@ -193,13 +196,13 @@ class CachingWindowStore
         validateStoreOpen();
 
         final WindowStoreIterator<byte[]> underlyingIterator = wrapped().fetch(key, timeFrom, timeTo);
-        if (cache == null) {
+        if (context.cache() == null) {
             return underlyingIterator;
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(key, timeFrom, timeTo) :
-            cache.range(name,
+            context.cache().range(cacheName,
                         cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
                         cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
             );
@@ -231,13 +234,13 @@ class CachingWindowStore
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator =
             wrapped().fetch(from, to, timeFrom, timeTo);
-        if (cache == null) {
+        if (context.cache() == null) {
             return underlyingIterator;
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(from, to, timeFrom, timeTo) :
-            cache.range(name,
+            context.cache().range(cacheName,
                         cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
                         cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
             );
@@ -261,7 +264,7 @@ class CachingWindowStore
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetchAll(timeFrom, timeTo);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().all(cacheName);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
@@ -280,7 +283,7 @@ class CachingWindowStore
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]>  underlyingIterator = wrapped().all();
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().all(cacheName);
 
         return new MergedSortedCacheWindowStoreKeyValueIterator(
             cacheIterator,
@@ -293,15 +296,20 @@ class CachingWindowStore
 
     @Override
     public synchronized void flush() {
-        cache.flush(name);
+        context.cache().flush(cacheName);
         wrapped().flush();
+    }
+
+    @Override
+    public void flushCache() {
+        context.cache().flush(cacheName);
     }
 
     @Override
     public synchronized void close() {
         final LinkedList<RuntimeException> suppressed = executeAll(
-            () -> cache.flush(name),
-            () -> cache.close(name),
+            () -> context.cache().flush(cacheName),
+            () -> context.cache().close(cacheName),
             wrapped()::close
         );
         if (!suppressed.isEmpty()) {
@@ -340,14 +348,14 @@ class CachingWindowStore
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.timeTo = timeTo;
-            this.lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp));
+            this.lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
 
             this.segmentInterval = cacheFunction.getSegmentInterval();
             this.currentSegmentId = cacheFunction.segmentId(timeFrom);
 
             setCacheKeyRange(timeFrom, currentSegmentLastTime());
 
-            this.current = cache.range(name, cacheKeyFrom, cacheKeyTo);
+            this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
         }
 
         @Override
@@ -408,7 +416,7 @@ class CachingWindowStore
 
         private void getNextSegmentIterator() {
             ++currentSegmentId;
-            lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp));
+            lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
 
             if (currentSegmentId > lastSegmentId) {
                 current = null;
@@ -418,7 +426,7 @@ class CachingWindowStore
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
 
             current.close();
-            current = cache.range(name, cacheKeyFrom, cacheKeyTo);
+            current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
         }
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {

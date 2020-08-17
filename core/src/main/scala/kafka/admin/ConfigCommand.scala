@@ -23,6 +23,7 @@ import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.common.Config
 import kafka.log.LogConfig
+import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
 import kafka.utils.Implicits._
@@ -61,6 +62,7 @@ import scala.collection._
  */
 object ConfigCommand extends Config {
 
+  val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
   val BrokerSupportedConfigTypes = ConfigType.all :+ BrokerLoggerConfigType
   val ZkSupportedConfigTypes = ConfigType.all
@@ -363,6 +365,14 @@ object ConfigCommand extends Config {
         adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case ConfigType.User | ConfigType.Client =>
+        val nonQuotaConfigsToAdd = configsToBeAdded.keys.filterNot(QuotaConfigs.isQuotaConfig)
+        if (nonQuotaConfigsToAdd.nonEmpty)
+          throw new IllegalArgumentException(s"Only quota configs can be added for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $nonQuotaConfigsToAdd")
+        val nonQuotaConfigsToDelete = configsToBeDeleted.filterNot(QuotaConfigs.isQuotaConfig)
+        if (nonQuotaConfigsToDelete.nonEmpty)
+          throw new IllegalArgumentException(s"Only quota configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $nonQuotaConfigsToDelete")
+
+
         val oldConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)
 
         val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
@@ -424,12 +434,12 @@ object ConfigCommand extends Config {
         case ConfigType.Topic =>
           adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get().asScala.toSeq
         case ConfigType.Broker | BrokerLoggerConfigType =>
-          adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ ConfigEntityName.Default
+          adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
       })
 
     entities.foreach { entity =>
       entity match {
-        case "" =>
+        case BrokerDefaultEntityName =>
           println(s"Default configs for $entityType in the cluster are:")
         case _ =>
           val configSourceStr = if (describeAll) "All" else "Dynamic"
@@ -454,7 +464,7 @@ object ConfigCommand extends Config {
           Topic.validate(entityName)
         (ConfigResource.Type.TOPIC, Some(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG))
       case ConfigType.Broker => entityName match {
-        case "" =>
+        case BrokerDefaultEntityName =>
           (ConfigResource.Type.BROKER, Some(ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG))
         case _ =>
           validateBrokerId()
@@ -626,7 +636,7 @@ object ConfigCommand extends Config {
       }
     }
 
-    val entities = entityTypes.map(t => Entity(t, if (sortedNames.hasNext) Some(sanitizeName(t, sortedNames.next)) else None))
+    val entities = entityTypes.map(t => Entity(t, if (sortedNames.hasNext) Some(sanitizeName(t, sortedNames.next())) else None))
     ConfigEntity(entities.head, if (entities.size > 1) Some(entities(1)) else None)
   }
 
@@ -710,12 +720,12 @@ object ConfigCommand extends Config {
       (userDefaults, ConfigType.User),
       (brokerDefaults, ConfigType.Broker))
 
-    private[admin] def entityTypes(): List[String] = {
+    private[admin] def entityTypes: List[String] = {
       options.valuesOf(entityType).asScala.toList ++
         (entityFlags ++ entityDefaultsFlags).filter(entity => options.has(entity._1)).map(_._2)
     }
 
-    private[admin] def entityNames(): List[String] = {
+    private[admin] def entityNames: List[String] = {
       val namesIterator = options.valuesOf(entityName).iterator
       options.specs.asScala
         .filter(spec => spec.options.contains("entity-name") || spec.options.contains("entity-default"))

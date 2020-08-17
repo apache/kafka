@@ -23,7 +23,11 @@ import java.util.HashMap;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
-import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
 
 /**
@@ -33,38 +37,82 @@ import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
  */
 @InterfaceStability.Evolving
 public class DescribeLogDirsResult {
-    private final Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> futures;
+    private final Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> futures;
 
-    DescribeLogDirsResult(Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> futures) {
+    DescribeLogDirsResult(Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> futures) {
         this.futures = futures;
     }
 
     /**
-     * Return a map from brokerId to future which can be used to check the information of partitions on each individual broker
+     * Return a map from brokerId to future which can be used to check the information of partitions on each individual broker.
+     * @deprecated Deprecated Since Kafka 2.7. Use {@link #descriptions()}.
      */
-    public Map<Integer, KafkaFuture<Map<String, LogDirInfo>>> values() {
+    @Deprecated
+    @SuppressWarnings("deprecation")
+    public Map<Integer, KafkaFuture<Map<String, DescribeLogDirsResponse.LogDirInfo>>> values() {
+        return descriptions().entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> entry.getValue().thenApply(map -> convertMapValues(map))));
+    }
+
+    @SuppressWarnings("deprecation")
+    private Map<String, DescribeLogDirsResponse.LogDirInfo> convertMapValues(Map<String, LogDirDescription> map) {
+        Stream<Map.Entry<String, LogDirDescription>> stream = map.entrySet().stream();
+        return stream.collect(Collectors.toMap(
+            Map.Entry::getKey,
+            infoEntry -> {
+                LogDirDescription logDir = infoEntry.getValue();
+                return new DescribeLogDirsResponse.LogDirInfo(logDir.error() == null ? Errors.NONE : Errors.forException(logDir.error()),
+                    logDir.replicaInfos().entrySet().stream().collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        replicaEntry -> new DescribeLogDirsResponse.ReplicaInfo(
+                            replicaEntry.getValue().size(),
+                            replicaEntry.getValue().offsetLag(),
+                            replicaEntry.getValue().isFuture())
+                )));
+            }));
+    }
+
+    /**
+     * Return a map from brokerId to future which can be used to check the information of partitions on each individual broker.
+     * The result of the future is a map from broker log directory path to a description of that log directory.
+     */
+    public Map<Integer, KafkaFuture<Map<String, LogDirDescription>>> descriptions() {
         return futures;
     }
 
     /**
      * Return a future which succeeds only if all the brokers have responded without error
+     * @deprecated Deprecated Since Kafka 2.7. Use {@link #allDescriptions()}.
      */
-    public KafkaFuture<Map<Integer, Map<String, LogDirInfo>>> all() {
+    @Deprecated
+    @SuppressWarnings("deprecation")
+    public KafkaFuture<Map<Integer, Map<String, DescribeLogDirsResponse.LogDirInfo>>> all() {
+        return allDescriptions().thenApply(map -> map.entrySet().stream().collect(Collectors.toMap(
+            entry -> entry.getKey(),
+            entry -> convertMapValues(entry.getValue())
+        )));
+    }
+
+    /**
+     * Return a future which succeeds only if all the brokers have responded without error.
+     * The result of the future is a map from brokerId to a map from broker log directory path
+     * to a description of that log directory.
+     */
+    public KafkaFuture<Map<Integer, Map<String, LogDirDescription>>> allDescriptions() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.BaseFunction<Void, Map<Integer, Map<String, LogDirInfo>>>() {
-                @Override
-                public Map<Integer, Map<String, LogDirInfo>> apply(Void v) {
-                    Map<Integer, Map<String, LogDirInfo>> descriptions = new HashMap<>(futures.size());
-                    for (Map.Entry<Integer, KafkaFuture<Map<String, LogDirInfo>>> entry : futures.entrySet()) {
-                        try {
-                            descriptions.put(entry.getKey(), entry.getValue().get());
-                        } catch (InterruptedException | ExecutionException e) {
-                            // This should be unreachable, because allOf ensured that all the futures completed successfully.
-                            throw new RuntimeException(e);
-                        }
+            thenApply(v -> {
+                Map<Integer, Map<String, LogDirDescription>> descriptions = new HashMap<>(futures.size());
+                for (Map.Entry<Integer, KafkaFuture<Map<String, LogDirDescription>>> entry : futures.entrySet()) {
+                    try {
+                        descriptions.put(entry.getKey(), entry.getValue().get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        // This should be unreachable, because allOf ensured that all the futures completed successfully.
+                        throw new RuntimeException(e);
                     }
-                    return descriptions;
                 }
+                return descriptions;
             });
     }
 }

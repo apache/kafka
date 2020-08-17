@@ -265,6 +265,7 @@ public class StreamsBuilderTest {
                  processorSupplier.theCapturedProcessor().processed);
     }
 
+    @Deprecated
     @Test
     public void shouldProcessViaThroughTopic() {
         final KStream<String, String> source = builder.stream("topic-source");
@@ -285,7 +286,28 @@ public class StreamsBuilderTest {
         assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), sourceProcessorSupplier.theCapturedProcessor().processed);
         assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), throughProcessorSupplier.theCapturedProcessor().processed);
     }
-    
+
+    @Test
+    public void shouldProcessViaRepartitionTopic() {
+        final KStream<String, String> source = builder.stream("topic-source");
+        final KStream<String, String> through = source.repartition();
+
+        final MockProcessorSupplier<String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
+        source.process(sourceProcessorSupplier);
+
+        final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
+        through.process(throughProcessorSupplier);
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic("topic-source", new StringSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            inputTopic.pipeInput("A", "aa");
+        }
+
+        assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), sourceProcessorSupplier.theCapturedProcessor().processed);
+        assertEquals(Collections.singletonList(new KeyValueTimestamp<>("A", "aa", 0)), throughProcessorSupplier.theCapturedProcessor().processed);
+    }
+
     @Test
     public void shouldMergeStreams() {
         final String topic1 = "topic-1";
@@ -375,7 +397,7 @@ public class StreamsBuilderTest {
         final String topic = "topic";
         builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store"));
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final Topology topology = builder.build(props);
 
         final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
@@ -829,7 +851,7 @@ public class StreamsBuilderTest {
     }
 
     private static void assertNamesForOperation(final ProcessorTopology topology, final String... expected) {
-        final List<ProcessorNode<?, ?>> processors = topology.processors();
+        final List<ProcessorNode<?, ?, ?, ?>> processors = topology.processors();
         assertEquals("Invalid number of expected processors", expected.length, processors.size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processors.get(i).name());

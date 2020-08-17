@@ -30,7 +30,7 @@ import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
-import kafka.security.auth.{Acl, Authorizer => LegacyAuthorizer, Resource}
+import kafka.security.auth.{Acl, Resource, Authorizer => LegacyAuthorizer}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import com.yammer.metrics.core.Meter
@@ -64,6 +64,7 @@ import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 import org.scalatest.Assertions.fail
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, mutable}
@@ -467,14 +468,14 @@ object TestUtils extends Logging {
     var length = 0
     while(expected.hasNext && actual.hasNext) {
       length += 1
-      assertEquals(expected.next, actual.next)
+      assertEquals(expected.next(), actual.next())
     }
 
     // check if the expected iterator is longer
     if (expected.hasNext) {
       var length1 = length
       while (expected.hasNext) {
-        expected.next
+        expected.next()
         length1 += 1
       }
       assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true)
@@ -484,7 +485,7 @@ object TestUtils extends Logging {
     if (actual.hasNext) {
       var length2 = length
       while (actual.hasNext) {
-        actual.next
+        actual.next()
         length2 += 1
       }
       assertFalse("Iterators have uneven length-- second has more: "+length2 + " > " + length, true)
@@ -498,8 +499,8 @@ object TestUtils extends Logging {
   def checkLength[T](s1: Iterator[T], expectedLength:Int): Unit = {
     var n = 0
     while (s1.hasNext) {
-      n+=1
-      s1.next
+      n += 1
+      s1.next()
     }
     assertEquals(expectedLength, n)
   }
@@ -524,7 +525,7 @@ object TestUtils extends Logging {
         while (true) {
           if (cur == null) {
             if (topIterator.hasNext)
-              cur = topIterator.next
+              cur = topIterator.next()
             else
               return false
           }
@@ -536,7 +537,7 @@ object TestUtils extends Logging {
         throw new RuntimeException("should not reach here")
       }
 
-      def next() : T = cur.next
+      def next() : T = cur.next()
     }
   }
 
@@ -580,6 +581,7 @@ object TestUtils extends Logging {
   /**
    * Create a (new) producer with a few pre-configured properties.
    */
+  @nowarn("cat=deprecation")
   def createProducer[K, V](brokerList: String,
                            acks: Int = -1,
                            maxBlockMs: Long = 60 * 1000L,
@@ -825,7 +827,7 @@ object TestUtils extends Logging {
   }
 
   /**
-    *  Wait until the given condition is true or throw an exception if the given wait time elapses.
+    * Wait until the given condition is true or throw an exception if the given wait time elapses.
     *
     * @param condition condition to check
     * @param msg error message
@@ -855,7 +857,7 @@ object TestUtils extends Logging {
     * This method is useful in cases where `waitUntilTrue` makes it awkward to provide good error messages.
     */
   def computeUntilTrue[T](compute: => T, waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L)(
-                    predicate: T => Boolean): (T, Boolean) = {
+                          predicate: T => Boolean): (T, Boolean) = {
     val startTime = System.currentTimeMillis()
     while (true) {
       val result = compute
@@ -1622,11 +1624,8 @@ object TestUtils extends Logging {
   }
 
   def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
-    Json.legacyEncodeAsString(
-      Map(
-        "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))
-      )
-    )
+    Json.encodeAsString(Map("partitions" ->
+      partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava).asJava)
   }
 
   def resource[R <: AutoCloseable, A](resource: R)(func: R => A): A = {

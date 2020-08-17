@@ -678,9 +678,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, totalRecords, tp)
     consumer.assign(List(tp).asJava)
 
-    // poll should fail because there is no offset reset strategy set
+    // poll should fail because there is no offset reset strategy set.
+    // we fail only when resetting positions after coordinator is known, so using a long timeout.
     intercept[NoOffsetForPartitionException] {
-      consumer.poll(Duration.ofMillis(50))
+      consumer.poll(Duration.ofMillis(15000))
     }
 
     // seek to out of range position
@@ -800,7 +801,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, partitions.toSet)
 
     val producer = createProducer()
-    val producerRecords = partitions.flatMap(sendRecords(producer, partitionCount, _))
+    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = 15, _))
     val consumerRecords = consumeRecords(consumer, producerRecords.size)
 
     val expected = producerRecords.map { record =>
@@ -1601,7 +1602,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                   "",
                                   "user", "",
                                   "client-id", clientId)
-        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+        assertNull("Metric should not have been created " + metricName, broker.metrics.metric(metricName))
     }
     servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
     servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
@@ -1615,9 +1616,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     def assertNoExemptRequestMetric(broker: KafkaServer): Unit = {
         val metricName = broker.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
-        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+        assertNull("Metric should not have been created " + metricName, broker.metrics.metric(metricName))
     }
-    servers.foreach(assertNoExemptRequestMetric(_))
+    servers.foreach(assertNoExemptRequestMetric)
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {

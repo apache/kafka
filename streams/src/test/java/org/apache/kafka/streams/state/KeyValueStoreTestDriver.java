@@ -249,7 +249,7 @@ public class KeyValueStoreTestDriver<K, V> {
             final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override
-            public ThreadCache getCache() {
+            public ThreadCache cache() {
                 return cache;
             }
 

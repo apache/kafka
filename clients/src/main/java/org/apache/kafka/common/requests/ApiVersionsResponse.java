@@ -16,9 +16,17 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.feature.Features;
+import org.apache.kafka.common.feature.FinalizedVersionRange;
+import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKey;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKeyCollection;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKeyCollection;
+
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
@@ -36,8 +44,15 @@ import java.util.Map;
  */
 public class ApiVersionsResponse extends AbstractResponse {
 
+    public static final int UNKNOWN_FINALIZED_FEATURES_EPOCH = -1;
+
     public static final ApiVersionsResponse DEFAULT_API_VERSIONS_RESPONSE =
-        createApiVersionsResponse(DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
+        createApiVersionsResponse(
+            DEFAULT_THROTTLE_TIME,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            Features.emptySupportedFeatures(),
+            Features.emptyFinalizedFeatures(),
+            UNKNOWN_FINALIZED_FEATURES_EPOCH);
 
     public final ApiVersionsResponseData data;
 
@@ -113,14 +128,45 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
     }
 
-    public static ApiVersionsResponse apiVersionsResponse(int throttleTimeMs, byte maxMagic) {
+    public static ApiVersionsResponse apiVersionsResponse(
+        int throttleTimeMs,
+        byte maxMagic,
+        Features<SupportedVersionRange> latestSupportedFeatures) {
+        return apiVersionsResponse(
+            throttleTimeMs, maxMagic, latestSupportedFeatures, Features.emptyFinalizedFeatures(), UNKNOWN_FINALIZED_FEATURES_EPOCH);
+    }
+
+    public static ApiVersionsResponse apiVersionsResponse(
+        int throttleTimeMs,
+        byte maxMagic,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Features<FinalizedVersionRange> finalizedFeatures,
+        int finalizedFeaturesEpoch) {
         if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == DEFAULT_THROTTLE_TIME) {
             return DEFAULT_API_VERSIONS_RESPONSE;
         }
-        return createApiVersionsResponse(throttleTimeMs, maxMagic);
+        return createApiVersionsResponse(
+            throttleTimeMs, maxMagic, latestSupportedFeatures, finalizedFeatures, finalizedFeaturesEpoch);
     }
 
-    public static ApiVersionsResponse createApiVersionsResponse(int throttleTimeMs, final byte minMagic) {
+    public static ApiVersionsResponse createApiVersionsResponse(
+        final int throttleTimeMs,
+        final byte minMagic) {
+        return createApiVersionsResponse(
+            throttleTimeMs,
+            minMagic,
+            Features.emptySupportedFeatures(),
+            Features.emptyFinalizedFeatures(),
+            UNKNOWN_FINALIZED_FEATURES_EPOCH);
+    }
+
+    public static ApiVersionsResponse createApiVersionsResponse(
+        final int throttleTimeMs,
+        final byte minMagic,
+        final Features<SupportedVersionRange> latestSupportedFeatures,
+        final Features<FinalizedVersionRange> finalizedFeatures,
+        final int finalizedFeaturesEpoch
+    ) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
@@ -135,7 +181,38 @@ public class ApiVersionsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
         data.setErrorCode(Errors.NONE.code());
         data.setApiKeys(apiKeys);
+        data.setSupportedFeatures(createSupportedFeatureKeys(latestSupportedFeatures));
+        data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures));
+        data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
 
         return new ApiVersionsResponse(data);
+    }
+
+    private static SupportedFeatureKeyCollection createSupportedFeatureKeys(
+        Features<SupportedVersionRange> latestSupportedFeatures) {
+        SupportedFeatureKeyCollection converted = new SupportedFeatureKeyCollection();
+        for (Map.Entry<String, SupportedVersionRange> feature : latestSupportedFeatures.features().entrySet()) {
+            SupportedFeatureKey key = new SupportedFeatureKey();
+            key.setName(feature.getKey());
+            key.setMinVersion(feature.getValue().min());
+            key.setMaxVersion(feature.getValue().max());
+            converted.add(key);
+        }
+
+        return converted;
+    }
+
+    private static FinalizedFeatureKeyCollection createFinalizedFeatureKeys(
+        Features<FinalizedVersionRange> finalizedFeatures) {
+        FinalizedFeatureKeyCollection converted = new FinalizedFeatureKeyCollection();
+        for (Map.Entry<String, FinalizedVersionRange> feature : finalizedFeatures.features().entrySet()) {
+            FinalizedFeatureKey key = new FinalizedFeatureKey();
+            key.setName(feature.getKey());
+            key.setMinVersionLevel(feature.getValue().min());
+            key.setMaxVersionLevel(feature.getValue().max());
+            converted.add(key);
+        }
+
+        return converted;
     }
 }
