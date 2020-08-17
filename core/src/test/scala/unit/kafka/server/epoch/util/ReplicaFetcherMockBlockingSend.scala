@@ -28,7 +28,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, EpochEndOffset, FetchResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
-import org.apache.kafka.common.utils.{SystemTime, Time}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
 
 /**
@@ -44,7 +44,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
                                      time: Time)
   extends BlockingSend {
 
-  private val client = new MockClient(new SystemTime, new MockMetadataUpdater {
+  private val client = new MockClient(Time.SYSTEM, new MockMetadataUpdater {
     override def fetchNodes(): util.List[Node] = Collections.emptyList()
     override def isUpdateNeeded: Boolean = false
     override def update(time: Time, update: MockClient.MetadataUpdate): Unit = {}

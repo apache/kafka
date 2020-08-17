@@ -241,10 +241,10 @@ public class ReplicaFetcherThreadBenchmark {
                     3,
                     new BrokerEndPoint(3, "host", 3000),
                     config,
+                    Time.SYSTEM,
                     new FailedPartitions(),
                     replicaManager,
                     new Metrics(),
-                    Time.SYSTEM,
                     new ReplicaQuota() {
                         @Override
                         public boolean isQuotaExceeded() {

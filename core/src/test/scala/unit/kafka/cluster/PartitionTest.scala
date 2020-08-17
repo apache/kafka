@@ -18,7 +18,7 @@ package kafka.cluster
 
 import java.nio.ByteBuffer
 import java.util.{Optional, Properties}
-import java.util.concurrent.{CountDownLatch, Executors, Semaphore, TimeUnit, TimeoutException}
+import java.util.concurrent.{CountDownLatch, Executors, Semaphore, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.yammer.metrics.core.Metric
@@ -34,9 +34,9 @@ import org.apache.kafka.common.errors.{ApiException, NotLeaderOrFollowerExceptio
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
+import org.apache.kafka.common.utils.Time
 import org.junit.Test
 import org.junit.Assert._
 import org.mockito.Mockito._
@@ -1539,7 +1539,7 @@ class PartitionTest extends AbstractPartitionTest {
     val topicPartition = new TopicPartition("test", 1)
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
-      new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[DelayedOperations]),
+      Time.SYSTEM, mock(classOf[PartitionStateStore]), mock(classOf[DelayedOperations]),
       mock(classOf[MetadataCache]), mock(classOf[LogManager]))
 
     val replicas = Seq(0, 1, 2, 3)

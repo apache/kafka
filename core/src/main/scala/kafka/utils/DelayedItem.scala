@@ -21,24 +21,17 @@ import java.util.concurrent._
 
 import org.apache.kafka.common.utils.Time
 
-import scala.math._
-
-class DelayedItem(val delayMs: Long) extends Delayed with Logging {
-
-  private val dueMs = Time.SYSTEM.milliseconds + delayMs
-
-  def this(delay: Long, unit: TimeUnit) = this(unit.toMillis(delay))
+class DelayedItem(val delayMs: Long, private val time: Time) extends Logging {
+  private val dueNs = time.nanoseconds + TimeUnit.MILLISECONDS.toNanos(delayMs)
 
   /**
-   * The remaining delay time
+   * true if the item is still delayed
    */
-  def getDelay(unit: TimeUnit): Long = {
-    unit.convert(max(dueMs - Time.SYSTEM.milliseconds, 0), TimeUnit.MILLISECONDS)
+  def isDelayed: Boolean = {
+    time.nanoseconds < dueNs
   }
 
-  def compareTo(d: Delayed): Int = {
-    val other = d.asInstanceOf[DelayedItem]
-    java.lang.Long.compare(dueMs, other.dueMs)
+  override def toString: String = {
+    s"DelayedItem(delayMs=${TimeUnit.NANOSECONDS.toMillis(dueNs-time.nanoseconds())})"
   }
-
 }
