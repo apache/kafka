@@ -329,6 +329,7 @@ class SocketServer(val config: KafkaConfig,
         stopProcessingRequests()
       dataPlaneRequestChannel.shutdown()
       controlPlaneRequestChannelOpt.foreach(_.shutdown())
+      connectionQuotas.close()
     }
     info("Shutdown completed")
   }
@@ -1168,7 +1169,7 @@ private[kafka] class Processor(val id: Int,
   }
 }
 
-class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends Logging {
+class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends Logging with AutoCloseable {
 
   @volatile private var defaultMaxConnectionsPerIp: Int = config.maxConnectionsPerIp
   @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.map { case (host, count) => (InetAddress.getByName(host), count) }
@@ -1237,6 +1238,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     counts.synchronized {
       maxConnectionsPerListener.remove(listenerName).foreach { listenerQuota =>
         listenerCounts.remove(listenerName)
+        // once listener is removed from maxConnectionsPerListener, no metrics will be recorded into listener's sensor
+        // so it is safe to remove sensor here
+        metrics.removeSensor(listenerQuota.connectionRateSensor.name)
         counts.notifyAll() // wake up any waiting acceptors to close cleanly
         config.removeReconfigurable(listenerQuota)
       }
@@ -1390,6 +1394,10 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       .timeWindow(config.quotaWindowSizeSeconds.toLong, TimeUnit.SECONDS)
       .samples(config.numQuotaSamples)
       .quota(new Quota(quotaLimit, true))
+  }
+
+  def close(): Unit = {
+    metrics.removeSensor("ConnectionAcceptRate")
   }
 
   class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable {

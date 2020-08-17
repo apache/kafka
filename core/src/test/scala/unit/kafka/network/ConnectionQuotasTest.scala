@@ -42,6 +42,7 @@ import scala.concurrent.TimeoutException
 class ConnectionQuotasTest {
   private var metrics: Metrics = _
   private var executor: ExecutorService = _
+  private var connectionQuotas: ConnectionQuotas = _
 
   private val listeners = Map(
     "EXTERNAL" -> ListenerDesc(new ListenerName("EXTERNAL"), InetAddress.getByName("192.168.1.1")),
@@ -89,6 +90,9 @@ class ConnectionQuotasTest {
   @After
   def tearDown(): Unit = {
     executor.shutdownNow()
+    if (connectionQuotas != null) {
+      connectionQuotas.close()
+    }
     metrics.close()
     TestUtils.clearYammerMetrics()
     blockedPercentMeters.clear()
@@ -97,7 +101,7 @@ class ConnectionQuotasTest {
   @Test
   def testFailWhenNoListeners(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     // inc() on a separate thread in case it blocks
     val listener = listeners("EXTERNAL")
@@ -111,7 +115,7 @@ class ConnectionQuotasTest {
   @Test
   def testFailDecrementForUnknownIp(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     addListenersAndVerify(config, connectionQuotas)
 
     // calling dec() for an IP for which we didn't call inc() should throw an exception
@@ -121,7 +125,7 @@ class ConnectionQuotasTest {
   @Test
   def testNoConnectionLimitsByDefault(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     addListenersAndVerify(config, connectionQuotas)
 
     // verify there is no limit by accepting 10000 connections as fast as possible
@@ -154,7 +158,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsPerIpProp, maxConnectionsPerIp.toString)
     val config = KafkaConfig.fromProps(props)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -195,7 +199,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     val config = KafkaConfig.fromProps(props)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -262,7 +266,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     val config = KafkaConfig.fromProps(props)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -309,7 +313,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -329,7 +333,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     addListenersAndVerify(config, connectionQuotas)
 
@@ -356,7 +360,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
@@ -382,7 +386,7 @@ class ConnectionQuotasTest {
     val props = brokerPropsWithDefaultConnectionLimits
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     val listenerConfig = Map(KafkaConfig.MaxConnectionCreationRateProp -> listenerRateLimit.toString).asJava
     addListenersAndVerify(config, listenerConfig, connectionQuotas)
@@ -408,7 +412,7 @@ class ConnectionQuotasTest {
   @Test
   def testMaxListenerConnectionListenerMustBeAboveZero(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
 
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
@@ -422,7 +426,7 @@ class ConnectionQuotasTest {
   @Test
   def testMaxListenerConnectionRateReconfiguration(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     val listenerRateLimit = 20
@@ -456,7 +460,7 @@ class ConnectionQuotasTest {
   @Test
   def testMaxBrokerConnectionRateReconfiguration(): Unit = {
     val config = KafkaConfig.fromProps(brokerPropsWithDefaultConnectionLimits)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     addListenersAndVerify(config, connectionQuotas)
@@ -481,7 +485,7 @@ class ConnectionQuotasTest {
     props.put(KafkaConfig.MaxConnectionsProp, maxConnections.toString)
     props.put(KafkaConfig.MaxConnectionCreationRateProp, brokerRateLimit.toString)
     val config = KafkaConfig.fromProps(props)
-    val connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
     connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
 
     addListenersAndVerify(config, connectionQuotas)
