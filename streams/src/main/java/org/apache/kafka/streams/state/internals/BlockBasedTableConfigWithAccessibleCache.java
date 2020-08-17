@@ -14,20 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.internals;
+package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
+import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.Cache;
 
-import java.util.Map;
+public class BlockBasedTableConfigWithAccessibleCache extends BlockBasedTableConfig {
 
-/**
- * A {@link StreamsConfig} that does not log its configuration on construction.
- *
- * This producer cleaner output for unit tests using the {@code test-utils},
- * since logging the config is not really valuable in this context.
- */
-public class QuietStreamsConfig extends StreamsConfig {
-    public QuietStreamsConfig(final Map<?, ?> props) {
-        super(props, false);
+    private Cache blockCache = null;
+
+    @Override
+    public BlockBasedTableConfig setBlockCache(final Cache cache) {
+        blockCache = cache;
+        return super.setBlockCache(cache);
+    }
+
+    public Cache blockCache() {
+        return blockCache;
     }
 }

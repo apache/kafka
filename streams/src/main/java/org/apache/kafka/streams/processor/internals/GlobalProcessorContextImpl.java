@@ -57,12 +57,12 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value) {
-        final ProcessorNode<?, ?> previousNode = currentNode();
+    public <KIn, VIn> void forward(final KIn key, final VIn value) {
+        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         try {
-            for (final ProcessorNode<?, ?> child : currentNode().children()) {
+            for (final ProcessorNode<?, ?, ?, ?> child : currentNode().children()) {
                 setCurrentNode(child);
-                ((ProcessorNode<K, V>) child).process(key, value);
+                ((ProcessorNode<KIn, VIn, ?, ?>) child).process(key, value);
             }
         } finally {
             setCurrentNode(previousNode);

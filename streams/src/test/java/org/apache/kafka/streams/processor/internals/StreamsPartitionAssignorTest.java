@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.SortedSet;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -34,6 +33,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
@@ -41,6 +41,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
@@ -50,9 +51,10 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
-import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
@@ -77,6 +79,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -125,7 +128,6 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("unchecked")
 @RunWith(value = Parameterized.class)
 public class StreamsPartitionAssignorTest {
     private static final String CONSUMER_1 = "consumer1";
@@ -269,9 +271,11 @@ public class StreamsPartitionAssignorTest {
     // topics and we will skip the listOffsets request for these changelogs
     private MockInternalTopicManager overwriteInternalTopicManagerWithMock(final boolean mockCreateInternalTopics) {
         final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
+            time,
             new StreamsConfig(configProps()),
             mockClientSupplier.restoreConsumer,
-            mockCreateInternalTopics);
+            mockCreateInternalTopics
+        );
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
         return mockInternalTopicManager;
     }
@@ -490,7 +494,7 @@ public class StreamsPartitionAssignorTest {
     public void testEagerSubscription() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1", "source2");
 
         final Set<TaskId> prevTasks = mkSet(
             new TaskId(0, 1), new TaskId(1, 1), new TaskId(2, 1)
@@ -517,7 +521,7 @@ public class StreamsPartitionAssignorTest {
     public void testCooperativeSubscription() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1", "source2");
 
         final Set<TaskId> prevTasks = mkSet(
             new TaskId(0, 1), new TaskId(1, 1), new TaskId(2, 1));
@@ -543,7 +547,7 @@ public class StreamsPartitionAssignorTest {
     public void testAssignBasic() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1", "source2");
         builder.addStateStore(new MockKeyValueStoreBuilder("store", false), "processor");
         final List<String> topics = asList("topic1", "topic2");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
@@ -614,8 +618,8 @@ public class StreamsPartitionAssignorTest {
     public void shouldAssignEvenlyAcrossConsumersOneClientMultipleThreads() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
-        builder.addProcessor("processorII", new MockProcessorSupplier(), "source2");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1");
+        builder.addProcessor("processorII", new MockProcessorSupplier<>(), "source2");
 
         final List<PartitionInfo> localInfos = asList(
             new PartitionInfo("topic1", 0, Node.noNode(), new Node[0], new Node[0]),
@@ -673,10 +677,10 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void testAssignWithPartialTopology() {
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
         builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
+        builder.addProcessor("processor2", new MockProcessorSupplier<>(), "source2");
         builder.addStateStore(new MockKeyValueStoreBuilder("store2", false), "processor2");
         final List<String> topics = asList("topic1", "topic2");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
@@ -708,7 +712,7 @@ public class StreamsPartitionAssignorTest {
     public void testAssignEmptyMetadata() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1", "source2");
         final List<String> topics = asList("topic1", "topic2");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
@@ -764,7 +768,7 @@ public class StreamsPartitionAssignorTest {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
         builder.addSource(null, "source3", null, null, null, "topic3");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2", "source3");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1", "source2", "source3");
         final List<String> topics = asList("topic1", "topic2", "topic3");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
 
@@ -815,10 +819,10 @@ public class StreamsPartitionAssignorTest {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
 
-        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor-1", new MockProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor-1");
 
-        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source2");
+        builder.addProcessor("processor-2", new MockProcessorSupplier<>(), "source2");
         builder.addStateStore(new MockKeyValueStoreBuilder("store2", false), "processor-2");
         builder.addStateStore(new MockKeyValueStoreBuilder("store3", false), "processor-2");
 
@@ -893,7 +897,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void testAssignWithStandbyReplicasAndStatelessTasks() {
         builder.addSource(null, "source1", null, null, null, "topic1", "topic2");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1");
 
         final List<String> topics = asList("topic1", "topic2");
 
@@ -922,7 +926,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void testAssignWithStandbyReplicasAndLoggingDisabled() {
         builder.addSource(null, "source1", null, null, null, "topic1", "topic2");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false).withLoggingDisabled(), "processor");
 
         final List<String> topics = asList("topic1", "topic2");
@@ -953,7 +957,7 @@ public class StreamsPartitionAssignorTest {
     public void testAssignWithStandbyReplicas() {
         builder.addSource(null, "source1", null, null, null, "topic1");
         builder.addSource(null, "source2", null, null, null, "topic2");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source1", "source2");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source1", "source2");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor");
 
         final List<String> topics = asList("topic1", "topic2");
@@ -1086,10 +1090,10 @@ public class StreamsPartitionAssignorTest {
     public void testAssignWithInternalTopics() {
         builder.addInternalTopic("topicX", InternalTopicProperties.empty());
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
         builder.addSink("sink1", "topicX", null, null, null, "processor1");
         builder.addSource(null, "source2", null, null, null, "topicX");
-        builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
+        builder.addProcessor("processor2", new MockProcessorSupplier<>(), "source2");
         final List<String> topics = asList("topic1", APPLICATION_ID + "-topicX");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
@@ -1111,11 +1115,11 @@ public class StreamsPartitionAssignorTest {
     public void testAssignWithInternalTopicThatsSourceIsAnotherInternalTopic() {
         builder.addInternalTopic("topicX", InternalTopicProperties.empty());
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
         builder.addSink("sink1", "topicX", null, null, null, "processor1");
         builder.addSource(null, "source2", null, null, null, "topicX");
         builder.addInternalTopic("topicZ", InternalTopicProperties.empty());
-        builder.addProcessor("processor2", new MockProcessorSupplier(), "source2");
+        builder.addProcessor("processor2", new MockProcessorSupplier<>(), "source2");
         builder.addSink("sink2", "topicZ", null, null, null, "processor2");
         builder.addSource(null, "source3", null, null, null, "topicZ");
         final List<String> topics = asList("topic1", APPLICATION_ID + "-topicX", APPLICATION_ID + "-topicZ");
@@ -1210,9 +1214,92 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
+    public void shouldReturnShutdownErrorCodeWhenCreatingRepartitionTopicsTimesOut() {
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        streamsBuilder.stream("topic1").repartition();
+
+        final String client = "client1";
+        builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+
+        createDefaultMockTaskManager();
+        EasyMock.replay(taskManager);
+        partitionAssignor.configure(configProps());
+        final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
+            time,
+            new StreamsConfig(configProps()),
+            mockClientSupplier.restoreConsumer,
+            false
+        ) {
+            @Override
+            public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) throws TaskAssignmentException {
+                throw new TimeoutException("KABOOM!");
+            }
+        };
+        partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
+
+        subscriptions.put(client,
+            new Subscription(
+                singletonList("topic1"),
+                defaultSubscriptionInfo.encode()
+            )
+        );
+        final Map<String, Assignment> assignment =
+            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+
+        // check if we created a task for all expected topicPartitions.
+        assertThat(
+            AssignmentInfo.decode(assignment.get(client).userData()).errCode(),
+            equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
+        );
+    }
+
+    @Test
+    public void shouldReturnShutdownErrorCodeWhenCreatingChangelogTopicsTimesOut() {
+        final StreamsBuilder streamsBuilder = new StreamsBuilder();
+        streamsBuilder.table("topic1", Materialized.as("store"));
+
+        final String client = "client1";
+        builder = TopologyWrapper.getInternalTopologyBuilder(streamsBuilder.build());
+
+        createDefaultMockTaskManager();
+        EasyMock.replay(taskManager);
+        partitionAssignor.configure(configProps());
+        final MockInternalTopicManager mockInternalTopicManager =  new MockInternalTopicManager(
+            time,
+            new StreamsConfig(configProps()),
+            mockClientSupplier.restoreConsumer,
+            false
+        ) {
+            @Override
+            public Set<String> makeReady(final Map<String, InternalTopicConfig> topics) throws TaskAssignmentException {
+                if (topics.isEmpty()) {
+                    return emptySet();
+                }
+                throw new TimeoutException("KABOOM!");
+            }
+        };
+        partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
+
+        subscriptions.put(client,
+            new Subscription(
+                singletonList("topic1"),
+                defaultSubscriptionInfo.encode()
+            )
+        );
+        final Map<String, Assignment> assignment =
+            partitionAssignor.assign(metadata, new GroupSubscription(subscriptions)).groupAssignment();
+
+        // check if we created a task for all expected topicPartitions.
+        assertThat(
+            AssignmentInfo.decode(assignment.get(client).userData()).errCode(),
+            equalTo(AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code())
+        );
+    }
+
+    @Test
     public void shouldAddUserDefinedEndPointToSubscription() {
         builder.addSource(null, "source", null, null, null, "input");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         builder.addSink("sink", "output", null, null, null, "processor");
 
         createDefaultMockTaskManager();
@@ -1229,7 +1316,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldMapUserEndPointToTopicPartitions() {
         builder.addSource(null, "source", null, null, null, "topic1");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         builder.addSink("sink", "output", null, null, null, "processor");
 
         final List<String> topics = Collections.singletonList("topic1");
@@ -1703,46 +1790,46 @@ public class StreamsPartitionAssignorTest {
         //  The traversal path 0 -> 1 -> 2 -> 3 hits the case where sub-topology 2 will be initialized while its
         //  parent 3 hasn't been initialized yet.
         builder.addSource(null, "KSTREAM-SOURCE-0000000000",  null, null, null, "input-stream");
-        builder.addProcessor("KSTREAM-FLATMAPVALUES-0000000001", new MockProcessorSupplier(), "KSTREAM-SOURCE-0000000000");
-        builder.addProcessor("KSTREAM-BRANCH-0000000002", new MockProcessorSupplier(), "KSTREAM-FLATMAPVALUES-0000000001");
-        builder.addProcessor("KSTREAM-BRANCHCHILD-0000000003", new MockProcessorSupplier(), "KSTREAM-BRANCH-0000000002");
-        builder.addProcessor("KSTREAM-BRANCHCHILD-0000000004", new MockProcessorSupplier(), "KSTREAM-BRANCH-0000000002");
-        builder.addProcessor("KSTREAM-MAP-0000000005", new MockProcessorSupplier(), "KSTREAM-BRANCHCHILD-0000000003");
+        builder.addProcessor("KSTREAM-FLATMAPVALUES-0000000001", new MockProcessorSupplier<>(), "KSTREAM-SOURCE-0000000000");
+        builder.addProcessor("KSTREAM-BRANCH-0000000002", new MockProcessorSupplier<>(), "KSTREAM-FLATMAPVALUES-0000000001");
+        builder.addProcessor("KSTREAM-BRANCHCHILD-0000000003", new MockProcessorSupplier<>(), "KSTREAM-BRANCH-0000000002");
+        builder.addProcessor("KSTREAM-BRANCHCHILD-0000000004", new MockProcessorSupplier<>(), "KSTREAM-BRANCH-0000000002");
+        builder.addProcessor("KSTREAM-MAP-0000000005", new MockProcessorSupplier<>(), "KSTREAM-BRANCHCHILD-0000000003");
 
         builder.addInternalTopic("odd_store-repartition", InternalTopicProperties.empty());
-        builder.addProcessor("odd_store-repartition-filter", new MockProcessorSupplier(), "KSTREAM-MAP-0000000005");
+        builder.addProcessor("odd_store-repartition-filter", new MockProcessorSupplier<>(), "KSTREAM-MAP-0000000005");
         builder.addSink("odd_store-repartition-sink", "odd_store-repartition", null, null, null, "odd_store-repartition-filter");
         builder.addSource(null, "odd_store-repartition-source", null, null, null, "odd_store-repartition");
-        builder.addProcessor("KSTREAM-REDUCE-0000000006", new MockProcessorSupplier(), "odd_store-repartition-source");
-        builder.addProcessor("KTABLE-TOSTREAM-0000000010", new MockProcessorSupplier(), "KSTREAM-REDUCE-0000000006");
-        builder.addProcessor("KSTREAM-PEEK-0000000011", new MockProcessorSupplier(), "KTABLE-TOSTREAM-0000000010");
-        builder.addProcessor("KSTREAM-MAP-0000000012", new MockProcessorSupplier(), "KSTREAM-PEEK-0000000011");
+        builder.addProcessor("KSTREAM-REDUCE-0000000006", new MockProcessorSupplier<>(), "odd_store-repartition-source");
+        builder.addProcessor("KTABLE-TOSTREAM-0000000010", new MockProcessorSupplier<>(), "KSTREAM-REDUCE-0000000006");
+        builder.addProcessor("KSTREAM-PEEK-0000000011", new MockProcessorSupplier<>(), "KTABLE-TOSTREAM-0000000010");
+        builder.addProcessor("KSTREAM-MAP-0000000012", new MockProcessorSupplier<>(), "KSTREAM-PEEK-0000000011");
 
         builder.addInternalTopic("odd_store_2-repartition", InternalTopicProperties.empty());
-        builder.addProcessor("odd_store_2-repartition-filter", new MockProcessorSupplier(), "KSTREAM-MAP-0000000012");
+        builder.addProcessor("odd_store_2-repartition-filter", new MockProcessorSupplier<>(), "KSTREAM-MAP-0000000012");
         builder.addSink("odd_store_2-repartition-sink", "odd_store_2-repartition", null, null, null, "odd_store_2-repartition-filter");
         builder.addSource(null, "odd_store_2-repartition-source", null, null, null, "odd_store_2-repartition");
-        builder.addProcessor("KSTREAM-REDUCE-0000000013", new MockProcessorSupplier(), "odd_store_2-repartition-source");
-        builder.addProcessor("KSTREAM-MAP-0000000017", new MockProcessorSupplier(), "KSTREAM-BRANCHCHILD-0000000004");
+        builder.addProcessor("KSTREAM-REDUCE-0000000013", new MockProcessorSupplier<>(), "odd_store_2-repartition-source");
+        builder.addProcessor("KSTREAM-MAP-0000000017", new MockProcessorSupplier<>(), "KSTREAM-BRANCHCHILD-0000000004");
 
         builder.addInternalTopic("even_store-repartition", InternalTopicProperties.empty());
-        builder.addProcessor("even_store-repartition-filter", new MockProcessorSupplier(), "KSTREAM-MAP-0000000017");
+        builder.addProcessor("even_store-repartition-filter", new MockProcessorSupplier<>(), "KSTREAM-MAP-0000000017");
         builder.addSink("even_store-repartition-sink", "even_store-repartition", null, null, null, "even_store-repartition-filter");
         builder.addSource(null, "even_store-repartition-source", null, null, null, "even_store-repartition");
-        builder.addProcessor("KSTREAM-REDUCE-0000000018", new MockProcessorSupplier(), "even_store-repartition-source");
-        builder.addProcessor("KTABLE-TOSTREAM-0000000022", new MockProcessorSupplier(), "KSTREAM-REDUCE-0000000018");
-        builder.addProcessor("KSTREAM-PEEK-0000000023", new MockProcessorSupplier(), "KTABLE-TOSTREAM-0000000022");
-        builder.addProcessor("KSTREAM-MAP-0000000024", new MockProcessorSupplier(), "KSTREAM-PEEK-0000000023");
+        builder.addProcessor("KSTREAM-REDUCE-0000000018", new MockProcessorSupplier<>(), "even_store-repartition-source");
+        builder.addProcessor("KTABLE-TOSTREAM-0000000022", new MockProcessorSupplier<>(), "KSTREAM-REDUCE-0000000018");
+        builder.addProcessor("KSTREAM-PEEK-0000000023", new MockProcessorSupplier<>(), "KTABLE-TOSTREAM-0000000022");
+        builder.addProcessor("KSTREAM-MAP-0000000024", new MockProcessorSupplier<>(), "KSTREAM-PEEK-0000000023");
 
         builder.addInternalTopic("even_store_2-repartition", InternalTopicProperties.empty());
-        builder.addProcessor("even_store_2-repartition-filter", new MockProcessorSupplier(), "KSTREAM-MAP-0000000024");
+        builder.addProcessor("even_store_2-repartition-filter", new MockProcessorSupplier<>(), "KSTREAM-MAP-0000000024");
         builder.addSink("even_store_2-repartition-sink", "even_store_2-repartition", null, null, null, "even_store_2-repartition-filter");
         builder.addSource(null, "even_store_2-repartition-source", null, null, null, "even_store_2-repartition");
-        builder.addProcessor("KSTREAM-REDUCE-0000000025", new MockProcessorSupplier(), "even_store_2-repartition-source");
-        builder.addProcessor("KTABLE-JOINTHIS-0000000030", new MockProcessorSupplier(), "KSTREAM-REDUCE-0000000013");
-        builder.addProcessor("KTABLE-JOINOTHER-0000000031", new MockProcessorSupplier(), "KSTREAM-REDUCE-0000000025");
-        builder.addProcessor("KTABLE-MERGE-0000000029", new MockProcessorSupplier(), "KTABLE-JOINTHIS-0000000030", "KTABLE-JOINOTHER-0000000031");
-        builder.addProcessor("KTABLE-TOSTREAM-0000000032", new MockProcessorSupplier(), "KTABLE-MERGE-0000000029");
+        builder.addProcessor("KSTREAM-REDUCE-0000000025", new MockProcessorSupplier<>(), "even_store_2-repartition-source");
+        builder.addProcessor("KTABLE-JOINTHIS-0000000030", new MockProcessorSupplier<>(), "KSTREAM-REDUCE-0000000013");
+        builder.addProcessor("KTABLE-JOINOTHER-0000000031", new MockProcessorSupplier<>(), "KSTREAM-REDUCE-0000000025");
+        builder.addProcessor("KTABLE-MERGE-0000000029", new MockProcessorSupplier<>(), "KTABLE-JOINTHIS-0000000030", "KTABLE-JOINOTHER-0000000031");
+        builder.addProcessor("KTABLE-TOSTREAM-0000000032", new MockProcessorSupplier<>(), "KTABLE-MERGE-0000000029");
 
         final List<String> topics = asList("input-stream", "test-even_store-repartition", "test-even_store_2-repartition", "test-odd_store-repartition", "test-odd_store_2-repartition");
 
@@ -1809,7 +1896,7 @@ public class StreamsPartitionAssignorTest {
     public void shouldThrowIllegalStateExceptionIfAnyPartitionsMissingFromChangelogEndOffsets() {
         final int changelogNumPartitions = 3;
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
 
         createMockAdminClient(getTopicPartitionOffsetsMap(
@@ -1830,7 +1917,7 @@ public class StreamsPartitionAssignorTest {
     @Test
     public void shouldThrowIllegalStateExceptionIfAnyTopicsMissingFromChangelogEndOffsets() {
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store2", false), "processor1");
 
@@ -1860,7 +1947,7 @@ public class StreamsPartitionAssignorTest {
         expect(result.all()).andReturn(allFuture);
 
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
 
         subscriptions.put("consumer10",
@@ -1903,7 +1990,7 @@ public class StreamsPartitionAssignorTest {
         expect(result.all()).andReturn(allFuture);
 
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier(), "source1");
+        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store", false), "processor1");
 
         subscriptions.put("consumer10",
