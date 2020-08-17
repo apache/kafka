@@ -25,13 +25,14 @@ import org.rocksdb.RocksIterator;
 
 import java.util.NoSuchElementException;
 import java.util.Set;
+import java.util.function.Consumer;
 
 class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements KeyValueIterator<Bytes, byte[]> {
 
     private final String storeName;
     private final RocksIterator iter;
     private final Set<KeyValueIterator<Bytes, byte[]>> openIterators;
-    private final boolean reverse;
+    private final Consumer<RocksIterator> advanceIterator;
 
     private volatile boolean open = true;
 
@@ -44,7 +45,7 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
         this.storeName = storeName;
         this.iter = iter;
         this.openIterators = openIterators;
-        this.reverse = reverse;
+        this.advanceIterator = reverse ? RocksIterator::prev : RocksIterator::next;
     }
 
     @Override
@@ -61,11 +62,7 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
             return allDone();
         } else {
             next = getKeyValue();
-            if (reverse) {
-                iter.prev();
-            } else {
-                iter.next();
-            }
+            advanceIterator.accept(iter);
             return next;
         }
     }

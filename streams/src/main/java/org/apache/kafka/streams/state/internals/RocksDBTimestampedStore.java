@@ -335,23 +335,28 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                         iterNoTimestamp.next();
                     }
                 } else {
-                    if (comparator.compare(nextNoTimestamp, nextWithTimestamp) <= 0) {
-                        next = KeyValue.pair(new Bytes(nextNoTimestamp), convertToTimestampedFormat(iterNoTimestamp.value()));
-                        nextNoTimestamp = null;
-                        if (reverse) {
-                            iterNoTimestamp.prev();
-                        } else {
+                    if (!reverse) {
+                        if (comparator.compare(nextNoTimestamp, nextWithTimestamp) <= 0) {
+                            next = KeyValue.pair(new Bytes(nextNoTimestamp), convertToTimestampedFormat(iterNoTimestamp.value()));
+                            nextNoTimestamp = null;
                             iterNoTimestamp.next();
-                        }
-                    } else {
-                        next = KeyValue.pair(new Bytes(nextWithTimestamp), iterWithTimestamp.value());
-                        nextWithTimestamp = null;
-                        if (reverse) {
-                            iterWithTimestamp.prev();
                         } else {
+                            next = KeyValue.pair(new Bytes(nextWithTimestamp), iterWithTimestamp.value());
+                            nextWithTimestamp = null;
                             iterWithTimestamp.next();
                         }
+                    } else {
+                        if (comparator.compare(nextNoTimestamp, nextWithTimestamp) >= 0) {
+                            next = KeyValue.pair(new Bytes(nextNoTimestamp), convertToTimestampedFormat(iterNoTimestamp.value()));
+                            nextNoTimestamp = null;
+                            iterNoTimestamp.prev();
+                        } else {
+                            next = KeyValue.pair(new Bytes(nextWithTimestamp), iterWithTimestamp.value());
+                            nextWithTimestamp = null;
+                            iterWithTimestamp.prev();
+                        }
                     }
+
                 }
             }
             return next;
@@ -379,7 +384,8 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         // comparator to be pluggable, and the default is lexicographic, so it's
         // safe to just force lexicographic comparator here for now.
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-        private final byte[] lastKey;
+        private final byte[] rawLastKey;
+        private final boolean reverse;
 
         RocksDBDualCFRangeIterator(final String storeName,
                                    final RocksIterator iterWithTimestamp,
@@ -388,19 +394,20 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                                    final Bytes to,
                                    final boolean reverse) {
             super(storeName, iterWithTimestamp, iterNoTimestamp, reverse);
+            this.reverse = reverse;
             if (reverse) {
-                iterWithTimestamp.seek(to.get());
-                iterNoTimestamp.seek(to.get());
-                lastKey = from.get();
-                if (lastKey == null) {
-                    throw new NullPointerException("RocksDBDualCFRangeIterator: lastKey is null for key " + from);
+                iterWithTimestamp.seekForPrev(to.get());
+                iterNoTimestamp.seekForPrev(to.get());
+                rawLastKey = from.get();
+                if (rawLastKey == null) {
+                    throw new NullPointerException("RocksDBDualCFRangeIterator: rawLastKey is null for key " + from);
                 }
             } else {
                 iterWithTimestamp.seek(from.get());
                 iterNoTimestamp.seek(from.get());
-                lastKey = to.get();
-                if (lastKey == null) {
-                    throw new NullPointerException("RocksDBDualCFRangeIterator: lastKey is null for key " + to);
+                rawLastKey = to.get();
+                if (rawLastKey == null) {
+                    throw new NullPointerException("RocksDBDualCFRangeIterator: rawLastKey is null for key " + to);
                 }
             }
         }
@@ -412,10 +419,18 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             if (next == null) {
                 return allDone();
             } else {
-                if (comparator.compare(next.key.get(), lastKey) <= 0) {
-                    return next;
+                if (!reverse) {
+                    if (comparator.compare(next.key.get(), rawLastKey) <= 0) {
+                        return next;
+                    } else {
+                        return allDone();
+                    }
                 } else {
-                    return allDone();
+                    if (comparator.compare(next.key.get(), rawLastKey) >= 0) {
+                        return next;
+                    } else {
+                        return allDone();
+                    }
                 }
             }
         }

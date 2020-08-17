@@ -400,7 +400,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldHandleDeletesAndPutbackOnRestoreAll() {
+    public void shouldHandleDeletesAndPutBackOnRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>("1".getBytes(UTF_8), "a".getBytes(UTF_8)));
         entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
@@ -521,14 +521,14 @@ public class RocksDBStoreTest {
             () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2"))));
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
         rocksDBStore.init(context, rocksDBStore);
         Utils.delete(dir);
         rocksDBStore.put(
             new Bytes(stringSerializer.serialize(null, "anyKey")),
             stringSerializer.serialize(null, "anyValue"));
-        rocksDBStore.flush();
+        assertThrows(ProcessorStateException.class, () -> rocksDBStore.flush());
     }
 
     @Test
