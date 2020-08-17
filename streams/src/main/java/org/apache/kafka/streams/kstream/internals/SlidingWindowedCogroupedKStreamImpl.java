@@ -94,10 +94,7 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
                 : null,
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
-            null,
-            windows,
-            null,
-            null);
+            windows);
     }
 
     private StoreBuilder<TimestampedWindowStore<K, V>> materialize(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
