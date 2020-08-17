@@ -16,7 +16,7 @@
 # limitations under the License.
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-KAFKA_NUM_CONTAINERS=${KAFKA_NUM_CONTAINERS:-2}
+KAFKA_NUM_CONTAINERS=${KAFKA_NUM_CONTAINERS:-14}
 TC_PATHS=${TC_PATHS:-./kafkatest/}
 REBUILD=${REBUILD:f}
 

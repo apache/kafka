@@ -424,7 +424,7 @@ class ConnectDistributedTest(Test):
             self.logger.debug("Max source seqno: %d", src_seqno_max)
             src_seqno_counts = Counter(src_seqnos)
             missing_src_seqnos = sorted(set(range(src_seqno_max)).difference(set(src_seqnos)))
-            duplicate_src_seqnos = sorted([seqno for seqno,count in src_seqno_counts.iteritems() if count > 1])
+            duplicate_src_seqnos = sorted([seqno for seqno,count in iter(src_seqno_counts.items()) if count > 1])
 
             if missing_src_seqnos:
                 self.logger.error("Missing source sequence numbers for task " + str(task))
@@ -444,7 +444,7 @@ class ConnectDistributedTest(Test):
             self.logger.debug("Max sink seqno: %d", sink_seqno_max)
             sink_seqno_counts = Counter(sink_seqnos)
             missing_sink_seqnos = sorted(set(range(sink_seqno_max)).difference(set(sink_seqnos)))
-            duplicate_sink_seqnos = sorted([seqno for seqno,count in sink_seqno_counts.iteritems() if count > 1])
+            duplicate_sink_seqnos = sorted([seqno for seqno,count in iter(sink_seqno_counts.items()) if count > 1])
 
             if missing_sink_seqnos:
                 self.logger.error("Missing sink sequence numbers for task " + str(task))

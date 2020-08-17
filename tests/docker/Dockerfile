@@ -37,7 +37,7 @@ RUN apt-mark hold python2 python2-minimal python2.7 python2.7-minimal libpython2
 RUN apt update && apt install -y sudo git netcat iptables rsync unzip wget curl jq coreutils openssh-server net-tools vim python-pip python-dev libffi-dev libssl-dev cmake pkg-config libfuse-dev iperf traceroute && apt-get -y clean
 RUN python3 -m pip install -U pip==20.2.2;
 RUN pip3 install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddress enum34
-#RUN pip3 install git+https://github.com/confluentinc/ducktape
+RUN pip3 install git+https://github.com/confluentinc/ducktape
 
 # Set up ssh
 COPY ./ssh-config /root/.ssh/config

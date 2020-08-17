@@ -34,7 +34,7 @@ class KafkaConfig(dict):
 
         # Set defaults
         for key, val in self.DEFAULTS.items():
-            if not self.has_key(key):
+            if key not in self:
                 self[key] = val
 
     def render(self):

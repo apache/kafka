@@ -87,7 +87,7 @@ class ClientCompatibilityFeaturesTest(Test):
                                self.kafka.bootstrap_servers(),
                                len(self.kafka.nodes),
                                self.topics.keys()[0]))
-        for k, v in features.iteritems():
+        for k, v in iter(features.items()):
             cmd = cmd + ("--%s %s " % (k, v))
         results_dir = TestContext.results_dir(self.test_context, 0)
         try:
