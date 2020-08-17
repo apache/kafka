@@ -16,7 +16,6 @@
 from ducktape.mark.resource import cluster
 from ducktape.mark import parametrize
 from ducktape.tests.test import Test
-from ducktape.utils.util import wait_until
 
 from kafkatest.services.trogdor.produce_bench_workload import ProduceBenchWorkloadService, ProduceBenchWorkloadSpec
 from kafkatest.services.trogdor.consume_bench_workload import ConsumeBenchWorkloadService, ConsumeBenchWorkloadSpec
@@ -25,7 +24,6 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.trogdor.trogdor import TrogdorService
 from kafkatest.services.zookeeper import ZookeeperService
 
-import json
 import time
 
 

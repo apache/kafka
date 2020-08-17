@@ -23,7 +23,7 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
-from config import KafkaConfig
+from .config import KafkaConfig
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin

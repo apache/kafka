@@ -23,8 +23,6 @@ from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.utils import validate_delivery
 
-import time
-
 class EndToEndTest(Test):
     """This class provides a shared template for tests which follow the common pattern of:
 

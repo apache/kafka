@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#from ducktape.utils.util import wait_until
+from ducktape.utils.util import wait_until
 
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.verifiable_producer import VerifiableProducer

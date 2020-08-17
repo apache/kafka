@@ -15,9 +15,8 @@
 
 import os.path
 import signal
-import streams_property
-import consumer_property
-from ducktape.cluster.remoteaccount import RemoteCommandError
+from . import streams_property
+from . import consumer_property
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin

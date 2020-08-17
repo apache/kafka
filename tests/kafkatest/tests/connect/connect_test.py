@@ -16,7 +16,7 @@
 from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize, matrix
+from ducktape.mark import parametrize
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.errors import TimeoutError
 
