@@ -1061,7 +1061,7 @@ object TestUtils extends Logging {
                    logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
 
-  class TestAlterIsrManager extends AlterIsrChannelManager {
+  class TestAlterIsrManager extends AlterIsrManager {
     val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
 
     override def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Unit = {

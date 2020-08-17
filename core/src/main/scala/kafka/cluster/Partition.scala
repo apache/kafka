@@ -182,7 +182,7 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrChannelManager: AlterIsrChannelManager) extends Logging with KafkaMetricsGroup {
+                alterIsrChannelManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -561,7 +561,6 @@ class Partition(val topicPartition: TopicPartition,
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
 
-      info(s"Follower ignoring ISR for $topicPartition")
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.iterator.map(_.toInt).toSeq,
         isr = Set.empty[Int],
@@ -1229,7 +1228,7 @@ class Partition(val topicPartition: TopicPartition,
       pendingInSyncReplicaIds = Some(inSyncReplicaIds)
       val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
       alterIsrChannelManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, {
-        case Errors.NONE => 
+        case Errors.NONE =>
         case e: Errors => warn(s"Controlled had an error handling AlterIsr for $topicPartition: $e") // TODO clear pending ISR?
       }))
     }

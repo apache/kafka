@@ -33,7 +33,7 @@ import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
-import org.apache.kafka.common.errors.InvalidIsrVersionException;
+import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.internals.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
@@ -327,7 +327,7 @@ public enum Errors {
     THROTTLING_QUOTA_EXCEEDED(89, "The throttling quota has been exceeded.", ThrottlingQuotaExceededException::new),
     PRODUCER_FENCED(90, "There is a newer producer with the same transactionalId " +
             "which fences the current one.", ProducerFencedException::new),
-    INVALID_ISR_VERSION(91, "The given ISR version was out-of-date.", InvalidIsrVersionException::new);
+    INVALID_UPDATE_VERSION(91, "The given ISR version was out-of-date.", InvalidUpdateVersionException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

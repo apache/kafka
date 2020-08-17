@@ -237,7 +237,7 @@ class ReplicaManagerQuotasTest {
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     replay(logManager)
 
-    val alterIsrManager: AlterIsrChannelManager = createMock(classOf[AlterIsrChannelManager])
+    val alterIsrManager: AlterIsrManager = createMock(classOf[AlterIsrManager])
 
     val leaderBrokerId = configs.head.brokerId
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager,

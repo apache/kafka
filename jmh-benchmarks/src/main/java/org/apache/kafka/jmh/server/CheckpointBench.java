@@ -22,7 +22,7 @@ import kafka.cluster.PartitionStateStore;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
-import kafka.server.AlterIsrChannelManager;
+import kafka.server.AlterIsrManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
@@ -90,7 +90,7 @@ public class CheckpointBench {
     private QuotaFactory.QuotaManagers quotaManagers;
     private LogDirFailureChannel failureChannel;
     private LogManager logManager;
-    private AlterIsrChannelManager alterIsrManager;
+    private AlterIsrManager alterIsrManager;
 
 
     @SuppressWarnings("deprecation")

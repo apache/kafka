@@ -1765,35 +1765,35 @@ class KafkaController(val config: KafkaConfig,
     val isrsToAlter = mutable.Map[TopicPartition, LeaderAndIsr]()
 
     alterIsrRequest.topics().forEach(topicReq => topicReq.partitions().forEach(partitionReq => {
-      val tp = new TopicPartition(topicReq.name(), partitionReq.partitionIndex())
+      val tp = new TopicPartition(topicReq.name, partitionReq.partitionIndex)
       val newIsr = partitionReq.newIsr().asScala.toList.map(_.toInt)
-      isrsToAlter.put(tp, new LeaderAndIsr(partitionReq.leaderId(), partitionReq.leaderEpoch(), newIsr, partitionReq.currentIsrVersion()))
+      isrsToAlter.put(tp, new LeaderAndIsr(partitionReq.leaderId, partitionReq.leaderEpoch, newIsr, partitionReq.currentIsrVersion))
     }))
 
     def responseCallback(results: Either[Map[TopicPartition, Errors], Errors]): Unit = {
       val resp = new AlterIsrResponseData()
       results match {
         case Right(error) =>
-          resp.setErrorCode(error.code())
+          resp.setErrorCode(error.code)
         case Left(partitions: Map[TopicPartition, Errors]) =>
           resp.setTopics(new util.ArrayList())
-          partitions.groupBy(_._1.topic()).foreachEntry((topic, partitionMap) => {
+          partitions.groupBy(_._1.topic).foreachEntry((topic, partitionMap) => {
             val topicResp = new AlterIsrResponseTopics()
               .setName(topic)
               .setPartitions(new util.ArrayList())
-            resp.topics().add(topicResp)
+            resp.topics.add(topicResp)
             partitionMap.foreachEntry((partition, error) => {
-              topicResp.partitions().add(
+              topicResp.partitions.add(
                 new AlterIsrResponsePartitions()
-                  .setPartitionIndex(partition.partition())
-                  .setErrorCode(error.code()))
+                  .setPartitionIndex(partition.partition)
+                  .setErrorCode(error.code))
             })
           })
       }
       callback.apply(resp)
     }
 
-    eventManager.put(AlterIsrReceived(alterIsrRequest.brokerId(), alterIsrRequest.brokerEpoch(), isrsToAlter, responseCallback))
+    eventManager.put(AlterIsrReceived(alterIsrRequest.brokerId, alterIsrRequest.brokerEpoch, isrsToAlter, responseCallback))
   }
 
   private def processAlterIsr(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr],
@@ -1870,7 +1870,7 @@ class KafkaController(val config: KafkaConfig,
 
     badVersionUpdates.foreach(partition => {
       warn(s"Failed to update ISR for partition $partition, bad ZK version")
-      partitionErrors.put(partition, Errors.INVALID_ISR_VERSION)
+      partitionErrors.put(partition, Errors.INVALID_UPDATE_VERSION)
     })
 
     // Update our cache

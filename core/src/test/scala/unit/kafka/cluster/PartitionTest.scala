@@ -1571,7 +1571,7 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition, 1000, ApiVersion.latestVersion, 0,
       new SystemTime(), mock(classOf[PartitionStateStore]), mock(classOf[DelayedOperations]),
-      mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrChannelManager]))
+      mock(classOf[MetadataCache]), mock(classOf[LogManager]), mock(classOf[AlterIsrManager]))
 
     val replicas = Seq(0, 1, 2, 3)
     val isr = Set(0, 1, 2, 3)

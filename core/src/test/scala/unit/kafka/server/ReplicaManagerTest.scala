@@ -65,7 +65,7 @@ class ReplicaManagerTest {
   val time = new MockTime
   val metrics = new Metrics
   var kafkaZkClient: KafkaZkClient = _
-  var alterIsrManager: AlterIsrChannelManager = _
+  var alterIsrManager: AlterIsrManager = _
 
   // Constants defined for readability
   val zkVersion = 0
@@ -79,7 +79,7 @@ class ReplicaManagerTest {
     EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new Properties()).anyTimes()
     EasyMock.replay(kafkaZkClient)
 
-    alterIsrManager = EasyMock.createMock(classOf[AlterIsrChannelManager])
+    alterIsrManager = EasyMock.createMock(classOf[AlterIsrManager])
   }
 
   @After

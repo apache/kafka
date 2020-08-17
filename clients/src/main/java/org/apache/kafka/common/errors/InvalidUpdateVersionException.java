@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
-public class InvalidIsrVersionException extends ApiException {
+public class InvalidUpdateVersionException extends ApiException {
 
-    public InvalidIsrVersionException(String message) {
+    public InvalidUpdateVersionException(String message) {
         super(message);
     }
 
-    public InvalidIsrVersionException(String message, Throwable throwable) {
+    public InvalidUpdateVersionException(String message, Throwable throwable) {
         super(message, throwable);
     }
 

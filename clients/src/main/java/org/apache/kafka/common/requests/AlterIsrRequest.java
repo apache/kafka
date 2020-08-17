@@ -43,9 +43,6 @@ public class AlterIsrRequest extends AbstractRequest {
 
     /**
      * Get an error response for a request with specified throttle time in the response if applicable
-     *
-     * @param throttleTimeMs
-     * @param e
      */
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
