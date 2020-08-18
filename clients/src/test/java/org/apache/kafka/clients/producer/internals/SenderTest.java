@@ -2208,7 +2208,7 @@ public class SenderTest {
         InOrder inOrder = inOrder(client);
         inOrder.verify(client, atLeastOnce()).ready(any(), anyLong());
         inOrder.verify(client, atLeastOnce()).newClientRequest(anyString(), any(), anyLong(), anyBoolean(), anyInt(),
-                any());
+                any(), any(), any());
         inOrder.verify(client, atLeastOnce()).send(any(), anyLong());
         inOrder.verify(client).poll(eq(0L), anyLong());
         inOrder.verify(client).poll(eq(accumulator.getDeliveryTimeoutMs()), anyLong());
@@ -2524,7 +2524,7 @@ public class SenderTest {
     private TransactionManager createTransactionManager() {
         return new TransactionManager(new LogContext(), null, 0, 100L, new ApiVersions(), false);
     }
-    
+
     private void setupWithTransactionState(TransactionManager transactionManager) {
         setupWithTransactionState(transactionManager, false, null);
     }
