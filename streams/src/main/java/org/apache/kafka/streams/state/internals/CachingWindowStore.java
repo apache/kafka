@@ -483,8 +483,11 @@ class CachingWindowStore
 
             setCacheKeyRange(timeFrom, currentSegmentLastTime());
 
-            if (reverse) this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
-            else this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            if (reverse) {
+                this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+            } else {
+                this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            }
         }
 
         @Override
@@ -555,8 +558,12 @@ class CachingWindowStore
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
 
             current.close();
-            if (reverse) current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
-            else current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+
+            if (reverse) {
+                current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+            } else {
+                current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            }
         }
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {

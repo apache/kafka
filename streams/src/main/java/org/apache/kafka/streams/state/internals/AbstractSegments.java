@@ -121,14 +121,17 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     public List<S> segments(final long timeFrom, final long timeTo, final boolean backward) {
         final List<S> result = new ArrayList<>();
         final NavigableMap<Long, S> segmentsInRange;
-        if (backward) segmentsInRange = segments.subMap(
-            segmentId(timeFrom), true,
-            segmentId(timeTo), true
-        ).descendingMap();
-        else segmentsInRange = segments.subMap(
-            segmentId(timeFrom), true,
-            segmentId(timeTo), true
-        );
+        if (backward) {
+            segmentsInRange = segments.subMap(
+                segmentId(timeFrom), true,
+                segmentId(timeTo), true
+            ).descendingMap();
+        } else {
+            segmentsInRange = segments.subMap(
+                segmentId(timeFrom), true,
+                segmentId(timeTo), true
+            );
+        }
         for (final S segment : segmentsInRange.values()) {
             if (segment.isOpen()) {
                 result.add(segment);
@@ -141,8 +144,11 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     public List<S> allSegments(final boolean backward) {
         final List<S> result = new ArrayList<>();
         final Collection<S> values;
-        if (backward) values = segments.descendingMap().values();
-        else values = segments.values();
+        if (backward) {
+            values = segments.descendingMap().values();
+        } else {
+            values = segments.values();
+        }
         for (final S segment : values) {
             if (segment.isOpen()) {
                 result.add(segment);

@@ -187,10 +187,19 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return WrappedInMemoryWindowStoreIterator.emptyIterator();
         }
 
-        if (backward) return registerNewWindowStoreIterator(
-            key, segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator());
-        else return registerNewWindowStoreIterator(
-            key, segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator());
+        if (backward) {
+            return registerNewWindowStoreIterator(
+                key,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .descendingMap().entrySet().iterator()
+            );
+        } else {
+            return registerNewWindowStoreIterator(
+                key,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .entrySet().iterator()
+            );
+        }
     }
 
     @Deprecated
@@ -237,10 +246,20 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        if (backward) return registerNewWindowedKeyValueIterator(
-            from, to, segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator());
-        else return registerNewWindowedKeyValueIterator(
-            from, to, segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator());
+        if (backward) {
+            return registerNewWindowedKeyValueIterator(
+                from,
+                to,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .descendingMap().entrySet().iterator());
+        } else {
+            return registerNewWindowedKeyValueIterator(
+                from,
+                to,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .entrySet().iterator()
+            );
+        }
     }
 
     @Deprecated
@@ -266,10 +285,19 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        if (backward) return registerNewWindowedKeyValueIterator(
-            null, null, segmentMap.subMap(minTime, true, timeTo, true).descendingMap().entrySet().iterator());
-        else return registerNewWindowedKeyValueIterator(
-            null, null, segmentMap.subMap(minTime, true, timeTo, true).entrySet().iterator());
+        if (backward) {
+            return registerNewWindowedKeyValueIterator(
+                null,
+                null,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .descendingMap().entrySet().iterator());
+        } else {
+            return registerNewWindowedKeyValueIterator(
+                null,
+                null,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .entrySet().iterator());
+        }
     }
 
     @Override
