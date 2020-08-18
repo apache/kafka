@@ -804,10 +804,10 @@ public class TopologyTestDriver implements Closeable {
 
     private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topicName);
-        if (outputRecords == null) {
-            if (!processorTopology.sinkTopics().contains(topicName)) {
-                throw new IllegalArgumentException("Unknown topic: " + topicName);
-            }
+        if (outputRecords == null && !processorTopology.sinkTopics().contains(topicName)) {
+            log.warn("Unrecognized topic: {}, this can occur if dynamic routing is used and no output has been "
+                         + "sent to this topic yet. If not using a TopicNameExtractor, check that the output topic "
+                         + "is correct.", topicName);
         }
         return outputRecords;
     }
