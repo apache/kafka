@@ -119,7 +119,7 @@ class StreamsBrokerBounceTest(Test):
     def fail_broker_type(self, failure_mode, broker_type):
         # Pick a random topic and bounce it's leader
         topic_index = randint(0, len(self.topics.keys()) - 1)
-        topic = self.topics.keys()[topic_index]
+        topic = [*self.topics.keys()][topic_index]
         failures[failure_mode](self, topic, broker_type)
 
     def fail_many_brokers(self, failure_mode, num_failures):
