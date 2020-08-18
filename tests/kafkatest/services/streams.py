@@ -230,7 +230,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, JmxMixin, Service):
         try:
             pids = [pid for pid in node.account.ssh_capture("cat " + self.PID_FILE, callback=str)]
             return [int(pid) for pid in pids]
-        except Exception, exception:
+        except Exception as exception:
             self.logger.debug(str(exception))
             return []
 

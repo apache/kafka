@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import os
+
+import errno
 import time
 from random import randint
 
@@ -53,7 +55,7 @@ def run_command(node, cmd, ssh_log_file):
                 f.write(line)
         except Exception as e:
             f.write("** Command failed!")
-            print e
+            print(e)
             raise
 
 
@@ -93,7 +95,7 @@ class ClientCompatibilityFeaturesTest(Test):
         try:
             os.makedirs(results_dir)
         except OSError as e:
-            if e.errno == errno.EEXIST and os.path.isdir(path):
+            if e.errno == errno.EEXIST and os.path.isdir(results_dir):
                 pass
             else:
                 raise
