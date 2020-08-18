@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -36,8 +37,12 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
 public class HandlingSourceTopicDeletionTest {
@@ -60,13 +65,11 @@ public class HandlingSourceTopicDeletionTest {
     private final StreamsBuilder builder = new StreamsBuilder();
     private String appId;
     private Properties streamsConfiguration;
-    private KafkaStreams kafkaStreams1;
-    private KafkaStreams kafkaStreams2;
+    private KafkaStreams kafkaStreams;
 
     @Before
     public void before() throws InterruptedException {
-        CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC, 2, 1);
+        CLUSTER.createTopics(INPUT_TOPIC, OUTPUT_TOPIC);
 
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         appId = "app-" + safeTestName;
@@ -93,11 +96,13 @@ public class HandlingSourceTopicDeletionTest {
 
     private void startApplication() throws InterruptedException {
         final Topology topology = builder.build();
-        kafkaStreams1 = new KafkaStreams(topology, streamsConfiguration);
+        kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
-        kafkaStreams1.start();
+        final AtomicBoolean calledUncaughtExceptionHandler = new AtomicBoolean(false);
+        kafkaStreams.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler.set(true));
+        kafkaStreams.start();
         TestUtils.waitForCondition(
-            () -> kafkaStreams1.state() == State.RUNNING,
+            () -> kafkaStreams.state() == State.RUNNING,
             TIMEOUT,
             () -> "Kafka Streams application did not reach state RUNNING in " + TIMEOUT + " ms"
         );
@@ -105,9 +110,11 @@ public class HandlingSourceTopicDeletionTest {
         CLUSTER.deleteTopics(INPUT_TOPIC);
 
         TestUtils.waitForCondition(
-            () -> kafkaStreams1.state() == State.ERROR,
-            TIMEOUT,
+            () -> kafkaStreams.state() == State.ERROR,
+            2*TIMEOUT,
             () -> "Kafka Streams application did not reach state ERROR in " + TIMEOUT + " ms"
         );
+
+        assertThat(calledUncaughtExceptionHandler.get(), is(true));
     }
 }
