@@ -70,6 +70,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public abstract class AbstractWindowBytesStoreTest {
@@ -854,25 +855,25 @@ public abstract class AbstractWindowBytesStoreTest {
         assertNull(windowStore.fetch(1, 0L));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
-        windowStore.put(null, "anyValue");
+        assertThrows(NullPointerException.class, () -> windowStore.put(null, "anyValue"));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnGetNullKey() {
-        windowStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> windowStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        windowStore.fetch(null, 2, ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> windowStore.fetch(null, 2, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        windowStore.fetch(1, null, ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> windowStore.fetch(1, null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
     @Test

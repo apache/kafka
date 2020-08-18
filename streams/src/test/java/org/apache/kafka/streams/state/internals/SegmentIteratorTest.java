@@ -37,6 +37,7 @@ import java.util.NoSuchElementException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class SegmentIteratorTest {
@@ -189,7 +190,7 @@ public class SegmentIteratorTest {
         assertFalse(iterator.hasNext());
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
     public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() {
         iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
@@ -198,10 +199,10 @@ public class SegmentIteratorTest {
             Bytes.wrap("h".getBytes()),
             false);
 
-        iterator.peekNextKey();
+        assertThrows(NoSuchElementException.class, () -> iterator.peekNextKey());
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
     public void shouldThrowNoSuchElementOnNextIfNoNext() {
         iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
@@ -210,7 +211,7 @@ public class SegmentIteratorTest {
             Bytes.wrap("h".getBytes()),
             false);
 
-        iterator.next();
+        assertThrows(NoSuchElementException.class, () -> iterator.next());
     }
 
     private KeyValue<String, String> toStringKeyValue(final KeyValue<Bytes, byte[]> binaryKv) {

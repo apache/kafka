@@ -604,23 +604,23 @@ public class CachingWindowStoreTest {
         assertEquals(0, cache.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
         cachingStore.close();
-        cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10)));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore() {
         cachingStore.close();
-        cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10)));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         cachingStore.close();
-        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.put(bytesKey("a"), bytesValue("a")));
     }
 
     @Test
@@ -765,10 +765,10 @@ public class CachingWindowStoreTest {
         assertFalse(keyRangeIterator.hasNext());
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
-        cachingStore.put(null, bytesValue("anyValue"));
+        assertThrows(NullPointerException.class, () -> cachingStore.put(null, bytesValue("anyValue")));
     }
 
     @Test
@@ -777,19 +777,19 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("a"), null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFetchNullKey() {
-        cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        cachingStore.fetch(null, bytesKey("anyTo"), ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, bytesKey("anyTo"), ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        cachingStore.fetch(bytesKey("anyFrom"), null, ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> cachingStore.fetch(bytesKey("anyFrom"), null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
     @Test
