@@ -107,15 +107,8 @@ class KafkaController(val config: KafkaConfig,
   private val partitionModificationsHandlers: mutable.Map[String, PartitionModificationsHandler] = mutable.Map.empty
   private val partitionReassignmentHandler = new PartitionReassignmentHandler(eventManager)
   private val preferredReplicaElectionHandler = new PreferredReplicaElectionHandler(eventManager)
+  private val isrChangeNotificationHandler = new IsrChangeNotificationHandler(eventManager)
   private val logDirEventNotificationHandler = new LogDirEventNotificationHandler(eventManager)
-
-  // If we are using AlterIsr (IBP >= KAFKA_2_7_IV1), we skip setting a watch on the ISR notification znode
-  private val isrChangeNotificationHandlerOpt: Option[ZNodeChildChangeHandler] =
-    if (config.interBrokerProtocolVersion < KAFKA_2_7_IV1) {
-      Some(new IsrChangeNotificationHandler(eventManager))
-    } else {
-      None
-    }
 
   @volatile private var activeControllerId = -1
   @volatile private var offlinePartitionCount = 0
@@ -229,9 +222,9 @@ class KafkaController(val config: KafkaConfig,
     info("Registering handlers")
 
     // before reading source of truth from zookeeper, register the listeners to get broker/topic callbacks
-    val childChangeHandlers = Seq(brokerChangeHandler, topicChangeHandler, topicDeletionHandler, logDirEventNotificationHandler)
+    val childChangeHandlers = Seq(brokerChangeHandler, topicChangeHandler, topicDeletionHandler, logDirEventNotificationHandler,
+      isrChangeNotificationHandler)
     childChangeHandlers.foreach(zkClient.registerZNodeChildChangeHandler)
-    isrChangeNotificationHandlerOpt.foreach(zkClient.registerZNodeChildChangeHandler)
 
     val nodeChangeHandlers = Seq(preferredReplicaElectionHandler, partitionReassignmentHandler)
     nodeChangeHandlers.foreach(zkClient.registerZNodeChangeHandlerAndCheckExistence)
@@ -291,10 +284,10 @@ class KafkaController(val config: KafkaConfig,
   private def onControllerResignation(): Unit = {
     debug("Resigning")
     // de-register listeners
-    isrChangeNotificationHandlerOpt.foreach(handler => zkClient.unregisterZNodeChildChangeHandler(handler.path))
     zkClient.unregisterZNodeChangeHandler(partitionReassignmentHandler.path)
     zkClient.unregisterZNodeChangeHandler(preferredReplicaElectionHandler.path)
     zkClient.unregisterZNodeChildChangeHandler(logDirEventNotificationHandler.path)
+    zkClient.unregisterStateChangeHandler(isrChangeNotificationHandler.path)
     unregisterBrokerModificationsHandler(brokerModificationsHandlers.keySet)
 
     // shutdown leader rebalance scheduler
