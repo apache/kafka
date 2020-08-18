@@ -63,7 +63,6 @@ public class RocksDBMetricsRecorder {
     }
 
     private static final String ROCKSDB_PROPERTIES_PREFIX = "rocksdb.";
-    private static final ByteBuffer CONVERSION_BUFFER = ByteBuffer.allocate(Long.BYTES);
 
     private final Logger logger;
 
@@ -184,8 +183,10 @@ public class RocksDBMetricsRecorder {
             BigInteger result = BigInteger.valueOf(0);
             for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
                 try {
+                    // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
+                    // BigInteger and construct the object from the byte representation of the value
                     result = result.add(new BigInteger(1, longToBytes(
-                            valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE))));
+                        valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE))));
 
                 } catch (final RocksDBException e) {
                     throw new ProcessorStateException("Error adding RocksDB metric " + NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE, e);
@@ -196,8 +197,9 @@ public class RocksDBMetricsRecorder {
     }
 
     private static byte[] longToBytes(final long data) {
-        CONVERSION_BUFFER.putLong(0, data);
-        return CONVERSION_BUFFER.array();
+        final ByteBuffer conversionBuffer = ByteBuffer.allocate(Long.BYTES);
+        conversionBuffer.putLong(0, data);
+        return conversionBuffer.array();
     }
 
     public void removeValueProviders(final String segmentName) {

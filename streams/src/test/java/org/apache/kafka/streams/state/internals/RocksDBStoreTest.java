@@ -628,9 +628,6 @@ public class RocksDBStoreTest {
         EasyMock.replay(context);
 
         rocksDBStore.init(context, rocksDBStore);
-        final byte[] key = "hello".getBytes();
-        final byte[] value = "world".getBytes();
-        rocksDBStore.put(Bytes.wrap(key), value);
 
         final Metric numberOfEntriesActiveMemTable = metrics.metric(new MetricName(
             "num-entries-active-mem-table",
@@ -638,6 +635,14 @@ public class RocksDBStoreTest {
             "description is not verified",
             streamsMetrics.storeLevelTagMap(Thread.currentThread().getName(), taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
+
+        assertThat(numberOfEntriesActiveMemTable, notNullValue());
+        assertThat(numberOfEntriesActiveMemTable.metricValue(), is(BigInteger.valueOf(0)));
+
+        final byte[] key = "hello".getBytes();
+        final byte[] value = "world".getBytes();
+        rocksDBStore.put(Bytes.wrap(key), value);
+
         assertThat(numberOfEntriesActiveMemTable, notNullValue());
         assertThat((BigInteger) numberOfEntriesActiveMemTable.metricValue(), greaterThan(BigInteger.valueOf(0)));
     }
