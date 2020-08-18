@@ -38,6 +38,7 @@ public class ProtoUtilsTest {
                     break;
                 default:
                     assertFalse(key + " should not require delayed allocation", key.requiresDelayedAllocation);
+                    break;
             }
         }
     }

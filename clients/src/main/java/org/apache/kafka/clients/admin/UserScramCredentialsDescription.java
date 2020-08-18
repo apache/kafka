@@ -81,9 +81,12 @@ public class UserScramCredentialsDescription {
     /**
      *
      * @return the always non-null/unmodifiable list of SASL/SCRAM credential representations for the user
-     * (empty if {@link #exception} defines an exception)
+     * @throws ApiException if {@link #exception()} indicates an exception is present
      */
     public List<ScramCredentialInfo> credentialInfos() {
+        if (exception().isPresent()) {
+            throw exception().get();
+        }
         return credentialInfos;
     }
 }
