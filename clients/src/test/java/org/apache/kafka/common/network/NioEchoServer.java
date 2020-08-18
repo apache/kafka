@@ -60,11 +60,7 @@ public class NioEchoServer extends Thread {
     public enum MetricType {
         TOTAL, RATE, AVG, MAX;
 
-        private final String metricNameSuffix;
-
-        private MetricType() {
-            metricNameSuffix = "-" + name().toLowerCase(Locale.ROOT);
-        }
+        private final String metricNameSuffix = "-" + name().toLowerCase(Locale.ROOT);
 
         public String metricNameSuffix() {
             return metricNameSuffix;
