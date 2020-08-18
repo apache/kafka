@@ -23,26 +23,23 @@ import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.HostedPartition.{Offline, Online}
-import kafka.server.{HostedPartition, KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils
+import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk._
-import org.junit.{After, Before, Test}
-import org.junit.Assert.{assertEquals, assertTrue}
-import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
-import org.apache.log4j.Level
-import kafka.utils.LogCaptureAppender
 import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.protocol.Errors
-import org.scalatest.Assertions.fail
-
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable
-import scala.collection.Seq
-import scala.util.{Failure, Success, Try}
+import org.apache.kafka.common.{ElectionType, TopicPartition}
+import org.apache.log4j.Level
+import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.{After, Before, Test}
 import org.mockito.Mockito.{doAnswer, spy, verify}
 import org.mockito.invocation.InvocationOnMock
+import org.scalatest.Assertions.fail
+
+import scala.collection.{Seq, mutable}
+import scala.jdk.CollectionConverters._
+import scala.util.{Failure, Success, Try}
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -445,43 +442,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), firstControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.initialLeaderEpoch + 1) &&
         leaderIsrAndControllerEpochMap(tp).leaderAndIsr.isr == List(otherBrokerId)
     }, "failed to get expected partition state after entire isr went offline")
-  }
-
-  @Test
-  def testAlterIsrSendsLeaderAndIsr(): Unit = {
-    servers = makeServers(2)
-    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
-    val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
-    val tp = new TopicPartition("t", 0)
-    val assignment = Map(tp.partition -> Seq(controllerId, otherBrokerId))
-    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
-      "failed to get expected partition state upon topic creation")
-    servers(otherBrokerId).shutdown()
-    //servers(otherBrokerId).awaitShutdown()
-
-    val spyController = spy(getController().kafkaController)
-    getController().kafkaController = spyController
-
-    doAnswer((_: InvocationOnMock) => {
-      latch.countDown()
-    }).doCallRealMethod().when(spyController).alterIsrs()
-
-
-    TestUtils.waitUntilTrue(() => {
-      servers.find(_.config.brokerId == controllerId).get.replicaManager.getPartition(tp) match {
-        case Online(partition) => println(partition.inSyncReplicaIds)
-        case Offline => println("Offline")
-        case HostedPartition.None => println("None")
-      }
-      false
-    }, "Failed to see ISR propagate")
-
-
-    assertTrue(servers.forall(_.dataPlaneRequestProcessor.
-
-
-
   }
 
   @Test

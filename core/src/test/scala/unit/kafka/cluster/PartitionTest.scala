@@ -1493,7 +1493,7 @@ class PartitionTest extends AbstractPartitionTest {
     // One AlterIsr request in-flight
     assertEquals(alterIsrManager.isrUpdates.size, 1)
 
-    // Try to expand again, should do nothing
+    // Try to modify ISR again, should do nothing
     partition.shrinkIsr(Set(follower3))
     assertEquals(alterIsrManager.isrUpdates.size, 1)
   }
