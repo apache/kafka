@@ -33,7 +33,7 @@ import java.util.Map;
  */
 public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
-    private final Long windowSize;
+    private Long windowSize;
     private boolean isChangelogTopic;
 
     private Deserializer<T> inner;
@@ -61,6 +61,11 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
+        if (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) instanceof String) {
+            windowSize = Long.parseLong((String) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG));
+        } else {
+            windowSize = (Long) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG);
+        }
         if (inner == null) {
             final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
             final String value = (String) configs.get(propertyName);
@@ -87,6 +92,7 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         }
 
         // toBinary was used to serialize the data
+
         return WindowKeySchema.from(data, windowSize, inner, topic);
     }
 

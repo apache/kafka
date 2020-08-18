@@ -564,6 +564,10 @@ public class StreamsConfig extends AbstractConfig {
     private static final String PARTITION_GROUPER_CLASS_DOC = "Partition grouper class that implements the <code>org.apache.kafka.streams.processor.PartitionGrouper</code> interface." +
         " WARNING: This config is deprecated and will be removed in 3.0.0 release.";
 
+    /** <code>window.size.ms</code> */    @SuppressWarnings("WeakerAccess")
+    public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
+    private static final String WINDOW_SIZE_MS_DOC = "Passes window size to the deserializer in order to calculate window end times. Default is Long.MAX_VALUE";
+
     /**
      * {@code topology.optimization}
      * @deprecated since 2.7; use {@link #TOPOLOGY_OPTIMIZATION_CONFIG} instead
@@ -855,7 +859,12 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     24 * 60 * 60 * 1000L,
                     Importance.LOW,
-                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC);
+                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
+            .define(WINDOW_SIZE_MS_CONFIG,
+                Type.LONG,
+                Long.MAX_VALUE,
+                Importance.LOW,
+                WINDOW_SIZE_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
