@@ -826,7 +826,7 @@ public class StreamTaskTest {
         // st is now 30
         assertTrue(task.process(0L));
 
-        processorStreamTime.mockProcessor.scheduleCancellable.cancel();
+        processorStreamTime.mockProcessor.scheduleCancellable().cancel();
 
         assertFalse(task.maybePunctuateStreamTime());
 
@@ -841,7 +841,7 @@ public class StreamTaskTest {
         final long now = time.milliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
-        processorSystemTime.mockProcessor.scheduleCancellable.cancel();
+        processorSystemTime.mockProcessor.scheduleCancellable().cancel();
         time.sleep(10);
         assertFalse(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.checkAndClearPunctuateResult(PunctuationType.WALL_CLOCK_TIME, now + 10);

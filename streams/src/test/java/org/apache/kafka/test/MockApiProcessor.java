@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -118,7 +119,7 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         assertThat("the number of outputs:", punctuated.size(), is(expected.length));
 
         for (int i = 0; i < expected.length; i++) {
-            assertThat("output[" + i + "]:", (long) punctuated.get(i), is(expected[i]));
+            assertThat("output[" + i + "]:", punctuated.get(i), is(expected[i]));
         }
 
         processed.clear();
@@ -132,36 +133,12 @@ public class MockApiProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VI
         return lastValueAndTimestampPerKey;
     }
 
-    public ArrayList<Long> punctuatedStreamTime() {
+    public List<Long> punctuatedStreamTime() {
         return punctuatedStreamTime;
-    }
-
-    public ArrayList<Long> punctuatedSystemTime() {
-        return punctuatedSystemTime;
     }
 
     public Cancellable scheduleCancellable() {
         return scheduleCancellable;
-    }
-
-    public void scheduleCancellable(final Cancellable scheduleCancellable) {
-        this.scheduleCancellable = scheduleCancellable;
-    }
-
-    public PunctuationType punctuationType() {
-        return punctuationType;
-    }
-
-    public long scheduleInterval() {
-        return scheduleInterval;
-    }
-
-    public boolean commitRequested() {
-        return commitRequested;
-    }
-
-    public void commitRequested(final boolean commitRequested) {
-        this.commitRequested = commitRequested;
     }
 
     public ProcessorContext<KOut, VOut> context() {

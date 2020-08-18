@@ -60,7 +60,7 @@ public class MockApiProcessorSupplier<KIn, VIn, KOut, VOut> implements Processor
         return processors.size();
     }
 
-        // get the captured processors with the expected number
+    // get the captured processors with the expected number
     public List<MockApiProcessor<KIn, VIn, KOut, VOut>> capturedProcessors(final int expectedNumberOfProcessors) {
         assertEquals(expectedNumberOfProcessors, processors.size());
 

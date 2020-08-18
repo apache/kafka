@@ -674,7 +674,7 @@ public class InternalTopologyBuilder {
     private void validateGlobalStoreArguments(final String sourceName,
                                               final String topic,
                                               final String processorName,
-                                              final ProcessorSupplier<?, ?, ?, ?> stateUpdateSupplier,
+                                              final ProcessorSupplier<?, ?, Void, Void> stateUpdateSupplier,
                                               final String storeName,
                                               final boolean loggingEnabled) {
         Objects.requireNonNull(sourceName, "sourceName must not be null");
