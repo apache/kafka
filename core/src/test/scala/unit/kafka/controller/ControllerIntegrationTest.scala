@@ -23,7 +23,8 @@ import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.metrics.KafkaYammerMetrics
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.HostedPartition.{Offline, Online}
+import kafka.server.{HostedPartition, KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import kafka.zk._
 import org.junit.{After, Before, Test}
@@ -444,6 +445,43 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), firstControllerEpoch, LeaderAndIsr.NoLeader, LeaderAndIsr.initialLeaderEpoch + 1) &&
         leaderIsrAndControllerEpochMap(tp).leaderAndIsr.isr == List(otherBrokerId)
     }, "failed to get expected partition state after entire isr went offline")
+  }
+
+  @Test
+  def testAlterIsrSendsLeaderAndIsr(): Unit = {
+    servers = makeServers(2)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId, otherBrokerId))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    servers(otherBrokerId).shutdown()
+    //servers(otherBrokerId).awaitShutdown()
+
+    val spyController = spy(getController().kafkaController)
+    getController().kafkaController = spyController
+
+    doAnswer((_: InvocationOnMock) => {
+      latch.countDown()
+    }).doCallRealMethod().when(spyController).alterIsrs()
+
+
+    TestUtils.waitUntilTrue(() => {
+      servers.find(_.config.brokerId == controllerId).get.replicaManager.getPartition(tp) match {
+        case Online(partition) => println(partition.inSyncReplicaIds)
+        case Offline => println("Offline")
+        case HostedPartition.None => println("None")
+      }
+      false
+    }, "Failed to see ISR propagate")
+
+
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.
+
+
+
   }
 
   @Test
