@@ -46,7 +46,7 @@ class ReplicaScaleTest(Test):
         self.zk.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=500, partition_count=34, replication_factor=3)
+    @parametrize(topic_count=100, partition_count=34, replication_factor=3)
     def test_produce_consume(self, topic_count, partition_count, replication_factor):
         topics_create_start_time = time.time()
         for i in range(topic_count):
@@ -101,7 +101,7 @@ class ReplicaScaleTest(Test):
         trogdor.stop()
 
     @cluster(num_nodes=12)
-    @parametrize(topic_count=500, partition_count=34, replication_factor=3)
+    @parametrize(topic_count=100, partition_count=34, replication_factor=3)
     def test_clean_bounce(self, topic_count, partition_count, replication_factor):
         topics_create_start_time = time.time()
         for i in range(topic_count):
