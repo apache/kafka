@@ -267,7 +267,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   private def deleteRemoteLogSegment(metadata: RemoteLogSegmentMetadata) = {
     try {
       //todo-tier delete in RLMM in 2 phases to avoid dangling objects
-      remoteLogMetadataManager.deleteRemoteLogSegmentMetadata(metadata.remoteLogSegmentId())
+      remoteLogMetadataManager.deleteRemoteLogSegmentMetadata(metadata)
       remoteLogStorageManager.deleteLogSegment(metadata)
     } catch {
       case e: Exception => {
@@ -711,7 +711,7 @@ object RemoteLogManager {
    */
   val CLUSTER_ID = "cluster.id"
 
-  def DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null, null, Map.empty, Defaults.RemoteLogRetentionBytes, TimeUnit.MINUTES.toMillis(Defaults.RemoteLogRetentionMinutes), Defaults.RemoteLogReaderThreads, Defaults.RemoteLogReaderMaxPendingTasks, Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs, Defaults.RemoteLogMetadataManager, Defaults.RemoteLogMetadataManagerClassPath, rlmmProps = Map.empty)
+  def DefaultConfig = RemoteLogManagerConfig(remoteLogStorageEnable = Defaults.RemoteLogStorageEnable, null, null, Map.empty, Defaults.RemoteLogRetentionBytes, Defaults.RemoteLogRetentionMillis, Defaults.RemoteLogReaderThreads, Defaults.RemoteLogReaderMaxPendingTasks, Defaults.RemoteLogManagerThreadPoolSize, Defaults.RemoteLogManagerTaskIntervalMs, Defaults.RemoteLogMetadataManager, Defaults.RemoteLogMetadataManagerClassPath, rlmmProps = Map.empty)
 
   def createRemoteLogManagerConfig(config: KafkaConfig): RemoteLogManagerConfig = {
     var rsmProps = Map[String, Any]()

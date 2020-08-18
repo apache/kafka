@@ -234,7 +234,7 @@ class MockRemoteLogMetadataManager extends RemoteLogMetadataManager {
     Optional.empty()
   }
 
-  override def deleteRemoteLogSegmentMetadata(remoteLogSegmentId: RemoteLogSegmentId): Unit = {}
+  override def deleteRemoteLogSegmentMetadata(remoteLogSegmentMetadata: RemoteLogSegmentMetadata): Unit = {}
 
   override def listRemoteLogSegments(topicPartition: TopicPartition,
                                      minOffset: Long): util.Iterator[RemoteLogSegmentMetadata] = Collections.emptyIterator()

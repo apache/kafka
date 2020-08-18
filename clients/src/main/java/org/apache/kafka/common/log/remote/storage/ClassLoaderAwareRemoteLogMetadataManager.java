@@ -57,33 +57,33 @@ public class ClassLoaderAwareRemoteLogMetadataManager implements RemoteLogMetada
     }
 
     @Override
-    public Optional<Long> earliestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException {
+    public Optional<Long> earliestLogOffset(TopicPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            return delegate.earliestLogOffset(tp, leaderEpoch);
+            return delegate.earliestLogOffset(topicPartition, leaderEpoch);
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
     }
 
     @Override
-    public Optional<Long> highestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException {
+    public Optional<Long> highestLogOffset(TopicPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            return delegate.highestLogOffset(tp, 0);
+            return delegate.highestLogOffset(topicPartition, 0);
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }
     }
 
     @Override
-    public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws RemoteStorageException {
+    public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
         ClassLoader originalClassLoader = Thread.currentThread().getContextClassLoader();
         Thread.currentThread().setContextClassLoader(loader);
         try {
-            delegate.deleteRemoteLogSegmentMetadata(remoteLogSegmentId);
+            delegate.deleteRemoteLogSegmentMetadata(remoteLogSegmentMetadata);
         } finally {
             Thread.currentThread().setContextClassLoader(originalClassLoader);
         }

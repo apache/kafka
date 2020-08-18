@@ -1110,7 +1110,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // enforce unclean leader election as disabled
           props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
           props.put(LogConfig.MinInSyncReplicasProp, ((config.remoteLogMetadataTopicReplicationFactor/2) + 1).toString)
-          props.put(LogConfig.RetentionMsProp, (config.remoteLogMetadataTopicRetentionMins * 60 * 1000).toString)
+          props.put(LogConfig.RetentionMsProp, config.remoteLogMetadataTopicRetentionMillis.toString)
 
           createTopic(topic, config.remoteLogMetadataTopicPartitions, config.remoteLogMetadataTopicReplicationFactor, props)
         }

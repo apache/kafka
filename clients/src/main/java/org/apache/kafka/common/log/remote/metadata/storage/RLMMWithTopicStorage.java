@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -74,10 +75,10 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP =
             "remote.log.metadata.topic.replication.factor";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP = "remote.log.metadata.topic.partitions";
-    public static final String REMOTE_LOG_METADATA_TOPIC_RETENTION_MINS_PROP =
-            "remote.log.metadata.topic.retention.mins";
-    public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS = 3;
-    public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MINS = 365 * 24 * 60;
+    public static final String REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS_PROP =
+            "remote.log.metadata.topic.retention.ms";
+    public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS = 50;
+    public static final long DEFAULT_REMOTE_LOG_METADATA_TOPIC_RETENTION_MILLIS = 365 * 24 * 60 * 60 * 1000L;
     public static final int DEFAULT_REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR = 3;
 
     private static final String COMMITTED_LOG_METADATA_FILE_NAME = "_rlmm_committed_metadata_log";
@@ -202,30 +203,28 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     @Override
-    public Optional<Long> earliestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException {
+    public Optional<Long> earliestLogOffset(TopicPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
         ensureInitialized();
 
-        NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(tp);
+        NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(topicPartition);
 
         return map == null || map.isEmpty() ? Optional.empty() : Optional.of(map.firstEntry().getKey());
     }
 
-    public Optional<Long> highestLogOffset(TopicPartition tp, int leaderEpoch) throws RemoteStorageException {
+    public Optional<Long> highestLogOffset(TopicPartition topicPartition, int leaderEpoch) throws RemoteStorageException {
         ensureInitialized();
 
-        NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(tp);
+        NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds.get(topicPartition);
 
         return map == null || map.isEmpty() ? Optional.empty() : Optional.of(map.lastEntry().getKey());
     }
 
     @Override
-    public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentId remoteLogSegmentId) throws RemoteStorageException {
+    public void deleteRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
         ensureInitialized();
+        Objects.requireNonNull(remoteLogSegmentMetadata, "remoteLogSegmentMetadata can not be null");
 
-        RemoteLogSegmentMetadata metadata = idWithSegmentMetadata.get(remoteLogSegmentId);
-        if (metadata != null) {
-            publishMessageToPartition(RemoteLogSegmentMetadata.markForDeletion(metadata));
-        }
+        publishMessageToPartition(RemoteLogSegmentMetadata.markForDeletion(remoteLogSegmentMetadata));
     }
 
     @Override
@@ -390,7 +389,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         ensureInitialized();
         Objects.requireNonNull(tp, "TopicPartition can not be null");
 
-        return Math.abs(tp.toString().hashCode()) % noOfMetadataTopicPartitions;
+        return Utils.toPositive(Utils.murmur2(tp.toString().getBytes(StandardCharsets.UTF_8)) )% noOfMetadataTopicPartitions;
     }
 
     private void createAdminClient() {

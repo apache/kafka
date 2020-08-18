@@ -179,7 +179,7 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
       Assert.assertEquals(rlSegIdTp0_0_100, rlSegMetTp0_15)
 
       // delete the segment
-      rlmmWithTopicStorage.deleteRemoteLogSegmentMetadata(rlSegIdTp0_0_100)
+      rlmmWithTopicStorage.deleteRemoteLogSegmentMetadata(rlSegMetTp0_0_100)
 
       // there should not be any entry as it is already deleted.
       val rlSegMetTp0_15_2 = rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 15L, 0)
