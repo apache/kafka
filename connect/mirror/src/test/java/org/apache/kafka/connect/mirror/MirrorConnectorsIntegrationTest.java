@@ -193,6 +193,7 @@ public class MirrorConnectorsIntegrationTest {
         primary.stop();
         backup.stop();
         assertFalse(exited.get());
+        Exit.resetExitProcedure();
     }
 
     @Test

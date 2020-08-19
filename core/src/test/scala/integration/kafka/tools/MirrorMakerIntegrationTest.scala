@@ -52,6 +52,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
   override def tearDown(): Unit = {
     super.tearDown()
     assertFalse(exited.get())
+    Exit.resetExitProcedure()
   }
 
   @Test(expected = classOf[TimeoutException])
