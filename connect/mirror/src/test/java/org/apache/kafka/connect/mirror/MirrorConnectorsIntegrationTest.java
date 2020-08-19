@@ -192,8 +192,11 @@ public class MirrorConnectorsIntegrationTest {
         deleteAllTopics(backup.kafka());
         primary.stop();
         backup.stop();
-        assertFalse(exited.get());
-        Exit.resetExitProcedure();
+        try {
+            assertFalse(exited.get());
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
 
     @Test
