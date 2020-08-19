@@ -19,11 +19,14 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.AlterConfigsResponseData;
+import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -50,14 +53,19 @@ public class AlterConfigsResponse extends AbstractResponse {
     }
 
     public AlterConfigsResponse addResults(final Map<ConfigResource, ApiError> results) {
+        List<AlterConfigsResourceResponse> originalResults = data.responses();
+        final List<AlterConfigsResourceResponse> newResults = new ArrayList<>(originalResults);
+
         results.forEach(
-            (resource, error) -> data.responses().add(
-                new AlterConfigsResponseData.AlterConfigsResourceResponse()
+            (resource, error) -> newResults.add(
+                new AlterConfigsResourceResponse()
                     .setErrorCode(error.error().code())
                     .setErrorMessage(error.message())
                     .setResourceName(resource.name())
                     .setResourceType(resource.type().id()))
         );
+        this.data.setResponses(newResults);
+
         return this;
     }
 

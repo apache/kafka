@@ -25,7 +25,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class IncrementalAlterConfigsResponse extends AbstractResponse {
@@ -39,14 +41,18 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
     }
 
     public IncrementalAlterConfigsResponse addResults(final Map<ConfigResource, ApiError> results) {
-        for (Map.Entry<ConfigResource, ApiError> entry : results.entrySet()) {
-            this.data.responses().add(
+        List<AlterConfigsResourceResponse> originalResults = data.responses();
+        final List<AlterConfigsResourceResponse> newResults = new ArrayList<>(originalResults);
+
+        results.forEach(
+            (resource, error) -> newResults.add(
                 new AlterConfigsResourceResponse()
-                    .setResourceName(entry.getKey().name())
-                    .setResourceType(entry.getKey().type().id())
-                    .setErrorCode(entry.getValue().error().code())
-                    .setErrorMessage(entry.getValue().message()));
-        }
+                    .setErrorCode(error.error().code())
+                    .setErrorMessage(error.message())
+                    .setResourceName(resource.name())
+                    .setResourceType(resource.type().id()))
+        );
+        this.data.setResponses(newResults);
         return this;
     }
 

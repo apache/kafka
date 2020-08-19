@@ -194,7 +194,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           sendResponseMaybeThrottle,
           request,
           response => {
-            mergeResponse(response.responseBody().asInstanceOf[R],
+            mergeResponse(response.responseBody.asInstanceOf[R],
               customizedAuthorizationError(unauthorizedResources))
           })
       } else {

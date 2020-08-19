@@ -40,6 +40,7 @@ import kafka.network.RequestChannel.SendResponse
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, AlterConfigsUtil, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation
@@ -374,19 +375,29 @@ class KafkaApisTest {
     val redirectRequestBuilder = new AlterClientQuotasRequest.Builder(
       Set(new ClientQuotaAlteration(quotaEntity, Collections.emptySet())).asJava, false)
 
+    val capturedCallback = EasyMock.newCapture[ClientResponse => AbstractResponse]()
+
     EasyMock.expect(brokerToControllerChannelManager.forwardRequest(
       EasyMock.eq(redirectRequestBuilder),
       anyObject[(RequestChannel.Request, Int => AbstractResponse,
         Option[Send => Unit]) => Unit](),
       EasyMock.eq(request),
-      anyObject(),
+      EasyMock.capture(capturedCallback),
       anyObject()
     )).once()
 
+    val clientResponse: ClientResponse = EasyMock.createNiceMock(classOf[ClientResponse])
+    val alterClientQuotasResponse = new AlterClientQuotasResponse(
+      Map(quotaEntity -> ApiError.NONE).asJava, 10
+    )
+    EasyMock.expect(clientResponse.responseBody).andReturn(alterClientQuotasResponse)
+
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, brokerToControllerChannelManager)
+      authorizer, controller, brokerToControllerChannelManager, clientResponse)
 
     createKafkaApis(authorizer = Some(authorizer)).handleAlterClientQuotasRequest(request)
+
+    assertEquals(alterClientQuotasResponse, capturedCallback.getValue.apply(clientResponse))
 
     EasyMock.verify(controller, brokerToControllerChannelManager)
   }
@@ -649,19 +660,46 @@ class KafkaApisTest {
         .setTopics(redirectTopics)
     )
 
+    val clientResponse: ClientResponse = EasyMock.createNiceMock(classOf[ClientResponse])
+
+    val authorizedTopicCollection = new CreateTopicsResponseData.CreatableTopicResultCollection(2)
+    authorizedTopicCollection.add(new CreateTopicsResponseData.CreatableTopicResult()
+      .setName(authorizedTopic)
+      .setErrorCode(Errors.NONE.code))
+    val createTopicsResponse = new CreateTopicsResponse(
+      new CreateTopicsResponseData()
+        .setTopics(authorizedTopicCollection)
+    )
+
+    EasyMock.expect(clientResponse.responseBody).andReturn(createTopicsResponse)
+
+    val capturedCallback = EasyMock.newCapture[ClientResponse => AbstractResponse]()
+
     EasyMock.expect(brokerToControllerChannelManager.forwardRequest(
       EasyMock.eq(redirectRequestBuilder),
       anyObject[(RequestChannel.Request, Int => AbstractResponse,
         Option[Send => Unit]) => Unit](),
       EasyMock.eq(request),
-      anyObject(),
+      EasyMock.capture(capturedCallback),
       anyObject()
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, clientControllerQuotaManager, requestChannel,
-      authorizer, controller, brokerToControllerChannelManager)
+      authorizer, controller, brokerToControllerChannelManager, clientResponse)
 
     createKafkaApis(authorizer = Some(authorizer)).handleCreateTopicsRequest(request)
+
+    val expectedTopicCollection = new CreateTopicsResponseData.CreatableTopicResultCollection(2)
+    expectedTopicCollection.add(new CreateTopicsResponseData.CreatableTopicResult()
+      .setName(authorizedTopic)
+      .setErrorCode(Errors.NONE.code))
+    expectedTopicCollection.add(new CreateTopicsResponseData.CreatableTopicResult()
+      .setName(unauthorizedTopic)
+      .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+      .setErrorMessage("Authorization failed."))
+
+    assertEquals(expectedTopicCollection, capturedCallback.getValue.apply(
+      clientResponse).asInstanceOf[CreateTopicsResponse].data.topics)
 
     EasyMock.verify(controller, brokerToControllerChannelManager, clientControllerQuotaManager)
   }
@@ -962,19 +1000,46 @@ class KafkaApisTest {
     )
     val redirectRequestBuilder = new AlterConfigsRequest.Builder(redirectConfigs.asJava, false)
 
+    val clientResponse: ClientResponse = EasyMock.createNiceMock(classOf[ClientResponse])
+
+    val validResponse =  new AlterConfigsResponseData.AlterConfigsResourceResponse()
+      .setErrorCode(Errors.NONE.code)
+      .setErrorMessage(null)
+      .setResourceName(authorizedTopic)
+      .setResourceType(ResourceType.TOPIC.code)
+
+    val alterConfigsResponse = new AlterConfigsResponse(
+      new AlterConfigsResponseData()
+        .setResponses(List(validResponse).asJava))
+
+    EasyMock.expect(clientResponse.responseBody).andReturn(alterConfigsResponse)
+
+    val capturedCallback = EasyMock.newCapture[ClientResponse => AbstractResponse]()
+
     EasyMock.expect(brokerToControllerChannelManager.forwardRequest(
       EasyMock.eq(redirectRequestBuilder),
       anyObject[(RequestChannel.Request, Int => AbstractResponse,
         Option[Send => Unit]) => Unit](),
       EasyMock.eq(request),
-      anyObject(),
+      EasyMock.capture(capturedCallback),
       anyObject()
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, brokerToControllerChannelManager)
+      authorizer, controller, brokerToControllerChannelManager, clientResponse)
 
     createKafkaApis(authorizer = Some(authorizer)).handleAlterConfigsRequest(request)
+
+    val expectedAlterConfigsResponses = List(validResponse,
+      new AlterConfigsResponseData.AlterConfigsResourceResponse()
+        .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        .setErrorMessage(null)
+        .setResourceName(unauthorizedTopic)
+        .setResourceType(ResourceType.TOPIC.code)
+    ).asJava
+
+    assertEquals(expectedAlterConfigsResponses, capturedCallback.getValue.apply(
+        clientResponse).asInstanceOf[AlterConfigsResponse].data.responses)
 
     EasyMock.verify(controller, brokerToControllerChannelManager)
   }
@@ -1209,23 +1274,49 @@ class KafkaApisTest {
       .build(topicHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest)
 
-    // Should only contain authorized resource
     val redirectRequestBuilder = new IncrementalAlterConfigsRequest.Builder(
       getIncrementalAlterConfigRequestData(Seq(authorizedResource)))
+
+    val clientResponse: ClientResponse = EasyMock.createNiceMock(classOf[ClientResponse])
+
+    val validResponse = new IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse()
+      .setErrorCode(Errors.NONE.code)
+      .setErrorMessage(null)
+      .setResourceName(authorizedTopic)
+      .setResourceType(ResourceType.TOPIC.code)
+
+    val incrementalAlterConfigsResponse = new IncrementalAlterConfigsResponse(
+      new IncrementalAlterConfigsResponseData()
+        .setResponses(List(validResponse).asJava))
+
+    EasyMock.expect(clientResponse.responseBody).andReturn(incrementalAlterConfigsResponse)
+
+    val capturedCallback = EasyMock.newCapture[ClientResponse => AbstractResponse]()
 
     EasyMock.expect(brokerToControllerChannelManager.forwardRequest(
       EasyMock.eq(redirectRequestBuilder),
       anyObject[(RequestChannel.Request, Int => AbstractResponse,
         Option[Send => Unit]) => Unit](),
       EasyMock.eq(request),
-      anyObject(),
+      EasyMock.capture(capturedCallback),
       anyObject()
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, brokerToControllerChannelManager)
+      authorizer, controller, brokerToControllerChannelManager, clientResponse)
 
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
+
+    val expectedIncrementalAlterConfigsResponses = List(validResponse,
+      new IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse()
+        .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        .setErrorMessage(null)
+        .setResourceName(unauthorizedTopic)
+        .setResourceType(ResourceType.TOPIC.code)
+    ).asJava
+
+    assertEquals(expectedIncrementalAlterConfigsResponses, capturedCallback.getValue.apply(
+      clientResponse).asInstanceOf[IncrementalAlterConfigsResponse].data.responses)
 
     EasyMock.verify(controller, brokerToControllerChannelManager)
   }
