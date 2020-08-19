@@ -86,6 +86,7 @@ object Defaults {
   val MaxConnectionsPerIp: Int = Int.MaxValue
   val MaxConnectionsPerIpOverrides: String = ""
   val MaxConnections: Int = Int.MaxValue
+  val MaxConnectionCreationRate: Int = Int.MaxValue
   val ConnectionsMaxIdleMs = 10 * 60 * 1000L
   val RequestTimeoutMs = 30000
   val ConnectionSetupTimeoutMs = CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS
@@ -367,6 +368,7 @@ object KafkaConfig {
   val MaxConnectionsPerIpProp = "max.connections.per.ip"
   val MaxConnectionsPerIpOverridesProp = "max.connections.per.ip.overrides"
   val MaxConnectionsProp = "max.connections"
+  val MaxConnectionCreationRateProp = "max.connection.creation.rate"
   val ConnectionsMaxIdleMsProp = "connections.max.idle.ms"
   val FailedAuthenticationDelayMsProp = "connection.failed.authentication.delay.ms"
   /***************** rack configuration *************/
@@ -699,6 +701,11 @@ object KafkaConfig {
     "should be configured based on broker capacity while listener limits should be configured based on application requirements. " +
     "New connections are blocked if either the listener or broker limit is reached. Connections on the inter-broker listener are " +
     "permitted even if broker-wide limit is reached. The least recently used connection on another listener will be closed in this case."
+  val MaxConnectionCreationRateDoc = "The maximum connection creation rate we allow in the broker at any time. Listener-level limits " +
+    s"may also be configured by prefixing the config name with the listener prefix, for example, <code>listener.name.internal.$MaxConnectionCreationRateProp</code>." +
+    "Broker-wide connection rate limit should be configured based on broker capacity while listener limits should be configured based on " +
+    "application requirements. New connections will be throttled if either the listener or the broker limit is reached, with the exception " +
+    "of inter-broker listener. Connections on the inter-broker listener will be throttled only when the listener-level rate limit is reached."
   val ConnectionsMaxIdleMsDoc = "Idle connections timeout: the server socket processor threads close the connections that idle more than this"
   val FailedAuthenticationDelayMsDoc = "Connection close delay on failed authentication: this is the time (in milliseconds) by which connection close will be delayed on authentication failure. " +
     s"This must be configured to be less than $ConnectionsMaxIdleMsProp to prevent connection timeout."
@@ -1026,6 +1033,7 @@ object KafkaConfig {
       .define(MaxConnectionsPerIpProp, INT, Defaults.MaxConnectionsPerIp, atLeast(0), MEDIUM, MaxConnectionsPerIpDoc)
       .define(MaxConnectionsPerIpOverridesProp, STRING, Defaults.MaxConnectionsPerIpOverrides, MEDIUM, MaxConnectionsPerIpOverridesDoc)
       .define(MaxConnectionsProp, INT, Defaults.MaxConnections, atLeast(0), MEDIUM, MaxConnectionsDoc)
+      .define(MaxConnectionCreationRateProp, INT, Defaults.MaxConnectionCreationRate, atLeast(0), MEDIUM, MaxConnectionCreationRateDoc)
       .define(ConnectionsMaxIdleMsProp, LONG, Defaults.ConnectionsMaxIdleMs, MEDIUM, ConnectionsMaxIdleMsDoc)
       .define(FailedAuthenticationDelayMsProp, INT, Defaults.FailedAuthenticationDelayMs, atLeast(0), LOW, FailedAuthenticationDelayMsDoc)
 
@@ -1450,6 +1458,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val maxConnectionsPerIpOverrides: Map[String, Int] =
     getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, getString(KafkaConfig.MaxConnectionsPerIpOverridesProp)).map { case (k, v) => (k, v.toInt)}
   def maxConnections = getInt(KafkaConfig.MaxConnectionsProp)
+  def maxConnectionCreationRate = getInt(KafkaConfig.MaxConnectionCreationRateProp)
   val connectionsMaxIdleMs = getLong(KafkaConfig.ConnectionsMaxIdleMsProp)
   val failedAuthenticationDelayMs = getInt(KafkaConfig.FailedAuthenticationDelayMsProp)
 
