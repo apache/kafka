@@ -17,10 +17,10 @@
 
 package org.apache.kafka.common.protocol;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.UUID;
+
 
 public final class MessageUtil {
     public static final UUID ZERO_UUID = new UUID(0L, 0L);
