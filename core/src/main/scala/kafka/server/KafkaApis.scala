@@ -80,7 +80,7 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
-import org.apache.kafka.server.authorizer.{Authorizer, _}
+import org.apache.kafka.server.authorizer._
 
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -128,7 +128,8 @@ class KafkaApis(val requestChannel: RequestChannel,
    * @tparam RK resource key
    * @tparam RV resource value
    */
-  private[server] abstract class ForwardRequestHandler[T <: AbstractRequest, R <: AbstractResponse, RK, RV]() extends Logging {
+  private[server] abstract class ForwardRequestHandler[T <: AbstractRequest,
+    R <: AbstractResponse, RK, RV]() extends Logging {
 
     /**
      * Split the given resource into authorized and unauthorized sets.
@@ -140,20 +141,37 @@ class KafkaApis(val requestChannel: RequestChannel,
     /**
      * Controller handling logic of the request.
      */
-    def process(authorizedResources: Map[RK, RV], unauthorizedResult: Map[RK, ApiError], request: T): Unit
+    def process(authorizedResources: Map[RK, RV],
+                unauthorizedResult: Map[RK, ApiError],
+                request: T): Unit
 
-    def createRequestBuilder(authorizedResources: Map[RK, RV], request: T): AbstractRequest.Builder[T]
+    /**
+     * Build a forward request to the controller.
+     *
+     * @param authorizedResources authorized resources by the forwarding broker
+     * @param request the original request
+     * @return forward request builder
+     */
+    def createRequestBuilder(authorizedResources: Map[RK, RV],
+                             request: T): AbstractRequest.Builder[T]
 
+    /**
+     * Inject customized authorization failure info.
+     *
+     * @param unauthorizedResources unauthorized resources by the forwarding broker
+     * @return unauthorized resources with corresponding errors
+     */
     def customizedAuthorizationError(unauthorizedResources: Map[RK, RV]): Map[RK, ApiError]
 
     /**
-     * Merge the forward response with the previous unauthorized results.
+     * Merge the forward response with the previously unauthorized results.
      *
      * @param forwardResponse the forward request's response
      * @param unauthorizedResult original unauthorized results
      * @return combined response to the original client
      */
-    def mergeResponse(forwardResponse: R, unauthorizedResult: Map[RK, ApiError]): R
+    def mergeResponse(forwardResponse: R,
+                      unauthorizedResult: Map[RK, ApiError]): R
 
     def handle(request: RequestChannel.Request): Unit = {
       val requestBody = request.body[AbstractRequest].asInstanceOf[T]
@@ -169,8 +187,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             }.toMap
             process(authorizedResources, unauthorizedResult, requestBody)
           }
-      } else if (!controller.isActive && config.redirectionEnabled && authorizedResources.nonEmpty) {
-        brokerToControllerChannelManager.forwardRequest(createRequestBuilder(authorizedResources, requestBody),
+      } else if (!controller.isActive && config.redirectionEnabled &&
+        authorizedResources.nonEmpty) {
+        brokerToControllerChannelManager.forwardRequest(
+          createRequestBuilder(authorizedResources, requestBody),
           sendResponseMaybeThrottle,
           request,
           response => {
@@ -178,9 +198,17 @@ class KafkaApis(val requestChannel: RequestChannel,
               customizedAuthorizationError(unauthorizedResources))
           })
       } else {
-        // When IBP is smaller than 2.7, forwarding is not supported therefore requests are handled directly
-        process(authorizedResources, customizedAuthorizationError(unauthorizedResources), requestBody)
+        // When IBP is smaller than 2.7, forwarding is not supported,
+        // therefore requests are handled directly
+        process(authorizedResources, customizedAuthorizationError(
+          unauthorizedResources), requestBody)
       }
+    }
+
+    private def isForwardingRequest(request: RequestChannel.Request): Boolean = {
+      request.header.initialPrincipalName != null &&
+        request.header.initialClientId != null &&
+        request.context.fromPrivilegedListener
     }
   }
 
@@ -1831,11 +1859,14 @@ class KafkaApis(val requestChannel: RequestChannel,
           s"${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottleByControllerMutationQuota(controllerMutationQuota, request, createResponse, onComplete = None)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
-    val forwardRequestHandler = new ForwardRequestHandler[CreateTopicsRequest, CreateTopicsResponse, String, CreatableTopic] {
-      override def resourceSplitByAuthorization(createTopicsRequest: CreateTopicsRequest): (Map[String, CreatableTopic], Map[String, CreatableTopic]) = {
+    val forwardRequestHandler = new ForwardRequestHandler[CreateTopicsRequest,
+      CreateTopicsResponse, String, CreatableTopic] {
+
+      override def resourceSplitByAuthorization(createTopicsRequest: CreateTopicsRequest):
+      (Map[String, CreatableTopic], Map[String, CreatableTopic]) = {
         val hasClusterAuthorization = authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
           logIfDenied = false)
         val topics = createTopicsRequest.data.topics.asScala.map(_.name)
@@ -1907,7 +1938,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       override def createRequestBuilder(authorizedResource: Map[String, CreatableTopic],
-                                        createTopicsRequest: CreateTopicsRequest): AbstractRequest.Builder[CreateTopicsRequest] = {
+                                        createTopicsRequest: CreateTopicsRequest):
+      AbstractRequest.Builder[CreateTopicsRequest] = {
         val topicsAuthorized = new CreateTopicsRequestData.CreatableTopicCollection(authorizedResource.size)
         createTopicsRequest.data.topics.forEach(topic =>
         if (authorizedResource.contains(topic.name)) {
@@ -1924,7 +1956,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         unauthorizedResource.keys.map(topicName => topicName -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED)).toMap
       }
 
-      override def mergeResponse(forwardResponse: CreateTopicsResponse, unauthorizedResult: Map[String, ApiError]): CreateTopicsResponse = {
+      override def mergeResponse(forwardResponse: CreateTopicsResponse,
+                                 unauthorizedResult: Map[String, ApiError]): CreateTopicsResponse = {
         val forwardTopics = forwardResponse.data.topics
         unauthorizedResult.foreach{ case (topicName, error) =>
           forwardTopics.add(new CreateTopicsResponseData.CreatableTopicResult()
@@ -1957,7 +1990,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           s"client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottleByControllerMutationQuota(controllerMutationQuota, request, createResponse, onComplete = None)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
     if (!controller.isActive) {
@@ -2004,7 +2037,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
-      sendResponseMaybeThrottleByControllerMutationQuota(controllerMutationQuota, request, createResponse, onComplete = None)
+      sendResponseMaybeThrottle(controllerMutationQuota, request, createResponse, onComplete = None)
     }
 
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
@@ -2644,12 +2677,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
-    val forwardRequestHandler = new ForwardRequestHandler[AlterConfigsRequest, AlterConfigsResponse, ConfigResource, Config] {
-      /**
-       * Split the given resource into authorized and unauthorized sets.
-       *
-       * @return authorized resources and unauthorized resources
-       */
+    val forwardRequestHandler = new ForwardRequestHandler[AlterConfigsRequest,
+      AlterConfigsResponse, ConfigResource, Config] {
+
       override def resourceSplitByAuthorization(alterConfigsRequest: AlterConfigsRequest): (
         Map[ConfigResource, Config], Map[ConfigResource, Config]) = {
         val resources = alterConfigsRequest.configs.asScala.toMap
@@ -2670,7 +2700,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       override def process(authorizedResources: Map[ConfigResource, Config],
                            unauthorizedResult: Map[ConfigResource, ApiError],
                            alterConfigsRequest: AlterConfigsRequest): Unit = {
-        val authorizedResult = adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+        val authorizedResult = adminManager.alterConfigs(
+          authorizedResources, alterConfigsRequest.validateOnly)
         def sendResponseCallback(results: Map[ConfigResource, ApiError]): Unit = {
           sendResponseMaybeThrottle(request, requestThrottleMs =>
             new AlterConfigsResponse(results.asJava, requestThrottleMs))
@@ -2679,29 +2710,26 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       override def createRequestBuilder(authorizedResources: Map[ConfigResource, Config],
-                                        request: AlterConfigsRequest): AbstractRequest.Builder[AlterConfigsRequest] = {
+                                        request: AlterConfigsRequest):
+      AbstractRequest.Builder[AlterConfigsRequest] = {
         new AlterConfigsRequest.Builder(
           authorizedResources.asJava, request.validateOnly())
       }
 
-      override def customizedAuthorizationError(unauthorizedResources: Map[ConfigResource, Config]): Map[ConfigResource, ApiError] = {
+      override def customizedAuthorizationError(unauthorizedResources: Map[ConfigResource, Config]):
+      Map[ConfigResource, ApiError] = {
         unauthorizedResources.keys.map { resource =>
           resource -> configsAuthorizationApiError(resource)
         }.toMap
       }
 
       override def mergeResponse(forwardResponse: AlterConfigsResponse,
-                                 unauthorizedResult: Map[ConfigResource, ApiError]): AlterConfigsResponse = {
+                                 unauthorizedResult: Map[ConfigResource, ApiError]):
+      AlterConfigsResponse = {
         forwardResponse.addResults(unauthorizedResult.asJava)
       }
     }
     forwardRequestHandler.handle(request)
-  }
-
-  private def isForwardingRequest(request: RequestChannel.Request): Boolean = {
-    request.header.initialPrincipalName != null &&
-      request.header.initialClientId != null &&
-      request.context.fromPrivilegedListener
   }
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
@@ -2804,13 +2832,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         new IncrementalAlterConfigsResponse(requestThrottleMs, results.asJava))
     }
 
-    val forwardRequestHandler = new ForwardRequestHandler[IncrementalAlterConfigsRequest, IncrementalAlterConfigsResponse, ConfigResource, Seq[AlterConfigOp]] {
-      /**
-       * Split the given resource into authorized and unauthorized sets.
-       *
-       * @return authorized resources and unauthorized resources
-       */
-      override def resourceSplitByAuthorization(incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest): (Map[ConfigResource, Seq[AlterConfigOp]], Map[ConfigResource, Seq[AlterConfigOp]]) = {
+    val forwardRequestHandler = new ForwardRequestHandler[IncrementalAlterConfigsRequest,
+      IncrementalAlterConfigsResponse, ConfigResource, Seq[AlterConfigOp]] {
+
+      override def resourceSplitByAuthorization(incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest):
+      (Map[ConfigResource, Seq[AlterConfigOp]], Map[ConfigResource, Seq[AlterConfigOp]]) = {
         val configs = incrementalAlterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
           val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
             alterConfigResource.resourceName)
@@ -3215,9 +3241,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAlterClientQuotasRequest(request: RequestChannel.Request): Unit = {
-    val forwardRequestHandler = new ForwardRequestHandler[AlterClientQuotasRequest, AlterClientQuotasResponse, ClientQuotaAlteration, Unit] {
+    val forwardRequestHandler = new ForwardRequestHandler[AlterClientQuotasRequest,
+      AlterClientQuotasResponse, ClientQuotaAlteration, Unit] {
 
-      override def resourceSplitByAuthorization(alterClientQuotasRequest: AlterClientQuotasRequest): (Map[ClientQuotaAlteration, Unit],
+      override def resourceSplitByAuthorization(alterClientQuotasRequest: AlterClientQuotasRequest):
+      (Map[ClientQuotaAlteration, Unit],
         Map[ClientQuotaAlteration, Unit]) = {
         val resources = alterClientQuotasRequest.entries.asScala.map(alteration => alteration -> ()).toMap
         if (authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
@@ -3228,16 +3256,20 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       override def createRequestBuilder(authorizedResource: Map[ClientQuotaAlteration, Unit],
-                                        request: AlterClientQuotasRequest): AbstractRequest.Builder[AlterClientQuotasRequest] = {
+                                        request: AlterClientQuotasRequest):
+      AbstractRequest.Builder[AlterClientQuotasRequest] = {
         new AlterClientQuotasRequest.Builder(authorizedResource.keys.asJavaCollection, request.validateOnly)
       }
 
-      override def customizedAuthorizationError(unauthorizedResource: Map[ClientQuotaAlteration, Unit]): Map[ClientQuotaAlteration, ApiError] = {
-          unauthorizedResource.keys.map(alteration => alteration -> new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
+      override def customizedAuthorizationError(unauthorizedResource: Map[ClientQuotaAlteration, Unit]):
+      Map[ClientQuotaAlteration, ApiError] = {
+          unauthorizedResource.keys.map(alteration =>
+            alteration -> new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
       }
 
       override def mergeResponse(forwardResponse: AlterClientQuotasResponse,
-                                 unauthorizedResult: Map[ClientQuotaAlteration, ApiError]): AlterClientQuotasResponse = forwardResponse
+                                 unauthorizedResult: Map[ClientQuotaAlteration, ApiError]):
+      AlterClientQuotasResponse = forwardResponse
 
       override def process(authorizedResources: Map[ClientQuotaAlteration, Unit],
                            unauthorizedResult: Map[ClientQuotaAlteration, ApiError],
@@ -3247,7 +3279,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             new AlterClientQuotasResponse(AlterClientQuotasResponse.convertResult(
               unauthorizedResult.asJava), requestThrottleMs))
         } else {
-          val result = adminManager.alterClientQuotas(authorizedResources.keys.toSeq, alterClientQuotasRequest.validateOnly).asJava
+          val result = adminManager.alterClientQuotas(
+            authorizedResources.keys.toSeq, alterClientQuotasRequest.validateOnly).asJava
           // the unauthorized result could be ignored as its authentication was for all or nothing.
           sendResponseMaybeThrottle(request, requestThrottleMs =>
             new AlterClientQuotasResponse(result, requestThrottleMs))
@@ -3476,10 +3509,10 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Throttle the channel if the controller mutations quota or the request quota have been violated.
    * Regardless of throttling, send the response immediately.
    */
-  private def sendResponseMaybeThrottleByControllerMutationQuota(controllerMutationQuota: ControllerMutationQuota,
-                                                                 request: RequestChannel.Request,
-                                                                 createResponse: Int => AbstractResponse,
-                                                                 onComplete: Option[Send => Unit]): Unit = {
+  private def sendResponseMaybeThrottle(controllerMutationQuota: ControllerMutationQuota,
+                                        request: RequestChannel.Request,
+                                        createResponse: Int => AbstractResponse,
+                                        onComplete: Option[Send => Unit]): Unit = {
     val timeMs = time.milliseconds
     val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)

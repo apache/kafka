@@ -168,11 +168,11 @@ class BrokerToControllerRequestThreadTest {
 
     val responseLatch = new CountDownLatch(1)
     val queueItem = BrokerToControllerQueueItem(
-      new MetadataRequest.Builder(new MetadataRequestData()), response => {
+      new MetadataRequest.Builder(new MetadataRequestData()
+        .setAllowAutoTopicCreation(true)), response => {
         assertEquals(expectedResponse, response.responseBody())
         responseLatch.countDown()
       })
-
     requestQueue.put(queueItem)
     // initialize to the controller
     testRequestThread.doWork()
@@ -181,7 +181,6 @@ class BrokerToControllerRequestThreadTest {
       body.isInstanceOf[MetadataRequest] &&
       body.asInstanceOf[MetadataRequest].allowAutoTopicCreation()
     }, responseWithNotControllerError)
-
     testRequestThread.doWork()
     // reinitialize the controller to a different node
     testRequestThread.doWork()
