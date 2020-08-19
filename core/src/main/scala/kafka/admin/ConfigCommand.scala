@@ -97,7 +97,7 @@ object ConfigCommand extends Config {
     val adminZkClient = new AdminZkClient(zkClient)
     try {
       if (opts.options.has(opts.alterOpt))
-        alterConfig(zkClient, opts, adminZkClient)
+        alterConfig(opts, adminZkClient)
       else if (opts.options.has(opts.describeOpt))
         describeConfig(zkClient, opts, adminZkClient)
     } finally {
@@ -105,7 +105,7 @@ object ConfigCommand extends Config {
     }
   }
 
-  private[admin] def alterConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
+  private[admin] def alterConfig(opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
     val configsToBeAdded = parseConfigsToBeAdded(opts)
     val configsToBeDeleted = parseConfigsToBeDeleted(opts)
     val entity = parseEntity(opts)
