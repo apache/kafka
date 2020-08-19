@@ -1878,6 +1878,7 @@ class KafkaController(val config: KafkaConfig,
     updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
 
     // Send out LeaderAndIsr for successful updates
+    debug(s"Sending LeaderAndIsr for ${adjustedIsrs.keys}")
     brokerRequestBatch.newBatch()
 
     // Send LeaderAndIsr for all requested partitions
