@@ -187,6 +187,7 @@ public class GlobalStateManagerImplTest {
     public void shouldLogWarningMessageWhenIOExceptionInCheckPoint() throws IOException {
         final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
         stateManager.initialize();
+        stateManager.updateChangelogOffsets(offsets);
 
         final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + ".tmp");
         file.createNewFile();
@@ -197,7 +198,7 @@ public class GlobalStateManagerImplTest {
                  LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
 
             // checkpoint should fail due to the file is readonly
-            stateManager.checkpoint(offsets);
+            stateManager.checkpoint();
             assertThat(appender.getMessages(), hasItem(containsString(
                 "Failed to write offset checkpoint file to " + checkpointFile.getPath() + " for global stores")));
         }
