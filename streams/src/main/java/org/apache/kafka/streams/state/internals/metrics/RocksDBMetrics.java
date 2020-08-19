@@ -35,7 +35,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addSumMetricToSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueMetricToSensor;
 
-public class  RocksDBMetrics {
+public class RocksDBMetrics {
     private RocksDBMetrics() {}
 
     private static final String BYTES_WRITTEN_TO_DB = "bytes-written";

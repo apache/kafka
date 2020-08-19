@@ -441,8 +441,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final void removeAllStoreLevelSensorsAndMetrics(final String threadId,
                                                            final String taskId,
                                                            final String storeName) {
-        removeAllStoreLevelMetrics(threadId, taskId, storeName);
         removeAllStoreLevelSensors(threadId, taskId, storeName);
+        removeAllStoreLevelMetrics(threadId, taskId, storeName);
     }
 
     private void removeAllStoreLevelSensors(final String threadId,
