@@ -34,6 +34,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Objects;
@@ -41,6 +42,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
@@ -49,6 +51,7 @@ import static org.apache.kafka.streams.processor.internals.StateDirectory.LOCK_F
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHECKPOINT_FILE_NAME;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -506,5 +509,52 @@ public class StateDirectoryTest {
     public void shouldLockGlobalStateDirectoryWhenDirectoryCreationDisabled() throws IOException {
         initializeStateDirectory(false);
         assertTrue(directory.lockGlobalState());
+    }
+
+    @Test
+    public void shouldNotFailWhenCreatingTaskDirectoryInParallel() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
+        final AtomicBoolean passed = new AtomicBoolean(true);
+
+        final CreateTaskDirRunner runner = new CreateTaskDirRunner(directory, taskId, passed);
+
+        final Thread t1 = new Thread(runner);
+        final Thread t2 = new Thread(runner);
+
+        t1.start();
+        t2.start();
+
+        t1.join(Duration.ofMillis(500L).toMillis());
+        t2.join(Duration.ofMillis(500L).toMillis());
+
+        assertNotNull(runner.taskDirectory);
+        assertTrue(passed.get());
+        assertTrue(runner.taskDirectory.exists());
+        assertTrue(runner.taskDirectory.isDirectory());
+    }
+
+    private static class CreateTaskDirRunner implements Runnable {
+        private final StateDirectory directory;
+        private final TaskId taskId;
+        private final AtomicBoolean passed;
+
+        private File taskDirectory;
+
+        private CreateTaskDirRunner(final StateDirectory directory,
+                                    final TaskId taskId,
+                                    final AtomicBoolean passed) {
+            this.directory = directory;
+            this.taskId = taskId;
+            this.passed = passed;
+        }
+
+        @Override
+        public void run() {
+            try {
+                taskDirectory = directory.directoryForTask(taskId);
+            } catch (final ProcessorStateException error) {
+                passed.set(false);
+            }
+        }
     }
 }

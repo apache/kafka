@@ -41,11 +41,10 @@ public class MockClientSupplier implements KafkaClientSupplier {
     private static final ByteArraySerializer BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
 
     private Cluster cluster;
-
     private String applicationId;
 
+    public MockAdminClient adminClient = new MockAdminClient();
     public final List<MockProducer<byte[], byte[]>> producers = new LinkedList<>();
-
     public final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     public final MockConsumer<byte[], byte[]> restoreConsumer = new MockConsumer<>(OffsetResetStrategy.LATEST);
 
@@ -55,11 +54,12 @@ public class MockClientSupplier implements KafkaClientSupplier {
 
     public void setCluster(final Cluster cluster) {
         this.cluster = cluster;
+        this.adminClient = new MockAdminClient(cluster.nodes(), cluster.nodeById(-1));
     }
 
     @Override
     public Admin getAdmin(final Map<String, Object> config) {
-        return new MockAdminClient(cluster.nodes(), cluster.nodeById(-1));
+        return adminClient;
     }
 
     @Override

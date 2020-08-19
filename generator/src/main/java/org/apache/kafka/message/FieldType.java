@@ -182,6 +182,31 @@ public interface FieldType {
         }
     }
 
+    final class RecordsFieldType implements FieldType {
+        static final RecordsFieldType INSTANCE = new RecordsFieldType();
+        private static final String NAME = "records";
+
+        @Override
+        public boolean serializationIsDifferentInFlexibleVersions() {
+            return true;
+        }
+
+        @Override
+        public boolean isRecords() {
+            return true;
+        }
+
+        @Override
+        public boolean canBeNullable() {
+            return true;
+        }
+
+        @Override
+        public String toString() {
+            return NAME;
+        }
+    }
+
     final class StructType implements FieldType {
         private final String type;
 
@@ -267,6 +292,8 @@ public interface FieldType {
                 return StringFieldType.INSTANCE;
             case BytesFieldType.NAME:
                 return BytesFieldType.INSTANCE;
+            case RecordsFieldType.NAME:
+                return RecordsFieldType.INSTANCE;
             default:
                 if (string.startsWith(ARRAY_PREFIX)) {
                     String elementTypeString = string.substring(ARRAY_PREFIX.length());
@@ -320,6 +347,13 @@ public interface FieldType {
      * Returns true if this is a bytes type.
      */
     default boolean isBytes() {
+        return false;
+    }
+
+    /**
+     * Returns true if this is a records type
+     */
+    default boolean isRecords() {
         return false;
     }
 

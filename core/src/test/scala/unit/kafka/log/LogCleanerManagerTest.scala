@@ -209,7 +209,7 @@ class LogCleanerManagerTest extends Logging {
     val tp = new TopicPartition("foo", 0)
     val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
 
-    logs.get(tp).maybeIncrementLogStartOffset(10L)
+    logs.get(tp).maybeIncrementLogStartOffset(10L, ClientRecordDeletion)
 
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 0L)
@@ -232,7 +232,7 @@ class LogCleanerManagerTest extends Logging {
 
     assertEquals(1, log.logSegments.size)
 
-    log.maybeIncrementLogStartOffset(2L)
+    log.maybeIncrementLogStartOffset(2L, ClientRecordDeletion)
 
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 0L)
@@ -493,13 +493,13 @@ class LogCleanerManagerTest extends Logging {
   def testCleanableOffsetsNeedsCheckpointReset(): Unit = {
     val tp = new TopicPartition("foo", 0)
     val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
-    logs.get(tp).maybeIncrementLogStartOffset(10L)
+    logs.get(tp).maybeIncrementLogStartOffset(10L, ClientRecordDeletion)
 
     var lastCleanOffset = Some(15L)
     var cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
     assertFalse("Checkpoint offset should not be reset if valid", cleanableOffsets.forceUpdateCheckpoint)
 
-    logs.get(tp).maybeIncrementLogStartOffset(20L)
+    logs.get(tp).maybeIncrementLogStartOffset(20L, ClientRecordDeletion)
     cleanableOffsets = LogCleanerManager.cleanableOffsets(logs.get(tp), lastCleanOffset, time.milliseconds)
     assertTrue("Checkpoint offset needs to be reset if less than log start offset", cleanableOffsets.forceUpdateCheckpoint)
 
@@ -608,7 +608,7 @@ class LogCleanerManagerTest extends Logging {
     val tp = new TopicPartition("foo", 0)
     val logs = setupIncreasinglyFilthyLogs(Seq(tp), startNumBatches = 20, batchIncrement = 5)
 
-    logs.get(tp).maybeIncrementLogStartOffset(20L)
+    logs.get(tp).maybeIncrementLogStartOffset(20L, ClientRecordDeletion)
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp, 15L)
 
@@ -629,7 +629,7 @@ class LogCleanerManagerTest extends Logging {
 
     // create two logs, one with an invalid offset, and one that is dirtier than the log with an invalid offset
     val logs = setupIncreasinglyFilthyLogs(partitions, startNumBatches = 20, batchIncrement = 5)
-    logs.get(tp0).maybeIncrementLogStartOffset(15L)
+    logs.get(tp0).maybeIncrementLogStartOffset(15L, ClientRecordDeletion)
     val cleanerManager = createCleanerManagerMock(logs)
     cleanerCheckpoints.put(tp0, 10L)
     cleanerCheckpoints.put(tp1, 5L)

@@ -18,19 +18,22 @@ package org.apache.kafka.clients.consumer.internals;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +44,10 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     public static final int DEFAULT_GENERATION = -1;
 
     private PartitionMovements partitionMovements;
+
+    // Keep track of the partitions being migrated from one consumer to another during assignment
+    // so the cooperative assignor can adjust the assignment
+    protected Map<TopicPartition, String> partitionsTransferringOwnership = new HashMap<>();
 
     static final class ConsumerGenerationPair {
         final String consumer;
@@ -65,12 +72,246 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
+        Map<String, List<TopicPartition>> consumerToOwnedPartitions = new HashMap<>();
+        if (allSubscriptionsEqual(partitionsPerTopic.keySet(), subscriptions, consumerToOwnedPartitions)) {
+            log.debug("Detected that all consumers were subscribed to same set of topics, invoking the "
+                          + "optimized assignment algorithm");
+            partitionsTransferringOwnership = new HashMap<>();
+            return constrainedAssign(partitionsPerTopic, consumerToOwnedPartitions);
+        } else {
+            log.debug("Detected that all not consumers were subscribed to same set of topics, falling back to the "
+                          + "general case assignment algorithm");
+            partitionsTransferringOwnership = null;
+            return generalAssign(partitionsPerTopic, subscriptions);
+        }
+    }
+
+    /**
+     * Returns true iff all consumers have an identical subscription. Also fills out the passed in
+     * {@code consumerToOwnedPartitions} with each consumer's previously owned and still-subscribed partitions
+     */
+    private boolean allSubscriptionsEqual(Set<String> allTopics,
+                                          Map<String, Subscription> subscriptions,
+                                          Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+        Set<String> membersWithOldGeneration = new HashSet<>();
+        Set<String> membersOfCurrentHighestGeneration = new HashSet<>();
+        int maxGeneration = DEFAULT_GENERATION;
+
+        Set<String> subscribedTopics = new HashSet<>();
+
+        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
+            String consumer = subscriptionEntry.getKey();
+            Subscription subscription = subscriptionEntry.getValue();
+
+            // initialize the subscribed topics set if this is the first subscription
+            if (subscribedTopics.isEmpty()) {
+                subscribedTopics.addAll(subscription.topics());
+            } else if (!(subscription.topics().size() == subscribedTopics.size()
+                && subscribedTopics.containsAll(subscription.topics()))) {
+                return false;
+            }
+
+            MemberData memberData = memberData(subscription);
+
+            List<TopicPartition> ownedPartitions = new ArrayList<>();
+            consumerToOwnedPartitions.put(consumer, ownedPartitions);
+
+            // Only consider this consumer's owned partitions as valid if it is a member of the current highest
+            // generation, or it's generation is not present but we have not seen any known generation so far
+            if (memberData.generation.isPresent() && memberData.generation.get() >= maxGeneration
+                || !memberData.generation.isPresent() && maxGeneration == DEFAULT_GENERATION) {
+
+                // If the current member's generation is higher, all the previously owned partitions are invalid
+                if (memberData.generation.isPresent() && memberData.generation.get() > maxGeneration) {
+                    membersWithOldGeneration.addAll(membersOfCurrentHighestGeneration);
+                    membersOfCurrentHighestGeneration.clear();
+                    maxGeneration = memberData.generation.get();
+                }
+
+                membersOfCurrentHighestGeneration.add(consumer);
+                for (final TopicPartition tp : memberData.partitions) {
+                    // filter out any topics that no longer exist or aren't part of the current subscription
+                    if (allTopics.contains(tp.topic())) {
+                        ownedPartitions.add(tp);
+                    }
+                }
+            }
+        }
+
+        for (String consumer : membersWithOldGeneration) {
+            consumerToOwnedPartitions.get(consumer).clear();
+        }
+        return true;
+    }
+
+
+    /**
+     * This constrainedAssign optimizes the assignment algorithm when all consumers were subscribed to same set of topics.
+     * The method includes the following steps:
+     *
+     * 1. Reassign as many previously owned partitions as possible, up to the maxQuota
+     * 2. Fill remaining members up to minQuota
+     * 3. If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
+     *    from the over-full consumers at max capacity
+     * 4. Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
+     *    should just distribute one partition each to all consumers at min capacity
+     *
+     * @param partitionsPerTopic          The number of partitions for each subscribed topic
+     * @param consumerToOwnedPartitions   Each consumer's previously owned and still-subscribed partitions
+     *
+     * @return Map from each member to the list of partitions assigned to them.
+     */
+    private Map<String, List<TopicPartition>> constrainedAssign(Map<String, Integer> partitionsPerTopic,
+                                                                Map<String, List<TopicPartition>> consumerToOwnedPartitions) {
+        SortedSet<TopicPartition> unassignedPartitions = getTopicPartitions(partitionsPerTopic);
+
+        Set<TopicPartition> allRevokedPartitions = new HashSet<>();
+
+        // Each consumer should end up in exactly one of the below
+        // the consumers not yet at capacity
+        List<String> unfilledMembers = new LinkedList<>();
+        // the members with exactly maxQuota partitions assigned
+        Queue<String> maxCapacityMembers = new LinkedList<>();
+        // the members with exactly minQuota partitions assigned
+        Queue<String> minCapacityMembers = new LinkedList<>();
+
+        int numberOfConsumers = consumerToOwnedPartitions.size();
+        int minQuota = (int) Math.floor(((double) unassignedPartitions.size()) / numberOfConsumers);
+        int maxQuota = (int) Math.ceil(((double) unassignedPartitions.size()) / numberOfConsumers);
+
+        // initialize the assignment map with an empty array of size minQuota for all members
+        Map<String, List<TopicPartition>> assignment = new HashMap<>(
+            consumerToOwnedPartitions.keySet().stream().collect(Collectors.toMap(c -> c, c -> new ArrayList<>(minQuota))));
+
+        // Reassign as many previously owned partitions as possible
+        for (Map.Entry<String, List<TopicPartition>> consumerEntry : consumerToOwnedPartitions.entrySet()) {
+            String consumer = consumerEntry.getKey();
+            List<TopicPartition> ownedPartitions = consumerEntry.getValue();
+
+            List<TopicPartition> consumerAssignment = assignment.get(consumer);
+            int i = 0;
+            // assign the first N partitions up to the max quota, and mark the remaining as being revoked
+            for (TopicPartition tp : ownedPartitions) {
+                if (i < maxQuota) {
+                    consumerAssignment.add(tp);
+                    unassignedPartitions.remove(tp);
+                } else {
+                    allRevokedPartitions.add(tp);
+                }
+                ++i;
+            }
+
+            if (ownedPartitions.size() < minQuota) {
+                unfilledMembers.add(consumer);
+            } else {
+                // It's possible for a consumer to be at both min and max capacity if minQuota == maxQuota
+                if (consumerAssignment.size() == minQuota)
+                    minCapacityMembers.add(consumer);
+                if (consumerAssignment.size() == maxQuota)
+                    maxCapacityMembers.add(consumer);
+            }
+        }
+
+        Collections.sort(unfilledMembers);
+        Iterator<TopicPartition> unassignedPartitionsIter = unassignedPartitions.iterator();
+
+        // Fill remaining members up to minQuota
+        while (!unfilledMembers.isEmpty() && !unassignedPartitions.isEmpty()) {
+            Iterator<String> unfilledConsumerIter = unfilledMembers.iterator();
+
+            while (unfilledConsumerIter.hasNext()) {
+                String consumer = unfilledConsumerIter.next();
+                List<TopicPartition> consumerAssignment = assignment.get(consumer);
+
+                if (unassignedPartitionsIter.hasNext()) {
+                    TopicPartition tp = unassignedPartitionsIter.next();
+                    consumerAssignment.add(tp);
+                    unassignedPartitionsIter.remove();
+                    // We already assigned all possible ownedPartitions, so we know this must be newly to this consumer
+                    if (allRevokedPartitions.contains(tp))
+                        partitionsTransferringOwnership.put(tp, consumer);
+                } else {
+                    break;
+                }
+
+                if (consumerAssignment.size() == minQuota) {
+                    minCapacityMembers.add(consumer);
+                    unfilledConsumerIter.remove();
+                }
+            }
+        }
+
+        // If we ran out of unassigned partitions before filling all consumers, we need to start stealing partitions
+        // from the over-full consumers at max capacity
+        for (String consumer : unfilledMembers) {
+            List<TopicPartition> consumerAssignment = assignment.get(consumer);
+            int remainingCapacity = minQuota - consumerAssignment.size();
+            while (remainingCapacity > 0) {
+                String overloadedConsumer = maxCapacityMembers.poll();
+                if (overloadedConsumer == null) {
+                    throw new IllegalStateException("Some consumers are under capacity but all partitions have been assigned");
+                }
+                TopicPartition swappedPartition = assignment.get(overloadedConsumer).remove(0);
+                consumerAssignment.add(swappedPartition);
+                --remainingCapacity;
+                // This partition is by definition transferring ownership, the swapped partition must have come from
+                // the max capacity member's owned partitions since it can only reach max capacity with owned partitions
+                partitionsTransferringOwnership.put(swappedPartition, consumer);
+            }
+            minCapacityMembers.add(consumer);
+        }
+
+        // Otherwise we may have run out of unfilled consumers before assigning all partitions, in which case we
+        // should just distribute one partition each to all consumers at min capacity
+        for (TopicPartition unassignedPartition : unassignedPartitions) {
+            String underCapacityConsumer = minCapacityMembers.poll();
+            if (underCapacityConsumer == null) {
+                throw new IllegalStateException("Some partitions are unassigned but all consumers are at maximum capacity");
+            }
+            // We can skip the bookkeeping of unassignedPartitions and maxCapacityMembers here since we are at the end
+            assignment.get(underCapacityConsumer).add(unassignedPartition);
+
+            if (allRevokedPartitions.contains(unassignedPartition))
+                partitionsTransferringOwnership.put(unassignedPartition, underCapacityConsumer);
+        }
+
+        return assignment;
+    }
+
+    private SortedSet<TopicPartition> getTopicPartitions(Map<String, Integer> partitionsPerTopic) {
+        SortedSet<TopicPartition> allPartitions =
+            new TreeSet<>(Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition));
+        for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
+            String topic = entry.getKey();
+            for (int i = 0; i < entry.getValue(); ++i) {
+                allPartitions.add(new TopicPartition(topic, i));
+            }
+        }
+        return allPartitions;
+    }
+
+    /**
+     * This generalAssign algorithm guarantees the assignment that is as balanced as possible.
+     * This method includes the following steps:
+     *
+     * 1. Preserving all the existing partition assignments
+     * 2. Removing all the partition assignments that have become invalid due to the change that triggers the reassignment
+     * 3. Assigning the unassigned partitions in a way that balances out the overall assignments of partitions to consumers
+     * 4. Further balancing out the resulting assignment by finding the partitions that can be reassigned
+     *    to another consumer towards an overall more balanced assignment.
+     *
+     * @param partitionsPerTopic         The number of partitions for each subscribed topic.
+     * @param subscriptions              Map from the member id to their respective topic subscription
+     *
+     * @return Map from each member to the list of partitions assigned to them.
+     */
+    private Map<String, List<TopicPartition>> generalAssign(Map<String, Integer> partitionsPerTopic,
+                                                            Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
         partitionMovements = new PartitionMovements();
 
         prepopulateCurrentAssignments(subscriptions, currentAssignment, prevAssignment);
-        boolean isFreshAssignment = currentAssignment.isEmpty();
 
         // a mapping of all topic partitions to all consumers that can be assigned to them
         final Map<TopicPartition, List<String>> partition2AllPotentialConsumers = new HashMap<>();
@@ -105,8 +346,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
             for (TopicPartition topicPartition: entry.getValue())
                 currentPartitionConsumer.put(topicPartition, entry.getKey());
 
-        List<TopicPartition> sortedPartitions = sortPartitions(
-            currentAssignment, prevAssignment.keySet(), isFreshAssignment, partition2AllPotentialConsumers, consumer2AllPotentialPartitions);
+        List<TopicPartition> sortedPartitions = sortPartitions(partition2AllPotentialConsumers);
 
         // all partitions that need to be assigned (initially set to all partitions but adjusted in the following loop)
         List<TopicPartition> unassignedPartitions = new ArrayList<>(sortedPartitions);
@@ -287,93 +527,13 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
      * Sort valid partitions so they are processed in the potential reassignment phase in the proper order
      * that causes minimal partition movement among consumers (hence honoring maximal stickiness)
      *
-     * @param currentAssignment the calculated assignment so far
-     * @param partitionsWithADifferentPreviousAssignment partitions that had a different consumer before (for every
-     *                                                   such partition there should also be a mapping in
-     *                                                   @currentAssignment to a different consumer)
-     * @param isFreshAssignment whether this is a new assignment, or a reassignment of an existing one
      * @param partition2AllPotentialConsumers a mapping of partitions to their potential consumers
-     * @param consumer2AllPotentialPartitions a mapping of consumers to potential partitions they can consumer from
-     * @return sorted list of valid partitions
+     * @return  an ascending sorted list of topic partitions based on how many consumers can potentially use them
      */
-    private List<TopicPartition> sortPartitions(Map<String, List<TopicPartition>> currentAssignment,
-                                                Set<TopicPartition> partitionsWithADifferentPreviousAssignment,
-                                                boolean isFreshAssignment,
-                                                Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
-                                                Map<String, List<TopicPartition>> consumer2AllPotentialPartitions) {
-        List<TopicPartition> sortedPartitions = new ArrayList<>();
-
-        if (!isFreshAssignment && areSubscriptionsIdentical(partition2AllPotentialConsumers, consumer2AllPotentialPartitions)) {
-            // if this is a reassignment and the subscriptions are identical (all consumers can consumer from all topics)
-            // then we just need to simply list partitions in a round robin fashion (from consumers with
-            // most assigned partitions to those with least)
-            Map<String, List<TopicPartition>> assignments = deepCopy(currentAssignment);
-            for (Entry<String, List<TopicPartition>> entry: assignments.entrySet()) {
-                List<TopicPartition> toRemove = new ArrayList<>();
-                for (TopicPartition partition: entry.getValue())
-                    if (!partition2AllPotentialConsumers.keySet().contains(partition))
-                        toRemove.add(partition);
-                for (TopicPartition partition: toRemove)
-                    entry.getValue().remove(partition);
-            }
-            TreeSet<String> sortedConsumers = new TreeSet<>(new SubscriptionComparator(assignments));
-            sortedConsumers.addAll(assignments.keySet());
-            // at this point, sortedConsumers contains an ascending-sorted list of consumers based on
-            // how many valid partitions are currently assigned to them
-
-            while (!sortedConsumers.isEmpty()) {
-                // take the consumer with the most partitions
-                String consumer = sortedConsumers.pollLast();
-                // currently assigned partitions to this consumer
-                List<TopicPartition> remainingPartitions = assignments.get(consumer);
-                // partitions that were assigned to a different consumer last time
-                List<TopicPartition> prevPartitions = new ArrayList<>(partitionsWithADifferentPreviousAssignment);
-                // from partitions that had a different consumer before, keep only those that are
-                // assigned to this consumer now
-                prevPartitions.retainAll(remainingPartitions);
-                if (!prevPartitions.isEmpty()) {
-                    // if there is a partition of this consumer that was assigned to another consumer before
-                    // mark it as good options for reassignment
-                    TopicPartition partition = prevPartitions.remove(0);
-                    remainingPartitions.remove(partition);
-                    sortedPartitions.add(partition);
-                    sortedConsumers.add(consumer);
-                } else if (!remainingPartitions.isEmpty()) {
-                    // otherwise, mark any other one of the current partitions as a reassignment candidate
-                    sortedPartitions.add(remainingPartitions.remove(0));
-                    sortedConsumers.add(consumer);
-                }
-            }
-
-            for (TopicPartition partition: partition2AllPotentialConsumers.keySet()) {
-                if (!sortedPartitions.contains(partition))
-                    sortedPartitions.add(partition);
-            }
-
-        } else {
-            // an ascending sorted set of topic partitions based on how many consumers can potentially use them
-            TreeSet<TopicPartition> sortedAllPartitions = new TreeSet<>(new PartitionComparator(partition2AllPotentialConsumers));
-            sortedAllPartitions.addAll(partition2AllPotentialConsumers.keySet());
-
-            while (!sortedAllPartitions.isEmpty())
-                sortedPartitions.add(sortedAllPartitions.pollFirst());
-        }
-
+    private List<TopicPartition> sortPartitions(Map<TopicPartition, List<String>> partition2AllPotentialConsumers) {
+        List<TopicPartition> sortedPartitions = new ArrayList<>(partition2AllPotentialConsumers.keySet());
+        Collections.sort(sortedPartitions, new PartitionComparator(partition2AllPotentialConsumers));
         return sortedPartitions;
-    }
-
-    /**
-     * @param partition2AllPotentialConsumers a mapping of partitions to their potential consumers
-     * @param consumer2AllPotentialPartitions a mapping of consumers to potential partitions they can consumer from
-     * @return true if potential consumers of partitions are the same, and potential partitions consumers can
-     * consumer from are the same too
-     */
-    private boolean areSubscriptionsIdentical(Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
-        Map<String, List<TopicPartition>> consumer2AllPotentialPartitions) {
-        if (!hasIdenticalListElements(partition2AllPotentialConsumers.values()))
-            return false;
-
-        return hasIdenticalListElements(consumer2AllPotentialPartitions.values());
     }
 
     /**
@@ -599,24 +759,6 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
 
     public boolean isSticky() {
         return partitionMovements.isSticky();
-    }
-
-    /**
-     * @param col a collection of elements of type list
-     * @return true if all lists in the collection have the same members; false otherwise
-     */
-    private <T> boolean hasIdenticalListElements(Collection<List<T>> col) {
-        Iterator<List<T>> it = col.iterator();
-        if (!it.hasNext())
-            return true;
-        List<T> cur = it.next();
-        while (it.hasNext()) {
-            List<T> next = it.next();
-            if (!(cur.containsAll(next) && next.containsAll(cur)))
-                return false;
-            cur = next;
-        }
-        return true;
     }
 
     private void deepCopy(Map<String, List<TopicPartition>> source, Map<String, List<TopicPartition>> dest) {

@@ -113,6 +113,9 @@ public class SubscriptionInfoData implements ApiMessage {
         SCHEMA_7
     };
     
+    public static final short LOWEST_SUPPORTED_VERSION = 1;
+    public static final short HIGHEST_SUPPORTED_VERSION = 7;
+    
     public SubscriptionInfoData(Readable _readable, short _version) {
         read(_readable, _version);
     }
@@ -605,7 +608,7 @@ public class SubscriptionInfoData implements ApiMessage {
         } else {
             if (!this.taskOffsetSums.equals(other.taskOffsetSums)) return false;
         }
-        return true;
+        return MessageUtil.compareRawTaggedFields(_unknownTaggedFields, other._unknownTaggedFields);
     }
     
     @Override
@@ -751,6 +754,9 @@ public class SubscriptionInfoData implements ApiMessage {
             SCHEMA_7
         };
         
+        public static final short LOWEST_SUPPORTED_VERSION = 7;
+        public static final short HIGHEST_SUPPORTED_VERSION = 7;
+        
         public PartitionToOffsetSum(Readable _readable, short _version) {
             read(_readable, _version);
         }
@@ -864,7 +870,7 @@ public class SubscriptionInfoData implements ApiMessage {
             PartitionToOffsetSum other = (PartitionToOffsetSum) obj;
             if (partition != other.partition) return false;
             if (offsetSum != other.offsetSum) return false;
-            return true;
+            return MessageUtil.compareRawTaggedFields(_unknownTaggedFields, other._unknownTaggedFields);
         }
         
         @Override
@@ -951,6 +957,9 @@ public class SubscriptionInfoData implements ApiMessage {
             SCHEMA_6,
             SCHEMA_7
         };
+        
+        public static final short LOWEST_SUPPORTED_VERSION = 1;
+        public static final short HIGHEST_SUPPORTED_VERSION = 7;
         
         public TaskId(Readable _readable, short _version) {
             read(_readable, _version);
@@ -1065,7 +1074,7 @@ public class SubscriptionInfoData implements ApiMessage {
             TaskId other = (TaskId) obj;
             if (topicGroupId != other.topicGroupId) return false;
             if (partition != other.partition) return false;
-            return true;
+            return MessageUtil.compareRawTaggedFields(_unknownTaggedFields, other._unknownTaggedFields);
         }
         
         @Override
@@ -1140,6 +1149,9 @@ public class SubscriptionInfoData implements ApiMessage {
             null,
             SCHEMA_7
         };
+        
+        public static final short LOWEST_SUPPORTED_VERSION = 7;
+        public static final short HIGHEST_SUPPORTED_VERSION = 7;
         
         public TaskOffsetSum(Readable _readable, short _version) {
             read(_readable, _version);
@@ -1303,7 +1315,7 @@ public class SubscriptionInfoData implements ApiMessage {
             } else {
                 if (!this.partitionToOffsetSum.equals(other.partitionToOffsetSum)) return false;
             }
-            return true;
+            return MessageUtil.compareRawTaggedFields(_unknownTaggedFields, other._unknownTaggedFields);
         }
         
         @Override

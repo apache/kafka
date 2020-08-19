@@ -56,7 +56,7 @@ public final class FieldSpec {
 
     private final Optional<Integer> tag;
 
-    private boolean zeroCopy;
+    private final boolean zeroCopy;
 
     @JsonCreator
     public FieldSpec(@JsonProperty("name") String name,
@@ -121,6 +121,9 @@ public final class FieldSpec {
             }
         }
         this.tag = Optional.ofNullable(tag);
+        if (this.tag.isPresent() && mapKey) {
+            throw new RuntimeException("Tagged fields cannot be used as keys.");
+        }
         checkTagInvariants();
 
         this.zeroCopy = zeroCopy;

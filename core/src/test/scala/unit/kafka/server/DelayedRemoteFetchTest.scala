@@ -21,7 +21,7 @@ import java.util.Optional
 import java.util.concurrent.CompletableFuture
 
 import kafka.cluster.Partition
-import kafka.log.remote.{RemoteLogManager, RemoteLogReadResult}
+import kafka.log.remote.{MockRemoteLogManager, RemoteLogManager, RemoteLogReadResult}
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
@@ -29,7 +29,6 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.{EasyMock, EasyMockSupport}
 import org.junit.Assert.assertEquals
 import org.junit.Test
-import kafka.log.remote.MockRemoteLogManager
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -104,7 +103,6 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
         leaderLogEndOffset = -1L,
         followerLogStartOffset = -1L,
         fetchTimeMs = -1L,
-        readSize = 0,
         lastStableOffset = None,
         exception = Some(new Exception()))),
       (tp, new LogReadResult(
@@ -114,15 +112,13 @@ class DelayedRemoteFetchTest extends EasyMockSupport {
         leaderLogEndOffset = 2000,
         followerLogStartOffset = 0,
         fetchTimeMs = 0,
-        readSize = 1000,
         lastStableOffset = Some(1000),
         exception = None))
     )
 
     val partition: Partition = EasyMock.createMock(classOf[Partition])
     val replicaManager: ReplicaManager = EasyMock.createMock(classOf[ReplicaManager])
-    EasyMock.expect(replicaManager.getPartitionOrException(
-      EasyMock.anyObject[TopicPartition], EasyMock.anyBoolean()))
+    EasyMock.expect(replicaManager.getPartitionOrException(EasyMock.anyObject[TopicPartition]))
       .andReturn(partition).anyTimes()
     EasyMock.replay(replicaManager)
 

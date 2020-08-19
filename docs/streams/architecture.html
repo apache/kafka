@@ -151,8 +151,10 @@
     <p>
         Note that the cost of task (re)initialization typically depends primarily on the time for restoring the state by replaying the state stores' associated changelog topics.
         To minimize this restoration time, users can configure their applications to have <b>standby replicas</b> of local states (i.e. fully replicated copies of the state).
-        When a task migration happens, Kafka Streams then attempts to assign a task to an application instance where such a standby replica already exists in order to minimize
+        When a task migration happens, Kafka Streams will assign a task to an application instance where such a standby replica already exists in order to minimize
         the task (re)initialization cost. See <code>num.standby.replicas</code> in the <a href="/{{version}}/documentation/#streamsconfigs"><b>Kafka Streams Configs</b></a> section.
+        Starting in 2.6, Kafka Streams will guarantee that a task is only ever assigned to an instance with a fully caught-up local copy of the state, if such an instance
+        exists. Standby tasks will increase the likelihood that a caught-up instance exists in the case of a failure.
     </p>
 
     <div class="pagination">

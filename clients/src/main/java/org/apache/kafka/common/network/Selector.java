@@ -107,7 +107,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final Set<KafkaChannel> explicitlyMutedChannels;
     private boolean outOfMemory;
     private final List<Send> completedSends;
-    private final LinkedHashMap<KafkaChannel, NetworkReceive> completedReceives;
+    private final LinkedHashMap<String, NetworkReceive> completedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
     private Set<SelectionKey> keysWithBufferedRead;
@@ -363,23 +363,19 @@ public class Selector implements Selectable, AutoCloseable {
     @Override
     public void close() {
         List<String> connections = new ArrayList<>(channels.keySet());
-        try {
-            for (String id : connections)
-                close(id);
-        } finally {
-            // If there is any exception thrown in close(id), we should still be able
-            // to close the remaining objects, especially the sensors because keeping
-            // the sensors may lead to failure to start up the ReplicaFetcherThread if
-            // the old sensors with the same names has not yet been cleaned up.
-            AtomicReference<Throwable> firstException = new AtomicReference<>();
-            Utils.closeQuietly(nioSelector, "nioSelector", firstException);
-            Utils.closeQuietly(sensors, "sensors", firstException);
-            Utils.closeQuietly(channelBuilder, "channelBuilder", firstException);
-            Throwable exception = firstException.get();
-            if (exception instanceof RuntimeException && !(exception instanceof SecurityException)) {
-                throw (RuntimeException) exception;
-            }
-
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
+        Utils.closeAllQuietly(firstException, "release connections",
+                connections.stream().map(id -> (AutoCloseable) () -> close(id)).toArray(AutoCloseable[]::new));
+        // If there is any exception thrown in close(id), we should still be able
+        // to close the remaining objects, especially the sensors because keeping
+        // the sensors may lead to failure to start up the ReplicaFetcherThread if
+        // the old sensors with the same names has not yet been cleaned up.
+        Utils.closeQuietly(nioSelector, "nioSelector", firstException);
+        Utils.closeQuietly(sensors, "sensors", firstException);
+        Utils.closeQuietly(channelBuilder, "channelBuilder", firstException);
+        Throwable exception = firstException.get();
+        if (exception instanceof RuntimeException && !(exception instanceof SecurityException)) {
+            throw (RuntimeException) exception;
         }
     }
 
@@ -804,7 +800,33 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     /**
-     * Clear the results from the prior poll
+     * Clears completed receives. This is used by SocketServer to remove references to
+     * receive buffers after processing completed receives, without waiting for the next
+     * poll().
+     */
+    public void clearCompletedReceives() {
+        this.completedReceives.clear();
+    }
+
+    /**
+     * Clears completed sends. This is used by SocketServer to remove references to
+     * send buffers after processing completed sends, without waiting for the next
+     * poll().
+     */
+    public void clearCompletedSends() {
+        this.completedSends.clear();
+    }
+
+    /**
+     * Clears all the results from the previous poll. This is invoked by Selector at the start of
+     * a poll() when all the results from the previous poll are expected to have been handled.
+     * <p>
+     * SocketServer uses {@link #clearCompletedSends()} and {@link #clearCompletedSends()} to
+     * clear `completedSends` and `completedReceives` as soon as they are processed to avoid
+     * holding onto large request/response buffers from multiple connections longer than necessary.
+     * Clients rely on Selector invoking {@link #clear()} at the start of each poll() since memory usage
+     * is less critical and clearing once-per-poll provides the flexibility to process these results in
+     * any order before the next poll.
      */
     private void clear() {
         this.completedSends.clear();
@@ -935,7 +957,6 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         this.sensors.connectionClosed.record();
-        this.completedReceives.remove(channel);
         this.explicitlyMutedChannels.remove(channel);
         if (notifyDisconnect)
             this.disconnected.put(channel.id(), channel.state());
@@ -1015,7 +1036,7 @@ public class Selector implements Selectable, AutoCloseable {
      * Check if given channel has a completed receive
      */
     private boolean hasCompletedReceive(KafkaChannel channel) {
-        return completedReceives.containsKey(channel);
+        return completedReceives.containsKey(channel.id());
     }
 
     /**
@@ -1025,7 +1046,7 @@ public class Selector implements Selectable, AutoCloseable {
         if (hasCompletedReceive(channel))
             throw new IllegalStateException("Attempting to add second completed receive to channel " + channel.id());
 
-        this.completedReceives.put(channel, networkReceive);
+        this.completedReceives.put(channel.id(), networkReceive);
         sensors.recordCompletedReceive(channel.id(), networkReceive.size(), currentTimeMs);
     }
 
@@ -1089,9 +1110,10 @@ public class Selector implements Selectable, AutoCloseable {
 
     class SelectorMetrics implements AutoCloseable {
         private final Metrics metrics;
-        private final String metricGrpPrefix;
         private final Map<String, String> metricTags;
         private final boolean metricsPerConnection;
+        private final String metricGrpName;
+        private final String perConnectionMetricGrpName;
 
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
@@ -1117,10 +1139,10 @@ public class Selector implements Selectable, AutoCloseable {
 
         public SelectorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection) {
             this.metrics = metrics;
-            this.metricGrpPrefix = metricGrpPrefix;
             this.metricTags = metricTags;
             this.metricsPerConnection = metricsPerConnection;
-            String metricGrpName = metricGrpPrefix + "-metrics";
+            this.metricGrpName = metricGrpPrefix + "-metrics";
+            this.perConnectionMetricGrpName = metricGrpPrefix + "-node-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
 
             for (Map.Entry<String, String> tag: metricTags.entrySet()) {
@@ -1268,34 +1290,33 @@ public class Selector implements Selectable, AutoCloseable {
                 String nodeRequestName = "node-" + connectionId + ".requests-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
                 if (nodeRequest == null) {
-                    String metricGrpName = metricGrpPrefix + "-node-metrics";
                     Map<String, String> tags = new LinkedHashMap<>(metricTags);
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);
-                    nodeRequest.add(createMeter(metrics, metricGrpName, tags, new WindowedCount(), "request", "requests sent"));
-                    MetricName metricName = metrics.metricName("request-size-avg", metricGrpName, "The average size of requests sent.", tags);
+                    nodeRequest.add(createMeter(metrics, perConnectionMetricGrpName, tags, new WindowedCount(), "request", "requests sent"));
+                    MetricName metricName = metrics.metricName("request-size-avg", perConnectionMetricGrpName, "The average size of requests sent.", tags);
                     nodeRequest.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-size-max", metricGrpName, "The maximum size of any request sent.", tags);
+                    metricName = metrics.metricName("request-size-max", perConnectionMetricGrpName, "The maximum size of any request sent.", tags);
                     nodeRequest.add(metricName, new Max());
 
                     String bytesSentName = "node-" + connectionId + ".bytes-sent";
                     Sensor bytesSent = sensor(bytesSentName);
-                    bytesSent.add(createMeter(metrics, metricGrpName, tags, "outgoing-byte", "outgoing bytes"));
+                    bytesSent.add(createMeter(metrics, perConnectionMetricGrpName, tags, "outgoing-byte", "outgoing bytes"));
 
                     String nodeResponseName = "node-" + connectionId + ".responses-received";
                     Sensor nodeResponse = sensor(nodeResponseName);
-                    nodeResponse.add(createMeter(metrics, metricGrpName, tags, new WindowedCount(), "response", "responses received"));
+                    nodeResponse.add(createMeter(metrics, perConnectionMetricGrpName, tags, new WindowedCount(), "response", "responses received"));
 
                     String bytesReceivedName = "node-" + connectionId + ".bytes-received";
                     Sensor bytesReceive = sensor(bytesReceivedName);
-                    bytesReceive.add(createMeter(metrics, metricGrpName, tags, "incoming-byte", "incoming bytes"));
+                    bytesReceive.add(createMeter(metrics, perConnectionMetricGrpName, tags, "incoming-byte", "incoming bytes"));
 
                     String nodeTimeName = "node-" + connectionId + ".latency";
                     Sensor nodeRequestTime = sensor(nodeTimeName);
-                    metricName = metrics.metricName("request-latency-avg", metricGrpName, tags);
+                    metricName = metrics.metricName("request-latency-avg", perConnectionMetricGrpName, tags);
                     nodeRequestTime.add(metricName, new Avg());
-                    metricName = metrics.metricName("request-latency-max", metricGrpName, tags);
+                    metricName = metrics.metricName("request-latency-max", perConnectionMetricGrpName, tags);
                     nodeRequestTime.add(metricName, new Max());
                 }
             }

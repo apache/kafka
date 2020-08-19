@@ -241,13 +241,12 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * Stops partitions for copying segments, building indexes and deletes the partition in remote storage if delete flag
    * is set as true.
    *
-   * @param topicPartitions Set of topic partitions.
+   * @param topicPartition  topic partition to be stopped.
    * @param delete          flag to indicate whether the given topic partitions to be deleted or not.
    */
-  def stopPartitions(topicPartitions: Set[TopicPartition], delete: Boolean): Unit = {
-    topicPartitions.foreach { tp =>
+  def stopPartitions(topicPartition: TopicPartition, delete: Boolean): Unit = {
       // unassign topic partitions from RLM leader/follower
-      val rlmTaskWithFuture = leaderOrFollowerTasks.remove(tp)
+      val rlmTaskWithFuture = leaderOrFollowerTasks.remove(topicPartition)
       if (rlmTaskWithFuture != null) {
         rlmTaskWithFuture.cancel()
       }
@@ -256,14 +255,13 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
         try {
           //todo-tier need to check whether it is really needed to delete from remote. This may be a delete request only
           //for this replica. We should delete from remote storage only if the topic partition is getting deleted.
-          remoteLogMetadataManager.listRemoteLogSegments(tp).asScala.foreach(t => deleteRemoteLogSegment(t))
+          remoteLogMetadataManager.listRemoteLogSegments(topicPartition).asScala.foreach(t => deleteRemoteLogSegment(t))
 
-          remoteLogMetadataManager.onStopPartitions(topicPartitions.asJava)
+          remoteLogMetadataManager.onStopPartitions(Collections.singleton(topicPartition))
         } catch {
-          case ex: Exception => error(s"Error occurred while deleting topic partition: $tp", ex)
+          case ex: Exception => error(s"Error occurred while deleting topic partition: $topicPartition", ex)
         }
       }
-    }
   }
 
   private def deleteRemoteLogSegment(metadata: RemoteLogSegmentMetadata) = {

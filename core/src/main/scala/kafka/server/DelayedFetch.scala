@@ -77,7 +77,6 @@ class DelayedFetch(delayMs: Long,
    * Case E: This broker is the leader, but the requested epoch is now fenced
    * Case F: The fetch offset locates not on the last segment of the log
    * Case G: The accumulated bytes from all the fetching partitions exceeds the minimum bytes
-   * Case H: The high watermark on this broker has changed within a FetchSession, need to propagate to follower (KIP-392)
    * Upon completion, should return whatever data is available for each valid partition
    */
   override def tryComplete(): Boolean = {
@@ -88,8 +87,7 @@ class DelayedFetch(delayMs: Long,
         val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
-            val partition = replicaManager.getPartitionOrException(topicPartition,
-              expectLeader = fetchMetadata.fetchOnlyLeader)
+            val partition = replicaManager.getPartitionOrException(topicPartition)
             val offsetSnapshot = partition.fetchOffsetSnapshot(fetchLeaderEpoch, fetchMetadata.fetchOnlyLeader)
 
             val endOffset = fetchMetadata.fetchIsolation match {
@@ -120,21 +118,10 @@ class DelayedFetch(delayMs: Long,
                   accumulatedSize += bytesAvailable
               }
             }
-
-            if (fetchMetadata.isFromFollower) {
-              // Case H check if the follower has the latest HW from the leader
-              if (partition.getReplica(fetchMetadata.replicaId)
-                .exists(r => offsetSnapshot.highWatermark.messageOffset > r.lastSentHighWatermark)) {
-                return forceComplete()
-              }
-            }
           }
         } catch {
-          case _: NotLeaderForPartitionException =>  // Case A
-            debug(s"Broker is no longer the leader of $topicPartition, satisfy $fetchMetadata immediately")
-            return forceComplete()
-          case _: ReplicaNotAvailableException =>  // Case B
-            debug(s"Broker no longer has a replica of $topicPartition, satisfy $fetchMetadata immediately")
+          case _: NotLeaderOrFollowerException =>  // Case A or Case B
+            debug(s"Broker is no longer the leader or follower of $topicPartition, satisfy $fetchMetadata immediately")
             return forceComplete()
           case _: UnknownTopicOrPartitionException => // Case C
             debug(s"Broker no longer knows of partition $topicPartition, satisfy $fetchMetadata immediately")

@@ -18,15 +18,15 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
@@ -36,65 +36,72 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
 import java.util.List;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
-    // The below are both null for standby tasks
-    private final StreamTask streamTask;
-    private final RecordCollector collector;
+    // the below are null for standby tasks
+    private StreamTask streamTask;
+    private RecordCollector collector;
 
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
-    final Map<String, String> storeToChangelogTopic = new HashMap<>();
+    private final ProcessorStateManager stateManager;
 
-    ProcessorContextImpl(final TaskId id,
-                         final StreamTask streamTask,
-                         final StreamsConfig config,
-                         final RecordCollector collector,
-                         final ProcessorStateManager stateMgr,
-                         final StreamsMetricsImpl metrics,
-                         final ThreadCache cache) {
-        super(id, config, metrics, stateMgr, cache);
-        this.streamTask = streamTask;
-        this.collector = collector;
+    final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
-        if (streamTask == null && taskType() == TaskType.ACTIVE) {
-            throw new IllegalStateException("Tried to create context for active task but the streamtask was null");
-        }
-    }
-
-    ProcessorContextImpl(final TaskId id,
-                         final StreamsConfig config,
-                         final ProcessorStateManager stateMgr,
-                         final StreamsMetricsImpl metrics) {
-        this(
-            id,
-            null,
-            config,
-            null,
-            stateMgr,
-            metrics,
-            new ThreadCache(
-                new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
-                0,
-                metrics
-            )
-        );
-    }
-
-    public ProcessorStateManager stateManager() {
-        return (ProcessorStateManager) stateManager;
+    public ProcessorContextImpl(final TaskId id,
+                                final StreamsConfig config,
+                                final ProcessorStateManager stateMgr,
+                                final StreamsMetricsImpl metrics,
+                                final ThreadCache cache) {
+        super(id, config, metrics, cache);
+        stateManager = stateMgr;
     }
 
     @Override
-    public void register(final StateStore store,
-                         final StateRestoreCallback stateRestoreCallback) {
-        storeToChangelogTopic.put(store.name(), ProcessorStateManager.storeChangelogTopic(applicationId(), store.name()));
-        super.register(store, stateRestoreCallback);
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        if (stateManager.taskType() != TaskType.ACTIVE) {
+            throw new IllegalStateException("Tried to transition processor context to active but the state manager's " +
+                                                "type was " + stateManager.taskType());
+        }
+        this.streamTask = streamTask;
+        this.collector = recordCollector;
+        this.cache = newCache;
+        addAllFlushListenersToNewCache();
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        if (stateManager.taskType() != TaskType.STANDBY) {
+            throw new IllegalStateException("Tried to transition processor context to standby but the state manager's " +
+                                                "type was " + stateManager.taskType());
+        }
+        this.streamTask = null;
+        this.collector = null;
+        this.cache = newCache;
+        addAllFlushListenersToNewCache();
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        cacheNameToFlushListener.put(namespace, listener);
+        cache.addDirtyEntryFlushListener(namespace, listener);
+    }
+
+    private void addAllFlushListenersToNewCache() {
+        for (final Map.Entry<String, DirtyEntryFlushListener> cacheEntry : cacheNameToFlushListener.entrySet()) {
+            cache.addDirtyEntryFlushListener(cacheEntry.getKey(), cacheEntry.getValue());
+        }
+    }
+
+    @Override
+    public ProcessorStateManager stateManager() {
+        return stateManager;
     }
 
     @Override
@@ -108,16 +115,20 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                           final byte[] value,
                           final long timestamp) {
         throwUnsupportedOperationExceptionIfStandby("logChange");
+
+        final TopicPartition changelogPartition = stateManager().registeredChangelogPartitionFor(storeName);
+
         // Sending null headers to changelog topics (KIP-244)
         collector.send(
-            storeToChangelogTopic.get(storeName),
+            changelogPartition.topic(),
             key,
             value,
             null,
-            taskId().partition,
+            changelogPartition.partition(),
             timestamp,
             BYTES_KEY_SERIALIZER,
-            BYTEARRAY_VALUE_SERIALIZER);
+            BYTEARRAY_VALUE_SERIALIZER
+        );
     }
 
     /**
@@ -142,7 +153,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                 "make sure to connect the added store to the processor by providing the processor name to " +
                 "'.addStateStore()' or connect them via '.connectProcessorAndStateStores()'. " +
                 "DSL users need to provide the store name to '.process()', '.transform()', or '.transformValues()' " +
-                "to connect the store to the corresponding operator. If you do not add stores manually, " +
+                "to connect the store to the corresponding operator, or they can provide a StoreBuilder by implementing " +
+                "the stores() method on the Supplier itself. If you do not add stores manually, " +
                 "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
         }
 
@@ -184,7 +196,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                final V value,
                                final To to) {
         throwUnsupportedOperationExceptionIfStandby("forward");
-        final ProcessorNode<?, ?> previousNode = currentNode();
+        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         final ProcessorRecordContext previousContext = recordContext;
 
         try {
@@ -200,12 +212,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
             final String sendTo = toInternal.child();
             if (sendTo == null) {
-                final List<ProcessorNode<?, ?>> children = currentNode().children();
-                for (final ProcessorNode<?, ?> child : children) {
-                    forward((ProcessorNode<K, V>) child, key, value);
+                final List<? extends ProcessorNode<?, ?, ?, ?>> children = currentNode().children();
+                for (final ProcessorNode<?, ?, ?, ?> child : children) {
+                    forward((ProcessorNode<K, V, ?, ?>) child, key, value);
                 }
             } else {
-                final ProcessorNode<K, V> child = currentNode().getChild(sendTo);
+                final ProcessorNode<K, V, ?, ?> child = currentNode().getChild(sendTo);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + sendTo
                         + " either does not exist or is not connected to this processor.");
@@ -218,11 +230,14 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private <K, V> void forward(final ProcessorNode<K, V> child,
+    private <K, V> void forward(final ProcessorNode<K, V, ?, ?> child,
                                 final K key,
                                 final V value) {
         setCurrentNode(child);
         child.process(key, value);
+        if (child.isTerminalNode()) {
+            streamTask.maybeRecordE2ELatency(timestamp(), currentSystemTimeMs(), child.name());
+        }
     }
 
     @Override
@@ -278,7 +293,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     @Override
-    public ProcessorNode<?, ?> currentNode() {
+    public ProcessorNode<?, ?, ?, ?> currentNode() {
         throwUnsupportedOperationExceptionIfStandby("currentNode");
         return super.currentNode();
     }

@@ -59,7 +59,7 @@ class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
         val fetchLeaderEpoch = fetchStatus.fetchInfo.currentLeaderEpoch
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
-            replicaManager.getPartitionOrException(topicPartition, expectLeader = fetchMetadata.fetchOnlyLeader)
+            replicaManager.getPartitionOrException(topicPartition)
           }
         } catch {
           case _: KafkaStorageException => // Case d

@@ -396,7 +396,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     private void createAdminClient() {
         Map<String, Object> props = new HashMap<>(configs);
         props.put(ProducerConfig.CLIENT_ID_CONFIG, createClientId("admin"));
-        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 5000);
 
         this.adminClient = AdminClient.create(props);
@@ -412,8 +412,6 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         props.put(ProducerConfig.ACKS_CONFIG, "all");
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
         props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
-
-        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 5000);
 
         this.producer = new KafkaProducer<>(props);

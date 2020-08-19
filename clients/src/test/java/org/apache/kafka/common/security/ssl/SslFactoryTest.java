@@ -17,7 +17,9 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
+import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -158,6 +160,32 @@ public class SslFactoryTest {
         //host and port are hints
         SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
         assertTrue(engine.getUseClientMode());
+    }
+
+    @Test
+    public void staleSslEngineFactoryShouldBeClosed() throws IOException, GeneralSecurityException {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> clientSslConfig = sslConfigsBuilder(Mode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .useClientCert(false)
+                .build();
+        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(clientSslConfig);
+        TestSslUtils.TestSslEngineFactory sslEngineFactory = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
+        assertNotNull(sslEngineFactory);
+        assertFalse(sslEngineFactory.closed);
+
+        trustStoreFile = File.createTempFile("truststore", ".jks");
+        clientSslConfig = sslConfigsBuilder(Mode.SERVER)
+                .createNewTrustStore(trustStoreFile)
+                .build();
+        clientSslConfig.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, TestSslUtils.TestSslEngineFactory.class);
+        sslFactory.reconfigure(clientSslConfig);
+        TestSslUtils.TestSslEngineFactory newSslEngineFactory = (TestSslUtils.TestSslEngineFactory) sslFactory.sslEngineFactory();
+        assertNotEquals(sslEngineFactory, newSslEngineFactory);
+        // the older one should be closed
+        assertTrue(sslEngineFactory.closed);
     }
 
     @Test

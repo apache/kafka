@@ -61,10 +61,7 @@ public class StreamThreadStateStoreProvider {
             if (keyTaskId != null) {
                 final Task task = tasks.get(keyTaskId);
                 if (task == null) {
-                    throw new InvalidStateStoreException(
-                        String.format("The specified partition %d for store %s does not exist.",
-                            storeQueryParams.partition(),
-                            storeName));
+                    return Collections.emptyList();
                 }
                 final T store = validateAndListStores(task.getStore(storeName), queryableStoreType, storeName, keyTaskId);
                 if (store != null) {

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
+
 /**
  * @param <K>  key type
  * @param <V>  value type
@@ -28,6 +30,6 @@ package org.apache.kafka.streams.kstream;
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)
  */
-public interface ValueTransformerWithKeySupplier<K, V, VR> {
+public interface ValueTransformerWithKeySupplier<K, V, VR> extends ConnectedStoreProvider {
     ValueTransformerWithKey<K, V, VR> get();
 }

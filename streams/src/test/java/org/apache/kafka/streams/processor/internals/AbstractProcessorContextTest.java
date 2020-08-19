@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
@@ -88,6 +89,12 @@ public class AbstractProcessorContextTest {
         } catch (final IllegalStateException e) {
             // pass
         }
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnTopicIfRecordContextTopicIsNull() {
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, null, null));
+        assertThat(context.topic(), nullValue());
     }
 
     @Test
@@ -195,7 +202,12 @@ public class AbstractProcessorContextTest {
         }
 
         TestProcessorContext(final MockStreamsMetrics metrics) {
-            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache(new LogContext("name "), 0, metrics));
+            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new ThreadCache(new LogContext("name "), 0, metrics));
+        }
+
+        @Override
+        protected StateManager stateManager() {
+            return new StateManagerStub();
         }
 
         @Override
@@ -240,6 +252,23 @@ public class AbstractProcessorContextTest {
                               final Bytes key,
                               final byte[] value,
                               final long timestamp) {
+        }
+
+        @Override
+        public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        }
+
+        @Override
+        public void transitionToStandby(final ThreadCache newCache) {
+        }
+
+        @Override
+        public void registerCacheFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
+        }
+
+        @Override
+        public String changelogFor(final String storeName) {
+            return ProcessorStateManager.storeChangelogTopic(applicationId(), storeName);
         }
     }
 }

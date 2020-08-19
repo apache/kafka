@@ -47,7 +47,8 @@ class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService
 
     def __init__(self, context, num_nodes, kafka, transactional_id, consumer_group,
                  input_topic, input_partition, output_topic, max_messages=-1,
-                 transaction_size=1000, transaction_timeout=None, enable_random_aborts=True, use_group_metadata=False, group_mode=False):
+                 transaction_size=1000, transaction_timeout=None, enable_random_aborts=True,
+                 use_group_metadata=False, group_mode=False):
         super(TransactionalMessageCopier, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.transactional_id = transactional_id

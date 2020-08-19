@@ -23,9 +23,9 @@ import java.util.Map;
  */
 public class OffsetSpec {
 
-    static class EarliestSpec extends OffsetSpec { }
-    static class LatestSpec extends OffsetSpec { }
-    static class TimestampSpec extends OffsetSpec {
+    public static class EarliestSpec extends OffsetSpec { }
+    public static class LatestSpec extends OffsetSpec { }
+    public static class TimestampSpec extends OffsetSpec {
         private final long timestamp;
 
         TimestampSpec(long timestamp) {

@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.nio.BufferUnderflowException;
 import java.util.EnumSet;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -284,6 +286,37 @@ public final class Utils {
     }
 
     /**
+     * Starting from the current position, read an integer indicating the size of the byte array to read,
+     * then read the array. Consumes the buffer: upon returning, the buffer's position is after the array
+     * that is returned.
+     * @param buffer The buffer to read a size-prefixed array from
+     * @return The array
+     */
+    public static byte[] getNullableSizePrefixedArray(final ByteBuffer buffer) {
+        final int size = buffer.getInt();
+        return getNullableArray(buffer, size);
+    }
+
+    /**
+     * Read a byte array of the given size. Consumes the buffer: upon returning, the buffer's position
+     * is after the array that is returned.
+     * @param buffer The buffer to read a size-prefixed array from
+     * @param size The number of bytes to read out of the buffer
+     * @return The array
+     */
+    public static byte[] getNullableArray(final ByteBuffer buffer, final int size) {
+        if (size > buffer.remaining()) {
+            // preemptively throw this when the read is doomed to fail, so we don't have to allocate the array.
+            throw new BufferUnderflowException();
+        }
+        final byte[] oldBytes = size == -1 ? null : new byte[size];
+        if (oldBytes != null) {
+            buffer.get(oldBytes);
+        }
+        return oldBytes;
+    }
+
+    /**
      * Returns a copy of src byte array
      * @param src The byte array to copy
      * @return The copy
@@ -340,6 +373,18 @@ public final class Utils {
      */
     public static <T> Class<? extends T> loadClass(String klass, Class<T> base) throws ClassNotFoundException {
         return Class.forName(klass, true, Utils.getContextOrKafkaClassLoader()).asSubclass(base);
+    }
+
+    /**
+     * Cast {@code klass} to {@code base} and instantiate it.
+     * @param klass The class to instantiate
+     * @param base A know baseclass of klass.
+     * @param <T> the type of the base class
+     * @throws ClassCastException If {@code klass} is not a subclass of {@code base}.
+     * @return the new instance.
+     */
+    public static <T> T newInstance(Class<?> klass, Class<T> base) {
+        return Utils.newInstance(klass.asSubclass(base));
     }
 
     /**
@@ -755,6 +800,20 @@ public final class Utils {
     }
 
     /**
+     * Creates a {@link Properties} from a map
+     *
+     * @param properties A map of properties to add
+     * @return The properties object
+     */
+    public static Properties mkObjectProperties(final Map<String, Object> properties) {
+        final Properties result = new Properties();
+        for (final Map.Entry<String, Object> entry : properties.entrySet()) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *
      * @param rootFile The root file at which to begin deleting
@@ -919,6 +978,16 @@ public final class Utils {
                 log.error("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
             }
         }
+    }
+
+    /**
+     * close all closable objects even if one of them throws exception.
+     * @param firstException keeps the first exception
+     * @param name message of closing those objects
+     * @param closeables closable objects
+     */
+    public static void closeAllQuietly(AtomicReference<Throwable> firstException, String name, AutoCloseable... closeables) {
+        for (AutoCloseable closeable : closeables) closeQuietly(closeable, name, firstException);
     }
 
     /**
@@ -1183,5 +1252,23 @@ public final class Utils {
         result.addAll(left);
         result.removeAll(right);
         return result;
+    }
+
+    /**
+     * Convert a properties to map. All keys in properties must be string type. Otherwise, a ConfigException is thrown.
+     * @param properties to be converted
+     * @return a map including all elements in properties
+     */
+    public static Map<String, Object> propsToMap(Properties properties) {
+        Map<String, Object> map = new HashMap<>(properties.size());
+        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+            if (entry.getKey() instanceof String) {
+                String k = (String) entry.getKey();
+                map.put(k, properties.get(k));
+            } else {
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
+            }
+        }
+        return map;
     }
 }

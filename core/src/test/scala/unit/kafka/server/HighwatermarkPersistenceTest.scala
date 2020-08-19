@@ -60,7 +60,7 @@ class HighwatermarkPersistenceTest {
 
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
-    scheduler.startup
+    scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
@@ -110,7 +110,7 @@ class HighwatermarkPersistenceTest {
     EasyMock.replay(zkClient)
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
-    scheduler.startup
+    scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
     // create replica manager
@@ -178,7 +178,7 @@ class HighwatermarkPersistenceTest {
   }
 
   private def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read.getOrElse(
+    replicaManager.highWatermarkCheckpoints(new File(replicaManager.config.logDirs.head).getAbsolutePath).read().getOrElse(
       new TopicPartition(topic, partition), 0L)
   }
 }
