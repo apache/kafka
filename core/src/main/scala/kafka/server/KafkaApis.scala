@@ -1856,13 +1856,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         (toCreate, unauthorizedTopics)
       }
 
-      override def process(authorizedTopics: Map[String, CreatableTopic], unauthorizedResult: Map[String, ApiError], createTopicsRequest: CreateTopicsRequest): Unit = {
+      override def process(authorizedTopics: Map[String, CreatableTopic],
+                           unauthorizedResult: Map[String, ApiError],
+                           createTopicsRequest: CreateTopicsRequest): Unit = {
         val results = new CreatableTopicResultCollection(createTopicsRequest.data.topics.size)
         createTopicsRequest.data.topics.forEach { topic =>
           results.add(new CreatableTopicResult().setName(topic.name))
         }
+
+        val topics = createTopicsRequest.data.topics.asScala.map(_.name).toSet
         val authorizedForDescribeConfigs = filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
-          authorizedTopics.keys, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
+          topics, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
 
         results.forKeyValue { topic =>
           if (results.findAll(topic.name).size > 1) {
@@ -1922,12 +1926,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       override def mergeResponse(forwardResponse: CreateTopicsResponse, unauthorizedResult: Map[String, ApiError]): CreateTopicsResponse = {
         val forwardTopics = forwardResponse.data.topics
-        unauthorizedResult.foreach{ case (topicName, error) => {
+        unauthorizedResult.foreach{ case (topicName, error) =>
           forwardTopics.add(new CreateTopicsResponseData.CreatableTopicResult()
             .setName(topicName)
             .setErrorCode(error.error.code)
             .setErrorMessage("Authorization failed."))
-        }}
+        }
         forwardResponse
       }
     }

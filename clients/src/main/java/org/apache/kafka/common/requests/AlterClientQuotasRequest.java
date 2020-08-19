@@ -30,6 +30,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class AlterClientQuotasRequest extends AbstractRequest {
 
@@ -75,6 +76,16 @@ public class AlterClientQuotasRequest extends AbstractRequest {
         @Override
         public String toString() {
             return data.toString();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Builder && this.data.equals(((Builder) other).data);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(data);
         }
     }
 
