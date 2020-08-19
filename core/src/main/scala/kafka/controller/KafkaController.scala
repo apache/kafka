@@ -1817,8 +1817,9 @@ class KafkaController(val config: KafkaConfig,
       return
     }
 
-    val partitionErrors: mutable.Map[TopicPartition, Errors] = mutable.HashMap[TopicPartition, Errors]()
+    val partitionResponses: mutable.Map[TopicPartition, Errors] = mutable.HashMap[TopicPartition, Errors]()
 
+    // Determine which partitions we will accept the new ISR for
     val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = isrsToAlter.flatMap {
       case (tp: TopicPartition, newLeaderAndIsr: LeaderAndIsr) =>
         val partitionError: Errors = controllerContext.partitionLeadershipInfo(tp) match {
@@ -1843,10 +1844,11 @@ class KafkaController(val config: KafkaConfig,
           case None => Errors.UNKNOWN_TOPIC_OR_PARTITION
         }
         if (partitionError == Errors.NONE) {
+          partitionResponses(tp) = Errors.NONE
           // Bump the leaderEpoch for partitions that we're going to write
           Some(tp -> newLeaderAndIsr.newEpochAndZkVersion)
         } else {
-          partitionErrors.put(tp, partitionError)
+          partitionResponses(tp) = partitionError
           None
         }
     }
@@ -1864,14 +1866,14 @@ class KafkaController(val config: KafkaConfig,
           Some(partition -> updatedIsr)
         case Left(error) =>
           warn(s"Failed to update ISR for partition $partition", error)
-          partitionErrors.put(partition, Errors.forException(error))
+          partitionResponses.put(partition, Errors.forException(error))
           None
       }
     }
 
     badVersionUpdates.foreach(partition => {
       warn(s"Failed to update ISR for partition $partition, bad ZK version")
-      partitionErrors.put(partition, Errors.INVALID_UPDATE_VERSION)
+      partitionResponses.put(partition, Errors.INVALID_UPDATE_VERSION)
     })
 
     // Update our cache
@@ -1882,7 +1884,7 @@ class KafkaController(val config: KafkaConfig,
     brokerRequestBatch.newBatch()
 
     // Send LeaderAndIsr for all requested partitions
-    adjustedIsrs.keys.foreach(partition => {
+    isrsToAlter.keys.foreach(partition => {
       controllerContext.partitionLeadershipInfo(partition) match {
         case Some(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch) =>
           val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
@@ -1894,7 +1896,7 @@ class KafkaController(val config: KafkaConfig,
     brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
 
     // Send back AlterIsr response
-    callback.apply(Left(partitionErrors))
+    callback.apply(Left(partitionResponses))
   }
 
   private def processControllerChange(): Unit = {
