@@ -241,7 +241,7 @@ public class MeteredSessionStore<K, V>
         try {
             wrapped().close();
         } finally {
-            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(threadId, taskId, name());
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, name());
         }
     }
 

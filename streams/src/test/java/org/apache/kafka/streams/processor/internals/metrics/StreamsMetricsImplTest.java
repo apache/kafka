@@ -95,7 +95,6 @@ public class StreamsMetricsImplTest {
     private final static String VERSION = StreamsConfig.METRICS_LATEST;
     private final static String CLIENT_ID = "test-client";
     private final static String THREAD_ID1 = "test-thread-1";
-    private final static String THREAD_ID2 = "test-thread-2";
     private final static String TASK_ID1 = "test-task-1";
     private final static String TASK_ID2 = "test-task-2";
     private final static String METRIC_NAME1 = "test-metric1";
@@ -107,11 +106,6 @@ public class StreamsMetricsImplTest {
     private final static String STORE_ID_TAG = "-state-id";
     private final static String STORE_NAME1 = "store1";
     private final static String STORE_NAME2 = "store2";
-    private final static Map<String, String> STORE_LEVEL_TAG_MAP = mkMap(
-        mkEntry(THREAD_ID_TAG, THREAD_ID1),
-        mkEntry(TASK_ID_TAG, TASK_ID1),
-        mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
-    );
     private final static String RECORD_CACHE_ID_TAG = "record-cache-id";
     private final static String ENTITY_NAME = "test-entity";
     private final static String OPERATION_NAME = "test-operation";
@@ -125,14 +119,17 @@ public class StreamsMetricsImplTest {
     private final static String DESCRIPTION3 = "description number three";
     private final static Gauge<String> VALUE_PROVIDER = (config, now) -> "mutable-value";
 
-
-
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
     private final String metricNamePrefix = "metric";
     private final String group = "group";
     private final Map<String, String> tags = mkMap(mkEntry("tag", "value"));
     private final Map<String, String> clientLevelTags = mkMap(mkEntry(CLIENT_ID_TAG, CLIENT_ID));
+    private final Map<String, String> storeLevelTagMap = mkMap(
+        mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
+        mkEntry(TASK_ID_TAG, TASK_ID1),
+        mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
+    );
     private final MetricName metricName1 =
         new MetricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags);
     private final MetricName metricName2 =
@@ -209,11 +206,10 @@ public class StreamsMetricsImplTest {
         streamsMetrics.threadLevelSensor(THREAD_ID1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
         streamsMetrics.taskLevelSensor(THREAD_ID1, TASK_ID1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.taskLevelSensor(THREAD_ID1, TASK_ID1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME2, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME2, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
         streamsMetrics.addStoreLevelMutableMetric(
-            THREAD_ID1,
             TASK_ID1,
             SCOPE_NAME,
             STORE_NAME1,
@@ -223,7 +219,6 @@ public class StreamsMetricsImplTest {
             VALUE_PROVIDER
         );
         streamsMetrics.addStoreLevelMutableMetric(
-            THREAD_ID1,
             TASK_ID1,
             SCOPE_NAME,
             STORE_NAME1,
@@ -233,7 +228,6 @@ public class StreamsMetricsImplTest {
             VALUE_PROVIDER
         );
         streamsMetrics.addStoreLevelMutableMetric(
-            THREAD_ID1,
             TASK_ID1,
             SCOPE_NAME,
             STORE_NAME2,
@@ -330,7 +324,6 @@ public class StreamsMetricsImplTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         final Sensor actualSensor = streamsMetrics.storeLevelSensor(
-            THREAD_ID1,
             TASK_ID1,
             STORE_NAME1,
             SENSOR_NAME_1,
@@ -350,7 +343,6 @@ public class StreamsMetricsImplTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         final Sensor actualSensor = streamsMetrics.storeLevelSensor(
-            THREAD_ID1,
             TASK_ID1,
             STORE_NAME1,
             SENSOR_NAME_1,
@@ -367,8 +359,8 @@ public class StreamsMetricsImplTest {
         final Capture<String> sensorKeys = setUpSensorKeyTests(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_2, INFO_RECORDING_LEVEL);
 
         assertThat(sensorKeys.getValues().get(0), not(sensorKeys.getValues().get(1)));
     }
@@ -379,8 +371,8 @@ public class StreamsMetricsImplTest {
         final Capture<String> sensorKeys = setUpSensorKeyTests(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID2, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID2, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
 
         assertThat(sensorKeys.getValues().get(0), not(sensorKeys.getValues().get(1)));
     }
@@ -391,20 +383,23 @@ public class StreamsMetricsImplTest {
         final Capture<String> sensorKeys = setUpSensorKeyTests(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME2, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME2, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
 
         assertThat(sensorKeys.getValues().get(0), not(sensorKeys.getValues().get(1)));
     }
 
     @Test
-    public void shouldNotUseSameStoreLevelSensorKeyWithDifferentThreadIds() {
+    public void shouldNotUseSameStoreLevelSensorKeyWithDifferentThreadIds() throws InterruptedException {
         final Metrics metrics = niceMock(Metrics.class);
         final Capture<String> sensorKeys = setUpSensorKeyTests(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
-        streamsMetrics.storeLevelSensor(THREAD_ID2, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        final Thread otherThread =
+            new Thread(() -> streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL));
+        otherThread.start();
+        otherThread.join();
 
         assertThat(sensorKeys.getValues().get(0), not(sensorKeys.getValues().get(1)));
     }
@@ -415,8 +410,8 @@ public class StreamsMetricsImplTest {
         final Capture<String> sensorKeys = setUpSensorKeyTests(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
-        streamsMetrics.storeLevelSensor(THREAD_ID1, TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
+        streamsMetrics.storeLevelSensor(TASK_ID1, STORE_NAME1, SENSOR_NAME_1, INFO_RECORDING_LEVEL);
 
         assertThat(sensorKeys.getValues().get(0), is(sensorKeys.getValues().get(1)));
     }
@@ -432,9 +427,9 @@ public class StreamsMetricsImplTest {
     public void shouldAddNewStoreLevelMutableMetric() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
-            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
+        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap))
             .andReturn(metricName);
         expect(metrics.metric(metricName)).andReturn(null);
         metrics.addMetric(eq(metricName), eqMetricConfig(metricConfig), eq(VALUE_PROVIDER));
@@ -442,7 +437,6 @@ public class StreamsMetricsImplTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addStoreLevelMutableMetric(
-            THREAD_ID1,
             TASK_ID1,
             SCOPE_NAME,
             STORE_NAME1,
@@ -459,15 +453,14 @@ public class StreamsMetricsImplTest {
     public void shouldNotAddStoreLevelMutableMetricIfAlreadyExists() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
-            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap);
+        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap))
             .andReturn(metricName);
         expect(metrics.metric(metricName)).andReturn(mock(KafkaMetric.class));
         replay(metrics);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
 
         streamsMetrics.addStoreLevelMutableMetric(
-            THREAD_ID1,
             TASK_ID1,
             SCOPE_NAME,
             STORE_NAME1,
@@ -485,12 +478,12 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = niceMock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
         final MetricName metricName1 =
-            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap);
         final MetricName metricName2 =
-            new MetricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, STORE_LEVEL_TAG_MAP);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
+            new MetricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, storeLevelTagMap);
+        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap))
             .andReturn(metricName1);
-        expect(metrics.metricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, STORE_LEVEL_TAG_MAP))
+        expect(metrics.metricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, storeLevelTagMap))
             .andReturn(metricName2);
         final Capture<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
         resetToDefault(metrics);
@@ -500,7 +493,7 @@ public class StreamsMetricsImplTest {
         expect(metrics.removeMetric(metricName2)).andReturn(mock(KafkaMetric.class));
         replay(metrics);
 
-        streamsMetrics.removeAllStoreLevelSensorsAndMetrics(THREAD_ID1, TASK_ID1, STORE_NAME1);
+        streamsMetrics.removeAllStoreLevelSensorsAndMetrics(TASK_ID1, STORE_NAME1);
 
         verify(metrics);
     }
@@ -1003,13 +996,13 @@ public class StreamsMetricsImplTest {
         final String storeName = "window-keeper";
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, THREAD_ID1, builtInMetricsVersion, time);
 
-        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(THREAD_ID1, taskName, storeType, storeName);
+        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskName, storeType, storeName);
 
         assertThat(tagMap.size(), equalTo(3));
         final boolean isMetricsLatest = builtInMetricsVersion.equals(StreamsConfig.METRICS_LATEST);
         assertThat(
             tagMap.get(isMetricsLatest ? StreamsMetricsImpl.THREAD_ID_TAG : StreamsMetricsImpl.THREAD_ID_TAG_0100_TO_24),
-            equalTo(THREAD_ID1));
+            equalTo(Thread.currentThread().getName()));
         assertThat(tagMap.get(StreamsMetricsImpl.TASK_ID_TAG), equalTo(taskName));
         assertThat(tagMap.get(storeType + "-" + StreamsMetricsImpl.STORE_ID_TAG), equalTo(storeName));
     }

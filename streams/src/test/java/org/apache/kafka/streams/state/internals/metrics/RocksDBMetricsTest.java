@@ -47,12 +47,11 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 public class RocksDBMetricsTest {
 
     private static final String STATE_LEVEL_GROUP = "stream-state-metrics";
-    private static final String THREAD_ID = "test-thread";
     private static final String TASK_ID = "test-task";
     private static final String STORE_TYPE = "test-store-type";
     private static final String STORE_NAME = "store";
     private static final RocksDBMetricContext ROCKSDB_METRIC_CONTEXT =
-            new RocksDBMetricContext(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME);
+        new RocksDBMetricContext(TASK_ID, STORE_TYPE, STORE_NAME);
 
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
@@ -227,8 +226,7 @@ public class RocksDBMetricsTest {
         final String description = "Current total number of entries in the active memtable";
         final Gauge<BigInteger> valueProvider = (config, now) -> BigInteger.valueOf(10);
         streamsMetrics.addStoreLevelMutableMetric(
-                eq(THREAD_ID),
-                eq(TASK_ID),
+            eq(TASK_ID),
                 eq(STORE_TYPE),
                 eq(STORE_NAME),
                 eq(name),
@@ -296,14 +294,12 @@ public class RocksDBMetricsTest {
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.storeLevelSensor(
-            THREAD_ID,
             TASK_ID,
             STORE_NAME,
             metricNamePrefix,
             RecordingLevel.DEBUG
         )).andReturn(sensor);
         expect(streamsMetrics.storeLevelTagMap(
-            THREAD_ID,
             TASK_ID,
             STORE_TYPE,
             STORE_NAME

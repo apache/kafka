@@ -45,6 +45,8 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -95,8 +97,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> storeLevelSensors = new HashMap<>();
-    private final Map<String, Deque<MetricName>> storeLevelMetrics = new HashMap<>();
+    private final ConcurrentMap<String, Deque<String>> storeLevelSensors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Deque<MetricName>> storeLevelMetrics = new ConcurrentHashMap<>();
 
     private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
@@ -269,11 +271,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return tagMap;
     }
 
-    public Map<String, String> storeLevelTagMap(final String threadId,
-                                                final String taskName,
+    public Map<String, String> storeLevelTagMap(final String taskName,
                                                 final String storeType,
                                                 final String storeName) {
-        final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
+        final Map<String, String> tagMap = taskLevelTagMap(Thread.currentThread().getName(), taskName);
         tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
         return tagMap;
     }
@@ -397,25 +398,21 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             + SENSOR_PREFIX_DELIMITER + SENSOR_CACHE_LABEL + SENSOR_PREFIX_DELIMITER + cacheName;
     }
 
-    public final Sensor storeLevelSensor(final String threadId,
-                                         final String taskId,
+    public final Sensor storeLevelSensor(final String taskId,
                                          final String storeName,
                                          final String sensorName,
-                                         final Sensor.RecordingLevel recordingLevel,
+                                         final RecordingLevel recordingLevel,
                                          final Sensor... parents) {
-        final String key = storeSensorPrefix(threadId, taskId, storeName);
+        final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
         final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-        synchronized (storeLevelSensors) {
-            return Optional.ofNullable(metrics.getSensor(fullSensorName))
-                .orElseGet(() -> {
-                    storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                    return metrics.sensor(fullSensorName, recordingLevel, parents);
-                });
-        }
+        return Optional.ofNullable(metrics.getSensor(fullSensorName))
+            .orElseGet(() -> {
+                storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+                return metrics.sensor(fullSensorName, recordingLevel, parents);
+            });
     }
 
-    public <T> void addStoreLevelMutableMetric(final String threadId,
-                                               final String taskId,
+    public <T> void addStoreLevelMutableMetric(final String taskId,
                                                final String metricsScope,
                                                final String storeName,
                                                final String name,
@@ -426,21 +423,19 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             name,
             STATE_STORE_LEVEL_GROUP,
             description,
-            storeLevelTagMap(threadId, taskId, metricsScope, storeName)
+            storeLevelTagMap(taskId, metricsScope, storeName)
         );
-        synchronized (storeLevelMetrics) {
-            if (metrics.metric(metricName) == null) {
-                final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
-                final String key = storeSensorPrefix(threadId, taskId, storeName);
-                metrics.addMetric(metricName, metricConfig, valueProvider);
-                storeLevelMetrics.computeIfAbsent(key, ignored -> new LinkedList<>()).push(metricName);
-            }
+        if (metrics.metric(metricName) == null) {
+            final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
+            final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
+            metrics.addMetric(metricName, metricConfig, valueProvider);
+            storeLevelMetrics.computeIfAbsent(key, ignored -> new LinkedList<>()).push(metricName);
         }
     }
 
-    public final void removeAllStoreLevelSensorsAndMetrics(final String threadId,
-                                                           final String taskId,
+    public final void removeAllStoreLevelSensorsAndMetrics(final String taskId,
                                                            final String storeName) {
+        final String threadId = Thread.currentThread().getName();
         removeAllStoreLevelSensors(threadId, taskId, storeName);
         removeAllStoreLevelMetrics(threadId, taskId, storeName);
     }
@@ -449,11 +444,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                             final String taskId,
                                             final String storeName) {
         final String key = storeSensorPrefix(threadId, taskId, storeName);
-        synchronized (storeLevelSensors) {
-            final Deque<String> sensors = storeLevelSensors.remove(key);
-            while (sensors != null && !sensors.isEmpty()) {
-                metrics.removeSensor(sensors.pop());
-            }
+        final Deque<String> sensors = storeLevelSensors.remove(key);
+        while (sensors != null && !sensors.isEmpty()) {
+            metrics.removeSensor(sensors.pop());
         }
     }
 
@@ -461,11 +454,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                             final String taskId,
                                             final String storeName) {
         final String key = storeSensorPrefix(threadId, taskId, storeName);
-        synchronized (storeLevelMetrics) {
-            final Deque<MetricName> metricNames = storeLevelMetrics.remove(key);
-            while (metricNames != null && !metricNames.isEmpty()) {
-                metrics.removeMetric(metricNames.pop());
-            }
+        final Deque<MetricName> metricNames = storeLevelMetrics.remove(key);
+        while (metricNames != null && !metricNames.isEmpty()) {
+            metrics.removeMetric(metricNames.pop());
         }
     }
 

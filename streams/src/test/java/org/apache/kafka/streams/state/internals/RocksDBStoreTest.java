@@ -606,7 +606,7 @@ public class RocksDBStoreTest {
             "bytes-written-total",
             StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
             "description is not verified",
-            streamsMetrics.storeLevelTagMap(Thread.currentThread().getName(), taskId.toString(), METRICS_SCOPE, DB_NAME)
+            streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
         assertThat((double) bytesWrittenTotal.metricValue(), greaterThan(0d));
     }
@@ -633,7 +633,7 @@ public class RocksDBStoreTest {
             "num-entries-active-mem-table",
             StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
             "description is not verified",
-            streamsMetrics.storeLevelTagMap(Thread.currentThread().getName(), taskId.toString(), METRICS_SCOPE, DB_NAME)
+            streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
 
         assertThat(numberOfEntriesActiveMemTable, notNullValue());

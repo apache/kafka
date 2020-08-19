@@ -82,15 +82,12 @@ public class RocksDBMetricsRecorder {
     private final Map<String, DbAndCacheAndStatistics> storeToValueProviders = new ConcurrentHashMap<>();
     private final String metricsScope;
     private final String storeName;
-    private final String threadId;
     private TaskId taskId;
     private StreamsMetricsImpl streamsMetrics;
 
     public RocksDBMetricsRecorder(final String metricsScope,
-                                  final String threadId,
                                   final String storeName) {
         this.metricsScope = metricsScope;
-        this.threadId = threadId;
         this.storeName = storeName;
         final LogContext logContext = new LogContext(String.format("[RocksDB Metrics Recorder for %s] ", storeName));
         logger = logContext.logger(RocksDBMetricsRecorder.class);
@@ -121,8 +118,7 @@ public class RocksDBMetricsRecorder {
                 + "This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
-        final RocksDBMetricContext metricContext =
-                new RocksDBMetricContext(threadId, taskId.toString(), metricsScope, storeName);
+        final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
         initSensors(streamsMetrics, metricContext);
         initGauges(streamsMetrics, metricContext);
         this.taskId = taskId;
