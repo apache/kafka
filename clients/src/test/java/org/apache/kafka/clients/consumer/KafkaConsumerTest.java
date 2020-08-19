@@ -1767,6 +1767,12 @@ public class KafkaConsumerTest {
     }
 
     @Test(expected = AuthenticationException.class)
+    public void testTimesForOffsetsAuthenticationFailure() {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
+        consumer.timesForOffsets(singletonMap(tp0, 0L));
+    }
+
+    @Test(expected = AuthenticationException.class)
     public void testCommitSyncAuthenticationFailure() {
         final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();

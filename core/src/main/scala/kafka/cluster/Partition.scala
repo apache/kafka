@@ -1090,7 +1090,7 @@ class Partition(val topicPartition: TopicPartition,
         getOffsetByTimestamp(timestamp).filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
           .orElse(maybeOffsetsError.map(e => throw e))
       case Left(offset) =>
-        logManager.getLog(topicPartition).flatMap(log => log.fetchOffset(offset))
+        logManager.getLog(topicPartition).flatMap(log => log.fetchTimestampByOffset(offset))
     }
   }
 

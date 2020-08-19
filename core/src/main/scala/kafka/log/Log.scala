@@ -1639,9 +1639,14 @@ class Log(@volatile private var _dir: File,
    * @return The offset and timestamp of the message at this offset.
    *         None if no such message is found.
    */
-  def fetchOffset(targetOffset: Long): Option[TimestampAndOffset] = {
+  def fetchTimestampByOffset(targetOffset: Long): Option[TimestampAndOffset] = {
     maybeHandleIOException(s"Error while fetching offset for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset $targetOffset")
+
+      if (config.messageFormatVersion < KAFKA_0_10_0_IV0)
+        throw new UnsupportedForMessageFormatException(s"Cannot retrieve timestamp for offset because message format version " +
+          s"for partition $topicPartition is ${config.messageFormatVersion} which is earlier than the minimum " +
+          s"required version $KAFKA_0_10_0_IV0")
 
       // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
       // constant time access while being safe to use with concurrent collections unlike `toArray`.

@@ -2426,33 +2426,33 @@ public class FetcherTest {
     }
 
     @Test
-    public void testGetOffsetsForTimesTimeout() {
+    public void testGetOffsetsTimeout() {
         buildFetcher();
         assertThrows(TimeoutException.class, () -> fetcher.offsetsForTimes(
             Collections.singletonMap(new TopicPartition(topicName, 2), 1000L), time.timer(100L)));
     }
 
     @Test
-    public void testGetOffsetsForTimes() {
+    public void testGetOffsets() {
         buildFetcher();
 
         // Empty map
         assertTrue(fetcher.offsetsForTimes(new HashMap<>(), time.timer(100L)).isEmpty());
         // Unknown Offset
-        testGetOffsetsForTimesWithUnknownOffset();
+        testGetOffsetsWithUnknownOffset();
         // Error code none with unknown offset
-        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, -1L, 100L, null, 100L);
+        testGetOffsetsWithError(Errors.NONE, Errors.NONE, -1L, 100L, null, 100L);
         // Error code none with known offset
-        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, 10L, 100L, 10L, 100L);
+        testGetOffsetsWithError(Errors.NONE, Errors.NONE, 10L, 100L, 10L, 100L);
         // Test both of partition has error.
-        testGetOffsetsForTimesWithError(Errors.NOT_LEADER_OR_FOLLOWER, Errors.INVALID_REQUEST, 10L, 100L, 10L, 100L);
+        testGetOffsetsWithError(Errors.NOT_LEADER_OR_FOLLOWER, Errors.INVALID_REQUEST, 10L, 100L, 10L, 100L);
         // Test the second partition has error.
-        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER, 10L, 100L, 10L, 100L);
+        testGetOffsetsWithError(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER, 10L, 100L, 10L, 100L);
         // Test different errors.
-        testGetOffsetsForTimesWithError(Errors.NOT_LEADER_OR_FOLLOWER, Errors.NONE, 10L, 100L, 10L, 100L);
-        testGetOffsetsForTimesWithError(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
-        testGetOffsetsForTimesWithError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, Errors.NONE, 10L, 100L, null, 100L);
-        testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
+        testGetOffsetsWithError(Errors.NOT_LEADER_OR_FOLLOWER, Errors.NONE, 10L, 100L, 10L, 100L);
+        testGetOffsetsWithError(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE, 10L, 100L, 10L, 100L);
+        testGetOffsetsWithError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, Errors.NONE, 10L, 100L, null, 100L);
+        testGetOffsetsWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
     }
 
     @Test
@@ -2607,7 +2607,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
+    public void testGetOffsetsWhenSomeTopicPartitionLeadersNotKnownInitially() {
         buildFetcher();
 
         subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
@@ -2655,7 +2655,7 @@ public class FetcherTest {
     }
 
     @Test
-    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersDisconnectException() {
+    public void testGetOffsetsWhenSomeTopicPartitionLeadersDisconnectException() {
         buildFetcher();
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
@@ -3486,12 +3486,12 @@ public class FetcherTest {
         return 1;
     }
 
-    private void testGetOffsetsForTimesWithError(Errors errorForP0,
-                                                 Errors errorForP1,
-                                                 long offsetForP0,
-                                                 long offsetForP1,
-                                                 Long expectedOffsetForP0,
-                                                 Long expectedOffsetForP1) {
+    private void testGetOffsetsWithError(Errors errorForP0,
+                                         Errors errorForP1,
+                                         long offsetForP0,
+                                         long offsetForP1,
+                                         Long expectedOffsetForP0,
+                                         Long expectedOffsetForP1) {
         client.reset();
         String topicName2 = "topic2";
         TopicPartition t2p0 = new TopicPartition(topicName2, 0);
@@ -3540,7 +3540,7 @@ public class FetcherTest {
         }
     }
 
-    private void testGetOffsetsForTimesWithUnknownOffset() {
+    private void testGetOffsetsWithUnknownOffset() {
         client.reset();
         // Ensure metadata has both partition.
         MetadataResponse initialMetadataUpdate = TestUtils.metadataUpdateWith(1, singletonMap(topicName, 1));

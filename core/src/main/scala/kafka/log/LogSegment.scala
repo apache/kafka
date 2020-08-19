@@ -658,7 +658,7 @@ class LogSegment private[log] (val log: FileRecords,
   /**
    * The largest offset this segment contains.
    */
-  def largestOffset = offsetIndex.lastOffset
+  def largestOffset = offsetOfMaxTimestampSoFar
 
   /**
    * Change the last modified time for this log segment

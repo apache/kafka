@@ -1248,6 +1248,71 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
+  def testTimesForOffsets(): Unit = {
+    val numParts = 2
+    val topic1 = "part-test-topic-1"
+    val topic2 = "part-test-topic-2"
+    val topic3 = "part-test-topic-3"
+    val props = new Properties()
+    props.setProperty(LogConfig.MessageFormatVersionProp, "0.9.0")
+    createTopic(topic1, numParts, 1)
+    // Topic2 is in old message format.
+    createTopic(topic2, numParts, 1, props)
+    createTopic(topic3, numParts, 1)
+
+    val consumer = createConsumer()
+
+    // Test negative target offsets
+    intercept[IllegalArgumentException](
+      consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic1, 0), -1)))
+
+    val producer = createProducer()
+    var ts = 100000000: Long
+    for (topic <- List(topic1, topic2, topic3)) {
+      for (part <- 0 until numParts) {
+        for (offset <- 0 until 100) {
+          val record = new ProducerRecord(topic, part, ts, "key".getBytes, "value".getBytes)
+          producer.send(record)
+          ts += 1
+        }
+      }
+    }
+    producer.flush()
+
+    val offsetsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
+    offsetsToSearch.put(new TopicPartition(topic1, 0), 0) // ts: 100000000
+    offsetsToSearch.put(new TopicPartition(topic1, 1), 50) // ts: 100000150
+    offsetsToSearch.put(new TopicPartition(topic2, 0), 0) // ts: 100000200 but not avail because of message format
+    offsetsToSearch.put(new TopicPartition(topic2, 1), 50) // ts: 100000350 but not avail because of message format
+    offsetsToSearch.put(new TopicPartition(topic3, 0), 80) // 100000480
+    offsetsToSearch.put(new TopicPartition(topic3, 1), 150) // offset not found
+
+    val timestampOffsets = consumer.timesForOffsets(offsetsToSearch)
+
+    val timestampTopic1P0 = timestampOffsets.get(new TopicPartition(topic1, 0))
+    assertEquals(0, timestampTopic1P0.offset)
+    assertEquals(100000000, timestampTopic1P0.timestamp)
+    assertEquals(Optional.of(0), timestampTopic1P0.leaderEpoch)
+
+    val timestampTopic1P1 = timestampOffsets.get(new TopicPartition(topic1, 1))
+    assertEquals(50, timestampTopic1P1.offset)
+    assertEquals(100000150, timestampTopic1P1.timestamp)
+    assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
+
+    assertEquals("null should be returned when message format is 0.9.0",
+      null, timestampOffsets.get(new TopicPartition(topic2, 0)))
+    assertEquals("null should be returned when message format is 0.9.0",
+      null, timestampOffsets.get(new TopicPartition(topic2, 1)))
+
+    val timestampTopic3P0 = timestampOffsets.get(new TopicPartition(topic3, 0))
+    assertEquals(80, timestampTopic3P0.offset)
+    assertEquals(100000480, timestampTopic3P0.timestamp)
+    assertEquals(Optional.of(0), timestampTopic3P0.leaderEpoch)
+
+    assertEquals(null, timestampOffsets.get(new TopicPartition(topic3, 1)))
+  }
+
+  @Test
   def testEarliestOrLatestOffsets(): Unit = {
     val topic0 = "topicWithNewMessageFormat"
     val topic1 = "topicWithOldMessageFormat"
