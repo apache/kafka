@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -64,6 +65,16 @@ public class CreateTopicsRequest extends AbstractRequest {
         @Override
         public String toString() {
             return data.toString();
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            return other instanceof Builder && this.data.equals(((Builder) other).data);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(data);
         }
     }
 
