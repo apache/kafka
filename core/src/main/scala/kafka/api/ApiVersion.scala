@@ -367,9 +367,15 @@ case object KAFKA_2_7_IV0 extends DefaultApiVersion {
 
 case object KAFKA_2_7_IV1 extends DefaultApiVersion {
   val shortVersion: String = "2.7"
+<<<<<<< HEAD
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
   val id: Int = 29
+=======
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 28
+>>>>>>> add separate IBP for redirection
 }
 
 case object KAFKA_2_7_IV2 extends DefaultApiVersion {
