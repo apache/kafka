@@ -35,6 +35,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.HashSet;
+import java.util.Set;
+
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrLateRecordDropSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensorOrSkippedRecordsSensor;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
@@ -134,7 +136,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             //store start times of windows we find
-            final HashSet<Long> windowStartTimes = new HashSet<Long>();
+            final Set<Long> windowStartTimes = new HashSet<>();
 
             // aggregate that will go in the current record’s left/right window (if needed)
             ValueAndTimestamp<Agg> leftWinAgg = null;
@@ -201,14 +203,14 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
             }
             //create right window for new record
-            if (!rightWinAlreadyCreated && rightWinIsNotEmpty(rightWinAgg, timestamp)) {
+            if (!rightWinAlreadyCreated && rightWindowIsNotEmpty(rightWinAgg, timestamp)) {
                 final TimeWindow window = new TimeWindow(timestamp + 1, timestamp + 1 + windows.timeDifferenceMs());
                 final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(getValueOrNull(rightWinAgg), Math.max(rightWinAgg.timestamp(), timestamp));
                 putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
             }
         }
 
-        private boolean rightWinIsNotEmpty(final ValueAndTimestamp<Agg> rightWinAgg, final long timestamp) {
+        private boolean rightWindowIsNotEmpty(final ValueAndTimestamp<Agg> rightWinAgg, final long timestamp) {
             return rightWinAgg != null && rightWinAgg.timestamp() > timestamp;
         }
 

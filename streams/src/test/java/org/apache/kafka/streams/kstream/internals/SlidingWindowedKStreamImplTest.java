@@ -387,7 +387,7 @@ public class SlidingWindowedKStreamImplTest {
     }
 
     @Test
-    public void ShouldDropWindowsOutsideOfRetention() {
+    public void shouldDropWindowsOutsideOfRetention() {
         final WindowBytesStoreSupplier storeSupplies = Stores.inMemoryWindowStore("aggregated", ofMillis(1200L), ofMillis(100L), false);
         windowedStream.aggregate(
             MockInitializer.STRING_INIT,
@@ -403,6 +403,7 @@ public class SlidingWindowedKStreamImplTest {
 
             inputTopic.pipeInput("1", "2", 100L);
             inputTopic.pipeInput("1", "3", 500L);
+            inputTopic.pipeInput("1", "4", 799L);
             inputTopic.pipeInput("1", "4", 1000L);
             inputTopic.pipeInput("1", "5", 2000L);
 
