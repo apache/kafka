@@ -551,9 +551,9 @@ public class  RocksDBMetrics {
         );
     }
 
-    public static void addNumEntriesImmutableMemTablesMetric(final StreamsMetricsImpl streamsMetrics,
-                                                             final RocksDBMetricContext metricContext,
-                                                             final Gauge<BigInteger> valueProvider) {
+    public static void addNumEntriesImmMemTablesMetric(final StreamsMetricsImpl streamsMetrics,
+                                                       final RocksDBMetricContext metricContext,
+                                                       final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,
@@ -563,9 +563,9 @@ public class  RocksDBMetrics {
         );
     }
 
-    public static void addNumDeletesImmutableMemTablesMetric(final StreamsMetricsImpl streamsMetrics,
-                                                             final RocksDBMetricContext metricContext,
-                                                             final Gauge<BigInteger> valueProvider) {
+    public static void addNumDeletesImmMemTablesMetric(final StreamsMetricsImpl streamsMetrics,
+                                                       final RocksDBMetricContext metricContext,
+                                                       final Gauge<BigInteger> valueProvider) {
         addMutableMetric(
             streamsMetrics,
             metricContext,

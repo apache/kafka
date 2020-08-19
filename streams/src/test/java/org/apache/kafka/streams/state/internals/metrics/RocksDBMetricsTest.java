@@ -251,7 +251,7 @@ public class RocksDBMetricsTest {
         runAndVerifyMutableMetric(
             name,
             description,
-            () -> RocksDBMetrics.addNumEntriesImmutableMemTablesMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+            () -> RocksDBMetrics.addNumEntriesImmMemTablesMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
         );
     }
 
@@ -262,7 +262,7 @@ public class RocksDBMetricsTest {
         runAndVerifyMutableMetric(
             name,
             description,
-            () -> RocksDBMetrics.addNumDeletesImmutableMemTablesMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
+            () -> RocksDBMetrics.addNumDeletesImmMemTablesMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
         );
     }
 
