@@ -4085,6 +4085,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testListOffsetsMaxAllowedNumRetries() throws Exception {
 
@@ -4238,6 +4239,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testListOffsetsMaxAllowedNumRetriesSuccessWithMultipleLeaders() throws Exception {
 
@@ -4276,7 +4278,7 @@ public class KafkaAdminClientTest {
                 env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
                 Map<TopicPartition, PartitionData> responseData1 = new HashMap<>();
-                responseData1.put(tp1, new PartitionData(Errors.NOT_LEADER_FOR_PARTITION, -1L, 123L, Optional.of(321)));
+                responseData1.put(tp1, new PartitionData(Errors.LEADER_NOT_AVAILABLE, -1L, 123L, Optional.of(321)));
                 env.kafkaClient().prepareResponse(new ListOffsetResponse(responseData1));
 
                 Map<TopicPartition, PartitionData> responseData2 = new HashMap<>();
@@ -4293,7 +4295,7 @@ public class KafkaAdminClientTest {
                 env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
 
                 Map<TopicPartition, PartitionData> responseData1 = new HashMap<>();
-                responseData1.put(tp1, new PartitionData(Errors.NOT_LEADER_FOR_PARTITION, -1L, 123L, Optional.of(321)));
+                responseData1.put(tp1, new PartitionData(Errors.LEADER_NOT_AVAILABLE, -1L, 123L, Optional.of(321)));
                 env.kafkaClient().prepareResponse(new ListOffsetResponse(responseData1));
 
             }

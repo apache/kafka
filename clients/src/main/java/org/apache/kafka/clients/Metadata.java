@@ -60,7 +60,7 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  */
 public class Metadata implements Closeable {
     private final Logger log;
-    private final long refreshBackoffMs;
+    private long refreshBackoffMs;
     private int attempts;
     private final long metadataExpireMs;
     private int updateVersion;  // bumped on every metadata response
