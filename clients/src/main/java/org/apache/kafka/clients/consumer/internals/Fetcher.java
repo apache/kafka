@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ApiVersion;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -74,6 +75,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.CloseableIterator;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -136,7 +138,6 @@ public class Fetcher<K, V> implements Closeable {
     private final int maxBytes;
     private final int maxWaitMs;
     private final int fetchSize;
-    private final long retryBackoffMs;
     private final long requestTimeoutMs;
     private final int maxPollRecords;
     private final boolean checkCrcs;
@@ -155,6 +156,9 @@ public class Fetcher<K, V> implements Closeable {
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
+    private final ExponentialBackoff retryBackoff;
+    final static double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
+    final static int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
 
     private CompletedFetch nextInLineFetch = null;
 
@@ -175,6 +179,7 @@ public class Fetcher<K, V> implements Closeable {
                    FetcherMetricsRegistry metricsRegistry,
                    Time time,
                    long retryBackoffMs,
+                   long retryBackoffMaxMs,
                    long requestTimeoutMs,
                    IsolationLevel isolationLevel,
                    ApiVersions apiVersions) {
@@ -195,10 +200,11 @@ public class Fetcher<K, V> implements Closeable {
         this.valueDeserializer = valueDeserializer;
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricsRegistry);
-        this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.apiVersions = apiVersions;
+        this.retryBackoff = new ExponentialBackoff(
+                retryBackoffMs, RETRY_BACKOFF_EXP_BASE, retryBackoffMaxMs, RETRY_BACKOFF_JITTER);
         this.sessionHandlers = new HashMap<>();
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.nodesWithPendingFetchRequests = new HashSet<>();
@@ -365,6 +371,7 @@ public class Fetcher<K, V> implements Closeable {
         if (!request.isAllTopics() && request.emptyTopicList())
             return Collections.emptyMap();
 
+        int attempts = 0;
         do {
             RequestFuture<ClientResponse> future = sendMetadataRequest(request);
             client.poll(future, timer);
@@ -414,7 +421,7 @@ public class Fetcher<K, V> implements Closeable {
                 }
             }
 
-            timer.sleep(retryBackoffMs);
+            timer.sleep(retryBackoff.backoff(attempts++));
         } while (timer.notExpired());
 
         throw new TimeoutException("Timeout expired while fetching topic metadata");
@@ -740,9 +747,10 @@ public class Fetcher<K, V> implements Closeable {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
                     if (!result.partitionsToRetry.isEmpty()) {
-                        subscriptions.requestFailed(result.partitionsToRetry, time.milliseconds() + retryBackoffMs);
+                        subscriptions.requestFailed(result.partitionsToRetry, time.milliseconds());
                         metadata.requestUpdate();
                     }
+                    subscriptions.requestSucceeded(result.fetchedOffsets.keySet(), time.milliseconds());
 
                     for (Map.Entry<TopicPartition, ListOffsetData> fetchedOffset : result.fetchedOffsets.entrySet()) {
                         TopicPartition partition = fetchedOffset.getKey();
@@ -754,7 +762,7 @@ public class Fetcher<K, V> implements Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    subscriptions.requestFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
+                    subscriptions.requestFailed(resetTimestamps.keySet(), time.milliseconds());
                     metadata.requestUpdate();
 
                     if (!(e instanceof RetriableException) && !cachedListOffsetsException.compareAndSet(null, e))
@@ -814,10 +822,10 @@ public class Fetcher<K, V> implements Closeable {
                 public void onSuccess(OffsetForEpochResult offsetsResult) {
                     List<SubscriptionState.LogTruncation> truncations = new ArrayList<>();
                     if (!offsetsResult.partitionsToRetry().isEmpty()) {
-                        subscriptions.setNextAllowedRetry(offsetsResult.partitionsToRetry(), time.milliseconds() + retryBackoffMs);
+                        subscriptions.requestFailed(offsetsResult.partitionsToRetry(), time.milliseconds());
                         metadata.requestUpdate();
                     }
-
+                    subscriptions.requestSucceeded(offsetsResult.endOffsets().keySet(), time.milliseconds());
                     // For each OffsetsForLeader response, check if the end-offset is lower than our current offset
                     // for the partition. If so, it means we have experienced log truncation and need to reposition
                     // that partition's offset.
@@ -838,7 +846,7 @@ public class Fetcher<K, V> implements Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    subscriptions.requestFailed(fetchPositions.keySet(), time.milliseconds() + retryBackoffMs);
+                    subscriptions.requestFailed(fetchPositions.keySet(), time.milliseconds());
                     metadata.requestUpdate();
 
                     if (!(e instanceof RetriableException)) {

@@ -33,13 +33,14 @@ public class ConsumerMetadata extends Metadata {
     private final Set<String> transientTopics;
 
     public ConsumerMetadata(long refreshBackoffMs,
+                            long refreshBackoffMaxMs,
                             long metadataExpireMs,
                             boolean includeInternalTopics,
                             boolean allowAutoTopicCreation,
                             SubscriptionState subscription,
                             LogContext logContext,
                             ClusterResourceListeners clusterResourceListeners) {
-        super(refreshBackoffMs, metadataExpireMs, logContext, clusterResourceListeners);
+        super(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, logContext, clusterResourceListeners);
         this.includeInternalTopics = includeInternalTopics;
         this.allowAutoTopicCreation = allowAutoTopicCreation;
         this.subscription = subscription;

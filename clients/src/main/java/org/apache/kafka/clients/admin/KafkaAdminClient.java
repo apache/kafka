@@ -218,6 +218,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -350,7 +351,11 @@ public class KafkaAdminClient extends AdminClient {
 
     private final int maxRetries;
 
-    private final long retryBackoffMs;
+    private ExponentialBackoff retryBackoff;
+
+    final static double RETRY_BACKOFF_JITTER = CommonClientConfigs.RETRY_BACKOFF_JITTER;
+
+    final static int RETRY_BACKOFF_EXP_BASE = CommonClientConfigs.RETRY_BACKOFF_EXP_BASE;
 
     /**
      * Get or create a list value from a map.
@@ -558,7 +563,11 @@ public class KafkaAdminClient extends AdminClient {
         this.timeoutProcessorFactory = (timeoutProcessorFactory == null) ?
             new TimeoutProcessorFactory() : timeoutProcessorFactory;
         this.maxRetries = config.getInt(AdminClientConfig.RETRIES_CONFIG);
-        this.retryBackoffMs = config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        this.retryBackoff = new ExponentialBackoff(
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                RETRY_BACKOFF_EXP_BASE,
+                config.getLong(AdminClientConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
+                RETRY_BACKOFF_JITTER);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -726,6 +735,16 @@ public class KafkaAdminClient extends AdminClient {
             return curNode;
         }
 
+        final void incrementRetryBackoff(Call failedCall, long now) {
+            this.nextAllowedTryMs = now + retryBackoff.backoff(failedCall.tries);
+            this.tries = failedCall.tries + 1;
+        }
+
+        final void cloneRetryBackoff(Call toClone) {
+            this.nextAllowedTryMs = toClone.nextAllowedTryMs;
+            this.tries = toClone.tries;
+        }
+
         /**
          * Handle a failure.
          *
@@ -754,8 +773,8 @@ public class KafkaAdminClient extends AdminClient {
                 runnable.enqueue(this, now);
                 return;
             }
-            tries++;
-            nextAllowedTryMs = now + retryBackoffMs;
+
+            incrementRetryBackoff(this, now);
 
             // If the call has timed out, fail.
             if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
@@ -1300,7 +1319,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Ensure that we use a small poll timeout if there are pending calls which need to be sent
                 if (!pendingCalls.isEmpty())
-                    pollTimeout = Math.min(pollTimeout, retryBackoffMs);
+                    pollTimeout = Math.min(pollTimeout, retryBackoff.baseBackoff());
 
                 // Wait for network responses.
                 log.trace("Entering KafkaClient#poll(timeout={})", pollTimeout);
@@ -2821,20 +2840,18 @@ public class KafkaAdminClient extends AdminClient {
                 context.node().orElse(null));
         // Requeue the task so that we can try with new coordinator
         context.setNode(null);
-
-        Call call = nextCall.get();
-        call.tries = failedCall.tries + 1;
-        call.nextAllowedTryMs = calculateNextAllowedRetryMs();
-
+        long now = time.milliseconds();
         Call findCoordinatorCall = getFindCoordinatorCall(context, nextCall);
+        findCoordinatorCall.incrementRetryBackoff(failedCall, now);
         runnable.call(findCoordinatorCall, time.milliseconds());
     }
 
-    private void rescheduleMetadataTask(MetadataOperationContext<?, ?> context, Supplier<List<Call>> nextCalls) {
+    private void rescheduleMetadataTask(MetadataOperationContext<?, ?> context, Supplier<List<Call>> nextCalls, Call failedCall) {
         log.info("Retrying to fetch metadata.");
         // Requeue the task so that we can re-attempt fetching metadata
         context.setResponse(Optional.empty());
         Call metadataCall = getMetadataCall(context, nextCalls);
+        metadataCall.incrementRetryBackoff(failedCall, time.milliseconds());
         runnable.call(metadataCall, time.milliseconds());
     }
 
@@ -2909,8 +2926,9 @@ public class KafkaAdminClient extends AdminClient {
                     return;
 
                 context.setNode(response.node());
-
-                runnable.call(nextCall.get(), time.milliseconds());
+                Call call = nextCall.get();
+                call.cloneRetryBackoff(this);
+                runnable.call(call, time.milliseconds());
             }
 
             @Override
@@ -3034,6 +3052,7 @@ public class KafkaAdminClient extends AdminClient {
                 context.setResponse(Optional.of(response));
 
                 for (Call call : nextCalls.get()) {
+                    call.cloneRetryBackoff(this);
                     runnable.call(call, time.milliseconds());
                 }
             }
@@ -3689,10 +3708,6 @@ public class KafkaAdminClient extends AdminClient {
         return new ListPartitionReassignmentsResult(partitionReassignmentsFuture);
     }
 
-    private long calculateNextAllowedRetryMs() {
-        return time.milliseconds() + retryBackoffMs;
-    }
-
     private void handleNotControllerError(AbstractResponse response) throws ApiException {
         if (response.errorCounts().containsKey(Errors.NOT_CONTROLLER)) {
             handleNotControllerError(Errors.NOT_CONTROLLER);
@@ -3994,9 +4009,10 @@ public class KafkaAdminClient extends AdminClient {
                     if (!retryTopicPartitionOffsets.isEmpty()) {
                         Set<String> retryTopics = retryTopicPartitionOffsets.keySet().stream().map(
                             TopicPartition::topic).collect(Collectors.toSet());
-                        MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> retryContext =
+                        MetadataOperationContext<ListOffsetsResultInfo, ListOffsetsOptions> operationContext =
                             new MetadataOperationContext<>(retryTopics, context.options(), context.deadline(), futures);
-                        rescheduleMetadataTask(retryContext, () -> getListOffsetsCalls(retryContext, retryTopicPartitionOffsets, futures));
+                        rescheduleMetadataTask(operationContext, () ->
+                                getListOffsetsCalls(operationContext, retryTopicPartitionOffsets, futures), this);
                     }
                 }
 
