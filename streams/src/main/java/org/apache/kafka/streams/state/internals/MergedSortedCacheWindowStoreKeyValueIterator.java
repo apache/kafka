@@ -37,7 +37,7 @@ class MergedSortedCacheWindowStoreKeyValueIterator
         final long windowSize,
         final SegmentedCacheFunction cacheFunction
     ) {
-        super(filteredCacheIterator, underlyingIterator, false);
+        super(filteredCacheIterator, underlyingIterator, true);
         this.serdes = serdes;
         this.windowSize = windowSize;
         this.cacheFunction = cacheFunction;

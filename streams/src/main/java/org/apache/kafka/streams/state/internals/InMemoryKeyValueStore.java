@@ -111,15 +111,15 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
-        return range(from, to, false);
+        return range(from, to, true);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
-        return range(from, to, true);
+        return range(from, to, false);
     }
 
-    private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean reverse) {
+    private KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final boolean forward) {
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -129,21 +129,21 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet(), reverse));
+            new InMemoryKeyValueIterator(map.subMap(from, true, to, true).keySet(), forward));
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.keySet(), false));
+            new InMemoryKeyValueIterator(map.keySet(), true));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator(map.keySet(), true));
+            new InMemoryKeyValueIterator(map.keySet(), false));
     }
 
     @Override
@@ -166,11 +166,11 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> iter;
 
-        private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean reverse) {
-            if (reverse) {
-                this.iter = new TreeSet<>(keySet).descendingIterator();
-            } else {
+        private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean forward) {
+            if (forward) {
                 this.iter = new TreeSet<>(keySet).iterator();
+            } else {
+                this.iter = new TreeSet<>(keySet).descendingIterator();
             }
         }
 

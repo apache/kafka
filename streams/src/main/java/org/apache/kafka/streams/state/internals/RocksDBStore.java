@@ -324,18 +324,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                               final Bytes to) {
-        return range(from, to, false);
+        return range(from, to, true);
     }
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
                                                                      final Bytes to) {
-        return range(from, to, true);
+        return range(from, to, false);
     }
 
     KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                           final Bytes to,
-                                          final boolean reverse) {
+                                          final boolean forward) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
 
@@ -348,7 +348,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         validateStoreOpen();
 
-        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to, reverse);
+        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to, forward);
         openIterators.add(rocksDBRangeIterator);
 
         return rocksDBRangeIterator;
@@ -356,17 +356,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
-        return all(false);
+        return all(true);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return all(true);
+        return all(false);
     }
 
-    KeyValueIterator<Bytes, byte[]> all(final boolean reverse) {
+    KeyValueIterator<Bytes, byte[]> all(final boolean forward) {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> rocksDbIterator = dbAccessor.all(reverse);
+        final KeyValueIterator<Bytes, byte[]> rocksDbIterator = dbAccessor.all(forward);
         openIterators.add(rocksDbIterator);
         return rocksDbIterator;
     }
@@ -493,9 +493,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                               final Bytes to,
-                                              final boolean reverse);
+                                              final boolean forward);
 
-        KeyValueIterator<Bytes, byte[]> all(final boolean reverse);
+        KeyValueIterator<Bytes, byte[]> all(final boolean forward);
 
         long approximateNumEntries() throws RocksDBException;
 
@@ -560,25 +560,25 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                      final Bytes to,
-                                                     final boolean reverse) {
+                                                     final boolean forward) {
             return new RocksDBRangeIterator(
                 name,
                 db.newIterator(columnFamily),
                 openIterators,
                 from,
                 to,
-                reverse);
+                forward);
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> all(final boolean reverse) {
+        public KeyValueIterator<Bytes, byte[]> all(final boolean forward) {
             final RocksIterator innerIterWithTimestamp = db.newIterator(columnFamily);
-            if (reverse) {
-                innerIterWithTimestamp.seekToLast();
-            } else {
+            if (forward) {
                 innerIterWithTimestamp.seekToFirst();
+            } else {
+                innerIterWithTimestamp.seekToLast();
             }
-            return new RocksDbIterator(name, innerIterWithTimestamp, openIterators, reverse);
+            return new RocksDbIterator(name, innerIterWithTimestamp, openIterators, forward);
         }
 
         @Override

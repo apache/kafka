@@ -30,8 +30,8 @@ class MergedSortedCacheKeyValueBytesStoreIterator
 
     MergedSortedCacheKeyValueBytesStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                                 final KeyValueIterator<Bytes, byte[]> storeIterator,
-                                                final boolean reverse) {
-        super(cacheIterator, storeIterator, reverse);
+                                                final boolean forward) {
+        super(cacheIterator, storeIterator, forward);
     }
 
     @Override

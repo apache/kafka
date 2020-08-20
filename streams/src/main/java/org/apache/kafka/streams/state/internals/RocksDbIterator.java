@@ -41,11 +41,11 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     RocksDbIterator(final String storeName,
                     final RocksIterator iter,
                     final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
-                    final boolean reverse) {
+                    final boolean forward) {
         this.storeName = storeName;
         this.iter = iter;
         this.openIterators = openIterators;
-        this.advanceIterator = reverse ? RocksIterator::prev : RocksIterator::next;
+        this.advanceIterator = forward ? RocksIterator::next : RocksIterator::prev;
     }
 
     @Override

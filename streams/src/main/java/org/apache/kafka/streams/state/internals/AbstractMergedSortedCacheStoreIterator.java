@@ -31,14 +31,14 @@ import java.util.NoSuchElementException;
 abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements KeyValueIterator<K, V> {
     private final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator;
     private final KeyValueIterator<KS, VS> storeIterator;
-    private final boolean reverse;
+    private final boolean forward;
 
     AbstractMergedSortedCacheStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                            final KeyValueIterator<KS, VS> storeIterator,
-                                           final boolean reverse) {
+                                           final boolean forward) {
         this.cacheIterator = cacheIterator;
         this.storeIterator = storeIterator;
-        this.reverse = reverse;
+        this.forward = forward;
     }
 
     abstract int compare(final Bytes cacheKey, final KS storeKey);
@@ -96,7 +96,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
     private KeyValue<K, V> chooseNextValue(final Bytes nextCacheKey,
                                            final KS nextStoreKey,
                                            final int comparison) {
-        if (!reverse) {
+        if (forward) {
             if (comparison > 0) {
                 return nextStoreValue(nextStoreKey);
             } else if (comparison < 0) {
@@ -163,7 +163,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
     private K chooseNextKey(final Bytes nextCacheKey,
                             final KS nextStoreKey,
                             final int comparison) {
-        if (!reverse) {
+        if (forward) {
             if (comparison > 0) {
                 return deserializeStoreKey(nextStoreKey);
             } else if (comparison < 0) {
