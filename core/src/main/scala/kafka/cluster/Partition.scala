@@ -498,6 +498,8 @@ class Partition(val topicPartition: TopicPartition,
 
   def getLeaderEpoch: Int = this.leaderEpoch
 
+  def getZkVersion: Int = this.zkVersion
+
   /**
    * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset
    * from the time when this broker was the leader last time) and setting the new leader and ISR.
@@ -1318,10 +1320,10 @@ class Partition(val topicPartition: TopicPartition,
       case Errors.NONE =>
       case Errors.REPLICA_NOT_AVAILABLE | Errors.INVALID_REPLICA_ASSIGNMENT =>
         warn(s"Proposed ISR was not accepted. Some replicas were not online or were not assigned to $topicPartition")
-        pendingInSyncReplicaIds = None
+        //pendingInSyncReplicaIds = None
       case e: Errors =>
         warn(s"Controller had an error handling AlterIsr for $topicPartition: $e")
-        pendingInSyncReplicaIds = None
+        //pendingInSyncReplicaIds = None
     }))
   }
 

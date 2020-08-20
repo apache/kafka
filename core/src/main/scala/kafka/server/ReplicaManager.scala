@@ -1293,7 +1293,9 @@ class ReplicaManager(val config: KafkaConfig,
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              if (requestLeaderEpoch > currentLeaderEpoch) {
+              val currentZkVersion = partition.getZkVersion
+              val requestZkVersion = partitionState.zkVersion
+              if (requestLeaderEpoch > currentLeaderEpoch || requestZkVersion > currentZkVersion) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId))
