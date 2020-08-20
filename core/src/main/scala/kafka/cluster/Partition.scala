@@ -223,8 +223,11 @@ class Partition(val topicPartition: TopicPartition,
   @volatile var assignmentState: AssignmentState = SimpleAssignmentState(Seq.empty)
 
   private val useAlterIsr: Boolean = interBrokerProtocolVersion >= KAFKA_2_7_IV1
-  @volatile var pendingInSyncReplicaIds: Option[Set[Int]] = Option.empty
 
+  // This optional set has a dual purpose. When it is None, we know there is not an AlterIsr request in-flight. When
+  // it is set, there is an AlterIsr request in flight, and if it was an expansion we can now use the values of replicas
+  // in this set as as a "maximal" or "effective" ISR.
+  @volatile var pendingInSyncReplicaIds: Option[Set[Int]] = None
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
@@ -486,7 +489,7 @@ class Partition(val topicPartition: TopicPartition,
       log = None
       futureLog = None
       inSyncReplicaIds = Set.empty
-      pendingInSyncReplicaIds = Option.empty
+      pendingInSyncReplicaIds = None
       leaderReplicaIdOpt = None
       leaderEpochStartOffsetOpt = None
       Partition.removeMetrics(topicPartition)
@@ -718,7 +721,7 @@ class Partition(val topicPartition: TopicPartition,
     else
       assignmentState = SimpleAssignmentState(assignment)
     inSyncReplicaIds = isr
-    pendingInSyncReplicaIds = Option.empty
+    pendingInSyncReplicaIds = None
   }
 
   /**
@@ -1250,16 +1253,14 @@ class Partition(val topicPartition: TopicPartition,
 
   private def expandIsrWithAlterIsr(newInSyncReplica: Int): Unit = {
     if (pendingInSyncReplicaIds.isEmpty) {
+      // When expanding the ISR, we can safely assume the new replica will make it into the ISR since this puts us in
+      // a more constrained state for advancing the HW.
       val newIsr = inSyncReplicaIds + newInSyncReplica
-      debug(s"Adding new in-sync replica $newInSyncReplica. Pending ISR updated to [${newIsr.mkString(",")}]")
       pendingInSyncReplicaIds = Some(newIsr)
-      val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
-      alterIsrChannelManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, {
-        case Errors.NONE => // TODO update isrExpandRate?
-        case e: Errors => warn(s"Controlled had an error handling AlterIsr for $topicPartition: $e") // TODO clear pending ISR?
-      }))
+      debug(s"Adding new in-sync replica $newInSyncReplica. Pending ISR updated to [${newIsr.mkString(",")}] for $topicPartition")
+      alterIsr(newIsr)
     } else {
-      warn(s"ISR update in-flight, not adding new in-sync replica $newInSyncReplica")
+      debug(s"ISR update in-flight, not adding new in-sync replica $newInSyncReplica for $topicPartition")
     }
   }
 
@@ -1281,15 +1282,15 @@ class Partition(val topicPartition: TopicPartition,
 
   private def shrinkIsrWithAlterIsr(outOfSyncReplicas: Set[Int]): Unit = {
     if (pendingInSyncReplicaIds.isEmpty) {
-      val newIsr = inSyncReplicaIds -- outOfSyncReplicas
+      // When shrinking the ISR, we cannot assume that the update will succeed as this could erroneously advance the HW
+      // We update pendingInSyncReplicaIds here simply to prevent any further ISR updates from occurring until we get
+      // the next LeaderAndIsr
       pendingInSyncReplicaIds = Some(inSyncReplicaIds)
-      val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
-      alterIsrChannelManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, {
-        case Errors.NONE => // TODO update isrShrinkRate?
-        case e: Errors => warn(s"Controlled had an error handling AlterIsr for $topicPartition: $e") // TODO clear pending ISR?
-      }))
+      val newIsr = inSyncReplicaIds -- outOfSyncReplicas
+      debug(s"Removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
+      alterIsr(newIsr)
     } else {
-      warn(s"ISR update in-flight, not removing out-of-sync replicas $outOfSyncReplicas")
+      debug(s"ISR update in-flight, not removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
     }
   }
 
@@ -1309,6 +1310,19 @@ class Partition(val topicPartition: TopicPartition,
       case None =>
         info(s"Cached zkVersion $zkVersion not equal to that in zookeeper, skip updating ISR")
     }
+  }
+
+  private def alterIsr(newIsr: Set[Int]): Unit = {
+    val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
+    alterIsrChannelManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, {
+      case Errors.NONE =>
+      case Errors.REPLICA_NOT_AVAILABLE | Errors.INVALID_REPLICA_ASSIGNMENT =>
+        warn(s"Proposed ISR was not accepted. Some replicas were not online or were not assigned to $topicPartition")
+        pendingInSyncReplicaIds = None
+      case e: Errors =>
+        warn(s"Controller had an error handling AlterIsr for $topicPartition: $e")
+        pendingInSyncReplicaIds = None
+    }))
   }
 
   override def equals(that: Any): Boolean = that match {

@@ -1833,10 +1833,10 @@ class KafkaController(val config: KafkaConfig,
               val currentAssignment = controllerContext.partitionReplicaAssignment(tp)
               if (!newLeaderAndIsr.isr.forall(replicaId => currentAssignment.contains(replicaId))) {
                 warn(s"Some of the proposed ISR are not in the assignment for partition $tp. Proposed ISR=$newLeaderAndIsr.isr assignment=$currentAssignment")
-                Errors.INVALID_REQUEST
+                Errors.INVALID_REPLICA_ASSIGNMENT
               } else if (!newLeaderAndIsr.isr.forall(replicaId => controllerContext.isReplicaOnline(replicaId, tp))) {
                 warn(s"Some of the proposed ISR are offline for partition $tp. Proposed ISR=$newLeaderAndIsr.isr")
-                Errors.INVALID_REQUEST
+                Errors.REPLICA_NOT_AVAILABLE
               } else {
                 Errors.NONE
               }
@@ -1879,8 +1879,8 @@ class KafkaController(val config: KafkaConfig,
     // Update our cache
     updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
 
-    // Send out LeaderAndIsr for successful updates
-    debug(s"Sending LeaderAndIsr for ${adjustedIsrs.keys}")
+    // Send out LeaderAndIsr for all requested updates regardless of success
+    debug(s"Sending LeaderAndIsr for ${isrsToAlter.keys}")
     brokerRequestBatch.newBatch()
 
     // Send LeaderAndIsr for all requested partitions
