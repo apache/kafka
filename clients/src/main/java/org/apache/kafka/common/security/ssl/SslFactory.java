@@ -151,6 +151,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             return sslEngineFactory;
         }
         try {
+            log.info("Doing key store check");
             SslEngineFactory newSslEngineFactory = instantiateSslEngineFactory(nextConfigs);
             if (sslEngineFactory.keystore() == null) {
                 if (newSslEngineFactory.keystore() != null) {
@@ -165,6 +166,7 @@ public class SslFactory implements Reconfigurable, Closeable {
 
                 CertificateEntries.ensureCompatible(newSslEngineFactory.keystore(), sslEngineFactory.keystore());
             }
+            log.info("The key store check was successful");
             if (sslEngineFactory.truststore() == null && newSslEngineFactory.truststore() != null) {
                 throw new ConfigException("Cannot add SSL truststore to an existing listener for which no " +
                         "truststore was configured.");
@@ -176,7 +178,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             }
             return newSslEngineFactory;
         } catch (Exception e) {
-            log.debug("Validation of dynamic config update of SSLFactory failed.", e);
+            log.info("Validation of dynamic config update of SSLFactory failed: {}", e.getCause().toString());
             throw new ConfigException("Validation of dynamic config update of SSLFactory failed: " + e);
         }
     }

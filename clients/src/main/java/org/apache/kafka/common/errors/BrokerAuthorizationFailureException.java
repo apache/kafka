@@ -21,6 +21,8 @@ package org.apache.kafka.common.errors;
  */
 public class BrokerAuthorizationFailureException extends AuthorizationException {
 
+    private static final long serialVersionUID = 1L;
+
     public BrokerAuthorizationFailureException(String message) {
         super(message);
     }

@@ -29,14 +29,14 @@ import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs, AbstractConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection._
+import scala.collection.{mutable, _}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -95,6 +95,7 @@ object DynamicBrokerConfig {
     KafkaConfig.ConnectionsMaxReauthMsProp)
 
   private val ReloadableFileConfigs = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG)
+  private val PassWordConfigs = Set(SslConfigs.SSL_KEY_PASSWORD_CONFIG, SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)
 
   val ListenerConfigRegex = """listener\.name\.[^.]*\.(.*)""".r
 
@@ -213,7 +214,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
     val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
-    updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
+
+    updateBrokerConfig(kafkaConfig.brokerId, fromPersistentProps(brokerConfig, perBrokerConfig = true))
   }
 
   /**
@@ -290,10 +292,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 
   private[server] def updateBrokerConfig(brokerId: Int, persistentProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
     try {
-      val props = fromPersistentProps(persistentProps, perBrokerConfig = true)
+      val configTrimmed = trimSSLStorePaths(persistentProps)
       dynamicBrokerConfigs.clear()
-      dynamicBrokerConfigs ++= props.asScala
-      updateCurrentConfig()
+      dynamicBrokerConfigs ++= persistentProps.asScala
+      updateCurrentConfig(configTrimmed)
     } catch {
       case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: $persistentProps", e)
     }
@@ -318,7 +320,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * the SSL configs have changed, then the update will not be done here, but will be handled later when ZK
    * changes are processed. At the moment, only listener configs are considered for reloading.
    */
-  private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
+  private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties, forceReload: Boolean = false): Unit = CoreUtils.inWriteLock(lock) {
+    info(s"Doing updated file reload on broker ${kafkaConfig.brokerId}")
     reconfigurables
       .filter(reconfigurable => ReloadableFileConfigs.exists(reconfigurable.reconfigurableConfigs.contains))
       .foreach {
@@ -329,6 +332,58 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         case reconfigurable =>
           trace(s"Files will not be reloaded without config change for $reconfigurable")
       }
+  }
+
+  private[server] def maybeAugmentSSLStorePaths(configProps: Properties, previousConfigProps: Map[String, String]): Unit ={
+    val processedFiles = new mutable.HashSet[String]
+    reconfigurables
+      .filter(reconfigurable => ReloadableFileConfigs.exists(reconfigurable.reconfigurableConfigs.contains))
+        .foreach({
+          case reconfigurable: ListenerReconfigurable =>
+            ReloadableFileConfigs.foreach(configName => {
+              val prefixedName = reconfigurable.listenerName.configPrefix + configName
+              if (!processedFiles.contains(prefixedName) && configProps.containsKey(prefixedName) &&
+                configProps.get(prefixedName).equals(previousConfigProps.getOrElse(prefixedName, ""))) {
+                val equivalentFileName = configProps.getProperty(prefixedName).replace("/", "//")
+                configProps.setProperty(prefixedName, equivalentFileName)
+                info(s"augment prefix name config $prefixedName to $equivalentFileName on broker ${kafkaConfig.brokerId}")
+                processedFiles.add(prefixedName)
+              }
+            })
+        })
+  }
+
+//  private[server] def trimSSLStorePaths(configProps: Map[String, String]): Boolean = {
+//    val newProps = mutable.Map[String, String]()
+//    newProps ++= configProps
+//    trimSSLStorePaths(newProps)
+//  }
+
+  private[server] def trimSSLStorePaths(configProps: Properties): Boolean = {
+    var fileChanged = false
+    val processedFiles = new mutable.HashSet[String]
+
+    reconfigurables
+      .filter(reconfigurable => ReloadableFileConfigs.exists(reconfigurable.reconfigurableConfigs.contains))
+      .foreach {
+        case reconfigurable: ListenerReconfigurable =>
+        ReloadableFileConfigs.foreach(configName => {
+          val prefixedName = reconfigurable.listenerName.configPrefix + configName
+          if (!processedFiles.contains(prefixedName) && configProps.containsKey(prefixedName)) {
+            val configFileName = configProps.getProperty(prefixedName)
+            val equivalentFileName = configFileName.replace("//", "/")
+            if (!configFileName.equals(equivalentFileName)) {
+              fileChanged = true
+            }
+
+            configProps.setProperty(prefixedName, equivalentFileName)
+            info(s"trim prefix name config $prefixedName to $equivalentFileName on broker ${kafkaConfig.brokerId}")
+            processedFiles.add(prefixedName)
+          }
+        }
+        )
+      }
+    fileChanged
   }
 
   private def maybeCreatePasswordEncoder(secret: Option[Password]): Option[PasswordEncoder] = {
@@ -446,7 +501,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps
   }
 
-  private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = CoreUtils.inReadLock(lock) {
+  private[server] def validate(props: Properties,
+                               perBrokerConfig: Boolean,
+                               configTrimmed: Boolean = false): Unit = CoreUtils.inReadLock(lock) {
     val newProps = validatedKafkaProps(props, perBrokerConfig)
     processReconfiguration(newProps, validateOnly = true)
   }
@@ -511,14 +568,14 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
   }
 
-  private def updateCurrentConfig(): Unit = {
+  private def updateCurrentConfig(configTrimmed: Boolean = false): Unit = {
     val newProps = mutable.Map[String, String]()
     newProps ++= staticBrokerConfigs
     overrideProps(newProps, dynamicDefaultConfigs)
     overrideProps(newProps, dynamicBrokerConfigs)
     val oldConfig = currentConfig
     val (newConfig, brokerReconfigurablesToUpdate) = processReconfiguration(newProps, validateOnly = false)
-    if (newConfig ne currentConfig) {
+    if ((newConfig ne currentConfig)) {
       currentConfig = newConfig
       kafkaConfig.updateCurrentConfig(newConfig)
 
@@ -527,9 +584,12 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     }
   }
 
-  private def processReconfiguration(newProps: Map[String, String], validateOnly: Boolean): (KafkaConfig, List[BrokerReconfigurable]) = {
+  private def processReconfiguration(newProps: Map[String, String],
+                                     validateOnly: Boolean): (KafkaConfig, List[BrokerReconfigurable]) = {
+
     val newConfig = new KafkaConfig(newProps.asJava, !validateOnly, None)
     val (changeMap, deletedKeySet) = updatedConfigs(newConfig.originalsFromThisConfig, currentConfig.originals)
+//    if (changeMap.nonEmpty || deletedKeySet.nonEmpty || configTrimmed) {
     if (changeMap.nonEmpty || deletedKeySet.nonEmpty) {
       try {
         val customConfigs = new util.HashMap[String, Object](newConfig.originalsFromThisConfig) // non-Kafka configs
@@ -564,15 +624,17 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def needsReconfiguration(reconfigurableConfigs: util.Set[String], updatedKeys: Set[String], deletedKeys: Set[String]): Boolean = {
-    reconfigurableConfigs.asScala.intersect(updatedKeys).nonEmpty ||
-      reconfigurableConfigs.asScala.intersect(deletedKeys).nonEmpty
+    val moreThanPasswordChange = updatedKeys.diff(PassWordConfigs).nonEmpty
+    info(s"more than password change for key set $updatedKeys is $moreThanPasswordChange")
+    (reconfigurableConfigs.asScala.intersect(updatedKeys).nonEmpty ||
+      reconfigurableConfigs.asScala.intersect(deletedKeys).nonEmpty) && moreThanPasswordChange
   }
 
   private def processListenerReconfigurable(listenerReconfigurable: ListenerReconfigurable,
                                             newConfig: KafkaConfig,
                                             customConfigs: util.Map[String, Object],
                                             validateOnly: Boolean,
-                                            reloadOnly:  Boolean): Unit = {
+                                            reloadOnly: Boolean): Unit = {
     val listenerName = listenerReconfigurable.listenerName
     val oldValues = currentConfig.valuesWithPrefixOverride(listenerName.configPrefix)
     val newValues = newConfig.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
@@ -580,8 +642,29 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     val updatedKeys = changeMap.keySet
     val configsChanged = needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys, deletedKeys)
     // if `reloadOnly`, reconfigure if configs haven't changed. Otherwise reconfigure if configs have changed
-    if (reloadOnly != configsChanged)
+    if (reloadOnly != configsChanged) {
+      info(s"Doing a reload of config on broker ${kafkaConfig.brokerId}")
+//      PassWordConfigs.foreach(key => {
+//        if (oldValues.containsKey(key)) {
+//          newValues.put(key, oldValues.get(key))
+//        }
+//      })
+
       processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
+    } else {
+      info(s"ConfigsChanged is $configsChanged for broker ${kafkaConfig.brokerId}")
+      info(s"updated keys $updatedKeys, deleted keys $deletedKeys, reconfigurables ${listenerReconfigurable.reconfigurableConfigs}")
+      updatedKeys.foreach(key => {
+        val oldValue = oldValues.getOrDefault(key, "null")
+        val newValue = newValues.getOrDefault(key, "null")
+        info(s"For key $key, the old value is ${oldValue}, while new value is ${newValue}")
+        oldValue match {
+          case password: Password =>
+            info(s"Password changes are: old value ${password.value()}, new value ${newValue.asInstanceOf[Password].value()}")
+          case _ =>
+        }
+      })
+    }
   }
 
   private def processReconfigurable(reconfigurable: Reconfigurable,

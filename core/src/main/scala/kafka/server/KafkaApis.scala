@@ -2868,31 +2868,33 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       override def createRequestBuilder(authorizedResources: Map[ConfigResource, Seq[AlterConfigOp]],
-                                        incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest): AbstractRequest.Builder[IncrementalAlterConfigsRequest] = {
+                                        incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest):
+      AbstractRequest.Builder[IncrementalAlterConfigsRequest] = {
         new IncrementalAlterConfigsRequest.Builder(
           AlterConfigsUtil.generateIncrementalRequestData(authorizedResources.map {
             case (resource, ops) => resource -> ops.asJavaCollection
           }.asJava, incrementalAlterConfigsRequest.data().validateOnly()))
       }
 
-      override def customizedAuthorizationError(unauthorizedResources: Map[ConfigResource, Seq[AlterConfigOp]]): Map[ConfigResource, ApiError] = {
+      override def customizedAuthorizationError(unauthorizedResources: Map[ConfigResource, Seq[AlterConfigOp]]):
+      Map[ConfigResource, ApiError] = {
         unauthorizedResources.keys.map { resource =>
           resource -> configsAuthorizationApiError(resource)
         }.toMap
       }
 
       override def mergeResponse(forwardResponse: IncrementalAlterConfigsResponse,
-                                 unauthorizedResult: Map[ConfigResource, ApiError]): IncrementalAlterConfigsResponse = {
+                                 unauthorizedResult: Map[ConfigResource, ApiError]):
+      IncrementalAlterConfigsResponse = {
         forwardResponse.addResults(unauthorizedResult.asJava)
       }
     }
-
     forwardRequestHandler.handle(request)
   }
 
   def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {
     val describeConfigsRequest = request.body[DescribeConfigsRequest]
-    val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.toBuffer.partition { resource =>
+    val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>
       ConfigResource.Type.forId(resource.resourceType) match {
         case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
           authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)
