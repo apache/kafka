@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -38,7 +37,6 @@ import org.junit.rules.TestName;
 
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.is;
@@ -63,7 +61,6 @@ public class HandlingSourceTopicDeletionTest {
     public TestName testName = new TestName();
 
     private final StreamsBuilder builder = new StreamsBuilder();
-    private String appId;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
 
@@ -72,7 +69,7 @@ public class HandlingSourceTopicDeletionTest {
         CLUSTER.createTopics(INPUT_TOPIC, OUTPUT_TOPIC);
 
         final String safeTestName = safeUniqueTestName(getClass(), testName);
-        appId = "app-" + safeTestName;
+        final String appId = "app-" + safeTestName;
 
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
@@ -111,7 +108,7 @@ public class HandlingSourceTopicDeletionTest {
 
         TestUtils.waitForCondition(
             () -> kafkaStreams.state() == State.ERROR,
-            2*TIMEOUT,
+            2 * TIMEOUT,
             () -> "Kafka Streams application did not reach state ERROR in " + TIMEOUT + " ms"
         );
 
