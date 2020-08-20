@@ -136,8 +136,6 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
 
-        streamsConfiguration.put(StreamsConfig.consumerPrefix(ConsumerConfig.WINDOW_SIZE_MS_CONFIG), 500L);
-
         final KeyValueMapper<Integer, String, String> mapper = MockMapper.selectValueMapper();
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
         groupedStream = stream.groupBy(mapper, Grouped.with(Serdes.String(), Serdes.String()));
