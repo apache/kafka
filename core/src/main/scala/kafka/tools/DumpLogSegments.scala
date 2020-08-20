@@ -258,8 +258,11 @@ object DumpLogSegments {
             }
             lastOffset = record.offset
 
-            print(s"$RecordIndent offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
-              s"keysize: ${record.keySize} valuesize: ${record.valueSize}")
+            print(s"$RecordIndent offset: ${record.offset} baseOffset: ${batch.baseOffset} lastOffset: ${batch.lastOffset} baseSequence: ${} ${batch.baseSequence}" +
+             s" lastSequence: ${batch.lastSequence} producerEpoch: ${batch.producerEpoch} partitionLeaderEpoch: ${batch.partitionLeaderEpoch} position: ${validBytes} " +
+             s" ${batch.timestampType}: ${record.timestamp} isvalid: ${record.isValid}"+
+             s" keysize: ${record.keySize} valuesize: ${record.valueSize} size: ${batch.sizeInBytes} magic: ${batch.magic} " +
+             s"compresscodec: ${batch.compressionType} crc: ${record.checksumOrNull}")
 
             if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
               print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
