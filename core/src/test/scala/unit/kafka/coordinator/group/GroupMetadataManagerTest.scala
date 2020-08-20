@@ -932,6 +932,24 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testCurrentStateTSForAllGroupMetadataVersion(): Unit = {
+    val generation = 1
+    val protocol = "range"
+    val memberId = "memberId"
+
+    for (apiVersion <- ApiVersion.allVersions) {
+      val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, apiVersion = apiVersion)
+
+      val deserializedGroupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecord.value(), time)
+      // GROUP_METADATA_VALUE_SCHEMA_V2 or higher should correctly set the currentStateTimestamp
+      if (apiVersion >= KAFKA_2_1_IV0)
+        assertEquals(time.milliseconds(), deserializedGroupMetadata.currentStateTimestamp.get)
+      else
+        assertTrue(deserializedGroupMetadata.currentStateTimestamp.isEmpty)
+    }
+  }
+
+  @Test
   def testReadFromOldGroupMetadata(): Unit = {
     val generation = 1
     val protocol = "range"
