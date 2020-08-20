@@ -145,7 +145,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public byte[] fetch(final Bytes key, final long windowStartTimestamp) {
-
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -165,17 +164,17 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Deprecated
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
-        return fetch(key, timeFrom, timeTo, false);
+        return fetch(key, timeFrom, timeTo, true);
     }
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key, final Instant from, final Instant to) {
         final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
         final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetch(key, timeFrom, timeTo, true);
+        return fetch(key, timeFrom, timeTo, false);
     }
 
-    WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo, final boolean backward) {
+    WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo, final boolean forward) {
         Objects.requireNonNull(key, "key cannot be null");
 
         removeExpiredSegments();
@@ -187,17 +186,17 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return WrappedInMemoryWindowStoreIterator.emptyIterator();
         }
 
-        if (backward) {
+        if (forward) {
             return registerNewWindowStoreIterator(
                 key,
                 segmentMap.subMap(minTime, true, timeTo, true)
-                    .descendingMap().entrySet().iterator()
+                    .entrySet().iterator()
             );
         } else {
             return registerNewWindowStoreIterator(
                 key,
                 segmentMap.subMap(minTime, true, timeTo, true)
-                    .entrySet().iterator()
+                    .descendingMap().entrySet().iterator()
             );
         }
     }
@@ -208,7 +207,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                            final Bytes to,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        return fetch(from, to, timeFrom, timeTo, false);
+        return fetch(from, to, timeFrom, timeTo, true);
     }
 
     @Override
@@ -218,14 +217,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                                    final Instant toTime) {
         final long timeFrom = ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
         final long timeTo = ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
-        return fetch(from, to, timeFrom, timeTo, true);
+        return fetch(from, to, timeFrom, timeTo, false);
     }
 
     KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
                                                     final Bytes to,
                                                     final long timeFrom,
                                                     final long timeTo,
-                                                    final boolean backward) {
+                                                    final boolean forward) {
         Objects.requireNonNull(from, "from key cannot be null");
         Objects.requireNonNull(to, "to key cannot be null");
 
@@ -246,36 +245,36 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        if (backward) {
-            return registerNewWindowedKeyValueIterator(
-                from,
-                to,
-                segmentMap.subMap(minTime, true, timeTo, true)
-                    .descendingMap().entrySet().iterator());
-        } else {
+        if (forward) {
             return registerNewWindowedKeyValueIterator(
                 from,
                 to,
                 segmentMap.subMap(minTime, true, timeTo, true)
                     .entrySet().iterator()
             );
+        } else {
+            return registerNewWindowedKeyValueIterator(
+                from,
+                to,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .descendingMap().entrySet().iterator());
         }
     }
 
     @Deprecated
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        return fetchAll(timeFrom, timeTo, false);
+        return fetchAll(timeFrom, timeTo, true);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant from, final Instant to) {
         final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
         final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetchAll(timeFrom, timeTo, true);
+        return fetchAll(timeFrom, timeTo, false);
     }
 
-    KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo, final boolean backward) {
+    KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo, final boolean forward) {
         removeExpiredSegments();
 
         // add one b/c records expire exactly retentionPeriod ms after created
@@ -285,18 +284,18 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        if (backward) {
-            return registerNewWindowedKeyValueIterator(
-                null,
-                null,
-                segmentMap.subMap(minTime, true, timeTo, true)
-                    .descendingMap().entrySet().iterator());
-        } else {
+        if (forward) {
             return registerNewWindowedKeyValueIterator(
                 null,
                 null,
                 segmentMap.subMap(minTime, true, timeTo, true)
                     .entrySet().iterator());
+        } else {
+            return registerNewWindowedKeyValueIterator(
+                null,
+                null,
+                segmentMap.subMap(minTime, true, timeTo, true)
+                    .descendingMap().entrySet().iterator());
         }
     }
 

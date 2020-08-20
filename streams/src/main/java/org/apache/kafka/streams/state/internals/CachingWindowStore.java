@@ -216,7 +216,7 @@ class CachingWindowStore
             cacheIterator, hasNextCondition, cacheFunction
         );
 
-        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, false);
+        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, true);
     }
 
     @Override
@@ -246,7 +246,7 @@ class CachingWindowStore
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
-        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, true);
+        return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator, false);
     }
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
@@ -290,7 +290,7 @@ class CachingWindowStore
             bytesSerdes,
             windowSize,
             cacheFunction,
-            false
+            true
         );
     }
 
@@ -336,7 +336,7 @@ class CachingWindowStore
             bytesSerdes,
             windowSize,
             cacheFunction,
-            true
+            false
         );
     }
 
@@ -358,7 +358,7 @@ class CachingWindowStore
             bytesSerdes,
             windowSize,
             cacheFunction,
-            false
+            true
         );
     }
 
@@ -382,7 +382,7 @@ class CachingWindowStore
             bytesSerdes,
             windowSize,
             cacheFunction,
-            true
+            false
         );
     }
 
@@ -399,7 +399,7 @@ class CachingWindowStore
             bytesSerdes,
             windowSize,
             cacheFunction,
-            false
+            true
         );
     }
 
@@ -416,7 +416,7 @@ class CachingWindowStore
             bytesSerdes,
             windowSize,
             cacheFunction,
-            true
+            false
         );
     }
 

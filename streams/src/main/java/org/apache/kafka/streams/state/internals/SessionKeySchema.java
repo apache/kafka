@@ -88,8 +88,8 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
                                                         final long from,
                                                         final long to,
-                                                        final boolean backward) {
-        return segments.segments(from, Long.MAX_VALUE, backward);
+                                                        final boolean forward) {
+        return segments.segments(from, Long.MAX_VALUE, forward);
     }
 
     private static <K> K extractKey(final byte[] binaryKey,

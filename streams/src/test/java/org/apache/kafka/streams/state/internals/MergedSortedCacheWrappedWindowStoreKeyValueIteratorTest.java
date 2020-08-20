@@ -146,7 +146,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
 
     @Test
     public void shouldIterateBothStoreAndCache() {
-        final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, false);
+        final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, true);
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
         assertFalse(iterator.hasNext());
@@ -154,7 +154,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
 
     @Test
     public void shouldReverseIterateBothStoreAndCache() {
-        final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, true);
+        final MergedSortedCacheWindowStoreKeyValueIterator iterator = createIterator(storeKvs, cacheKvs, false);
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey)));
         assertThat(convertKeyValuePair(iterator.next()), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey)));
         assertFalse(iterator.hasNext());

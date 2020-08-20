@@ -202,6 +202,6 @@ public interface SegmentedBytesStore extends StateStore {
          * @param to
          * @return  List of segments to search
          */
-        <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to, boolean backward);
+        <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to, boolean forward);
     }
 }

@@ -63,14 +63,14 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                                  final long from,
                                                  final long to) {
-        return fetch(key, from, to, false);
+        return fetch(key, from, to, true);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key,
                                                          final long from,
                                                          final long to) {
-        return fetch(key, from, to, true);
+        return fetch(key, from, to, false);
     }
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
@@ -95,7 +95,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                                  final Bytes keyTo,
                                                  final long from,
                                                  final long to) {
-        return fetch(keyFrom, keyTo, from, to, false);
+        return fetch(keyFrom, keyTo, from, to, true);
     }
 
     @Override
@@ -103,7 +103,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                                          final Bytes keyTo,
                                                          final long from,
                                                          final long to) {
-        return fetch(keyFrom, keyTo, from, to, true);
+        return fetch(keyFrom, keyTo, from, to, false);
     }
 
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
@@ -134,7 +134,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        final List<S> searchSpace = segments.allSegments(false);
+        final List<S> searchSpace = segments.allSegments(true);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),
@@ -146,7 +146,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardAll() {
-        final List<S> searchSpace = segments.allSegments(true);
+        final List<S> searchSpace = segments.allSegments(false);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),
@@ -159,7 +159,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {
-        final List<S> searchSpace = segments.segments(timeFrom, timeTo, false);
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, true);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),
@@ -172,7 +172,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
                                                             final long timeTo) {
-        final List<S> searchSpace = segments.segments(timeFrom, timeTo, true);
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, false);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),
