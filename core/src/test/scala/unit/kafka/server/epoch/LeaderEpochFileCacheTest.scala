@@ -438,7 +438,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, startOffset = 8)
     cache.assign(epoch = 4, startOffset = 11)
 
-    //When we clear from a postition between offset 8 & offset 11
+    //When we clear from a position between offset 8 & offset 11
     cache.truncateFromStart(startOffset = 9)
 
     //Then we should update the middle epoch entry's offset
