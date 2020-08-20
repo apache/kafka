@@ -48,6 +48,8 @@ import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
+import org.rocksdb.CompactionOptionsFIFO;
+import org.rocksdb.CompactionStyle;
 import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
@@ -58,6 +60,7 @@ import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -640,6 +643,74 @@ public class RocksDBStoreTest {
         ));
         assertThat(numberOfEntriesActiveMemTable, notNullValue());
         assertThat((BigInteger) numberOfEntriesActiveMemTable.metricValue(), greaterThan(BigInteger.valueOf(0)));
+    }
+
+    public static class RocksDBConfigSetterForFifoCompaction implements RocksDBConfigSetter {
+        public RocksDBConfigSetterForFifoCompaction(){}
+
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            options.setCompactionStyle(CompactionStyle.FIFO);
+            options.setCompactionOptionsFIFO(new CompactionOptionsFIFO());
+            options.compactionOptionsFIFO().setAllowCompaction(false);
+        }
+
+        public void close(final String storeName, final Options options) {
+        }
+    }
+
+    @Test
+    public void shouldVerifyThatPropertyBasedMetricsUseValidPropertyName() {
+        final TaskId taskId = new TaskId(0, 0);
+
+        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
+
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetterForFifoCompaction.class);
+        context = EasyMock.niceMock(InternalMockProcessorContext.class);
+        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
+        EasyMock.expect(context.taskId()).andStubReturn(taskId);
+        EasyMock.expect(context.appConfigs()).andStubReturn(new StreamsConfig(props).originals());
+        EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        EasyMock.replay(context);
+
+        rocksDBStore.init(context, rocksDBStore);
+
+        final List<String> propertyNames = Arrays.asList(
+            "num-entries-active-mem-table",
+            "num-deletes-active-mem-table",
+            "num-entries-imm-mem-tables",
+            "num-deletes-imm-mem-tables",
+            "num-immutable-mem-table",
+            "cur-size-active-mem-table",
+            "cur-size-all-mem-tables",
+            "size-all-mem-tables",
+            "mem-table-flush-pending",
+            "num-running-flushes",
+            "compaction-pending",
+            "num-running-compactions",
+            "estimate-pending-compaction-bytes",
+            "total-sst-files-size",
+            "live-sst-files-size",
+            "num-live-versions",
+            "block-cache-capacity",
+            "block-cache-usage",
+            "block-cache-pinned-usage",
+            "estimate-num-keys",
+            "estimate-table-readers-mem",
+            "background-errors"
+        );
+        for (final String propertyname : propertyNames) {
+            final Metric metric = metrics.metric(new MetricName(
+                propertyname,
+                StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
+                "description is not verified",
+                streamsMetrics.storeLevelTagMap(Thread.currentThread().getName(), taskId.toString(), METRICS_SCOPE, DB_NAME)
+            ));
+            assertThat("Metric " + propertyname + " not found!", metric, notNullValue());
+            metric.metricValue();
+        }
     }
 
     public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {

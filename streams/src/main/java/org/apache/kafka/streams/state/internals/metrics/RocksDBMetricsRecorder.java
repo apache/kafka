@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -44,7 +45,6 @@ import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.CU
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_BYTES_OF_PENDING_COMPACTION;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_MEMORY_OF_TABLE_READERS;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_NUMBER_OF_KEYS;
-import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_OLDEST_KEY_TIME;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.LIVE_SST_FILES_SIZE;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.MEMTABLE_FLUSH_PENDING;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_DELETES_ACTIVE_MEMTABLE;
@@ -147,9 +147,9 @@ public class RocksDBMetricsRecorder {
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
         final RocksDBMetricContext metricContext =
-                new RocksDBMetricContext(threadId, taskId.toString(), metricsScope, storeName);
+            new RocksDBMetricContext(threadId, taskId.toString(), metricsScope, storeName);
         initSensors(streamsMetrics, metricContext);
-        initGauges(streamsMetrics, metricContext);
+        initGauges(streamsMetrics, metricContext, true);
         this.taskId = taskId;
         this.streamsMetrics = streamsMetrics;
     }
@@ -201,12 +201,12 @@ public class RocksDBMetricsRecorder {
         if (newValueProvider == null && oldValueProvider != null ||
             newValueProvider != null && oldValueProvider == null) {
 
-            final char capitalizedFirstChar = valueProviderName.toUpperCase().charAt(0);
+            final char capitalizedFirstChar = valueProviderName.toUpperCase(Locale.US).charAt(0);
             final StringBuilder capitalizedValueProviderName = new StringBuilder(valueProviderName);
             capitalizedValueProviderName.setCharAt(0, capitalizedFirstChar);
             throw new IllegalStateException(capitalizedValueProviderName +
                 " for segment " + segmentName + " of task " + taskId +
-                " is" + (newValueProvider== null ? " " : " not ") + "null although the " + valueProviderName +
+                " is" + (newValueProvider == null ? " " : " not ") + "null although the " + valueProviderName +
                 " of another segment in this metrics recorder is" + (newValueProvider != null ? " " : " not ") + "null. " +
                 "This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
@@ -229,7 +229,9 @@ public class RocksDBMetricsRecorder {
         numberOfFileErrorsSensor = RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricContext);
     }
 
-    private void initGauges(final StreamsMetricsImpl streamsMetrics, final RocksDBMetricContext metricContext) {
+    private void initGauges(final StreamsMetricsImpl streamsMetrics,
+                            final RocksDBMetricContext metricContext,
+                            final boolean fifoCompaction) {
         RocksDBMetrics.addNumImmutableMemTableMetric(
             streamsMetrics,
             metricContext,
@@ -339,24 +341,6 @@ public class RocksDBMetricsRecorder {
             streamsMetrics,
             metricContext,
             gaugeToComputeBlockCacheMetrics(PINNED_USAGE_OF_BLOCK_CACHE)
-        );
-        RocksDBMetrics.addEstimateOldestKeyTimeMetric(
-            streamsMetrics,
-            metricContext,
-            (metricsConfig, now) -> {
-                // -1 is in binary the largest value an unsigned long can have
-                BigInteger result = new BigInteger(1, longToBytes(-1L));
-                for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
-                    try {
-                        result = result.min(new BigInteger(1, longToBytes(
-                            valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + ESTIMATED_OLDEST_KEY_TIME)
-                        )));
-                    } catch (final RocksDBException e) {
-                        throw new ProcessorStateException("Error recording RocksDB metric " + ESTIMATED_OLDEST_KEY_TIME, e);
-                    }
-                }
-                return result;
-            }
         );
     }
 

@@ -579,7 +579,6 @@ public class RocksDBMetricsRecorderTest {
         RocksDBMetrics.addBlockCachePinnedUsageMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         RocksDBMetrics.addEstimateNumKeysMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         RocksDBMetrics.addEstimateTableReadersMemMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
-        RocksDBMetrics.addEstimateOldestKeyTimeMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         replay(RocksDBMetrics.class);
     }
@@ -633,7 +632,6 @@ public class RocksDBMetricsRecorderTest {
         RocksDBMetrics.addBlockCachePinnedUsageMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         RocksDBMetrics.addEstimateNumKeysMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         RocksDBMetrics.addEstimateTableReadersMemMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
-        RocksDBMetrics.addEstimateOldestKeyTimeMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         replay(RocksDBMetrics.class);
     }

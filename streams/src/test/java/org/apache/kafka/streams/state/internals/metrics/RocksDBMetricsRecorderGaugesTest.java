@@ -45,7 +45,6 @@ import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.CU
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_BYTES_OF_PENDING_COMPACTION;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_MEMORY_OF_TABLE_READERS;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_NUMBER_OF_KEYS;
-import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.ESTIMATED_OLDEST_KEY_TIME;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.LIVE_SST_FILES_SIZE;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.MEMTABLE_FLUSH_PENDING;
 import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_DELETES_ACTIVE_MEMTABLE;
@@ -201,38 +200,6 @@ public class RocksDBMetricsRecorderGaugesTest {
     @Test
     public void shouldGetPinnedUsageOfBlockCacheWithSingleCache() throws Exception {
         runAndVerifyBlockCacheMetricsWithSingleCache(PINNED_USAGE_OF_BLOCK_CACHE);
-    }
-
-    @Test
-    public void shouldGetEstimatedOldestKeyTime() throws Exception {
-        final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
-        final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, THREAD_ID, STORE_NAME);
-        expect(dbToAdd1.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + ESTIMATED_OLDEST_KEY_TIME))
-            .andStubReturn(5L);
-        expect(dbToAdd2.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + ESTIMATED_OLDEST_KEY_TIME))
-            .andStubReturn(3L);
-        replay(dbToAdd1, dbToAdd2);
-
-        recorder.init(streamsMetrics, TASK_ID);
-        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
-        recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
-
-        final Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
-        final Map<String, String> tagMap = mkMap(
-            mkEntry(THREAD_ID_TAG, THREAD_ID),
-            mkEntry(TASK_ID_TAG, TASK_ID.toString()),
-            mkEntry(METRICS_SCOPE + "-" + STORE_ID_TAG, STORE_NAME)
-        );
-        final KafkaMetric metric = (KafkaMetric) metrics.get(new MetricName(
-            ESTIMATED_OLDEST_KEY_TIME,
-            STATE_STORE_LEVEL_GROUP,
-            "description is ignored",
-            tagMap
-        ));
-
-        assertThat(metric, notNullValue());
-        assertThat(metric.metricValue(), is(BigInteger.valueOf(3)));
     }
 
     private void runAndVerifySumOfProperties(final String propertyName) throws Exception {

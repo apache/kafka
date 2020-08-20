@@ -457,18 +457,6 @@ public class RocksDBMetricsTest {
     }
 
     @Test
-    public void shouldAddEstimateOldestKeyTimeMetric() {
-        final String name = "estimate-oldest-key-time";
-        final String description =
-            "Estimated oldest key timestamp in the RocksDB instance (only available for FIFO compaction)";
-        runAndVerifyMutableMetric(
-            name,
-            description,
-            () -> RocksDBMetrics.addEstimateOldestKeyTimeMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, VALUE_PROVIDER)
-        );
-    }
-
-    @Test
     public void shouldAddBackgroundErrorsMetric() {
         final String name = "background-errors";
         final String description = "Total number of background errors";

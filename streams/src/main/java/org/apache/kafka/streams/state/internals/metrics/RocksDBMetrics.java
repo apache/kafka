@@ -79,7 +79,6 @@ public class  RocksDBMetrics {
     static final String PINNED_USAGE_OF_BLOCK_CACHE = "block-cache-pinned-usage";
     static final String ESTIMATED_NUMBER_OF_KEYS = "estimate-num-keys";
     static final String ESTIMATED_MEMORY_OF_TABLE_READERS = "estimate-table-readers-mem";
-    static final String ESTIMATED_OLDEST_KEY_TIME = "estimate-oldest-key-time";
     static final String NUMBER_OF_BACKGROUND_ERRORS = "background-errors";
 
     private static final String BYTES_WRITTEN_TO_DB_RATE_DESCRIPTION =
@@ -156,8 +155,6 @@ public class  RocksDBMetrics {
         "Estimated number of total keys in the active and unflushed immutable memtables and storage";
     private static final String ESTIMATED_MEMORY_OF_TABLE_READERS_DESCRIPTION =
         "Estimated memory in bytes used for reading SST tables, excluding memory used in block cache";
-    private static final String ESTIMATED_OLDEST_KEY_TIME_DESCRIPTION =
-        "Estimated oldest key timestamp in the RocksDB instance (only available for FIFO compaction)";
     private static final String TOTAL_NUMBER_OF_BACKGROUND_ERRORS_DESCRIPTION = "Total number of background errors";
 
     public static class RocksDBMetricContext {
@@ -788,18 +785,6 @@ public class  RocksDBMetrics {
             valueProvider,
             ESTIMATED_MEMORY_OF_TABLE_READERS,
             ESTIMATED_MEMORY_OF_TABLE_READERS_DESCRIPTION
-        );
-    }
-
-    public static void addEstimateOldestKeyTimeMetric(final StreamsMetricsImpl streamsMetrics,
-                                                      final RocksDBMetricContext metricContext,
-                                                      final Gauge<BigInteger> valueProvider) {
-        addMutableMetric(
-            streamsMetrics,
-            metricContext,
-            valueProvider,
-            ESTIMATED_OLDEST_KEY_TIME,
-            ESTIMATED_OLDEST_KEY_TIME_DESCRIPTION
         );
     }
 
