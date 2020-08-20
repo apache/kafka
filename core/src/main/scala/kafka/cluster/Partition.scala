@@ -1258,6 +1258,8 @@ class Partition(val topicPartition: TopicPartition,
         case Errors.NONE => // TODO update isrExpandRate?
         case e: Errors => warn(s"Controlled had an error handling AlterIsr for $topicPartition: $e") // TODO clear pending ISR?
       }))
+    } else {
+      warn(s"ISR update in-flight, not adding new in-sync replica $newInSyncReplica")
     }
   }
 
@@ -1286,6 +1288,8 @@ class Partition(val topicPartition: TopicPartition,
         case Errors.NONE => // TODO update isrShrinkRate?
         case e: Errors => warn(s"Controlled had an error handling AlterIsr for $topicPartition: $e") // TODO clear pending ISR?
       }))
+    } else {
+      warn(s"ISR update in-flight, not removing out-of-sync replicas $outOfSyncReplicas")
     }
   }
 
