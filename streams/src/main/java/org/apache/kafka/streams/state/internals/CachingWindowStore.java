@@ -204,7 +204,7 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(key, timeFrom, timeTo, false) :
+            new CacheIteratorWrapper(key, timeFrom, timeTo, true) :
             context.cache().range(
                 cacheName,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
@@ -235,7 +235,7 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(key, timeFrom, timeTo, true) :
+            new CacheIteratorWrapper(key, timeFrom, timeTo, false) :
             context.cache().reverseRange(
                 cacheName,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
@@ -274,7 +274,7 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(from, to, timeFrom, timeTo, false) :
+            new CacheIteratorWrapper(from, to, timeFrom, timeTo, true) :
             context.cache().range(
                 cacheName,
                 cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
@@ -320,7 +320,7 @@ class CachingWindowStore
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(from, to, timeFrom, timeTo, true) :
+            new CacheIteratorWrapper(from, to, timeFrom, timeTo, false) :
             context.cache().reverseRange(
                 cacheName,
                 cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
@@ -451,7 +451,7 @@ class CachingWindowStore
         private final Bytes keyFrom;
         private final Bytes keyTo;
         private final long timeTo;
-        private final boolean reverse;
+        private final boolean forward;
 
         private long lastSegmentId;
         private long currentSegmentId;
@@ -463,30 +463,30 @@ class CachingWindowStore
         private CacheIteratorWrapper(final Bytes key,
                                      final long timeFrom,
                                      final long timeTo,
-                                     final boolean reverse) {
-            this(key, key, timeFrom, timeTo, reverse);
+                                     final boolean forward) {
+            this(key, key, timeFrom, timeTo, forward);
         }
 
         private CacheIteratorWrapper(final Bytes keyFrom,
                                      final Bytes keyTo,
                                      final long timeFrom,
                                      final long timeTo,
-                                     final boolean reverse) {
+                                     final boolean forward) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.timeTo = timeTo;
             this.lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
-            this.reverse = reverse;
+            this.forward = forward;
 
             this.segmentInterval = cacheFunction.getSegmentInterval();
             this.currentSegmentId = cacheFunction.segmentId(timeFrom);
 
             setCacheKeyRange(timeFrom, currentSegmentLastTime());
 
-            if (reverse) {
-                this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
-            } else {
+            if (forward) {
                 this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            } else {
+                this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
         }
 
@@ -559,10 +559,10 @@ class CachingWindowStore
 
             current.close();
 
-            if (reverse) {
-                current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
-            } else {
+            if (forward) {
                 current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            } else {
+                current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
         }
 

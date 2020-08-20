@@ -174,7 +174,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private MergedSortedCacheWindowStoreKeyValueIterator createIterator(
         final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
         final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
-        final boolean reverse
+        final boolean forward
     ) {
         final DelegatingPeekingKeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(storeKvs));
@@ -187,7 +187,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
             new StateSerdes<>("name", Serdes.Bytes(), Serdes.ByteArray()),
             WINDOW_SIZE,
             SINGLE_SEGMENT_CACHE_FUNCTION,
-            reverse
+            forward
         );
     }
 }

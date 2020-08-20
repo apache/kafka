@@ -76,8 +76,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                           final long from,
                                           final long to,
-                                          final boolean backward) {
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, backward);
+                                          final boolean forward) {
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, forward);
 
         final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
         final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
@@ -87,7 +87,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             keySchema.hasNextCondition(key, key, from, to),
             binaryFrom,
             binaryTo,
-            backward);
+            forward);
     }
 
     @Override
@@ -110,7 +110,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                           final Bytes keyTo,
                                           final long from,
                                           final long to,
-                                          final boolean backward) {
+                                          final boolean forward) {
         if (keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
@@ -119,7 +119,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, backward);
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, forward);
 
         final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
         final Bytes binaryTo = keySchema.upperRange(keyTo, to);
@@ -129,7 +129,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             keySchema.hasNextCondition(keyFrom, keyTo, from, to),
             binaryFrom,
             binaryTo,
-            backward);
+            forward);
     }
 
     @Override
@@ -141,7 +141,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
             null,
             null,
-            false);
+            true);
     }
 
     @Override
@@ -153,7 +153,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
             null,
             null,
-            true);
+            false);
     }
 
     @Override
@@ -166,7 +166,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             keySchema.hasNextCondition(null, null, timeFrom, timeTo),
             null,
             null,
-            false);
+            true);
     }
 
     @Override
@@ -179,7 +179,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             keySchema.hasNextCondition(null, null, timeFrom, timeTo),
             null,
             null,
-            true);
+            false);
     }
 
     @Override

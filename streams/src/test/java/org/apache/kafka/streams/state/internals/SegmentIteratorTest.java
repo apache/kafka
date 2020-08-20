@@ -87,7 +87,8 @@ public class SegmentIteratorTest {
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
-            Bytes.wrap("z".getBytes()), false);
+            Bytes.wrap("z".getBytes()),
+            true);
 
         assertTrue(iterator.hasNext());
         assertEquals("a", new String(iterator.peekNextKey().get()));
@@ -115,7 +116,7 @@ public class SegmentIteratorTest {
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
             Bytes.wrap("z".getBytes()),
-            true);
+            false);
 
         assertTrue(iterator.hasNext());
         assertEquals("b", new String(iterator.peekNextKey().get()));
@@ -143,7 +144,7 @@ public class SegmentIteratorTest {
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
             Bytes.wrap("z".getBytes()),
-            false);
+            true);
 
         iterator.currentIterator = segmentOne.all();
         segmentOne.close();
@@ -157,7 +158,7 @@ public class SegmentIteratorTest {
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
             Bytes.wrap("b".getBytes()),
-            true);
+            false);
 
         assertTrue(iterator.hasNext());
         assertEquals("b", new String(iterator.peekNextKey().get()));
@@ -177,7 +178,7 @@ public class SegmentIteratorTest {
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
             Bytes.wrap("b".getBytes()),
-            false);
+            true);
 
         assertTrue(iterator.hasNext());
         assertEquals("a", new String(iterator.peekNextKey().get()));
@@ -197,7 +198,7 @@ public class SegmentIteratorTest {
             hasNextCondition,
             Bytes.wrap("f".getBytes()),
             Bytes.wrap("h".getBytes()),
-            false);
+            true);
 
         assertThrows(NoSuchElementException.class, () -> iterator.peekNextKey());
     }
@@ -209,7 +210,7 @@ public class SegmentIteratorTest {
             hasNextCondition,
             Bytes.wrap("f".getBytes()),
             Bytes.wrap("h".getBytes()),
-            false);
+            true);
 
         assertThrows(NoSuchElementException.class, () -> iterator.next());
     }
