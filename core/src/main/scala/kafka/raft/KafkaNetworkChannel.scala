@@ -18,6 +18,7 @@ package kafka.raft
 
 import java.net.InetSocketAddress
 import java.util
+import java.util.Optional
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -31,6 +32,7 @@ import org.apache.kafka.common.{KafkaException, Node}
 import org.apache.kafka.raft.{NetworkChannel, RaftMessage, RaftRequest, RaftResponse, RaftUtil}
 
 import scala.collection.mutable
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 object KafkaNetworkChannel {
@@ -45,8 +47,6 @@ object KafkaNetworkChannel {
         new EndQuorumEpochResponse(endEpochResponse)
       case fetchResponse: FetchResponseData =>
         new FetchResponse(fetchResponse)
-      case findLeaderResponse: FindQuorumResponseData =>
-        new FindQuorumResponse(findLeaderResponse)
     }
   }
 
@@ -63,8 +63,6 @@ object KafkaNetworkChannel {
         new AbstractRequest.Builder[FetchRequest](ApiKeys.FETCH) {
           override def build(version: Short): FetchRequest = new FetchRequest(fetchRequest, version)
         }
-      case findLeaderRequest: FindQuorumRequestData =>
-        new FindQuorumRequest.Builder(findLeaderRequest)
     }
   }
 
@@ -74,7 +72,6 @@ object KafkaNetworkChannel {
       case beginEpochResponse: BeginQuorumEpochResponse => beginEpochResponse.data
       case endEpochResponse: EndQuorumEpochResponse => endEpochResponse.data
       case fetchResponse: FetchResponse[_] => fetchResponse.data
-      case findLeaderResponse: FindQuorumResponse => findLeaderResponse.data
     }
   }
 
@@ -84,7 +81,6 @@ object KafkaNetworkChannel {
       case beginEpochRequest: BeginQuorumEpochRequest => beginEpochRequest.data
       case endEpochRequest: EndQuorumEpochRequest => endEpochRequest.data
       case fetchRequest: FetchRequest => fetchRequest.data
-      case findLeaderRequest: FindQuorumRequest => findLeaderRequest.data
     }
   }
 
@@ -136,6 +132,8 @@ class KafkaNetworkChannel(time: Time,
       val request = pendingOutbound.peek()
       endpoints.get(request.destinationId) match {
         case Some(node) =>
+          // FIXME: This check is broken
+
           if (client.connectionFailed(node)) {
             pendingOutbound.poll()
             val apiKey = ApiKeys.forId(request.data.apiKey)
@@ -145,6 +143,9 @@ class KafkaNetworkChannel(time: Time,
             if (!success) {
               throw new KafkaException("Undelivered queue is full")
             }
+
+            // Make sure to reset the connection state
+            client.ready(node, currentTimeMs)
           } else if (client.ready(node, currentTimeMs)) {
             pendingOutbound.poll()
             val clientRequest = buildClientRequest(request)

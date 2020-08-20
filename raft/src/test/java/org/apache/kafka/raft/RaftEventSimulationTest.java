@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.message.FindQuorumResponseData;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.LogContext;
@@ -33,7 +33,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -47,15 +46,17 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
-import static org.apache.kafka.raft.KafkaRaftClientTest.METADATA_PARTITION;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 public class RaftEventSimulationTest {
+    private static final TopicPartition METADATA_PARTITION = new TopicPartition("__cluster_metadata", 0);
     private static final int ELECTION_TIMEOUT_MS = 1000;
     private static final int ELECTION_JITTER_MS = 100;
     private static final int FETCH_TIMEOUT_MS = 5000;
@@ -599,10 +600,6 @@ public class RaftEventSimulationTest {
             return nodes.keySet();
         }
 
-        int randomNodeId() {
-            return random.nextInt(nodes.size());
-        }
-
         int majoritySize() {
             return voters.size() / 2 + 1;
         }
@@ -754,6 +751,10 @@ public class RaftEventSimulationTest {
                 start(voterId);
         }
 
+        private InetSocketAddress nodeAddress(int id) {
+            return new InetSocketAddress("localhost", 9990 + id);
+        }
+
         void start(int nodeId) {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
@@ -763,15 +764,15 @@ public class RaftEventSimulationTest {
             MockFuturePurgatory<LogOffset> appendPurgatory = new MockFuturePurgatory<>(time);
             Metrics metrics = new Metrics(time);
 
-            // For the bootstrap server, we use a pretend VIP which internally routes
-            // to any of the nodes randomly.
-            List<InetSocketAddress> bootstrapServers = Collections.singletonList(
-                new InetSocketAddress("localhost", 9000));
+            Map<Integer, InetSocketAddress> voterConnectionMap = voters.stream()
+                .collect(Collectors.toMap(
+                    Function.identity(),
+                    this::nodeAddress
+                ));
 
             KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time, metrics,
-                fetchPurgatory, appendPurgatory, new InetSocketAddress("localhost", 9990 + nodeId), bootstrapServers,
-                ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS, FETCH_TIMEOUT_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS,
-                FETCH_MAX_WAIT_MS, logContext, random);
+                fetchPurgatory, appendPurgatory, voterConnectionMap, ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS,
+                FETCH_TIMEOUT_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS, FETCH_MAX_WAIT_MS, logContext, random);
             RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,
                     persistentState.store, quorum, logContext);
             node.initialize();
@@ -1064,29 +1065,18 @@ public class RaftEventSimulationTest {
             RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.data(),
                 cluster.time.milliseconds());
 
-            final int targetNodeId;
-            if (destinationId < 0) {
-                // We route requests to the bootstrap servers randomly
-                targetNodeId = cluster.randomNodeId();
-            } else {
-                targetNodeId = destinationId;
-            }
-
-            if (!filters.get(targetNodeId).acceptInbound(inbound))
+            if (!filters.get(destinationId).acceptInbound(inbound))
                 return;
 
-            cluster.nodeIfRunning(targetNodeId).ifPresent(node -> {
+            cluster.nodeIfRunning(destinationId).ifPresent(node -> {
                 MockNetworkChannel destChannel = node.channel;
-                inflight.put(correlationId, new InflightRequest(correlationId, senderId, targetNodeId));
+                inflight.put(correlationId, new InflightRequest(correlationId, senderId, destinationId));
                 destChannel.mockReceive(inbound);
             });
         }
 
         void deliver(int senderId, RaftResponse.Outbound outbound) {
             int correlationId = outbound.correlationId();
-            if (outbound.data instanceof FindQuorumResponseData)
-                senderId = -1;
-
             RaftResponse.Inbound inbound = new RaftResponse.Inbound(correlationId, outbound.data(), senderId);
             InflightRequest inflightRequest = inflight.remove(correlationId);
             if (!filters.get(inflightRequest.sourceId).acceptInbound(inbound))

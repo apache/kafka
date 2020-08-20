@@ -49,8 +49,7 @@ class RaftRequestHandler(networkChannel: KafkaNetworkChannel,
         case ApiKeys.VOTE
              | ApiKeys.BEGIN_QUORUM_EPOCH
              | ApiKeys.END_QUORUM_EPOCH
-             | ApiKeys.FETCH
-             | ApiKeys.FIND_QUORUM =>
+             | ApiKeys.FETCH =>
           val requestBody = request.body[AbstractRequest]
           networkChannel.postInboundRequest(
             request.header,

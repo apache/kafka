@@ -254,8 +254,6 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new BeginQuorumEpochRequest(struct, apiVersion);
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochRequest(struct, apiVersion);
-            case FIND_QUORUM:
-                return new FindQuorumRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

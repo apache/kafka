@@ -16,112 +16,28 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
-import java.net.InetSocketAddress;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
+import java.util.Random;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ConnectionCacheTest {
     private final MockTime time = new MockTime();
-    private final MockNetworkChannel networkChannel = new MockNetworkChannel();
-    private final LogContext logContext = new LogContext();
     private final int requestTimeoutMs = 30000;
     private final int retryBackoffMs = 100;
-
-    @Test
-    public void testMaybeUpdate() {
-        List<InetSocketAddress> bootstrapServers = Collections.singletonList(
-            new InetSocketAddress("127.0.0.1", 9092)
-        );
-
-        ConnectionCache cache = new ConnectionCache(networkChannel,
-            bootstrapServers,
-            retryBackoffMs,
-            requestTimeoutMs,
-            logContext);
-
-        ConnectionCache.HostInfo initialHostInfo = new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            1L
-        );
-
-        cache.maybeUpdate(1, initialHostInfo);
-        assertEquals(Optional.of(initialHostInfo), cache.getOrCreate(1).hostInfo());
-
-        ConnectionCache.HostInfo updatedHostInfo = new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            2L
-        );
-
-        cache.maybeUpdate(1, updatedHostInfo);
-        assertEquals(Optional.of(updatedHostInfo), cache.getOrCreate(1).hostInfo());
-
-        cache.maybeUpdate(1, initialHostInfo);
-        assertEquals(Optional.of(updatedHostInfo), cache.getOrCreate(1).hostInfo());
-    }
-
-    @Test
-    public void testResetConnectionStateAfterHostInfoUpdate() {
-        List<InetSocketAddress> bootstrapServers = Collections.singletonList(
-            new InetSocketAddress("127.0.0.1", 9092)
-        );
-
-        ConnectionCache cache = new ConnectionCache(networkChannel,
-            bootstrapServers,
-            retryBackoffMs,
-            requestTimeoutMs,
-            logContext);
-
-        ConnectionCache.HostInfo initialHostInfo = new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            1L
-        );
-
-        ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
-        cache.maybeUpdate(1, initialHostInfo);
-
-        long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
-
-        ConnectionCache.HostInfo updatedHostInfo = new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            2L
-        );
-
-        cache.maybeUpdate(1, updatedHostInfo);
-        assertTrue(connectionState.isReady(time.milliseconds()));
-    }
+    private final Random random = new Random(1);
 
     @Test
     public void testResetAllConnections() {
-        List<InetSocketAddress> bootstrapServers = Collections.singletonList(
-            new InetSocketAddress("127.0.0.1", 9092)
-        );
-
-        ConnectionCache cache = new ConnectionCache(networkChannel,
-            bootstrapServers,
+        ConnectionCache cache = new ConnectionCache(
+            Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
-            logContext);
-
-        cache.maybeUpdate(1, new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            1L
-        ));
-
-        cache.maybeUpdate(2, new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9094),
-            1L
-        ));
+            random);
 
         // One host has an inflight request
         ConnectionCache.ConnectionState connectionState1 = cache.getOrCreate(1);
@@ -143,25 +59,13 @@ public class ConnectionCacheTest {
 
     @Test
     public void testBackoffAfterFailure() {
-        List<InetSocketAddress> bootstrapServers = Collections.singletonList(
-            new InetSocketAddress("127.0.0.1", 9092)
-        );
-
-        ConnectionCache cache = new ConnectionCache(networkChannel,
-            bootstrapServers,
+        ConnectionCache cache = new ConnectionCache(
+            Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
-            logContext);
-
-        ConnectionCache.HostInfo hostInfo = new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            1L
-        );
+            random);
 
         ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
-        assertFalse(connectionState.isReady(time.milliseconds()));
-
-        cache.maybeUpdate(1, hostInfo);
         assertTrue(connectionState.isReady(time.milliseconds()));
 
         long correlationId = 1;
@@ -177,23 +81,13 @@ public class ConnectionCacheTest {
 
     @Test
     public void testSuccessfulResponse() {
-        List<InetSocketAddress> bootstrapServers = Collections.singletonList(
-            new InetSocketAddress("127.0.0.1", 9092)
-        );
-
-        ConnectionCache cache = new ConnectionCache(networkChannel,
-            bootstrapServers,
+        ConnectionCache cache = new ConnectionCache(
+            Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
-            logContext);
-
-        ConnectionCache.HostInfo hostInfo = new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            1L
-        );
+            random);
 
         ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
-        cache.maybeUpdate(1, hostInfo);
 
         long correlationId = 1;
         connectionState.onRequestSent(correlationId, time.milliseconds());
@@ -204,23 +98,13 @@ public class ConnectionCacheTest {
 
     @Test
     public void testIgnoreUnexpectedResponse() {
-        List<InetSocketAddress> bootstrapServers = Collections.singletonList(
-            new InetSocketAddress("127.0.0.1", 9092)
-        );
-
-        ConnectionCache cache = new ConnectionCache(networkChannel,
-            bootstrapServers,
+        ConnectionCache cache = new ConnectionCache(
+            Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
-            logContext);
-
-        ConnectionCache.HostInfo hostInfo = new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            1L
-        );
+            random);
 
         ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
-        cache.maybeUpdate(1, hostInfo);
 
         long correlationId = 1;
         connectionState.onRequestSent(correlationId, time.milliseconds());
@@ -231,23 +115,14 @@ public class ConnectionCacheTest {
 
     @Test
     public void testRequestTimeout() {
-        List<InetSocketAddress> bootstrapServers = Collections.singletonList(
-            new InetSocketAddress("127.0.0.1", 9092)
-        );
-
-        ConnectionCache cache = new ConnectionCache(networkChannel,
-            bootstrapServers,
+        ConnectionCache cache = new ConnectionCache(
+            Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
-            logContext);
+            random);
 
-        ConnectionCache.HostInfo hostInfo = new ConnectionCache.HostInfo(
-            new InetSocketAddress("127.0.0.1", 9093),
-            1L
-        );
 
         ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
-        cache.maybeUpdate(1, hostInfo);
 
         long correlationId = 1;
         connectionState.onRequestSent(correlationId, time.milliseconds());

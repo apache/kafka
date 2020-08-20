@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.io.File
-import java.net.{InetAddress, InetSocketAddress}
 import java.nio.file.Files
 import java.util.Properties
 import java.util.concurrent.CountDownLatch
@@ -183,7 +182,7 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
                               logDir: File): KafkaRaftClient = {
     val quorumState = new QuorumState(
       config.brokerId,
-      raftConfig.bootstrapVoters,
+      raftConfig.quorumVoterIds,
       new FileBasedStateStore(new File(logDir, "quorum-state")),
       logContext
     )
@@ -204,7 +203,6 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
       time,
       fetchPurgatory,
       appendPurgatory,
-      advertisedListener,
       logContext
     )
   }
@@ -261,14 +259,6 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
       new ApiVersions,
       logContext
     )
-  }
-
-  private def advertisedListener: InetSocketAddress = {
-    val host = Option(config.advertisedListeners
-      .find(_.listenerName == config.interBrokerListenerName).head.host)
-      .getOrElse(InetAddress.getLocalHost.getCanonicalHostName)
-    val port = socketServer.boundPort(config.interBrokerListenerName)
-    new InetSocketAddress(host, port)
   }
 
   class RaftIoThread(client: KafkaRaftClient) extends ShutdownableThread("raft-io-thread") {

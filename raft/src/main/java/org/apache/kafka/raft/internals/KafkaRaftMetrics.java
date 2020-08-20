@@ -34,7 +34,6 @@ import java.util.concurrent.TimeUnit;
 public class KafkaRaftMetrics implements AutoCloseable {
 
     private final Metrics metrics;
-    private final long bootTimestamp;
 
     private OffsetAndEpoch logEndOffset;
     private int numUnknownVoterConnections;
@@ -49,7 +48,6 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private final MetricName highWatermarkMetricName;
     private final MetricName logEndOffsetMetricName;
     private final MetricName logEndEpochMetricName;
-    private final MetricName bootTimestampMetricName;
     private final MetricName numUnknownVoterConnectionsMetricName;
     private final Sensor commitTimeSensor;
     private final Sensor electionTimeSensor;
@@ -57,9 +55,8 @@ public class KafkaRaftMetrics implements AutoCloseable {
     private final Sensor appendRecordsSensor;
     private final Sensor pollIdleSensor;
 
-    public KafkaRaftMetrics(Metrics metrics, String metricGrpPrefix, QuorumState state, long timestamp) {
+    public KafkaRaftMetrics(Metrics metrics, String metricGrpPrefix, QuorumState state) {
         this.metrics = metrics;
-        this.bootTimestamp = timestamp;
         String metricGroupName = metricGrpPrefix + "-metrics";
 
         this.pollStartMs = OptionalLong.empty();
@@ -110,9 +107,6 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
         this.logEndEpochMetricName = metrics.metricName("log-end-epoch", metricGroupName, "The current raft log end epoch.");
         metrics.addMetric(this.logEndEpochMetricName, (mConfig, currentTimeMs) -> logEndOffset.epoch);
-
-        this.bootTimestampMetricName = metrics.metricName("boot-timestamp", metricGroupName, "The bootstrapped timestamp of this member.");
-        metrics.addMetric(this.bootTimestampMetricName, (mConfig, currentTimeMs) -> bootTimestamp);
 
         this.numUnknownVoterConnectionsMetricName = metrics.metricName("number-unknown-voter-connections", metricGroupName, "The number of voter connections recognized at this member.");
         metrics.addMetric(this.numUnknownVoterConnectionsMetricName, (mConfig, currentTimeMs) -> numUnknownVoterConnections);
@@ -201,7 +195,6 @@ public class KafkaRaftMetrics implements AutoCloseable {
         metrics.removeMetric(highWatermarkMetricName);
         metrics.removeMetric(logEndOffsetMetricName);
         metrics.removeMetric(logEndEpochMetricName);
-        metrics.removeMetric(bootTimestampMetricName);
         metrics.removeMetric(numUnknownVoterConnectionsMetricName);
 
         metrics.removeSensor(commitTimeSensor.name());

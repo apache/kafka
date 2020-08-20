@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import org.apache.kafka.clients.MockClient
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
-import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FindQuorumRequestData, FindQuorumResponseData, VoteResponseData}
+import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests.{AbstractResponse, BeginQuorumEpochRequest, EndQuorumEpochRequest, RequestHeader, VoteRequest, VoteResponse}
 import org.apache.kafka.common.utils.{MockTime, Time}
@@ -178,13 +178,6 @@ class KafkaNetworkChannelTest {
         })
         request.setReplicaId(1)
 
-      case ApiKeys.FIND_QUORUM =>
-        new FindQuorumRequestData()
-          .setHost("localhost")
-          .setPort(9092)
-          .setReplicaId(1)
-          .setBootTimestamp(time.milliseconds())
-
       case _ =>
         throw new AssertionError(s"Unexpected api $key")
     }
@@ -207,10 +200,6 @@ class KafkaNetworkChannelTest {
         new FetchResponseData()
           .setErrorCode(error.code)
 
-      case ApiKeys.FIND_QUORUM =>
-        new FindQuorumResponseData()
-          .setErrorCode(error.code)
-
       case _ =>
         throw new AssertionError(s"Unexpected api $key")
     }
@@ -222,7 +211,6 @@ class KafkaNetworkChannelTest {
       case res: EndQuorumEpochResponseData => res.errorCode
       case res: FetchResponseData => res.errorCode
       case res: VoteResponseData => res.errorCode
-      case res: FindQuorumResponseData => res.errorCode
     }
     Errors.forCode(code)
   }
@@ -235,7 +223,6 @@ object KafkaNetworkChannelTest {
     ApiKeys.BEGIN_QUORUM_EPOCH,
     ApiKeys.END_QUORUM_EPOCH,
     ApiKeys.FETCH,
-    ApiKeys.FIND_QUORUM
   )
 
   private class StubMetadataUpdater extends MockMetadataUpdater {

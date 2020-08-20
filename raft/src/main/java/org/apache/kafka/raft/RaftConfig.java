@@ -16,22 +16,19 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.clients.ClientDnsLookup;
-import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 import static org.apache.kafka.clients.CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG;
@@ -42,9 +39,10 @@ public class RaftConfig extends AbstractConfig {
 
     private static final String QUORUM_PREFIX = "quorum.";
 
-    public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "bootstrap.voters";
-    private static final String QUORUM_VOTERS_DOC = "List of voters. This is only used the " +
-        "first time a cluster is initialized.";
+    public static final String QUORUM_VOTERS_CONFIG = QUORUM_PREFIX + "voters";
+    private static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
+        "the set of voters in a comma-separated list of `{id}@{host}:{port}` entries. " +
+        "For example: `1@localhost:9092,2@localhost:9093,3@localhost:9094`";
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     private static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
@@ -57,16 +55,10 @@ public class RaftConfig extends AbstractConfig {
 
     public static final String QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG = QUORUM_PREFIX + "election.backoff.max.ms";
     private static final String QUORUM_ELECTION_BACKOFF_MAX_MS_DOC = "Maximum time in milliseconds before starting new elections. " +
-            "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
+        "This is used in the binary exponential backoff mechanism that helps prevent gridlocked elections";
 
     static {
         CONFIG = new ConfigDef()
-            .define(QUORUM_PREFIX + BOOTSTRAP_SERVERS_CONFIG,
-                ConfigDef.Type.LIST,
-                Collections.emptyList(),
-                new ConfigDef.NonNullValidator(),
-                ConfigDef.Importance.HIGH,
-                CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
             .define(QUORUM_PREFIX + REQUEST_TIMEOUT_MS_CONFIG,
                 ConfigDef.Type.INT,
                 20000,
@@ -85,8 +77,14 @@ public class RaftConfig extends AbstractConfig {
                 new ConfigDef.Validator() {
                     @Override
                     public void ensureValid(String name, Object value) {
-                        if (value == null || ((List) value).isEmpty()) {
-                            throw new ConfigException(name, value, "Empty list");
+                        if (value == null) {
+                            throw new ConfigException(name, null);
+                        }
+
+                        @SuppressWarnings("unchecked")
+                        Map<Integer, InetSocketAddress> voterConnections = parseVoterConnections((List) value);
+                        if (voterConnections.isEmpty()) {
+                            throw new ConfigException(name, value);
                         }
                     }
 
@@ -116,7 +114,6 @@ public class RaftConfig extends AbstractConfig {
                 ConfigDef.Importance.HIGH,
                 QUORUM_FETCH_TIMEOUT_MS_DOC);
     }
-
 
     public RaftConfig(Properties props) {
         super(CONFIG, props);
@@ -162,12 +159,52 @@ public class RaftConfig extends AbstractConfig {
         return getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
     }
 
-    public Set<Integer> bootstrapVoters() {
-        return getList(QUORUM_VOTERS_CONFIG).stream().map(Integer::valueOf).collect(Collectors.toSet());
+    public Set<Integer> quorumVoterIds() {
+        return quorumVoterConnections().keySet();
     }
 
-    public List<InetSocketAddress> bootstrapServers() {
-        return ClientUtils.parseAndValidateAddresses(getList(QUORUM_PREFIX + BOOTSTRAP_SERVERS_CONFIG),
-            ClientDnsLookup.USE_ALL_DNS_IPS);
+    public Map<Integer, InetSocketAddress> quorumVoterConnections() {
+        return parseVoterConnections(getList(QUORUM_VOTERS_CONFIG));
     }
+
+    private static Integer parseVoterId(String idString) {
+        try {
+            return Integer.parseInt(idString);
+        } catch (NumberFormatException e) {
+            throw new ConfigException("Failed to parse voter ID as an integer from " + idString);
+        }
+    }
+
+    private static Map<Integer, InetSocketAddress> parseVoterConnections(List<String> voterEntries) {
+        Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
+
+        for (String voterMapEntry : voterEntries) {
+            String[] idAndAddress = voterMapEntry.split("@");
+            if (idAndAddress.length != 2) {
+                throw new ConfigException("Invalid configuration value for " + QUORUM_VOTERS_CONFIG
+                    + ". Each entry should be in the form `{id}@{host}:{port}`.");
+            }
+
+            Integer voterId = parseVoterId(idAndAddress[0]);
+            String host = Utils.getHost(idAndAddress[1]);
+            if (host == null) {
+                throw new ConfigException("Failed to parse host name from entry " + voterMapEntry
+                    + " for the configuration " + QUORUM_VOTERS_CONFIG
+                    + ". Each entry should be in the form `{id}@{host}:{port}`.");
+            }
+
+            Integer port = Utils.getPort(idAndAddress[1]);
+            if (port == null) {
+                throw new ConfigException("Failed to parse host port from entry " + voterMapEntry
+                    + " for the configuration " + QUORUM_VOTERS_CONFIG
+                    + ". Each entry should be in the form `{id}@{host}:{port}`.");
+            }
+
+            voterMap.put(voterId, new InetSocketAddress(host, port));
+        }
+
+        return voterMap;
+
+    }
+
 }

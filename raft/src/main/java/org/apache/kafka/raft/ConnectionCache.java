@@ -16,70 +16,54 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
-
-import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Random;
-import java.util.stream.Collectors;
+import java.util.Set;
 
 public class ConnectionCache {
     private final Map<Integer, ConnectionState> connections = new HashMap<>();
-    private final Map<Integer, ConnectionState> bootstrapConnections = new HashMap<>();
-    private final List<Integer> bootstrapServerIds = new ArrayList<>();
+    private final List<Integer> voters = new ArrayList<>();
 
-    private final NetworkChannel channel;
-    private final Logger log;
     private final int retryBackoffMs;
     private final int requestTimeoutMs;
-    private final Random random = new Random();
+    private final Random random;
 
-    public ConnectionCache(NetworkChannel channel,
-                           List<InetSocketAddress> bootstrapServers,
+    public ConnectionCache(Set<Integer> voterIds,
                            int retryBackoffMs,
                            int requestTimeoutMs,
-                           LogContext logContext) {
-        this.channel = channel;
-        this.log = logContext.logger(ConnectionCache.class);
+                           Random random) {
+
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
+        this.voters.addAll(voterIds);
+        this.random = random;
 
-        // Mimic logic in `Cluster.bootstrap` until we think of something smarter
-        int nodeId = -1;
-        for (InetSocketAddress address : bootstrapServers) {
-            ConnectionState connection = new ConnectionState(nodeId);
-            connection.maybeUpdate(new HostInfo(address, 0L));
-            bootstrapConnections.put(nodeId, connection);
-            bootstrapServerIds.add(nodeId);
-            channel.updateEndpoint(nodeId, address);
-            nodeId--;
+        for (Integer voterId: voterIds) {
+            ConnectionState connection = new ConnectionState(voterId);
+            connections.put(voterId, connection);
         }
     }
 
     public ConnectionState getOrCreate(int id) {
-        if (id < 0) {
-            return bootstrapConnections.get(id);
-        } else {
-            return connections.computeIfAbsent(id, key -> new ConnectionState(id));
-        }
+        return connections.computeIfAbsent(id, key -> new ConnectionState(id));
     }
 
-    public OptionalInt findReadyBootstrapServer(long currentTimeMs) {
-        int startIndex = random.nextInt(bootstrapServerIds.size());
+    public OptionalInt findReadyVoter(long currentTimeMs) {
+        int startIndex = random.nextInt(voters.size());
         OptionalInt res = OptionalInt.empty();
-        for (int i = 0; i < bootstrapServerIds.size(); i++) {
-            int index = (startIndex + i) % bootstrapServerIds.size();
-            int nodeId = bootstrapServerIds.get(index);
-            ConnectionState connection = bootstrapConnections.get(nodeId);
-            if (!res.isPresent() && connection.isReady(currentTimeMs)) {
-                res = OptionalInt.of(nodeId);
+        for (int i = 0; i < voters.size(); i++) {
+            int index = (startIndex + i) % voters.size();
+            Integer voterId = voters.get(index);
+            ConnectionState connection = connections.get(voterId);
+            boolean isReady = connection.isReady(currentTimeMs);
+
+            if (isReady) {
+                res = OptionalInt.of(voterId);
             } else if (connection.inFlightCorrelationId.isPresent()) {
                 res = OptionalInt.empty();
                 break;
@@ -88,62 +72,9 @@ public class ConnectionCache {
         return res;
     }
 
-    public boolean hasUnknownVoterEndpoints() {
-        return connections.values().stream().anyMatch(cxn -> cxn.hostInfo == null);
-    }
-
-    public HostInfo maybeUpdate(int id, HostInfo update) {
-        ConnectionState connectionState = getOrCreate(id);
-
-        if (connectionState.maybeUpdate(update)) {
-            channel.updateEndpoint(id, update.address);
-        }
-
-        return connectionState.hostInfo;
-    }
-
-    public Map<Integer, Optional<HostInfo>> allVoters() {
-        return connections.entrySet().stream()
-            .collect(Collectors.toMap(
-                entry -> entry.getKey(),
-                entry -> entry.getValue().hostInfo()));
-    }
-
     public void resetAll() {
         for (ConnectionState connectionState : connections.values())
             connectionState.reset();
-    }
-
-    public static class HostInfo {
-        public final InetSocketAddress address;
-        public final long bootTimestamp;
-
-        public HostInfo(InetSocketAddress address, long bootTimestamp) {
-            this.address = address;
-            this.bootTimestamp = bootTimestamp;
-        }
-
-        @Override
-        public String toString() {
-            return "HostInfo(" +
-                "address=" + address +
-                ", bootTimestamp=" + bootTimestamp +
-                ")";
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            HostInfo hostInfo = (HostInfo) o;
-            return bootTimestamp == hostInfo.bootTimestamp &&
-                Objects.equals(address, hostInfo.address);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(address, bootTimestamp);
-        }
     }
 
     private enum State {
@@ -154,7 +85,6 @@ public class ConnectionCache {
 
     public class ConnectionState {
         private final long id;
-        private HostInfo hostInfo = null;
         private State state = State.READY;
         private long lastSendTimeMs = 0L;
         private long lastFailTimeMs = 0L;
@@ -176,28 +106,11 @@ public class ConnectionCache {
             return id;
         }
 
-        public Optional<HostInfo> hostInfo() {
-            return Optional.ofNullable(hostInfo);
-        }
-
         boolean isReady(long timeMs) {
-            if (hostInfo == null) {
-                return false;
-            } else if (isBackoffComplete(timeMs) || hasRequestTimedOut(timeMs)) {
+            if (isBackoffComplete(timeMs) || hasRequestTimedOut(timeMs)) {
                 state = State.READY;
             }
-
             return state == State.READY;
-        }
-
-        boolean maybeUpdate(HostInfo update) {
-            if (hostInfo == null || hostInfo.bootTimestamp < update.bootTimestamp) {
-                hostInfo = update;
-                reset();
-                log.info("Update connection info for node {} to {}", id, hostInfo);
-                return true;
-            }
-            return false;
         }
 
         void onResponseError(long correlationId, long timeMs) {
@@ -239,7 +152,6 @@ public class ConnectionCache {
         public String toString() {
             return "ConnectionState(" +
                 "id=" + id +
-                ", hostInfo=" + hostInfo +
                 ", state=" + state +
                 ", lastSendTimeMs=" + lastSendTimeMs +
                 ", lastFailTimeMs=" + lastFailTimeMs +

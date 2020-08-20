@@ -60,19 +60,10 @@ public class KafkaRaftMetricsTest {
     }
 
     @Test
-    public void shouldRecordBootTime() throws IOException {
-        state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
-        state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state, time.milliseconds());
-
-        assertEquals((double) time.milliseconds(), getMetric(metrics, "boot-timestamp").metricValue());
-    }
-
-    @Test
     public void shouldRecordVoterQuorumState() throws IOException {
         state = new QuorumState(localId, Utils.mkSet(localId, 1, 2), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state, time.milliseconds());
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         assertEquals("follower", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
@@ -128,7 +119,7 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordNonVoterQuorumState() throws IOException {
         state = new QuorumState(localId, Utils.mkSet(1, 2, 3), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state, time.milliseconds());
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         assertEquals("observer", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
@@ -158,7 +149,7 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordLogEnd() throws IOException {
         state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state, time.milliseconds());
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         assertEquals((double) 0L, getMetric(metrics, "log-end-offset").metricValue());
         assertEquals((double) 0, getMetric(metrics, "log-end-epoch").metricValue());
@@ -173,7 +164,7 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordNumUnknownVoterConnections() throws IOException {
         state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state, time.milliseconds());
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         assertEquals((double) 0, getMetric(metrics, "number-unknown-voter-connections").metricValue());
 
@@ -186,7 +177,7 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordPollIdleRatio() throws IOException {
         state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state, time.milliseconds());
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         raftMetrics.updatePollStart(time.milliseconds());
         time.sleep(100L);
@@ -208,7 +199,7 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordLatency() throws IOException {
         state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state, time.milliseconds());
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         raftMetrics.updateElectionStartMs(time.milliseconds());
         time.sleep(1000L);
@@ -239,7 +230,7 @@ public class KafkaRaftMetricsTest {
     public void shouldRecordRate() throws IOException {
         state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
         state.initialize(new OffsetAndEpoch(0L, 0));
-        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state, time.milliseconds());
+        raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
         raftMetrics.updateAppendRecords(12);
         assertEquals(0.4, getMetric(metrics, "append-records-rate").metricValue());

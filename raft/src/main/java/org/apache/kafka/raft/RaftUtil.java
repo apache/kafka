@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.FindQuorumResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -32,26 +31,13 @@ import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.util.Collections;
-import java.util.OptionalInt;
 import java.util.function.Consumer;
 
 import static java.util.Collections.singletonList;
 
 public class RaftUtil {
 
-    public static ApiMessage errorResponse(ApiKeys apiKey,
-                                           Errors error) {
-        return errorResponse(apiKey, error, 0, OptionalInt.empty());
-    }
-
-    // TODO: Remove epoch/leaderId from parameters after FindQuorum is gone
-    public static ApiMessage errorResponse(
-        ApiKeys apiKey,
-        Errors error,
-        int epoch,
-        OptionalInt leaderIdOpt
-    ) {
-        int leaderId = leaderIdOpt.orElse(-1);
+    public static ApiMessage errorResponse(ApiKeys apiKey, Errors error) {
         switch (apiKey) {
             case VOTE:
                 return new VoteResponseData().setErrorCode(error.code());
@@ -61,11 +47,6 @@ public class RaftUtil {
                 return new EndQuorumEpochResponseData().setErrorCode(error.code());
             case FETCH:
                 return new FetchResponseData().setErrorCode(error.code());
-            case FIND_QUORUM:
-                return new FindQuorumResponseData()
-                    .setErrorCode(error.code())
-                    .setLeaderEpoch(leaderId)
-                    .setLeaderId(epoch);
             default:
                 throw new IllegalArgumentException("Received response for unexpected request type: " + apiKey);
         }
