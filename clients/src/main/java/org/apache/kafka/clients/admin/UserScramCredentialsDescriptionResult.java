@@ -18,33 +18,42 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.List;
 import java.util.Objects;
 
 /**
- * The result of the {@link Admin#describeUserScramCredentials()} call.
+ * Representation of the result of describing all SASL/SCRAM credentials associated with a user.
  *
- * The API of this class is evolving, see {@link Admin} for details.
+ * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-554%3A+Add+Broker-side+SCRAM+Config+API">KIP-554: Add Broker-side SCRAM Config API</a>
  */
-@InterfaceStability.Evolving
-public class DescribeUserScramCredentialsResult {
-    private final KafkaFuture<List<UserScramCredentialsDescriptionResult>> future;
+public class UserScramCredentialsDescriptionResult {
+    private final String user;
+    private final KafkaFuture<UserScramCredentialsDescription> future;
 
     /**
+     * Constructor for when SASL/SCRAM credentials associated with a user could not be retrieved
      *
-     * @param future the required future representing the result of the call
+     * @param user the required user name
+     * @param future the required future
      */
-    public DescribeUserScramCredentialsResult(KafkaFuture<List<UserScramCredentialsDescriptionResult>> future) {
+    public UserScramCredentialsDescriptionResult(String user, KafkaFuture<UserScramCredentialsDescription> future) {
+        this.user = Objects.requireNonNull(user);
         this.future = Objects.requireNonNull(future);
     }
 
     /**
      *
-     * @return the future representing the result of the call
+     * @return the user name
      */
-    public KafkaFuture<List<UserScramCredentialsDescriptionResult>> future() {
+    public String user() {
+        return user;
+    }
+
+    /**
+     *
+     * @return the future
+     */
+    public KafkaFuture<UserScramCredentialsDescription> future() {
         return future;
     }
 }

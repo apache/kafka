@@ -29,7 +29,7 @@ import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, UserScramCredentialsDescription, Config => JConfig, ScramMechanism => PublicScramMechanism}
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.types.Password
@@ -570,17 +570,16 @@ object ConfigCommand extends Config {
     // we describe user SCRAM credentials only when we are not describing client information
     // and we are not given either --entity-default or --user-defaults
     if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
-      getUserScramCredentialConfigs(adminClient, entityNames).foreach { case (user, description) =>
-        // we support per-user errors, so we have to check each one
-        val optionalException = description.exception
-        if (optionalException.isPresent) {
-          val exception = optionalException.get
-          println(s"Error retrieving SCRAM credential configs for user-principal '$user': ${exception.getClass.getSimpleName}: ${exception.getMessage}")
-        } else {
+      adminClient.describeUserScramCredentials(entityNames.asJava).future.get(30, TimeUnit.SECONDS).asScala.foreach(descriptionResult => {
+        val user = descriptionResult.user
+        try {
+          val description = descriptionResult.future.get(30, TimeUnit.SECONDS)
           val descriptionText = description.credentialInfos.asScala.map(info => s"${info.mechanism.mechanismName}=iterations=${info.iterations}").mkString(", ")
           println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
+        } catch {
+          case e: Exception => println(s"Error retrieving SCRAM credential configs for user-principal '$user': ${e.getClass.getSimpleName}: ${e.getMessage}")
         }
-      }
+      })
     }
   }
 
@@ -606,10 +605,6 @@ object ConfigCommand extends Config {
     }
 
     adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala
-  }
-
-  private def getUserScramCredentialConfigs(adminClient: Admin, users: List[String]): Map[String, UserScramCredentialsDescription] = {
-      adminClient.describeUserScramCredentials(users.asJava).all.get(30, TimeUnit.SECONDS).asScala
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {

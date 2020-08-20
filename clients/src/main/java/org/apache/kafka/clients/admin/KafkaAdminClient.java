@@ -4085,7 +4085,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options) {
-        final KafkaFutureImpl<Map<String, UserScramCredentialsDescription>> future = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<List<UserScramCredentialsDescriptionResult>> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         Call call = new Call("describeUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
@@ -4104,21 +4104,21 @@ public class KafkaAdminClient extends AdminClient {
                 if (messageLevelErrorCode != Errors.NONE.code()) {
                     future.completeExceptionally(Errors.forCode(messageLevelErrorCode).exception(data.errorMessage()));
                 } else {
-                    future.complete(data.results().stream().collect(Collectors.toMap(
-                        DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult::user,
-                        result -> {
-                            short errorCode = result.errorCode();
-                            if (errorCode != Errors.NONE.code()) {
-                                return new UserScramCredentialsDescription(result.user(),
-                                        Errors.forCode(errorCode).exception(result.errorMessage()));
-                            } else {
-                                return new UserScramCredentialsDescription(result.user(),
-                                        result.credentialInfos().stream().map(credentialInfo ->
-                                                new ScramCredentialInfo(ScramMechanism.fromType(credentialInfo.mechanism()),
-                                                        credentialInfo.iterations()))
-                                                .collect(Collectors.toList()));
-                            }
-                        })));
+                    future.complete(data.results().stream().map(result -> {
+                        KafkaFutureImpl<UserScramCredentialsDescription> future = new KafkaFutureImpl<>();
+                        String user = result.user();
+                        short userLevelErrorCode = result.errorCode();
+                        if (userLevelErrorCode != Errors.NONE.code()) {
+                            future.completeExceptionally(Errors.forCode(userLevelErrorCode).exception(result.errorMessage()));
+                        } else {
+                            future.complete(new UserScramCredentialsDescription(user,
+                                    result.credentialInfos().stream().map(credentialInfo ->
+                                            new ScramCredentialInfo(ScramMechanism.fromType(credentialInfo.mechanism()),
+                                                    credentialInfo.iterations()))
+                                            .collect(Collectors.toList())));
+                        }
+                        return new UserScramCredentialsDescriptionResult(user, future);
+                    }).collect(Collectors.toList()));
                 }
             }
 

@@ -4456,10 +4456,12 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DescribeUserScramCredentialsResponse(responseData));
 
             DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(Arrays.asList(user0Name, user1Name));
-            Map<String, UserScramCredentialsDescription> resultData = result.all().get();
-            assertEquals(2, resultData.size());
-            assertTrue(resultData.containsKey(user0Name) && resultData.containsKey(user1Name));
-            UserScramCredentialsDescription userScramCredentialsDescription0 = resultData.get(user0Name);
+            List<UserScramCredentialsDescriptionResult> descriptionResults = result.future().get();
+            assertEquals(2, descriptionResults.size());
+            UserScramCredentialsDescriptionResult user0DescriptionResult = descriptionResults.stream().filter(
+                description -> description.user().equals(user0Name)).findFirst().get();
+            assertEquals(user0Name, user0DescriptionResult.user());
+            UserScramCredentialsDescription userScramCredentialsDescription0 = user0DescriptionResult.future().get();
             assertEquals(user0Name, userScramCredentialsDescription0.name());
             assertEquals(2, userScramCredentialsDescription0.credentialInfos().size());
             assertEquals(user0ScramMechanism0, userScramCredentialsDescription0.credentialInfos().get(0).mechanism());
@@ -4467,7 +4469,11 @@ public class KafkaAdminClientTest {
             assertEquals(user0ScramMechanism1, userScramCredentialsDescription0.credentialInfos().get(1).mechanism());
             assertEquals(user0Iterations1, userScramCredentialsDescription0.credentialInfos().get(1).iterations());
 
-            UserScramCredentialsDescription userScramCredentialsDescription1 = resultData.get(user1Name);
+            UserScramCredentialsDescriptionResult user1DescriptionResult = descriptionResults.stream().filter(
+                description -> description.user().equals(user1Name)).findFirst().get();
+            assertEquals(user1Name, user1DescriptionResult.user());
+
+            UserScramCredentialsDescription userScramCredentialsDescription1 = user1DescriptionResult.future().get();
             assertEquals(user1Name, userScramCredentialsDescription1.name());
             assertEquals(1, userScramCredentialsDescription1.credentialInfos().size());
             assertEquals(user1ScramMechanism, userScramCredentialsDescription1.credentialInfos().get(0).mechanism());
