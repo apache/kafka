@@ -318,6 +318,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         kafkaController = new KafkaController(config, zkClient, time, metrics, brokerInfo, brokerEpoch, tokenManager, threadNamePrefix)
         kafkaController.startup()
 
+        if (config.redirectionEnabled) {
+          brokerToControllerChannelManager = new BrokerToControllerChannelManager(metadataCache, time, metrics, config, threadNamePrefix)
+          brokerToControllerChannelManager.start()
+        }
+
         adminManager = new AdminManager(config, metrics, metadataCache, zkClient)
 
         /* start group coordinator */
@@ -713,6 +718,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (kafkaController != null)
           CoreUtils.swallow(kafkaController.shutdown(), this)
+
+        if (brokerToControllerChannelManager != null)
+          CoreUtils.swallow(brokerToControllerChannelManager.shutdown(), this)
 
         if (featureChangeListener != null)
           CoreUtils.swallow(featureChangeListener.close(), this)

@@ -178,13 +178,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       val (authorizedResources, unauthorizedResources) = resourceSplitByAuthorization(requestBody)
       if (isForwardingRequest(request)) {
         if (!controller.isActive) {
-            sendErrorResponseMaybeThrottle(request, Errors.NOT_CONTROLLER.exception())
+          sendErrorResponseMaybeThrottle(request, Errors.NOT_CONTROLLER.exception())
           } else {
             // For forwarding requests, the authentication failure is not caused by
             // the original client, but by the broker.
             val unauthorizedResult = unauthorizedResources.keys.map {
               resource => resource -> new ApiError(Errors.BROKER_AUTHORIZATION_FAILURE, null)
             }.toMap
+
             process(authorizedResources, unauthorizedResult, requestBody)
           }
       } else if (!controller.isActive && config.redirectionEnabled &&
