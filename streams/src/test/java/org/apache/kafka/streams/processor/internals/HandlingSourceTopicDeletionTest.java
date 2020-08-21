@@ -36,6 +36,7 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -66,7 +67,8 @@ public class HandlingSourceTopicDeletionTest {
 
     @Before
     public void before() throws InterruptedException {
-        CLUSTER.createTopics(INPUT_TOPIC, OUTPUT_TOPIC);
+        CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
+        CLUSTER.createTopic(OUTPUT_TOPIC, 2, 1);
 
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final String appId = "app-" + safeTestName;
@@ -85,13 +87,13 @@ public class HandlingSourceTopicDeletionTest {
     }
 
     @Test
-    public void shouldShutdownAfterSourceTopicDeleted() throws InterruptedException {
+    public void shouldShutdownAfterSourceTopicDeleted() throws InterruptedException, ExecutionException {
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Integer(), Serdes.String()));
         startApplication();
     }
 
-    private void startApplication() throws InterruptedException {
+    private void startApplication() throws InterruptedException, ExecutionException {
         final Topology topology = builder.build();
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
@@ -101,15 +103,15 @@ public class HandlingSourceTopicDeletionTest {
         TestUtils.waitForCondition(
             () -> kafkaStreams.state() == State.RUNNING,
             TIMEOUT,
-            () -> "Kafka Streams application did not reach state RUNNING in " + TIMEOUT + " ms"
+            () -> "Kafka Streams application did not reach state RUNNING"
         );
 
-        CLUSTER.deleteTopics(INPUT_TOPIC);
+        CLUSTER.deleteTopicAndWait(INPUT_TOPIC);
 
         TestUtils.waitForCondition(
             () -> kafkaStreams.state() == State.ERROR,
-            2 * TIMEOUT,
-            () -> "Kafka Streams application did not reach state ERROR in " + TIMEOUT + " ms"
+            TIMEOUT,
+            () -> "Kafka Streams application did not reach state ERROR"
         );
 
         assertThat(calledUncaughtExceptionHandler.get(), is(true));
