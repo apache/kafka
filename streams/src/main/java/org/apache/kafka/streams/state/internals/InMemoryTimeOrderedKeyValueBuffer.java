@@ -52,6 +52,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -82,6 +83,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private FullChangeSerde<V> valueSerde;
 
     private long memBufferSize = 0L;
+    private AtomicLong recordCacheRemaining;
     private long minTimestamp = Long.MAX_VALUE;
     private InternalProcessorContext context;
     private String changelogTopic;
@@ -220,6 +222,12 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition;
+        this.recordCacheRemaining = this.context.getRecordCacheRemaining();
+    }
+
+    @Override
+    public void setRecordCacheRemaining(final AtomicLong recordCacheRemaining) {
+        this.recordCacheRemaining = recordCacheRemaining;
     }
 
     @Override
@@ -233,6 +241,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         index.clear();
         sortedMap.clear();
         dirtyKeys.clear();
+        recordCacheRemaining.addAndGet(memBufferSize);
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
@@ -309,7 +318,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                 if (bufferKey != null) {
                     final BufferValue removed = sortedMap.remove(bufferKey);
                     if (removed != null) {
-                        memBufferSize -= computeRecordSize(bufferKey.key(), removed);
+                        final long recordSize = computeRecordSize(bufferKey.key(), removed);
+                        recordCacheRemaining.addAndGet(recordSize);
+                        memBufferSize -= recordSize;
                     }
                     if (bufferKey.time() == minTimestamp) {
                         minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
@@ -405,7 +416,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
                 dirtyKeys.add(next.getKey().key());
 
-                memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
+                final long recordSize = computeRecordSize(next.getKey().key(), bufferValue);
+                recordCacheRemaining.addAndGet(recordSize);
+                memBufferSize -= recordSize;
 
                 // peek at the next record so we can update the minTimestamp
                 if (delegate.hasNext()) {
@@ -493,19 +506,21 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         // then insert the new record in the same place in the priority queue
 
         final BufferKey previousKey = index.get(key);
+        long recordSizeDelta = 0;
         if (previousKey == null) {
             final BufferKey nextKey = new BufferKey(time, key);
             index.put(key, nextKey);
             sortedMap.put(nextKey, value);
             minTimestamp = Math.min(minTimestamp, time);
-            memBufferSize += computeRecordSize(key, value);
+            recordSizeDelta = computeRecordSize(key, value);
         } else {
             final BufferValue removedValue = sortedMap.put(previousKey, value);
-            memBufferSize =
-                memBufferSize
-                    + computeRecordSize(key, value)
+            recordSizeDelta =
+                    computeRecordSize(key, value)
                     - (removedValue == null ? 0 : computeRecordSize(key, removedValue));
         }
+        memBufferSize += recordSizeDelta;
+        recordCacheRemaining.addAndGet(-1 * recordSizeDelta);
     }
 
     @Override

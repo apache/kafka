@@ -30,6 +30,7 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class AbstractProcessorContext implements InternalProcessorContext {
 
@@ -40,11 +41,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final StreamsMetricsImpl metrics;
     private final Serde<?> keySerde;
     private final Serde<?> valueSerde;
+    private final AtomicLong recordCacheRemaining;
+
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode<?, ?, ?, ?> currentNode;
     private long currentSystemTimeMs;
-
     protected ThreadCache cache;
 
     public AbstractProcessorContext(final TaskId taskId,
@@ -58,6 +60,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         valueSerde = config.defaultValueSerde();
         keySerde = config.defaultKeySerde();
         this.cache = cache;
+        this.recordCacheRemaining = cache == null ? null : cache.getRecordCacheRemaining();
     }
 
     protected abstract StateManager stateManager();
@@ -228,5 +231,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public String changelogFor(final String storeName) {
         return stateManager().changelogFor(storeName);
+    }
+
+    @Override
+    public AtomicLong getRecordCacheRemaining() {
+        return recordCacheRemaining;
     }
 }

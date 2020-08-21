@@ -32,6 +32,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 class StandbyTaskCreator {
     private final InternalTopologyBuilder builder;
@@ -61,7 +62,7 @@ class StandbyTaskCreator {
 
         dummyCache = new ThreadCache(
             new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
-            0,
+            new AtomicLong(0),
             streamsMetrics
         );
     }

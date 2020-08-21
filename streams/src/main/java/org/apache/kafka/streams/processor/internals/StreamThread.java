@@ -294,6 +294,36 @@ public class StreamThread extends Thread {
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx) {
+        return create(
+            builder,
+            config,
+            clientSupplier,
+            adminClient,
+            processId,
+            clientId,
+            streamsMetrics,
+            time,
+            streamsMetadataState,
+            new AtomicLong(cacheSizeBytes),
+            stateDirectory,
+            userStateRestoreListener,
+            threadIdx
+        );
+    }
+
+    public static StreamThread create(final InternalTopologyBuilder builder,
+                                      final StreamsConfig config,
+                                      final KafkaClientSupplier clientSupplier,
+                                      final Admin adminClient,
+                                      final UUID processId,
+                                      final String clientId,
+                                      final StreamsMetricsImpl streamsMetrics,
+                                      final Time time,
+                                      final StreamsMetadataState streamsMetadataState,
+                                      final AtomicLong recordCacheRemaining,
+                                      final StateDirectory stateDirectory,
+                                      final StateRestoreListener userStateRestoreListener,
+                                      final int threadIdx) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -313,9 +343,11 @@ public class StreamThread extends Thread {
             userStateRestoreListener
         );
 
-        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        // TODO optimize the "disabled" case by not even allocating a cache
+        final ThreadCache cache = new ThreadCache(logContext, recordCacheRemaining, streamsMetrics);
 
-        final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
+        final ActiveTaskCreator activeTaskCreator =
+            new ActiveTaskCreator(
             builder,
             config,
             streamsMetrics,

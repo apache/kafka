@@ -309,9 +309,10 @@ public class TopologyTestDriver implements Closeable {
         final StreamsMetricsImpl streamsMetrics = setupMetrics(streamsConfig);
         setupTopology(builder, streamsConfig);
 
+        final AtomicLong cacheSizeBytes = new AtomicLong(Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)));
         final ThreadCache cache = new ThreadCache(
             logContext,
-            Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
+            cacheSizeBytes,
             streamsMetrics
         );
 
@@ -349,8 +350,8 @@ public class TopologyTestDriver implements Closeable {
             logContext
         );
 
-        setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
-        setupTask(streamsConfig, streamsMetrics, cache);
+        setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache, cacheSizeBytes);
+        setupTask(streamsConfig, streamsMetrics, cache, cacheSizeBytes);
     }
 
     private static void logIfTaskIdleEnabled(final StreamsConfig streamsConfig) {
@@ -409,7 +410,8 @@ public class TopologyTestDriver implements Closeable {
     private void setupGlobalTask(final Time mockWallClockTime,
                                  final StreamsConfig streamsConfig,
                                  final StreamsMetricsImpl streamsMetrics,
-                                 final ThreadCache cache) {
+                                 final ThreadCache cache,
+                                 final AtomicLong recordCacheRemaining) {
         if (globalTopology != null) {
             final MockConsumer<byte[], byte[]> globalConsumer = new MockConsumer<>(OffsetResetStrategy.NONE);
             for (final String topicName : globalTopology.sourceTopics()) {
@@ -459,7 +461,8 @@ public class TopologyTestDriver implements Closeable {
 
     private void setupTask(final StreamsConfig streamsConfig,
                            final StreamsMetricsImpl streamsMetrics,
-                           final ThreadCache cache) {
+                           final ThreadCache cache,
+                           final AtomicLong recordCacheRemaining) {
         if (!partitionsByInputTopic.isEmpty()) {
             consumer.assign(partitionsByInputTopic.values());
             final Map<TopicPartition, Long> startOffsets = new HashMap<>();

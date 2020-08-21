@@ -23,10 +23,13 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
+
+    void setRecordCacheRemaining(AtomicLong recordCacheRemaining);
 
     final class Eviction<K, V> {
         private final K key;

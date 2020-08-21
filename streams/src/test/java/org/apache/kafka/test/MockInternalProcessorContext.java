@@ -34,6 +34,8 @@ import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
@@ -149,5 +151,10 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public String changelogFor(final String storeName) {
         return "mock-changelog";
+    }
+
+    @Override
+    public AtomicLong getRecordCacheRemaining() {
+        return new AtomicLong(0);
     }
 }

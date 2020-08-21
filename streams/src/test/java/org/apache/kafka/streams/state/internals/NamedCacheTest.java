@@ -31,6 +31,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -51,7 +52,7 @@ public class NamedCacheTest {
     public void setUp() {
         innerMetrics = new Metrics();
         metrics = new MockStreamsMetrics(innerMetrics);
-        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, metrics);
+        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, new AtomicLong(Long.MAX_VALUE), metrics);
     }
 
     @Test

@@ -27,6 +27,8 @@ public abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC
 
     public abstract long maxBytes();
 
+    public abstract boolean useRecordCacheBytes();
+
     @SuppressWarnings("unused")
     public abstract BufferFullStrategy bufferFullStrategy();
 
@@ -41,12 +43,12 @@ public abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC
 
     @Override
     public Suppressed.StrictBufferConfig shutDownWhenFull() {
-        return new StrictBufferConfigImpl(maxRecords(), maxBytes(), SHUT_DOWN);
+        return new StrictBufferConfigImpl(maxRecords(), maxBytes(), useRecordCacheBytes(), SHUT_DOWN, getLogConfig());
     }
 
     @Override
     public Suppressed.EagerBufferConfig emitEarlyWhenFull() {
-        return new EagerBufferConfigImpl(maxRecords(), maxBytes());
+        return new EagerBufferConfigImpl(maxRecords(), maxBytes(), useRecordCacheBytes(), getLogConfig());
     }
 
     public abstract boolean isLoggingEnabled();

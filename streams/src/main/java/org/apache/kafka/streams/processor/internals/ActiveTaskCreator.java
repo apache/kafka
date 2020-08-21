@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getTaskProducerClientId;
@@ -55,6 +56,7 @@ class ActiveTaskCreator {
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
     private final ThreadCache cache;
+    private final AtomicLong recordCacheRemaining;
     private final Time time;
     private final KafkaClientSupplier clientSupplier;
     private final String threadId;
@@ -81,6 +83,7 @@ class ActiveTaskCreator {
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
         this.cache = cache;
+        this.recordCacheRemaining = cache.getRecordCacheRemaining();
         this.time = time;
         this.clientSupplier = clientSupplier;
         this.threadId = threadId;

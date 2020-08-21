@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 public final class ProcessorContextReverseAdapter implements InternalProcessorContext {
     private final InternalApiProcessorContext<Object, Object> delegate;
@@ -157,6 +158,11 @@ public final class ProcessorContextReverseAdapter implements InternalProcessorCo
     @Override
     public String changelogFor(final String storeName) {
         return delegate.changelogFor(storeName);
+    }
+
+    @Override
+    public AtomicLong getRecordCacheRemaining() {
+        return delegate.getRecordCacheRemaining();
     }
 
     @Override

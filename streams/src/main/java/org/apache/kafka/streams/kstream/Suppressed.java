@@ -69,6 +69,11 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
         BC withMaxBytes(final long byteLimit);
 
         /**
+         *
+         */
+        BC usingCacheBytes();
+
+        /**
          * Create a buffer unconstrained by size (either keys or bytes).
          *
          * As a result, the buffer will consume as much memory as it needs, dictated by the time bound.

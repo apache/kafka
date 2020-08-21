@@ -33,6 +33,7 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
@@ -46,6 +47,7 @@ class NamedCache {
     private LRUNode head;
     private long currentSizeBytes;
 
+    private final AtomicLong recordCacheRemaining;
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor hitRatioSensor;
 
@@ -55,8 +57,9 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
-    NamedCache(final String name, final StreamsMetricsImpl streamsMetrics) {
+    NamedCache(final String name, final AtomicLong recordCacheRemaining, final StreamsMetricsImpl streamsMetrics) {
         this.name = name;
+        this.recordCacheRemaining = recordCacheRemaining;
         this.streamsMetrics = streamsMetrics;
         storeName = ThreadCache.underlyingStoreNamefromCacheName(name);
         taskName = ThreadCache.taskIDfromCacheName(name);
@@ -163,11 +166,12 @@ class NamedCache {
                 )
             );
         }
+        long sizeDelta = 0;
         LRUNode node = cache.get(key);
         if (node != null) {
             numOverwrites++;
 
-            currentSizeBytes -= node.size();
+            sizeDelta -= node.size();
             node.update(value);
             updateLRU(node);
         } else {
@@ -181,7 +185,10 @@ class NamedCache {
             dirtyKeys.remove(key);
             dirtyKeys.add(key);
         }
-        currentSizeBytes += node.size();
+        sizeDelta += node.size();
+
+        recordCacheRemaining.addAndGet(-1 * sizeDelta);
+        currentSizeBytes += sizeDelta;
     }
 
     synchronized long sizeInBytes() {
@@ -237,6 +244,7 @@ class NamedCache {
             return;
         }
         final LRUNode eldest = tail;
+        recordCacheRemaining.addAndGet(eldest.size());
         currentSizeBytes -= eldest.size();
         remove(eldest);
         cache.remove(eldest.key);
@@ -268,6 +276,7 @@ class NamedCache {
 
         remove(node);
         dirtyKeys.remove(key);
+        recordCacheRemaining.addAndGet(node.size());
         currentSizeBytes -= node.size();
         return node.entry();
     }
@@ -317,6 +326,7 @@ class NamedCache {
     synchronized void close() {
         head = tail = null;
         listener = null;
+        recordCacheRemaining.addAndGet(currentSizeBytes);
         currentSizeBytes = 0;
         dirtyKeys.clear();
         cache.clear();

@@ -35,6 +35,8 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import static java.util.Objects.requireNonNull;
 
 public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSupplier<K, V, V> {
@@ -114,6 +116,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
     private static final class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         private final long maxRecords;
         private final long maxBytes;
+        private final boolean useRecordCacheBytes;
         private final long suppressDurationMillis;
         private final TimeDefinition<K> bufferTimeDefinition;
         private final BufferFullStrategy bufferFullStrategy;
@@ -124,12 +127,14 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         private InternalProcessorContext internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+        private AtomicLong recordCacheRemaining;
 
         private KTableSuppressProcessor(final SuppressedInternal<K> suppress, final String storeName) {
             this.storeName = storeName;
             requireNonNull(suppress);
             maxRecords = suppress.bufferConfig().maxRecords();
             maxBytes = suppress.bufferConfig().maxBytes();
+            useRecordCacheBytes = suppress.bufferConfig().useRecordCacheBytes();
             suppressDurationMillis = suppress.timeToWaitForMoreEvents().toMillis();
             bufferTimeDefinition = suppress.timeDefinition();
             bufferFullStrategy = suppress.bufferConfig().bufferFullStrategy();
@@ -149,6 +154,13 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
             buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
             buffer.setSerdesIfNull((Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());
+
+            if (useRecordCacheBytes) {
+                recordCacheRemaining = internalProcessorContext.getRecordCacheRemaining();
+            } else {
+                recordCacheRemaining = new AtomicLong(maxBytes);
+            }
+            buffer.setRecordCacheRemaining(recordCacheRemaining);
         }
 
         @Override
@@ -177,10 +189,10 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
                         return;
                     case SHUT_DOWN:
                         throw new StreamsException(String.format(
-                            "%s buffer exceeded its max capacity. Currently [%d/%d] records and [%d/%d] bytes.",
+                            "%s buffer exceeded its max capacity. Currently [%d/%d] records and cache size remaining [%d].",
                             internalProcessorContext.currentNode().name(),
                             buffer.numRecords(), maxRecords,
-                            buffer.bufferSize(), maxBytes
+                            recordCacheRemaining.get()
                         ));
                     default:
                         throw new UnsupportedOperationException(
@@ -192,7 +204,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         }
 
         private boolean overCapacity() {
-            return buffer.numRecords() > maxRecords || buffer.bufferSize() > maxBytes;
+            return buffer.numRecords() > maxRecords || recordCacheRemaining.get() <= 0;
         }
 
         private void emit(final TimeOrderedKeyValueBuffer.Eviction<K, V> toEmit) {

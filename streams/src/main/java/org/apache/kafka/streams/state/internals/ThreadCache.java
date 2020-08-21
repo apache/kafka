@@ -28,6 +28,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
@@ -35,7 +36,7 @@ import java.util.NoSuchElementException;
  */
 public class ThreadCache {
     private final Logger log;
-    private final long maxCacheSizeBytes;
+    private final AtomicLong recordCacheRemaining;
     private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
 
@@ -45,12 +46,20 @@ public class ThreadCache {
     private long numEvicts = 0;
     private long numFlushes = 0;
 
+    public AtomicLong getRecordCacheRemaining() {
+        return recordCacheRemaining;
+    }
+
     public interface DirtyEntryFlushListener {
         void apply(final List<DirtyEntry> dirty);
     }
 
     public ThreadCache(final LogContext logContext, final long maxCacheSizeBytes, final StreamsMetricsImpl metrics) {
-        this.maxCacheSizeBytes = maxCacheSizeBytes;
+        this(logContext, new AtomicLong(maxCacheSizeBytes), metrics);
+    }
+
+    public ThreadCache(final LogContext logContext, final AtomicLong recordCacheRemaining, final StreamsMetricsImpl metrics) {
+        this.recordCacheRemaining = recordCacheRemaining;
         this.metrics = metrics;
         this.log = logContext.logger(getClass());
     }
@@ -180,7 +189,7 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, recordCacheRemaining, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
     }
@@ -188,7 +197,7 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, this.metrics));
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, recordCacheRemaining, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
@@ -228,7 +237,7 @@ public class ThreadCache {
 
     private void maybeEvict(final String namespace) {
         int numEvicted = 0;
-        while (sizeBytes() > maxCacheSizeBytes) {
+        while (recordCacheRemaining.get() <= 0) {
             final NamedCache cache = getOrCreateCache(namespace);
             // we abort here as the put on this cache may have triggered
             // a put on another cache. So even though the sizeInBytes() is
@@ -253,7 +262,7 @@ public class ThreadCache {
     private synchronized NamedCache getOrCreateCache(final String name) {
         NamedCache cache = caches.get(name);
         if (cache == null) {
-            cache = new NamedCache(name, this.metrics);
+            cache = new NamedCache(name, recordCacheRemaining, this.metrics);
             caches.put(name, cache);
         }
         return cache;

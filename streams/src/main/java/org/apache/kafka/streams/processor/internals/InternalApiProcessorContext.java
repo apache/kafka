@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 /**
  * For internal use so we can update the {@link RecordContext} and current
  * {@link ProcessorNode} when we are forwarding items that have been evicted or flushed from
@@ -116,4 +118,6 @@ public interface InternalApiProcessorContext<KForward, VForward> extends Process
                    final long timestamp);
 
     String changelogFor(final String storeName);
+
+    AtomicLong getRecordCacheRemaining();
 }

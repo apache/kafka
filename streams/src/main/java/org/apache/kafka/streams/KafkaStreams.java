@@ -88,6 +88,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
@@ -576,7 +577,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, Time.SYSTEM, null);
     }
 
     /**
@@ -593,7 +594,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time);
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), new DefaultKafkaClientSupplier(), time, null);
     }
 
     /**
@@ -613,7 +614,15 @@ public class KafkaStreams implements AutoCloseable {
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time);
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time, null);
+    }
+
+    public KafkaStreams(final Topology topology,
+                        final Properties props,
+                        final KafkaClientSupplier clientSupplier,
+                        final Time time,
+                        final AtomicLong sharedRecordCache) {
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time, sharedRecordCache);
     }
 
     /**
@@ -642,19 +651,20 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final StreamsConfig config,
                         final Time time) {
-        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), time);
+        this(topology.internalTopologyBuilder, config, new DefaultKafkaClientSupplier(), time, null);
     }
 
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier) throws StreamsException {
-        this(internalTopologyBuilder, config, clientSupplier, Time.SYSTEM);
+        this(internalTopologyBuilder, config, clientSupplier, Time.SYSTEM, null);
     }
 
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier,
-                         final Time time) throws StreamsException {
+                         final Time time,
+                         final AtomicLong sharedRecordCache) throws StreamsException {
         this.config = config;
         this.time = time;
 
@@ -728,12 +738,11 @@ public class KafkaStreams implements AutoCloseable {
                 "must subscribe to at least one source topic or global table.");
         }
 
-        long totalCacheSize = config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG);
-        if (totalCacheSize < 0) {
-            totalCacheSize = 0;
+        final AtomicLong totalCacheSize = sharedRecordCache == null ? new AtomicLong(config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)) : sharedRecordCache;
+        if (totalCacheSize.get() < 0) {
+            totalCacheSize.set(0);
             log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
         }
-        final long cacheSizePerThread = totalCacheSize / (threads.length + (hasGlobalTopology ? 1 : 0));
         final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
                 (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
@@ -752,7 +761,7 @@ public class KafkaStreams implements AutoCloseable {
                 config,
                 clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
-                cacheSizePerThread,
+                totalCacheSize,
                 streamsMetrics,
                 time,
                 globalThreadId,
@@ -777,7 +786,7 @@ public class KafkaStreams implements AutoCloseable {
                 streamsMetrics,
                 time,
                 streamsMetadataState,
-                cacheSizePerThread,
+                totalCacheSize,
                 stateDirectory,
                 delegatingStateRestoreListener,
                 i + 1);
