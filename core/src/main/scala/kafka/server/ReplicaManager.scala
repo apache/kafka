@@ -328,8 +328,6 @@ class ReplicaManager(val config: KafkaConfig,
     val haltBrokerOnFailure = config.interBrokerProtocolVersion < KAFKA_1_0_IV0
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
-
-    alterIsrManager.startup()
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
@@ -1769,7 +1767,6 @@ class ReplicaManager(val config: KafkaConfig,
     if (checkpointHW)
       checkpointHighWatermarks()
     replicaSelectorOpt.foreach(_.close)
-    alterIsrManager.shutdown()
     info("Shut down completely")
   }
 

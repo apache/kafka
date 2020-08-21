@@ -299,12 +299,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         socketServer.startup(startProcessingRequests = false)
 
         brokerToControllerChannelManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics, config, threadNamePrefix)
+        brokerToControllerChannelManager.start()
 
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
 
         /* start replica manager */
-        replicaManager = createReplicaManager(isShuttingDown, brokerEpoch)
+        replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
         // Now that the broker is successfully registered, checkpoint its metadata
@@ -422,7 +423,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     metricsContext
   }
 
-  protected def createReplicaManager(isShuttingDown: AtomicBoolean, brokerEpoch: Long): ReplicaManager = {
+  protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
     val alterIsrManager = new AlterIsrManagerImpl(brokerToControllerChannelManager, zkClient, kafkaScheduler,
       time, config.brokerId)
     new ReplicaManager(config, metrics, time, zkClient, kafkaScheduler, logManager, isShuttingDown, quotaManagers,
@@ -704,6 +705,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
         if (replicaManager != null)
           CoreUtils.swallow(replicaManager.shutdown(), this)
+
+        if (brokerToControllerChannelManager != null)
+          CoreUtils.swallow(brokerToControllerChannelManager.shutdown(), this)
+
         if (logManager != null)
           CoreUtils.swallow(logManager.shutdown(), this)
 

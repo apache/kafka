@@ -43,10 +43,6 @@ trait AlterIsrManager {
   def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Unit
 
   def clearPending(topicPartition: TopicPartition): Unit
-
-  def startup(): Unit
-
-  def shutdown(): Unit
 }
 
 case class AlterIsrItem(topicPartition: TopicPartition, leaderAndIsr: LeaderAndIsr, callback: Errors => Unit)
@@ -80,14 +76,6 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
       // when we get a new LeaderAndIsr, we clear out any pending requests
       unsentIsrUpdates.remove(topicPartition)
     }
-  }
-
-  override def startup(): Unit = {
-    controllerChannelManager.start()
-  }
-
-  override def shutdown(): Unit = {
-    controllerChannelManager.shutdown()
   }
 
   private def propagateIsrChanges(): Unit = {
