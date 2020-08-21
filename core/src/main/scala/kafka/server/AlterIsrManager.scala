@@ -114,15 +114,23 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
           val body: AlterIsrResponse = response.responseBody().asInstanceOf[AlterIsrResponse]
           val data: AlterIsrResponseData = body.data
           Errors.forCode(data.errorCode) match {
-            case Errors.NONE => info(s"Controller handled AlterIsr request")
-            case e: Errors => warn(s"Controller returned an error when handling AlterIsr request: $e")
+            case Errors.NONE =>
+              info(s"Controller handled AlterIsr request")
+              data.topics.forEach(topic => {
+                topic.partitions().forEach(partition => {
+                  callbacks(new TopicPartition(topic.name, partition.partitionIndex))(
+                    Errors.forCode(partition.errorCode))
+                })
+              })
+            case e: Errors =>
+              // Need to propagate top-level errors back to all partitions so they can react accordingly
+              warn(s"Controller returned a top-level error when handling AlterIsr request: $e")
+              data.topics.forEach(topic => {
+                topic.partitions().forEach(partition => {
+                  callbacks(new TopicPartition(topic.name, partition.partitionIndex))(e)
+                })
+              })
           }
-          data.topics.forEach(topic => {
-            topic.partitions().forEach(partition => {
-              callbacks(new TopicPartition(topic.name, partition.partitionIndex))(
-                Errors.forCode(partition.errorCode))
-            })
-          })
         }
 
         debug(s"Sending AlterIsr to controller $message")

@@ -46,9 +46,6 @@ class AlterIsrManagerTest {
     EasyMock.replay(kafkaZkClient)
 
     brokerToController = EasyMock.createMock(classOf[BrokerToControllerChannelManager])
-    EasyMock.expect(brokerToController.start()).once()
-    EasyMock.expect(brokerToController.shutdown()).once()
-
   }
 
   @Test
@@ -58,12 +55,10 @@ class AlterIsrManagerTest {
 
     val scheduler = new MockScheduler(time)
     val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId)
-    alterIsrManager.startup()
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 1), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
     time.sleep(50)
     scheduler.tick()
 
-    alterIsrManager.shutdown()
     EasyMock.verify(brokerToController)
   }
 
@@ -75,7 +70,6 @@ class AlterIsrManagerTest {
 
     val scheduler = new MockScheduler(time)
     val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId)
-    alterIsrManager.startup()
     // Only send one ISR update for a given topic+partition
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 1), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 1), new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}))
@@ -83,7 +77,6 @@ class AlterIsrManagerTest {
     time.sleep(50)
     scheduler.tick()
 
-    alterIsrManager.shutdown()
     EasyMock.verify(brokerToController)
 
     val request = capture.getValue.build()
@@ -99,7 +92,6 @@ class AlterIsrManagerTest {
 
     val scheduler = new MockScheduler(time)
     val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId)
-    alterIsrManager.startup()
 
     for (i <- 0 to 9) {
       alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, i), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
@@ -112,7 +104,6 @@ class AlterIsrManagerTest {
     // This should not be included in the batch
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 10), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
 
-    alterIsrManager.shutdown()
     EasyMock.verify(brokerToController)
 
     val request = capture.getValue.build()
@@ -128,12 +119,10 @@ class AlterIsrManagerTest {
 
     val scheduler = new MockScheduler(time)
     val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId)
-    alterIsrManager.startup()
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 1), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
     time.sleep(50) // throws
     scheduler.tick()
 
-    alterIsrManager.shutdown()
     EasyMock.verify(brokerToController)
   }
 }

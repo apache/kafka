@@ -1071,10 +1071,6 @@ object TestUtils extends Logging {
     override def clearPending(topicPartition: TopicPartition): Unit = {
       isrUpdates.clear()
     }
-
-    override def startup(): Unit = { }
-
-    override def shutdown(): Unit = { }
   }
 
   def createAlterIsrManager(): TestAlterIsrManager = {

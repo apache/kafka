@@ -515,7 +515,7 @@ class Partition(val topicPartition: TopicPartition,
       val isr = partitionState.isr.asScala.map(_.toInt).toSet
       val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
       val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
-      info(s"Leader setting ISR for $topicPartition to $isr")
+      info(s"Leader setting ISR to $isr for $topicPartition with leader epoch ${partitionState.leaderEpoch}")
 
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.map(_.toInt),
@@ -666,7 +666,6 @@ class Partition(val topicPartition: TopicPartition,
 
         // check if we need to expand ISR to include this replica
         // if it is not in the ISR yet
-        // TODO add read ISR lock here?
         if (!inSyncReplicaIds(true).contains(followerId))
           maybeExpandIsr(followerReplica, followerFetchTimeMs)
 
@@ -1329,6 +1328,13 @@ class Partition(val topicPartition: TopicPartition,
         warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we are not the leader. Not retrying.")
       case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
         warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since this partition is unknown. Not retrying.")
+      case Errors.INVALID_UPDATE_VERSION =>
+        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition due to invalid ZK version. Not retrying.")
+      // Top-level errors that have been pushed down to partition level by AlterIsrManager
+      case Errors.STALE_BROKER_EPOCH =>
+        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition due to a stale broker epoch. " +
+             s"Clearing pending ISR to allow leader to retry.")
+        pendingInSyncReplicaIds = None
       case e: Errors =>
         warn(s"Controller had an unexpected error ($e) when handling proposed ISR $newIsr for $topicPartition. State is unknown.")
         pendingInSyncReplicaIds = None
