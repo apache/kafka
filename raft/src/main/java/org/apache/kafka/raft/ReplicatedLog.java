@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.io.Closeable;
 import java.util.Optional;
@@ -148,6 +149,9 @@ public interface ReplicatedLog extends Closeable {
         truncateTo(truncationOffset);
         return OptionalLong.of(truncationOffset);
     }
+
+    // TODO: Write documentation
+    SnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
 
     default void close() {}
 

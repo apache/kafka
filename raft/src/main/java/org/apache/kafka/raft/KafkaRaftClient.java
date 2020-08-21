@@ -23,14 +23,14 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -56,6 +56,7 @@ import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.LogOffset;
+import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -1729,6 +1730,12 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         shutdown.set(new GracefulShutdown(timeoutMs, shutdownComplete));
         channel.wakeup();
         return shutdownComplete;
+    }
+
+    // TODO: Change this signature to SnapshotWriter createSnapshot()
+    @Override
+    public SnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
+        return log.createSnapshot(snapshotId);
     }
 
     private void close() {

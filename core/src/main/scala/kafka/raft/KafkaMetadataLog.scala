@@ -20,10 +20,12 @@ import java.util.Optional
 
 import kafka.log.{AppendOrigin, Log}
 import kafka.server.{FetchHighWatermark, FetchLogEnd}
+import kafka.snapshot.KafkaSnapshotWriter
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.raft
 import org.apache.kafka.raft.{LogAppendInfo, LogFetchInfo, LogOffsetMetadata, Isolation, ReplicatedLog}
+import org.apache.kafka.snapshot.SnapshotWriter
 
 import scala.compat.java8.OptionConverters._
 
@@ -139,6 +141,10 @@ class KafkaMetadataLog(
    */
   override def topicPartition(): TopicPartition = {
     topicPartition
+  }
+
+  override def createSnapshot(snapshotId: raft.OffsetAndEpoch): SnapshotWriter = {
+    KafkaSnapshotWriter(log.dir.toPath, snapshotId)
   }
 
   override def close(): Unit = {

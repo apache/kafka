@@ -351,6 +351,11 @@ public class MockLog implements ReplicatedLog {
         epochStartOffsets.add(new EpochStartOffset(epoch, startOffset));
     }
 
+    @Override
+    public SnapshotWriter createSnapshot(OffsetAndEpoch snapshotId) {
+        return new MockSnapshotWriter(snapshotId);
+    }
+
     static class MockOffsetMetadata implements OffsetMetadata {
         final long id;
 
@@ -472,4 +477,54 @@ public class MockLog implements ReplicatedLog {
         }
     }
 
+    final class MockSnapshotWriter implements SnapshotWriter {
+        private final OffsetAndEpoch snapshotId;
+        private ByteBuffer data;
+        private boolean frozen;
+
+        public MockSnapshotWriter(OffsetAndEpoch snapshotId) {
+            this.snapshotId = snapshotId;
+            this.data = ByteBuffer.allocate(0);
+            this.frozen = false;
+        }
+
+        @Override
+        public OffsetAndEpoch snapshotId() {
+            return snapshotId;
+        }
+
+        @Override
+        public int append(MemoryRecords records) throws IOException {
+            if (frozen) {
+                throw new RuntimeException("Snapshot is already frozen " + snapshotId);
+            }
+
+            if (records.sizeInBytes() == 0) {
+                throw new IllegalArgumentException("Attempt to append an empty record set");
+            }
+
+            ByteBuffer recordBuffer = records.buffer();
+            if (!(data.remaining() >= recordBuffer.remaining())) {
+                ByteBuffer old = data;
+                old.flip();
+
+                int newSize = Math.max(data.capacity() * 2, data.capacity() + recordBuffer.remaining());
+                data = ByteBuffer.allocate(newSize);
+
+                data.put(old);
+            }
+            data.put(recordBuffer);
+
+            return records.sizeInBytes();
+        }
+
+        @Override
+        public void freeze() throws IOException {
+            frozen = true;
+            data.flip();
+        }
+
+        @Override
+        public void close() {}
+    }
 }

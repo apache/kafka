@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.snapshot.SnapshotWriter;
 
 import java.io.IOException;
 import java.util.List;
@@ -100,4 +101,12 @@ public interface RaftClient<T> {
      */
     CompletableFuture<Void> shutdown(int timeoutMs);
 
+    /**
+     * Get a writable snapshot file for a given offset and epoch
+     *
+     * @param snapshotId The offset and epoch that identifies the snapshot. The RaftClient assumes
+     *        that the snapshot includes the record for offset and epoch in snapshotId.
+     * @return A writable snapshot object. Snapshot are immutable once the return object is closed.
+     */
+    SnapshotWriter createSnapshot(OffsetAndEpoch snapshotId);
 }
