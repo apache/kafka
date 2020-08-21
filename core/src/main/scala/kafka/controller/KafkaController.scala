@@ -1846,7 +1846,7 @@ class KafkaController(val config: KafkaConfig,
         if (partitionError == Errors.NONE) {
           partitionResponses(tp) = Errors.NONE
           // Bump the leaderEpoch for partitions that we're going to write
-          Some(tp -> newLeaderAndIsr.newEpochAndZkVersion)
+          Some(tp -> newLeaderAndIsr.newEpochAndZkVersion) // TODO only bump this for latest IBP
         } else {
           partitionResponses(tp) = partitionError
           None

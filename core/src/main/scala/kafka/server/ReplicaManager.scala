@@ -1317,7 +1317,8 @@ class ReplicaManager(val config: KafkaConfig,
                 stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
                   s"controller $controllerId with correlation id $correlationId " +
                   s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch matches the current leader epoch")
+                  s"leader epoch $requestLeaderEpoch matches the current leader epoch " +
+                  s"and the zk version $requestZkVersion matches the current zk version")
                 responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
               }
             }

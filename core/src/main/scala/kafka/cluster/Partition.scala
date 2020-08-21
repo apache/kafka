@@ -1318,12 +1318,19 @@ class Partition(val topicPartition: TopicPartition,
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
     alterIsrChannelManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, {
       case Errors.NONE =>
+        debug(s"Controller accepted proposed ISR $newIsr for $topicPartition.")
       case Errors.REPLICA_NOT_AVAILABLE | Errors.INVALID_REPLICA_ASSIGNMENT =>
-        warn(s"Proposed ISR was not accepted. Some replicas were not online or were not assigned to $topicPartition")
-        //pendingInSyncReplicaIds = None
+        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition. Some replicas were not online or " +
+             s"in the partition assignment. Clearing pending ISR to allow leader to retry.")
+        pendingInSyncReplicaIds = None
+      case Errors.FENCED_LEADER_EPOCH =>
+        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we have an old leader epoch. Not retrying.")
+      case Errors.NOT_LEADER_OR_FOLLOWER =>
+        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we are not the leader. Not retrying.")
+      case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since this partition is unknown. Not retrying.")
       case e: Errors =>
-        warn(s"Controller had an error handling AlterIsr for $topicPartition: $e")
-        //pendingInSyncReplicaIds = None
+        warn(s"Controller had an error ($e) handling proposed ISR $newIsr for $topicPartition. Not retrying.")
     }))
   }
 
