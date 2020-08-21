@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
@@ -44,7 +43,6 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         this(null, Long.MAX_VALUE);
     }
 
-    // TODO: fix this part as last bits of KAFKA-4468
     @Deprecated
     public TimeWindowedDeserializer(final Deserializer<T> inner) {
         this(inner, Long.MAX_VALUE);
@@ -63,11 +61,14 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     @SuppressWarnings("unchecked")
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
-        if (configs.get(ConsumerConfig.WINDOW_SIZE_MS_CONFIG) instanceof String) {
-            windowSize = Long.parseLong((String) configs.get(ConsumerConfig.WINDOW_SIZE_MS_CONFIG));
-        } else {
-            windowSize = (Long) configs.get(ConsumerConfig.WINDOW_SIZE_MS_CONFIG);
+        if (windowSize == Long.MAX_VALUE) {
+            if (configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG) instanceof String) {
+                windowSize = Long.parseLong((String) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG));
+            } else {
+                windowSize = (Long) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG);
+            }
         }
+
         if (inner == null) {
             final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
             final String value = (String) configs.get(propertyName);

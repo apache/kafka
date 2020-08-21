@@ -312,10 +312,6 @@ public class ConsumerConfig extends AbstractConfig {
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
-    /** <code>window.size.ms</code> */
-    public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
-    private static final String WINDOW_SIZE_MS_DOC = "Passes window size to the deserializer in order to calculate window end times. Default is Long.MAX_VALUE";
-
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -558,11 +554,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                                .define(WINDOW_SIZE_MS_CONFIG,
-                                    Type.LONG,
-                                    Long.MAX_VALUE,
-                                    Importance.LOW,
-                                    WINDOW_SIZE_MS_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
     }

@@ -135,6 +135,7 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        //streamsConfiguration.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, 500L);
 
         final KeyValueMapper<Integer, String, String> mapper = MockMapper.selectValueMapper();
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
@@ -207,7 +208,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondBatchTimestamp);
         produceMessages(secondBatchTimestamp);
 
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
+        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
         groupedStream
                 .windowedBy(TimeWindows.of(ofMillis(500L)))
                 .reduce(reducer)
@@ -317,7 +318,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(secondTimestamp);
         produceMessages(secondTimestamp);
 
-        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class);
+        final Serde<Windowed<String>> windowedSerde = WindowedSerdes.timeWindowedSerdeFrom(String.class, 500L);
         groupedStream.windowedBy(TimeWindows.of(ofMillis(500L)))
                 .aggregate(
                         initializer,
@@ -1035,7 +1036,7 @@ public class KStreamAggregationIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
-        consumerProperties.put(ConsumerConfig.WINDOW_SIZE_MS_CONFIG, 500L);
+        consumerProperties.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, 500L);
 
         if (keyDeserializer instanceof TimeWindowedDeserializer || keyDeserializer instanceof SessionWindowedDeserializer) {
             consumerProperties.setProperty(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
@@ -1059,7 +1060,7 @@ public class KStreamAggregationIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
-        consumerProperties.put(ConsumerConfig.WINDOW_SIZE_MS_CONFIG, 500L);
+        consumerProperties.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, 500L);
 
         if (keyDeserializer instanceof TimeWindowedDeserializer || keyDeserializer instanceof SessionWindowedDeserializer) {
             consumerProperties.setProperty(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
