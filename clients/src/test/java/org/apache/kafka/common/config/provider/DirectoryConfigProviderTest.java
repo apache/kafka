@@ -100,7 +100,7 @@ public class DirectoryConfigProviderTest {
     @Test
     public void testNoSubdirs() {
         // Only regular files directly in the path directory are allowed, not in subdirs
-        Set<String> keys = toSet(asList(subdir.getName(), String.join(File.separator,subdir.getName(), subdirFile.getName())));
+        Set<String> keys = toSet(asList(subdir.getName(), String.join(File.separator, subdir.getName(), subdirFile.getName())));
         ConfigData configData = provider.get(dir.getAbsolutePath(), keys);
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
