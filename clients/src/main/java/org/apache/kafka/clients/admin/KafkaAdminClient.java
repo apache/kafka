@@ -42,6 +42,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -4085,7 +4086,8 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options) {
-        final KafkaFutureImpl<List<UserScramCredentialsDescriptionResult>> future = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<List<String>> usersFuture = new KafkaFutureImpl<>();
+        final Map<String, KafkaFuture<UserScramCredentialsDescription>> perUserFutures = new HashMap<>();
         final long now = time.milliseconds();
         Call call = new Call("describeUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
@@ -4102,9 +4104,13 @@ public class KafkaAdminClient extends AdminClient {
                 DescribeUserScramCredentialsResponseData data = response.data();
                 short messageLevelErrorCode = data.errorCode();
                 if (messageLevelErrorCode != Errors.NONE.code()) {
-                    future.completeExceptionally(Errors.forCode(messageLevelErrorCode).exception(data.errorMessage()));
+                    usersFuture.completeExceptionally(Errors.forCode(messageLevelErrorCode).exception(data.errorMessage()));
                 } else {
-                    future.complete(data.results().stream().map(result -> {
+                    /* We must not complete the users future until after we create all of the the per-user futures,
+                     * otherwise it is possible for a request to retrieve the results to sneak in after we complete the
+                     * users future but before we create all of the per-user futures.
+                     */
+                    data.results().stream().forEach(result -> {
                         KafkaFutureImpl<UserScramCredentialsDescription> future = new KafkaFutureImpl<>();
                         String user = result.user();
                         short userLevelErrorCode = result.errorCode();
@@ -4117,18 +4123,21 @@ public class KafkaAdminClient extends AdminClient {
                                                     credentialInfo.iterations()))
                                             .collect(Collectors.toList())));
                         }
-                        return new UserScramCredentialsDescriptionResult(user, future);
-                    }).collect(Collectors.toList()));
+                        perUserFutures.put(user, future);
+                    });
+                    usersFuture.complete(data.results().stream().map(
+                            DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult::user).collect(
+                            Collectors.toList()));
                 }
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                future.completeExceptionally(throwable);
+                usersFuture.completeExceptionally(throwable);
             }
         };
         runnable.call(call, now);
-        return new DescribeUserScramCredentialsResult(future);
+        return new DescribeUserScramCredentialsResult(usersFuture, perUserFutures);
     }
 
     @Override
@@ -4192,10 +4201,6 @@ public class KafkaAdminClient extends AdminClient {
                         }
                     }
                 });
-        // fail any users immediately that have an illegal alteration as identified above
-        userIllegalAlterationExceptions.entrySet().stream().forEach(entry -> {
-            futures.get(entry.getKey()).completeExceptionally(entry.getValue());
-        });
 
         // submit alterations for users that do not have an illegal alteration as identified above
         Call call = new Call("alterUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
@@ -4224,6 +4229,14 @@ public class KafkaAdminClient extends AdminClient {
                         handleNotControllerError(error);
                     }
                 }
+                /* Now that we have the results for the ones we sent,
+                 * fail any users that have an illegal alteration as identified above.
+                 * Be sure to do this after the NOT_CONTROLLER error check above
+                 * so that all errors are consistent in that case.
+                 */
+                userIllegalAlterationExceptions.entrySet().stream().forEach(entry -> {
+                    futures.get(entry.getKey()).completeExceptionally(entry.getValue());
+                });
                 response.data().results().forEach(result -> {
                     KafkaFutureImpl<Void> future = futures.get(result.user());
                     if (future == null) {

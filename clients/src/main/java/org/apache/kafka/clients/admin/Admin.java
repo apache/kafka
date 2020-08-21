@@ -1242,22 +1242,17 @@ public interface Admin extends AutoCloseable {
     /**
      * Describe SASL/SCRAM credentials.
      * <p>
-     * The following exceptions can be anticipated when calling {@code get()} on the future from the
+     * The following exceptions can be anticipated when calling {@code get()} on the futures from the
      * returned {@link DescribeUserScramCredentialsResult}:
      * <ul>
      *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      *   If the authenticated user didn't have describe access to the cluster.</li>
-     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
-     *   If the request timed out before the describe could finish.</li>
-     * </ul>
-     * <p>
-     * The following exceptions can be anticipated when calling {@code get()} on futures returned by
-     * {@link UserScramCredentialsDescriptionResult}:
-     * <ul>
      *   <li>{@link org.apache.kafka.common.errors.ResourceNotFoundException}
      *   If the user did not exist/had no SCRAM credentials.</li>
      *   <li>{@link org.apache.kafka.common.errors.DuplicateResourceException}
      *   If the user was requested to be described more than once in the original request.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
      * </ul>
      * <p>
      * This operation is supported by brokers with version 2.7.0 or higher.

@@ -570,10 +570,10 @@ object ConfigCommand extends Config {
     // we describe user SCRAM credentials only when we are not describing client information
     // and we are not given either --entity-default or --user-defaults
     if (!entityTypes.contains(ConfigType.Client) && !entityNames.contains("")) {
-      adminClient.describeUserScramCredentials(entityNames.asJava).future.get(30, TimeUnit.SECONDS).asScala.foreach(descriptionResult => {
-        val user = descriptionResult.user
+      val result = adminClient.describeUserScramCredentials(entityNames.asJava)
+      result.users.get(30, TimeUnit.SECONDS).asScala.foreach(user => {
         try {
-          val description = descriptionResult.future.get(30, TimeUnit.SECONDS)
+          val description = result.description(user).get(30, TimeUnit.SECONDS)
           val descriptionText = description.credentialInfos.asScala.map(info => s"${info.mechanism.mechanismName}=iterations=${info.iterations}").mkString(", ")
           println(s"SCRAM credential configs for user-principal '$user' are $descriptionText")
         } catch {

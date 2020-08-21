@@ -4455,29 +4455,35 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new DescribeUserScramCredentialsResponse(responseData));
 
-            DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(Arrays.asList(user0Name, user1Name));
-            List<UserScramCredentialsDescriptionResult> descriptionResults = result.future().get();
-            assertEquals(2, descriptionResults.size());
-            UserScramCredentialsDescriptionResult user0DescriptionResult = descriptionResults.stream().filter(
-                description -> description.user().equals(user0Name)).findFirst().get();
-            assertEquals(user0Name, user0DescriptionResult.user());
-            UserScramCredentialsDescription userScramCredentialsDescription0 = user0DescriptionResult.future().get();
+            List<String> usersRequestedList = asList(user0Name, user1Name);
+            Set<String> usersRequestedSet = usersRequestedList.stream().collect(Collectors.toSet());
+            DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(usersRequestedList);
+            // be sure to grab the map and any single user result first, before dereferencing the users future,
+            // so that we test for a race condition with the users future
+            Map<String, UserScramCredentialsDescription> descriptionResults = result.all().get();
+            KafkaFuture<UserScramCredentialsDescription> user0DescriptionFuture = result.description(user0Name);
+            KafkaFuture<UserScramCredentialsDescription> user1DescriptionFuture = result.description(user1Name);
+            // now we can dereference the users future
+            Set<String> usersDescribedFromUsersSet = result.users().get().stream().collect(Collectors.toSet());
+            assertEquals(usersRequestedSet, usersDescribedFromUsersSet);
+            Set<String> usersDescribedFromMapKeySet = descriptionResults.keySet();
+            assertEquals(usersRequestedSet, usersDescribedFromMapKeySet);
+
+            UserScramCredentialsDescription userScramCredentialsDescription0 = descriptionResults.get(user0Name);
             assertEquals(user0Name, userScramCredentialsDescription0.name());
             assertEquals(2, userScramCredentialsDescription0.credentialInfos().size());
             assertEquals(user0ScramMechanism0, userScramCredentialsDescription0.credentialInfos().get(0).mechanism());
             assertEquals(user0Iterations0, userScramCredentialsDescription0.credentialInfos().get(0).iterations());
             assertEquals(user0ScramMechanism1, userScramCredentialsDescription0.credentialInfos().get(1).mechanism());
             assertEquals(user0Iterations1, userScramCredentialsDescription0.credentialInfos().get(1).iterations());
+            assertEquals(userScramCredentialsDescription0, user0DescriptionFuture.get());
 
-            UserScramCredentialsDescriptionResult user1DescriptionResult = descriptionResults.stream().filter(
-                description -> description.user().equals(user1Name)).findFirst().get();
-            assertEquals(user1Name, user1DescriptionResult.user());
-
-            UserScramCredentialsDescription userScramCredentialsDescription1 = user1DescriptionResult.future().get();
+            UserScramCredentialsDescription userScramCredentialsDescription1 = descriptionResults.get(user1Name);
             assertEquals(user1Name, userScramCredentialsDescription1.name());
             assertEquals(1, userScramCredentialsDescription1.credentialInfos().size());
             assertEquals(user1ScramMechanism, userScramCredentialsDescription1.credentialInfos().get(0).mechanism());
             assertEquals(user1Iterations, userScramCredentialsDescription1.credentialInfos().get(0).iterations());
+            assertEquals(userScramCredentialsDescription1, user1DescriptionFuture.get());
         }
     }
 
@@ -4496,7 +4502,8 @@ public class KafkaAdminClientTest {
             ScramMechanism user2ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
 
             AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
-            responseData.setResults(Collections.emptyList());
+            responseData.setResults(Arrays.asList(
+                    new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult().setUser(user2Name)));
 
             env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
 
@@ -4508,10 +4515,19 @@ public class KafkaAdminClientTest {
             assertEquals(3, resultData.size());
             Arrays.asList(user0Name, user1Name).stream().forEach(u -> {
                 assertTrue(resultData.containsKey(u));
-                assertTrue(resultData.get(u).isCompletedExceptionally());
+                try {
+                    resultData.get(u).get();
+                    fail("Expected request for user " + u + " to complete exceptionally, but it did not");
+                } catch (Exception expected) {
+                    // ignore
+                }
             });
             assertTrue(resultData.containsKey(user2Name));
-            assertTrue(!resultData.get(user2Name).isCompletedExceptionally());
+            try {
+                resultData.get(user2Name).get();
+            } catch (Exception e) {
+                fail("Expected request for user " + user2Name + " to NOT complete excdptionally, but it did");
+            }
             try {
                 result.all().get();
                 fail("Expected 'result.all().get()' to throw an exception since at least one user failed, but it did not");

@@ -17,13 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.errors.ApiException;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * Representation of all SASL/SCRAM credentials associated with a user that can be retrieved, or an exception indicating
@@ -33,32 +30,37 @@ import java.util.Optional;
  */
 public class UserScramCredentialsDescription {
     private final String name;
-    private final Optional<ApiException> exception;
     private final List<ScramCredentialInfo> credentialInfos;
 
-    /**
-     * Constructor for when SASL/SCRAM credentials associated with a user could not be retrieved
-     *
-     * @param name the required user name
-     * @param exception the required exception indicating why the credentials for the user could not be retrieved
-     */
-    public UserScramCredentialsDescription(String name, ApiException exception) {
-        this(name, Optional.of(Objects.requireNonNull(exception)), Collections.emptyList());
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        UserScramCredentialsDescription that = (UserScramCredentialsDescription) o;
+        return name.equals(that.name) &&
+                credentialInfos.equals(that.credentialInfos);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, credentialInfos);
+    }
+
+    @Override
+    public String toString() {
+        return "UserScramCredentialsDescription{" +
+                "name='" + name + '\'' +
+                ", credentialInfos=" + credentialInfos +
+                '}';
     }
 
     /**
-     * Constructor for when SASL/SCRAM credentials associated with a user are successfully retrieved
      *
      * @param name the required user name
      * @param credentialInfos the required SASL/SCRAM credential representations for the user
      */
     public UserScramCredentialsDescription(String name, List<ScramCredentialInfo> credentialInfos) {
-        this(name, Optional.empty(), Objects.requireNonNull(credentialInfos));
-    }
-
-    private UserScramCredentialsDescription(String name, Optional<ApiException> exception, List<ScramCredentialInfo> credentialInfos) {
         this.name = Objects.requireNonNull(name);
-        this.exception = Objects.requireNonNull(exception);
         this.credentialInfos = Collections.unmodifiableList(new ArrayList<>(credentialInfos));
     }
 
@@ -72,21 +74,9 @@ public class UserScramCredentialsDescription {
 
     /**
      *
-     * @return the exception, if any, that prevented the user's SASL/SCRAM credentials from being retrieved
-     */
-    public Optional<ApiException> exception() {
-        return exception;
-    }
-
-    /**
-     *
      * @return the always non-null/unmodifiable list of SASL/SCRAM credential representations for the user
-     * @throws ApiException if {@link #exception()} indicates an exception is present
      */
     public List<ScramCredentialInfo> credentialInfos() {
-        if (exception().isPresent()) {
-            throw exception().get();
-        }
         return credentialInfos;
     }
 }

@@ -53,4 +53,26 @@ public class ScramCredentialInfo {
     public int iterations() {
         return iterations;
     }
+
+    @Override
+    public String toString() {
+        return "ScramCredentialInfo{" +
+                "mechanism=" + mechanism +
+                ", iterations=" + iterations +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ScramCredentialInfo that = (ScramCredentialInfo) o;
+        return iterations == that.iterations &&
+                mechanism == that.mechanism;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(mechanism, iterations);
+    }
 }

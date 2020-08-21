@@ -60,9 +60,9 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     val response = sendDescribeUserScramCredentialsRequest(request)
 
     val error = response.data.errorCode
-    assertEquals("Expected no error when describing evrything and there are no credentials",
+    assertEquals("Expected no error when describing everything and there are no credentials",
       Errors.NONE.code, error)
-    assertEquals("Expected no credentials when describing evrything and there are no credentials",
+    assertEquals("Expected no credentials when describing everything and there are no credentials",
       0, response.data.results.size)
   }
 
