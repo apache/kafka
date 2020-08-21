@@ -678,11 +678,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
             fields = line.split("\t")
             # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
-            fields = map(lambda x: x.split(" ")[1], fields)
+            fields = list(map(lambda x: x.split(" ")[1], fields))
             partitions.append(
                 {"topic": fields[0],
                  "partition": int(fields[1]),
-                 "replicas": map(int, fields[3].split(','))})
+                 "replicas": list(map(int, fields[3].split(',')))})
         return {"partitions": partitions}
 
 

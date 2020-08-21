@@ -88,7 +88,7 @@ class Benchmark(Test):
         self.validate_versions(client_version, broker_version)
         self.start_kafka(security_protocol, security_protocol, broker_version, tls_version)
         # Always generate the same total amount of data
-        nrecords = int(self.target_data_size / message_size)
+        nrecords = int(self.target_data_size // message_size)
 
         self.producer = ProducerPerformanceService(
             self.test_context, num_producers, self.kafka, topic=topic,
@@ -140,8 +140,8 @@ class Benchmark(Test):
         # FIXME we should be generating a graph too
         # Try to break it into 5 blocks, but fall back to a smaller number if
         # there aren't even 5 elements
-        block_size = max(len(self.producer.stats[0]) / 5, 1)
-        nblocks = len(self.producer.stats[0]) / block_size
+        block_size = max(len(self.producer.stats[0]) // 5, 1)
+        nblocks = len(self.producer.stats[0]) // block_size
 
         for i in range(nblocks):
             subset = self.producer.stats[0][i*block_size:min((i+1)*block_size, len(self.producer.stats[0]))]

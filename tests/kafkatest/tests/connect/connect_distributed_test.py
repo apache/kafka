@@ -26,6 +26,7 @@ from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH, LATEST_2_3, LATEST_2_2, LATEST_2_1, LATEST_2_0, LATEST_1_1, LATEST_1_0, LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
 
+from functools import reduce
 from collections import Counter, namedtuple
 import itertools
 import json
@@ -258,7 +259,7 @@ class ConnectDistributedTest(Test):
         self.source = VerifiableSource(self.cc, topic=self.TOPIC)
         self.source.start()
 
-        wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
+        wait_until(lambda: len(list(self.source.committed_messages())) > 0, timeout_sec=30,
                    err_msg="Timeout expired waiting for source task to produce a message")
 
         self.sink = VerifiableSink(self.cc, topics=[self.TOPIC])
