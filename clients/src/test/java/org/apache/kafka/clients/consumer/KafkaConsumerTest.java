@@ -2550,8 +2550,8 @@ public class KafkaConsumerTest {
         assertEquals(DeserializerForClientId.CLIENT_IDS.get(1), consumer.getClientId());
 
         assertEquals(2, DeserializerForClientId.AUTO_COMMIT_FLAGS.size());
-        assertEquals(DeserializerForClientId.AUTO_COMMIT_FLAGS.get(0), consumer.isAutoCommitEnabled());
-        assertEquals(DeserializerForClientId.AUTO_COMMIT_FLAGS.get(1), consumer.isAutoCommitEnabled());
+        assertFalse(DeserializerForClientId.AUTO_COMMIT_FLAGS.get(0));
+        assertFalse(DeserializerForClientId.AUTO_COMMIT_FLAGS.get(1));
 
         consumer.close();
     }
