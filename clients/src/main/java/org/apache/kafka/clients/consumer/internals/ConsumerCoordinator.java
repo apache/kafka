@@ -1472,8 +1472,4 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     boolean poll(Timer timer) {
         return poll(timer, true);
     }
-
-    public boolean isAutoCommitEnabled() {
-        return autoCommitEnabled;
-    }
 }

@@ -585,7 +585,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
-    private final boolean enableAutoCommit;
     private volatile boolean closed = false;
     private List<ConsumerPartitionAssignor> assignors;
 
@@ -683,7 +682,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             }
 
             this.log = logContext.logger(getClass());
-            this.enableAutoCommit = config.maybeOverrideEnableAutoCommit();
+            boolean enableAutoCommit = config.maybeOverrideEnableAutoCommit();
             groupId.ifPresent(groupIdStr -> {
                 if (groupIdStr.isEmpty()) {
                     log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
@@ -694,7 +693,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
-            this.metrics = buildMetrics(config, time, clientId, enableAutoCommit);
+            this.metrics = buildMetrics(config, time, clientId);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
             // load interceptors and make sure they get clientId
@@ -705,18 +704,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-                this.keyDeserializer.configure(config.copyWithOverride(Utils.mkMap(
-                        Utils.mkEntry(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit),
-                        Utils.mkEntry(ConsumerConfig.CLIENT_ID_CONFIG, clientId))), true);
+                this.keyDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), true);
             } else {
                 config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
                 this.keyDeserializer = keyDeserializer;
             }
             if (valueDeserializer == null) {
                 this.valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
-                this.valueDeserializer.configure(config.copyWithOverride(Utils.mkMap(
-                        Utils.mkEntry(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit),
-                        Utils.mkEntry(ConsumerConfig.CLIENT_ID_CONFIG, clientId))), false);
+                this.valueDeserializer.configure(config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId)), false);
             } else {
                 config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
                 this.valueDeserializer = valueDeserializer;
@@ -861,18 +856,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.assignors = assignors;
         this.groupId = Optional.ofNullable(groupId);
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-        this.enableAutoCommit = coordinator.isAutoCommitEnabled();
     }
 
-    private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId, boolean enableAutoCommit) {
+    private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {
         Map<String, String> metricsTags = Collections.singletonMap(CLIENT_ID_METRIC_TAG, clientId);
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                 .tags(metricsTags);
         List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                MetricsReporter.class, Utils.mkMap(Utils.mkEntry(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit),
-                        Utils.mkEntry(ConsumerConfig.CLIENT_ID_CONFIG, clientId)));
+                MetricsReporter.class, Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
         JmxReporter jmxReporter = new JmxReporter();
         jmxReporter.configure(config.originals());
         reporters.add(jmxReporter);
@@ -2483,10 +2476,5 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
         return updateAssignmentMetadataIfNeeded(timer, true);
-    }
-
-    // Visible for testing
-    public boolean isAutoCommitEnabled() {
-        return enableAutoCommit;
     }
 }
