@@ -503,8 +503,12 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(lineSeparator)
     }
 
-    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String): Unit = {
-      output.write(deserialize(deserializer, sourceBytes, topic))
+    def deserialize(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) = {
+      val nonNullBytes = Option(sourceBytes).getOrElse(nullLiteral)
+      val convertedBytes = deserializer
+        .map(d => utfBytes(d.deserialize(topic, consumerRecord.headers, nonNullBytes).toString))
+        .getOrElse(nonNullBytes)
+      convertedBytes
     }
 
     import consumerRecord._
@@ -546,12 +550,12 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
 
     if (printKey) {
-      write(keyDeserializer, key, topic)
+      output.write(deserialize(keyDeserializer, key, topic))
       writeSeparator(columnSeparator = printValue)
     }
 
     if (printValue) {
-      write(valueDeserializer, value, topic)
+      output.write(deserialize(valueDeserializer, value, topic))
       output.write(lineSeparator)
     }
   }
@@ -563,14 +567,6 @@ class DefaultMessageFormatter extends MessageFormatter {
         newConfigs.put(key.substring(prefix.length), value)
     }
     newConfigs.asJava
-  }
-
-  private def deserialize(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) = {
-    val nonNullBytes = Option(sourceBytes).getOrElse(nullLiteral)
-    val convertedBytes = deserializer
-      .map(d => utfBytes(d.deserialize(topic, nonNullBytes).toString))
-      .getOrElse(nonNullBytes)
-    convertedBytes
   }
 
   private def utfBytes(str: String) = str.getBytes(StandardCharsets.UTF_8)
