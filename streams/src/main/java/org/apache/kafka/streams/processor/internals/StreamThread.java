@@ -1053,7 +1053,7 @@ public class StreamThread extends Thread {
 
     Consumer<byte[], byte[]> restoreConsumer() {
         return restoreConsumer;
-    };
+    }
 
     Admin adminClient() {
         return adminClient;
@@ -1061,5 +1061,5 @@ public class StreamThread extends Thread {
 
     InternalTopologyBuilder internalTopologyBuilder() {
         return builder;
-    };
+    }
 }
