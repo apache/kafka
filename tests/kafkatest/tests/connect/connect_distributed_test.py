@@ -228,9 +228,9 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the PAUSED state")
 
         # verify that we do not produce new messages while paused
-        num_messages = len(self.source.sent_messages())
+        num_messages = len(list(self.source.sent_messages()))
         time.sleep(10)
-        assert num_messages == len(self.source.sent_messages()), "Paused source connector should not produce any messages"
+        assert num_messages == len(list(self.source.sent_messages())), "Paused source connector should not produce any messages"
 
         self.cc.resume_connector(self.source.name)
 
@@ -239,7 +239,7 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the RUNNING state")
 
         # after resuming, we should see records produced again
-        wait_until(lambda: len(self.source.sent_messages()) > num_messages, timeout_sec=30,
+        wait_until(lambda: len(list(self.source.sent_messages())) > num_messages, timeout_sec=30,
                    err_msg="Failed to produce messages after resuming source connector")
 
     @cluster(num_nodes=5)
@@ -276,9 +276,9 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the PAUSED state")
 
         # verify that we do not consume new messages while paused
-        num_messages = len(self.sink.received_messages())
+        num_messages = len(list(self.sink.received_messages()))
         time.sleep(10)
-        assert num_messages == len(self.sink.received_messages()), "Paused sink connector should not consume any messages"
+        assert num_messages == len(list(self.sink.received_messages())), "Paused sink connector should not consume any messages"
 
         self.cc.resume_connector(self.sink.name)
 
@@ -287,7 +287,7 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the RUNNING state")
 
         # after resuming, we should see records consumed again
-        wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=30,
+        wait_until(lambda: len(list(self.sink.received_messages())) > num_messages, timeout_sec=30,
                    err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
@@ -421,7 +421,10 @@ class ConnectDistributedTest(Test):
             src_seqnos = [msg['seqno'] for msg in src_messages if msg['task'] == task]
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because clean
             # bouncing should commit on rebalance.
-            src_seqno_max = max(src_seqnos)
+            if len(src_seqnos) == 0:
+                src_seqno_max = 0
+            else:
+                src_seqno_max = max(src_seqnos)
             self.logger.debug("Max source seqno: %d", src_seqno_max)
             src_seqno_counts = Counter(src_seqnos)
             missing_src_seqnos = sorted(set(range(src_seqno_max)).difference(set(src_seqnos)))
