@@ -78,15 +78,14 @@ public class DeleteGroupsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new HashMap<>();
-        for (DeletableGroupResult result : data.results()) {
-            Errors error = Errors.forCode(result.errorCode());
-            counts.put(error, counts.getOrDefault(error, 0) + 1);
-        }
+        data.results().forEach(result ->
+            updateErrorCounts(counts, Errors.forCode(result.errorCode()))
+        );
         return counts;
     }
 
     public static DeleteGroupsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteGroupsResponse(ApiKeys.DELETE_GROUPS.parseResponse(version, buffer));
+        return new DeleteGroupsResponse(ApiKeys.DELETE_GROUPS.parseResponse(version, buffer), version);
     }
 
     @Override

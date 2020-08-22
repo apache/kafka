@@ -20,13 +20,15 @@ package org.apache.kafka.server.authorizer;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 
+import java.util.Optional;
+
 @InterfaceStability.Evolving
 public class AclCreateResult {
     public static final AclCreateResult SUCCESS = new AclCreateResult();
 
     private final ApiException exception;
 
-    public AclCreateResult() {
+    private AclCreateResult() {
         this(null);
     }
 
@@ -35,16 +37,9 @@ public class AclCreateResult {
     }
 
     /**
-     * Returns any exception during create. If exception is null, the request has succeeded.
+     * Returns any exception during create. If exception is empty, the request has succeeded.
      */
-    public ApiException exception() {
-        return exception;
-    }
-
-    /**
-     * Returns true if the request failed.
-     */
-    public boolean failed() {
-        return exception != null;
+    public Optional<ApiException> exception() {
+        return exception == null ? Optional.empty() : Optional.of(exception);
     }
 }

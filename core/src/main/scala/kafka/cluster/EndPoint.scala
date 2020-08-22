@@ -62,8 +62,7 @@ object EndPoint {
 /**
  * Part of the broker definition - matching host/port pair to a protocol
  */
-case class EndPoint(override val host: String, override val port: Int, listenerName: ListenerName, override val securityProtocol: SecurityProtocol)
-    extends JEndpoint(Option(listenerName).map(_.value).orNull, securityProtocol, host, port) {
+case class EndPoint(host: String, port: Int, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
   def connectionString: String = {
     val hostport =
       if (host == null)
@@ -73,7 +72,7 @@ case class EndPoint(override val host: String, override val port: Int, listenerN
     listenerName.value + "://" + hostport
   }
 
-  // to keep spotbugs happy
-  override def equals(o: scala.Any): Boolean = super.equals(o)
-  override def hashCode(): Int = super.hashCode()
+  def toJava: JEndpoint = {
+    new JEndpoint(listenerName.value, securityProtocol, host, port)
+  }
 }

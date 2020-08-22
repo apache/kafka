@@ -25,11 +25,13 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Properties;
 
@@ -37,8 +39,6 @@ import static org.junit.Assert.assertArrayEquals;
 
 public class KStreamFlatMapValuesTest {
     private final String topicName = "topic";
-    private final ConsumerRecordFactory<Integer, Integer> recordFactory =
-        new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
@@ -60,9 +60,11 @@ public class KStreamFlatMapValuesTest {
         stream.flatMapValues(mapper).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, Integer> inputTopic =
+                    driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             for (final int expectedKey : expectedKeys) {
-                // passing the timestamp to recordFactory.create to disambiguate the call
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey, 0L));
+                // passing the timestamp to inputTopic.create to disambiguate the call
+                inputTopic.pipeInput(expectedKey, expectedKey, 0L);
             }
         }
 
@@ -71,7 +73,7 @@ public class KStreamFlatMapValuesTest {
             new KeyValueTimestamp<>(2, "v2", 0), new KeyValueTimestamp<>(2, "V2", 0),
             new KeyValueTimestamp<>(3, "v3", 0), new KeyValueTimestamp<>(3, "V3", 0)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
 
@@ -95,9 +97,11 @@ public class KStreamFlatMapValuesTest {
         stream.flatMapValues(mapper).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, Integer> inputTopic =
+                    driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             for (final int expectedKey : expectedKeys) {
-                // passing the timestamp to recordFactory.create to disambiguate the call
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey, 0L));
+                // passing the timestamp to inputTopic.create to disambiguate the call
+                inputTopic.pipeInput(expectedKey, expectedKey, 0L);
             }
         }
 
@@ -110,6 +114,6 @@ public class KStreamFlatMapValuesTest {
             new KeyValueTimestamp<>(3, "v3", 0),
             new KeyValueTimestamp<>(3, "k3", 0)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 }

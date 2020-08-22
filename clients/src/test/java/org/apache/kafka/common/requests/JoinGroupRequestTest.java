@@ -86,7 +86,6 @@ public class JoinGroupRequestTest {
         Struct struct = new JoinGroupRequestData()
                 .setGroupId("groupId")
                 .setMemberId("consumerId")
-                .setGroupInstanceId("groupInstanceId")
                 .setProtocolType("consumer")
                 .setSessionTimeoutMs(sessionTimeoutMs)
                 .toStruct((short) 0);

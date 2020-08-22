@@ -67,8 +67,8 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     classOf[TestClientPrincipalBuilder].getName)
   this.serverConfig.setProperty("listener.name.server." + BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
     classOf[TestServerPrincipalBuilder].getName)
-  override val clientPrincipal = "client"
-  override val kafkaPrincipal = "server"
+  override val clientPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "client")
+  override val kafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "server")
 
   @Before
   override def setUp(): Unit = {

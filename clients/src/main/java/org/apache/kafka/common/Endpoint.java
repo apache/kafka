@@ -17,6 +17,8 @@
 package org.apache.kafka.common;
 
 import java.util.Objects;
+import java.util.Optional;
+
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
@@ -27,23 +29,24 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 @InterfaceStability.Evolving
 public class Endpoint {
 
-    private final String listener;
+    private final String listenerName;
     private final SecurityProtocol securityProtocol;
     private final String host;
     private final int port;
 
-    public Endpoint(String listener, SecurityProtocol securityProtocol, String host, int port) {
-        this.listener = listener;
+    public Endpoint(String listenerName, SecurityProtocol securityProtocol, String host, int port) {
+        this.listenerName = listenerName;
         this.securityProtocol = securityProtocol;
         this.host = host;
         this.port = port;
     }
 
     /**
-     * Returns the listener name of this endpoint.
+     * Returns the listener name of this endpoint. This is non-empty for endpoints provided
+     * to broker plugins, but may be empty when used in clients.
      */
-    public String listener() {
-        return listener;
+    public Optional<String> listenerName() {
+        return Optional.ofNullable(listenerName);
     }
 
     /**
@@ -77,7 +80,7 @@ public class Endpoint {
         }
 
         Endpoint that = (Endpoint) o;
-        return Objects.equals(this.listener, that.listener) &&
+        return Objects.equals(this.listenerName, that.listenerName) &&
             Objects.equals(this.securityProtocol, that.securityProtocol) &&
             Objects.equals(this.host, that.host) &&
             this.port == that.port;
@@ -86,13 +89,13 @@ public class Endpoint {
 
     @Override
     public int hashCode() {
-        return Objects.hash(listener, securityProtocol, host, port);
+        return Objects.hash(listenerName, securityProtocol, host, port);
     }
 
     @Override
     public String toString() {
         return "Endpoint(" +
-            "listener='" + listener + '\'' +
+            "listenerName='" + listenerName + '\'' +
             ", securityProtocol=" + securityProtocol +
             ", host='" + host + '\'' +
             ", port=" + port +

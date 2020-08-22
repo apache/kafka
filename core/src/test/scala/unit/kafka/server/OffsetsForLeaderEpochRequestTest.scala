@@ -25,7 +25,7 @@ import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsFo
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
@@ -48,8 +48,8 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     val follower = replicas.find(_ != leader).get
     val nonReplica = servers.map(_.config.brokerId).find(!replicas.contains(_)).get
 
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, follower, request)
-    assertResponseError(Errors.NOT_LEADER_FOR_PARTITION, nonReplica, request)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, follower, request)
+    assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, request)
   }
 
   @Test
@@ -81,8 +81,8 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
     // Check follower error codes
     val followerId = TestUtils.findFollowerId(topicPartition, servers)
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.empty())
-    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
@@ -96,7 +96,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
   }
 
   private def sendRequest(brokerId: Int, request: OffsetsForLeaderEpochRequest): OffsetsForLeaderEpochResponse = {
-    val response = connectAndSend(request, ApiKeys.OFFSET_FOR_LEADER_EPOCH, destination = brokerSocketServer(brokerId))
-    OffsetsForLeaderEpochResponse.parse(response, request.version)
+    connectAndReceive[OffsetsForLeaderEpochResponse](request, destination = brokerSocketServer(brokerId))
   }
+
 }

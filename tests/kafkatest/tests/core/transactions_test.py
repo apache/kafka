@@ -31,7 +31,7 @@ class TransactionsTest(Test):
     a destination topic and killing the copy process as well as the broker
     randomly through the process. In the end we verify that the final output
     topic contains exactly one committed copy of each message in the input
-    topic
+    topic.
     """
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
@@ -47,6 +47,15 @@ class TransactionsTest(Test):
         self.num_output_partitions = 3
         self.num_seed_messages = 100000
         self.transaction_size = 750
+
+        # The transaction timeout should be lower than the progress timeout, but at
+        # least as high as the request timeout (which is 30s by default). When the
+        # client is hard-bounced, progress may depend on the previous transaction
+        # being aborted. When the broker is hard-bounced, we may have to wait as
+        # long as the request timeout to get a `Produce` response and we do not
+        # want the coordinator timing out the transaction.
+        self.transaction_timeout = 40000
+        self.progress_timeout_sec = 60
         self.consumer_group = "transactions-test-consumer-group"
 
         self.zk = ZookeeperService(test_context, num_nodes=1)
@@ -69,7 +78,7 @@ class TransactionsTest(Test):
         seed_producer.start()
         wait_until(lambda: seed_producer.num_acked >= num_seed_messages,
                    timeout_sec=seed_timeout_sec,
-                   err_msg="Producer failed to produce messages %d in  %ds." %\
+                   err_msg="Producer failed to produce messages %d in %ds." %\
                    (self.num_seed_messages, seed_timeout_sec))
         return seed_producer.acked
 
@@ -89,7 +98,7 @@ class TransactionsTest(Test):
                            hard-killed broker %s" % str(node.account))
                 self.kafka.start_node(node)
 
-    def create_and_start_message_copier(self, input_topic, input_partition, output_topic, transactional_id):
+    def create_and_start_message_copier(self, input_topic, input_partition, output_topic, transactional_id, use_group_metadata):
         message_copier = TransactionalMessageCopier(
             context=self.test_context,
             num_nodes=1,
@@ -100,7 +109,9 @@ class TransactionsTest(Test):
             input_partition=input_partition,
             output_topic=output_topic,
             max_messages=-1,
-            transaction_size=self.transaction_size
+            transaction_size=self.transaction_size,
+            transaction_timeout=self.transaction_timeout,
+            use_group_metadata=use_group_metadata
         )
         message_copier.start()
         wait_until(lambda: message_copier.alive(message_copier.nodes[0]),
@@ -112,21 +123,22 @@ class TransactionsTest(Test):
         for _ in range(3):
             for copier in copiers:
                 wait_until(lambda: copier.progress_percent() >= 20.0,
-                           timeout_sec=30,
-                           err_msg="%s : Message copier didn't make enough progress in 30s. Current progress: %s" \
-                           % (copier.transactional_id, str(copier.progress_percent())))
+                           timeout_sec=self.progress_timeout_sec,
+                           err_msg="%s : Message copier didn't make enough progress in %ds. Current progress: %s" \
+                           % (copier.transactional_id, self.progress_timeout_sec, str(copier.progress_percent())))
                 self.logger.info("%s - progress: %s" % (copier.transactional_id,
                                                         str(copier.progress_percent())))
                 copier.restart(clean_shutdown)
 
-    def create_and_start_copiers(self, input_topic, output_topic, num_copiers):
+    def create_and_start_copiers(self, input_topic, output_topic, num_copiers, use_group_metadata):
         copiers = []
         for i in range(0, num_copiers):
             copiers.append(self.create_and_start_message_copier(
                 input_topic=input_topic,
                 output_topic=output_topic,
                 input_partition=i,
-                transactional_id="copier-" + str(i)
+                transactional_id="copier-" + str(i),
+                use_group_metadata=use_group_metadata
             ))
         return copiers
 
@@ -164,7 +176,8 @@ class TransactionsTest(Test):
 
     def copy_messages_transactionally(self, failure_mode, bounce_target,
                                       input_topic, output_topic,
-                                      num_copiers, num_messages_to_copy):
+                                      num_copiers, num_messages_to_copy,
+                                      use_group_metadata):
         """Copies messages transactionally from the seeded input topic to the
         output topic, either bouncing brokers or clients in a hard and soft
         way as it goes.
@@ -176,7 +189,8 @@ class TransactionsTest(Test):
         """
         copiers = self.create_and_start_copiers(input_topic=input_topic,
                                                 output_topic=output_topic,
-                                                num_copiers=num_copiers)
+                                                num_copiers=num_copiers,
+                                                use_group_metadata=use_group_metadata)
         concurrent_consumer = self.start_consumer(output_topic,
                                                   group_id="concurrent_consumer")
         clean_shutdown = False
@@ -188,11 +202,12 @@ class TransactionsTest(Test):
         elif bounce_target == "clients":
             self.bounce_copiers(copiers, clean_shutdown)
 
+        copier_timeout_sec = 120
         for copier in copiers:
             wait_until(lambda: copier.is_done,
-                       timeout_sec=120,
+                       timeout_sec=copier_timeout_sec,
                        err_msg="%s - Failed to copy all messages in  %ds." %\
-                       (copier.transactional_id, 120))
+                       (copier.transactional_id, copier_timeout_sec))
         self.logger.info("finished copying messages")
 
         return self.drain_consumer(concurrent_consumer, num_messages_to_copy)
@@ -218,8 +233,9 @@ class TransactionsTest(Test):
     @cluster(num_nodes=9)
     @matrix(failure_mode=["hard_bounce", "clean_bounce"],
             bounce_target=["brokers", "clients"],
-            check_order=[True, False])
-    def test_transactions(self, failure_mode, bounce_target, check_order):
+            check_order=[True, False],
+            use_group_metadata=[True, False])
+    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
@@ -243,7 +259,7 @@ class TransactionsTest(Test):
         concurrently_consumed_messages = self.copy_messages_transactionally(
             failure_mode, bounce_target, input_topic=self.input_topic,
             output_topic=self.output_topic, num_copiers=self.num_input_partitions,
-            num_messages_to_copy=self.num_seed_messages)
+            num_messages_to_copy=self.num_seed_messages, use_group_metadata=use_group_metadata)
         output_messages = self.get_messages_from_topic(self.output_topic, self.num_seed_messages)
 
         concurrently_consumed_message_set = set(concurrently_consumed_messages)

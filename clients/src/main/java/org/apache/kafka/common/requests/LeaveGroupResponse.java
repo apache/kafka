@@ -97,6 +97,10 @@ public class LeaveGroupResponse extends AbstractResponse {
         return getError(Errors.forCode(data.errorCode()), data.members());
     }
 
+    public Errors topLevelError() {
+        return Errors.forCode(data.errorCode());
+    }
+
     private static Errors getError(Errors topLevelError, List<MemberResponse> memberResponses) {
         if (topLevelError != Errors.NONE) {
             return topLevelError;
@@ -121,13 +125,18 @@ public class LeaveGroupResponse extends AbstractResponse {
         }
 
         // Member level error.
-        for (MemberResponse memberResponse : data.members()) {
+        data.members().forEach(memberResponse -> {
             Errors memberError = Errors.forCode(memberResponse.errorCode());
             if (memberError != Errors.NONE) {
                 updateErrorCounts(combinedErrorCounts, memberError);
             }
-        }
+        });
         return combinedErrorCounts;
+    }
+
+    @Override
+    public String toString() {
+        return data.toString();
     }
 
     @Override

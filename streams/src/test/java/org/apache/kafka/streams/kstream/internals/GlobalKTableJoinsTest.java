@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -87,19 +87,20 @@ public class GlobalKTableJoinsTest {
 
     private void verifyJoin(final Map<String, ValueAndTimestamp<String>> expected,
                             final MockProcessorSupplier<String, String> supplier) {
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> globalInputTopic = driver.createInputTopic(globalTopic, new StringSerializer(), new StringSerializer());
             // write some data to the global table
-            driver.pipeInput(recordFactory.create(globalTopic, "a", "A", 1L));
-            driver.pipeInput(recordFactory.create(globalTopic, "b", "B", 5L));
+            globalInputTopic.pipeInput("a", "A", 1L);
+            globalInputTopic.pipeInput("b", "B", 5L);
+            final TestInputTopic<String, String> streamInputTopic = driver.createInputTopic(streamTopic, new StringSerializer(), new StringSerializer());
             //write some data to the stream
-            driver.pipeInput(recordFactory.create(streamTopic, "1", "a", 2L));
-            driver.pipeInput(recordFactory.create(streamTopic, "2", "b", 10L));
-            driver.pipeInput(recordFactory.create(streamTopic, "3", "c", 3L));
+            streamInputTopic.pipeInput("1", "a", 2L);
+            streamInputTopic.pipeInput("2", "b", 10L);
+            streamInputTopic.pipeInput("3", "c", 3L);
         }
 
-        assertEquals(expected, supplier.theCapturedProcessor().lastValueAndTimestampPerKey);
+        assertEquals(expected, supplier.theCapturedProcessor().lastValueAndTimestampPerKey());
     }
 }

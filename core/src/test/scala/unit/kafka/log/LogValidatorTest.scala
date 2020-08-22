@@ -20,21 +20,29 @@ import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 
 import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
-import kafka.common.LongRef
+import kafka.common.{LongRef, RecordValidationException}
+import kafka.log.LogValidator.ValidationAndOffsetAssignResult
 import kafka.message._
+import kafka.metrics.KafkaYammerMetrics
+import kafka.server.BrokerTopicStats
+import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.{assertThrows, intercept}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 class LogValidatorTest {
 
   val time = Time.SYSTEM
+  val topicPartition = new TopicPartition("topic", 0)
+  val brokerTopicStats = new BrokerTopicStats
+  val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
   @Test
   def testOnlyOneBatch(): Unit = {
@@ -57,6 +65,29 @@ class LogValidatorTest {
   }
 
   @Test
+  def testValidationOfBatchesWithNonSequentialInnerOffsets(): Unit = {
+    def testMessageValidation(magicValue: Byte): Unit = {
+      val numRecords = 20
+      val invalidRecords = recordsWithNonSequentialInnerOffsets(magicValue, CompressionType.GZIP, numRecords)
+
+      // Validation for v2 and above is strict for this case. For older formats, we fix invalid
+      // internal offsets by rewriting the batch.
+      if (magicValue >= RecordBatch.MAGIC_VALUE_V2) {
+        assertThrows[InvalidRecordException] {
+          validateMessages(invalidRecords, magicValue, CompressionType.GZIP, CompressionType.GZIP)
+        }
+      } else {
+        val result = validateMessages(invalidRecords, magicValue, CompressionType.GZIP, CompressionType.GZIP)
+        assertEquals(0 until numRecords, result.validatedRecords.records.asScala.map(_.offset))
+      }
+    }
+
+    for (version <- RecordVersion.values) {
+      testMessageValidation(version.value)
+    }
+  }
+
+  @Test
   def testMisMatchMagic(): Unit = {
     checkMismatchMagic(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
     checkMismatchMagic(RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
@@ -73,13 +104,19 @@ class LogValidatorTest {
   }
 
   private def checkMismatchMagic(batchMagic: Byte, recordMagic: Byte, compressionType: CompressionType): Unit = {
-    assertThrows[InvalidRecordException] {
+    assertThrows[RecordValidationException] {
       validateMessages(recordsWithInvalidInnerMagic(batchMagic, recordMagic, compressionType), batchMagic, compressionType, compressionType)
     }
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}")), 1)
+    assertTrue(meterCount(s"${BrokerTopicStats.InvalidMagicNumberRecordsPerSec}") > 0)
   }
 
-  private def validateMessages(records: MemoryRecords, magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType): Unit = {
+  private def validateMessages(records: MemoryRecords,
+                               magic: Byte,
+                               sourceCompressionType: CompressionType,
+                               targetCompressionType: CompressionType): ValidationAndOffsetAssignResult = {
     LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       new LongRef(0L),
       time,
       now = 0L,
@@ -90,8 +127,9 @@ class LogValidatorTest {
       TimestampType.CREATE_TIME,
       1000L,
       RecordBatch.NO_PRODUCER_EPOCH,
-      isFromClient = true,
-      KAFKA_2_3_IV1
+      origin = AppendOrigin.Client,
+      KAFKA_2_3_IV1,
+      brokerTopicStats
     )
   }
 
@@ -100,11 +138,17 @@ class LogValidatorTest {
     checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V1)
   }
 
+  @Test
+  def testLogAppendTimeNonCompressedV2(): Unit = {
+    checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V2)
+  }
+
   private def checkLogAppendTimeNonCompressed(magic: Byte): Unit = {
     val now = System.currentTimeMillis()
     // The timestamps should be overwritten
     val records = createRecords(magicValue = magic, timestamp = 1234L, codec = CompressionType.NONE)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time= time,
       now = now,
@@ -115,21 +159,21 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatedResults.validatedRecords
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, 1234L, batch))
+    validatedRecords.batches.forEach(batch => validateLogAppendTime(now, 1234L, batch))
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
-    assertEquals(s"The offset of max timestamp should be 0", 0, validatedResults.shallowOffsetOfMaxTimestamp)
     assertFalse("Message size should not have been changed", validatedResults.messageSizeMaybeChanged)
 
+    // we index from last offset in version 2 instead of base offset
+    val expectedMaxTimestampOffset = if (magic >= RecordBatch.MAGIC_VALUE_V2) 2 else 0
+    assertEquals(s"The offset of max timestamp should be $expectedMaxTimestampOffset",
+      expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestamp)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 0, records,
       compressed = false)
-  }
-
-  def testLogAppendTimeNonCompressedV2(): Unit = {
-    checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V2)
   }
 
   @Test
@@ -143,6 +187,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = now,
@@ -153,12 +198,13 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, -1, batch))
+    validatedRecords.batches.forEach(batch => validateLogAppendTime(now, -1, batch))
     assertTrue("MessageSet should still valid", validatedRecords.batches.iterator.next().isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be ${records.records.asScala.size - 1}",
@@ -185,6 +231,7 @@ class LogValidatorTest {
     val records = createRecords(magicValue = magic, timestamp = 1234L, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = now,
@@ -195,13 +242,14 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals("message set size should not change", records.records.asScala.size,
       validatedRecords.records.asScala.size)
-    validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, 1234L, batch))
+    validatedRecords.batches.forEach(batch => validateLogAppendTime(now, 1234L, batch))
     assertTrue("MessageSet should still valid", validatedRecords.batches.iterator.next().isValid)
     assertEquals(s"Max timestamp should be $now", now, validatedResults.maxTimestamp)
     assertEquals(s"The offset of max timestamp should be ${records.records.asScala.size - 1}",
@@ -243,6 +291,7 @@ class LogValidatorTest {
     records.buffer.putInt(DefaultRecordBatch.LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = time.milliseconds(),
@@ -253,8 +302,9 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
   }
 
   @Test
@@ -285,6 +335,7 @@ class LogValidatorTest {
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -295,8 +346,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = partitionLeaderEpoch,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatingResults.validatedRecords
 
     var i = 0
@@ -352,6 +404,7 @@ class LogValidatorTest {
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -362,8 +415,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = partitionLeaderEpoch,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatingResults.validatedRecords
 
     var i = 0
@@ -403,6 +457,7 @@ class LogValidatorTest {
   private def checkCreateTimeUpConversionFromV0(toMagic: Byte): Unit = {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -413,8 +468,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatedResults.validatedRecords
 
     for (batch <- validatedRecords.batches.asScala) {
@@ -445,6 +501,7 @@ class LogValidatorTest {
     val timestamp = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, codec = CompressionType.GZIP, timestamp = timestamp)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = timestamp,
@@ -455,8 +512,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatedResults.validatedRecords
 
     for (batch <- validatedRecords.batches.asScala) {
@@ -500,6 +558,7 @@ class LogValidatorTest {
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -510,8 +569,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = partitionLeaderEpoch,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val validatedRecords = validatedResults.validatedRecords
 
     var i = 0
@@ -544,13 +604,14 @@ class LogValidatorTest {
     checkCompressed(RecordBatch.MAGIC_VALUE_V2)
   }
 
-  @Test(expected = classOf[InvalidTimestampException])
+  @Test(expected = classOf[RecordValidationException])
   def testInvalidCreateTimeNonCompressedV1(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, timestamp = now - 1001L,
       codec = CompressionType.NONE)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -561,17 +622,19 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
   }
 
-  @Test(expected = classOf[InvalidTimestampException])
+  @Test(expected = classOf[RecordValidationException])
   def testInvalidCreateTimeNonCompressedV2(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = now - 1001L,
       codec = CompressionType.NONE)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -582,17 +645,19 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
   }
 
-  @Test(expected = classOf[InvalidTimestampException])
+  @Test(expected = classOf[RecordValidationException])
   def testInvalidCreateTimeCompressedV1(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, timestamp = now - 1001L,
       codec = CompressionType.GZIP)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -603,17 +668,19 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
   }
 
-  @Test(expected = classOf[InvalidTimestampException])
+  @Test(expected = classOf[RecordValidationException])
   def testInvalidCreateTimeCompressedV2(): Unit = {
     val now = System.currentTimeMillis()
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = now - 1001L,
       codec = CompressionType.GZIP)
     LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time = time,
       now = System.currentTimeMillis(),
@@ -624,8 +691,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
   }
 
   @Test
@@ -634,6 +702,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -644,8 +713,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -654,6 +724,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -664,8 +735,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -675,6 +747,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -685,8 +758,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
 
@@ -697,6 +771,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -707,8 +782,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
 
@@ -720,6 +796,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val compressedMessagesWithOffset = LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -730,8 +807,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -743,6 +821,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val compressedMessagesWithOffset = LogValidator.validateMessagesAndAssignOffsets(
       records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -753,8 +832,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -764,6 +844,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val offset = 1234567
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -774,8 +855,9 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = false)
@@ -787,6 +869,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val offset = 1234567
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -797,8 +880,9 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = false)
@@ -810,6 +894,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -820,8 +905,9 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = true)
@@ -833,6 +919,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -843,8 +930,9 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     checkOffsets(validatedResults.validatedRecords, offset)
     verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
       compressed = true)
@@ -856,6 +944,7 @@ class LogValidatorTest {
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -866,8 +955,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
   }
 
   @Test
@@ -876,6 +966,7 @@ class LogValidatorTest {
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
     val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     val result = LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -886,8 +977,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = false,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Coordinator,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
     val batches = TestUtils.toList(result.validatedRecords.batches)
     assertEquals(1, batches.size)
     val batch = batches.get(0)
@@ -901,6 +993,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V1, now, codec = CompressionType.NONE)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -911,8 +1004,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -922,6 +1016,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V1, now, CompressionType.GZIP)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -932,8 +1027,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -942,6 +1038,7 @@ class LogValidatorTest {
     checkOffsets(records, 0)
     val offset = 1234567
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -952,8 +1049,9 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -962,6 +1060,7 @@ class LogValidatorTest {
     val offset = 1234567
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -972,8 +1071,9 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -983,6 +1083,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, now, codec = CompressionType.NONE)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -993,8 +1094,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -1004,6 +1106,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -1014,8 +1117,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test(expected = classOf[UnsupportedForMessageFormatException])
@@ -1027,6 +1131,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -1037,8 +1142,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test(expected = classOf[UnsupportedForMessageFormatException])
@@ -1050,6 +1156,7 @@ class LogValidatorTest {
     val records = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes), new SimpleRecord("beautiful".getBytes))
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -1060,8 +1167,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -1071,6 +1179,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, now, codec = CompressionType.NONE)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -1081,8 +1190,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
   }
 
   @Test
@@ -1092,6 +1202,7 @@ class LogValidatorTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, now, CompressionType.GZIP)
     checkOffsets(records, 0)
     checkOffsets(LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -1102,8 +1213,34 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion).validatedRecords, offset)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats).validatedRecords, offset)
+  }
+
+  @Test
+  def testNonIncreasingOffsetRecordBatchHasMetricsLogged(): Unit = {
+    val records = createNonIncreasingOffsetRecords(RecordBatch.MAGIC_VALUE_V2)
+    records.batches().asScala.head.setLastOffset(2)
+    assertThrows[InvalidRecordException] {
+      LogValidator.validateMessagesAndAssignOffsets(records,
+        topicPartition,
+        offsetCounter = new LongRef(0L),
+        time = time,
+        now = System.currentTimeMillis(),
+        sourceCodec = DefaultCompressionCodec,
+        targetCodec = DefaultCompressionCodec,
+        compactedTopic = false,
+        magic = RecordBatch.MAGIC_VALUE_V0,
+        timestampType = TimestampType.CREATE_TIME,
+        timestampDiffMaxMs = 5000L,
+        partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        origin = AppendOrigin.Client,
+        interBrokerProtocolVersion = ApiVersion.latestVersion,
+        brokerTopicStats = brokerTopicStats)
+    }
+    assertEquals(metricsKeySet.count(_.getMBeanName.endsWith(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}")), 1)
+    assertTrue(meterCount(s"${BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec}") > 0)
   }
 
   @Test(expected = classOf[InvalidRecordException])
@@ -1117,6 +1254,7 @@ class LogValidatorTest {
     // The timestamps should be overwritten
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = 1234L, codec = CompressionType.NONE)
     LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(0),
       time= time,
       now = now,
@@ -1127,8 +1265,9 @@ class LogValidatorTest {
       timestampType = TimestampType.LOG_APPEND_TIME,
       timestampDiffMaxMs = 1000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = KAFKA_2_0_IV1)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = KAFKA_2_0_IV1,
+      brokerTopicStats = brokerTopicStats)
   }
 
   @Test(expected = classOf[InvalidRecordException])
@@ -1139,6 +1278,81 @@ class LogValidatorTest {
   @Test(expected = classOf[InvalidRecordException])
   def testRecompressedBatchWithoutRecordsNotAllowed(): Unit = {
     testBatchWithoutRecordsNotAllowed(NoCompressionCodec, DefaultCompressionCodec)
+  }
+
+  @Test
+  def testInvalidTimestampExceptionHasBatchIndex(): Unit = {
+    val now = System.currentTimeMillis()
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = now - 1001L,
+      codec = CompressionType.GZIP)
+    val e = intercept[RecordValidationException] {
+      LogValidator.validateMessagesAndAssignOffsets(
+        records,
+        topicPartition,
+        offsetCounter = new LongRef(0),
+        time = time,
+        now = System.currentTimeMillis(),
+        sourceCodec = DefaultCompressionCodec,
+        targetCodec = DefaultCompressionCodec,
+        magic = RecordBatch.MAGIC_VALUE_V1,
+        compactedTopic = false,
+        timestampType = TimestampType.CREATE_TIME,
+        timestampDiffMaxMs = 1000L,
+        partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        origin = AppendOrigin.Client,
+        interBrokerProtocolVersion = ApiVersion.latestVersion,
+        brokerTopicStats = brokerTopicStats)
+    }
+
+    assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
+    assertTrue(e.recordErrors.nonEmpty)
+    assertEquals(e.recordErrors.size, 3)
+  }
+
+  @Test
+  def testInvalidRecordExceptionHasBatchIndex(): Unit = {
+    val e = intercept[RecordValidationException] {
+      validateMessages(recordsWithInvalidInnerMagic(
+        RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP),
+        RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
+    }
+
+    assertTrue(e.invalidException.isInstanceOf[InvalidRecordException])
+    assertTrue(e.recordErrors.nonEmpty)
+    // recordsWithInvalidInnerMagic creates 20 records
+    assertEquals(e.recordErrors.size, 20)
+    e.recordErrors.foreach(assertNotNull(_))
+  }
+
+  @Test
+  def testBatchWithInvalidRecordsAndInvalidTimestamp(): Unit = {
+    val records = (0 until 5).map(id =>
+      LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0, 0L, null, id.toString.getBytes())
+    )
+
+    val buffer = ByteBuffer.allocate(1024)
+    val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
+      TimestampType.CREATE_TIME, 0L)
+    var offset = 0
+
+    // we want to mix in a record with invalid timestamp range
+    builder.appendUncheckedWithOffset(offset, LegacyRecord.create(RecordBatch.MAGIC_VALUE_V1,
+      1200L, null, "timestamp".getBytes))
+    records.foreach { record =>
+      offset += 30
+      builder.appendUncheckedWithOffset(offset, record)
+    }
+    val invalidOffsetTimestampRecords = builder.build()
+
+    val e = intercept[RecordValidationException] {
+      validateMessages(invalidOffsetTimestampRecords,
+        RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
+    }
+    // if there is a mix of both regular InvalidRecordException and InvalidTimestampException,
+    // InvalidTimestampException takes precedence
+    assertTrue(e.invalidException.isInstanceOf[InvalidTimestampException])
+    assertTrue(e.recordErrors.nonEmpty)
+    assertEquals(6, e.recordErrors.size)
   }
 
   private def testBatchWithoutRecordsNotAllowed(sourceCodec: CompressionCodec, targetCodec: CompressionCodec): Unit = {
@@ -1152,6 +1366,7 @@ class LogValidatorTest {
     buffer.flip()
     val records = MemoryRecords.readableRecords(buffer)
     LogValidator.validateMessagesAndAssignOffsets(records,
+      topicPartition,
       offsetCounter = new LongRef(offset),
       time = time,
       now = System.currentTimeMillis(),
@@ -1162,8 +1377,9 @@ class LogValidatorTest {
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
-      isFromClient = true,
-      interBrokerProtocolVersion = ApiVersion.latestVersion)
+      origin = AppendOrigin.Client,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      brokerTopicStats = brokerTopicStats)
   }
 
   private def createRecords(magicValue: Byte,
@@ -1174,6 +1390,17 @@ class LogValidatorTest {
     builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
     builder.appendWithOffset(1, timestamp, null, "there".getBytes)
     builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
+    builder.build()
+  }
+
+  private def createNonIncreasingOffsetRecords(magicValue: Byte,
+                                               timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                                               codec: CompressionType = CompressionType.NONE): MemoryRecords = {
+    val buf = ByteBuffer.allocate(512)
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
+    builder.appendWithOffset(2, timestamp, null, "there".getBytes)
+    builder.appendWithOffset(3, timestamp, null, "beautiful".getBytes)
     builder.build()
   }
 
@@ -1201,6 +1428,23 @@ class LogValidatorTest {
       assertEquals("Unexpected offset in message set iterator", offset, entry.offset)
       offset += 1
     }
+  }
+
+  private def recordsWithNonSequentialInnerOffsets(magicValue: Byte,
+                                                   codec: CompressionType,
+                                                   numRecords: Int): MemoryRecords = {
+    val records = (0 until numRecords).map { id =>
+      new SimpleRecord(id.toString.getBytes)
+    }
+
+    val buffer = ByteBuffer.allocate(1024)
+    val builder = MemoryRecords.builder(buffer, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+
+    records.foreach { record =>
+      builder.appendUncheckedWithOffset(0, record)
+    }
+
+    builder.build()
   }
 
   private def recordsWithInvalidInnerMagic(batchMagicValue: Byte,

@@ -51,7 +51,7 @@ import org.apache.kafka.common.errors.InvalidOffsetException
  */
 // Avoid shadowing mutable `file` in AbstractIndex
 class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Int](_file, baseOffset, maxIndexSize, writable) {
+    extends AbstractIndex(_file, baseOffset, maxIndexSize, writable) {
   import OffsetIndex._
 
   override def entrySize = 8
@@ -147,7 +147,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
         mmap.putInt(position)
         _entries += 1
         _lastOffset = offset
-        require(_entries * entrySize == mmap.position(), entries + " entries but file position in index is " + mmap.position() + ".")
+        require(_entries * entrySize == mmap.position(), s"$entries entries but file position in index is ${mmap.position()}.")
       } else {
         throw new InvalidOffsetException(s"Attempt to append an offset ($offset) to position $entries no larger than" +
           s" the last offset appended (${_lastOffset}) to ${file.getAbsolutePath}.")
@@ -204,38 +204,4 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
 
 object OffsetIndex extends Logging {
   override val loggerName: String = classOf[OffsetIndex].getName
-}
-
-
-
-/**
-  * A thin wrapper on top of the raw OffsetIndex object to avoid initialization on construction. This defers the OffsetIndex
-  * initialization to the time it gets accessed so the cost of the heavy memory mapped operation gets amortized over time.
-  *
-  * Combining with skipping sanity check for safely flushed segments, the startup time of a broker can be reduced, especially
-  * for the the broker with a lot of log segments
-  *
-  */
-class LazyOffsetIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
-  @volatile private var offsetIndex: Option[OffsetIndex] = None
-
-  def file: File = {
-    if (offsetIndex.isDefined)
-      offsetIndex.get.file
-    else
-      _file
-  }
-
-  def file_=(f: File): Unit = {
-    if (offsetIndex.isDefined)
-      offsetIndex.get.file = f
-    else
-      _file = f
-  }
-
-  def get: OffsetIndex = {
-    if (offsetIndex.isEmpty)
-      offsetIndex = Some(new OffsetIndex(_file, baseOffset, maxIndexSize, writable))
-    offsetIndex.get
-  }
 }

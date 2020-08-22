@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 /**
@@ -24,19 +25,19 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
  */
 class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
-    final private RocksDBMetricsRecorder metricsRecorder;
+    private final RocksDBMetricsRecorder metricsRecorder;
 
     KeyValueSegments(final String name,
                      final String metricsScope,
                      final long retentionPeriod,
                      final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
-        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name);
     }
 
     @Override
     public KeyValueSegment getOrCreateSegment(final long segmentId,
-                                              final InternalProcessorContext context) {
+                                              final ProcessorContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
@@ -53,8 +54,8 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
     }
 
     @Override
-    public void close() {
-        metricsRecorder.close();
-        super.close();
+    public void openExisting(final ProcessorContext context, final long streamTime) {
+        metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
+        super.openExisting(context, streamTime);
     }
 }

@@ -17,37 +17,23 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public final class MessageUtilTest {
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
-
-    @Test
-    public void testSimpleUtf8Lengths() {
-        validateUtf8Length("");
-        validateUtf8Length("abc");
-        validateUtf8Length("This is a test string.");
-    }
-
-    @Test
-    public void testMultibyteUtf8Lengths() {
-        validateUtf8Length("A\u00ea\u00f1\u00fcC");
-        validateUtf8Length("\ud801\udc00");
-        validateUtf8Length("M\u00fcO");
-    }
-
-    private void validateUtf8Length(String string) {
-        byte[] arr = string.getBytes(StandardCharsets.UTF_8);
-        assertEquals(arr.length, MessageUtil.serializedUtf8Length(string));
-    }
 
     @Test
     public void testDeepToString() {
@@ -55,5 +41,41 @@ public final class MessageUtilTest {
             MessageUtil.deepToString(Arrays.asList(1, 2, 3).iterator()));
         assertEquals("[foo]",
             MessageUtil.deepToString(Arrays.asList("foo").iterator()));
+    }
+
+    @Test
+    public void testByteBufferToArray() {
+        assertArrayEquals(new byte[]{1, 2, 3},
+            MessageUtil.byteBufferToArray(ByteBuffer.wrap(new byte[]{1, 2, 3})));
+        assertArrayEquals(new byte[]{},
+            MessageUtil.byteBufferToArray(ByteBuffer.wrap(new byte[]{})));
+    }
+
+    @Test
+    public void testDuplicate() {
+        assertEquals(null, MessageUtil.duplicate(null));
+        assertArrayEquals(new byte[] {},
+            MessageUtil.duplicate(new byte[] {}));
+        assertArrayEquals(new byte[] {1, 2, 3},
+            MessageUtil.duplicate(new byte[] {1, 2, 3}));
+    }
+
+    @Test
+    public void testCompareRawTaggedFields() {
+        assertTrue(MessageUtil.compareRawTaggedFields(null, null));
+        assertTrue(MessageUtil.compareRawTaggedFields(null, Collections.emptyList()));
+        assertTrue(MessageUtil.compareRawTaggedFields(Collections.emptyList(), null));
+        assertFalse(MessageUtil.compareRawTaggedFields(Collections.emptyList(),
+            Collections.singletonList(new RawTaggedField(1, new byte[] {1}))));
+        assertFalse(MessageUtil.compareRawTaggedFields(null,
+            Collections.singletonList(new RawTaggedField(1, new byte[] {1}))));
+        assertFalse(MessageUtil.compareRawTaggedFields(
+            Collections.singletonList(new RawTaggedField(1, new byte[] {1})),
+            Collections.emptyList()));
+        assertTrue(MessageUtil.compareRawTaggedFields(
+            Arrays.asList(new RawTaggedField(1, new byte[] {1}),
+                new RawTaggedField(2, new byte[] {})),
+            Arrays.asList(new RawTaggedField(1, new byte[] {1}),
+                new RawTaggedField(2, new byte[] {}))));
     }
 }

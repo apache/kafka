@@ -18,6 +18,9 @@
   "type": "response",
   "name": "SaslHandshakeResponse",
   // Version 1 is the same as version 0.
+  // NOTE: Version cannot be easily bumped due to incorrect
+  // client negotiation for clients <= 2.4.
+  // See https://issues.apache.org/jira/browse/KAFKA-9577
   "validVersions": "0-1",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",

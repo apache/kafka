@@ -18,7 +18,10 @@
   "type": "response",
   "name": "CreateDelegationTokenResponse",
   // Starting in version 1, on quota violation, brokers send out responses before throttling.
-  "validVersions": "0-1",
+  //
+  // Version 2 is the first flexible version.
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top-level error, or zero if there was no error."},

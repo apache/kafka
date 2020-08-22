@@ -23,9 +23,10 @@ import org.apache.kafka.streams.processor.StateStore;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collection;
+import java.util.Map;
+import org.apache.kafka.streams.processor.internals.Task.TaskType;
 
-interface StateManager extends Checkpointable {
+public interface StateManager {
     File baseDir();
 
     /**
@@ -33,16 +34,24 @@ interface StateManager extends Checkpointable {
      * (e.g., when it conflicts with the names of internal topics, like the checkpoint file name)
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void register(final StateStore store, final StateRestoreCallback stateRestoreCallback);
+    void registerStore(final StateStore store, final StateRestoreCallback stateRestoreCallback);
+
+    StateStore getStore(final String name);
 
     void flush();
 
-    void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
-                                              final InternalProcessorContext processorContext);
+    void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets);
 
-    void close(final boolean clean) throws IOException;
+    void checkpoint();
 
+    Map<TopicPartition, Long> changelogOffsets();
+
+    void close() throws IOException;
+
+    TaskType taskType();
+
+    String changelogFor(final String storeName);
+
+    // TODO: we can remove this when consolidating global state manager into processor state manager
     StateStore getGlobalStore(final String name);
-
-    StateStore getStore(final String name);
 }

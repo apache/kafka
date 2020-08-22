@@ -134,14 +134,14 @@ public final class SessionWindows {
     }
 
     /**
-     * Reject late events that arrive more than {@code afterWindowEnd}
+     * Reject out-of-order events that arrive more than {@code afterWindowEnd}
      * after the end of its window.
-     *
+     * <p>
      * Note that new events may change the boundaries of session windows, so aggressive
-     * close times can lead to surprising results in which a too-late event is rejected and then
+     * close times can lead to surprising results in which an out-of-order event is rejected and then
      * a subsequent event moves the window boundary forward.
      *
-     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit out-of-order events to a window.
      * @return this updated builder
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
      */

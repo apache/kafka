@@ -188,7 +188,7 @@ Hence there won't be any STDOUT output except log entries as the results are wri
 Now we can start the console producer in a separate terminal to write some input data to this topic:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
 </pre>
 
 and inspect the output of the WordCount demo application by reading from its output topic with the console consumer in a separate terminal:
@@ -212,7 +212,7 @@ This will send a new message to the input topic, where the message key is null a
 (in practice, input data for applications will typically be streaming continuously into Kafka, rather than being manually entered as we do in this quickstart):
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
 all streams lead to kafka
 </pre>
 
@@ -246,7 +246,7 @@ Enter the text line "hello kafka streams" and hit &lt;RETURN&gt;.
 Your terminal should look as follows:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
 all streams lead to kafka
 hello kafka streams
 </pre>
@@ -279,7 +279,7 @@ representing the most recent word counts as computed by the WordCount applicatio
 Let's enter one final input text line "join kafka summit" and hit &lt;RETURN&gt; in the console producer to the input topic <b>streams-plaintext-input</b> before we wrap up this quickstart:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
+&gt; bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic streams-plaintext-input
 all streams lead to kafka
 hello kafka streams
 join kafka summit

@@ -17,11 +17,16 @@
 
 package org.apache.kafka.connect.transforms;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
@@ -42,7 +47,8 @@ import static org.junit.Assert.assertTrue;
 public class CastTest {
     private final Cast<SourceRecord> xformKey = new Cast.Key<>();
     private final Cast<SourceRecord> xformValue = new Cast.Value<>();
-    private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+    private static final long MILLIS_PER_HOUR = TimeUnit.HOURS.toMillis(1);
+    private static final long MILLIS_PER_DAY = TimeUnit.DAYS.toMillis(1);
 
     @After
     public void teardown() {
@@ -320,6 +326,97 @@ public class CastTest {
         xformValue.apply(new SourceRecord(null, null, "topic", 0, null, Collections.singletonList("foo")));
     }
 
+    @Test
+    public void castLogicalToPrimitive() {
+        List<String> specParts = Arrays.asList(
+            "date_to_int32:int32",  // Cast to underlying representation
+            "timestamp_to_int64:int64",  // Cast to underlying representation
+            "time_to_int64:int64",  // Cast to wider datatype than underlying representation
+            "decimal_to_int32:int32",  // Cast to narrower datatype with data loss
+            "timestamp_to_float64:float64",  // loss of precision casting to double
+            "null_timestamp_to_int32:int32"
+        );
+
+        Date day = new Date(MILLIS_PER_DAY);
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
+            String.join(",", specParts)));
+
+        SchemaBuilder builder = SchemaBuilder.struct();
+        builder.field("date_to_int32", org.apache.kafka.connect.data.Date.SCHEMA);
+        builder.field("timestamp_to_int64", Timestamp.SCHEMA);
+        builder.field("time_to_int64", Time.SCHEMA);
+        builder.field("decimal_to_int32", Decimal.schema(new BigDecimal((long) Integer.MAX_VALUE + 1).scale()));
+        builder.field("timestamp_to_float64", Timestamp.SCHEMA);
+        builder.field("null_timestamp_to_int32", Timestamp.builder().optional().build());
+
+        Schema supportedTypesSchema = builder.build();
+
+        Struct recordValue = new Struct(supportedTypesSchema);
+        recordValue.put("date_to_int32", day);
+        recordValue.put("timestamp_to_int64", new Date(0));
+        recordValue.put("time_to_int64", new Date(1));
+        recordValue.put("decimal_to_int32", new BigDecimal((long) Integer.MAX_VALUE + 1));
+        recordValue.put("timestamp_to_float64", new Date(Long.MAX_VALUE));
+        recordValue.put("null_timestamp_to_int32", null);
+
+        SourceRecord transformed = xformValue.apply(
+            new SourceRecord(null, null, "topic", 0,
+                supportedTypesSchema, recordValue));
+
+        assertEquals(1, ((Struct) transformed.value()).get("date_to_int32"));
+        assertEquals(0L, ((Struct) transformed.value()).get("timestamp_to_int64"));
+        assertEquals(1L, ((Struct) transformed.value()).get("time_to_int64"));
+        assertEquals(Integer.MIN_VALUE, ((Struct) transformed.value()).get("decimal_to_int32"));
+        assertEquals(9.223372036854776E18, ((Struct) transformed.value()).get("timestamp_to_float64"));
+        assertNull(((Struct) transformed.value()).get("null_timestamp_to_int32"));
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Type.INT32, transformedSchema.field("date_to_int32").schema().type());
+        assertEquals(Type.INT64, transformedSchema.field("timestamp_to_int64").schema().type());
+        assertEquals(Type.INT64, transformedSchema.field("time_to_int64").schema().type());
+        assertEquals(Type.INT32, transformedSchema.field("decimal_to_int32").schema().type());
+        assertEquals(Type.FLOAT64, transformedSchema.field("timestamp_to_float64").schema().type());
+        assertEquals(Type.INT32, transformedSchema.field("null_timestamp_to_int32").schema().type());
+    }
+
+    @Test
+    public void castLogicalToString() {
+        Date date = new Date(MILLIS_PER_DAY);
+        Date time = new Date(MILLIS_PER_HOUR);
+        Date timestamp = new Date();
+
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG,
+            "date:string,decimal:string,time:string,timestamp:string"));
+
+        SchemaBuilder builder = SchemaBuilder.struct();
+        builder.field("date", org.apache.kafka.connect.data.Date.SCHEMA);
+        builder.field("decimal", Decimal.schema(new BigDecimal(1982).scale()));
+        builder.field("time", Time.SCHEMA);
+        builder.field("timestamp", Timestamp.SCHEMA);
+
+        Schema supportedTypesSchema = builder.build();
+
+        Struct recordValue = new Struct(supportedTypesSchema);
+        recordValue.put("date", date);
+        recordValue.put("decimal", new BigDecimal(1982));
+        recordValue.put("time", time);
+        recordValue.put("timestamp", timestamp);
+
+        SourceRecord transformed = xformValue.apply(
+            new SourceRecord(null, null, "topic", 0,
+                supportedTypesSchema, recordValue));
+
+        assertEquals(Values.dateFormatFor(date).format(date), ((Struct) transformed.value()).get("date"));
+        assertEquals("1982", ((Struct) transformed.value()).get("decimal"));
+        assertEquals(Values.dateFormatFor(time).format(time), ((Struct) transformed.value()).get("time"));
+        assertEquals(Values.dateFormatFor(timestamp).format(timestamp), ((Struct) transformed.value()).get("timestamp"));
+
+        Schema transformedSchema = ((Struct) transformed.value()).schema();
+        assertEquals(Type.STRING, transformedSchema.field("date").schema().type());
+        assertEquals(Type.STRING, transformedSchema.field("decimal").schema().type());
+        assertEquals(Type.STRING, transformedSchema.field("time").schema().type());
+        assertEquals(Type.STRING, transformedSchema.field("timestamp").schema().type());
+    }
 
     @Test
     public void castFieldsWithSchema() {
@@ -338,7 +435,7 @@ public class CastTest {
         builder.field("boolean", Schema.BOOLEAN_SCHEMA);
         builder.field("string", Schema.STRING_SCHEMA);
         builder.field("bigdecimal", Decimal.schema(new BigDecimal(42).scale()));
-        builder.field("date", Timestamp.SCHEMA);
+        builder.field("date", org.apache.kafka.connect.data.Date.SCHEMA);
         builder.field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA);
         builder.field("timestamp", Timestamp.SCHEMA);
         Schema supportedTypesSchema = builder.build();

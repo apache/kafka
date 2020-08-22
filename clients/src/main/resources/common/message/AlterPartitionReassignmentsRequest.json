@@ -18,6 +18,7 @@
   "type": "request",
   "name": "AlterPartitionReassignmentsRequest",
   "validVersions": "0",
+  "flexibleVersions": "0+",
   "fields": [
     { "name": "TimeoutMs", "type": "int32", "versions": "0+", "default": "60000",
       "about": "The time in ms to wait for the request to complete." },

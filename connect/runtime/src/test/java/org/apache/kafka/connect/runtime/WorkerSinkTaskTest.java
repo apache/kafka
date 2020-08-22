@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Arrays;
+import java.util.Iterator;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -25,11 +27,16 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
@@ -42,11 +49,14 @@ import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.CaptureType;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
+import org.easymock.IExpectationSetters;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -77,6 +87,7 @@ import java.util.regex.Pattern;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -136,6 +147,8 @@ public class WorkerSinkTaskTest {
     @Mock
     private TaskStatus.Listener statusListener;
     @Mock
+    private StatusBackingStore statusBackingStore;
+    @Mock
     private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
     private Capture<Pattern> topicsRegex = EasyMock.newCapture();
@@ -162,11 +175,15 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState) {
+        createTask(initialState, keyConverter, valueConverter, headerConverter);
+    }
+
+    private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter) {
         workerTask = new WorkerSinkTask(
             taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
             keyConverter, valueConverter, headerConverter,
             transformationChain, consumer, pluginLoader, time,
-            RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR, null, statusBackingStore);
     }
 
     @After
@@ -179,6 +196,7 @@ public class WorkerSinkTaskTest {
         createTask(TargetState.PAUSED);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         Set<TopicPartition> partitions = new HashSet<>(asList(TOPIC_PARTITION, TOPIC_PARTITION2));
@@ -207,6 +225,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
@@ -301,6 +320,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         // If a retriable exception is thrown, we should redeliver the same batch, pausing the consumer in the meantime
@@ -377,6 +397,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         expectRebalanceRevocationError(exception);
 
@@ -402,6 +423,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         expectRebalanceAssignmentError(exception);
 
@@ -425,7 +447,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
-
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
@@ -515,11 +537,65 @@ public class WorkerSinkTaskTest {
     }
 
     @Test
+    public void testWakeupNotThrownDuringShutdown() throws Exception {
+        createTask(initialState);
+
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+        expectPollInitialAssignment();
+
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+            @Override
+            public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                // stop the task during its second iteration
+                workerTask.stop();
+                return new ConsumerRecords<>(Collections.emptyMap());
+            }
+        });
+        consumer.wakeup();
+        EasyMock.expectLastCall();
+
+        sinkTask.put(EasyMock.eq(Collections.emptyList()));
+        EasyMock.expectLastCall();
+
+        final Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(TOPIC_PARTITION, new OffsetAndMetadata(FIRST_OFFSET + 1));
+        offsets.put(TOPIC_PARTITION2, new OffsetAndMetadata(FIRST_OFFSET));
+        sinkTask.preCommit(offsets);
+        EasyMock.expectLastCall().andReturn(offsets);
+
+        sinkTask.close(EasyMock.anyObject());
+        PowerMock.expectLastCall();
+
+        // fail the first time
+        consumer.commitSync(EasyMock.eq(offsets));
+        EasyMock.expectLastCall().andThrow(new WakeupException());
+
+        // and succeed the second time
+        consumer.commitSync(EasyMock.eq(offsets));
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.execute();
+
+        assertEquals(0, workerTask.commitFailures());
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testRequestCommit() throws Exception {
         createTask(initialState);
 
         expectInitializeTask();
-
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
 
         expectConsumerPoll(1);
@@ -625,6 +701,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // iter 1
         expectPollInitialAssignment();
@@ -692,6 +769,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // iter 1
         expectPollInitialAssignment();
@@ -742,6 +820,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // iter 1
         expectPollInitialAssignment();
@@ -833,6 +912,90 @@ public class WorkerSinkTaskTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testSinkTasksHandleCloseErrors() throws Exception {
+        createTask(initialState);
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+
+        // Put one message through the task to get some offsets to commit
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.anyObject());
+        PowerMock.expectLastCall().andVoid();
+
+        // Stop the task during the next put
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.anyObject());
+        PowerMock.expectLastCall().andAnswer(() -> {
+            workerTask.stop();
+            return null;
+        });
+
+        consumer.wakeup();
+        PowerMock.expectLastCall();
+
+        // Throw another exception while closing the task's assignment
+        EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
+            .andStubReturn(Collections.emptyMap());
+        Throwable closeException = new RuntimeException();
+        sinkTask.close(EasyMock.anyObject());
+        PowerMock.expectLastCall().andThrow(closeException);
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        try {
+            workerTask.execute();
+            fail("workerTask.execute should have thrown an exception");
+        } catch (RuntimeException e) {
+            PowerMock.verifyAll();
+            assertSame("Exception from close should propagate as-is", closeException, e);
+        }
+    }
+
+    @Test
+    public void testSuppressCloseErrors() throws Exception {
+        createTask(initialState);
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+
+        // Put one message through the task to get some offsets to commit
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        sinkTask.put(EasyMock.anyObject());
+        PowerMock.expectLastCall().andVoid();
+
+        // Throw an exception on the next put to trigger shutdown behavior
+        // This exception is the true "cause" of the failure
+        expectConsumerPoll(1);
+        expectConversionAndTransformation(1);
+        Throwable putException = new RuntimeException();
+        sinkTask.put(EasyMock.anyObject());
+        PowerMock.expectLastCall().andThrow(putException);
+
+        // Throw another exception while closing the task's assignment
+        EasyMock.expect(sinkTask.preCommit(EasyMock.anyObject()))
+            .andStubReturn(Collections.emptyMap());
+        Throwable closeException = new RuntimeException();
+        sinkTask.close(EasyMock.anyObject());
+        PowerMock.expectLastCall().andThrow(closeException);
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        try {
+            workerTask.execute();
+            fail("workerTask.execute should have thrown an exception");
+        } catch (ConnectException e) {
+            PowerMock.verifyAll();
+            assertSame("Exception from put should be the cause", putException, e.getCause());
+            assertTrue("Exception from close should be suppressed", e.getSuppressed().length > 0);
+            assertSame(closeException, e.getSuppressed()[0]);
+        }
+    }
+
     // Verify that when commitAsync is called but the supplied callback is not called by the consumer before a
     // rebalance occurs, the async callback does not reset the last committed offset from the rebalance.
     // See KAFKA-5731 for more information.
@@ -841,6 +1004,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         // iter 1
         expectPollInitialAssignment();
@@ -1061,6 +1225,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
 
         expectPollInitialAssignment();
 
@@ -1115,6 +1280,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME);
         expectConversionAndTransformation(1);
@@ -1147,6 +1313,7 @@ public class WorkerSinkTaskTest {
         createTask(initialState);
 
         expectInitializeTask();
+        expectTaskGetTopic(true);
         expectPollInitialAssignment();
         expectConsumerPoll(1, timestamp, timestampType);
         expectConversionAndTransformation(1);
@@ -1264,6 +1431,87 @@ public class WorkerSinkTaskTest {
         assertEquals(30, metrics.currentMetricValueAsDouble(group1.metricGroup(), "put-batch-max-time-ms"), 0.001d);
     }
 
+    @Test
+    public void testHeaders() throws Exception {
+        Headers headers = new RecordHeaders();
+        headers.add("header_key", "header_value".getBytes());
+
+        createTask(initialState);
+
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+        expectPollInitialAssignment();
+
+        expectConsumerPoll(1, headers);
+        expectConversionAndTransformation(1, null, headers);
+        sinkTask.put(EasyMock.<Collection<SinkRecord>>anyObject());
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testHeadersWithCustomConverter() throws Exception {
+        StringConverter stringConverter = new StringConverter();
+        TestConverterWithHeaders testConverter = new TestConverterWithHeaders();
+
+        createTask(initialState, stringConverter, testConverter, stringConverter);
+
+        expectInitializeTask();
+        expectTaskGetTopic(true);
+        expectPollInitialAssignment();
+
+        String keyA = "a";
+        String valueA = "Árvíztűrő tükörfúrógép";
+        Headers headersA = new RecordHeaders();
+        String encodingA = "latin2";
+        headersA.add("encoding", encodingA.getBytes());
+
+        String keyB = "b";
+        String valueB = "Тестовое сообщение";
+        Headers headersB = new RecordHeaders();
+        String encodingB = "koi8_r";
+        headersB.add("encoding", encodingB.getBytes());
+
+        expectConsumerPoll(Arrays.asList(
+            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 1, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                0L, 0, 0, keyA.getBytes(), valueA.getBytes(encodingA), headersA),
+            new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + 2, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
+                0L, 0, 0, keyB.getBytes(), valueB.getBytes(encodingB), headersB)
+        ));
+
+        expectTransformation(2, null);
+
+        Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
+        sinkTask.put(EasyMock.capture(records));
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        workerTask.initializeAndStart();
+        workerTask.iteration(); // iter 1 -- initial assignment
+        workerTask.iteration(); // iter 2 -- deliver 1 record
+
+        Iterator<SinkRecord> iterator = records.getValue().iterator();
+
+        SinkRecord recordA = iterator.next();
+        assertEquals(keyA, recordA.key());
+        assertEquals(valueA, (String) recordA.value());
+
+        SinkRecord recordB = iterator.next();
+        assertEquals(keyB, recordB.key());
+        assertEquals(valueB, (String) recordB.value());
+
+        PowerMock.verifyAll();
+    }
+
     private void expectInitializeTask() throws Exception {
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
@@ -1346,17 +1594,25 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectConsumerPoll(final int numMessages) {
-        expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE);
+        expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, emptyHeaders());
+    }
+
+    private void expectConsumerPoll(final int numMessages, Headers headers) {
+        expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE, headers);
     }
 
     private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType) {
+        expectConsumerPoll(numMessages, timestamp, timestampType, emptyHeaders());
+    }
+
+    private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType, Headers headers) {
         EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
                 new IAnswer<ConsumerRecords<byte[], byte[]>>() {
                     @Override
                     public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
                         List<ConsumerRecord<byte[], byte[]>> records = new ArrayList<>();
                         for (int i = 0; i < numMessages; i++)
-                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE));
+                            records.add(new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturnedTp1 + i, timestamp, timestampType, 0L, 0, 0, RAW_KEY, RAW_VALUE, headers));
                         recordsReturnedTp1 += numMessages;
                         return new ConsumerRecords<>(
                                 numMessages > 0 ?
@@ -1367,14 +1623,40 @@ public class WorkerSinkTaskTest {
                 });
     }
 
+    private void expectConsumerPoll(List<ConsumerRecord<byte[], byte[]>> records) {
+        EasyMock.expect(consumer.poll(Duration.ofMillis(EasyMock.anyLong()))).andAnswer(
+            new IAnswer<ConsumerRecords<byte[], byte[]>>() {
+                @Override
+                public ConsumerRecords<byte[], byte[]> answer() throws Throwable {
+                    return new ConsumerRecords<>(
+                        records.isEmpty() ?
+                            Collections.<TopicPartition, List<ConsumerRecord<byte[], byte[]>>>emptyMap() :
+                            Collections.singletonMap(new TopicPartition(TOPIC, PARTITION), records)
+                    );
+                }
+            });
+    }
+
     private void expectConversionAndTransformation(final int numMessages) {
         expectConversionAndTransformation(numMessages, null);
     }
 
     private void expectConversionAndTransformation(final int numMessages, final String topicPrefix) {
-        EasyMock.expect(keyConverter.toConnectData(TOPIC, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).times(numMessages);
-        EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).times(numMessages);
+        expectConversionAndTransformation(numMessages, topicPrefix, emptyHeaders());
+    }
 
+    private void expectConversionAndTransformation(final int numMessages, final String topicPrefix, final Headers headers) {
+        EasyMock.expect(keyConverter.toConnectData(TOPIC, headers, RAW_KEY)).andReturn(new SchemaAndValue(KEY_SCHEMA, KEY)).times(numMessages);
+        EasyMock.expect(valueConverter.toConnectData(TOPIC, headers, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).times(numMessages);
+
+        for (Header header : headers) {
+            EasyMock.expect(headerConverter.toConnectHeader(TOPIC, header.key(), header.value())).andReturn(new SchemaAndValue(VALUE_SCHEMA, new String(header.value()))).times(1);
+        }
+
+        expectTransformation(numMessages, topicPrefix);
+    }
+
+    private void expectTransformation(final int numMessages, final String topicPrefix) {
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
         EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture)))
                 .andAnswer(new IAnswer<SinkRecord>() {
@@ -1389,13 +1671,36 @@ public class WorkerSinkTaskTest {
                                        origRecord.key(),
                                        origRecord.valueSchema(),
                                        origRecord.value(),
-                                       origRecord.timestamp()
+                                       origRecord.timestamp(),
+                                       origRecord.headers()
                                )
                                : origRecord;
                     }
                 }).times(numMessages);
     }
 
+    private void expectTaskGetTopic(boolean anyTimes) {
+        final Capture<String> connectorCapture = EasyMock.newCapture();
+        final Capture<String> topicCapture = EasyMock.newCapture();
+        IExpectationSetters<TopicStatus> expect = EasyMock.expect(statusBackingStore.getTopic(
+                EasyMock.capture(connectorCapture),
+                EasyMock.capture(topicCapture)));
+        if (anyTimes) {
+            expect.andStubAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        } else {
+            expect.andAnswer(() -> new TopicStatus(
+                    topicCapture.getValue(),
+                    new ConnectorTaskId(connectorCapture.getValue(), 0),
+                    Time.SYSTEM.milliseconds()));
+        }
+        if (connectorCapture.hasCaptured() && topicCapture.hasCaptured()) {
+            assertEquals("job", connectorCapture.getValue());
+            assertEquals(TOPIC, topicCapture.getValue());
+        }
+    }
 
     private void assertSinkMetricValue(String name, double expected) {
         MetricGroup sinkTaskGroup = workerTask.sinkTaskMetricsGroup().metricGroup();
@@ -1470,6 +1775,10 @@ public class WorkerSinkTaskTest {
         double readTotal = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-read-total");
         double sendRate = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-send-rate");
         double sendTotal = metrics.currentMetricValueAsDouble(sinkTaskGroup, "sink-record-send-total");
+    }
+
+    private RecordHeaders emptyHeaders() {
+        return new RecordHeaders();
     }
 
     private abstract static class TestSinkTask extends SinkTask  {

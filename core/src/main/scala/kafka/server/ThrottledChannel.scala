@@ -33,9 +33,11 @@ import org.apache.kafka.common.utils.Time
   * @param throttleTimeMs Delay associated with this request
   * @param channelThrottlingCallback Callback for channel throttling
   */
-class ThrottledChannel(val request: RequestChannel.Request, val time: Time, val throttleTimeMs: Int, channelThrottlingCallback: Response => Unit)
+class ThrottledChannel(val request: RequestChannel.Request, val time: Time, val throttleTimeMs: Int,
+                       channelThrottlingCallback: Response => Unit)
   extends Delayed with Logging {
-  var endTime = time.milliseconds + throttleTimeMs
+
+  private val endTimeNanos = time.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(throttleTimeMs)
 
   // Notify the socket server that throttling has started for this channel.
   channelThrottlingCallback(new RequestChannel.StartThrottlingResponse(request))
@@ -47,13 +49,11 @@ class ThrottledChannel(val request: RequestChannel.Request, val time: Time, val 
   }
 
   override def getDelay(unit: TimeUnit): Long = {
-    unit.convert(endTime - time.milliseconds, TimeUnit.MILLISECONDS)
+    unit.convert(endTimeNanos - time.nanoseconds(), TimeUnit.NANOSECONDS)
   }
 
   override def compareTo(d: Delayed): Int = {
     val other = d.asInstanceOf[ThrottledChannel]
-    if (this.endTime < other.endTime) -1
-    else if (this.endTime > other.endTime) 1
-    else 0
+    java.lang.Long.compare(this.endTimeNanos, other.endTimeNanos)
   }
 }

@@ -19,8 +19,8 @@ package org.apache.kafka.trogdor.task;
 
 import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.trogdor.common.Platform;
-import org.apache.kafka.trogdor.common.ThreadUtils;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;

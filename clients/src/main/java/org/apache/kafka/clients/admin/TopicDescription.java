@@ -33,7 +33,7 @@ public class TopicDescription {
     private final String name;
     private final boolean internal;
     private final List<TopicPartitionInfo> partitions;
-    private Set<AclOperation> authorizedOperations;
+    private final Set<AclOperation> authorizedOperations;
 
     @Override
     public boolean equals(final Object o) {
@@ -72,7 +72,7 @@ public class TopicDescription {
      *                   leadership and replica information for that partition.
      * @param authorizedOperations authorized operations for this topic, or null if this is not known.
      */
-    TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions,
+    public TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions,
                             Set<AclOperation> authorizedOperations) {
         this.name = name;
         this.internal = internal;

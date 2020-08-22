@@ -44,9 +44,10 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 public class RocksDBMetricsTest {
 
     private static final String STATE_LEVEL_GROUP = "stream-state-metrics";
-    private final String taskName = "task";
-    private final String storeType = "test-state-id";
-    private final String storeName = "store";
+    private static final String THREAD_ID = "test-thread";
+    private static final String TASK_ID = "test-task";
+    private static final String STORE_TYPE = "test-store-type";
+    private static final String STORE_NAME = "store";
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
     private final StreamsMetricsImpl streamsMetrics = createStrictMock(StreamsMetricsImpl.class);
@@ -204,17 +205,14 @@ public class RocksDBMetricsTest {
     public void shouldGetNumberOfOpenFilesSensor() {
         final String metricNamePrefix = "number-open-files";
         final String description = "Number of currently open files";
-        verifyValueSensor(metricNamePrefix, description, RocksDBMetrics::numberOfOpenFilesSensor);
+        verifySumSensor(metricNamePrefix, false, description, RocksDBMetrics::numberOfOpenFilesSensor);
     }
 
     @Test
     public void shouldGetNumberOfFilesErrors() {
         final String metricNamePrefix = "number-file-errors";
         final String description = "Total number of file errors occurred";
-        setupStreamsMetricsMock(metricNamePrefix);
-        StreamsMetricsImpl.addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
-
-        replayCallAndVerify(RocksDBMetrics::numberOfFileErrorsSensor);
+        verifySumSensor(metricNamePrefix, true, description, RocksDBMetrics::numberOfFileErrorsSensor);
     }
 
     private void verifyRateAndTotalSensor(final String metricNamePrefix,
@@ -252,18 +250,35 @@ public class RocksDBMetricsTest {
         replayCallAndVerify(sensorCreator);
     }
 
+    private void verifySumSensor(final String metricNamePrefix,
+                                 final boolean withSuffix,
+                                 final String description,
+                                 final SensorCreator sensorCreator) {
+        setupStreamsMetricsMock(metricNamePrefix);
+        if (withSuffix) {
+            StreamsMetricsImpl.addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, description);
+        } else {
+            StreamsMetricsImpl
+                .addSumMetricToSensor(sensor, STATE_LEVEL_GROUP, tags, metricNamePrefix, withSuffix, description);
+        }
+
+        replayCallAndVerify(sensorCreator);
+    }
+
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.storeLevelSensor(
-            taskName,
-            storeName,
+            THREAD_ID,
+            TASK_ID,
+            STORE_NAME,
             metricNamePrefix,
             RecordingLevel.DEBUG
         )).andReturn(sensor);
         expect(streamsMetrics.storeLevelTagMap(
-            taskName,
-            storeType,
-            storeName
+            THREAD_ID,
+            TASK_ID,
+            STORE_TYPE,
+            STORE_NAME
         )).andReturn(tags);
     }
 
@@ -272,7 +287,7 @@ public class RocksDBMetricsTest {
         replay(StreamsMetricsImpl.class);
 
         final Sensor sensor =
-            sensorCreator.sensor(streamsMetrics, new RocksDBMetricContext(taskName, storeType, storeName));
+            sensorCreator.sensor(streamsMetrics, new RocksDBMetricContext(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME));
 
         verifyAll();
         verify(StreamsMetricsImpl.class);

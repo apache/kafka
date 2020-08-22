@@ -31,6 +31,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -42,8 +43,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
@@ -81,7 +80,7 @@ public final class RecordAccumulator {
     private final ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches;
     private final IncompleteBatches incomplete;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
-    private final Map<TopicPartition, Long> muted;
+    private final Set<TopicPartition> muted;
     private int drainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
@@ -128,7 +127,7 @@ public final class RecordAccumulator {
         this.batches = new CopyOnWriteMap<>();
         this.free = bufferPool;
         this.incomplete = new IncompleteBatches();
-        this.muted = new HashMap<>();
+        this.muted = new HashSet<>();
         this.time = time;
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
@@ -159,11 +158,6 @@ public final class RecordAccumulator {
             }
         };
         metrics.addMetric(metricName, availableBytes);
-
-        Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
-        MetricName rateMetricName = metrics.metricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion");
-        MetricName totalMetricName = metrics.metricName("buffer-exhausted-total", metricGrpName, "The total number of record sends that are dropped due to buffer exhaustion");
-        bufferExhaustedRecordSensor.add(new Meter(rateMetricName, totalMetricName));
     }
 
     /**
@@ -179,8 +173,9 @@ public final class RecordAccumulator {
      * @param headers the Headers for the record
      * @param callback The user-supplied callback to execute when the request is complete
      * @param maxTimeToBlock The maximum time in milliseconds to block for buffer memory to be available
-     * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and 
-     *                        running the the partitioner's onNewBatch method before trying to append again
+     * @param abortOnNewBatch A boolean that indicates returning before a new batch is created and
+     *                        running the partitioner's onNewBatch method before trying to append again
+     * @param nowMs The current time, in milliseconds
      */
     public RecordAppendResult append(TopicPartition tp,
                                      long timestamp,
@@ -189,7 +184,8 @@ public final class RecordAccumulator {
                                      Header[] headers,
                                      Callback callback,
                                      long maxTimeToBlock,
-                                     boolean abortOnNewBatch) throws InterruptedException {
+                                     boolean abortOnNewBatch,
+                                     long nowMs) throws InterruptedException {
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
@@ -201,7 +197,7 @@ public final class RecordAccumulator {
             synchronized (dq) {
                 if (closed)
                     throw new KafkaException("Producer closed while send in progress");
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq, nowMs);
                 if (appendResult != null)
                     return appendResult;
             }
@@ -211,26 +207,29 @@ public final class RecordAccumulator {
                 // Return a result that will cause another call to append.
                 return new RecordAppendResult(null, false, false, true);
             }
-            
+
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
             int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
-            log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
+            log.trace("Allocating a new {} byte message buffer for topic {} partition {} with remaining timeout {}ms", size, tp.topic(), tp.partition(), maxTimeToBlock);
             buffer = free.allocate(size, maxTimeToBlock);
+
+            // Update the current time in case the buffer allocation blocked above.
+            nowMs = time.milliseconds();
             synchronized (dq) {
                 // Need to check if producer is closed again after grabbing the dequeue lock.
                 if (closed)
                     throw new KafkaException("Producer closed while send in progress");
 
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq, nowMs);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     return appendResult;
                 }
 
                 MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
-                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
+                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, nowMs);
                 FutureRecordMetadata future = Objects.requireNonNull(batch.tryAppend(timestamp, key, value, headers,
-                        callback, time.milliseconds()));
+                        callback, nowMs));
 
                 dq.addLast(batch);
                 incomplete.add(batch);
@@ -263,10 +262,10 @@ public final class RecordAccumulator {
      *  if it is expired, or when the producer is closed.
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
-                                         Callback callback, Deque<ProducerBatch> deque) {
+                                         Callback callback, Deque<ProducerBatch> deque, long nowMs) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
-            FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.milliseconds());
+            FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, nowMs);
             if (future == null)
                 last.closeForRecordAppends();
             else
@@ -275,19 +274,8 @@ public final class RecordAccumulator {
         return null;
     }
 
-    private boolean isMuted(TopicPartition tp, long now) {
-        // Take care to avoid unnecessary map look-ups because this method is a hotspot if producing to a
-        // large number of partitions
-        Long throttleUntilTime = muted.get(tp);
-        if (throttleUntilTime == null)
-            return false;
-
-        if (now >= throttleUntilTime) {
-            muted.remove(tp);
-            return false;
-        }
-        
-        return true;
+    private boolean isMuted(TopicPartition tp) {
+        return muted.contains(tp);
     }
 
     public void resetNextBatchExpiryTime() {
@@ -471,7 +459,7 @@ public final class RecordAccumulator {
                         // This is a partition for which leader is not known, but messages are available to send.
                         // Note that entries are currently not removed from batches when deque is empty.
                         unknownLeaderTopics.add(part.topic());
-                    } else if (!readyNodes.contains(leader) && !isMuted(part, nowMs)) {
+                    } else if (!readyNodes.contains(leader) && !isMuted(part)) {
                         long waitedTimeMs = batch.waitedTimeMs(nowMs);
                         boolean backingOff = batch.attempts() > 0 && waitedTimeMs < retryBackoffMs;
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
@@ -519,11 +507,24 @@ public final class RecordAccumulator {
                 // we cannot send the batch until we have refreshed the producer id
                 return true;
 
-            if (!first.hasSequence() && transactionManager.hasUnresolvedSequence(first.topicPartition))
-                // Don't drain any new batches while the state of previous sequence numbers
-                // is unknown. The previous batches would be unknown if they were aborted
-                // on the client after being sent to the broker at least once.
-                return true;
+            if (!first.hasSequence()) {
+                if (transactionManager.hasInflightBatches(tp)) {
+                    // Don't drain any new batches while the partition has in-flight batches with a different epoch
+                    // and/or producer ID. Otherwise, a batch with a new epoch and sequence number
+                    // 0 could be written before earlier batches complete, which would cause out of sequence errors
+                    ProducerBatch firstInFlightBatch = transactionManager.nextBatchBySequence(tp);
+
+                    if (firstInFlightBatch != null && transactionManager.producerIdOrEpochNotMatch(firstInFlightBatch)) {
+                        return true;
+                    }
+                }
+
+                if (transactionManager.hasUnresolvedSequence(first.topicPartition))
+                    // Don't drain any new batches while the state of previous sequence numbers
+                    // is unknown. The previous batches would be unknown if they were aborted
+                    // on the client after being sent to the broker at least once.
+                    return true;
+            }
 
             int firstInFlightSequence = transactionManager.firstInFlightSequence(first.topicPartition);
             if (firstInFlightSequence != RecordBatch.NO_SEQUENCE && first.hasSequence()
@@ -549,7 +550,7 @@ public final class RecordAccumulator {
             this.drainIndex = (this.drainIndex + 1) % parts.size();
 
             // Only proceed if the partition has no in-flight batches.
-            if (isMuted(tp, now))
+            if (isMuted(tp))
                 continue;
 
             Deque<ProducerBatch> deque = getDeque(tp);
@@ -633,7 +634,7 @@ public final class RecordAccumulator {
     /**
      * The earliest absolute time a batch will expire (in milliseconds)
      */
-    public Long nextExpiryTimeMs() {
+    public long nextExpiryTimeMs() {
         return this.nextBatchExpiryTimeMs;
     }
 
@@ -784,11 +785,11 @@ public final class RecordAccumulator {
     }
 
     public void mutePartition(TopicPartition tp) {
-        muted.put(tp, Long.MAX_VALUE);
+        muted.add(tp);
     }
 
-    public void unmutePartition(TopicPartition tp, long throttleUntilTimeMs) {
-        muted.put(tp, throttleUntilTimeMs);
+    public void unmutePartition(TopicPartition tp) {
+        muted.remove(tp);
     }
 
     /**
@@ -796,6 +797,7 @@ public final class RecordAccumulator {
      */
     public void close() {
         this.closed = true;
+        this.free.close();
     }
 
     /*

@@ -249,7 +249,7 @@ public final class Agent {
         log.info("Starting agent process.");
         final Agent agent = new Agent(platform, Scheduler.SYSTEM, restServer, resource);
         restServer.start(resource);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        Exit.addShutdownHook("agent-shutdown-hook", () -> {
             log.warn("Running agent shutdown hook.");
             try {
                 agent.beginShutdown();
@@ -257,7 +257,7 @@ public final class Agent {
             } catch (Exception e) {
                 log.error("Got exception while running agent shutdown hook.", e);
             }
-        }));
+        });
         if (taskSpec != null) {
             TaskSpec spec = null;
             try {

@@ -28,19 +28,19 @@ import org.slf4j.Logger;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
 
 class RecordDeserializer {
-    private final SourceNode sourceNode;
-    private final DeserializationExceptionHandler deserializationExceptionHandler;
     private final Logger log;
-    private final Sensor skippedRecordSensor;
+    private final SourceNode<?, ?, ?, ?> sourceNode;
+    private final Sensor droppedRecordsSensor;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
-    RecordDeserializer(final SourceNode sourceNode,
+    RecordDeserializer(final SourceNode<?, ?, ?, ?> sourceNode,
                        final DeserializationExceptionHandler deserializationExceptionHandler,
                        final LogContext logContext,
-                       final Sensor skippedRecordsSensor) {
+                       final Sensor droppedRecordsSensor) {
         this.sourceNode = sourceNode;
         this.deserializationExceptionHandler = deserializationExceptionHandler;
         this.log = logContext.logger(RecordDeserializer.class);
-        this.skippedRecordSensor = skippedRecordsSensor;
+        this.droppedRecordsSensor = droppedRecordsSensor;
     }
 
     /**
@@ -63,7 +63,9 @@ class RecordDeserializer {
                 rawRecord.serializedKeySize(),
                 rawRecord.serializedValueSize(),
                 sourceNode.deserializeKey(rawRecord.topic(), rawRecord.headers(), rawRecord.key()),
-                sourceNode.deserializeValue(rawRecord.topic(), rawRecord.headers(), rawRecord.value()), rawRecord.headers());
+                sourceNode.deserializeValue(rawRecord.topic(), rawRecord.headers(), rawRecord.value()),
+                rawRecord.headers()
+            );
         } catch (final Exception deserializationException) {
             final DeserializationExceptionHandler.DeserializationHandlerResponse response;
             try {
@@ -90,13 +92,13 @@ class RecordDeserializer {
                     rawRecord.offset(),
                     deserializationException
                 );
-                skippedRecordSensor.record();
+                droppedRecordsSensor.record();
                 return null;
             }
         }
     }
 
-    SourceNode sourceNode() {
+    SourceNode<?, ?, ?, ?> sourceNode() {
         return sourceNode;
     }
 }

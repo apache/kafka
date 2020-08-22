@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
 
@@ -947,6 +949,33 @@ public class ConfigDef {
         }
     }
 
+    public static class CaseInsensitiveValidString implements Validator {
+
+        final Set<String> validStrings;
+
+        private CaseInsensitiveValidString(List<String> validStrings) {
+            this.validStrings = validStrings.stream()
+                .map(s -> s.toUpperCase(Locale.ROOT))
+                .collect(Collectors.toSet());
+        }
+
+        public static CaseInsensitiveValidString in(String... validStrings) {
+            return new CaseInsensitiveValidString(Arrays.asList(validStrings));
+        }
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s == null || !validStrings.contains(s.toUpperCase(Locale.ROOT))) {
+                throw new ConfigException(name, o, "String must be one of (case insensitive): " + Utils.join(validStrings, ", "));
+            }
+        }
+
+        public String toString() {
+            return "(case insensitive) [" + Utils.join(validStrings, ", ") + "]";
+        }
+    }
+
     public static class NonNullValidator implements Validator {
         @Override
         public void ensureValid(String name, Object value) {
@@ -1138,8 +1167,15 @@ public class ConfigDef {
                     String defaultValueStr = convertToString(key.defaultValue, key.type);
                     if (defaultValueStr.isEmpty())
                         return "\"\"";
-                    else
-                        return defaultValueStr;
+                    else {
+                        String suffix = "";
+                        if (key.name.endsWith(".bytes")) {
+                            suffix = niceMemoryUnits(((Number) key.defaultValue).longValue());
+                        } else if (key.name.endsWith(".ms")) {
+                            suffix = niceTimeUnits(((Number) key.defaultValue).longValue());
+                        }
+                        return defaultValueStr + suffix;
+                    }
                 } else
                     return "";
             case "Valid Values":
@@ -1149,6 +1185,50 @@ public class ConfigDef {
             default:
                 throw new RuntimeException("Can't find value for header '" + headerName + "' in " + key.name);
         }
+    }
+
+    static String niceMemoryUnits(long bytes) {
+        long value = bytes;
+        int i = 0;
+        while (value != 0 && i < 4) {
+            if (value % 1024L == 0) {
+                value /= 1024L;
+                i++;
+            } else {
+                break;
+            }
+        }
+        switch (i) {
+            case 1:
+                return " (" + value + " kibibyte" + (value == 1 ? ")" : "s)");
+            case 2:
+                return " (" + value + " mebibyte" + (value == 1 ? ")" : "s)");
+            case 3:
+                return " (" + value + " gibibyte" + (value == 1 ? ")" : "s)");
+            case 4:
+                return " (" + value + " tebibyte" + (value == 1 ? ")" : "s)");
+            default:
+                return "";
+        }
+    }
+
+    static String niceTimeUnits(long millis) {
+        long value = millis;
+        long[] divisors = {1000, 60, 60, 24};
+        String[] units = {"second", "minute", "hour", "day"};
+        int i = 0;
+        while (value != 0 && i < 4) {
+            if (value % divisors[i] == 0) {
+                value /= divisors[i];
+                i++;
+            } else {
+                break;
+            }
+        }
+        if (i > 0) {
+            return " (" + value + " " + units[i - 1] + (value > 1 ? "s)" : ")");
+        }
+        return "";
     }
 
     public String toHtmlTable() {
@@ -1407,6 +1487,83 @@ public class ConfigDef {
                 return base.visible(unprefixed(name), unprefixed(parsedConfig));
             }
         };
+    }
+
+    public String toHtml() {
+        return toHtml(Collections.emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * @param headerDepth The top level header depth in the generated HTML.
+     * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
+     */
+    public String toHtml(int headerDepth, Function<String, String> idGenerator) {
+        return toHtml(headerDepth, idGenerator, Collections.emptyMap());
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping.
+     */
+    public String toHtml(Map<String, String> dynamicUpdateModes) {
+        return toHtml(4, Function.identity(), dynamicUpdateModes);
+    }
+
+    /**
+     * Converts this config into an HTML list that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" label
+     * will be included in the config details with the value of the update mode. Default
+     * mode is "read-only".
+     * @param headerDepth The top level header depth in the generated HTML.
+     * @param idGenerator A function for computing the HTML id attribute in the generated HTML from a given config name.
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping.
+     */
+    public String toHtml(int headerDepth, Function<String, String> idGenerator,
+                         Map<String, String> dynamicUpdateModes) {
+        boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
+        List<ConfigKey> configs = sortedConfigs();
+        StringBuilder b = new StringBuilder();
+        b.append("<ul class=\"config-list\">\n");
+        for (ConfigKey key : configs) {
+            if (key.internalConfig) {
+                continue;
+            }
+            b.append("<li>\n");
+            b.append(String.format("<h%1$d>" +
+                    "<a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
+                    "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
+            b.append("<p>");
+            b.append(key.documentation.replaceAll("\n", "<br>"));
+            b.append("</p>\n");
+
+            b.append("<table>" +
+                    "<tbody>\n");
+            for (String detail : headers()) {
+                if (detail.equals("Name") || detail.equals("Description")) continue;
+                addConfigDetail(b, detail, getConfigValue(key, detail));
+            }
+            if (hasUpdateModes) {
+                String updateMode = dynamicUpdateModes.get(key.name);
+                if (updateMode == null)
+                    updateMode = "read-only";
+                addConfigDetail(b, "Update Mode", updateMode);
+            }
+            b.append("</tbody></table>\n");
+            b.append("</li>\n");
+        }
+        b.append("</ul>\n");
+        return b.toString();
+    }
+
+    private static void addConfigDetail(StringBuilder builder, String name, String value) {
+        builder.append("<tr>" +
+                "<th>" + name + ":</th>" +
+                "<td>" + value + "</td>" +
+                "</tr>\n");
     }
 
 }

@@ -19,7 +19,7 @@ package kafka.api.test
 
 import java.util.{Collection, Collections, Properties}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import org.junit.runners.Parameterized
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized.Parameters

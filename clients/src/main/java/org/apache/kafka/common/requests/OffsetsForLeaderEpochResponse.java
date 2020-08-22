@@ -41,8 +41,8 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
  * Possible error codes:
  *
  * - {@link Errors#TOPIC_AUTHORIZATION_FAILED} If the user does not have DESCRIBE access to a requested topic
- * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker which is not a replica
- * - {@link Errors#NOT_LEADER_FOR_PARTITION} If the broker is not a leader and either the provided leader epoch
+ * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker with version < 2.6 which is not a replica
+ * - {@link Errors#NOT_LEADER_OR_FOLLOWER} If the broker is not a leader or follower and either the provided leader epoch
  *     matches the known leader epoch on the broker or is empty
  * - {@link Errors#FENCED_LEADER_EPOCH} If the epoch is lower than the broker's epoch
  * - {@link Errors#UNKNOWN_LEADER_EPOCH} If the epoch is larger than the broker's epoch
@@ -130,8 +130,9 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (EpochEndOffset response : epochEndOffsetsByPartition.values())
-            updateErrorCounts(errorCounts, response.error());
+        epochEndOffsetsByPartition.values().forEach(response ->
+            updateErrorCounts(errorCounts, response.error())
+        );
         return errorCounts;
     }
 

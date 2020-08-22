@@ -25,7 +25,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -37,8 +37,6 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 
 public class KTableMapKeysTest {
-    private final ConsumerRecordFactory<Integer, String> recordFactory =
-        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
@@ -66,13 +64,15 @@ public class KTableMapKeysTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (int i = 0; i < originalKeys.length; i++) {
-                driver.pipeInput(recordFactory.create(topic1, originalKeys[i], values[i], 5 + i * 5));
+                final TestInputTopic<Integer, String> inputTopic =
+                        driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer());
+                inputTopic.pipeInput(originalKeys[i], values[i], 5 + i * 5);
             }
         }
 
-        assertEquals(3, supplier.theCapturedProcessor().processed.size());
+        assertEquals(3, supplier.theCapturedProcessor().processed().size());
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed().get(i));
         }
     }
 }

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,7 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 SIGNAL=${SIGNAL:-TERM}
-PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
+
+if [[ $(uname -s) == "OS/390" ]]; then
+    if [ -z $JOBNAME ]; then
+        JOBNAME="ZKEESTRT"
+    fi
+    PIDS=$(ps -A -o pid,jobname,comm | grep -i $JOBNAME | grep java | grep -v grep | awk '{print $1}')
+else
+    PIDS=$(ps ax | grep java | grep -i QuorumPeerMain | grep -v grep | awk '{print $1}')
+fi
 
 if [ -z "$PIDS" ]; then
   echo "No zookeeper server to stop"

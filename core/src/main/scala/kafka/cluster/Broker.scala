@@ -21,20 +21,36 @@ import java.util
 
 import kafka.common.BrokerEndPointNotAvailableException
 import kafka.server.KafkaConfig
+import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo
 
 import scala.collection.Seq
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
+
+object Broker {
+  private[cluster] case class ServerInfo(clusterResource: ClusterResource,
+                                         brokerId: Int,
+                                         endpoints: util.List[Endpoint],
+                                         interBrokerEndpoint: Endpoint) extends AuthorizerServerInfo
+
+  def apply(id: Int, endPoints: Seq[EndPoint], rack: Option[String]): Broker = {
+    new Broker(id, endPoints, rack, emptySupportedFeatures)
+  }
+}
 
 /**
  * A Kafka broker.
- * A broker has an id, a collection of end-points, an optional rack and a listener to security protocol map.
- * Each end-point is (host, port, listenerName).
+ *
+ * @param id          a broker id
+ * @param endPoints   a collection of EndPoint. Each end-point is (host, port, listener name, security protocol).
+ * @param rack        an optional rack
+ * @param features    supported features
  */
-case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
+case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], features: Features[SupportedVersionRange]) {
 
   private val endPointsMap = endPoints.map { endPoint =>
     endPoint.listenerName -> endPoint
@@ -44,10 +60,10 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
     throw new IllegalArgumentException(s"There is more than one end point with the same listener name: ${endPoints.mkString(",")}")
 
   override def toString: String =
-    s"$id : ${endPointsMap.values.mkString("(",",",")")} : ${rack.orNull}"
+    s"$id : ${endPointsMap.values.mkString("(",",",")")} : ${rack.orNull} : $features"
 
   def this(id: Int, host: String, port: Int, listenerName: ListenerName, protocol: SecurityProtocol) = {
-    this(id, Seq(EndPoint(host, port, listenerName, protocol)), None)
+    this(id, Seq(EndPoint(host, port, listenerName, protocol)), None, emptySupportedFeatures)
   }
 
   def this(bep: BrokerEndPoint, listenerName: ListenerName, protocol: SecurityProtocol) = {
@@ -75,15 +91,8 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
 
   def toServerInfo(clusterId: String, config: KafkaConfig): AuthorizerServerInfo = {
     val clusterResource: ClusterResource = new ClusterResource(clusterId)
-    val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName)
-    val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.asInstanceOf[Endpoint]).asJava
-    BrokerEndpointInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint)
+    val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName).toJava
+    val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.toJava).asJava
+    Broker.ServerInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint)
   }
-
-  case class BrokerEndpointInfo(clusterResource: ClusterResource,
-                                brokerId: Int,
-                                endpoints: util.List[Endpoint],
-                                interBrokerEndpoint: Endpoint)
-    extends AuthorizerServerInfo
-
 }

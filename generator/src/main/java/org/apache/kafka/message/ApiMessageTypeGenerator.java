@@ -23,7 +23,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-public final class ApiMessageTypeGenerator {
+public final class ApiMessageTypeGenerator implements TypeClassGenerator {
     private final HeaderGenerator headerGenerator;
     private final CodeBuffer buffer;
     private final TreeMap<Short, ApiData> apis;
@@ -67,12 +67,18 @@ public final class ApiMessageTypeGenerator {
         }
     }
 
-    public ApiMessageTypeGenerator() {
-        this.headerGenerator = new HeaderGenerator();
+    public ApiMessageTypeGenerator(String packageName) {
+        this.headerGenerator = new HeaderGenerator(packageName);
         this.apis = new TreeMap<>();
         this.buffer = new CodeBuffer();
     }
 
+    @Override
+    public String outputName() {
+        return MessageGenerator.API_MESSAGE_TYPE_JAVA;
+    }
+
+    @Override
     public void registerMessageType(MessageSpec spec) {
         switch (spec.type()) {
             case REQUEST: {
@@ -109,7 +115,13 @@ public final class ApiMessageTypeGenerator {
         }
     }
 
-    public void generate() {
+    @Override
+    public void generateAndWrite(BufferedWriter writer) throws IOException {
+        generate();
+        write(writer);
+    }
+
+    private void generate() {
         buffer.printf("public enum ApiMessageType {%n");
         buffer.incrementIndent();
         generateEnumValues();
@@ -131,6 +143,10 @@ public final class ApiMessageTypeGenerator {
         generateAccessor("responseSchemas", "Schema[]");
         buffer.printf("%n");
         generateToString();
+        buffer.printf("%n");
+        generateHeaderVersion("request");
+        buffer.printf("%n");
+        generateHeaderVersion("response");
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
@@ -241,7 +257,77 @@ public final class ApiMessageTypeGenerator {
         buffer.printf("}%n");
     }
 
-    public void write(BufferedWriter writer) throws IOException {
+    private void generateHeaderVersion(String type) {
+        buffer.printf("public short %sHeaderVersion(short _version) {%n", type);
+        buffer.incrementIndent();
+        buffer.printf("switch (apiKey) {%n");
+        buffer.incrementIndent();
+        for (Map.Entry<Short, ApiData> entry : apis.entrySet()) {
+            short apiKey = entry.getKey();
+            ApiData apiData = entry.getValue();
+            String name = apiData.name();
+            buffer.printf("case %d: // %s%n", apiKey, MessageGenerator.capitalizeFirst(name));
+            buffer.incrementIndent();
+            if (type.equals("response") && apiKey == 18) {
+                buffer.printf("// ApiVersionsResponse always includes a v0 header.%n");
+                buffer.printf("// See KIP-511 for details.%n");
+                buffer.printf("return (short) 0;%n");
+                buffer.decrementIndent();
+                continue;
+            }
+            if (type.equals("request") && apiKey == 7) {
+                buffer.printf("// Version 0 of ControlledShutdownRequest has a non-standard request header%n");
+                buffer.printf("// which does not include clientId.  Version 1 of ControlledShutdownRequest%n");
+                buffer.printf("// and later use the standard request header.%n");
+                buffer.printf("if (_version == 0) {%n");
+                buffer.incrementIndent();
+                buffer.printf("return (short) 0;%n");
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }
+            ApiData data = entry.getValue();
+            MessageSpec spec = null;
+            if (type.equals("request")) {
+                spec = data.requestSpec;
+            } else if (type.equals("response")) {
+                spec = data.responseSpec;
+            } else {
+                throw new RuntimeException("Invalid type " + type + " for generateHeaderVersion");
+            }
+            if (spec == null) {
+                throw new RuntimeException("failed to find " + type + " for API key " + apiKey);
+            }
+            VersionConditional.forVersions(spec.flexibleVersions(),
+                spec.validVersions()).
+                ifMember(__ -> {
+                    if (type.equals("request")) {
+                        buffer.printf("return (short) 2;%n");
+                    } else {
+                        buffer.printf("return (short) 1;%n");
+                    }
+                }).
+                ifNotMember(__ -> {
+                    if (type.equals("request")) {
+                        buffer.printf("return (short) 1;%n");
+                    } else {
+                        buffer.printf("return (short) 0;%n");
+                    }
+                }).generate(buffer);
+            buffer.decrementIndent();
+        }
+        buffer.printf("default:%n");
+        buffer.incrementIndent();
+        headerGenerator.addImport(MessageGenerator.UNSUPPORTED_VERSION_EXCEPTION_CLASS);
+        buffer.printf("throw new UnsupportedVersionException(\"Unsupported API key \"" +
+            " + apiKey);%n");
+        buffer.decrementIndent();
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+        buffer.decrementIndent();
+        buffer.printf("}%n");
+    }
+
+    private void write(BufferedWriter writer) throws IOException {
         headerGenerator.buffer().write(writer);
         buffer.write(writer);
     }

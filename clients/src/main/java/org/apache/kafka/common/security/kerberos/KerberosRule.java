@@ -46,6 +46,7 @@ class KerberosRule {
     private final String toPattern;
     private final boolean repeat;
     private final boolean toLowerCase;
+    private final boolean toUpperCase;
 
     KerberosRule(String defaultRealm) {
         this.defaultRealm = defaultRealm;
@@ -57,10 +58,11 @@ class KerberosRule {
         toPattern = null;
         repeat = false;
         toLowerCase = false;
+        toUpperCase = false;
     }
 
     KerberosRule(String defaultRealm, int numOfComponents, String format, String match, String fromPattern,
-                 String toPattern, boolean repeat, boolean toLowerCase) {
+                 String toPattern, boolean repeat, boolean toLowerCase, boolean toUpperCase) {
         this.defaultRealm = defaultRealm;
         isDefault = false;
         this.numOfComponents = numOfComponents;
@@ -71,6 +73,7 @@ class KerberosRule {
         this.toPattern = toPattern;
         this.repeat = repeat;
         this.toLowerCase = toLowerCase;
+        this.toUpperCase = toUpperCase;
     }
 
     @Override
@@ -101,6 +104,9 @@ class KerberosRule {
             }
             if (toLowerCase) {
                 buf.append("/L");
+            }
+            if (toUpperCase) {
+                buf.append("/U");
             }
         }
         return buf.toString();
@@ -191,7 +197,10 @@ class KerberosRule {
         }
         if (toLowerCase && result != null) {
             result = result.toLowerCase(Locale.ENGLISH);
+        } else if (toUpperCase && result != null) {
+            result = result.toUpperCase(Locale.ENGLISH);
         }
+
         return result;
     }
 }

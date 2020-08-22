@@ -33,7 +33,7 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.Buffer
 import kafka.server.QuotaType
 import kafka.server.KafkaServer
@@ -173,7 +173,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @Test
   def testMaxPollIntervalMs(): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 3000.toString)
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
 
@@ -187,9 +187,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
 
-    Thread.sleep(3500)
+    // after we extend longer than max.poll a rebalance should be triggered
+    // NOTE we need to have a relatively much larger value than max.poll to let heartbeat expired for sure
+    Thread.sleep(3000)
 
-    // we should fall out of the group and need to rebalance
     awaitRebalance(consumer, listener)
     assertEquals(2, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
@@ -278,8 +279,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // now we should see the committed positions from another consumer
     val anotherConsumer = createConsumer()
-    assertEquals(300, anotherConsumer.committed(tp).offset)
-    assertEquals(500, anotherConsumer.committed(tp2).offset)
+    assertEquals(300, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
   @Test
@@ -305,8 +306,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // now we should see the committed positions from another consumer
     val anotherConsumer = createConsumer()
-    assertEquals(300, anotherConsumer.committed(tp).offset)
-    assertEquals(500, anotherConsumer.committed(tp2).offset)
+    assertEquals(300, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
   @Test
@@ -480,17 +481,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // sync commit
     val syncMetadata = new OffsetAndMetadata(5, Optional.of(15), "foo")
     consumer.commitSync(Map((tp, syncMetadata)).asJava)
-    assertEquals(syncMetadata, consumer.committed(tp))
+    assertEquals(syncMetadata, consumer.committed(Set(tp).asJava).get(tp))
 
     // async commit
     val asyncMetadata = new OffsetAndMetadata(10, "bar")
     sendAndAwaitAsyncCommit(consumer, Some(Map(tp -> asyncMetadata)))
-    assertEquals(asyncMetadata, consumer.committed(tp))
+    assertEquals(asyncMetadata, consumer.committed(Set(tp).asJava).get(tp))
 
     // handle null metadata
     val nullMetadata = new OffsetAndMetadata(5, null)
     consumer.commitSync(Map(tp -> nullMetadata).asJava)
-    assertEquals(nullMetadata, consumer.committed(tp))
+    assertEquals(nullMetadata, consumer.committed(Set(tp).asJava).get(tp))
   }
 
   @Test
@@ -509,7 +510,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     assertEquals(None, callback.lastError)
     assertEquals(count, callback.successCount)
-    assertEquals(new OffsetAndMetadata(count), consumer.committed(tp))
+    assertEquals(new OffsetAndMetadata(count), consumer.committed(Set(tp).asJava).get(tp))
   }
 
   @Test
@@ -579,7 +580,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
 
     consumer.seekToBeginning(List(tp).asJava)
-    assertEquals(0, consumer.position(tp), 0)
+    assertEquals(0L, consumer.position(tp))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0)
 
     consumer.seek(tp, mid)
@@ -597,7 +598,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
 
     consumer.seekToBeginning(List(tp2).asJava)
-    assertEquals(0, consumer.position(tp2), 0)
+    assertEquals(0L, consumer.position(tp2))
     consumeAndVerifyRecords(consumer, numRecords = 1, startingOffset = 0, tp = tp2)
 
     consumer.seek(tp2, mid)
@@ -622,24 +623,25 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     sendRecords(producer, numRecords = 5, tp)
 
+    val topicPartition = new TopicPartition(topic, 15)
     val consumer = createConsumer()
-    assertNull(consumer.committed(new TopicPartition(topic, 15)))
+    assertNull(consumer.committed(Set(topicPartition).asJava).get(topicPartition))
 
     // position() on a partition that we aren't subscribed to throws an exception
     intercept[IllegalStateException] {
-      consumer.position(new TopicPartition(topic, 15))
+      consumer.position(topicPartition)
     }
 
     consumer.assign(List(tp).asJava)
 
     assertEquals("position() on a partition that we are subscribed to should reset the offset", 0L, consumer.position(tp))
     consumer.commitSync()
-    assertEquals(0L, consumer.committed(tp).offset)
+    assertEquals(0L, consumer.committed(Set(tp).asJava).get(tp).offset)
 
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 0)
     assertEquals("After consuming 5 records, position should be 5", 5L, consumer.position(tp))
     consumer.commitSync()
-    assertEquals("Committed offset should be returned", 5L, consumer.committed(tp).offset)
+    assertEquals("Committed offset should be returned", 5L, consumer.committed(Set(tp).asJava).get(tp).offset)
 
     sendRecords(producer, numRecords = 1, tp)
 
@@ -676,9 +678,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, totalRecords, tp)
     consumer.assign(List(tp).asJava)
 
-    // poll should fail because there is no offset reset strategy set
+    // poll should fail because there is no offset reset strategy set.
+    // we fail only when resetting positions after coordinator is known, so using a long timeout.
     intercept[NoOffsetForPartitionException] {
-      consumer.poll(Duration.ofMillis(50))
+      consumer.poll(Duration.ofMillis(15000))
     }
 
     // seek to out of range position
@@ -798,7 +801,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, partitions.toSet)
 
     val producer = createProducer()
-    val producerRecords = partitions.flatMap(sendRecords(producer, partitionCount, _))
+    val producerRecords = partitions.flatMap(sendRecords(producer, numRecords = 15, _))
     val consumerRecords = consumeRecords(consumer, producerRecords.size)
 
     val expected = producerRecords.map { record =>
@@ -1024,12 +1027,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // commit sync and verify onCommit is called
     val commitCountBefore = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue
     testConsumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava)
-    assertEquals(2, testConsumer.committed(tp).offset)
+    assertEquals(2, testConsumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
     // commit async and verify onCommit is called
     sendAndAwaitAsyncCommit(testConsumer, Some(Map(tp -> new OffsetAndMetadata(5L))))
-    assertEquals(5, testConsumer.committed(tp).offset)
+    assertEquals(5, testConsumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
     testConsumer.close()
@@ -1076,8 +1079,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                                     rebalanceListener)
 
     // after rebalancing, we should have reset to the committed positions
-    assertEquals(10, testConsumer.committed(tp).offset)
-    assertEquals(20, testConsumer.committed(tp2).offset)
+    assertEquals(10, testConsumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(20, testConsumer.committed(Set(tp2).asJava).get(tp2).offset)
     assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance)
 
     // verify commits are intercepted on close
@@ -1321,19 +1324,19 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val pos1 = consumer.position(tp)
     val pos2 = consumer.position(tp2)
     consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
-    assertEquals(3, consumer.committed(tp).offset)
-    assertNull(consumer.committed(tp2))
+    assertEquals(3, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertNull(consumer.committed(Set(tp2).asJava).get(tp2))
 
     // Positions should not change
     assertEquals(pos1, consumer.position(tp))
     assertEquals(pos2, consumer.position(tp2))
     consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
-    assertEquals(3, consumer.committed(tp).offset)
-    assertEquals(5, consumer.committed(tp2).offset)
+    assertEquals(3, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(5, consumer.committed(Set(tp2).asJava).get(tp2).offset)
 
     // Using async should pick up the committed changes after commit completes
     sendAndAwaitAsyncCommit(consumer, Some(Map(tp2 -> new OffsetAndMetadata(7L))))
-    assertEquals(7, consumer.committed(tp2).offset)
+    assertEquals(7, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
   @Test
@@ -1371,8 +1374,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, newAssignment)
 
     // after rebalancing, we should have reset to the committed positions
-    assertEquals(300, consumer.committed(tp).offset)
-    assertEquals(500, consumer.committed(tp2).offset)
+    assertEquals(300, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
   @Test
@@ -1510,7 +1513,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.assign(List(tp2).asJava)
     awaitNonEmptyRecords(consumer, tp2)
-    assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
+    assertNull(consumer.metrics.get(new MetricName(tp.toString + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags)))
   }
 
@@ -1599,7 +1602,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
                                   "",
                                   "user", "",
                                   "client-id", clientId)
-        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+        assertNull("Metric should not have been created " + metricName, broker.metrics.metric(metricName))
     }
     servers.foreach(assertNoMetric(_, "byte-rate", QuotaType.Produce, producerClientId))
     servers.foreach(assertNoMetric(_, "throttle-time", QuotaType.Produce, producerClientId))
@@ -1613,9 +1616,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     def assertNoExemptRequestMetric(broker: KafkaServer): Unit = {
         val metricName = broker.metrics.metricName("exempt-request-time", QuotaType.Request.toString, "")
-        assertNull("Metric should not hanve been created " + metricName, broker.metrics.metric(metricName))
+        assertNull("Metric should not have been created " + metricName, broker.metrics.metric(metricName))
     }
-    servers.foreach(assertNoExemptRequestMetric(_))
+    servers.foreach(assertNoExemptRequestMetric)
   }
 
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
@@ -1808,7 +1811,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
 
     try {
-      consumer2.committed(tp)
+      consumer2.committed(Set(tp).asJava)
       fail("Expected committed offset fetch to fail due to null group id")
     } catch {
       case e: InvalidGroupIdException => // OK

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -173,7 +175,7 @@ public class DefaultRecordBatchTest {
         assertEquals(actualSize, DefaultRecordBatch.sizeInBytes(Arrays.asList(records)));
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test(expected = CorruptRecordException.class)
     public void testInvalidRecordSize() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 CompressionType.NONE, TimestampType.CREATE_TIME,
@@ -233,7 +235,7 @@ public class DefaultRecordBatchTest {
         }
     }
 
-    @Test(expected = InvalidRecordException.class)
+    @Test(expected = CorruptRecordException.class)
     public void testInvalidCrc() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
                 CompressionType.NONE, TimestampType.CREATE_TIME,
@@ -406,6 +408,12 @@ public class DefaultRecordBatchTest {
         assertEquals(10, DefaultRecordBatch.incrementSequence(5, 5));
         assertEquals(0, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE, 1));
         assertEquals(4, DefaultRecordBatch.incrementSequence(Integer.MAX_VALUE - 5, 10));
+    }
+
+    @Test
+    public void testDecrementSequence() {
+        assertEquals(0, DefaultRecordBatch.decrementSequence(5, 5));
+        assertEquals(Integer.MAX_VALUE, DefaultRecordBatch.decrementSequence(0, 1));
     }
 
     private static DefaultRecordBatch recordsWithInvalidRecordCount(Byte magicValue, long timestamp,

@@ -68,7 +68,7 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
         try {
             iter.close();
         } finally {
-            metrics.recordLatency(sensor, startNs, time.nanoseconds());
+            sensor.record(time.nanoseconds() - startNs);
         }
     }
 

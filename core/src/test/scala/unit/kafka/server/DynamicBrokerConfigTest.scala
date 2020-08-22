@@ -19,7 +19,7 @@ package kafka.server
 
 import java.{lang, util}
 import java.util.Properties
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient
@@ -33,7 +33,7 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.Assertions.intercept
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.Set
 
 class DynamicBrokerConfigTest {
@@ -197,6 +197,15 @@ class DynamicBrokerConfigTest {
     verifyConfigUpdate(listenerMaxConnectionsProp, "10", perBrokerConfig = false, expectFailure = false)
   }
 
+  @Test
+  def testConnectionRateQuota(): Unit = {
+    verifyConfigUpdate(KafkaConfig.MaxConnectionCreationRateProp, "110", perBrokerConfig = true, expectFailure = false)
+    verifyConfigUpdate(KafkaConfig.MaxConnectionCreationRateProp, "120", perBrokerConfig = false, expectFailure = false)
+    val listenerMaxConnectionsProp = s"listener.name.external.${KafkaConfig.MaxConnectionCreationRateProp}"
+    verifyConfigUpdate(listenerMaxConnectionsProp, "20", perBrokerConfig = true, expectFailure = false)
+    verifyConfigUpdate(listenerMaxConnectionsProp, "30", perBrokerConfig = false, expectFailure = false)
+  }
+
   private def verifyConfigUpdate(name: String, value: Object, perBrokerConfig: Boolean, expectFailure: Boolean): Unit = {
     val configProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     configProps.put(KafkaConfig.PasswordEncoderSecretProp, "broker.secret")
@@ -332,13 +341,13 @@ class DynamicBrokerConfigTest {
 
     class TestAuthorizer extends Authorizer with Reconfigurable {
       @volatile var superUsers = ""
-      override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
-      override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, CompletableFuture[Void]] = Map.empty.asJava
-      override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[AclDeleteResult] = null
-      override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[AclCreateResult] = null
+      override def start(serverInfo: AuthorizerServerInfo): util.Map[Endpoint, _ <: CompletionStage[Void]] = Map.empty.asJava
       override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = null
-      override def configure(configs: util.Map[String, _]): Unit = {}
+      override def createAcls(requestContext: AuthorizableRequestContext, aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = null
+      override def deleteAcls(requestContext: AuthorizableRequestContext, aclBindingFilters: util.List[AclBindingFilter]): util.List[_ <: CompletionStage[AclDeleteResult]] = null
+      override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = null
       override def close(): Unit = {}
+      override def configure(configs: util.Map[String, _]): Unit = {}
       override def reconfigurableConfigs(): util.Set[String] = Set("super.users").asJava
       override def validateReconfiguration(configs: util.Map[String, _]): Unit = {}
       override def reconfigure(configs: util.Map[String, _]): Unit = {

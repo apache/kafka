@@ -17,20 +17,24 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiPredicate;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
@@ -39,18 +43,18 @@ import java.util.stream.Collectors;
  */
 public class MetadataCache {
     private final String clusterId;
-    private final List<Node> nodes;
+    private final Map<Integer, Node> nodes;
     private final Set<String> unauthorizedTopics;
     private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
     private final Node controller;
-    private final Map<TopicPartition, PartitionInfoAndEpoch> metadataByPartition;
+    private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
 
     private Cluster clusterInstance;
 
     MetadataCache(String clusterId,
-                  List<Node> nodes,
-                  Collection<PartitionInfoAndEpoch> partitions,
+                  Map<Integer, Node> nodes,
+                  Collection<PartitionMetadata> partitions,
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
                   Set<String> internalTopics,
@@ -58,14 +62,14 @@ public class MetadataCache {
         this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, null);
     }
 
-    MetadataCache(String clusterId,
-                  List<Node> nodes,
-                  Collection<PartitionInfoAndEpoch> partitions,
-                  Set<String> unauthorizedTopics,
-                  Set<String> invalidTopics,
-                  Set<String> internalTopics,
-                  Node controller,
-                  Cluster clusterInstance) {
+    private MetadataCache(String clusterId,
+                          Map<Integer, Node> nodes,
+                          Collection<PartitionMetadata> partitions,
+                          Set<String> unauthorizedTopics,
+                          Set<String> invalidTopics,
+                          Set<String> internalTopics,
+                          Node controller,
+                          Cluster clusterInstance) {
         this.clusterId = clusterId;
         this.nodes = nodes;
         this.unauthorizedTopics = unauthorizedTopics;
@@ -74,8 +78,8 @@ public class MetadataCache {
         this.controller = controller;
 
         this.metadataByPartition = new HashMap<>(partitions.size());
-        for (PartitionInfoAndEpoch p : partitions) {
-            this.metadataByPartition.put(new TopicPartition(p.partitionInfo().topic(), p.partitionInfo().partition()), p);
+        for (PartitionMetadata p : partitions) {
+            this.metadataByPartition.put(p.topicPartition, p);
         }
 
         if (clusterInstance == null) {
@@ -85,16 +89,12 @@ public class MetadataCache {
         }
     }
 
-    /**
-     * Return the cached PartitionInfo iff it was for the given epoch
-     */
-    Optional<PartitionInfoAndEpoch> getPartitionInfoHavingEpoch(TopicPartition topicPartition, int epoch) {
-        PartitionInfoAndEpoch infoAndEpoch = metadataByPartition.get(topicPartition);
-        return Optional.ofNullable(infoAndEpoch).filter(infoEpoch -> infoEpoch.epoch() == epoch);
+    Optional<PartitionMetadata> partitionMetadata(TopicPartition topicPartition) {
+        return Optional.ofNullable(metadataByPartition.get(topicPartition));
     }
 
-    Optional<PartitionInfoAndEpoch> getPartitionInfo(TopicPartition topicPartition) {
-        return Optional.ofNullable(metadataByPartition.get(topicPartition));
+    Optional<Node> nodeById(int id) {
+        return Optional.ofNullable(nodes.get(id));
     }
 
     Cluster cluster() {
@@ -105,25 +105,95 @@ public class MetadataCache {
         }
     }
 
+    ClusterResource clusterResource() {
+        return new ClusterResource(clusterId);
+    }
+
+    /**
+     * Merges the metadata cache's contents with the provided metadata, returning a new metadata cache. The provided
+     * metadata is presumed to be more recent than the cache's metadata, and therefore all overlapping metadata will
+     * be overridden.
+     *
+     * @param newClusterId the new cluster Id
+     * @param newNodes the new set of nodes
+     * @param addPartitions partitions to add
+     * @param addUnauthorizedTopics unauthorized topics to add
+     * @param addInternalTopics internal topics to add
+     * @param newController the new controller node
+     * @param retainTopic returns whether a topic's metadata should be retained
+     * @return the merged metadata cache
+     */
+    MetadataCache mergeWith(String newClusterId,
+                            Map<Integer, Node> newNodes,
+                            Collection<PartitionMetadata> addPartitions,
+                            Set<String> addUnauthorizedTopics,
+                            Set<String> addInvalidTopics,
+                            Set<String> addInternalTopics,
+                            Node newController,
+                            BiPredicate<String, Boolean> retainTopic) {
+
+        Predicate<String> shouldRetainTopic = topic -> retainTopic.test(topic, internalTopics.contains(topic));
+
+        Map<TopicPartition, PartitionMetadata> newMetadataByPartition = new HashMap<>(addPartitions.size());
+        for (PartitionMetadata partition : addPartitions) {
+            newMetadataByPartition.put(partition.topicPartition, partition);
+        }
+        for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
+            if (shouldRetainTopic.test(entry.getKey().topic())) {
+                newMetadataByPartition.putIfAbsent(entry.getKey(), entry.getValue());
+            }
+        }
+
+        Set<String> newUnauthorizedTopics = fillSet(addUnauthorizedTopics, unauthorizedTopics, shouldRetainTopic);
+        Set<String> newInvalidTopics = fillSet(addInvalidTopics, invalidTopics, shouldRetainTopic);
+        Set<String> newInternalTopics = fillSet(addInternalTopics, internalTopics, shouldRetainTopic);
+
+        return new MetadataCache(newClusterId, newNodes, newMetadataByPartition.values(), newUnauthorizedTopics,
+                newInvalidTopics, newInternalTopics, newController);
+    }
+
+    /**
+     * Copies {@code baseSet} and adds all non-existent elements in {@code fillSet} such that {@code predicate} is true.
+     * In other words, all elements of {@code baseSet} will be contained in the result, with additional non-overlapping
+     * elements in {@code fillSet} where the predicate is true.
+     *
+     * @param baseSet the base elements for the resulting set
+     * @param fillSet elements to be filled into the resulting set
+     * @param predicate tested against the fill set to determine whether elements should be added to the base set
+     */
+    private static <T> Set<T> fillSet(Set<T> baseSet, Set<T> fillSet, Predicate<T> predicate) {
+        Set<T> result = new HashSet<>(baseSet);
+        for (T element : fillSet) {
+            if (predicate.test(element)) {
+                result.add(element);
+            }
+        }
+        return result;
+    }
+
     private void computeClusterView() {
         List<PartitionInfo> partitionInfos = metadataByPartition.values()
                 .stream()
-                .map(PartitionInfoAndEpoch::partitionInfo)
+                .map(metadata -> MetadataResponse.toPartitionInfo(metadata, nodes))
                 .collect(Collectors.toList());
-        this.clusterInstance = new Cluster(clusterId, nodes, partitionInfos, unauthorizedTopics, invalidTopics, internalTopics, controller);
+        this.clusterInstance = new Cluster(clusterId, nodes.values(), partitionInfos, unauthorizedTopics,
+                invalidTopics, internalTopics, controller);
     }
 
     static MetadataCache bootstrap(List<InetSocketAddress> addresses) {
-        List<Node> nodes = new ArrayList<>();
+        Map<Integer, Node> nodes = new HashMap<>();
         int nodeId = -1;
-        for (InetSocketAddress address : addresses)
-            nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
+        for (InetSocketAddress address : addresses) {
+            nodes.put(nodeId, new Node(nodeId, address.getHostString(), address.getPort()));
+            nodeId--;
+        }
         return new MetadataCache(null, nodes, Collections.emptyList(),
-                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Cluster.bootstrap(addresses));
+                Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
+                null, Cluster.bootstrap(addresses));
     }
 
     static MetadataCache empty() {
-        return new MetadataCache(null, Collections.emptyList(), Collections.emptyList(),
+        return new MetadataCache(null, Collections.emptyMap(), Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Cluster.empty());
     }
 
@@ -137,43 +207,4 @@ public class MetadataCache {
                 '}';
     }
 
-    public static class PartitionInfoAndEpoch {
-        private final PartitionInfo partitionInfo;
-        private final int epoch;
-
-        PartitionInfoAndEpoch(PartitionInfo partitionInfo, int epoch) {
-            this.partitionInfo = partitionInfo;
-            this.epoch = epoch;
-        }
-
-        public PartitionInfo partitionInfo() {
-            return partitionInfo;
-        }
-
-        public int epoch() {
-            return epoch;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            PartitionInfoAndEpoch that = (PartitionInfoAndEpoch) o;
-            return epoch == that.epoch &&
-                    Objects.equals(partitionInfo, that.partitionInfo);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(partitionInfo, epoch);
-        }
-
-        @Override
-        public String toString() {
-            return "PartitionInfoAndEpoch{" +
-                    "partitionInfo=" + partitionInfo +
-                    ", epoch=" + epoch +
-                    '}';
-        }
-    }
 }

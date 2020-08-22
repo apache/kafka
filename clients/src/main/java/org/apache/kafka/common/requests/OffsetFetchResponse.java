@@ -41,6 +41,7 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPO
  * - Partition errors:
  *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
  *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
+ *   - {@link Errors#UNSTABLE_OFFSET_COMMIT}
  *
  * - Group or coordinator errors:
  *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}

@@ -22,7 +22,7 @@
     </p>
     <h3><a id="messages" href="#messages">5.2 Messages</a></h3>
     <p>
-    Messages consist of a variable-length header, a variable length opaque key byte array and a variable length opaque value byte array. The format of the header is described in the following section.
+    Messages consist of a variable-length header, a variable-length opaque key byte array and a variable-length opaque value byte array. The format of the header is described in the following section.
     Leaving the key and value opaque is the right decision: there is a great deal of progress being made on serialization libraries right now, and any particular choice is unlikely to be right for all uses. Needless to say a particular application using Kafka would likely mandate a particular serialization type as part of its usage. The <code>RecordBatch</code> interface is simply an iterator over messages with specialized methods for bulk reading and writing to an NIO <code>Channel</code>.</p>
 
     <h3><a id="messageformat" href="#messageformat">5.3 Message Format</a></h3>
@@ -67,7 +67,7 @@
     <p>On compaction: unlike the older message formats, magic v2 and above preserves the first and last offset/sequence numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
     producer's state when the log is reloaded. If we did not retain the last sequence number, for example, then after a partition leader failure, the producer might see an OutOfSequence error. The base sequence number must
     be preserved for duplicate checking (the broker checks incoming Produce requests for duplicates by verifying that the first and last sequence numbers of the incoming batch match the last from that producer). As a result,
-    it is possible to have empty batches in the log when all the records in the batch are cleaned but batch is still retained in order to preserve a producer's last sequence number. One oddity here is that the baseTimestamp
+    it is possible to have empty batches in the log when all the records in the batch are cleaned but batch is still retained in order to preserve a producer's last sequence number. One oddity here is that the firstTimestamp
     field is not preserved during compaction, so it will change if the first record in the batch is compacted away.</p>
 
     <h5><a id="controlbatch" href="#controlbatch">5.3.1.1 Control Batches</a></h5>
@@ -130,7 +130,7 @@
     MessageSet (Version: 1) => [offset message_size message]
         offset => INT64
         message_size => INT32
-        message => crc magic_byte attributes key value
+        message => crc magic_byte attributes timestamp key value
             crc => INT32
             magic_byte => INT8
             attributes => INT8
@@ -143,7 +143,7 @@
                     0: create time
                     1: log append time
                 bit 4~7: unused
-            timestamp =>INT64
+            timestamp => INT64
             key => BYTES
             value => BYTES
     </pre></p>
@@ -219,7 +219,15 @@
     </pre>
     <h4><a id="impl_deletes" href="#impl_deletes">Deletes</a></h4>
     <p>
-    Data is deleted one log segment at a time. The log manager allows pluggable delete policies to choose which files are eligible for deletion. The current policy deletes any log with a modification time of more than <i>N</i> days ago, though a policy which retained the last <i>N</i> GB could also be useful. To avoid locking reads while still allowing deletes that modify the segment list we use a copy-on-write style segment list implementation that provides consistent views to allow a binary search to proceed on an immutable static snapshot view of the log segments while deletes are progressing.
+    Data is deleted one log segment at a time. The log manager applies two metrics to identify segments which are
+        eligible for deletion: time and size. For time-based policies, the record timestamps are considered, with the
+        largest timestamp in a segment file (order of records is not relevant) defining the retention time for the
+        entire segment. Size-based retention is disabled by default. When enabled the log manager keeps deleting the
+        oldest segment file until the overall size of the partition is within the configured limit again. If both
+        policies are enabled at the same time, a segment that is eligible for deletion due to either policy will be
+        deleted. To avoid locking reads while still allowing deletes that modify the segment list we use a copy-on-write
+        style segment list implementation that provides consistent views to allow a binary search to proceed on an
+        immutable static snapshot view of the log segments while deletes are progressing.
     </p>
     <h4><a id="impl_guarantees" href="#impl_guarantees">Guarantees</a></h4>
     <p>
@@ -264,7 +272,7 @@
 
     <h4><a id="impl_zknotation" href="#impl_zknotation">Notation</a></h4>
     <p>
-    When an element in a path is denoted [xyz], that means that the value of xyz is not fixed and there is in fact a ZooKeeper znode for each possible value of xyz. For example /topics/[topic] would be a directory named /topics containing a sub-directory for each topic name. Numerical ranges are also given such as [0...5] to indicate the subdirectories 0, 1, 2, 3, 4. An arrow -> is used to indicate the contents of a znode. For example /hello -> world would indicate a znode /hello containing the value "world".
+    When an element in a path is denoted <code>[xyz]</code>, that means that the value of xyz is not fixed and there is in fact a ZooKeeper znode for each possible value of xyz. For example <code>/topics/[topic]</code> would be a directory named /topics containing a sub-directory for each topic name. Numerical ranges are also given such as <code>[0...5]</code> to indicate the subdirectories 0, 1, 2, 3, 4. An arrow <code>-></code> is used to indicate the contents of a znode. For example <code>/hello -> world</code> would indicate a znode /hello containing the value "world".
     </p>
 
     <h4><a id="impl_zkbroker" href="#impl_zkbroker">Broker Node Registry</a></h4>

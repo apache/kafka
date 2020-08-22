@@ -16,11 +16,16 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpOptions;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicResponseHandler;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -39,6 +44,7 @@ import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.MockStrict;
 import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.modules.junit4.PowerMockRunner;
+import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.core.MediaType;
 import java.io.ByteArrayOutputStream;
@@ -49,10 +55,16 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*"})
-public class RestServerTest {
+import static org.apache.kafka.connect.runtime.WorkerConfig.ADMIN_LISTENERS_CONFIG;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
+@RunWith(PowerMockRunner.class)
+@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*", "javax.crypto.*"})
+public class RestServerTest {
     @MockStrict
     private Herder herder;
     @MockStrict
@@ -63,7 +75,9 @@ public class RestServerTest {
 
     @After
     public void tearDown() {
-        server.stop();
+        if (server != null) {
+            server.stop();
+        }
     }
 
     @SuppressWarnings("deprecation")
@@ -161,6 +175,14 @@ public class RestServerTest {
         config = new DistributedConfig(configMap);
         server = new RestServer(config);
         Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
+
+        // correct listener is chosen when https listener is configured before http listener and advertised listener is http
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://encrypted-localhost:42069,http://plaintext-localhost:4761");
+        configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
+        config = new DistributedConfig(configMap);
+        server = new RestServer(config);
+        Assert.assertEquals("http://plaintext-localhost:4761/", server.advertisedUrl().toString());
     }
 
     @Test
@@ -278,5 +300,189 @@ public class RestServerTest {
         CloseableHttpResponse response = httpClient.execute(httpHost, request);
 
         Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void testLoggersEndpointWithDefaults() throws IOException {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+                workerConfig,
+                ConnectRestExtension.class))
+                .andStubReturn(Collections.emptyList());
+        PowerMock.replayAll();
+
+        // create some loggers in the process
+        LoggerFactory.getLogger("a.b.c.s.W");
+
+        server = new RestServer(workerConfig);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        String host = server.advertisedUrl().getHost();
+        int port = server.advertisedUrl().getPort();
+
+        executePut(host, port, "/admin/loggers/a.b.c.s.W", "{\"level\": \"INFO\"}");
+
+        String responseStr = executeGet(host, port, "/admin/loggers");
+        Map<String, Map<String, ?>> loggers = mapper.readValue(responseStr, new TypeReference<Map<String, Map<String, ?>>>() {
+        });
+        assertNotNull("expected non null response for /admin/loggers" + prettyPrint(loggers), loggers);
+        assertTrue("expect at least 1 logger. instead found " + prettyPrint(loggers), loggers.size() >= 1);
+        assertEquals("expected to find logger a.b.c.s.W set to INFO level", loggers.get("a.b.c.s.W").get("level"), "INFO");
+    }
+
+    @Test
+    public void testIndependentAdminEndpoint() throws IOException {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(ADMIN_LISTENERS_CONFIG, "http://localhost:0");
+
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+                workerConfig,
+                ConnectRestExtension.class))
+                .andStubReturn(Collections.emptyList());
+        PowerMock.replayAll();
+
+        // create some loggers in the process
+        LoggerFactory.getLogger("a.b.c.s.W");
+        LoggerFactory.getLogger("a.b.c.p.X");
+        LoggerFactory.getLogger("a.b.c.p.Y");
+        LoggerFactory.getLogger("a.b.c.p.Z");
+
+        server = new RestServer(workerConfig);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        assertNotEquals(server.advertisedUrl(), server.adminUrl());
+
+        executeGet(server.adminUrl().getHost(), server.adminUrl().getPort(), "/admin/loggers");
+
+        HttpRequest request = new HttpGet("/admin/loggers");
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        Assert.assertEquals(404, response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void testDisableAdminEndpoint() throws IOException {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(ADMIN_LISTENERS_CONFIG, "");
+
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+                workerConfig,
+                ConnectRestExtension.class))
+                .andStubReturn(Collections.emptyList());
+        PowerMock.replayAll();
+
+        server = new RestServer(workerConfig);
+        server.initializeServer();
+        server.initializeResources(herder);
+
+        assertNull(server.adminUrl());
+
+        HttpRequest request = new HttpGet("/admin/loggers");
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        Assert.assertEquals(404, response.getStatusLine().getStatusCode());
+    }
+
+    @Test
+    public void testValidCustomizedHttpResponseHeaders() throws IOException  {
+        String headerConfig =
+                "add X-XSS-Protection: 1; mode=block, \"add Cache-Control: no-cache, no-store, must-revalidate\"";
+        Map<String, String> expectedHeaders = new HashMap<>();
+        expectedHeaders.put("X-XSS-Protection", "1; mode=block");
+        expectedHeaders.put("Cache-Control", "no-cache, no-store, must-revalidate");
+        checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
+    }
+
+    @Test
+    public void testDefaultCustomizedHttpResponseHeaders() throws IOException  {
+        String headerConfig = "";
+        Map<String, String> expectedHeaders = new HashMap<>();
+        checkCustomizedHttpResponseHeaders(headerConfig, expectedHeaders);
+    }
+
+    private void checkCustomizedHttpResponseHeaders(String headerConfig, Map<String, String> expectedHeaders)
+            throws IOException  {
+        Map<String, String> workerProps = baseWorkerProps();
+        workerProps.put("offset.storage.file.filename", "/tmp");
+        workerProps.put(WorkerConfig.RESPONSE_HTTP_HEADERS_CONFIG, headerConfig);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
+
+        EasyMock.expect(herder.kafkaClusterId()).andReturn(KAFKA_CLUSTER_ID);
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+                workerConfig,
+                ConnectRestExtension.class)).andStubReturn(Collections.emptyList());
+
+        EasyMock.expect(herder.connectors()).andReturn(Arrays.asList("a", "b"));
+
+        PowerMock.replayAll();
+
+        server = new RestServer(workerConfig);
+        try {
+            server.initializeServer();
+            server.initializeResources(herder);
+            HttpRequest request = new HttpGet("/connectors");
+            try (CloseableHttpClient httpClient = HttpClients.createMinimal()) {
+                HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
+                try (CloseableHttpResponse response = httpClient.execute(httpHost, request)) {
+                    Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+                    if (!headerConfig.isEmpty()) {
+                        expectedHeaders.forEach((k, v) ->
+                                Assert.assertEquals(response.getFirstHeader(k).getValue(), v));
+                    } else {
+                        Assert.assertNull(response.getFirstHeader("X-Frame-Options"));
+                    }
+                }
+            }
+        } finally {
+            server.stop();
+            server = null;
+        }
+    }
+
+    private String executeGet(String host, int port, String endpoint) throws IOException {
+        HttpRequest request = new HttpGet(endpoint);
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(host, port);
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+        return new BasicResponseHandler().handleResponse(response);
+    }
+
+    private String executePut(String host, int port, String endpoint, String jsonBody) throws IOException {
+        HttpPut request = new HttpPut(endpoint);
+        StringEntity entity = new StringEntity(jsonBody, "UTF-8");
+        entity.setContentType("application/json");
+        request.setEntity(entity);
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(host, port);
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+        return new BasicResponseHandler().handleResponse(response);
+    }
+
+    private static String prettyPrint(Map<String, ?> map) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(map);
     }
 }

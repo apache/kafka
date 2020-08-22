@@ -29,12 +29,13 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Properties;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -44,8 +45,6 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamTransformTest {
     private static final String TOPIC_NAME = "topic";
-    private final ConsumerRecordFactory<Integer, Integer> recordFactory =
-        new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
 
     @Test
@@ -87,16 +86,16 @@ public class KStreamTransformTest {
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy"),
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "test")
             )),
-            0L)) {
-            final ConsumerRecordFactory<Integer, Integer> recordFactory =
-                new ConsumerRecordFactory<>(TOPIC_NAME, new IntegerSerializer(), new IntegerSerializer());
+            Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<Integer, Integer> inputTopic =
+                driver.createInputTopic(TOPIC_NAME, new IntegerSerializer(), new IntegerSerializer());
 
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(expectedKey, expectedKey * 10, expectedKey / 2L));
+                inputTopic.pipeInput(expectedKey, expectedKey * 10, expectedKey / 2L);
             }
 
-            driver.advanceWallClockTime(2);
-            driver.advanceWallClockTime(1);
+            driver.advanceWallClockTime(Duration.ofMillis(2));
+            driver.advanceWallClockTime(Duration.ofMillis(1));
 
             final KeyValueTimestamp[] expected = {
                 new KeyValueTimestamp<>(2, 10, 0),
@@ -107,9 +106,9 @@ public class KStreamTransformTest {
                 new KeyValueTimestamp<>(-1, 3, 3)
             };
 
-            assertEquals(expected.length, processor.theCapturedProcessor().processed.size());
+            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
             for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
+                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
             }
         }
     }
@@ -146,18 +145,20 @@ public class KStreamTransformTest {
         final KStream<Integer, Integer> stream = builder.stream(TOPIC_NAME, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, Instant.ofEpochMilli(0L))) {
+            final TestInputTopic<Integer, Integer> inputTopic =
+                    driver.createInputTopic(TOPIC_NAME, new IntegerSerializer(), new IntegerSerializer());
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(TOPIC_NAME, expectedKey, expectedKey * 10, 0L));
+                inputTopic.pipeInput(expectedKey, expectedKey * 10, 0L);
             }
 
             // This tick yields the "-1:2" result
-            driver.advanceWallClockTime(2);
+            driver.advanceWallClockTime(Duration.ofMillis(2));
             // This tick further advances the clock to 3, which leads to the "-1:3" result
-            driver.advanceWallClockTime(1);
+            driver.advanceWallClockTime(Duration.ofMillis(1));
         }
 
-        assertEquals(6, processor.theCapturedProcessor().processed.size());
+        assertEquals(6, processor.theCapturedProcessor().processed().size());
 
         final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(2, 10, 0),
             new KeyValueTimestamp<>(20, 110, 0),
@@ -167,7 +168,7 @@ public class KStreamTransformTest {
             new KeyValueTimestamp<>(-1, 3, 3)};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
+            assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
         }
     }
 

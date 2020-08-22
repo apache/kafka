@@ -17,7 +17,9 @@
   "apiKey": 44,
   "type": "request",
   "name": "IncrementalAlterConfigsRequest",
-  "validVersions": "0",
+  // Version 1 is the first flexible version.
+  "validVersions": "0-1",
+  "flexibleVersions": "1+",
   "fields": [
     { "name": "Resources", "type": "[]AlterConfigsResource", "versions": "0+",
       "about": "The incremental updates for each resource.", "fields": [

@@ -36,6 +36,6 @@ public class DefaultStreamPartitioner<K, V> implements StreamPartitioner<K, V> {
     @Override
     public Integer partition(final String topic, final K key, final V value, final int numPartitions) {
         final byte[] keyBytes = keySerializer.serialize(topic, key);
-        return defaultPartitioner.partition(topic, key, keyBytes, value, null, cluster);
+        return defaultPartitioner.partition(topic, key, keyBytes, value, null, cluster, numPartitions);
     }
 }

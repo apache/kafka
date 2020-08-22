@@ -48,6 +48,7 @@ public class RocksDBWindowStore
         super.init(context, root);
     }
 
+    @Deprecated
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());
@@ -55,17 +56,16 @@ public class RocksDBWindowStore
 
     @Override
     public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
-        maybeUpdateSeqnumForDups();
-
-        wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum), value);
+        // Skip if value is null and duplicates are allowed since this delete is a no-op
+        if (!(value == null && retainDuplicates)) {
+            maybeUpdateSeqnumForDups();
+            wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum), value);
+        }
     }
 
     @Override
     public byte[] fetch(final Bytes key, final long timestamp) {
         final byte[] bytesValue = wrapped().get(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum));
-        if (bytesValue == null) {
-            return null;
-        }
         return bytesValue;
     }
 

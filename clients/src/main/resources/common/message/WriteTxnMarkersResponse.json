@@ -18,6 +18,7 @@
   "type": "response",
   "name": "WriteTxnMarkersResponse",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "Markers", "type": "[]WritableTxnMarkerResult", "versions": "0+",
       "about": "The results for writing makers.", "fields": [

@@ -22,16 +22,18 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.DeleteAclsRequestData;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.junit.Test;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.stream.Collectors;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 public class DeleteAclsRequestTest {
     private static final short V0 = 0;
@@ -49,19 +51,19 @@ public class DeleteAclsRequestTest {
     private static final AclBindingFilter UNKNOWN_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.UNKNOWN, "prefix", PatternType.PREFIXED),
         new AccessControlEntryFilter("User:*", "127.0.0.1", AclOperation.CREATE, AclPermissionType.ALLOW));
 
-    @Test(expected = UnsupportedVersionException.class)
+    @Test
     public void shouldThrowOnV0IfPrefixed() {
-        new DeleteAclsRequest(V0, aclFilters(PREFIXED_FILTER));
+        assertThrows(UnsupportedVersionException.class, () -> new DeleteAclsRequest.Builder(requestData(PREFIXED_FILTER)).build(V0));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowOnUnknownElements() {
-        new DeleteAclsRequest(V1, aclFilters(UNKNOWN_FILTER));
+        assertThrows(IllegalArgumentException.class, () -> new DeleteAclsRequest.Builder(requestData(UNKNOWN_FILTER)).build(V1));
     }
 
     @Test
     public void shouldRoundTripLiteralV0() {
-        final DeleteAclsRequest original = new DeleteAclsRequest(V0, aclFilters(LITERAL_FILTER));
+        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(requestData(LITERAL_FILTER)).build(V0);
         final Struct struct = original.toStruct();
 
         final DeleteAclsRequest result = new DeleteAclsRequest(struct, V0);
@@ -71,13 +73,14 @@ public class DeleteAclsRequestTest {
 
     @Test
     public void shouldRoundTripAnyV0AsLiteral() {
-        final DeleteAclsRequest original = new DeleteAclsRequest(V0, aclFilters(ANY_FILTER));
-        final DeleteAclsRequest expected = new DeleteAclsRequest(V0, aclFilters(
+        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(requestData(ANY_FILTER)).build(V0);
+        final DeleteAclsRequest expected = new DeleteAclsRequest.Builder(requestData(
             new AclBindingFilter(new ResourcePatternFilter(
                 ANY_FILTER.patternFilter().resourceType(),
                 ANY_FILTER.patternFilter().name(),
                 PatternType.LITERAL),
-                ANY_FILTER.entryFilter())));
+                ANY_FILTER.entryFilter()))
+        ).build(V0);
 
         final DeleteAclsRequest result = new DeleteAclsRequest(original.toStruct(), V0);
 
@@ -86,7 +89,9 @@ public class DeleteAclsRequestTest {
 
     @Test
     public void shouldRoundTripV1() {
-        final DeleteAclsRequest original = new DeleteAclsRequest(V1, aclFilters(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER));
+        final DeleteAclsRequest original = new DeleteAclsRequest.Builder(
+                requestData(LITERAL_FILTER, PREFIXED_FILTER, ANY_FILTER)
+        ).build(V1);
         final Struct struct = original.toStruct();
 
         final DeleteAclsRequest result = new DeleteAclsRequest(struct, V1);
@@ -104,7 +109,9 @@ public class DeleteAclsRequestTest {
         }
     }
 
-    private static List<AclBindingFilter> aclFilters(final AclBindingFilter... acls) {
-        return Arrays.asList(acls);
+    private static DeleteAclsRequestData requestData(AclBindingFilter... acls) {
+        return new DeleteAclsRequestData().setFilters(asList(acls).stream()
+            .map(DeleteAclsRequest::deleteAclsFilter)
+            .collect(Collectors.toList()));
     }
 }

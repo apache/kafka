@@ -20,25 +20,28 @@ package kafka.controller
 import java.util.Properties
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
-import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
+import kafka.metrics.KafkaYammerMetrics
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
 import kafka.zk._
 import org.junit.{After, Before, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ElectionType, TopicPartition}
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.log4j.Level
 import kafka.utils.LogCaptureAppender
 import org.apache.kafka.common.metrics.KafkaMetric
+import org.apache.kafka.common.protocol.Errors
 import org.scalatest.Assertions.fail
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.Seq
 import scala.util.{Failure, Success, Try}
+import org.mockito.Mockito.{doAnswer, spy, verify}
+import org.mockito.invocation.InvocationOnMock
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -47,14 +50,14 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   @Before
   override def setUp(): Unit = {
-    super.setUp
+    super.setUp()
     servers = Seq.empty[KafkaServer]
   }
 
   @After
   override def tearDown(): Unit = {
     TestUtils.shutdownServers(servers)
-    super.tearDown
+    super.tearDown()
   }
 
   @Test
@@ -96,12 +99,12 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     val controlPlaneMetricMap = mutable.Map[String, KafkaMetric]()
     val dataPlaneMetricMap = mutable.Map[String, KafkaMetric]()
-    servers.head.metrics.metrics().values().asScala.foreach { kafkaMetric =>
-      if (kafkaMetric.metricName().tags().values().contains("CONTROLLER")) {
+    servers.head.metrics.metrics.values.forEach { kafkaMetric =>
+      if (kafkaMetric.metricName.tags.values.contains("CONTROLLER")) {
         controlPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
       }
-      if (kafkaMetric.metricName().tags().values().contains("PLAINTEXT")) {
-        dataPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
+      if (kafkaMetric.metricName.tags.values.contains("PLAINTEXT")) {
+        dataPlaneMetricMap.put(kafkaMetric.metricName.name, kafkaMetric)
       }
     }
     assertEquals(1e-0, controlPlaneMetricMap("response-total").metricValue().asInstanceOf[Double], 0)
@@ -143,10 +146,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       val offlineReplicaPartitionInfo = server.metadataCache.getPartitionInfo(topic, 0).get
       assertEquals(1, offlineReplicaPartitionInfo.offlineReplicas.size())
       assertEquals(testBroker.config.brokerId, offlineReplicaPartitionInfo.offlineReplicas.get(0))
-      assertEquals(assignment(0).asJava, offlineReplicaPartitionInfo.basePartitionState.replicas)
-      assertEquals(Seq(remainingBrokers.head.config.brokerId).asJava, offlineReplicaPartitionInfo.basePartitionState.isr)
+      assertEquals(assignment(0).asJava, offlineReplicaPartitionInfo.replicas)
+      assertEquals(Seq(remainingBrokers.head.config.brokerId).asJava, offlineReplicaPartitionInfo.isr)
       val onlinePartitionInfo = server.metadataCache.getPartitionInfo(topic, 1).get
-      assertEquals(assignment(1).asJava, onlinePartitionInfo.basePartitionState.replicas)
+      assertEquals(assignment(1).asJava, onlinePartitionInfo.replicas)
       assertTrue(onlinePartitionInfo.offlineReplicas.isEmpty)
     }
 
@@ -158,7 +161,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
           val partitionInfoOpt = server.metadataCache.getPartitionInfo(topic, partitionId)
           if (partitionInfoOpt.isDefined) {
             val partitionInfo = partitionInfoOpt.get
-            !partitionInfo.offlineReplicas.isEmpty || !partitionInfo.basePartitionState.replicas.asScala.equals(replicas)
+            !partitionInfo.offlineReplicas.isEmpty || !partitionInfo.replicas.asScala.equals(replicas)
           } else {
             true
           }
@@ -204,8 +207,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         val partitionInfoOpt = broker.metadataCache.getPartitionInfo(topic, 0)
         if (partitionInfoOpt.isDefined) {
           val partitionInfo = partitionInfoOpt.get
-          (!partitionInfo.offlineReplicas.isEmpty && partitionInfo.basePartitionState.leader == -1
-            && !partitionInfo.basePartitionState.replicas.isEmpty && !partitionInfo.basePartitionState.isr.isEmpty)
+          (!partitionInfo.offlineReplicas.isEmpty && partitionInfo.leader == -1
+            && !partitionInfo.replicas.isEmpty && !partitionInfo.isr.isEmpty)
         } else {
           false
         }
@@ -249,7 +252,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val tp0 = new TopicPartition("t", 0)
     val tp1 = new TopicPartition("t", 1)
     val assignment = Map(tp0.partition -> Seq(0))
-    val expandedAssignment = Map(tp0 -> Seq(0), tp1 -> Seq(0))
+    val expandedAssignment = Map(
+      tp0 -> ReplicaAssignment(Seq(0), Seq(), Seq()),
+      tp1 -> ReplicaAssignment(Seq(0), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.setTopicAssignment(tp0.topic, expandedAssignment, firstControllerEpochZkVersion)
     waitForPartitionState(tp1, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
@@ -265,7 +270,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val tp0 = new TopicPartition("t", 0)
     val tp1 = new TopicPartition("t", 1)
     val assignment = Map(tp0.partition -> Seq(otherBrokerId, controllerId))
-    val expandedAssignment = Map(tp0 -> Seq(otherBrokerId, controllerId), tp1 -> Seq(otherBrokerId, controllerId))
+    val expandedAssignment = Map(
+      tp0 -> ReplicaAssignment(Seq(otherBrokerId, controllerId), Seq(), Seq()),
+      tp1 -> ReplicaAssignment(Seq(otherBrokerId, controllerId), Seq(), Seq()))
     TestUtils.createTopic(zkClient, tp0.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
@@ -280,20 +287,20 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
 
-    val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.PartitionReassignment.rateAndTimeMetricName.get}"
+    val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.AlterPartitionReassignment.rateAndTimeMetricName.get}"
     val timerCount = timer(metricName).count
 
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
-    val reassignment = Map(tp -> Seq(otherBrokerId))
+    val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
-    zkClient.createPartitionReassignment(reassignment)
+    zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
       "failed to get expected partition state after partition reassignment")
-    TestUtils.waitUntilTrue(() =>  zkClient.getReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
+    TestUtils.waitUntilTrue(() =>  zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
-    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress(),
+    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
       "failed to remove reassign partitions path after completion")
 
     val updatedTimerCount = timer(metricName).count
@@ -315,7 +322,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     zkClient.setOrCreatePartitionReassignment(reassignment, controller.kafkaController.controllerContext.epochZkVersion)
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
-    TestUtils.waitUntilTrue(() => zkClient.reassignPartitionsInProgress(),
+    TestUtils.waitUntilTrue(() => zkClient.reassignPartitionsInProgress,
       "partition reassignment path should remain while reassignment in progress")
   }
 
@@ -326,19 +333,19 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
-    val reassignment = Map(tp -> Seq(otherBrokerId))
+    val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
-    zkClient.createPartitionReassignment(reassignment)
+    zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
       "failed to get expected partition state during partition reassignment with offline replica")
     servers(otherBrokerId).startup()
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 4,
       "failed to get expected partition state after partition reassignment")
-    TestUtils.waitUntilTrue(() => zkClient.getReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
+    TestUtils.waitUntilTrue(() => zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
-    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress(),
+    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
       "failed to remove reassign partitions path after completion")
   }
 
@@ -429,8 +436,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state upon topic creation")
-    servers(1).shutdown()
-    servers(1).awaitShutdown()
+    servers(otherBrokerId).shutdown()
+    servers(otherBrokerId).awaitShutdown()
     TestUtils.waitUntilTrue(() => {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
       leaderIsrAndControllerEpochMap.contains(tp) &&
@@ -446,7 +453,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val partition = 0
     // create brokers
     val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false).map(KafkaConfig.fromProps)
-    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
     // create the topic
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
 
@@ -459,14 +466,14 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     var activeServers = servers.filter(s => s.config.brokerId != 2)
     // wait for the update metadata request to trickle to the brokers
     TestUtils.waitUntilTrue(() =>
-      activeServers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.isr.size != 3),
+      activeServers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.isr.size != 3),
       "Topic test not created after timeout")
     assertEquals(0, partitionsRemaining.size)
     var partitionStateInfo = activeServers.head.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get
-    var leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
+    var leaderAfterShutdown = partitionStateInfo.leader
     assertEquals(0, leaderAfterShutdown)
-    assertEquals(2, partitionStateInfo.basePartitionState.isr.size)
-    assertEquals(List(0,1), partitionStateInfo.basePartitionState.isr.asScala)
+    assertEquals(2, partitionStateInfo.isr.size)
+    assertEquals(List(0,1), partitionStateInfo.isr.asScala)
     controller.controlledShutdown(1, servers.find(_.config.brokerId == 1).get.kafkaController.brokerEpoch, controlledShutdownCallback)
     partitionsRemaining = resultQueue.take() match {
       case Success(partitions) => partitions
@@ -475,22 +482,22 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertEquals(0, partitionsRemaining.size)
     activeServers = servers.filter(s => s.config.brokerId == 0)
     partitionStateInfo = activeServers.head.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get
-    leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
+    leaderAfterShutdown = partitionStateInfo.leader
     assertEquals(0, leaderAfterShutdown)
 
-    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.leader == 0))
     controller.controlledShutdown(0, servers.find(_.config.brokerId == 0).get.kafkaController.brokerEpoch, controlledShutdownCallback)
     partitionsRemaining = resultQueue.take().get
     assertEquals(1, partitionsRemaining.size)
     // leader doesn't change since all the replicas are shut down
-    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.leader == 0))
   }
 
   @Test
   def testControllerRejectControlledShutdownRequestWithStaleBrokerEpoch(): Unit = {
     // create brokers
     val serverConfigs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfig.fromProps)
-    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
 
     val controller = getController().kafkaController
     val otherBroker = servers.find(e => e.config.brokerId != controller.config.brokerId).get
@@ -578,6 +585,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
       override def process(): Unit = latch.await()
+      override def preempt(): Unit = {}
     })
 
     otherBroker.shutdown()
@@ -592,6 +600,86 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       otherBroker.replicaManager.metadataCache.getAllTopics().size == 1 &&
       otherBroker.replicaManager.metadataCache.getAliveBrokers.size == 2
     }, "Broker fail to initialize after restart")
+  }
+
+  @Test
+  def testPreemptionOnControllerShutdown(): Unit = {
+    servers = makeServers(1, enableControlledShutdown = false)
+    val controller = getController().kafkaController
+    var count = 2
+    val latch = new CountDownLatch(1)
+    val spyThread = spy(controller.eventManager.thread)
+    controller.eventManager.thread = spyThread
+    val processedEvent = new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = latch.await()
+      override def preempt(): Unit = {}
+    }
+    val preemptedEvent = new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = {}
+      override def preempt(): Unit = count -= 1
+    }
+
+    controller.eventManager.put(processedEvent)
+    controller.eventManager.put(preemptedEvent)
+    controller.eventManager.put(preemptedEvent)
+
+    doAnswer((_: InvocationOnMock) => {
+      latch.countDown()
+    }).doCallRealMethod().when(spyThread).awaitShutdown()
+    controller.shutdown()
+    TestUtils.waitUntilTrue(() => {
+      count == 0
+    }, "preemption was not fully completed before shutdown")
+
+    verify(spyThread).awaitShutdown()
+  }
+
+  @Test
+  def testPreemptionWithCallbacks(): Unit = {
+    servers = makeServers(1, enableControlledShutdown = false)
+    val controller = getController().kafkaController
+    val latch = new CountDownLatch(1)
+    val spyThread = spy(controller.eventManager.thread)
+    controller.eventManager.thread = spyThread
+    val processedEvent = new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = latch.await()
+      override def preempt(): Unit = {}
+    }
+    val tp0 = new TopicPartition("t", 0)
+    val tp1 = new TopicPartition("t", 1)
+    val partitions = Set(tp0, tp1)
+    val event1 = ReplicaLeaderElection(Some(partitions), ElectionType.PREFERRED, ZkTriggered, partitionsMap => {
+      for (partition <- partitionsMap) {
+        partition._2 match {
+          case Left(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
+          case Right(_) => fail("replica leader election should error")
+        }
+      }
+    })
+    val event2 = ControlledShutdown(0, 0, {
+      case Success(_) => fail("controlled shutdown should error")
+      case Failure(e) =>
+        assertEquals(classOf[ControllerMovedException], e.getClass)
+    })
+    val event3  = ApiPartitionReassignment(Map(tp0 -> None, tp1 -> None), {
+      case Left(_) => fail("api partition reassignment should error")
+      case Right(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
+    })
+    val event4 = ListPartitionReassignments(Some(partitions), {
+      case Left(_) => fail("api partition reassignment should error")
+      case Right(e) => assertEquals(Errors.NOT_CONTROLLER, e.error())
+    })
+
+    controller.eventManager.put(processedEvent)
+    controller.eventManager.put(event1)
+    controller.eventManager.put(event2)
+    controller.eventManager.put(event3)
+    controller.eventManager.put(event4)
+
+    doAnswer((_: InvocationOnMock) => {
+      latch.countDown()
+    }).doCallRealMethod().when(spyThread).awaitShutdown()
+    controller.shutdown() 
   }
 
   private def testControllerMove(fun: () => Unit): Unit = {
@@ -610,6 +698,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       // This is used to make sure that when the event thread resumes and starts processing events, the controller has already moved.
       controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
         override def process(): Unit = latch.await()
+        override def preempt(): Unit = {}
       })
 
       // Execute pre-defined logic. This can be topic creation/deletion, preferred leader election, etc.
@@ -624,8 +713,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
 
       // Expect to capture the ControllerMovedException in the log of ControllerEventThread
-      println(appender.getMessages.find(e => e.getLevel == Level.INFO
-        && e.getThrowableInformation != null))
       val event = appender.getMessages.find(e => e.getLevel == Level.INFO
         && e.getThrowableInformation != null
         && e.getThrowableInformation.getThrowable.getClass.getName.equals(classOf[ControllerMovedException].getName))
@@ -696,8 +783,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   private def timer(metricName: String): Timer = {
-    Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
-      .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
+    KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.filter { case (k, _) =>
+      k.getMBeanName == metricName
+    }.values.headOption.getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
   }
 
   private def getController(): KafkaServer = {

@@ -30,7 +30,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
-import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.SingletonNoOpValueTransformer;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -50,8 +50,6 @@ import static org.junit.Assert.assertArrayEquals;
 public class KStreamTransformValuesTest {
     private final String topicName = "topic";
     private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
-    private final ConsumerRecordFactory<Integer, Integer> recordFactory =
-        new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
     @Mock(MockType.NICE)
     private ProcessorContext context;
@@ -85,7 +83,9 @@ public class KStreamTransformValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, expectedKey / 2L));
+                final TestInputTopic<Integer, Integer> inputTopic =
+                        driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer());
+                inputTopic.pipeInput(expectedKey, expectedKey * 10, expectedKey / 2L);
             }
         }
         final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(1, 10, 0),
@@ -93,7 +93,7 @@ public class KStreamTransformValuesTest {
             new KeyValueTimestamp<>(100, 1110, 50),
             new KeyValueTimestamp<>(1000, 11110, 500)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
     @Test
@@ -124,8 +124,10 @@ public class KStreamTransformValuesTest {
         stream.transformValues(valueTransformerSupplier).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<Integer, Integer> inputTopic =
+                    driver.createInputTopic(topicName, new IntegerSerializer(), new IntegerSerializer());
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, expectedKey / 2L));
+                inputTopic.pipeInput(expectedKey, expectedKey * 10, expectedKey / 2L);
             }
         }
         final KeyValueTimestamp[] expected = {new KeyValueTimestamp<>(1, 11, 0),
@@ -133,7 +135,7 @@ public class KStreamTransformValuesTest {
             new KeyValueTimestamp<>(100, 1221, 50),
             new KeyValueTimestamp<>(1000, 12221, 500)};
 
-        assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
+        assertArrayEquals(expected, supplier.theCapturedProcessor().processed().toArray());
     }
 
     @SuppressWarnings("unchecked")

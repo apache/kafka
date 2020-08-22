@@ -69,11 +69,11 @@ public class BrokerSecurityConfigs {
     public static final String SSL_CLIENT_AUTH_DOC = "Configures kafka broker to request client authentication."
             + " The following settings are common: "
             + " <ul>"
-            + " <li><code>ssl.client.auth=required</code> If set to required"
-            + " client authentication is required."
+            + " <li><code>ssl.client.auth=required</code> If set to required client authentication is required."
             + " <li><code>ssl.client.auth=requested</code> This means client authentication is optional."
-            + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
-            + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
+            + " unlike required, if this option is set client can choose not to provide authentication information about itself"
+            + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed."
+            + "</ul>";
 
     public static final String SASL_ENABLED_MECHANISMS_DOC = "The list of SASL mechanisms enabled in the Kafka server. "
             + "The list may contain any mechanism for which a security provider is available. "

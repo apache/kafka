@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -23,22 +24,34 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-public abstract class AbstractResponse extends AbstractRequestResponse {
+public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
     protected Send toSend(String destination, ResponseHeader header, short apiVersion) {
-        return new NetworkSend(destination, serialize(apiVersion, header));
+        return new NetworkSend(destination, RequestUtils.serialize(header.toStruct(), toStruct(apiVersion)));
     }
 
     /**
      * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
      */
     public ByteBuffer serialize(short version, ResponseHeader responseHeader) {
-        return serialize(responseHeader.toStruct(), toStruct(version));
+        return RequestUtils.serialize(responseHeader.toStruct(), toStruct(version));
+    }
+
+    /**
+     * Visible for testing, typically {@link #toSend(String, ResponseHeader, short)} should be used instead.
+     */
+    public ByteBuffer serialize(ApiKeys apiKey, short version, int correlationId) {
+        ResponseHeader header =
+            new ResponseHeader(correlationId, apiKey.responseHeaderVersion(version));
+        return RequestUtils.serialize(header.toStruct(), toStruct(version));
     }
 
     public abstract Map<Errors, Integer> errorCounts();
@@ -47,9 +60,13 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
         return Collections.singletonMap(error, 1);
     }
 
-    protected Map<Errors, Integer> errorCounts(Map<?, Errors> errors) {
+    protected Map<Errors, Integer> errorCounts(Stream<Errors> errors) {
+        return errors.collect(Collectors.groupingBy(e -> e, Collectors.summingInt(e -> 1)));
+    }
+
+    protected Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        for (Errors error : errors.values())
+        for (Errors error : errors)
             updateErrorCounts(errorCounts, error);
         return errorCounts;
     }
@@ -62,8 +79,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
     }
 
     protected void updateErrorCounts(Map<Errors, Integer> errorCounts, Errors error) {
-        Integer count = errorCounts.get(error);
-        errorCounts.put(error, count == null ? 1 : count + 1);
+        Integer count = errorCounts.getOrDefault(error, 0);
+        errorCounts.put(error, count + 1);
     }
 
     protected abstract Struct toStruct(short version);
@@ -73,7 +90,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case PRODUCE:
                 return new ProduceResponse(struct);
             case FETCH:
-                return FetchResponse.parse(struct);
+                return new FetchResponse<>(new FetchResponseData(struct, version));
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
@@ -93,13 +110,13 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SYNC_GROUP:
                 return new SyncGroupResponse(struct, version);
             case STOP_REPLICA:
-                return new StopReplicaResponse(struct);
+                return new StopReplicaResponse(struct, version);
             case CONTROLLED_SHUTDOWN:
                 return new ControlledShutdownResponse(struct, version);
             case UPDATE_METADATA:
-                return new UpdateMetadataResponse(struct);
+                return new UpdateMetadataResponse(struct, version);
             case LEADER_AND_ISR:
-                return new LeaderAndIsrResponse(struct);
+                return new LeaderAndIsrResponse(struct, version);
             case DESCRIBE_GROUPS:
                 return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
@@ -107,45 +124,45 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case SASL_HANDSHAKE:
                 return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
-                return new ApiVersionsResponse(struct);
+                return ApiVersionsResponse.fromStruct(struct, version);
             case CREATE_TOPICS:
                 return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:
                 return new DeleteTopicsResponse(struct, version);
             case DELETE_RECORDS:
-                return new DeleteRecordsResponse(struct);
+                return new DeleteRecordsResponse(struct, version);
             case INIT_PRODUCER_ID:
                 return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:
-                return new AddPartitionsToTxnResponse(struct);
+                return new AddPartitionsToTxnResponse(struct, version);
             case ADD_OFFSETS_TO_TXN:
-                return new AddOffsetsToTxnResponse(struct);
+                return new AddOffsetsToTxnResponse(struct, version);
             case END_TXN:
-                return new EndTxnResponse(struct);
+                return new EndTxnResponse(struct, version);
             case WRITE_TXN_MARKERS:
-                return new WriteTxnMarkersResponse(struct);
+                return new WriteTxnMarkersResponse(struct, version);
             case TXN_OFFSET_COMMIT:
-                return new TxnOffsetCommitResponse(struct);
+                return new TxnOffsetCommitResponse(struct, version);
             case DESCRIBE_ACLS:
-                return new DescribeAclsResponse(struct);
+                return new DescribeAclsResponse(struct, version);
             case CREATE_ACLS:
-                return new CreateAclsResponse(struct);
+                return new CreateAclsResponse(struct, version);
             case DELETE_ACLS:
-                return new DeleteAclsResponse(struct);
+                return new DeleteAclsResponse(struct, version);
             case DESCRIBE_CONFIGS:
-                return new DescribeConfigsResponse(struct);
+                return new DescribeConfigsResponse(struct, version);
             case ALTER_CONFIGS:
-                return new AlterConfigsResponse(struct);
+                return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:
                 return new AlterReplicaLogDirsResponse(struct);
             case DESCRIBE_LOG_DIRS:
-                return new DescribeLogDirsResponse(struct);
+                return new DescribeLogDirsResponse(struct, version);
             case SASL_AUTHENTICATE:
                 return new SaslAuthenticateResponse(struct, version);
             case CREATE_PARTITIONS:
-                return new CreatePartitionsResponse(struct);
+                return new CreatePartitionsResponse(struct, version);
             case CREATE_DELEGATION_TOKEN:
                 return new CreateDelegationTokenResponse(struct, version);
             case RENEW_DELEGATION_TOKEN:
@@ -164,6 +181,12 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new AlterPartitionReassignmentsResponse(struct, version);
             case LIST_PARTITION_REASSIGNMENTS:
                 return new ListPartitionReassignmentsResponse(struct, version);
+            case OFFSET_DELETE:
+                return new OffsetDeleteResponse(struct, version);
+            case DESCRIBE_CLIENT_QUOTAS:
+                return new DescribeClientQuotasResponse(struct, version);
+            case ALTER_CLIENT_QUOTAS:
+                return new AlterClientQuotasResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

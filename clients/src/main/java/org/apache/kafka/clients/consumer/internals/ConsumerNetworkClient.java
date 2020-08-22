@@ -95,6 +95,9 @@ public class ConsumerNetworkClient implements Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
     }
 
+    public int defaultRequestTimeoutMs() {
+        return requestTimeoutMs;
+    }
 
     /**
      * Send a request with the default timeout. See {@link #send(Node, AbstractRequest.Builder, int)}.
@@ -124,7 +127,7 @@ public class ConsumerNetworkClient implements Closeable {
         long now = time.milliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
-                requestTimeoutMs, completionHandler);
+            requestTimeoutMs, null, null, completionHandler);
         unsent.put(node, clientRequest);
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
@@ -304,6 +307,27 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     /**
+     * Poll for network IO in best-effort only trying to transmit the ready-to-send request
+     * Do not check any pending requests or metadata errors so that no exception should ever
+     * be thrown, also no wakeups be triggered and no interrupted exception either.
+     */
+    public void transmitSends() {
+        Timer timer = time.timer(0);
+
+        // do not try to handle any disconnects, prev request failures, metadata exception etc;
+        // just try once and return immediately
+        lock.lock();
+        try {
+            // send all the requests we can send now
+            trySend(timer.currentTimeMs());
+
+            client.poll(0, timer.currentTimeMs());
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Block until all pending requests from the given node have finished.
      * @param node The node to await requests from
      * @param timer Timer bounding how long this method can block
@@ -408,8 +432,8 @@ public class ConsumerNetworkClient implements Closeable {
                     RequestFutureCompletionHandler handler = (RequestFutureCompletionHandler) request.callback();
                     AuthenticationException authenticationException = client.authenticationException(node);
                     handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
-                            request.callback(), request.destination(), request.createdTimeMs(), now, true,
-                            null, authenticationException, null));
+                        request.callback(), request.destination(), request.createdTimeMs(), now, true,
+                        null, authenticationException, null));
                 }
             }
         }
@@ -570,7 +594,7 @@ public class ConsumerNetworkClient implements Closeable {
                 future.raise(response.authenticationException());
             } else if (response.wasDisconnected()) {
                 log.debug("Cancelled request with header {} due to node {} being disconnected",
-                        response.requestHeader(), response.destination());
+                    response.requestHeader(), response.destination());
                 future.raise(DisconnectException.INSTANCE);
             } else if (response.versionMismatch() != null) {
                 future.raise(response.versionMismatch());

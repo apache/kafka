@@ -19,6 +19,8 @@ package org.apache.kafka.server.authorizer;
 
 import java.util.Collections;
 import java.util.Collection;
+import java.util.Optional;
+
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
@@ -43,9 +45,11 @@ public class AclDeleteResult {
 
     /**
      * Returns any exception while attempting to match ACL filter to delete ACLs.
+     * If exception is empty, filtering has succeeded. See {@link #aclBindingDeleteResults()}
+     * for deletion results for each filter.
      */
-    public ApiException exception() {
-        return exception;
+    public Optional<ApiException> exception() {
+        return exception == null ? Optional.empty() : Optional.of(exception);
     }
 
     /**
@@ -73,25 +77,19 @@ public class AclDeleteResult {
         }
 
         /**
-         * Returns ACL binding that matched the delete filter. {@link #deleted()} indicates if
-         * the binding was deleted.
+         * Returns ACL binding that matched the delete filter. If {@link #exception()} is
+         * empty, the ACL binding was successfully deleted.
          */
         public AclBinding aclBinding() {
             return aclBinding;
         }
 
         /**
-         * Returns exception that resulted in failure to delete ACL binding.
+         * Returns any exception that resulted in failure to delete ACL binding.
+         * If exception is empty, the ACL binding was successfully deleted.
          */
-        public ApiException exception() {
-            return exception;
-        }
-
-        /**
-         * Returns true if ACL binding was deleted, false otherwise.
-         */
-        public boolean deleted() {
-            return exception == null;
+        public Optional<ApiException> exception() {
+            return exception == null ? Optional.empty() : Optional.of(exception);
         }
     }
 }

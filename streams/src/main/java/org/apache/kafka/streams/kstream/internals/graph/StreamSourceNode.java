@@ -51,7 +51,7 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    public Collection<String> getTopicNames() {
+    public Collection<String> topicNames() {
         return new ArrayList<>(topicNames);
     }
 

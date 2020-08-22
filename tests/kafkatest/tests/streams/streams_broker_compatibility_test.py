@@ -21,15 +21,17 @@ from kafkatest.services.streams import StreamsBrokerCompatibilityService
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.version import LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_1_0, LATEST_1_1, \
-    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, KafkaVersion
+    LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, KafkaVersion
 
 
 class StreamsBrokerCompatibility(Test):
     """
     These tests validates that
-    - Streams 0.11+ w/ EOS fails fast for older brokers 0.10.2 and 0.10.1
-    - Streams 0.11+ w/o EOS works for older brokers 0.10.2 and 0.10.1
-    - Streams fails fast for 0.10.0 brokers
+    - Streams works for older brokers 0.11 (or newer)
+    - Streams w/ EOS-alpha works for older brokers 0.11 (or newer)
+    - Streams w/ EOS-beta works for older brokers 2.5 (or newer)
+    - Streams fails fast for older brokers 0.10.0, 0.10.2, and 0.10.1
+    - Streams w/ EOS-beta fails fast for older brokers 2.4 or older
     """
 
     input = "brokerCompatibilitySourceTopic"
@@ -44,7 +46,11 @@ class StreamsBrokerCompatibility(Test):
                                   topics={
                                       self.input: {'partitions': 1, 'replication-factor': 1},
                                       self.output: {'partitions': 1, 'replication-factor': 1}
-                                  })
+                                  },
+                                  server_prop_overides=[
+                                      ["transaction.state.log.replication.factor", "1"],
+                                      ["transaction.state.log.min.isr", "1"]
+                                  ])
         self.consumer = VerifiableConsumer(test_context,
                                            1,
                                            self.kafka,
@@ -54,23 +60,8 @@ class StreamsBrokerCompatibility(Test):
     def setUp(self):
         self.zk.start()
 
-   
-    @parametrize(broker_version=str(LATEST_0_10_2))
-    @parametrize(broker_version=str(LATEST_0_10_1))
-    def test_fail_fast_on_incompatible_brokers_if_eos_enabled(self, broker_version):
-        self.kafka.set_version(KafkaVersion(broker_version))
-        self.kafka.start()
 
-        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, True)
-
-        with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
-            processor.start()
-            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException',
-                               timeout_sec=60,
-                               err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException' error message " + str(processor.node.account))
-
-        self.kafka.stop()
-
+    @parametrize(broker_version=str(LATEST_2_4))
     @parametrize(broker_version=str(LATEST_2_3))
     @parametrize(broker_version=str(LATEST_2_2))
     @parametrize(broker_version=str(LATEST_2_1))
@@ -78,13 +69,11 @@ class StreamsBrokerCompatibility(Test):
     @parametrize(broker_version=str(LATEST_1_1))
     @parametrize(broker_version=str(LATEST_1_0))
     @parametrize(broker_version=str(LATEST_0_11_0))
-    @parametrize(broker_version=str(LATEST_0_10_2))
-    @parametrize(broker_version=str(LATEST_0_10_1))
     def test_compatible_brokers_eos_disabled(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
-        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, False)
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, "at_least_once")
         processor.start()
 
         self.consumer.start()
@@ -96,18 +85,89 @@ class StreamsBrokerCompatibility(Test):
         self.consumer.stop()
         self.kafka.stop()
 
+    @parametrize(broker_version=str(LATEST_2_6))
+    @parametrize(broker_version=str(LATEST_2_5))
+    @parametrize(broker_version=str(LATEST_2_4))
+    @parametrize(broker_version=str(LATEST_2_3))
+    @parametrize(broker_version=str(LATEST_2_2))
+    @parametrize(broker_version=str(LATEST_2_1))
+    @parametrize(broker_version=str(LATEST_2_0))
+    @parametrize(broker_version=str(LATEST_1_1))
+    @parametrize(broker_version=str(LATEST_1_0))
+    @parametrize(broker_version=str(LATEST_0_11_0))
+    def test_compatible_brokers_eos_alpha_enabled(self, broker_version):
+        self.kafka.set_version(KafkaVersion(broker_version))
+        self.kafka.start()
+
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, "exactly_once")
+        processor.start()
+
+        self.consumer.start()
+
+        processor.wait()
+
+        wait_until(lambda: self.consumer.total_consumed() > 0, timeout_sec=30, err_msg="Did expect to read a message but got none within 30 seconds.")
+
+        self.consumer.stop()
+        self.kafka.stop()
+
+    # TODO enable after 2.5 is released
+    # @parametrize(broker_version=str(LATEST_2_5))
+    # def test_compatible_brokers_eos_beta_enabled(self, broker_version):
+    #     self.kafka.set_version(KafkaVersion(broker_version))
+    #     self.kafka.start()
+    #
+    #     processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, "exactly_once_beta")
+    #     processor.start()
+    #
+    #     self.consumer.start()
+    #
+    #     processor.wait()
+    #
+    #     wait_until(lambda: self.consumer.total_consumed() > 0, timeout_sec=30, err_msg="Did expect to read a message but got none within 30 seconds.")
+    #
+    #     self.consumer.stop()
+    #     self.kafka.stop()
+
+    @parametrize(broker_version=str(LATEST_0_10_2))
+    @parametrize(broker_version=str(LATEST_0_10_1))
     @parametrize(broker_version=str(LATEST_0_10_0))
     def test_fail_fast_on_incompatible_brokers(self, broker_version):
         self.kafka.set_version(KafkaVersion(broker_version))
         self.kafka.start()
 
-        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, False)
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, "at_least_once")
 
         with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
             processor.start()
-            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support CREATE_TOPICS',
+            monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException',
                         timeout_sec=60,
-                        err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException: The broker does not support CREATE_TOPICS' error message " + str(processor.node.account))
+                        err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException " + str(processor.node.account))
 
         self.kafka.stop()
 
+    @parametrize(broker_version=str(LATEST_2_4))
+    @parametrize(broker_version=str(LATEST_2_3))
+    @parametrize(broker_version=str(LATEST_2_2))
+    @parametrize(broker_version=str(LATEST_2_1))
+    @parametrize(broker_version=str(LATEST_2_0))
+    @parametrize(broker_version=str(LATEST_1_1))
+    @parametrize(broker_version=str(LATEST_1_0))
+    @parametrize(broker_version=str(LATEST_0_11_0))
+    def test_fail_fast_on_incompatible_brokers_if_eos_beta_enabled(self, broker_version):
+        self.kafka.set_version(KafkaVersion(broker_version))
+        self.kafka.start()
+
+        processor = StreamsBrokerCompatibilityService(self.test_context, self.kafka, "exactly_once_beta")
+
+        with processor.node.account.monitor_log(processor.STDERR_FILE) as monitor:
+            with processor.node.account.monitor_log(processor.LOG_FILE) as log:
+                processor.start()
+                log.wait_until('Shutting down because the Kafka cluster seems to be on a too old version. Setting processing\.guarantee="exactly_once_beta" requires broker version 2\.5 or higher\.',
+                               timeout_sec=60,
+                               err_msg="Never saw 'Shutting down, because the Kafka cluster seems to be on a too old version. Setting `processing.guarantee=\"exaclty_once_beta\"` requires broker version 2.5 or higher.' log message " + str(processor.node.account))
+                monitor.wait_until('FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException',
+                                   timeout_sec=60,
+                                   err_msg="Never saw 'FATAL: An unexpected exception org.apache.kafka.common.errors.UnsupportedVersionException' error message " + str(processor.node.account))
+
+        self.kafka.stop()
