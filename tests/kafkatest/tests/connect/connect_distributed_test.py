@@ -444,7 +444,11 @@ class ConnectDistributedTest(Test):
             sink_seqnos = [msg['seqno'] for msg in sink_messages if msg['task'] == task]
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because
             # clean bouncing should commit on rebalance.
-            sink_seqno_max = max(sink_seqnos)
+
+            if len(sink_seqnos) == 0:
+                sink_seqno_max = 0
+            else:
+                sink_seqno_max = max(sink_seqnos)
             self.logger.debug("Max sink seqno: %d", sink_seqno_max)
             sink_seqno_counts = Counter(sink_seqnos)
             missing_sink_seqnos = sorted(set(range(sink_seqno_max)).difference(set(sink_seqnos)))
