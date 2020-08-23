@@ -85,7 +85,7 @@ class EndToEndTest(Test):
 
     def await_consumed_offsets(self, last_acked_offsets, timeout_sec):
         def has_finished_consuming():
-            for partition, offset in iter(last_acked_offsets.items()):
+            for partition, offset in last_acked_offsets.items():
                 if not partition in self.last_consumed_offsets:
                     return False
                 last_commit = self.consumer.last_commit(partition)

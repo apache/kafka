@@ -88,7 +88,7 @@ class Benchmark(Test):
         self.validate_versions(client_version, broker_version)
         self.start_kafka(security_protocol, security_protocol, broker_version, tls_version)
         # Always generate the same total amount of data
-        nrecords = int(self.target_data_size // message_size)
+        nrecords = int(self.target_data_size / message_size)
 
         self.producer = ProducerPerformanceService(
             self.test_context, num_producers, self.kafka, topic=topic,

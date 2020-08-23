@@ -421,14 +421,11 @@ class ConnectDistributedTest(Test):
             src_seqnos = [msg['seqno'] for msg in src_messages if msg['task'] == task]
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because clean
             # bouncing should commit on rebalance.
-            if len(src_seqnos) == 0:
-                src_seqno_max = 0
-            else:
-                src_seqno_max = max(src_seqnos)
+            src_seqno_max = max(src_seqnos) if len(src_seqnos) else 0
             self.logger.debug("Max source seqno: %d", src_seqno_max)
             src_seqno_counts = Counter(src_seqnos)
             missing_src_seqnos = sorted(set(range(src_seqno_max)).difference(set(src_seqnos)))
-            duplicate_src_seqnos = sorted([seqno for seqno,count in iter(src_seqno_counts.items()) if count > 1])
+            duplicate_src_seqnos = sorted([seqno for seqno,count in src_seqno_counts.items() if count > 1])
 
             if missing_src_seqnos:
                 self.logger.error("Missing source sequence numbers for task " + str(task))
@@ -444,11 +441,7 @@ class ConnectDistributedTest(Test):
             sink_seqnos = [msg['seqno'] for msg in sink_messages if msg['task'] == task]
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because
             # clean bouncing should commit on rebalance.
-
-            if len(sink_seqnos) == 0:
-                sink_seqno_max = 0
-            else:
-                sink_seqno_max = max(sink_seqnos)
+            sink_seqno_max = max(sink_seqnos) if len(sink_seqnos) else 0
             self.logger.debug("Max sink seqno: %d", sink_seqno_max)
             sink_seqno_counts = Counter(sink_seqnos)
             missing_sink_seqnos = sorted(set(range(sink_seqno_max)).difference(set(sink_seqnos)))
