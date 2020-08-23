@@ -49,21 +49,6 @@ class KafkaVersion(LooseVersion):
         else:
             return LooseVersion.__str__(self)
 
-    def __eq__(self, other):
-        return self._cmp(other) == 0
-
-    def __lt__(self, other):
-        return self._cmp(other) < 0
-
-    def __le__(self, other):
-        return self._cmp(other) <= 0
-
-    def __gt__(self, other):
-        return self._cmp(other) > 0
-
-    def __ge__(self, other):
-        return self._cmp(other) >= 0
-
     def _cmp(self, other):
         if isinstance(other, str):
             other = KafkaVersion(other)
