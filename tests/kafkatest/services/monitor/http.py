@@ -154,7 +154,7 @@ class _MetricsReceiver(BaseHTTPRequestHandler):
             name = raw_metric['name']
             group = raw_metric['group']
             # Convert to tuple of pairs because dicts & lists are unhashable
-            tags = tuple([(k, v) for k, v in raw_metric['tags'].items()]),
+            tags = tuple((k, v) for k, v in raw_metric['tags'].items()),
             value = raw_metric['value']
 
             key = MetricKey(host=host, client_id=client_id, name=name, group=group, tags=tags)
