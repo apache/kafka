@@ -93,9 +93,11 @@ class ReplicationTest(EndToEndTest):
     indicator that nothing is left to consume.
     """
 
+    PARTITIONS = 3
+    REPLICATION_FACTOR = 3
     TOPIC_CONFIG = {
-        "partitions": 3,
-        "replication-factor": 3,
+        "partitions": PARTITIONS,
+        "replication-factor": REPLICATION_FACTOR,
         "configs": {"min.insync.replicas": 2}
     }
  
@@ -163,3 +165,6 @@ class ReplicationTest(EndToEndTest):
         self.await_startup()
         failures[failure_mode](self, broker_type)
         self.run_validation(enable_idempotence=enable_idempotence)
+
+        if security_protocol != "SASL_SSL":
+            self.kafka.replica_leader_epochs_match(self.topic, range(0, self.REPLICATION_FACTOR))

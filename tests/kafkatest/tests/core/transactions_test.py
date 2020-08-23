@@ -281,3 +281,6 @@ class TransactionsTest(Test):
             assert input_messages == sorted(input_messages), "The seed messages themselves were not in order"
             assert output_messages == input_messages, "Output messages are not in order"
             assert concurrently_consumed_messages == output_messages, "Concurrently consumed messages are not in order"
+
+        self.kafka.replica_leader_epochs_match(self.input_topic, range(0, self.num_input_partitions))
+        self.kafka.replica_leader_epochs_match(self.output_topic, range(0, self.num_output_partitions))
