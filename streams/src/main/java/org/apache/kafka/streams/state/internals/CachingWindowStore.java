@@ -476,17 +476,21 @@ class CachingWindowStore
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.timeTo = timeTo;
-            this.lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
             this.forward = forward;
 
             this.segmentInterval = cacheFunction.getSegmentInterval();
-            this.currentSegmentId = cacheFunction.segmentId(timeFrom);
-
-            setCacheKeyRange(timeFrom, currentSegmentLastTime());
 
             if (forward) {
+                this.lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
+                this.currentSegmentId = cacheFunction.segmentId(timeFrom);
+
+                setCacheKeyRange(timeFrom, currentSegmentLastTime());
                 this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
+                this.currentSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
+                this.lastSegmentId = cacheFunction.segmentId(timeFrom);
+
+                setCacheKeyRange(currentSegmentBeginTime(), Math.min(timeTo, maxObservedTimestamp.get()));
                 this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
         }
@@ -548,21 +552,33 @@ class CachingWindowStore
         }
 
         private void getNextSegmentIterator() {
-            ++currentSegmentId;
-            lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
-
-            if (currentSegmentId > lastSegmentId) {
-                current = null;
-                return;
-            }
-
-            setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
-
-            current.close();
-
             if (forward) {
+                ++currentSegmentId;
+                lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
+
+                if (currentSegmentId > lastSegmentId) {
+                    current = null;
+                    return;
+                }
+
+                setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
+
+                current.close();
+
                 current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
+                --currentSegmentId;
+//                lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
+
+                if (currentSegmentId < lastSegmentId) {
+                    current = null;
+                    return;
+                }
+
+                setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
+
+                current.close();
+
                 current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
             }
         }
