@@ -1403,23 +1403,18 @@ object GroupMetadataManager {
       val value = valueSchema.read(buffer)
       val maxVersion = GROUP_VALUE_SCHEMAS.size - 1
 
-      if (0 to maxVersion contains version) {
+      if (version >= 0 && version <= maxVersion) {
         val generationId = value.get(GENERATION_KEY).asInstanceOf[Int]
         val protocolType = value.get(PROTOCOL_TYPE_KEY).asInstanceOf[String]
         val protocol = value.get(PROTOCOL_KEY).asInstanceOf[String]
         val leaderId = value.get(LEADER_KEY).asInstanceOf[String]
         val memberMetadataArray = value.getArray(MEMBERS_KEY)
         val initialState = if (memberMetadataArray.isEmpty) Empty else Stable
-        val currentStateTimestamp: Option[Long] = version match {
-          case version if version >= 2 =>
-            if (value.hasField(CURRENT_STATE_TIMESTAMP_KEY)) {
-              val timestamp = value.getLong(CURRENT_STATE_TIMESTAMP_KEY)
-              if (timestamp == -1) None else Some(timestamp)
-            } else
-              None
-          case _ =>
-            None
-        }
+        val currentStateTimestamp: Option[Long] =
+          if (version >= 2 && value.hasField(CURRENT_STATE_TIMESTAMP_KEY)) {
+            val timestamp = value.getLong(CURRENT_STATE_TIMESTAMP_KEY)
+            if (timestamp == -1) None else Some(timestamp)
+          } else None
 
         val members = memberMetadataArray.map { memberMetadataObj =>
           val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
