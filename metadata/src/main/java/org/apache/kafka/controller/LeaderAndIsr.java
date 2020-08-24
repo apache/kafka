@@ -17,7 +17,35 @@
 
 package org.apache.kafka.controller;
 
-public final class QuorumControllerManager {
-    QuorumControllerManager() {
+import java.util.List;
+
+public class LeaderAndIsr {
+    private final int leaderId;
+    private final int leaderEpoch;
+    private final List<Integer> isr;
+    private final int currentZkVersion;
+
+    public LeaderAndIsr(int leaderId, int leaderEpoch, List<Integer> isr,
+                        int currentZkVersion) {
+        this.leaderId = leaderId;
+        this.leaderEpoch = leaderEpoch;
+        this.isr = isr;
+        this.currentZkVersion = currentZkVersion;
+    }
+
+    public int leaderId() {
+        return leaderId;
+    }
+
+    public int leaderEpoch() {
+        return leaderEpoch;
+    }
+
+    public List<Integer> isr() {
+        return isr;
+    }
+
+    public int currentZkVersion() {
+        return currentZkVersion;
     }
 }

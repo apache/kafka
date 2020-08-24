@@ -67,6 +67,13 @@ if [ -z "$UPGRADE_KAFKA_STREAMS_TEST_VERSION" ]; then
   done
 fi
 
+for file in "$base_dir"/metadata/build/libs/kafka-*.jar;
+do
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
 for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
   if should_include_file "$file"; then
