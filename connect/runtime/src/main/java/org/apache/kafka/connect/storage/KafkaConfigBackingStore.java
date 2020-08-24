@@ -699,6 +699,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 if (started)
                     updateListener.onTaskConfigUpdate(updatedTasks);
             } else if (record.key().equals(SESSION_KEY_KEY)) {
+                SessionKey newSessionKey;
                 synchronized (lock) {
                     if (value.value() == null) {
                         log.error("Ignoring session key because it is unexpectedly null");
@@ -733,10 +734,11 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         new SecretKeySpec(key, (String) keyAlgorithm),
                         (long) creationTimestamp
                     );
-
-                    if (started)
-                        updateListener.onSessionKeyUpdate(KafkaConfigBackingStore.this.sessionKey);
+                    newSessionKey = KafkaConfigBackingStore.this.sessionKey;
                 }
+
+                if (started)
+                    updateListener.onSessionKeyUpdate(newSessionKey);
             } else {
                 log.error("Discarding config update record with invalid key: {}", record.key());
             }
