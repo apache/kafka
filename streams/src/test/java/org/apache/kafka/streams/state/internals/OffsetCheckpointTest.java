@@ -138,14 +138,11 @@ public class OffsetCheckpointTest {
 
     @Test
     public void shouldThrowIOExceptionWhenWritingToNotExistedFile() {
-        final Map<TopicPartition, Long> offsetsToWrite = Collections.singletonMap(
-            new TopicPartition(topic, 0), 0L);
+        final Map<TopicPartition, Long> offsetsToWrite = Collections.singletonMap(new TopicPartition(topic, 0), 0L);
 
-        // create a file with not existed path, and feed into OffsetCheckpoint
         final File notExistedFile = new File("/not_existed_dir/not_existed_file");
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(notExistedFile);
-
-        // should throw IOException while writing the offset into the file
+        
         final IOException e = assertThrows(IOException.class, () -> checkpoint.write(offsetsToWrite));
         assertThat(e.getMessage(), containsString("No such file or directory"));
     }

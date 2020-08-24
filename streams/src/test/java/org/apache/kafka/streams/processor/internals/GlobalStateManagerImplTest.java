@@ -189,15 +189,13 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         stateManager.updateChangelogOffsets(offsets);
 
+        // set readonly to the CHECKPOINT_FILE_NAME.tmp file because we will write data to the .tmp file first
+        // and then swap to CHECKPOINT_FILE_NAME by replacing it
         final File file = new File(stateDirectory.globalStateDir(), StateManagerUtil.CHECKPOINT_FILE_NAME + ".tmp");
         file.createNewFile();
-        // set the checkpoint tmp file to read-only to simulate the IOException situation
         file.setWritable(false);
 
-        try (final LogCaptureAppender appender =
-                 LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
-
-            // checkpoint should fail due to the file is readonly
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(GlobalStateManagerImpl.class)) {
             stateManager.checkpoint();
             assertThat(appender.getMessages(), hasItem(containsString(
                 "Failed to write offset checkpoint file to " + checkpointFile.getPath() + " for global stores")));
