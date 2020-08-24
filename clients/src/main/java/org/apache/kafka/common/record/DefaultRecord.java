@@ -20,6 +20,7 @@ import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Checksums;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.PrimitiveRef;
@@ -538,15 +539,16 @@ public class DefaultRecord implements Record {
             String headerKey = Utils.utf8(buffer, headerKeySize);
             buffer.position(buffer.position() + headerKeySize);
 
-            ByteBuffer headerValue = null;
+            Header header;
             int headerValueSize = ByteUtils.readVarint(buffer);
-            if (headerValueSize >= 0) {
-                headerValue = buffer.slice();
+            if (headerValueSize > 0) {
+                ByteBuffer headerValue = buffer.slice();
                 headerValue.limit(headerValueSize);
                 buffer.position(buffer.position() + headerValueSize);
-            }
-
-            headers[i] = new RecordHeader(headerKey, headerValue);
+                header = new RecordHeader(headerKey, headerValue);
+            } else if (headerValueSize == 0) header = new RecordHeader(headerKey, Bytes.EMPTY);
+            else header = new RecordHeader(headerKey, (byte[]) null);
+            headers[i] = header;
         }
 
         return headers;
