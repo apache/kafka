@@ -327,7 +327,7 @@ public enum Errors {
     THROTTLING_QUOTA_EXCEEDED(89, "The throttling quota has been exceeded.", ThrottlingQuotaExceededException::new),
     PRODUCER_FENCED(90, "There is a newer producer with the same transactionalId " +
             "which fences the current one.", ProducerFencedException::new),
-    INVALID_UPDATE_VERSION(91, "The given ISR version was out-of-date.", InvalidUpdateVersionException::new);
+    INVALID_UPDATE_VERSION(91, "The given update version was invalid.", InvalidUpdateVersionException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

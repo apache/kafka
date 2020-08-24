@@ -143,7 +143,7 @@ object Partition extends KafkaMetricsGroup {
       delayedOperations = delayedOperations,
       metadataCache = replicaManager.metadataCache,
       logManager = replicaManager.logManager,
-      alterIsrChannelManager = replicaManager.alterIsrManager)
+      alterIsrManager = replicaManager.alterIsrManager)
   }
 
   def removeMetrics(topicPartition: TopicPartition): Unit = {
@@ -201,7 +201,7 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrChannelManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
+                alterIsrManager: AlterIsrManager) extends Logging with KafkaMetricsGroup {
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
@@ -225,8 +225,7 @@ class Partition(val topicPartition: TopicPartition,
   private val useAlterIsr: Boolean = interBrokerProtocolVersion >= KAFKA_2_7_IV1
 
   // This optional set has a dual purpose. When it is None, we know there is not an AlterIsr request in-flight. When
-  // it is set, there is an AlterIsr request in flight, and if it was an expansion we can now use the values of replicas
-  // in this set as as a "maximal" or "effective" ISR.
+  // not None, there is an AlterIsr request in flight and values of the Set include a "maximal" or "effective" ISR.
   @volatile var pendingInSyncReplicaIds: Option[Set[Int]] = None
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
@@ -546,7 +545,7 @@ class Partition(val topicPartition: TopicPartition,
       zkVersion = partitionState.zkVersion
 
       // Clear any pending AlterIsr requests and check replica state
-      alterIsrChannelManager.clearPending(topicPartition)
+      alterIsrManager.clearPending(topicPartition)
 
       // In the case of successive leader elections in a short time period, a follower may have
       // entries in its log from a later epoch than any entry in the new leader's log. In order
@@ -626,7 +625,7 @@ class Partition(val topicPartition: TopicPartition,
       zkVersion = partitionState.zkVersion
 
       // Since we might have been a leader previously, still clear any pending AlterIsr requests
-      alterIsrChannelManager.clearPending(topicPartition)
+      alterIsrManager.clearPending(topicPartition)
 
       if (leaderReplicaIdOpt.contains(newLeaderBrokerId) && leaderEpoch == oldLeaderEpoch) {
         false
@@ -664,8 +663,8 @@ class Partition(val topicPartition: TopicPartition,
         // since the replica's logStartOffset may have incremented
         val leaderLWIncremented = newLeaderLW > oldLeaderLW
 
-        // check if we need to expand ISR to include this replica
-        // if it is not in the ISR yet
+        // Check if this in-sync replica needs to be added to the ISR. We look at the "maximal" ISR here so we don't
+        // send an additional Alter ISR request for the same replica
         if (!inSyncReplicaIds(true).contains(followerId))
           maybeExpandIsr(followerReplica, followerFetchTimeMs)
 
@@ -827,8 +826,8 @@ class Partition(val topicPartition: TopicPartition,
    *
    * With the addition of AlterIsr, we also consider newly added replicas as part of the ISR when advancing
    * the HW. These replicas have not yet been committed to the ISR by the controller and propagated via LeaderAndIsr.
-   * The reason we can safely do this is that adding members to the ISR makes it more restrictive. See KIP-497 for
-   * more details
+   * Adding additional replicas to the ISR makes it more restrictive and therefor safe. We call this set the "maximal"
+   * ISR. See KIP-497 for more details
    *
    * Returns true if the HW was incremented, and false otherwise.
    * Note There is no need to acquire the leaderIsrUpdate lock here
@@ -840,7 +839,7 @@ class Partition(val topicPartition: TopicPartition,
       // avoid unnecessary collection generation
       var newHighWatermark = leaderLog.logEndOffsetMetadata
       remoteReplicasMap.values.foreach { replica =>
-        // Note here we are using effectiveInSyncReplicaIds, see explanation above
+        // Note here we are using the "maximal", see explanation above
         if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
           (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds(true).contains(replica.brokerId))) {
           newHighWatermark = replica.logEndOffsetMetadata
@@ -1253,6 +1252,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def expandIsrWithAlterIsr(newInSyncReplica: Int): Unit = {
+    // This is called from maybeExpandIsr which holds the ISR write lock
     if (pendingInSyncReplicaIds.isEmpty) {
       // When expanding the ISR, we can safely assume the new replica will make it into the ISR since this puts us in
       // a more constrained state for advancing the HW.
@@ -1282,6 +1282,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def shrinkIsrWithAlterIsr(outOfSyncReplicas: Set[Int]): Unit = {
+    // This is called from maybeShrinkIsr which holds the ISR write lock
     if (pendingInSyncReplicaIds.isEmpty) {
       // When shrinking the ISR, we cannot assume that the update will succeed as this could erroneously advance the HW
       // We update pendingInSyncReplicaIds here simply to prevent any further ISR updates from occurring until we get
@@ -1315,29 +1316,31 @@ class Partition(val topicPartition: TopicPartition,
 
   private def alterIsr(newIsr: Set[Int]): Unit = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
-    alterIsrChannelManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, {
-      case Errors.NONE =>
-        debug(s"Controller accepted proposed ISR $newIsr for $topicPartition.")
-      case Errors.REPLICA_NOT_AVAILABLE | Errors.INVALID_REPLICA_ASSIGNMENT =>
-        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition. Some replicas were not online or " +
-             s"in the partition assignment. Clearing pending ISR to allow leader to retry.")
-        pendingInSyncReplicaIds = None
-      case Errors.FENCED_LEADER_EPOCH =>
-        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we have an old leader epoch. Not retrying.")
-      case Errors.NOT_LEADER_OR_FOLLOWER =>
-        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we are not the leader. Not retrying.")
-      case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since this partition is unknown. Not retrying.")
-      case Errors.INVALID_UPDATE_VERSION =>
-        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition due to invalid ZK version. Not retrying.")
-      // Top-level errors that have been pushed down to partition level by AlterIsrManager
-      case Errors.STALE_BROKER_EPOCH =>
-        warn(s"Controller rejected proposed ISR $newIsr for $topicPartition due to a stale broker epoch. " +
-             s"Clearing pending ISR to allow leader to retry.")
-        pendingInSyncReplicaIds = None
-      case e: Errors =>
-        warn(s"Controller had an unexpected error ($e) when handling proposed ISR $newIsr for $topicPartition. State is unknown.")
-        pendingInSyncReplicaIds = None
+    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, {
+      inWriteLock(leaderIsrUpdateLock) {
+        case Errors.NONE =>
+          debug(s"Controller accepted proposed ISR $newIsr for $topicPartition.")
+        case Errors.REPLICA_NOT_AVAILABLE | Errors.INVALID_REPLICA_ASSIGNMENT =>
+          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition. Some replicas were not online or " +
+            s"in the partition assignment. Clearing pending ISR to allow leader to retry.")
+          pendingInSyncReplicaIds = None
+        case Errors.FENCED_LEADER_EPOCH =>
+          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we have an old leader epoch. Not retrying.")
+        case Errors.NOT_LEADER_OR_FOLLOWER =>
+          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we are not the leader. Not retrying.")
+        case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since this partition is unknown. Not retrying.")
+        case Errors.INVALID_UPDATE_VERSION =>
+          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition due to invalid ZK version. Not retrying.")
+        // Top-level errors that have been pushed down to partition level by AlterIsrManager
+        case Errors.STALE_BROKER_EPOCH =>
+          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition due to a stale broker epoch. " +
+            s"Clearing pending ISR to allow leader to retry.")
+          pendingInSyncReplicaIds = None
+        case e: Errors =>
+          warn(s"Controller had an unexpected error ($e) when handling proposed ISR $newIsr for $topicPartition. State is unknown.")
+          pendingInSyncReplicaIds = None
+      }
     }))
   }
 
