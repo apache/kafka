@@ -977,7 +977,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             epochs = [self.replica_leader_epochs(self.get_node(replica), topic, partition, end_offset) for replica in isr]
             for e1 in epochs:
                 for e2 in epochs:
-                    assert e1 == e2, "leader epochs didn't match %s" % str(epochs)
+                    assert e1 == e2, "leader epochs for %s-%d didn't match %s" % (topic, partition, str(epochs))
 
     def java_class_name(self):
         return "kafka.Kafka"
