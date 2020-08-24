@@ -173,7 +173,7 @@ public class CompositeReadOnlyWindowStoreTest {
         assertEquals(Collections.singletonList(new KeyValue<>(1L, "my-value")), results);
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
         final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
         EasyMock.expect(storeProvider.stores(anyString(), anyObject()))
@@ -185,10 +185,11 @@ public class CompositeReadOnlyWindowStoreTest {
             QueryableStoreTypes.windowStore(),
             "foo"
         );
-        store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
+
+        assertThrows(InvalidStateStoreException.class, () -> store.fetch("key", ofEpochMilli(1), ofEpochMilli(10)));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowInvalidStateStoreExceptionOnRebalanceWhenBackwards() {
         final StateStoreProvider storeProvider = EasyMock.createNiceMock(StateStoreProvider.class);
         EasyMock.expect(storeProvider.stores(anyString(), anyObject()))
@@ -200,7 +201,7 @@ public class CompositeReadOnlyWindowStoreTest {
             QueryableStoreTypes.windowStore(),
             "foo"
         );
-        store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10));
+        assertThrows(InvalidStateStoreException.class, () -> store.backwardFetch("key", ofEpochMilli(1), ofEpochMilli(10)));
     }
 
     @Test
@@ -429,19 +430,19 @@ public class CompositeReadOnlyWindowStoreTest {
             KeyValue.pair(new Windowed<>("b", new TimeWindow(10, 10 + WINDOW_SIZE)), "b"))));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNPEIfKeyIsNull() {
-        windowStore.fetch(null, ofEpochMilli(0), ofEpochMilli(0));
+        assertThrows(NullPointerException.class, () -> windowStore.fetch(null, ofEpochMilli(0), ofEpochMilli(0)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNPEIfFromKeyIsNull() {
-        windowStore.fetch(null, "a", ofEpochMilli(0), ofEpochMilli(0));
+        assertThrows(NullPointerException.class, () -> windowStore.fetch(null, "a", ofEpochMilli(0), ofEpochMilli(0)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNPEIfToKeyIsNull() {
-        windowStore.fetch("a", null, ofEpochMilli(0), ofEpochMilli(0));
+        assertThrows(NullPointerException.class, () -> windowStore.fetch("a", null, ofEpochMilli(0), ofEpochMilli(0)));
     }
 
 }

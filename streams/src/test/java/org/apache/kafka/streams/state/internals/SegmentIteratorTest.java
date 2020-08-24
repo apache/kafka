@@ -112,19 +112,11 @@ public class SegmentIteratorTest {
     @Test
     public void shouldIterateBackwardOverAllSegments() {
         iterator = new SegmentIterator<>(
-            Arrays.asList(segmentOne, segmentTwo).iterator(),
+            Arrays.asList(segmentTwo, segmentOne).iterator(), //store should pass the segments in the right order
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
             Bytes.wrap("z".getBytes()),
             false);
-
-        assertTrue(iterator.hasNext());
-        assertEquals("b", new String(iterator.peekNextKey().get()));
-        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
-
-        assertTrue(iterator.hasNext());
-        assertEquals("a", new String(iterator.peekNextKey().get()));
-        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
 
         assertTrue(iterator.hasNext());
         assertEquals("d", new String(iterator.peekNextKey().get()));
@@ -133,6 +125,14 @@ public class SegmentIteratorTest {
         assertTrue(iterator.hasNext());
         assertEquals("c", new String(iterator.peekNextKey().get()));
         assertEquals(KeyValue.pair("c", "3"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
 
         assertFalse(iterator.hasNext());
     }

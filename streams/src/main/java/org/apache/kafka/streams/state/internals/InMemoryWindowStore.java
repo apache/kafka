@@ -57,17 +57,17 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private final String name;
     private final String metricScope;
-    private ProcessorContext context;
-    private Sensor expiredRecordSensor;
-    private int seqnum = 0;
-    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
-
     private final long retentionPeriod;
     private final long windowSize;
     private final boolean retainDuplicates;
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap = new ConcurrentSkipListMap<>();
     private final Set<InMemoryWindowStoreIteratorWrapper> openIterators = ConcurrentHashMap.newKeySet();
+
+    private ProcessorContext context;
+    private Sensor expiredRecordSensor;
+    private int seqnum = 0;
+    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     private volatile boolean open = false;
 
@@ -539,7 +539,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
     }
 
-    private static class WrappedWindowedKeyValueIterator extends InMemoryWindowStoreIteratorWrapper implements KeyValueIterator<Windowed<Bytes>, byte[]> {
+    private static class WrappedWindowedKeyValueIterator
+        extends InMemoryWindowStoreIteratorWrapper
+        implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
         private final long windowSize;
 

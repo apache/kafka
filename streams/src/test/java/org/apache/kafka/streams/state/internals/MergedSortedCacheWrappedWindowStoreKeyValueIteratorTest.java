@@ -58,7 +58,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
             ),
             new LRUCacheEntry(cacheKey.getBytes())
         )).iterator();
-    private Deserializer<String> deserializer = Serdes.String().deserializer();
+    final private Deserializer<String> deserializer = Serdes.String().deserializer();
 
     @Test
     public void shouldHaveNextFromStore() {
@@ -171,11 +171,9 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     }
 
 
-    private MergedSortedCacheWindowStoreKeyValueIterator createIterator(
-        final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
-        final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
-        final boolean forward
-    ) {
+    private MergedSortedCacheWindowStoreKeyValueIterator createIterator(final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
+                                                                        final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
+                                                                        final boolean forward) {
         final DelegatingPeekingKeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(storeKvs));
 

@@ -40,14 +40,17 @@ import java.util.Map;
 
 public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
+
     private final String name;
     private final AbstractSegments<S> segments;
     private final String metricScope;
     private final KeySchema keySchema;
+
     private ProcessorContext context;
-    private volatile boolean open;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+
+    private volatile boolean open;
 
     AbstractRocksDBSegmentedBytesStore(final String name,
                                        final String metricScope,

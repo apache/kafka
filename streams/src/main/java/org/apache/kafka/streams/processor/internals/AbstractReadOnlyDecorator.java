@@ -287,6 +287,5 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
                                                         final K to) {
             return wrapped().fetch(from, to);
         }
-
     }
 }

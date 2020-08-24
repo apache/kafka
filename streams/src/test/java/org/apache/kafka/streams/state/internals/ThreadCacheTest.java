@@ -24,7 +24,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -35,6 +34,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class ThreadCacheTest {
@@ -44,7 +44,7 @@ public class ThreadCacheTest {
     private final LogContext logContext = new LogContext("testCache ");
 
     @Test
-    public void basicPutGet() throws IOException {
+    public void basicPutGet() {
         final List<KeyValue<String, String>> toInsert = Arrays.asList(
                 new KeyValue<>("K1", "V1"),
                 new KeyValue<>("K2", "V2"),
@@ -65,7 +65,7 @@ public class ThreadCacheTest {
         for (final KeyValue<String, String> kvToInsert : toInsert) {
             final Bytes key = Bytes.wrap(kvToInsert.key.getBytes());
             final LRUCacheEntry entry = cache.get(namespace, key);
-            assertEquals(entry.isDirty(), true);
+            assertTrue(entry.isDirty());
             assertEquals(new String(entry.value()), kvToInsert.value);
         }
         assertEquals(cache.gets(), 5);
@@ -252,11 +252,11 @@ public class ThreadCacheTest {
         assertEquals(iterator.peekNextKey(), iterator.next().key);
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
     public void shouldThrowIfNoPeekNextKey() {
         final ThreadCache cache = new ThreadCache(logContext, 10000L, new MockStreamsMetrics(new Metrics()));
         final ThreadCache.MemoryLRUCacheBytesIterator iterator = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{1}));
-        iterator.peekNextKey();
+        assertThrows(NoSuchElementException.class, iterator::peekNextKey);
     }
 
     @Test
