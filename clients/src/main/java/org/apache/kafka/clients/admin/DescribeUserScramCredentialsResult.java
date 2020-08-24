@@ -79,12 +79,13 @@ public class DescribeUserScramCredentialsResult {
 
     /**
      *
-     * @return a future indicating the distinct users that were described.  The future will not complete successfully
-     * if the user is not authorized to perform the describe operation; otherwise, it will complete successfully as long
-     * as the list of users with credentials can be successfully determined within some hard-coded timeout period. Note
-     * that the returned list will only include users that have at least one credential: a request to describe an
-     * explicit list of users, none of which existed/had a credential, will result in a future that returns an empty
-     * list being returned here.
+     * @return a future indicating the distinct users that meet the request criteria and that have at least one
+     * credential.  The future will not complete successfully if the user is not authorized to perform the describe
+     * operation; otherwise, it will complete successfully as long as the list of users with credentials can be
+     * successfully determined within some hard-coded timeout period. Note that the returned list will not include users
+     * that do not exist/have no credentials: a request to describe an explicit list of users, none of which existed/had
+     * a credential, will result in a future that returns an empty list being returned here. A returned list will
+     * include users that have a credential but that could not be described.
      */
     public KafkaFuture<List<String>> users() {
         return KafkaFuture.allOf(dataFuture).thenApply(v -> {
