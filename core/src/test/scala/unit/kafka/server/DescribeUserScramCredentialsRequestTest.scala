@@ -101,6 +101,19 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(s"Cannot describe SCRAM credentials for the same user twice in a single request: $user", result.errorMessage)
   }
 
+  @Test
+  def testUnknownUser(): Unit = {
+    val unknownUser = "unknownUser"
+    val request = new DescribeUserScramCredentialsRequest.Builder(
+      new DescribeUserScramCredentialsRequestData().setUsers(List(new UserName().setName(unknownUser)).asJava)).build()
+    val response = sendDescribeUserScramCredentialsRequest(request)
+
+    assertEquals("Expected no top-level error", Errors.NONE.code, response.data.errorCode)
+    assertEquals(1, response.data.results.size)
+    val result: DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult = response.data.results.get(0)
+    assertEquals(s"Expected duplicate resource error for $unknownUser", Errors.RESOURCE_NOT_FOUND.code, result.errorCode)
+    assertEquals(s"Attempt to describe a user credential that does not exist: $unknownUser", result.errorMessage)
+  }
 
   private def sendDescribeUserScramCredentialsRequest(request: DescribeUserScramCredentialsRequest, socketServer: SocketServer = controllerSocketServer): DescribeUserScramCredentialsResponse = {
     connectAndReceive[DescribeUserScramCredentialsResponse](request, destination = socketServer)

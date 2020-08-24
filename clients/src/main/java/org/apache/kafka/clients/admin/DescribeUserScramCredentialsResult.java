@@ -41,26 +41,33 @@ public class DescribeUserScramCredentialsResult {
     private final KafkaFuture<DescribeUserScramCredentialsResponseData> dataFuture;
 
     /**
+     * Package-private constructor
      *
      * @param dataFuture the future indicating response data from the call
      */
-    public DescribeUserScramCredentialsResult(KafkaFuture<DescribeUserScramCredentialsResponseData> dataFuture) {
+    DescribeUserScramCredentialsResult(KafkaFuture<DescribeUserScramCredentialsResponseData> dataFuture) {
         this.dataFuture = Objects.requireNonNull(dataFuture);
     }
 
     /**
      *
-     * @return a future for the results of all requested (either explicitly or implicitly via describe-all) users.
-     * The future will complete successfully only if all user descriptions complete successfully.
+     * @return a future for the results of all described users with map keys (one per user) being consistent with the
+     * contents of the list returned by {@link #users()}. The future will complete successfully only if all such user
+     * descriptions complete successfully.
      */
     public KafkaFuture<Map<String, UserScramCredentialsDescription>> all() {
         return KafkaFuture.allOf(dataFuture).thenApply(v -> {
             DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
-            // check to make sure every individual user succeeded
-            Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalFirstFailure =
-                    data.results().stream().filter(result -> result.errorCode() != Errors.NONE.code()).findFirst();
-            if (optionalFirstFailure.isPresent()) {
-                throw Errors.forCode(optionalFirstFailure.get().errorCode()).exception(optionalFirstFailure.get().errorMessage());
+            /* Check to make sure every individual described user succeeded.  Note that a successfully described user
+             * is one that appears with *either* a NONE error code or a RESOURCE_NOT_FOUND error code. The
+             * RESOURCE_NOT_FOUND means the client explicitly requested a describe of that particular user but it could
+             * not be described because it does not exist; such a user will not appear as a key in the returned map.
+             */
+            Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalFirstFailedDescribe =
+                    data.results().stream().filter(result ->
+                        result.errorCode() != Errors.NONE.code() && result.errorCode() != Errors.RESOURCE_NOT_FOUND.code()).findFirst();
+            if (optionalFirstFailedDescribe.isPresent()) {
+                throw Errors.forCode(optionalFirstFailedDescribe.get().errorCode()).exception(optionalFirstFailedDescribe.get().errorMessage());
             }
             Map<String, UserScramCredentialsDescription> retval = new HashMap<>();
             data.results().stream().forEach(userResult ->
@@ -72,15 +79,19 @@ public class DescribeUserScramCredentialsResult {
 
     /**
      *
-     * @return a future indicating the distinct users that were requested (either explicitly or implicitly via
-     * describe-all).  The future will not complete successfully if the user is not authorized to perform the describe
-     * operation; otherwise, it will complete successfully as long as the list of users with credentials can be
-     * successfully determined within some hard-coded timeout period.
+     * @return a future indicating the distinct users that were described.  The future will not complete successfully
+     * if the user is not authorized to perform the describe operation; otherwise, it will complete successfully as long
+     * as the list of users with credentials can be successfully determined within some hard-coded timeout period. Note
+     * that the returned list will only include users that have at least one credential: a request to describe an
+     * explicit list of users, none of which existed/had a credential, will result in a future that returns an empty
+     * list being returned here.
      */
     public KafkaFuture<List<String>> users() {
         return KafkaFuture.allOf(dataFuture).thenApply(v -> {
             DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
-            return data.results().stream().map(result -> result.user()).collect(Collectors.toList());
+            return data.results().stream()
+                    .filter(result -> result.errorCode() != Errors.RESOURCE_NOT_FOUND.code())
+                    .map(result -> result.user()).collect(Collectors.toList());
         });
     }
 
@@ -88,22 +99,23 @@ public class DescribeUserScramCredentialsResult {
      *
      * @param userName the name of the user description being requested
      * @return a future indicating the description results for the given user. The future will complete exceptionally if
-     * the future returned by {@link #users()} completes exceptionally.  If the given user does not exist in the list
-     * of requested users then the future will complete exceptionally with
+     * the future returned by {@link #users()} completes exceptionally.  Note that if the given user does not exist in
+     * the list of described users then the returned future will complete exceptionally with
      * {@link org.apache.kafka.common.errors.ResourceNotFoundException}.
      */
     public KafkaFuture<UserScramCredentialsDescription> description(String userName) {
         return KafkaFuture.allOf(dataFuture).thenApply(v -> {
             DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
-            Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalUserResult =
-                    data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
             // it is possible that there is no future for this user (for example, the original describe request was for
             // users 1, 2, and 3 but this is looking for user 4), so explicitly take care of that case
+            Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalUserResult =
+                    data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
             if (!optionalUserResult.isPresent()) {
                 throw new ResourceNotFoundException("No such user: " + userName);
             }
             DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult = optionalUserResult.get();
             if (userResult.errorCode() != Errors.NONE.code()) {
+                // RESOURCE_NOT_FOUND is included here
                 throw Errors.forCode(userResult.errorCode()).exception(userResult.errorMessage());
             }
             return new UserScramCredentialsDescription(userResult.user(), getScramCredentialInfosFor(userResult));

@@ -1019,7 +1019,7 @@ class AdminManager(val config: KafkaConfig,
         userResults += (user -> result)
       } else if (explicitUser) {
         // it is an error to request credentials for a user that has no credentials
-        result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code).setErrorMessage(attemptToDescribeUserThatDoesNotExist)
+        result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code).setErrorMessage(s"$attemptToDescribeUserThatDoesNotExist: $user")
         userResults += (user -> result)
       }
     }
