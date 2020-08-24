@@ -117,14 +117,14 @@ public class MirrorSourceTask extends SourceTask {
         try {
             consumerAccess.acquire();
         } catch (InterruptedException e) {
-            log.warn("Interrupted waiting for access to consumer. Will try closing anyway.");
+            log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
         }
         Utils.closeQuietly(consumer, "source consumer");
         Utils.closeQuietly(offsetProducer, "offset producer");
         Utils.closeQuietly(metrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
-
+   
     @Override
     public String version() {
         return "1";
@@ -222,7 +222,7 @@ public class MirrorSourceTask extends SourceTask {
             outstandingOffsetSyncs.release();
         });
     }
-
+ 
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, x -> loadOffset(x)));
     }
