@@ -20,10 +20,14 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ResourceNotFoundException;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
+import org.apache.kafka.common.protocol.Errors;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -34,19 +38,14 @@ import java.util.stream.Collectors;
  */
 @InterfaceStability.Evolving
 public class DescribeUserScramCredentialsResult {
-    private final KafkaFuture<List<String>> usersFuture;
-    private final Map<String, KafkaFuture<UserScramCredentialsDescription>> perUserFutures;
+    private final KafkaFuture<DescribeUserScramCredentialsResponseData> dataFuture;
 
     /**
      *
-     * @param usersFuture the future indicating the users described by the call
-     * @param perUserFutures the required map of user names to futures representing the results of describing each
-     *                       user's SCRAM credentials.
+     * @param dataFuture the future indicating response data from the call
      */
-    public DescribeUserScramCredentialsResult(KafkaFuture<List<String>> usersFuture,
-                                              Map<String, KafkaFuture<UserScramCredentialsDescription>> perUserFutures) {
-        this.usersFuture = Objects.requireNonNull(usersFuture);
-        this.perUserFutures = Objects.requireNonNull(perUserFutures);
+    public DescribeUserScramCredentialsResult(KafkaFuture<DescribeUserScramCredentialsResponseData> dataFuture) {
+        this.dataFuture = Objects.requireNonNull(dataFuture);
     }
 
     /**
@@ -56,19 +55,19 @@ public class DescribeUserScramCredentialsResult {
      * futures for the user descriptions complete successfully.
      */
     public KafkaFuture<Map<String, UserScramCredentialsDescription>> all() {
-        KafkaFuture<Void> succeedsOnlyIfUsersFutureSucceeds = KafkaFuture.allOf(users());
-        return succeedsOnlyIfUsersFutureSucceeds.thenApply(void1 -> {
-            KafkaFuture<Void> succeedsOnlyIfAllDescriptionsSucceed = KafkaFuture.allOf(perUserFutures.values().toArray(
-                    new KafkaFuture[perUserFutures.size()]));
-            KafkaFuture<Map<String, UserScramCredentialsDescription>> mapFuture = succeedsOnlyIfAllDescriptionsSucceed.thenApply(void2 ->
-                perUserFutures.entrySet().stream().collect(Collectors.toMap(
-                    e -> e.getKey(),
-                    e -> valueFromFutureGuaranteedToSucceedAtThisPoint(e.getValue()))));
-            /* At this point it is only the users future that is guaranteed to have succeeded.
-             * We want to return the future to the map, but we have to return a map at this point.
-             * We need to dereference the future while propagating any exception.
-             */
-            return valueFromFuturePropagatingExceptionsAsUnchecked(mapFuture);
+        return KafkaFuture.allOf(dataFuture).thenApply(v -> {
+            DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
+            // check to make sure every individual user succeeded
+            Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalFirstFailure =
+                    data.results().stream().filter(result -> result.errorCode() != Errors.NONE.code()).findFirst();
+            if (optionalFirstFailure.isPresent()) {
+                throw Errors.forCode(optionalFirstFailure.get().errorCode()).exception(optionalFirstFailure.get().errorMessage());
+            }
+            Map<String, UserScramCredentialsDescription> retval = new HashMap<>();
+            data.results().stream().forEach(userResult ->
+                    retval.put(userResult.user(), new UserScramCredentialsDescription(userResult.user(),
+                            getScramCredentialInfosFor(userResult))));
+            return retval;
         });
     }
 
@@ -80,7 +79,10 @@ public class DescribeUserScramCredentialsResult {
      * successfully determined within some hard-coded timeout period.
      */
     public KafkaFuture<List<String>> users() {
-        return usersFuture;
+        return KafkaFuture.allOf(dataFuture).thenApply(v -> {
+            DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
+            return data.results().stream().map(result -> result.user()).collect(Collectors.toList());
+        });
     }
 
     /**
@@ -92,16 +94,28 @@ public class DescribeUserScramCredentialsResult {
      * {@link org.apache.kafka.common.errors.ResourceNotFoundException}.
      */
     public KafkaFuture<UserScramCredentialsDescription> description(String userName) {
-        KafkaFuture<Void> succeedsOnlyIfUsersFutureSucceeds = KafkaFuture.allOf(usersFuture);
-        return succeedsOnlyIfUsersFutureSucceeds.thenApply(void1 -> {
+        return KafkaFuture.allOf(dataFuture).thenApply(v -> {
+            DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
+            Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalUserResult =
+                    data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
             // it is possible that there is no future for this user (for example, the original describe request was for
             // users 1, 2, and 3 but this is looking for user 4), so explicitly take care of that case
-            KafkaFuture<UserScramCredentialsDescription> requestedUserFuture = perUserFutures.get(userName);
-            if (requestedUserFuture == null) {
+            if (!optionalUserResult.isPresent()) {
                 throw new ResourceNotFoundException("No such user: " + userName);
             }
-            return valueFromFuturePropagatingExceptionsAsUnchecked(requestedUserFuture);
+            DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult = optionalUserResult.get();
+            if (userResult.errorCode() != Errors.NONE.code()) {
+                throw Errors.forCode(userResult.errorCode()).exception(userResult.errorMessage());
+            }
+            return new UserScramCredentialsDescription(userResult.user(), getScramCredentialInfosFor(userResult));
         });
+    }
+
+    private static List<ScramCredentialInfo> getScramCredentialInfosFor(
+            DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult) {
+        return userResult.credentialInfos().stream().map(c ->
+                new ScramCredentialInfo(ScramMechanism.fromType(c.mechanism()), c.iterations()))
+                .collect(Collectors.toList());
     }
 
     private static <T> T valueFromFutureGuaranteedToSucceedAtThisPoint(KafkaFuture<T> future) {
@@ -113,19 +127,6 @@ public class DescribeUserScramCredentialsResult {
             throw new RuntimeException(e);
         } catch (ExecutionException e) {
             // will never happen since it is assumed the future will succeed
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static <T> T valueFromFuturePropagatingExceptionsAsUnchecked(KafkaFuture<T> future) {
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            // could happen; convert it to an unchecked exception
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
-        } catch (ExecutionException e) {
-            // could happen; convert it to an unchecked exception
             throw new RuntimeException(e);
         }
     }

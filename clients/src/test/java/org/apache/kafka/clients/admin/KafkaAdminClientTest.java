@@ -4458,12 +4458,9 @@ public class KafkaAdminClientTest {
             List<String> usersRequestedList = asList(user0Name, user1Name);
             Set<String> usersRequestedSet = usersRequestedList.stream().collect(Collectors.toSet());
             DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(usersRequestedList);
-            // be sure to grab the map and any single user result first, before dereferencing the users future,
-            // so that we test for a race condition with the users future
             Map<String, UserScramCredentialsDescription> descriptionResults = result.all().get();
             KafkaFuture<UserScramCredentialsDescription> user0DescriptionFuture = result.description(user0Name);
             KafkaFuture<UserScramCredentialsDescription> user1DescriptionFuture = result.description(user1Name);
-            // now we can dereference the users future
             Set<String> usersDescribedFromUsersSet = result.users().get().stream().collect(Collectors.toSet());
             assertEquals(usersRequestedSet, usersDescribedFromUsersSet);
             Set<String> usersDescribedFromMapKeySet = descriptionResults.keySet();

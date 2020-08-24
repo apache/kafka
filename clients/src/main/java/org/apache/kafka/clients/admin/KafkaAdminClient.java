@@ -42,7 +42,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -4086,8 +4085,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options) {
-        final KafkaFutureImpl<List<String>> usersFuture = new KafkaFutureImpl<>();
-        final Map<String, KafkaFuture<UserScramCredentialsDescription>> perUserFutures = new HashMap<>();
+        final KafkaFutureImpl<DescribeUserScramCredentialsResponseData> dataFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         Call call = new Call("describeUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
@@ -4104,40 +4102,19 @@ public class KafkaAdminClient extends AdminClient {
                 DescribeUserScramCredentialsResponseData data = response.data();
                 short messageLevelErrorCode = data.errorCode();
                 if (messageLevelErrorCode != Errors.NONE.code()) {
-                    usersFuture.completeExceptionally(Errors.forCode(messageLevelErrorCode).exception(data.errorMessage()));
+                    dataFuture.completeExceptionally(Errors.forCode(messageLevelErrorCode).exception(data.errorMessage()));
                 } else {
-                    /* We must not complete the users future until after we create all of the the per-user futures,
-                     * otherwise it is possible for a request to retrieve the results to sneak in after we complete the
-                     * users future but before we create all of the per-user futures.
-                     */
-                    data.results().stream().forEach(result -> {
-                        KafkaFutureImpl<UserScramCredentialsDescription> future = new KafkaFutureImpl<>();
-                        String user = result.user();
-                        short userLevelErrorCode = result.errorCode();
-                        if (userLevelErrorCode != Errors.NONE.code()) {
-                            future.completeExceptionally(Errors.forCode(userLevelErrorCode).exception(result.errorMessage()));
-                        } else {
-                            future.complete(new UserScramCredentialsDescription(user,
-                                    result.credentialInfos().stream().map(credentialInfo ->
-                                            new ScramCredentialInfo(ScramMechanism.fromType(credentialInfo.mechanism()),
-                                                    credentialInfo.iterations()))
-                                            .collect(Collectors.toList())));
-                        }
-                        perUserFutures.put(user, future);
-                    });
-                    usersFuture.complete(data.results().stream().map(
-                            DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult::user).collect(
-                            Collectors.toList()));
+                    dataFuture.complete(data);
                 }
             }
 
             @Override
             void handleFailure(Throwable throwable) {
-                usersFuture.completeExceptionally(throwable);
+                dataFuture.completeExceptionally(throwable);
             }
         };
         runnable.call(call, now);
-        return new DescribeUserScramCredentialsResult(usersFuture, perUserFutures);
+        return new DescribeUserScramCredentialsResult(dataFuture);
     }
 
     @Override

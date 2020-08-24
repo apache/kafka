@@ -134,7 +134,7 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
     val result = runConfigCommandViaBroker(Array("--user", unknownUser, "--describe"))
     assertTrue("Expected System.exit() to not be called with an unknown user", result.exitStatus.isEmpty)
     val expectedExceptionMessage = "Attempt to describe a user credential that does not exist"
-    val expectedException = new ExecutionException(new RuntimeException(new ExecutionException(new ResourceNotFoundException(expectedExceptionMessage))))
+    val expectedException = new ExecutionException(new ResourceNotFoundException(expectedExceptionMessage))
     assertEquals(s"Error retrieving SCRAM credential configs for user-principal '$unknownUser': ${expectedException.getClass.getSimpleName}: ${expectedException.getMessage}\n",
       result.stdout)
   }
