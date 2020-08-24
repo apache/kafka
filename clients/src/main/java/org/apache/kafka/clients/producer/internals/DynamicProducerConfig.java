@@ -15,7 +15,9 @@
  * limitations under the License.
  */
 package org.apache.kafka.clients.producer.internals;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.clients.ClientRequest;
@@ -27,8 +29,8 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.requests.DescribeClientConfigsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
-import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -60,6 +62,8 @@ public class DynamicProducerConfig {
 
     private final DynamicClientConfigUpdater updater;
 
+    private final List<String> supportedConfigs;
+
     public DynamicProducerConfig(KafkaClient client, ProducerConfig config, Time time, LogContext logContext, int requestTimeoutMs) {
         this.client = client;
         this.originals = config.originals();
@@ -68,7 +72,9 @@ public class DynamicProducerConfig {
         this.updatedConfigs = config;
         this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
         this.previousDynamicConfigs = new HashMap<>();
-        updater = new DynamicClientConfigUpdater(
+        this.supportedConfigs = new ArrayList<>();
+        supportedConfigs.add(ProducerConfig.ACKS_CONFIG);
+        this.updater = new DynamicClientConfigUpdater(
             config.getLong(CommonClientConfigs.METADATA_MAX_AGE_CONFIG), 
             config.getBoolean(CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG), 
             time
@@ -87,11 +93,11 @@ public class DynamicProducerConfig {
             Node node = client.leastLoadedNode(now);
             if (node != null && client.ready(node, now)) {
                 updater.sentConfigsRequest();
-                RequestCompletionHandler callback = response -> handleDescribeConfigsResponse(response);
+                RequestCompletionHandler callback = response -> handleConfigsResponse(response);
                 ClientRequest clientRequest = client
-                    .newClientRequest(node.idString(), updater.newRequestBuilder(this.clientId), now, true, requestTimeoutMs, callback);
+                    .newClientRequest(node.idString(), updater.newRequestBuilder(this.clientId, this.supportedConfigs), now, true, requestTimeoutMs, callback);
                 this.client.send(clientRequest, now);
-                log.info("Sent DescribeConfigsRequest");
+                log.info("Sent DescribeClientConfigsRequest");
             }
         }
     }
@@ -100,12 +106,13 @@ public class DynamicProducerConfig {
      * Handler for the {@link org.apache.kafka.common.requests.DescribeConfigsResponse}
      * @param response
      */
-    private void handleDescribeConfigsResponse(ClientResponse response) {
+    private void handleConfigsResponse(ClientResponse response) {
         if (response.hasResponse()) {
-            log.info("Recieved DescribeConfigResponse");
+            log.info("Recieved DescribeClientConfigResponse");
             updater.receiveConfigs();
+            updater.receiveInitialConfigs();
 
-            DescribeConfigsResponse configsResponse = (DescribeConfigsResponse) response.responseBody();
+            DescribeClientConfigsResponse configsResponse = (DescribeClientConfigsResponse) response.responseBody();
             Map<String, String> dynamicConfigs = updater.createResultMapAndHandleErrors(configsResponse, log);
 
             // Only parse and validate dynamic configs if they have changed since the last time they were fetched
@@ -117,13 +124,13 @@ public class DynamicProducerConfig {
                     overlayed.putAll(dynamicConfigs);
                     previousDynamicConfigs = dynamicConfigs;
 
-                    // Only update our configs if the parse in ProducerConfig is successful
+                    // Only update configs if the parse in ProducerConfig is successful
                     ProducerConfig parsedConfigs = new ProducerConfig(overlayed, false);
                     updatedConfigs = parsedConfigs;
                     log.info("Updated dynamic configurations {}", dynamicConfigs);
                     log.info("Using acks={}", this.getAcks().toString()); 
                 } catch (ConfigException ce) {
-                    log.info("Rejecting new dynamic configs");
+                    log.info("Rejecting new dynamic configs {}", dynamicConfigs);
                 }
             }
         } else {

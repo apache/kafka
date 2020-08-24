@@ -84,8 +84,10 @@ object DynamicConfig {
     val AcksOverrideProp = ProducerConfig.ACKS_CONFIG
     val SessionTimeoutOverrideProp = CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG
     val HeartbeatIntervalOverrideProp = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG
+    val SupportedConfigsProp = "supported.configs"
+
     private val configNames = Set(AcksOverrideProp,
-      SessionTimeoutOverrideProp, HeartbeatIntervalOverrideProp)
+      SessionTimeoutOverrideProp, HeartbeatIntervalOverrideProp, SupportedConfigsProp)
 
     def isClientConfig(name: String): Boolean = configNames.contains(name)
   }
@@ -99,6 +101,7 @@ object DynamicConfig {
     val AcksOverrideProp = ClientConfigs.AcksOverrideProp
     val SessionTimeoutOverrideProp = ClientConfigs.SessionTimeoutOverrideProp
     val HeartbeatIntervalOverrideProp = ClientConfigs.HeartbeatIntervalOverrideProp
+    val SupportedConfigsProp = ClientConfigs.SupportedConfigsProp
 
     // Defaults
     val DefaultProducerOverride = ClientQuotaManagerConfig.QuotaDefault
@@ -108,6 +111,7 @@ object DynamicConfig {
     val DefaultAcksOverride = "1"
     val DefaultSessionTimeoutOverride = 10000
     val DefaultHeartbeatIntervalOverride = 3000
+    val DefaultSupportedConfigs = ""
 
     // Documentation
     val ProducerOverrideDoc = "A rate representing the upper bound (bytes/sec) for producer traffic."
@@ -118,12 +122,14 @@ object DynamicConfig {
     val HeartbeatIntervalOverrideDoc = "Consumer group heartbeat interval"
     val ControllerMutationOverrideDoc = "The rate at which mutations are accepted for the create topics request, " +
       "the create partitions request and the delete topics request. The rate is accumulated by the number of partitions created or deleted."
+    val SupportedConfigsDoc = "Configs supported for each connection"
 
     // Definitions
     private val clientConfigs = new ConfigDef()
       .define(ProducerByteRateOverrideProp, LONG, DefaultProducerOverride, MEDIUM, ProducerOverrideDoc)
       .define(ConsumerByteRateOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ConsumerOverrideDoc)
       .define(RequestPercentageOverrideProp, DOUBLE, DefaultRequestOverride, MEDIUM, RequestOverrideDoc)
+      .define(ControllerMutationOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ControllerMutationOverrideDoc)
       .define(AcksOverrideProp, STRING, DefaultAcksOverride, ConfigDef.ValidString.in("all", "-1", "0", "1"), HIGH, AcksOverrideDoc)
       .define(
         SessionTimeoutOverrideProp, 
@@ -133,7 +139,7 @@ object DynamicConfig {
         HIGH, 
         SessionTimeoutOverrideDoc)
       .define(HeartbeatIntervalOverrideProp, INT, DefaultHeartbeatIntervalOverride, HIGH, HeartbeatIntervalOverrideDoc)
-      .define(ControllerMutationOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ControllerMutationOverrideDoc)
+      .define(SupportedConfigsProp, LIST, DefaultSupportedConfigs, MEDIUM, SupportedConfigsDoc)
 
     def configKeys = clientConfigs.configKeys
 

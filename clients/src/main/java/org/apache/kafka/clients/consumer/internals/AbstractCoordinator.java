@@ -50,7 +50,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeClientConfigsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -1351,7 +1351,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                 @Override
                                 public void onSuccess(ClientResponse resp) {
                                     synchronized (AbstractCoordinator.this) {
-                                        dynamicConfig.handleDescribeConfigsResponse((DescribeConfigsResponse) resp.responseBody());
+                                        dynamicConfig.handleConfigsResponse((DescribeClientConfigsResponse) resp.responseBody());
                                         // Need to rejoin group so that the coordinator changes the session timeout in this 
                                         // group member's metadata if the session timeout was dynamically updated.
                                         // Also need to reset timers in HB thread with new interval and timeout.

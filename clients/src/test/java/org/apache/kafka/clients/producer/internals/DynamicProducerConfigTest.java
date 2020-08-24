@@ -18,19 +18,17 @@ package org.apache.kafka.clients.producer.internals;
 
 import static org.junit.Assert.assertEquals;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.message.DescribeConfigsResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.requests.DescribeClientConfigsResponse;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -164,27 +162,16 @@ public class DynamicProducerConfigTest {
         // Reverted to static configuration
         assertEquals(Short.valueOf("-1"), dynamicConfigs.getAcks());
     }
-    
-    public DescribeConfigsResponse describeConfigsResponse(Errors error) {
+
+    public DescribeClientConfigsResponse describeConfigsResponse(Errors error) {
         return describeConfigsResponse(Collections.emptyMap(), error);
     }
 
-    public DescribeConfigsResponse describeConfigsResponse(Map<String, String> configs, Errors error) {
-        List<DescribeConfigsResponseData.DescribeConfigsResult> results = new ArrayList<DescribeConfigsResponseData.DescribeConfigsResult>();
-        DescribeConfigsResponseData.DescribeConfigsResult result = new DescribeConfigsResponseData.DescribeConfigsResult();
-        result.setErrorCode(error.code());
-        result.setConfigs(createConfigEntries(configs));
-        results.add(result);
-        return new DescribeConfigsResponse(new DescribeConfigsResponseData().setResults(results));
-    }
-
-    public List<DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntries(Map<String, String> configs) {
-        List<DescribeConfigsResponseData.DescribeConfigsResourceResult> results = new ArrayList<>();
-
-        configs.entrySet().forEach(entry -> {
-            results.add(new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(entry.getKey()).setValue(entry.getValue()));
-        });
-
-        return results;
+    public DescribeClientConfigsResponse describeConfigsResponse(Map<String, String> configs, Errors error) {
+        Map<String, String> mockEntity = new HashMap<>();
+        mockEntity.put("user", "alice");
+        Map<ClientQuotaEntity, Map<String, String>> entityConfigs = new HashMap<>();
+        entityConfigs.put(new ClientQuotaEntity(mockEntity), configs);
+        return new DescribeClientConfigsResponse(entityConfigs, 0);
     }
 }
