@@ -51,8 +51,7 @@ public class DescribeUserScramCredentialsResult {
     /**
      *
      * @return a future for the results of all requested (either explicitly or implicitly via describe-all) users.
-     * The future will complete successfully only if the users future first completes successfully and then all the
-     * futures for the user descriptions complete successfully.
+     * The future will complete successfully only if all user descriptions complete successfully.
      */
     public KafkaFuture<Map<String, UserScramCredentialsDescription>> all() {
         return KafkaFuture.allOf(dataFuture).thenApply(v -> {
