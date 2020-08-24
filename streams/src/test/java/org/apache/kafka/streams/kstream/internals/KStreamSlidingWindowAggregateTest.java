@@ -43,6 +43,7 @@ import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.Matcher;
 import org.junit.Test;
@@ -72,8 +73,111 @@ public class KStreamSlidingWindowAggregateTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final String threadId = Thread.currentThread().getName();
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void testAggBasic() {
+    public void testAggregateSmallInput() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+
+        final KTable<Windowed<String>, String> table = builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
+            );
+        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        table.toStream().process(supplier);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("A", "1", 10L);
+            inputTopic.pipeInput("A", "2", 15L);
+            inputTopic.pipeInput("A", "3", 20L);
+            inputTopic.pipeInput("A", "4", 22L);
+            inputTopic.pipeInput("A", "5", 30L);
+        }
+
+        final Map<Long, ValueAndTimestamp<String>> actual = new HashMap<>();
+        for (final KeyValueTimestamp<Object, Object> entry : supplier.theCapturedProcessor().processed) {
+            final Windowed<String> window = (Windowed<String>) entry.key();
+            final Long start = window.window().start();
+            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make((String) entry.value(), entry.timestamp());
+            if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
+                actual.replace(start, valueAndTimestamp);
+            }
+        }
+
+        final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
+        expected.put(0L, ValueAndTimestamp.make("0+1", 10L));
+        expected.put(5L, ValueAndTimestamp.make("0+1+2", 15L));
+        expected.put(10L, ValueAndTimestamp.make("0+1+2+3", 20L));
+        expected.put(11L, ValueAndTimestamp.make("0+2+3", 20L));
+        expected.put(12L, ValueAndTimestamp.make("0+2+3+4", 22L));
+        expected.put(16L, ValueAndTimestamp.make("0+3+4", 22L));
+        expected.put(20L, ValueAndTimestamp.make("0+3+4+5", 30L));
+        expected.put(21L, ValueAndTimestamp.make("0+4+5", 30L));
+        expected.put(23L, ValueAndTimestamp.make("0+5", 30L));
+
+        assertEquals(expected, actual);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testReduceSmallInput() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topic = "topic";
+
+        final KTable<Windowed<String>, String> table = builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .reduce(
+                MockReducer.STRING_ADDER,
+                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
+            );
+        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
+        table.toStream().process(supplier);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final TestInputTopic<String, String> inputTopic =
+                driver.createInputTopic(topic, new StringSerializer(), new StringSerializer());
+            inputTopic.pipeInput("A", "1", 10L);
+            inputTopic.pipeInput("A", "2", 14L);
+            inputTopic.pipeInput("A", "3", 15L);
+            inputTopic.pipeInput("A", "4", 22L);
+            inputTopic.pipeInput("A", "5", 26L);
+            inputTopic.pipeInput("A", "6", 30L);
+        }
+
+        final Map<Long, ValueAndTimestamp<String>> actual = new HashMap<>();
+        for (final KeyValueTimestamp<Object, Object> entry : supplier.theCapturedProcessor().processed) {
+            final Windowed<String> window = (Windowed<String>) entry.key();
+            final Long start = window.window().start();
+            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make((String) entry.value(), entry.timestamp());
+            if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
+                actual.replace(start, valueAndTimestamp);
+            }
+        }
+
+        final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
+        expected.put(0L, ValueAndTimestamp.make("1", 10L));
+        expected.put(4L, ValueAndTimestamp.make("1+2", 14L));
+        expected.put(5L, ValueAndTimestamp.make("1+2+3", 15L));
+        expected.put(11L, ValueAndTimestamp.make("2+3", 15L));
+        expected.put(12L, ValueAndTimestamp.make("2+3+4", 22L));
+        expected.put(15L, ValueAndTimestamp.make("3+4", 22L));
+        expected.put(16L, ValueAndTimestamp.make("4+5", 26L));
+        expected.put(20L, ValueAndTimestamp.make("4+5+6", 30L));
+        expected.put(23L, ValueAndTimestamp.make("5+6", 30L));
+        expected.put(27L, ValueAndTimestamp.make("6", 30L));
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testAggregateLargeInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -428,87 +532,63 @@ public class KStreamSlidingWindowAggregateTest {
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(10000)))
             .aggregate(
-                MockInitializer.STRING_INIT,
-                MockAggregator.TOSTRING_ADDER,
+                () -> "",
+                (key, value, aggregate) -> {
+                    aggregate += value;
+                    final char[] ch = aggregate.toCharArray();
+                    Arrays.sort(ch);
+                    aggregate = String.valueOf(ch);
+                    return aggregate;
+                },
                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())
             );
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table.toStream().process(supplier);
-
-        final List<ValueAndTimestamp<String>> input = Arrays.asList(
-            ValueAndTimestamp.make("A", 10L),
-            ValueAndTimestamp.make("A", 15L),
-            ValueAndTimestamp.make("A", 16L),
-            ValueAndTimestamp.make("A", 18L),
-            ValueAndTimestamp.make("A", 30L),
-            ValueAndTimestamp.make("A", 40L),
-            ValueAndTimestamp.make("A", 55L),
-            ValueAndTimestamp.make("A", 56L),
-            ValueAndTimestamp.make("A", 58L),
-            ValueAndTimestamp.make("A", 58L),
-            ValueAndTimestamp.make("A", 62L),
-            ValueAndTimestamp.make("A", 63L),
-            ValueAndTimestamp.make("A", 63L),
-            ValueAndTimestamp.make("A", 63L),
-            ValueAndTimestamp.make("A", 76L),
-            ValueAndTimestamp.make("A", 77L),
-            ValueAndTimestamp.make("A", 80L)
-        );
-
         final long seed = new Random().nextLong();
         final Random shuffle = new Random(seed);
-        Collections.shuffle(input, shuffle);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            final TestInputTopic<String, String> inputTopic1 =
-                driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
-            for (int i = 0; i < input.size(); i++) {
-                inputTopic1.pipeInput("A", input.get(i).value(), input.get(i).timestamp());
-            }
-        }
-
-        final Map<Long, ValueAndTimestamp<String>> results = new HashMap<>();
-
-        for (final KeyValueTimestamp<Object, Object> entry : supplier.theCapturedProcessor().processed) {
-            final Windowed<String> window = (Windowed<String>) entry.key();
-            final Long start = window.window().start();
-            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make((String) entry.value(), entry.timestamp());
-            if (results.putIfAbsent(start, valueAndTimestamp) != null) {
-                results.replace(start, valueAndTimestamp);
-            }
-        }
-        randomEqualityCheck(results, seed);
-    }
-
-    private void randomEqualityCheck(final Map<Long, ValueAndTimestamp<String>> actual, final Long seed) {
-        final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
-        expected.put(0L, ValueAndTimestamp.make("0+A", 10L));
-        expected.put(11L, ValueAndTimestamp.make("0+A+A+A", 18L));
-        expected.put(5L, ValueAndTimestamp.make("0+A+A", 15L));
-        expected.put(16L, ValueAndTimestamp.make("0+A+A", 18L));
-        expected.put(6L, ValueAndTimestamp.make("0+A+A+A", 16L));
-        expected.put(17L, ValueAndTimestamp.make("0+A", 18L));
-        expected.put(8L, ValueAndTimestamp.make("0+A+A+A+A", 18L));
-        expected.put(20L, ValueAndTimestamp.make("0+A", 30L));
-        expected.put(31L, ValueAndTimestamp.make("0+A", 40L));
-        expected.put(30L, ValueAndTimestamp.make("0+A+A", 40L));
-        expected.put(45L, ValueAndTimestamp.make("0+A", 55L));
-        expected.put(56L, ValueAndTimestamp.make("0+A+A+A+A+A+A+A", 63L));
-        expected.put(46L, ValueAndTimestamp.make("0+A+A", 56L));
-        expected.put(57L, ValueAndTimestamp.make("0+A+A+A+A+A+A", 63L));
-        expected.put(48L, ValueAndTimestamp.make("0+A+A+A+A", 58L));
-        expected.put(59L, ValueAndTimestamp.make("0+A+A+A+A", 63L));
-        expected.put(52L, ValueAndTimestamp.make("0+A+A+A+A+A", 62L));
-        expected.put(63L, ValueAndTimestamp.make("0+A+A+A", 63L));
-        expected.put(53L, ValueAndTimestamp.make("0+A+A+A+A+A+A+A+A", 63L));
-        expected.put(66L, ValueAndTimestamp.make("0+A", 76L));
-        expected.put(77L, ValueAndTimestamp.make("0+A+A", 80L));
-        expected.put(67L, ValueAndTimestamp.make("0+A+A", 77L));
-        expected.put(78L, ValueAndTimestamp.make("0+A", 80L));
-        expected.put(70L, ValueAndTimestamp.make("0+A+A+A", 80L));
 
         try {
-            assertEquals(expected, actual);
+
+            final List<ValueAndTimestamp<String>> input = Arrays.asList(
+                ValueAndTimestamp.make("A", 10L),
+                ValueAndTimestamp.make("B", 15L),
+                ValueAndTimestamp.make("C", 16L),
+                ValueAndTimestamp.make("D", 18L),
+                ValueAndTimestamp.make("E", 30L),
+                ValueAndTimestamp.make("F", 40L),
+                ValueAndTimestamp.make("G", 55L),
+                ValueAndTimestamp.make("H", 56L),
+                ValueAndTimestamp.make("I", 58L),
+                ValueAndTimestamp.make("J", 58L),
+                ValueAndTimestamp.make("K", 62L),
+                ValueAndTimestamp.make("L", 63L),
+                ValueAndTimestamp.make("M", 63L),
+                ValueAndTimestamp.make("N", 63L),
+                ValueAndTimestamp.make("O", 76L),
+                ValueAndTimestamp.make("P", 77L),
+                ValueAndTimestamp.make("Q", 80L)
+            );
+
+            Collections.shuffle(input, shuffle);
+            try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+                final TestInputTopic<String, String> inputTopic1 =
+                    driver.createInputTopic(topic1, new StringSerializer(), new StringSerializer());
+                for (int i = 0; i < input.size(); i++) {
+                    inputTopic1.pipeInput("A", input.get(i).value(), input.get(i).timestamp());
+                }
+            }
+
+            final Map<Long, ValueAndTimestamp<String>> results = new HashMap<>();
+
+            for (final KeyValueTimestamp<Object, Object> entry : supplier.theCapturedProcessor().processed) {
+                final Windowed<String> window = (Windowed<String>) entry.key();
+                final Long start = window.window().start();
+                final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make((String) entry.value(), entry.timestamp());
+                if (results.putIfAbsent(start, valueAndTimestamp) != null) {
+                    results.replace(start, valueAndTimestamp);
+                }
+            }
+            randomEqualityCheck(results, seed);
         } catch (final AssertionError t) {
             throw new AssertionError(
                 "Assertion failed in randomized test. Reproduce with seed: " + seed + ".",
@@ -522,6 +602,37 @@ public class KStreamSlidingWindowAggregateTest {
                     .append(".");
             throw new AssertionError(sb.toString(), t);
         }
+    }
+
+    private void randomEqualityCheck(final Map<Long, ValueAndTimestamp<String>> actual, final Long seed) {
+        final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
+        expected.put(0L, ValueAndTimestamp.make("A", 10L));
+        expected.put(5L, ValueAndTimestamp.make("AB", 15L));
+        expected.put(6L, ValueAndTimestamp.make("ABC", 16L));
+        expected.put(8L, ValueAndTimestamp.make("ABCD", 18L));
+        expected.put(11L, ValueAndTimestamp.make("BCD", 18L));
+        expected.put(16L, ValueAndTimestamp.make("CD", 18L));
+        expected.put(17L, ValueAndTimestamp.make("D", 18L));
+        expected.put(20L, ValueAndTimestamp.make("E", 30L));
+        expected.put(30L, ValueAndTimestamp.make("EF", 40L));
+        expected.put(31L, ValueAndTimestamp.make("F", 40L));
+        expected.put(45L, ValueAndTimestamp.make("G", 55L));
+        expected.put(46L, ValueAndTimestamp.make("GH", 56L));
+        expected.put(48L, ValueAndTimestamp.make("GHIJ", 58L));
+        expected.put(52L, ValueAndTimestamp.make("GHIJK", 62L));
+        expected.put(53L, ValueAndTimestamp.make("GHIJKLMN", 63L));
+        expected.put(56L, ValueAndTimestamp.make("HIJKLMN", 63L));
+        expected.put(57L, ValueAndTimestamp.make("IJKLMN", 63L));
+        expected.put(59L, ValueAndTimestamp.make("KLMN", 63L));
+        expected.put(63L, ValueAndTimestamp.make("LMN", 63L));
+        expected.put(66L, ValueAndTimestamp.make("O", 76L));
+        expected.put(67L, ValueAndTimestamp.make("OP", 77L));
+        expected.put(70L, ValueAndTimestamp.make("OPQ", 80L));
+        expected.put(77L, ValueAndTimestamp.make("PQ", 80L));
+        expected.put(78L, ValueAndTimestamp.make("Q", 80L));
+
+        assertEquals(expected, actual);
+
     }
 
     private void assertLatenessMetrics(final TopologyTestDriver driver,
