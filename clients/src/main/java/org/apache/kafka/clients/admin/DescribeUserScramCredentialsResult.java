@@ -100,14 +100,7 @@ public class DescribeUserScramCredentialsResult {
             if (requestedUserFuture == null) {
                 throw new ResourceNotFoundException("No such user: " + userName);
             }
-            KafkaFuture<Void> succeedsOnlyIfRequestedUserFutureSucceeds = KafkaFuture.allOf(requestedUserFuture);
-            KafkaFuture<UserScramCredentialsDescription> descriptionFuture = succeedsOnlyIfRequestedUserFutureSucceeds.thenApply(void2 ->
-                valueFromFutureGuaranteedToSucceedAtThisPoint(requestedUserFuture));
-            /* At this point it is only the users future that is guaranteed to have succeeded.
-             * We want to return the future to the description, but we have to return a description at this point.
-             * We need to dereference the future while propagating any exception.
-             */
-            return valueFromFuturePropagatingExceptionsAsUnchecked(descriptionFuture);
+            return valueFromFuturePropagatingExceptionsAsUnchecked(requestedUserFuture);
         });
     }
 
