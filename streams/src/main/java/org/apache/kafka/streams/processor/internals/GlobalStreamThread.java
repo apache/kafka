@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -63,7 +64,7 @@ public class GlobalStreamThread extends Thread {
     private final ThreadCache cache;
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
-    private final AtomicLong recordCacheRemaining;
+    private final MemoryBudget memoryBudget;
     private volatile StreamsException startupException;
 
     /**
@@ -207,7 +208,7 @@ public class GlobalStreamThread extends Thread {
             config,
             globalConsumer,
             stateDirectory,
-            new AtomicLong(cacheSizeBytes),
+            new MemoryBudget(new AtomicLong(cacheSizeBytes)),
             streamsMetrics,
             time,
             threadClientId,
@@ -219,7 +220,7 @@ public class GlobalStreamThread extends Thread {
                               final StreamsConfig config,
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
-                              final AtomicLong recordCacheRemaining,
+                              final MemoryBudget memoryBudget,
                               final StreamsMetricsImpl streamsMetrics,
                               final Time time,
                               final String threadClientId,
@@ -234,8 +235,8 @@ public class GlobalStreamThread extends Thread {
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
-        this.cache = new ThreadCache(logContext, recordCacheRemaining, this.streamsMetrics);
-        this.recordCacheRemaining = recordCacheRemaining;
+        this.cache = new ThreadCache(logContext, memoryBudget, this.streamsMetrics);
+        this.memoryBudget = memoryBudget;
         this.stateRestoreListener = stateRestoreListener;
     }
 

@@ -621,8 +621,8 @@ public class KafkaStreams implements AutoCloseable {
                         final Properties props,
                         final KafkaClientSupplier clientSupplier,
                         final Time time,
-                        final AtomicLong sharedRecordCache) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time, sharedRecordCache);
+                        final MemoryBudget memoryBudget) {
+        this(topology.internalTopologyBuilder, new StreamsConfig(props), clientSupplier, time, memoryBudget);
     }
 
     /**
@@ -664,7 +664,7 @@ public class KafkaStreams implements AutoCloseable {
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier,
                          final Time time,
-                         final AtomicLong sharedRecordCache) throws StreamsException {
+                         final MemoryBudget nullableMemoryBudget) throws StreamsException {
         this.config = config;
         this.time = time;
 
@@ -738,11 +738,9 @@ public class KafkaStreams implements AutoCloseable {
                 "must subscribe to at least one source topic or global table.");
         }
 
-        final AtomicLong totalCacheSize = sharedRecordCache == null ? new AtomicLong(config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)) : sharedRecordCache;
-        if (totalCacheSize.get() < 0) {
-            totalCacheSize.set(0);
-            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
-        }
+        final MemoryBudget memoryBudget = nullableMemoryBudget == null
+            ? new MemoryBudget(new AtomicLong(Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG))))
+            : nullableMemoryBudget;
         final boolean hasPersistentStores = taskTopology.hasPersistentLocalStore() ||
                 (hasGlobalTopology && globalTaskTopology.hasPersistentGlobalStore());
 
@@ -761,7 +759,7 @@ public class KafkaStreams implements AutoCloseable {
                 config,
                 clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
                 stateDirectory,
-                totalCacheSize,
+                memoryBudget,
                 streamsMetrics,
                 time,
                 globalThreadId,
@@ -786,7 +784,7 @@ public class KafkaStreams implements AutoCloseable {
                 streamsMetrics,
                 time,
                 streamsMetadataState,
-                totalCacheSize,
+                memoryBudget,
                 stateDirectory,
                 delegatingStateRestoreListener,
                 i + 1);

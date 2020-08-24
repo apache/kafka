@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -30,7 +31,6 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 
 public abstract class AbstractProcessorContext implements InternalProcessorContext {
 
@@ -41,7 +41,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final StreamsMetricsImpl metrics;
     private final Serde<?> keySerde;
     private final Serde<?> valueSerde;
-    private final AtomicLong recordCacheRemaining;
+    private final MemoryBudget memoryBudget;
 
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
@@ -60,7 +60,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         valueSerde = config.defaultValueSerde();
         keySerde = config.defaultKeySerde();
         this.cache = cache;
-        this.recordCacheRemaining = cache == null ? null : cache.getRecordCacheRemaining();
+        this.memoryBudget = cache == null ? null : cache.memoryBudget();
     }
 
     protected abstract StateManager stateManager();
@@ -234,7 +234,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public AtomicLong getRecordCacheRemaining() {
-        return recordCacheRemaining;
+    public MemoryBudget getMemoryBudget() {
+        return memoryBudget;
     }
 }

@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -65,6 +66,8 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestor
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
 public class StreamThread extends Thread {
+
+    private final ThreadCache cache;
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -304,7 +307,7 @@ public class StreamThread extends Thread {
             streamsMetrics,
             time,
             streamsMetadataState,
-            new AtomicLong(cacheSizeBytes),
+            new MemoryBudget(new AtomicLong(cacheSizeBytes)),
             stateDirectory,
             userStateRestoreListener,
             threadIdx
@@ -320,7 +323,7 @@ public class StreamThread extends Thread {
                                       final StreamsMetricsImpl streamsMetrics,
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
-                                      final AtomicLong recordCacheRemaining,
+                                      final MemoryBudget memoryBudget,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx) {
@@ -344,7 +347,7 @@ public class StreamThread extends Thread {
         );
 
         // TODO optimize the "disabled" case by not even allocating a cache
-        final ThreadCache cache = new ThreadCache(logContext, recordCacheRemaining, streamsMetrics);
+        final ThreadCache cache = new ThreadCache(logContext, memoryBudget, streamsMetrics);
 
         final ActiveTaskCreator activeTaskCreator =
             new ActiveTaskCreator(
@@ -417,7 +420,8 @@ public class StreamThread extends Thread {
             threadId,
             logContext,
             assignmentErrorCode,
-            nextScheduledRebalanceMs
+            nextScheduledRebalanceMs,
+            cache
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -468,8 +472,10 @@ public class StreamThread extends Thread {
                         final String threadId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
-                        final AtomicLong nextProbingRebalanceMs) {
+                        final AtomicLong nextProbingRebalanceMs,
+                        final ThreadCache cache) {
         super(threadId);
+        this.cache = cache;
         this.stateLock = new Object();
 
         this.adminClient = adminClient;
@@ -744,6 +750,8 @@ public class StreamThread extends Thread {
                 if (punctuated > 0) {
                     punctuateSensor.record(punctuateLatency / (double) punctuated, now);
                 }
+
+                cache.maybeEvict();
 
                 final int committed = maybeCommit();
                 final long commitLatency = advanceNowAndComputeLatency();

@@ -17,7 +17,5 @@
 package org.apache.kafka.streams.kstream.internals.suppress;
 
 public enum BufferFullStrategy {
-    EMIT,
-    SPILL_TO_DISK,
-    SHUT_DOWN
+    EMIT, SHUT_DOWN
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
@@ -127,7 +128,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         private InternalProcessorContext internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
-        private AtomicLong recordCacheRemaining;
+        private MemoryBudget memoryBudget;
 
         private KTableSuppressProcessor(final SuppressedInternal<K> suppress, final String storeName) {
             this.storeName = storeName;
@@ -156,11 +157,14 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
             buffer.setSerdesIfNull((Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());
 
             if (useRecordCacheBytes) {
-                recordCacheRemaining = internalProcessorContext.getRecordCacheRemaining();
+                memoryBudget = internalProcessorContext.getMemoryBudget();
             } else {
-                recordCacheRemaining = new AtomicLong(maxBytes);
+                memoryBudget = new MemoryBudget(new AtomicLong(maxBytes));
             }
-            buffer.setRecordCacheRemaining(recordCacheRemaining);
+            buffer.setMemoryBudget(
+                memoryBudget,
+                bufferFullStrategy == BufferFullStrategy.SHUT_DOWN ? MemoryBudget.AllocationType.HARD : MemoryBudget.AllocationType.SOFT
+            );
         }
 
         @Override
@@ -182,29 +186,30 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
             buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);
 
-            if (overCapacity()) {
-                switch (bufferFullStrategy) {
-                    case EMIT:
-                        buffer.evictWhile(this::overCapacity, this::emit);
-                        return;
-                    case SHUT_DOWN:
+            switch (bufferFullStrategy) {
+                case EMIT:
+                    final long targetSoftReservation = memoryBudget.targetSoftReservation();
+                    buffer.evictWhile(
+                        () -> buffer.numRecords() > maxRecords || buffer.nonEmpty() && memoryBudget.softReservation() > targetSoftReservation,
+                        this::emit
+                    );
+                    return;
+                case SHUT_DOWN:
+                    if (buffer.numRecords() > maxRecords || memoryBudget.overHardBudget()) {
                         throw new StreamsException(String.format(
-                            "%s buffer exceeded its max capacity. Currently [%d/%d] records and cache size remaining [%d].",
+                            "%s buffer exceeded its max capacity. Currently [%d/%d] records and memory: %s.",
                             internalProcessorContext.currentNode().name(),
                             buffer.numRecords(), maxRecords,
-                            recordCacheRemaining.get()
+                            memoryBudget
                         ));
-                    default:
-                        throw new UnsupportedOperationException(
-                            "The bufferFullStrategy [" + bufferFullStrategy +
-                                "] is not implemented. This is a bug in Kafka Streams."
-                        );
-                }
+                    }
+                    break;
+                default:
+                    throw new UnsupportedOperationException(
+                        "The bufferFullStrategy [" + bufferFullStrategy +
+                            "] is not implemented. This is a bug in Kafka Streams."
+                    );
             }
-        }
-
-        private boolean overCapacity() {
-            return buffer.numRecords() > maxRecords || recordCacheRemaining.get() <= 0;
         }
 
         private void emit(final TimeOrderedKeyValueBuffer.Eviction<K, V> toEmit) {

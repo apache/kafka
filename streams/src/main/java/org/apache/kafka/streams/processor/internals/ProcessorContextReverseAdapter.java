@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -33,7 +34,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 public final class ProcessorContextReverseAdapter implements InternalProcessorContext {
     private final InternalApiProcessorContext<Object, Object> delegate;
@@ -161,8 +161,8 @@ public final class ProcessorContextReverseAdapter implements InternalProcessorCo
     }
 
     @Override
-    public AtomicLong getRecordCacheRemaining() {
-        return delegate.getRecordCacheRemaining();
+    public MemoryBudget getMemoryBudget() {
+        return delegate.getMemoryBudget();
     }
 
     @Override

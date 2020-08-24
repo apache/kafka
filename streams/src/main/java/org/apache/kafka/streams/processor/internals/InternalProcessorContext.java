@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -27,8 +28,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
-
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * For internal use so we can update the {@link RecordContext} and current
@@ -123,5 +122,5 @@ public interface InternalProcessorContext extends ProcessorContext {
 
     String changelogFor(final String storeName);
 
-    AtomicLong getRecordCacheRemaining();
+    MemoryBudget getMemoryBudget();
 }

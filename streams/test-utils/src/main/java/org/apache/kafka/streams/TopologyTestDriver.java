@@ -312,7 +312,7 @@ public class TopologyTestDriver implements Closeable {
         final AtomicLong cacheSizeBytes = new AtomicLong(Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)));
         final ThreadCache cache = new ThreadCache(
             logContext,
-            cacheSizeBytes,
+            new MemoryBudget(cacheSizeBytes),
             streamsMetrics
         );
 

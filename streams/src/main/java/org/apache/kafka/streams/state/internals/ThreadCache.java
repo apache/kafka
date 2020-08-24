@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
@@ -36,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class ThreadCache {
     private final Logger log;
-    private final AtomicLong recordCacheRemaining;
+    private final MemoryBudget memoryBudget;
     private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
 
@@ -46,8 +47,12 @@ public class ThreadCache {
     private long numEvicts = 0;
     private long numFlushes = 0;
 
-    public AtomicLong getRecordCacheRemaining() {
-        return recordCacheRemaining;
+    public ThreadCache(final LogContext logContext, final StreamsMetricsImpl streamsMetrics) {
+        this(logContext, new MemoryBudget(new AtomicLong(Long.MAX_VALUE)), streamsMetrics);
+    }
+
+    public MemoryBudget memoryBudget() {
+        return memoryBudget;
     }
 
     public interface DirtyEntryFlushListener {
@@ -55,11 +60,11 @@ public class ThreadCache {
     }
 
     public ThreadCache(final LogContext logContext, final long maxCacheSizeBytes, final StreamsMetricsImpl metrics) {
-        this(logContext, new AtomicLong(maxCacheSizeBytes), metrics);
+        this(logContext, new MemoryBudget(new AtomicLong(maxCacheSizeBytes)), metrics);
     }
 
-    public ThreadCache(final LogContext logContext, final AtomicLong recordCacheRemaining, final StreamsMetricsImpl metrics) {
-        this.recordCacheRemaining = recordCacheRemaining;
+    public ThreadCache(final LogContext logContext, final MemoryBudget memoryBudget, final StreamsMetricsImpl metrics) {
+        this.memoryBudget = memoryBudget;
         this.metrics = metrics;
         this.log = logContext.logger(getClass());
     }
@@ -156,14 +161,12 @@ public class ThreadCache {
 
         final NamedCache cache = getOrCreateCache(namespace);
         cache.put(key, value);
-        maybeEvict(namespace);
     }
 
     public LRUCacheEntry putIfAbsent(final String namespace, final Bytes key, final LRUCacheEntry value) {
         final NamedCache cache = getOrCreateCache(namespace);
 
         final LRUCacheEntry result = cache.putIfAbsent(key, value);
-        maybeEvict(namespace);
 
         if (result == null) {
             numPuts++;
@@ -189,7 +192,7 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator range(final String namespace, final Bytes from, final Bytes to) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, recordCacheRemaining, this.metrics));
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, memoryBudget, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.keyRange(from, to), cache);
     }
@@ -197,7 +200,7 @@ public class ThreadCache {
     public MemoryLRUCacheBytesIterator all(final String namespace) {
         final NamedCache cache = getCache(namespace);
         if (cache == null) {
-            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, recordCacheRemaining, this.metrics));
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator(), new NamedCache(namespace, memoryBudget, this.metrics));
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
@@ -235,23 +238,26 @@ public class ThreadCache {
         }
     }
 
-    private void maybeEvict(final String namespace) {
+    public void maybeEvict() {
         int numEvicted = 0;
-        while (recordCacheRemaining.get() <= 0) {
-            final NamedCache cache = getOrCreateCache(namespace);
-            // we abort here as the put on this cache may have triggered
-            // a put on another cache. So even though the sizeInBytes() is
-            // still > maxCacheSizeBytes there is nothing to evict from this
-            // namespaced cache.
-            if (cache.isEmpty()) {
-                return;
+        final long targetSoftReservation = memoryBudget.targetSoftReservation();
+        while (memoryBudget.softReservation() > targetSoftReservation) {
+            final int previouslyEvicted = numEvicted;
+            for (final NamedCache cache : caches.values()) {
+                if (!cache.isEmpty() && memoryBudget.softReservation() > targetSoftReservation) {
+                    cache.evict();
+                    numEvicts++;
+                    numEvicted++;
+                }
             }
-            cache.evict();
-            numEvicts++;
-            numEvicted++;
+            // if we didn't evict anything, then we can't evict anything, so break out of the
+            // loop regardless of whether we're at the target or not.
+            if (numEvicted == previouslyEvicted) {
+                break;
+            }
         }
         if (log.isTraceEnabled()) {
-            log.trace("Evicted {} entries from cache {}", numEvicted, namespace);
+            log.trace("Evicted {} entries.", numEvicted);
         }
     }
 
@@ -262,7 +268,7 @@ public class ThreadCache {
     private synchronized NamedCache getOrCreateCache(final String name) {
         NamedCache cache = caches.get(name);
         if (cache == null) {
-            cache = new NamedCache(name, recordCacheRemaining, this.metrics);
+            cache = new NamedCache(name, memoryBudget, this.metrics);
             caches.put(name, cache);
         }
         return cache;

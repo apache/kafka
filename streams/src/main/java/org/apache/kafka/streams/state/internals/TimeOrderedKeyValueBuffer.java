@@ -17,19 +17,21 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
 
-    void setRecordCacheRemaining(AtomicLong recordCacheRemaining);
+    void setMemoryBudget(MemoryBudget memoryBudget, MemoryBudget.AllocationType allocationType);
+
+    boolean nonEmpty();
 
     final class Eviction<K, V> {
         private final K key;

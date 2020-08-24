@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -44,6 +45,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -176,6 +178,8 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         EasyMock.replay(underlyingStore);
         store = new CachingKeyValueStore(underlyingStore);
         cache = EasyMock.niceMock(ThreadCache.class);
+        EasyMock.expect(cache.memoryBudget()).andStubReturn(new MemoryBudget(new AtomicLong(Long.MAX_VALUE)));
+        EasyMock.replay(cache);
         context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, null));
         store.init(context, store);
