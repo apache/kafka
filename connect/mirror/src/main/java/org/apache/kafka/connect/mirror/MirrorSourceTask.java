@@ -33,6 +33,8 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 
+import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.storage.SimpleHeaderConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +66,7 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore outstandingOffsetSyncs;
     private Semaphore consumerAccess;
+    private HeaderConverter headerConverter;
 
     public MirrorSourceTask() {}
 
@@ -72,6 +75,7 @@ public class MirrorSourceTask extends SourceTask {
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
         this.maxOffsetLag = maxOffsetLag;
+        this.headerConverter = new SimpleHeaderConverter();
     }
 
     @Override
@@ -86,6 +90,7 @@ public class MirrorSourceTask extends SourceTask {
         replicationPolicy = config.replicationPolicy();
         partitionStates = new HashMap<>();
         offsetSyncsTopic = config.offsetSyncsTopic();
+        headerConverter = new SimpleHeaderConverter();
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig());
         offsetProducer = MirrorUtils.newProducer(config.sourceProducerConfig());
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
@@ -112,14 +117,14 @@ public class MirrorSourceTask extends SourceTask {
         try {
             consumerAccess.acquire();
         } catch (InterruptedException e) {
-            log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
+            log.warn("Interrupted waiting for access to consumer. Will try closing anyway.");
         }
         Utils.closeQuietly(consumer, "source consumer");
         Utils.closeQuietly(offsetProducer, "offset producer");
         Utils.closeQuietly(metrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
-   
+
     @Override
     public String version() {
         return "1";
@@ -217,7 +222,7 @@ public class MirrorSourceTask extends SourceTask {
             outstandingOffsetSyncs.release();
         });
     }
- 
+
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, x -> loadOffset(x)));
     }
@@ -244,7 +249,10 @@ public class MirrorSourceTask extends SourceTask {
     private Headers convertHeaders(ConsumerRecord<byte[], byte[]> record) {
         ConnectHeaders headers = new ConnectHeaders();
         for (Header header : record.headers()) {
-            headers.addBytes(header.key(), header.value());
+            headers.add(
+                    header.key(),
+                    headerConverter.toConnectHeader(record.topic(), header.key(), header.value())
+            );
         }
         return headers;
     }

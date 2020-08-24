@@ -21,6 +21,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.Test;
@@ -38,6 +39,7 @@ public class MirrorSourceTaskTest {
         Headers headers = new RecordHeaders();
         headers.add("header1", new byte[]{'l', 'm', 'n', 'o'});
         headers.add("header2", new byte[]{'p', 'q', 'r', 's', 't'});
+        headers.add("header3", new byte[]{'1', '8'});
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("topic1", 2, 3L, 4L,
             TimestampType.CREATE_TIME, 0L, 5, 6, key, value, headers);
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask("cluster7",
@@ -52,6 +54,9 @@ public class MirrorSourceTaskTest {
         assertEquals(value, sourceRecord.value());
         assertEquals(headers.lastHeader("header1").value(), sourceRecord.headers().lastWithName("header1").value());
         assertEquals(headers.lastHeader("header2").value(), sourceRecord.headers().lastWithName("header2").value());
+        assertEquals(Schema.STRING_SCHEMA, sourceRecord.headers().lastWithName("header1").schema());
+        assertEquals(Schema.STRING_SCHEMA, sourceRecord.headers().lastWithName("header2").schema());
+        assertEquals(Schema.INT8_SCHEMA, sourceRecord.headers().lastWithName("header3").schema());
     }
 
     @Test
