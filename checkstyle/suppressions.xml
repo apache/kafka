@@ -142,6 +142,10 @@
     <suppress checks="MethodLength"
               files="(RequestResponse|WorkerSinkTask)Test.java"/>
 
+    <!-- Controller -->
+    <suppress checks="CyclomaticComplexity|NPathComplexity"
+              files="(LocalLogManager).java"/>
+
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
               files="(KafkaStreams|KStreamImpl|KTableImpl|StreamsPartitionAssignor).java"/>

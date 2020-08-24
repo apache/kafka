@@ -23,9 +23,9 @@ import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class QuorumControllerManagerTest {
+public class QuorumControllerTest {
     private static final Logger log =
-        LoggerFactory.getLogger(QuorumControllerManagerTest.class);
+        LoggerFactory.getLogger(QuorumControllerTest.class);
 
     @Rule
     final public Timeout globalTimeout = Timeout.seconds(40);
