@@ -118,15 +118,6 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
 
             final long timestamp = context().timestamp();
-            //don't process records that don't fall within a full sliding window
-            /*if (timestamp < windows.timeDifferenceMs()) {
-                log.warn(
-                    "Skipping record due to early arrival. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    value, context().topic(), context().partition(), context().offset()
-                );
-                droppedRecordsSensor.record();
-                return;
-            }*/
             processInOrder(key, value, timestamp);
         }
 
@@ -140,7 +131,6 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 return;
             }
 
-            //store start times of windows we find
             final Set<Long> windowStartTimes = new HashSet<>();
 
             // aggregate that will go in the current record’s left/right window (if needed)
