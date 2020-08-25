@@ -339,7 +339,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
-        for (long now = timeFrom; now <= timeTo; now++) {
+        for (long now = timeTo; now >= timeFrom; now--) {
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.subMap(from, true, to, true).descendingMap().entrySet()) {
@@ -410,7 +410,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         this.open = open;
     }
 
-    private class TheWindowStoreIterator<E> implements WindowStoreIterator<E> {
+    private static class TheWindowStoreIterator<E> implements WindowStoreIterator<E> {
 
         private final Iterator<KeyValue<Long, E>> underlying;
 
