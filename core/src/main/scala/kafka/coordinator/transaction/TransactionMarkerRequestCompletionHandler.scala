@@ -143,7 +143,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                       throw new IllegalStateException(s"Received fatal error ${error.exceptionName} while sending txn marker for $transactionalId")
 
                     case Errors.UNKNOWN_TOPIC_OR_PARTITION |
-                         Errors.NOT_LEADER_FOR_PARTITION |
+                         Errors.NOT_LEADER_OR_FOLLOWER |
                          Errors.NOT_ENOUGH_REPLICAS |
                          Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND |
                          Errors.REQUEST_TIMED_OUT |

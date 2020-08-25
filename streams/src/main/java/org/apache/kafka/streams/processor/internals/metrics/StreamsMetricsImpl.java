@@ -28,9 +28,6 @@ import org.apache.kafka.common.metrics.stats.CumulativeCount;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
-import org.apache.kafka.common.metrics.stats.Percentile;
-import org.apache.kafka.common.metrics.stats.Percentiles;
-import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
@@ -47,9 +44,9 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
-import java.util.Optional;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
 
@@ -100,7 +97,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> storeLevelSensors = new HashMap<>();
 
-    private RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
+    private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
     private static final String SENSOR_PREFIX_DELIMITER = ".";
     private static final String SENSOR_NAME_DELIMITER = ".s.";
@@ -131,8 +128,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_SUFFIX = "-rate";
     public static final String TOTAL_SUFFIX = "-total";
     public static final String RATIO_SUFFIX = "-ratio";
-    public static final String P99_SUFFIX = "-p99";
-    public static final String P90_SUFFIX = "-p90";
 
     public static final String GROUP_PREFIX_WO_DELIMITER = "stream";
     public static final String GROUP_PREFIX = GROUP_PREFIX_WO_DELIMITER + "-";
@@ -154,15 +149,24 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_DESCRIPTION_PREFIX = "The average number of ";
     public static final String RATE_DESCRIPTION_SUFFIX = " per second";
 
-    private static final int PERCENTILES_SIZE_IN_BYTES = 1000 * 1000;    // 1 MB
-    private static double MAXIMUM_E2E_LATENCY = 10 * 24 * 60 * 60 * 1000d; // maximum latency is 10 days; values above that will be pinned
+    public static final String RECORD_E2E_LATENCY = "record-e2e-latency";
+    public static final String RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX =
+        "end-to-end latency of a record, measuring by comparing the record timestamp with the "
+            + "system time when it has been fully processed by the node";
+    public static final String RECORD_E2E_LATENCY_AVG_DESCRIPTION = "The average " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+    public static final String RECORD_E2E_LATENCY_MIN_DESCRIPTION = "The minimum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
+    public static final String RECORD_E2E_LATENCY_MAX_DESCRIPTION = "The maximum " + RECORD_E2E_LATENCY_DESCRIPTION_SUFFIX;
 
-    public StreamsMetricsImpl(final Metrics metrics, final String clientId, final String builtInMetricsVersion) {
+    public StreamsMetricsImpl(final Metrics metrics,
+                              final String clientId,
+                              final String builtInMetricsVersion,
+                              final Time time) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         Objects.requireNonNull(builtInMetricsVersion, "Built-in metrics version cannot be null");
         this.metrics = metrics;
         this.clientId = clientId;
         version = parseBuiltInMetricsVersion(builtInMetricsVersion);
+        rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
 
         this.parentSensors = new HashMap<>();
     }
@@ -177,10 +181,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public Version version() {
         return version;
-    }
-
-    public void setRocksDBMetricsRecordingTrigger(final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger) {
-        this.rocksDBMetricsRecordingTrigger = rocksDBMetricsRecordingTrigger;
     }
 
     public RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger() {
@@ -650,14 +650,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addMinAndMaxAndP99AndP90ToSensor(final Sensor sensor,
-                                                        final String group,
-                                                        final Map<String, String> tags,
-                                                        final String operation,
-                                                        final String descriptionOfMin,
-                                                        final String descriptionOfMax,
-                                                        final String descriptionOfP99,
-                                                        final String descriptionOfP90) {
+    public static void addMinAndMaxToSensor(final Sensor sensor,
+                                            final String group,
+                                            final Map<String, String> tags,
+                                            final String operation,
+                                            final String descriptionOfMin,
+                                            final String descriptionOfMax) {
         sensor.add(
             new MetricName(
                 operation + MIN_SUFFIX,
@@ -674,27 +672,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 descriptionOfMax,
                 tags),
             new Max()
-        );
-
-        sensor.add(
-            new Percentiles(
-                PERCENTILES_SIZE_IN_BYTES,
-                MAXIMUM_E2E_LATENCY,
-                BucketSizing.LINEAR,
-                new Percentile(
-                    new MetricName(
-                        operation + P99_SUFFIX,
-                        group,
-                        descriptionOfP99,
-                        tags),
-                    99),
-                new Percentile(
-                    new MetricName(
-                        operation + P90_SUFFIX,
-                        group,
-                        descriptionOfP90,
-                        tags),
-                    90))
         );
     }
 

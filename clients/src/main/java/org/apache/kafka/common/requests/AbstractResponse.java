@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -89,7 +90,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case PRODUCE:
                 return new ProduceResponse(struct);
             case FETCH:
-                return FetchResponse.parse(struct);
+                return new FetchResponse<>(new FetchResponseData(struct, version));
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
@@ -151,7 +152,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
             case DELETE_ACLS:
                 return new DeleteAclsResponse(struct, version);
             case DESCRIBE_CONFIGS:
-                return new DescribeConfigsResponse(struct);
+                return new DescribeConfigsResponse(struct, version);
             case ALTER_CONFIGS:
                 return new AlterConfigsResponse(struct, version);
             case ALTER_REPLICA_LOG_DIRS:

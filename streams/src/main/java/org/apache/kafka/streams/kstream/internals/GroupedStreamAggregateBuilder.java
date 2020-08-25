@@ -71,7 +71,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
-                                  final Serde<VR> valSerde) {
+                                  final Serde<VR> valueSerde) {
         assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
 
         final String aggFunctionName = functionName.name();
@@ -107,7 +107,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
         return new KTableImpl<>(aggFunctionName,
                                 keySerde,
-                                valSerde,
+                                valueSerde,
                                 sourceName.equals(this.name) ? subTopologySourceNodes : Collections.singleton(sourceName),
                                 queryableStoreName,
                                 aggregateSupplier,

@@ -80,6 +80,18 @@ public class MockSelector implements Selectable {
     }
 
     /**
+     * Since MockSelector.connect will always succeed and add the
+     * connection id to the Set connected, we can only simulate
+     * that the connection is still pending by remove the connection
+     * id from the Set connected
+     *
+     * @param id connection id
+     */
+    public void serverConnectionBlocked(String id) {
+        this.connected.remove(id);
+    }
+
+    /**
      * Simulate a server disconnect. This id will be present in {@link #disconnected()} on
      * the next {@link #poll(long)}.
      */

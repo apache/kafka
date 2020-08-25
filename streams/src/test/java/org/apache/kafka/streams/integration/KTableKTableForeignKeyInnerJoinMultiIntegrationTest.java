@@ -51,6 +51,7 @@ import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Properties;
@@ -91,19 +92,16 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
         PRODUCER_CONFIG_1.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG_1.put(ProducerConfig.ACKS_CONFIG, "all");
-        PRODUCER_CONFIG_1.put(ProducerConfig.RETRIES_CONFIG, 0);
         PRODUCER_CONFIG_1.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         PRODUCER_CONFIG_1.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, FloatSerializer.class);
 
         PRODUCER_CONFIG_2.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG_2.put(ProducerConfig.ACKS_CONFIG, "all");
-        PRODUCER_CONFIG_2.put(ProducerConfig.RETRIES_CONFIG, 0);
         PRODUCER_CONFIG_2.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         PRODUCER_CONFIG_2.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, LongSerializer.class);
 
         PRODUCER_CONFIG_3.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         PRODUCER_CONFIG_3.put(ProducerConfig.ACKS_CONFIG, "all");
-        PRODUCER_CONFIG_3.put(ProducerConfig.RETRIES_CONFIG, 0);
         PRODUCER_CONFIG_3.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
         PRODUCER_CONFIG_3.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
@@ -136,8 +134,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         );
 
         //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
-        final List<KeyValue<Integer, String>> table3 = Arrays.asList(
-                new KeyValue<>(10, "waffle")
+        final List<KeyValue<Integer, String>> table3 = Collections.singletonList(
+            new KeyValue<>(10, "waffle")
         );
 
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, PRODUCER_CONFIG_1, MOCK_TIME);

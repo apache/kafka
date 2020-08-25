@@ -413,7 +413,7 @@ class LogSegment private[log] (val log: FileRecords,
   override def toString: String = "LogSegment(baseOffset=" + baseOffset +
     ", size=" + size +
     ", lastModifiedTime=" + lastModified +
-    ", largestTime=" + largestTimestamp +
+    ", largestRecordTimestamp=" + largestRecordTimestamp +
     ")"
 
   /**
@@ -632,6 +632,11 @@ class LogSegment private[log] (val log: FileRecords,
    * The last modified time of this log segment as a unix time stamp
    */
   def lastModified = log.file.lastModified
+
+  /**
+   * The largest timestamp this segment contains, if maxTimestampSoFar >= 0, otherwise None.
+   */
+  def largestRecordTimestamp: Option[Long] = if (maxTimestampSoFar >= 0) Some(maxTimestampSoFar) else None
 
   /**
    * The largest timestamp this segment contains.

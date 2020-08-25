@@ -65,7 +65,7 @@ public class PartitionGroup {
     static class RecordInfo {
         RecordQueue queue;
 
-        ProcessorNode<?, ?> node() {
+        ProcessorNode<?, ?, ?, ?> node() {
             return queue.source();
         }
 
@@ -241,10 +241,6 @@ public class PartitionGroup {
 
     boolean allPartitionsBuffered() {
         return allBuffered;
-    }
-
-    void close() {
-        clear();
     }
 
     void clear() {

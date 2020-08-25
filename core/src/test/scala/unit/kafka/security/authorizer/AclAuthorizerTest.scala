@@ -362,7 +362,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val acls1 = Set(acl2)
     addAcls(aclAuthorizer, acls1, resource1)
 
-    zkClient.deleteAclChangeNotifications
+    zkClient.deleteAclChangeNotifications()
     val authorizer = new AclAuthorizer
     try {
       authorizer.configure(config.originals)
@@ -1037,7 +1037,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
     val header = new RequestHeader(apiKey, 2, "", 1) //ApiKeys apiKey, short version, String clientId, int correlation
     new RequestContext(header, "", clientAddress, principal, ListenerName.forSecurityProtocol(securityProtocol),
-      securityProtocol, ClientInformation.EMPTY)
+      securityProtocol, ClientInformation.EMPTY, false)
   }
 
   private def authorize(authorizer: AclAuthorizer, requestContext: RequestContext, operation: AclOperation, resource: ResourcePattern): Boolean = {
@@ -1087,9 +1087,8 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
     op != AclOperation.ANY && op != AclOperation.UNKNOWN
   }
 
-  private def prepareDefaultConfig(): String = {
+  private def prepareDefaultConfig: String =
     prepareConfig(Array("broker.id=1", "zookeeper.connect=somewhere"))
-  }
 
   private def prepareConfig(lines : Array[String]): String = {
     val file = File.createTempFile("kafkatest", ".properties")

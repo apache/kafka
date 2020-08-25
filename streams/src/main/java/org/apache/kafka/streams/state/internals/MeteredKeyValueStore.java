@@ -24,6 +24,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -41,6 +42,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
  * The inner {@link KeyValueStore} of this class is of type &lt;Bytes,byte[]&gt;, hence we use {@link Serde}s
  * to convert from &lt;K,V&gt; to &lt;Bytes,byte[]&gt;
+ *
  * @param <K>
  * @param <V>
  */
@@ -62,6 +64,8 @@ public class MeteredKeyValueStore<K, V>
     private Sensor allSensor;
     private Sensor rangeSensor;
     private Sensor flushSensor;
+    private Sensor e2eLatencySensor;
+    private ProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
     private final String threadId;
     private String taskId;
@@ -82,6 +86,7 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
+        this.context = context;
         taskId = context.taskId().toString();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
@@ -94,6 +99,7 @@ public class MeteredKeyValueStore<K, V>
         rangeSensor = StateStoreMetrics.rangeSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         deleteSensor = StateStoreMetrics.deleteSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
@@ -103,8 +109,12 @@ public class MeteredKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     void initStoreSerde(final ProcessorContext context) {
+        final String storeName = name();
+        final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName);
         serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+             changelogTopic != null ?
+                changelogTopic :
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
@@ -142,6 +152,7 @@ public class MeteredKeyValueStore<K, V>
                     final V value) {
         try {
             maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
+            maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
@@ -151,11 +162,13 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V putIfAbsent(final K key,
                          final V value) {
-        return maybeMeasureLatency(
+        final V currentValue = maybeMeasureLatency(
             () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
             time,
             putIfAbsentSensor
         );
+        maybeRecordE2ELatency();
+        return currentValue;
     }
 
     @Override
@@ -183,8 +196,22 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @Override
+    public KeyValueIterator<K, V> reverseRange(final K from,
+                                               final K to) {
+        return new MeteredKeyValueIterator(
+            wrapped().reverseRange(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
+            rangeSensor
+        );
+    }
+
+    @Override
     public KeyValueIterator<K, V> all() {
         return new MeteredKeyValueIterator(wrapped().all(), allSensor);
+    }
+
+    @Override
+    public KeyValueIterator<K, V> reverseAll() {
+        return new MeteredKeyValueIterator(wrapped().reverseAll(), allSensor);
     }
 
     @Override
@@ -220,6 +247,14 @@ public class MeteredKeyValueStore<K, V>
             byteEntries.add(KeyValue.pair(Bytes.wrap(serdes.rawKey(entry.key)), serdes.rawValue(entry.value)));
         }
         return byteEntries;
+    }
+
+    private void maybeRecordE2ELatency() {
+        if (e2eLatencySensor.shouldRecord()) {
+            final long currentTime = time.milliseconds();
+            final long e2eLatency =  currentTime - context.timestamp();
+            e2eLatencySensor.record(e2eLatency, currentTime);
+        }
     }
 
     private class MeteredKeyValueIterator implements KeyValueIterator<K, V> {

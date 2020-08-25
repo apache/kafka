@@ -167,7 +167,7 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("1", "1", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<Integer>> result
-            = supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            = supplier.theCapturedProcessor().lastValueAndTimestampPerKey();
         assertEquals(
             ValueAndTimestamp.make(2, 30L),
             result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
@@ -225,7 +225,7 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("1", "1", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<Long>> result =
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey();
         assertEquals(
             ValueAndTimestamp.make(2L, 30L),
             result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
@@ -271,7 +271,7 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("1", "C", 90);
         }
         final Map<Windowed<String>, ValueAndTimestamp<String>> result =
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey();
         assertEquals(
             ValueAndTimestamp.make("A:B", 30L),
             result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
@@ -582,13 +582,13 @@ public class KGroupedStreamImplTest {
             processData(driver);
 
             assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("1"),
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("1"),
                 equalTo(ValueAndTimestamp.make("0+A+C+D", 10L)));
             assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("2"),
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("2"),
                 equalTo(ValueAndTimestamp.make("0+B", 1L)));
             assertThat(
-                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("3"),
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey().get("3"),
                 equalTo(ValueAndTimestamp.make("0+E+F", 9L)));
         }
     }
@@ -622,7 +622,7 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("2", "B", 500L);
             inputTopic.pipeInput("3", "B", 100L);
         }
-        assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
+        assertThat(supplier.theCapturedProcessor().processed(), equalTo(Arrays.asList(
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
             new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),

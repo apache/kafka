@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.nio.ByteBuffer;
-import java.util.Iterator;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentNavigableMap;
-import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -31,17 +24,24 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.ByteBuffer;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreKeyBytes;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
@@ -54,7 +54,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private final String name;
     private final String metricScope;
-    private InternalProcessorContext context;
+    private ProcessorContext context;
     private Sensor expiredRecordSensor;
     private int seqnum = 0;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
@@ -87,9 +87,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        this.context = (InternalProcessorContext) context;
+        this.context = context;
 
-        final StreamsMetricsImpl metrics = this.context.metrics();
+        final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
         expiredRecordSensor = TaskMetrics.droppedRecordsSensorOrExpiredWindowRecordDropSensor(
@@ -120,7 +120,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         observedStreamTime = Math.max(observedStreamTime, windowStartTimestamp);
 
         if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
-            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            expiredRecordSensor.record(1.0d, ProcessorContextUtils.getCurrentSystemTime(context));
             LOG.warn("Skipping record for expired segment.");
         } else {
             if (value != null) {
@@ -191,8 +191,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         removeExpiredSegments();
 
         if (from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                 "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
@@ -257,7 +258,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                 it.close();
             }
         }
-        
+
         segmentMap.clear();
         open = false;
     }

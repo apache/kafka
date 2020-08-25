@@ -177,22 +177,16 @@ class RequestQuotaTest extends BaseRequestTest {
   }
 
   private def throttleTimeMetricValueForQuotaType(clientId: String, quotaType: QuotaType): Double = {
-    val metricName = leaderNode.metrics.metricName("throttle-time",
-                                  quotaType.toString,
-                                  "",
-                                  "user", "",
-                                  "client-id", clientId)
+    val metricName = leaderNode.metrics.metricName("throttle-time", quotaType.toString,
+      "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).throttleTimeSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
   }
 
   private def requestTimeMetricValue(clientId: String): Double = {
-    val metricName = leaderNode.metrics.metricName("request-time",
-                                  QuotaType.Request.toString,
-                                  "",
-                                  "user", "",
-                                  "client-id", clientId)
+    val metricName = leaderNode.metrics.metricName("request-time", QuotaType.Request.toString,
+      "", "user", "", "client-id", clientId)
     val sensor = leaderNode.quotaManagers.request.getOrCreateQuotaSensors(session("ANONYMOUS"),
       clientId).quotaSensor
     metricValue(leaderNode.metrics.metrics.get(metricName), sensor)
@@ -458,7 +452,10 @@ class RequestQuotaTest extends BaseRequestTest {
               .setOperation(AclOperation.ANY.code)
               .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DESCRIBE_CONFIGS =>
-          new DescribeConfigsRequest.Builder(Collections.singleton(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)))
+          new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
+            .setResources(Collections.singletonList(new DescribeConfigsRequestData.DescribeConfigsResource()
+              .setResourceType(ConfigResource.Type.TOPIC.id)
+              .setResourceName(tp.topic))))
 
         case ApiKeys.ALTER_CONFIGS =>
           new AlterConfigsRequest.Builder(
@@ -488,7 +485,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val data = new CreatePartitionsRequestData()
             .setTimeoutMs(0)
             .setValidateOnly(false)
-            .setTopics(Collections.singletonList(new CreatePartitionsTopic().setName("topic-2").setCount(1)))
+          data.topics().add(new CreatePartitionsTopic().setName("topic-2").setCount(1))
           new CreatePartitionsRequest.Builder(data)
 
         case ApiKeys.CREATE_DELEGATION_TOKEN =>

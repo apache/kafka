@@ -24,7 +24,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -44,7 +44,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private final AbstractSegments<S> segments;
     private final String metricScope;
     private final KeySchema keySchema;
-    private InternalProcessorContext context;
+    private ProcessorContext context;
     private volatile boolean open;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
@@ -81,8 +81,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                                  final long from,
                                                  final long to) {
         if (keyFrom.compareTo(keyTo) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                 "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
@@ -141,7 +142,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final long segmentId = segments.segmentId(timestamp);
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
         if (segment == null) {
-            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+            expiredRecordSensor.record(1.0d, ProcessorContextUtils.getCurrentSystemTime(context));
             LOG.warn("Skipping record for expired segment.");
         } else {
             segment.put(key, value);
@@ -165,9 +166,9 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        this.context = (InternalProcessorContext) context;
+        this.context = context;
 
-        final StreamsMetricsImpl metrics = this.context.metrics();
+        final StreamsMetricsImpl metrics = ProcessorContextUtils.getMetricsImpl(context);
         final String threadId = Thread.currentThread().getName();
         final String taskName = context.taskId().toString();
 

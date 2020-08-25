@@ -14,20 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.internals;
+package org.apache.kafka.connect.integration;
 
-import org.apache.kafka.streams.StreamsConfig;
-
-import java.util.Map;
+import org.junit.rules.TestRule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
+import org.slf4j.Logger;
 
 /**
- * A {@link StreamsConfig} that does not log its configuration on construction.
- *
- * This producer cleaner output for unit tests using the {@code test-utils},
- * since logging the config is not really valuable in this context.
+ * A utility class for Connect's integration tests
  */
-public class QuietStreamsConfig extends StreamsConfig {
-    public QuietStreamsConfig(final Map<?, ?> props) {
-        super(props, false);
+public class ConnectIntegrationTestUtils {
+    public static TestRule newTestWatcher(Logger log) {
+        return new TestWatcher() {
+            @Override
+            protected void starting(Description description) {
+                super.starting(description);
+                log.info("Starting test {}", description.getMethodName());
+            }
+
+            @Override
+            protected void finished(Description description) {
+                super.finished(description);
+                log.info("Finished test {}", description.getMethodName());
+            }
+        };
     }
 }

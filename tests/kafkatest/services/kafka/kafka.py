@@ -98,7 +98,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
+                 jmx_attributes=None, zk_connect_timeout=18000, zk_session_timeout=18000, server_prop_overides=None, zk_chroot=None,
                  zk_client_secure=False,
                  listener_security_config=ListenerSecurityConfig(), per_node_server_prop_overrides=None,
                  extra_kafka_opts="", tls_version=None):
@@ -181,10 +181,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.interbroker_listener = None
         self.setup_interbroker_listener(interbroker_security_protocol, self.listener_security_config.use_separate_interbroker_listener)
         self.interbroker_sasl_mechanism = interbroker_sasl_mechanism
+        self._security_config = None
 
         for node in self.nodes:
             node.version = version
-            node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
+            node.config = KafkaConfig(**{
+                config_property.BROKER_ID: self.idx(node),
+                config_property.ZOOKEEPER_CONNECTION_TIMEOUT_MS: zk_connect_timeout,
+                config_property.ZOOKEEPER_SESSION_TIMEOUT_MS: zk_session_timeout
+            })
 
     def set_version(self, version):
         for node in self.nodes:
@@ -214,16 +219,23 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     @property
     def security_config(self):
-        config = SecurityConfig(self.context, self.security_protocol, self.interbroker_listener.security_protocol,
-                                zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
-                                client_sasl_mechanism=self.client_sasl_mechanism,
-                                interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
-                                listener_security_config=self.listener_security_config,
-                                tls_version=self.tls_version)
+        if not self._security_config:
+            self._security_config = SecurityConfig(self.context, self.security_protocol, self.interbroker_listener.security_protocol,
+                                    zk_sasl=self.zk.zk_sasl, zk_tls=self.zk_client_secure,
+                                    client_sasl_mechanism=self.client_sasl_mechanism,
+                                    interbroker_sasl_mechanism=self.interbroker_sasl_mechanism,
+                                    listener_security_config=self.listener_security_config,
+                                    tls_version=self.tls_version)
         for port in self.port_mappings.values():
             if port.open:
-                config.enable_security_protocol(port.security_protocol)
-        return config
+                self._security_config.enable_security_protocol(port.security_protocol)
+        if self.zk.zk_sasl:
+            self._security_config.enable_sasl()
+            self._security_config.zk_sasl = self.zk.zk_sasl
+        if self.zk_client_secure:
+            self._security_config.enable_ssl()
+            self._security_config.zk_tls = self.zk_client_secure
+        return self._security_config
 
     def open_port(self, listener_name):
         self.port_mappings[listener_name].open = True
@@ -466,7 +478,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%(kafka_topics_cmd)s %(connection_string)s --create --topic %(topic)s " % {
             'kafka_topics_cmd': self._kafka_topics_cmd(node, use_zk_connection),
-            'connection_string': self._connect_setting(node, use_zk_connection),
+            'connection_string': self._topic_command_connect_setting(node, use_zk_connection),
             'topic': topic_cfg.get("topic"),
         }
         if 'replica-assignment' in topic_cfg:
@@ -491,7 +503,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running topic creation command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def delete_topic(self, topic, node=None):
+    def delete_topic(self, topic, node=None, use_zk_to_delete_topic=False):
         """
         Delete a topic with the topics command
         :param topic:
@@ -501,14 +513,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         self.logger.info("Deleting topic %s" % topic)
-        kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += kafka_topic_script + " "
-        cmd += "--bootstrap-server %(bootstrap_servers)s --delete --topic %(topic)s " % {
-            'bootstrap_servers': self.bootstrap_servers(self.security_protocol),
-            'topic': topic
-        }
+        cmd += "%s %s --topic %s --delete %s" % \
+               (self._kafka_topics_cmd(node=node, use_zk_connection=use_zk_to_delete_topic),
+                self._topic_command_connect_setting(node=node, use_zk_connection=use_zk_to_delete_topic),
+                topic, self._kafka_topics_cmd_config(node=node, use_zk_connection=use_zk_to_delete_topic))
         self.logger.info("Running topic delete command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -518,7 +528,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s %s --topic %s --describe %s" % \
               (self._kafka_topics_cmd(node=node, use_zk_connection=use_zk_to_describe_topic),
-               self._connect_setting(node=node, use_zk_connection=use_zk_to_describe_topic),
+               self._topic_command_connect_setting(node=node, use_zk_connection=use_zk_to_describe_topic),
                topic, self._kafka_topics_cmd_config(node=node, use_zk_connection=use_zk_to_describe_topic))
 
         self.logger.info("Running topic describe command...\n%s" % cmd)
@@ -533,7 +543,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s %s --list %s" % (self._kafka_topics_cmd(node, use_zk_to_list_topic),
-                                   self._connect_setting(node, use_zk_to_list_topic),
+                                   self._topic_command_connect_setting(node, use_zk_to_list_topic),
                                    self._kafka_topics_cmd_config(node, use_zk_to_list_topic))
         for line in node.account.ssh_capture(cmd):
             if not line.startswith("SLF4J"):
@@ -545,8 +555,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Altering message format version for topic %s with format %s", topic, msg_format_version)
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, msg_format_version)
+        cmd += "%s %s --entity-name %s --entity-type topics --alter --add-config message.format.version=%s" % \
+              (self.path.script("kafka-configs.sh", node), self._connect_setting_kafka_configs(node), topic, msg_format_version)
         self.logger.info("Running alter message format command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -559,10 +569,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.logger.info("Disabling unclean leader election for topic %s", topic)
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s --zookeeper %s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
-              (self.path.script("kafka-configs.sh", node), self.zk_connect_setting(), self.zk.zkTlsConfigFileOption(), topic, str(value).lower())
+        cmd += "%s %s --entity-name %s --entity-type topics --alter --add-config unclean.leader.election.enable=%s" % \
+              (self.path.script("kafka-configs.sh", node), self._connect_setting_kafka_configs(node), topic, str(value).lower())
         self.logger.info("Running alter unclean leader command...\n%s" % cmd)
         node.account.ssh(cmd)
+
+    def _connect_setting_kafka_configs(self, node):
+        if node.version.kafka_configs_command_uses_bootstrap_server():
+            return "--bootstrap-server %s " % self.bootstrap_servers(self.security_protocol)
+        else:
+            return "--zookeeper %s %s" % self.zk_connect_setting(), self.zk.zkTlsConfigFileOption()
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
@@ -593,6 +609,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  "replicas": map(int, fields[3].split(','))})
         return {"partitions": partitions}
 
+
+    def _connect_setting_reassign_partitions(self, node):
+        if node.version.reassign_partitions_command_supports_bootstrap_server():
+            return "--bootstrap-server %s " % self.bootstrap_servers(self.security_protocol)
+        else:
+            return "--zookeeper %s " % self.zk_connect_setting()
+
     def verify_reassign_partitions(self, reassignment, node=None):
         """Run the reassign partitions admin tool in "verify" mode
         """
@@ -609,7 +632,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = fix_opts_for_new_jvm(node)
         cmd += "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script("kafka-reassign-partitions.sh", node)
-        cmd += "--zookeeper %s " % self.zk_connect_setting()
+        cmd += self._connect_setting_reassign_partitions(node)
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--verify "
         cmd += "&& sleep 1 && rm -f %s" % json_file
@@ -649,7 +672,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         cmd = fix_opts_for_new_jvm(node)
         cmd += "echo %s > %s && " % (json_str, json_file)
         cmd += "%s " % self.path.script( "kafka-reassign-partitions.sh", node)
-        cmd += "--zookeeper %s " % self.zk_connect_setting()
+        cmd += self._connect_setting_reassign_partitions(node)
         cmd += "--reassignment-json-file %s " % json_file
         cmd += "--execute"
         if throttle is not None:
@@ -841,7 +864,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def zk_connect_setting(self):
         return self.zk.connect_setting(self.zk_chroot, self.zk_client_secure)
 
-    def _connect_setting(self, node, use_zk_connection=True):
+    def _topic_command_connect_setting(self, node, use_zk_connection=True):
         """
         Checks if --bootstrap-server config is supported, if yes then returns a string with
         bootstrap server, otherwise returns zookeeper connection string.

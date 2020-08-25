@@ -41,7 +41,7 @@ buildscript {
   }
 }
 
-apply plugin: "com.diffplug.gradle.spotless"
+apply plugin: "com.diffplug.spotless"
 spotless {
   scala {
     target 'streams/**/*.scala'
@@ -74,10 +74,26 @@ allprojects {
         }
       }
     }
-    configurations {
-      runtime {
+    configurations.all {
+      // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+      // that are unrelated to the project dependencies, we should not change them
+      if (name != "zinc") {
         resolutionStrategy {
-          force "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson"
+          force(
+            // ensure we have a single version of scala jars in the classpath, we enable inlining
+            // in the scala compiler for the `core` module so binary compatibility is only
+            // guaranteed if the exact same version of the scala jars is used for compilation
+            // and at runtime
+            libs.scalaLibrary,
+            libs.scalaReflect,
+            // ensures we have a single version of jackson-annotations in the classpath even if
+            // some modules only have a transitive reference to an older version
+            libs.jacksonAnnotations,
+            // be explicit about the Netty dependency version instead of relying on the version
+            // set by ZooKeeper (potentially older and containing CVEs)
+            libs.nettyHandler,
+            libs.nettyTransportNativeEpoll
+          )
         }
       }
     }
@@ -114,6 +130,8 @@ ext {
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 
   userTestLoggingEvents = project.hasProperty("testLoggingEvents") ? Arrays.asList(testLoggingEvents.split(",")) : null
+
+  userEnableTestCoverage = project.hasProperty("enableTestCoverage") ? enableTestCoverage : false
 
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 
@@ -463,7 +481,6 @@ subprojects {
       "-Xlint:delayedinit-select",
       "-Xlint:doc-detached",
       "-Xlint:missing-interpolator",
-      "-Xlint:nullary-override",
       "-Xlint:nullary-unit",
       "-Xlint:option-implicit",
       "-Xlint:package-object-classes",
@@ -501,6 +518,7 @@ subprojects {
     if (versions.baseScala == '2.12') {
       scalaCompileOptions.additionalParameters += [
         "-Xlint:by-name-right-associative",
+        "-Xlint:nullary-override",
         "-Xlint:unsound-match"
       ]
     }
@@ -552,28 +570,33 @@ subprojects {
 
   // Ignore core since its a scala project
   if (it.path != ':core') {
-    apply plugin: "jacoco"
+    if (userEnableTestCoverage) {
+      apply plugin: "jacoco"
 
-    jacoco {
-      toolVersion = versions.jacoco
-    }
-
-    // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
-    // may report 0 coverage, since the source was modified after initial instrumentation.
-    // See https://github.com/jacoco/jacoco/issues/51
-    jacocoTestReport {
-      dependsOn tasks.test
-      sourceSets sourceSets.main
-      reports {
-        html.enabled = true
-        xml.enabled = true
-        csv.enabled = false
+      jacoco {
+        toolVersion = versions.jacoco
       }
+
+      // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
+      // may report 0 coverage, since the source was modified after initial instrumentation.
+      // See https://github.com/jacoco/jacoco/issues/51
+      jacocoTestReport {
+        dependsOn tasks.test
+        sourceSets sourceSets.main
+        reports {
+          html.enabled = true
+          xml.enabled = true
+          csv.enabled = false
+        }
+      }
+
     }
   }
 
-  def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
-  task reportCoverage(dependsOn: [coverageGen])
+  if (userEnableTestCoverage) {
+    def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+    task reportCoverage(dependsOn: [coverageGen])
+  }
 
   task determineCommitId {
     def takeFromHash = 16
@@ -640,30 +663,34 @@ def checkstyleConfigProperties(configFileName) {
 }
 
 // Aggregates all jacoco results into the root project directory
-task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
-  def javaProjects = subprojects.findAll { it.path != ':core' }
+if (userEnableTestCoverage) {
+  task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
+    def javaProjects = subprojects.findAll { it.path != ':core' }
 
-  description = 'Generates an aggregate report from all subprojects'
-  dependsOn(javaProjects.test)
+    description = 'Generates an aggregate report from all subprojects'
+    dependsOn(javaProjects.test)
 
-  additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
-  sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
-  classDirectories.from = javaProjects.sourceSets.main.output
-  executionData.from = javaProjects.jacocoTestReport.executionData
+    additionalSourceDirs.from = javaProjects.sourceSets.main.allSource.srcDirs
+    sourceDirectories.from = javaProjects.sourceSets.main.allSource.srcDirs
+    classDirectories.from = javaProjects.sourceSets.main.output
+    executionData.from = javaProjects.jacocoTestReport.executionData
 
-  reports {
-    html.enabled = true
-    xml.enabled = true
-  }
+    reports {
+      html.enabled = true
+      xml.enabled = true
+    }
 
-  // workaround to ignore projects that don't have any tests at all
-  onlyIf = { true }
-  doFirst {
-    executionData = files(executionData.findAll { it.exists() })
+    // workaround to ignore projects that don't have any tests at all
+    onlyIf = { true }
+    doFirst {
+      executionData = files(executionData.findAll { it.exists() })
+    }
   }
 }
 
-task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
+if (userEnableTestCoverage) {
+  task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
+}
 
 def connectPkgs = [
     'connect:api',
@@ -684,7 +711,8 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
-  apply plugin: "org.scoverage"
+  if (userEnableTestCoverage)
+    apply plugin: "org.scoverage"
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
@@ -705,7 +733,6 @@ project(':core') {
     compile(libs.zookeeper) {
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
-      exclude module: 'netty'
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
     compile libs.commonsCli
@@ -736,11 +763,13 @@ project(':core') {
     testCompile libs.jfreechart
   }
 
-  scoverage {
-    scoverageVersion = versions.scoverage
-    reportDir = file("${rootProject.buildDir}/scoverage")
-    highlighting = false
-    minimumRate = 0.0
+  if (userEnableTestCoverage) {
+    scoverage {
+      scoverageVersion = versions.scoverage
+      reportDir = file("${rootProject.buildDir}/scoverage")
+      highlighting = false
+      minimumRate = 0.0
+    }
   }
 
   configurations {
@@ -849,6 +878,7 @@ project(':core') {
                                'genAdminClientConfigDocs', 'genProducerConfigDocs', 'genConsumerConfigDocs',
                                'genKafkaConfigDocs', 'genTopicConfigDocs',
                                ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
+                               ':connect:runtime:genConnectPredicateDocs',
                                ':connect:runtime:genSinkConnectorConfigDocs', ':connect:runtime:genSourceConnectorConfigDocs',
                                ':streams:genStreamsConfigDocs', 'genConsumerMetricsDocs', 'genProducerMetricsDocs',
                                ':connect:runtime:genConnectMetricsDocs'], type: Tar) {
@@ -1022,7 +1052,8 @@ project(':clients') {
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "org.apache.kafka.common.message",
              "src/generated/java/org/apache/kafka/common/message",
-             "src/main/resources/common/message" ]
+             "src/main/resources/common/message",
+             "ApiMessageTypeGenerator" ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
@@ -1032,7 +1063,8 @@ project(':clients') {
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "org.apache.kafka.common.message",
              "src/generated-test/java/org/apache/kafka/common/message",
-             "src/test/resources/common/message" ]
+             "src/test/resources/common/message",
+             "none" ]
     inputs.dir("src/test/resources/common/message")
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
@@ -1063,6 +1095,8 @@ project(':clients') {
     include "**/org/apache/kafka/common/annotation/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/header/*"
+    include "**/org/apache/kafka/common/metrics/*"
+    include "**/org/apache/kafka/common/metrics/stats/*"
     include "**/org/apache/kafka/common/resource/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
@@ -1167,7 +1201,8 @@ project(':streams') {
     classpath = project(':generator').sourceSets.main.runtimeClasspath
     args = [ "org.apache.kafka.streams.internals.generated",
              "src/generated/java/org/apache/kafka/streams/internals/generated",
-             "src/main/resources/common/message" ]
+             "src/main/resources/common/message",
+             "none" ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
   }
@@ -1239,6 +1274,28 @@ project(':streams') {
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "streams_config.html").newOutputStream()
   }
+
+  task testAll(
+    dependsOn: [
+            ':streams:test',
+            ':streams:test-utils:test',
+            ':streams:streams-scala:test',
+            ':streams:upgrade-system-tests-0100:test',
+            ':streams:upgrade-system-tests-0101:test',
+            ':streams:upgrade-system-tests-0102:test',
+            ':streams:upgrade-system-tests-0110:test',
+            ':streams:upgrade-system-tests-10:test',
+            ':streams:upgrade-system-tests-11:test',
+            ':streams:upgrade-system-tests-20:test',
+            ':streams:upgrade-system-tests-21:test',
+            ':streams:upgrade-system-tests-22:test',
+            ':streams:upgrade-system-tests-23:test',
+            ':streams:upgrade-system-tests-24:test',
+            ':streams:upgrade-system-tests-25:test',
+            ':streams:upgrade-system-tests-26:test',
+            ':streams:examples:test'
+    ]
+  )
 }
 
 project(':streams:streams-scala') {
@@ -1486,6 +1543,18 @@ project(':streams:upgrade-system-tests-25') {
 
   dependencies {
     testCompile libs.kafkaStreams_25
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-26') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-26"
+
+  dependencies {
+    testCompile libs.kafkaStreams_26
   }
 
   systemTestLibs {
@@ -1767,6 +1836,13 @@ project(':connect:runtime') {
     main = 'org.apache.kafka.connect.tools.TransformationDoc'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
+  }
+
+  task genConnectPredicateDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.connect.tools.PredicateDoc'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_predicates.html").newOutputStream()
   }
 
   task genConnectMetricsDocs(type: JavaExec) {
