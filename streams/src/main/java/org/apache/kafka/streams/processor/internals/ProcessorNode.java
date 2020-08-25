@@ -109,7 +109,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             maybeMeasureLatency(
                 () -> {
                     if (processor != null) {
-                        processor.init(ProcessorContextAdapter.adapt(context));
+                        processor.init(InternalProcessorContextOldToNewAdapter.adapt(context));
                     }
                 },
                 time,

@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorContextAdapter;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContextOldToNewAdapter;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.ArrayList;
@@ -44,7 +44,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     @Override
     public void init(final ProcessorContext context) {
         super.init(context);
-        delegate.init(ProcessorContextAdapter.adapt((InternalProcessorContext) context));
+        delegate.init(InternalProcessorContextOldToNewAdapter.adapt((InternalProcessorContext) context));
     }
 
     @Override

@@ -18,35 +18,37 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
 
-public final class ProcessorContextReverseAdapter implements InternalProcessorContext {
-    private final InternalApiProcessorContext<Object, Object> delegate;
+public final class ProcessorContextNewToOldAdapter implements org.apache.kafka.streams.processor.ProcessorContext {
+    private final ProcessorContext<Object, Object> delegate;
 
-    static InternalProcessorContext adapt(final InternalApiProcessorContext<Object, Object> delegate) {
-        if (delegate instanceof ProcessorContextAdapter) {
-            return ((ProcessorContextAdapter<Object, Object>) delegate).delegate();
+    @SuppressWarnings("unchecked")
+    public static org.apache.kafka.streams.processor.ProcessorContext adapt(final ProcessorContext<?, ?> delegate) {
+        if (delegate instanceof InternalProcessorContextOldToNewAdapter) {
+            return ((InternalProcessorContextOldToNewAdapter<?, ?>) delegate).delegate();
+        } else if (delegate instanceof InternalApiProcessorContext) {
+            return InternalProcessorContextNewToOldAdapter.adapt((InternalApiProcessorContext<Object, Object>) delegate);
         } else {
-            return new ProcessorContextReverseAdapter(delegate);
+            return new ProcessorContextNewToOldAdapter(delegate);
         }
     }
 
-    private ProcessorContextReverseAdapter(final InternalApiProcessorContext<Object, Object> delegate) {
-        this.delegate = delegate;
+    @SuppressWarnings("unchecked")
+    private ProcessorContextNewToOldAdapter(final ProcessorContext<?, ?> delegate) {
+        this.delegate = (ProcessorContext<Object, Object>) delegate;
     }
 
     @Override
@@ -75,93 +77,13 @@ public final class ProcessorContextReverseAdapter implements InternalProcessorCo
     }
 
     @Override
-    public StreamsMetricsImpl metrics() {
+    public StreamsMetrics metrics() {
         return delegate.metrics();
     }
 
     @Override
-    public void setSystemTimeMs(final long timeMs) {
-        delegate.setSystemTimeMs(timeMs);
-    }
-
-    @Override
-    public long currentSystemTimeMs() {
-        return delegate.currentSystemTimeMs();
-    }
-
-    @Override
-    public ProcessorRecordContext recordContext() {
-        return delegate.recordContext();
-    }
-
-    @Override
-    public void setRecordContext(final ProcessorRecordContext recordContext) {
-        delegate.setRecordContext(recordContext);
-    }
-
-    @Override
-    public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
-        delegate.setCurrentNode(currentNode);
-    }
-
-    @Override
-    public ProcessorNode<?, ?, ?, ?> currentNode() {
-        return delegate.currentNode();
-    }
-
-    @Override
-    public ThreadCache cache() {
-        return delegate.cache();
-    }
-
-    @Override
-    public void initialize() {
-        delegate.initialize();
-    }
-
-    @Override
-    public void uninitialize() {
-        delegate.uninitialize();
-    }
-
-    @Override
-    public Task.TaskType taskType() {
-        return delegate.taskType();
-    }
-
-    @Override
-    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
-        delegate.transitionToActive(streamTask, recordCollector, newCache);
-    }
-
-    @Override
-    public void transitionToStandby(final ThreadCache newCache) {
-        delegate.transitionToStandby(newCache);
-    }
-
-    @Override
-    public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) {
-        delegate.registerCacheFlushListener(namespace, listener);
-    }
-
-    @Override
-    public <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
-        return delegate.getStateStore(builder);
-    }
-
-    @Override
-    public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp) {
-        delegate.logChange(storeName, key, value, timestamp);
-    }
-
-    @Override
-    public String changelogFor(final String storeName) {
-        return delegate.changelogFor(storeName);
-    }
-
-    @Override
     public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
-        delegate.register(store, stateRestoreCallback);
+        throw new UnsupportedOperationException("The supplied ProcsesorContext doesn't support registering stateRestoreCallbacks");
     }
 
     @Override
@@ -176,7 +98,7 @@ public final class ProcessorContextReverseAdapter implements InternalProcessorCo
     }
 
     @Override
-    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) throws IllegalArgumentException {
+    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
         return delegate.schedule(interval, type, callback);
     }
 
@@ -193,7 +115,11 @@ public final class ProcessorContextReverseAdapter implements InternalProcessorCo
     @Deprecated
     @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        delegate.forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
+        // Note, we'll only fall through to here if the delegate does _not_ implement InternalApiProcessorContext,
+        // so only for mocks and such.
+        throw new UnsupportedOperationException(
+            "forward(key, value, index) has been deprecated since 2.0.0, and is not supported by this ProcessorContext."
+        );
     }
 
     @Deprecated
@@ -240,9 +166,5 @@ public final class ProcessorContextReverseAdapter implements InternalProcessorCo
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return delegate.appConfigsWithPrefix(prefix);
-    }
-
-    InternalApiProcessorContext<Object, Object> delegate() {
-        return delegate;
     }
 }

@@ -47,7 +47,7 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
-        delegate.init(ProcessorContextReverseAdapter.adapt((InternalApiProcessorContext<Object, Object>) context));
+        delegate.init(InternalProcessorContextNewToOldAdapter.adapt((InternalApiProcessorContext<Object, Object>) context));
     }
 
     @Override

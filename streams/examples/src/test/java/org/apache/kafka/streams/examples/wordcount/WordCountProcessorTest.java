@@ -18,8 +18,8 @@ package org.apache.kafka.streams.examples.wordcount;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.api.MockProcessorContext;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
@@ -36,7 +36,7 @@ import static org.junit.Assert.assertTrue;
 public class WordCountProcessorTest {
     @Test
     public void test() {
-        final MockProcessorContext context = new MockProcessorContext();
+        final MockProcessorContext<String, String> context = new MockProcessorContext<>();
 
         // Create, initialize, and register the state store.
         final KeyValueStore<String, Integer> store =
@@ -44,11 +44,10 @@ public class WordCountProcessorTest {
                 .withLoggingDisabled() // Changelog is not supported by MockProcessorContext.
                 // Caching is disabled by default, but FYI: caching is also not supported by MockProcessorContext.
                 .build();
-        store.init(context, store);
-        context.register(store, null);
+        store.init(context.getStateStoreContext(), store);
 
         // Create and initialize the processor under test
-        final Processor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
+        final Processor<String, String, String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
         processor.init(context);
 
         // send a record to the processor
@@ -61,7 +60,7 @@ public class WordCountProcessorTest {
         context.scheduledPunctuators().get(0).getPunctuator().punctuate(0L);
 
         // finally, we can verify the output.
-        final Iterator<MockProcessorContext.CapturedForward> capturedForwards = context.forwarded().iterator();
+        final Iterator<MockProcessorContext.CapturedForward<String, String>> capturedForwards = context.forwarded().iterator();
         assertEquals(new KeyValue<>("alpha", "2"), capturedForwards.next().keyValue());
         assertEquals(new KeyValue<>("beta", "1"), capturedForwards.next().keyValue());
         assertEquals(new KeyValue<>("gamma", "1"), capturedForwards.next().keyValue());
