@@ -20,9 +20,17 @@ package org.apache.kafka.common.record;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Deque;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.IntStream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 public class BufferSupplierTest {
 
@@ -41,6 +49,42 @@ public class BufferSupplierTest {
         ByteBuffer increased = supplier.get(2048);
         assertEquals(2048, increased.capacity());
         assertEquals(0, increased.position());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testSingleton() throws InterruptedException, NoSuchFieldException, IllegalAccessException {
+        int threadCount = 4;
+        ExecutorService threadPool = Executors.newFixedThreadPool(threadCount);
+        AtomicBoolean closed = new AtomicBoolean(false);
+        try {
+            IntStream.range(0, threadCount).forEach(index ->
+                threadPool.execute(() -> {
+                    try {
+                        while (!closed.get()) {
+                            ByteBuffer buffer = BufferSupplier.SINGLETON.get(index % 2 == 0 ? 10 : 20);
+                            BufferSupplier.SINGLETON.release(buffer);
+                            TimeUnit.MILLISECONDS.sleep(10);
+                        }
+                    } catch (InterruptedException e) {
+                        // nothing
+                    }
+                })
+            );
+            TimeUnit.SECONDS.sleep(5);
+        } finally {
+            closed.set(true);
+            threadPool.shutdown();
+            assertTrue(threadPool.awaitTermination(30, TimeUnit.SECONDS));
+        }
+
+        ConcurrentMap<Integer, Deque<ByteBuffer>> bufferMap = (ConcurrentMap<Integer, Deque<ByteBuffer>>) BufferSupplier.SINGLETON
+                .getClass().getDeclaredField("bufferMap").get(BufferSupplier.SINGLETON);
+        assertEquals(2, bufferMap.size());
+        bufferMap.values().forEach(queue -> assertEquals(2, queue.size()));
+
+        BufferSupplier.SINGLETON.close();
+        assertEquals(0, bufferMap.size());
     }
 
 }

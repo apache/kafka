@@ -22,6 +22,9 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Simple non-threadsafe interface for caching byte buffers. This is suitable for simple cases like ensuring that
@@ -47,6 +50,34 @@ public abstract class BufferSupplier implements AutoCloseable {
     public static BufferSupplier create() {
         return new DefaultSupplier();
     }
+
+    /**
+     * A thread-safe buffer supplier instance.
+     */
+    public static final BufferSupplier SINGLETON = new BufferSupplier() {
+        // We currently use a single block size, so optimise for that case
+        // visible for testing
+        final ConcurrentMap<Integer, Deque<ByteBuffer>> bufferMap = new ConcurrentHashMap<>(1);
+
+        @Override
+        public ByteBuffer get(int size) {
+            Deque<ByteBuffer> bufferQueue = bufferMap.get(size);
+            ByteBuffer buffer = bufferQueue == null ? null : bufferQueue.pollFirst();
+            return buffer == null ? ByteBuffer.allocate(size) : buffer;
+        }
+
+        @Override
+        public void release(ByteBuffer buffer) {
+            buffer.clear();
+            bufferMap.computeIfAbsent(buffer.capacity(), size -> new ConcurrentLinkedDeque<>())
+                    .addLast(buffer);
+        }
+
+        @Override
+        public void close() {
+            bufferMap.clear();
+        }
+    };
 
     /**
      * Supply a buffer with the required capacity. This may return a cached buffer or allocate a new instance.
