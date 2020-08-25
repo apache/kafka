@@ -67,8 +67,7 @@ public class HandlingSourceTopicDeletionTest {
 
     @Before
     public void before() throws InterruptedException {
-        CLUSTER.createTopic(INPUT_TOPIC, 2, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC, 2, 1);
+        CLUSTER.createTopics(INPUT_TOPIC, OUTPUT_TOPIC);
 
         final String safeTestName = safeUniqueTestName(getClass(), testName);
         final String appId = "app-" + safeTestName;
@@ -79,6 +78,7 @@ public class HandlingSourceTopicDeletionTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
+        streamsConfiguration.put(StreamsConfig.METADATA_MAX_AGE_CONFIG, 2000);
     }
 
     @After
@@ -93,7 +93,7 @@ public class HandlingSourceTopicDeletionTest {
         startApplication();
     }
 
-    private void startApplication() throws InterruptedException, ExecutionException {
+    private void startApplication() throws InterruptedException {
         final Topology topology = builder.build();
         kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
