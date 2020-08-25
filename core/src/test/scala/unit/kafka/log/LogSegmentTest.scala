@@ -18,6 +18,9 @@ package kafka.log
 
 import java.io.File
 
+import kafka.server.checkpoints.LeaderEpochCheckpoint
+import kafka.server.epoch.EpochEntry
+import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
@@ -28,6 +31,7 @@ import org.junit.{After, Before, Test}
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
+import scala.collection.mutable.ArrayBuffer
 
 class LogSegmentTest {
 
@@ -365,6 +369,45 @@ class LogSegmentTest {
     assertEquals(75L, abortedTxn.firstOffset)
     assertEquals(106L, abortedTxn.lastOffset)
     assertEquals(100L, abortedTxn.lastStableOffset)
+  }
+
+  /**
+   * Create a segment with some data, then recover the segment.
+   * The epoch cache entries should reflect the segment.
+   */
+  @Test
+  def testRecoveryRebuildsEpochCache(): Unit = {
+    val seg = createSegment(0)
+
+    val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
+      private var epochs = Seq.empty[EpochEntry]
+
+      override def write(epochs: Seq[EpochEntry]): Unit = {
+        this.epochs = epochs.toVector
+      }
+
+      override def read(): Seq[EpochEntry] = this.epochs
+    }
+
+    val cache = new LeaderEpochFileCache(topicPartition, () => seg.readNextOffset, checkpoint)
+    seg.append(largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 104L, MemoryRecords.withRecords(104L, CompressionType.NONE, 0,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    seg.append(largestOffset = 107L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 106L, MemoryRecords.withRecords(106L, CompressionType.NONE, 1,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    seg.append(largestOffset = 109L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 108L, MemoryRecords.withRecords(108L, CompressionType.NONE, 1,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    seg.append(largestOffset = 111L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 110, MemoryRecords.withRecords(110L, CompressionType.NONE, 2,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    seg.recover(new ProducerStateManager(topicPartition, logDir), Some(cache))
+    assertEquals(ArrayBuffer(EpochEntry(0, 104L), EpochEntry(epoch=1, startOffset=106), EpochEntry(epoch=2, startOffset=110)), cache.epochEntries)
   }
 
   private def endTxnRecords(controlRecordType: ControlRecordType,
