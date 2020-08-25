@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
@@ -106,7 +105,7 @@ public interface ProcessorContext<KForward, VForward> {
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(org.apache.kafka.streams.processor.ProcessorContext) initialization} or
+     * {@link Processor#init(ProcessorContext) initialization} or
      * {@link Processor#process(Object, Object) processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
