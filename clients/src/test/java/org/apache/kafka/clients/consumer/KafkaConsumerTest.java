@@ -508,13 +508,17 @@ public class KafkaConsumerTest {
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
-        prepareRebalance(client, node, assignor, singletonList(tp0), null);
+        // Since we would enable the heartbeat thread after received join-response which could
+        // send the sync-group on behalf of the consumer if it is enqueued, we may still complete
+        // the rebalance and send out the fetch; in order to avoid it we do not prepare sync response here.
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        client.prepareResponseFrom(joinGroupFollowerResponse(assignor, 1, memberId, leaderId, Errors.NONE), coordinator);
 
         consumer.poll(Duration.ZERO);
 
-        // The underlying client should NOT get a fetch request
         final Queue<ClientRequest> requests = client.requests();
-        Assert.assertEquals(0, requests.size());
+        Assert.assertEquals(0, requests.stream().filter(request -> request.apiKey().equals(ApiKeys.FETCH)).count());
     }
 
     @SuppressWarnings("deprecation")
