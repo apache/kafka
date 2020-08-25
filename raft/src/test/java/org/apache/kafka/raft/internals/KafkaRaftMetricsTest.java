@@ -28,50 +28,62 @@ import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.OptionalLong;
+import java.util.Random;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 
 public class KafkaRaftMetricsTest {
 
     private final int localId = 0;
+    private final int electionTimeoutMs = 5000;
+    private final int fetchTimeoutMs = 10000;
 
-    private Time time;
-    private Metrics metrics;
-    private QuorumState state;
+    private final Time time = new MockTime();
+    private final Metrics metrics = new Metrics(time);
+    private final Random random = new Random(1);
     private KafkaRaftMetrics raftMetrics;
-
-    @Before
-    public void setUp() {
-        time = new MockTime();
-        metrics = new Metrics(time);
-    }
 
     @After
     public void tearDown() {
         if (raftMetrics != null) {
             raftMetrics.close();
         }
+        metrics.close();
+    }
+
+    private QuorumState buildQuorumState(Set<Integer> voters) {
+        return new QuorumState(
+            localId,
+            voters,
+            electionTimeoutMs,
+            fetchTimeoutMs,
+            new MockQuorumStateStore(),
+            time,
+            new LogContext("kafka-raft-metrics-test"),
+            random
+        );
     }
 
     @Test
     public void shouldRecordVoterQuorumState() throws IOException {
-        state = new QuorumState(localId, Utils.mkSet(localId, 1, 2), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
+        QuorumState state = buildQuorumState(Utils.mkSet(localId, 1, 2));
+
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
-        assertEquals("follower", getMetric(metrics, "current-state").metricValue());
+        assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.becomeCandidate();
+        state.transitionToCandidate();
         assertEquals("candidate", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-vote").metricValue());
@@ -79,18 +91,18 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
         state.candidateStateOrThrow().recordGrantedVote(1);
-        state.becomeLeader(2L);
+        state.transitionToLeader(2L);
         assertEquals("leader", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) localId, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.leaderStateOrThrow().updateLocalState(0, lastFetchTime -> { }, new LogOffsetMetadata(5L));
-        state.leaderStateOrThrow().updateReplicaState(1, 0, lastFetchTime -> { }, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateLocalState(0, new LogOffsetMetadata(5L));
+        state.leaderStateOrThrow().updateReplicaState(1, 0, new LogOffsetMetadata(5L));
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.becomeFetchingFollower(2, 1);
+        state.transitionToFollower(2, 1);
         assertEquals("follower", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
@@ -100,15 +112,15 @@ public class KafkaRaftMetricsTest {
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.becomeVotedFollower(3, 2);
-        assertEquals("follower", getMetric(metrics, "current-state").metricValue());
+        state.transitionToVoted(3, 2);
+        assertEquals("voted", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 3, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.becomeUnattachedFollower(4);
-        assertEquals("follower", getMetric(metrics, "current-state").metricValue());
+        state.transitionToUnattached(4);
+        assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 4, getMetric(metrics, "current-epoch").metricValue());
@@ -117,18 +129,18 @@ public class KafkaRaftMetricsTest {
 
     @Test
     public void shouldRecordNonVoterQuorumState() throws IOException {
-        state = new QuorumState(localId, Utils.mkSet(1, 2, 3), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
+        QuorumState state = buildQuorumState(Utils.mkSet(1, 2, 3));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
-        assertEquals("observer", getMetric(metrics, "current-state").metricValue());
+        assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 0, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.becomeFetchingFollower(2, 1);
-        assertEquals("observer", getMetric(metrics, "current-state").metricValue());
+        state.transitionToFollower(2, 1);
+        assertEquals("follower", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) 1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 2, getMetric(metrics, "current-epoch").metricValue());
@@ -137,8 +149,8 @@ public class KafkaRaftMetricsTest {
         state.followerStateOrThrow().updateHighWatermark(OptionalLong.of(10L));
         assertEquals((double) 10L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.becomeUnattachedFollower(4);
-        assertEquals("observer", getMetric(metrics, "current-state").metricValue());
+        state.transitionToUnattached(4);
+        assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-leader").metricValue());
         assertEquals((double) -1, getMetric(metrics, "current-vote").metricValue());
         assertEquals((double) 4, getMetric(metrics, "current-epoch").metricValue());
@@ -147,7 +159,7 @@ public class KafkaRaftMetricsTest {
 
     @Test
     public void shouldRecordLogEnd() throws IOException {
-        state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
+        QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
@@ -162,7 +174,7 @@ public class KafkaRaftMetricsTest {
 
     @Test
     public void shouldRecordNumUnknownVoterConnections() throws IOException {
-        state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
+        QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
@@ -175,7 +187,7 @@ public class KafkaRaftMetricsTest {
 
     @Test
     public void shouldRecordPollIdleRatio() throws IOException {
-        state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
+        QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
@@ -197,7 +209,7 @@ public class KafkaRaftMetricsTest {
 
     @Test
     public void shouldRecordLatency() throws IOException {
-        state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
+        QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 
@@ -228,7 +240,7 @@ public class KafkaRaftMetricsTest {
 
     @Test
     public void shouldRecordRate() throws IOException {
-        state = new QuorumState(localId, Collections.singleton(localId), new MockQuorumStateStore(), new LogContext("kafka-raft-metrics-test"));
+        QuorumState state = buildQuorumState(Collections.singleton(localId));
         state.initialize(new OffsetAndEpoch(0L, 0));
         raftMetrics = new KafkaRaftMetrics(metrics, "raft", state);
 

@@ -24,8 +24,8 @@ import java.util.Set;
  */
 public class ElectionState {
     public final int epoch;
-    private final OptionalInt leaderIdOpt;
-    private final OptionalInt votedIdOpt;
+    public final OptionalInt leaderIdOpt;
+    public final OptionalInt votedIdOpt;
     private final Set<Integer> voters;
 
     ElectionState(int epoch,

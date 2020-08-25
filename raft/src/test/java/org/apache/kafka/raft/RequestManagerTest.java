@@ -25,7 +25,7 @@ import java.util.Random;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class ConnectionCacheTest {
+public class RequestManagerTest {
     private final MockTime time = new MockTime();
     private final int requestTimeoutMs = 30000;
     private final int retryBackoffMs = 100;
@@ -33,19 +33,19 @@ public class ConnectionCacheTest {
 
     @Test
     public void testResetAllConnections() {
-        ConnectionCache cache = new ConnectionCache(
+        RequestManager cache = new RequestManager(
             Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
         // One host has an inflight request
-        ConnectionCache.ConnectionState connectionState1 = cache.getOrCreate(1);
+        RequestManager.ConnectionState connectionState1 = cache.getOrCreate(1);
         connectionState1.onRequestSent(1, time.milliseconds());
         assertFalse(connectionState1.isReady(time.milliseconds()));
 
         // Another is backing off
-        ConnectionCache.ConnectionState connectionState2 = cache.getOrCreate(2);
+        RequestManager.ConnectionState connectionState2 = cache.getOrCreate(2);
         connectionState2.onRequestSent(2, time.milliseconds());
         connectionState2.onResponseError(2, time.milliseconds());
         assertFalse(connectionState2.isReady(time.milliseconds()));
@@ -59,13 +59,13 @@ public class ConnectionCacheTest {
 
     @Test
     public void testBackoffAfterFailure() {
-        ConnectionCache cache = new ConnectionCache(
+        RequestManager cache = new RequestManager(
             Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
-        ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
+        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
         assertTrue(connectionState.isReady(time.milliseconds()));
 
         long correlationId = 1;
@@ -81,13 +81,13 @@ public class ConnectionCacheTest {
 
     @Test
     public void testSuccessfulResponse() {
-        ConnectionCache cache = new ConnectionCache(
+        RequestManager cache = new RequestManager(
             Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
-        ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
+        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
 
         long correlationId = 1;
         connectionState.onRequestSent(correlationId, time.milliseconds());
@@ -98,13 +98,13 @@ public class ConnectionCacheTest {
 
     @Test
     public void testIgnoreUnexpectedResponse() {
-        ConnectionCache cache = new ConnectionCache(
+        RequestManager cache = new RequestManager(
             Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
-        ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
+        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
 
         long correlationId = 1;
         connectionState.onRequestSent(correlationId, time.milliseconds());
@@ -115,14 +115,14 @@ public class ConnectionCacheTest {
 
     @Test
     public void testRequestTimeout() {
-        ConnectionCache cache = new ConnectionCache(
+        RequestManager cache = new RequestManager(
             Utils.mkSet(1, 2, 3),
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
 
-        ConnectionCache.ConnectionState connectionState = cache.getOrCreate(1);
+        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
 
         long correlationId = 1;
         connectionState.onRequestSent(correlationId, time.milliseconds());

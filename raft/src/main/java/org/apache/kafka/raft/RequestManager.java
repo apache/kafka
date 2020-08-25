@@ -25,7 +25,7 @@ import java.util.OptionalInt;
 import java.util.Random;
 import java.util.Set;
 
-public class ConnectionCache {
+public class RequestManager {
     private final Map<Integer, ConnectionState> connections = new HashMap<>();
     private final List<Integer> voters = new ArrayList<>();
 
@@ -33,10 +33,10 @@ public class ConnectionCache {
     private final int requestTimeoutMs;
     private final Random random;
 
-    public ConnectionCache(Set<Integer> voterIds,
-                           int retryBackoffMs,
-                           int requestTimeoutMs,
-                           Random random) {
+    public RequestManager(Set<Integer> voterIds,
+                          int retryBackoffMs,
+                          int requestTimeoutMs,
+                          Random random) {
 
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
@@ -70,6 +70,21 @@ public class ConnectionCache {
             }
         }
         return res;
+    }
+
+    public long backoffBeforeAvailableVoter(long currentTimeMs) {
+        long minBackoffMs = Long.MAX_VALUE;
+        for (Integer voterId : voters) {
+            ConnectionState connection = connections.get(voterId);
+            if (connection.isReady(currentTimeMs)) {
+                return 0L;
+            } else if (connection.isBackingOff(currentTimeMs)) {
+                minBackoffMs = Math.min(minBackoffMs, connection.remainingBackoffMs(currentTimeMs));
+            } else {
+                minBackoffMs = Math.min(minBackoffMs, connection.remainingRequestTimeMs(currentTimeMs));
+            }
+        }
+        return minBackoffMs;
     }
 
     public void resetAll() {
@@ -111,6 +126,38 @@ public class ConnectionCache {
                 state = State.READY;
             }
             return state == State.READY;
+        }
+
+        boolean isBackingOff(long timeMs) {
+            if (state != State.BACKING_OFF) {
+                return false;
+            } else {
+                return !isBackoffComplete(timeMs);
+            }
+        }
+
+        boolean hasInflightRequest(long timeMs) {
+            if (state != State.AWAITING_REQUEST) {
+                return false;
+            } else {
+                return !hasRequestTimedOut(timeMs);
+            }
+        }
+
+        long remainingRequestTimeMs(long timeMs) {
+            if (hasInflightRequest(timeMs)) {
+                return lastSendTimeMs + requestTimeoutMs - timeMs;
+            } else {
+                return 0;
+            }
+        }
+
+        long remainingBackoffMs(long timeMs) {
+            if (isBackingOff(timeMs)) {
+                return lastFailTimeMs + retryBackoffMs - timeMs;
+            } else {
+                return 0;
+            }
         }
 
         void onResponseError(long correlationId, long timeMs) {

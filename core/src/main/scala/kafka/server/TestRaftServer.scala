@@ -19,7 +19,7 @@ package kafka.server
 
 import java.io.File
 import java.nio.file.Files
-import java.util.Properties
+import java.util.{Properties, Random}
 import java.util.concurrent.CountDownLatch
 
 import joptsimple.OptionParser
@@ -183,8 +183,12 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
     val quorumState = new QuorumState(
       config.brokerId,
       raftConfig.quorumVoterIds,
+      raftConfig.electionTimeoutMs,
+      raftConfig.fetchTimeoutMs,
       new FileBasedStateStore(new File(logDir, "quorum-state")),
-      logContext
+      time,
+      logContext,
+      new Random()
     )
 
     val fetchPurgatory = new KafkaFuturePurgatory[LogOffset](
@@ -238,7 +242,7 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
     val clientId = s"broker-${config.brokerId}-raft-client"
     val maxInflightRequestsPerConnection = 1
     val reconnectBackoffMs = 50
-    val reconnectBackoffMsMs = 50
+    val reconnectBackoffMsMs = 500
     val discoverBrokerVersions = false
 
     new NetworkClient(

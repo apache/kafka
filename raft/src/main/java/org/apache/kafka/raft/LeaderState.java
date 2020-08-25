@@ -23,10 +23,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class LeaderState implements EpochState {
@@ -58,11 +56,6 @@ public class LeaderState implements EpochState {
     @Override
     public ElectionState election() {
         return ElectionState.withElectedLeader(epoch, localId, voterReplicaStates.keySet());
-    }
-
-    @Override
-    public LeaderAndEpoch leaderAndEpoch() {
-        return new LeaderAndEpoch(OptionalInt.of(localId), epoch);
     }
 
     @Override
@@ -132,12 +125,10 @@ public class LeaderState implements EpochState {
     /**
      * Update the local replica state.
      *
-     * See {@link #updateReplicaState(int, long, Consumer, LogOffsetMetadata)}
+     * See {@link #updateReplicaState(int, long, LogOffsetMetadata)}
      */
-    public boolean updateLocalState(long fetchTimestamp,
-                                    Consumer<Long> onMajorityFetchTimeUpdated,
-                                    LogOffsetMetadata logOffsetMetadata) {
-        return updateReplicaState(localId, fetchTimestamp, onMajorityFetchTimeUpdated, logOffsetMetadata);
+    public boolean updateLocalState(long fetchTimestamp, LogOffsetMetadata logOffsetMetadata) {
+        return updateReplicaState(localId, fetchTimestamp, logOffsetMetadata);
     }
 
     /**
@@ -146,12 +137,10 @@ public class LeaderState implements EpochState {
      * @param replicaId replica id
      * @param fetchTimestamp fetch timestamp
      * @param logOffsetMetadata new log offset and metadata
-     * @param onMajorityFetchTimeUpdated callback for majority fetch time update
      * @return true if the high watermark is updated too
      */
     public boolean updateReplicaState(int replicaId,
                                       long fetchTimestamp,
-                                      Consumer<Long> onMajorityFetchTimeUpdated,
                                       LogOffsetMetadata logOffsetMetadata) {
         // Ignore fetches from negative replica id, as it indicates
         // the fetch is from non-replica. For example, a consumer.
@@ -160,13 +149,7 @@ public class LeaderState implements EpochState {
         }
 
         ReplicaState state = getReplicaState(replicaId);
-
         state.updateFetchTimestamp(fetchTimestamp);
-
-        if (isVoter(replicaId)) {
-            quorumMajorityFetchTimestamp().ifPresent(onMajorityFetchTimeUpdated::accept);
-        }
-
         return updateEndOffset(state, logOffsetMetadata);
     }
 
@@ -299,4 +282,20 @@ public class LeaderState implements EpochState {
         else
             return Long.compare(that.lastFetchTimestamp.getAsLong(), state.lastFetchTimestamp.getAsLong());
     };
+
+
+    @Override
+    public String toString() {
+        return "Leader(" +
+            "localId=" + localId +
+            ", epoch=" + epoch +
+            ", epochStartOffset=" + epochStartOffset +
+            ')';
+    }
+
+    @Override
+    public String name() {
+        return "Leader";
+    }
+
 }

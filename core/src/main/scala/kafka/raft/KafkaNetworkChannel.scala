@@ -18,7 +18,6 @@ package kafka.raft
 
 import java.net.InetSocketAddress
 import java.util
-import java.util.Optional
 import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -32,7 +31,6 @@ import org.apache.kafka.common.{KafkaException, Node}
 import org.apache.kafka.raft.{NetworkChannel, RaftMessage, RaftRequest, RaftResponse, RaftUtil}
 
 import scala.collection.mutable
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 object KafkaNetworkChannel {

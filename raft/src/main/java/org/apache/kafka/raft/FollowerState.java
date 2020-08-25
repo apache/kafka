@@ -16,44 +16,45 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
+
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 
 public class FollowerState implements EpochState {
+    private final int fetchTimeoutMs;
     private final int epoch;
-    private OptionalInt leaderIdOpt;
-    private OptionalInt votedIdOpt;
-    private OptionalLong highWatermark;
+    private final int leaderId;
     private final Set<Integer> voters;
+    private final Timer fetchTimer;
+    private OptionalLong highWatermark;
 
-    public FollowerState(int epoch, Set<Integer> voters) {
+    public FollowerState(
+        Time time,
+        int epoch,
+        int leaderId,
+        Set<Integer> voters,
+        int fetchTimeoutMs
+    ) {
+        this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
-        this.leaderIdOpt = OptionalInt.empty();
-        this.votedIdOpt = OptionalInt.empty();
-        this.highWatermark = OptionalLong.empty();
+        this.leaderId = leaderId;
         this.voters = voters;
-    }
-
-    @Override
-    public Optional<LogOffsetMetadata> highWatermark() {
-        return highWatermark.isPresent() ? Optional.of(new LogOffsetMetadata(highWatermark.getAsLong())) : Optional.empty();
+        this.fetchTimer = time.timer(fetchTimeoutMs);
+        this.highWatermark = OptionalLong.empty();
     }
 
     @Override
     public ElectionState election() {
-        if (votedIdOpt.isPresent())
-            return ElectionState.withVotedCandidate(epoch, votedIdOpt.getAsInt(), voters);
-        if (leaderIdOpt.isPresent())
-            return ElectionState.withElectedLeader(epoch, leaderIdOpt.getAsInt(), voters);
-        return ElectionState.withUnknownLeader(epoch, voters);
-    }
-
-    @Override
-    public LeaderAndEpoch leaderAndEpoch() {
-        // TODO: Do we need to make `leaderIdOpt` volatile?
-        return new LeaderAndEpoch(leaderIdOpt, epoch);
+        return new ElectionState(
+            epoch,
+            OptionalInt.of(leaderId),
+            OptionalInt.empty(),
+            voters
+        );
     }
 
     @Override
@@ -61,89 +62,39 @@ public class FollowerState implements EpochState {
         return epoch;
     }
 
-    /**
-     * Grant a vote to the candidate. The vote is permitted only if we had already voted for
-     * the candidate or if we have no current leader and have not voted in this epoch.
-     *
-     * @param candidateId The candidate we are voting for
-     * @return true if we had not already cast our vote
-     */
-    public boolean grantVoteTo(int candidateId) {
-        if (candidateId < 0) {
-            throw new IllegalArgumentException("Illegal negative candidateId: " + candidateId);
-        } else if (hasLeader()) {
-            throw new IllegalArgumentException("Cannot vote in epoch " + epoch +
-                    " since we already have a known leader for epoch");
-        } else if (hasVoted()) {
-            if (votedIdOpt.orElse(-1) != candidateId) {
-                throw new IllegalArgumentException("Cannot change vote in epoch " + epoch +
-                        " from " + votedIdOpt + " to " + candidateId);
-            }
-            return false;
-        }
-
-        this.votedIdOpt = OptionalInt.of(candidateId);
-        return true;
+    @Override
+    public String name() {
+        return "Follower";
     }
 
-    public boolean hasLeader() {
-        return leaderIdOpt.isPresent();
-    }
-
-    public boolean hasLeader(int replicaId) {
-        if (replicaId < 0)
-            throw new IllegalArgumentException("Illegal negative replicaId " + replicaId);
-        return leaderIdOpt.orElse(-1) == replicaId;
-    }
-
-    public boolean acknowledgeLeader(int leaderId) {
-        if (leaderId < 0) {
-            throw new IllegalArgumentException("Invalid negative leaderId: " + leaderId);
-        } else if (hasLeader()) {
-            if (leaderIdOpt.orElse(-1) != leaderId) {
-                throw new IllegalArgumentException("Cannot acknowledge leader " + leaderId +
-                        " in epoch " + epoch + " since we have already acknowledged " + leaderIdOpt);
-            }
-            return false;
-        }
-
-        votedIdOpt = OptionalInt.empty();
-        leaderIdOpt = OptionalInt.of(leaderId);
-        return true;
+    public long remainingFetchTimeMs(long currentTimeMs) {
+        fetchTimer.update(currentTimeMs);
+        return fetchTimer.remainingMs();
     }
 
     public int leaderId() {
-        if (!leaderIdOpt.isPresent()) {
-            throw new IllegalArgumentException("Cannot access leaderId of epoch " + epoch +
-                    " since we do not know it");
-        }
-        return leaderIdOpt.getAsInt();
+        return leaderId;
     }
 
-    public boolean hasVoted() {
-        return votedIdOpt.isPresent();
+    public boolean hasFetchTimeoutExpired(long currentTimeMs) {
+        fetchTimer.update(currentTimeMs);
+        return fetchTimer.isExpired();
     }
 
-    public boolean hasVotedFor(int candidateId) {
-        if (candidateId < 0)
-            throw new IllegalArgumentException("Illegal negative candidateId " + candidateId);
-        return votedIdOpt.orElse(-1) == candidateId;
+    public void resetFetchTimeout(long currentTimeMs) {
+        fetchTimer.update(currentTimeMs);
+        fetchTimer.reset(fetchTimeoutMs);
     }
 
-    public int votedId() {
-        if (!votedIdOpt.isPresent()) {
-            throw new IllegalArgumentException("Cannot access voted id of epoch " + epoch +
-                    " since we do not know it");
-        }
-        return votedIdOpt.getAsInt();
+    public void overrideFetchTimeout(long currentTimeMs, long timeoutMs) {
+        fetchTimer.update(currentTimeMs);
+        fetchTimer.reset(timeoutMs);
     }
 
     public void updateHighWatermark(OptionalLong highWatermark) {
-        if (!hasLeader())
-            throw new IllegalArgumentException("Cannot update high watermark without an acknowledged leader");
         if (!highWatermark.isPresent() && this.highWatermark.isPresent())
             throw new IllegalArgumentException("Attempt to overwrite current high watermark " + this.highWatermark +
-                    " with unknown value");
+                " with unknown value");
         this.highWatermark.ifPresent(previousHighWatermark -> {
             long updatedHighWatermark = highWatermark.getAsLong();
             if (updatedHighWatermark < 0)
@@ -155,23 +106,22 @@ public class FollowerState implements EpochState {
         this.highWatermark = highWatermark;
     }
 
-    public boolean detachLeader() {
-        if (hasLeader()) {
-            leaderIdOpt = OptionalInt.empty();
-            return true;
+    @Override
+    public Optional<LogOffsetMetadata> highWatermark() {
+        if (highWatermark.isPresent()) {
+            return Optional.of(new LogOffsetMetadata(highWatermark.getAsLong()));
+        } else {
+            return Optional.empty();
         }
-        return false;
     }
 
-    public boolean assertNotAttached() {
-        if (hasLeader())
-            throw new IllegalArgumentException("Unattached assertion failed since we have a current leader");
-        if (hasVoted())
-            throw new IllegalArgumentException("Unattached assertion failed since we have a voted candidate");
-        return true;
-    }
-
-    public boolean isUnattached() {
-        return !hasVoted() && !hasLeader();
+    @Override
+    public String toString() {
+        return "FollowerState(" +
+            "fetchTimeoutMs=" + fetchTimeoutMs +
+            ", epoch=" + epoch +
+            ", leaderId=" + leaderId +
+            ", voters=" + voters +
+            ')';
     }
 }

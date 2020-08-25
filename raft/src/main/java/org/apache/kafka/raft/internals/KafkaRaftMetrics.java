@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
-import org.apache.kafka.raft.FollowerState;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 
@@ -71,11 +70,12 @@ public class KafkaRaftMetrics implements AutoCloseable {
                 return "leader";
             } else if (state.isCandidate()) {
                 return "candidate";
+            } else if (state.isVoted()) {
+                return "voted";
+            } else if (state.isFollower()) {
+                return "follower";
             } else {
-                if (state.isVoter())
-                    return "follower";
-                else
-                    return "observer";
+                return "unattached";
             }
         };
         metrics.addMetric(this.currentStateMetricName, null, stateProvider);
@@ -87,12 +87,10 @@ public class KafkaRaftMetrics implements AutoCloseable {
         metrics.addMetric(this.currentVotedIdMetricName, (mConfig, currentTimeMs) -> {
             if (state.isLeader() || state.isCandidate()) {
                 return state.localId;
+            } else if (state.isVoted()) {
+                return state.votedStateOrThrow().votedId();
             } else {
-                FollowerState followerState = state.followerStateOrThrow();
-                if (followerState.hasVoted())
-                    return followerState.votedId();
-                else
-                    return -1;
+                return -1;
             }
         });
 

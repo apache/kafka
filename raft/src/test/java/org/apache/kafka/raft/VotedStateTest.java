@@ -16,27 +16,13 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
+import org.junit.Test;
 
-public interface EpochState {
+public class VotedStateTest {
 
-    default Optional<LogOffsetMetadata> highWatermark() {
-        return Optional.empty();
+    @Test
+    public void testElectionTimeout() {
+        // TODO:
     }
-
-    /**
-     * Get the current election state, which is guaranteed to be immutable.
-     */
-    ElectionState election();
-
-    /**
-     * Get the current (immutable) epoch.
-     */
-    int epoch();
-
-    /**
-     * User-friendly description of the state
-     */
-    String name();
 
 }

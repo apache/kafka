@@ -759,7 +759,8 @@ public class RaftEventSimulationTest {
             LogContext logContext = new LogContext("[Node " + nodeId + "] ");
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter);
-            QuorumState quorum = new QuorumState(nodeId, voters(), persistentState.store, logContext);
+            QuorumState quorum = new QuorumState(nodeId, voters(), ELECTION_TIMEOUT_MS,
+                FETCH_TIMEOUT_MS, persistentState.store, time, logContext, random);
             MockFuturePurgatory<LogOffset> fetchPurgatory = new MockFuturePurgatory<>(time);
             MockFuturePurgatory<LogOffset> appendPurgatory = new MockFuturePurgatory<>(time);
             Metrics metrics = new Metrics(time);
@@ -771,8 +772,8 @@ public class RaftEventSimulationTest {
                 ));
 
             KafkaRaftClient client = new KafkaRaftClient(channel, persistentState.log, quorum, time, metrics,
-                fetchPurgatory, appendPurgatory, voterConnectionMap, ELECTION_TIMEOUT_MS, ELECTION_JITTER_MS,
-                FETCH_TIMEOUT_MS, RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS, FETCH_MAX_WAIT_MS, logContext, random);
+                fetchPurgatory, appendPurgatory, voterConnectionMap, ELECTION_JITTER_MS,
+                RETRY_BACKOFF_MS, REQUEST_TIMEOUT_MS, FETCH_MAX_WAIT_MS, logContext, random);
             RaftNode node = new RaftNode(nodeId, client, persistentState.log, channel,
                     persistentState.store, quorum, logContext);
             node.initialize();
