@@ -22,9 +22,9 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -54,17 +54,17 @@ import java.util.concurrent.CountDownLatch;
  */
 public final class WordCountProcessorDemo {
 
-    static class MyProcessorSupplier implements ProcessorSupplier<String, String, String, String> {
+    static class MyProcessorSupplier implements ProcessorSupplier<String, String> {
 
         @Override
-        public Processor<String, String, String, String> get() {
-            return new Processor<String, String, String, String>() {
-                private ProcessorContext<String, String> context;
+        public Processor<String, String> get() {
+            return new Processor<String, String>() {
+                private ProcessorContext context;
                 private KeyValueStore<String, Integer> kvStore;
 
                 @Override
                 @SuppressWarnings("unchecked")
-                public void init(final ProcessorContext<String, String> context) {
+                public void init(final ProcessorContext context) {
                     this.context = context;
                     this.context.schedule(Duration.ofSeconds(1), PunctuationType.STREAM_TIME, timestamp -> {
                         try (final KeyValueIterator<String, Integer> iter = kvStore.all()) {
@@ -79,7 +79,7 @@ public final class WordCountProcessorDemo {
                             }
                         }
                     });
-                    this.kvStore = context.getStateStore("Counts");
+                    this.kvStore = (KeyValueStore<String, Integer>) context.getStateStore("Counts");
                 }
 
                 @Override
@@ -96,6 +96,9 @@ public final class WordCountProcessorDemo {
                         }
                     }
                 }
+
+                @Override
+                public void close() {}
             };
         }
     }

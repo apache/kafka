@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.ProcessorContextReverseAdapter;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 /**
  * A storage engine for managing state maintained by a stream processor.
@@ -51,27 +49,6 @@ public interface StateStore {
      * Initializes this state store.
      * <p>
      * The implementation of this function must register the root store in the context via the
-     * {@link org.apache.kafka.streams.processor.ProcessorContext#register(StateStore, StateRestoreCallback)} function,
-     * where the first {@link StateStore} parameter should always be the passed-in {@code root} object, and
-     * the second parameter should be an object of user's implementation
-     * of the {@link StateRestoreCallback} interface used for restoring the state store from the changelog.
-     * <p>
-     * Note that if the state store engine itself supports bulk writes, users can implement another
-     * interface {@link BatchingStateRestoreCallback} which extends {@link StateRestoreCallback} to
-     * let users implement bulk-load restoration logic instead of restoring one record at a time.
-     * <p>
-     * This method is not called if {@link StateStore#init(ProcessorContext, org.apache.kafka.streams.processor.StateStore)}
-     * is implemented.
-     *
-     * @throws IllegalStateException If store gets registered after initialized is already finished
-     * @throws StreamsException if the store's change log does not contain the partition
-     */
-    void init(org.apache.kafka.streams.processor.ProcessorContext context, StateStore root);
-
-    /**
-     * Initializes this state store.
-     * <p>
-     * The implementation of this function must register the root store in the context via the
      * {@link ProcessorContext#register(StateStore, StateRestoreCallback)} function, where the
      * first {@link StateStore} parameter should always be the passed-in {@code root} object, and
      * the second parameter should be an object of user's implementation
@@ -84,14 +61,7 @@ public interface StateStore {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    default void init(final ProcessorContext<?, ?> context, final StateStore root) {
-        final org.apache.kafka.streams.processor.ProcessorContext adapted =
-            ProcessorContextReverseAdapter.adapt(
-                context,
-                new ProcessorContextReverseAdapter.UnsupportedDeprecatedForwarder()
-            );
-        init(adapted, root);
-    }
+    void init(ProcessorContext context, StateStore root);
 
     /**
      * Flush any cached data

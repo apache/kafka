@@ -18,52 +18,35 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
 
-public final class ProcessorContextReverseAdapter implements org.apache.kafka.streams.processor.ProcessorContext {
-    private final ProcessorContext<Object, Object> delegate;
-    private final DeprecatedForwarder deprecatedForwarder;
+public final class ProcessorContextReverseAdapter implements InternalProcessorContext {
+    private final InternalApiProcessorContext<Object, Object> delegate;
 
-    public interface DeprecatedForwarder {
-        <K, V> void forward(final K key, final V value, final int childIndex);
-    }
-
-    public static final class UnsupportedDeprecatedForwarder implements DeprecatedForwarder {
-        @Override
-        public <K, V> void forward(final K key, final V value, final int childIndex) {
-            throw new UnsupportedOperationException("Forwarding by index was deprecated in 2.0 and is not supported by this ProcessorContext.");
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    public static org.apache.kafka.streams.processor.ProcessorContext adapt(final ProcessorContext<?, ?> delegate,
-                                                                            final DeprecatedForwarder deprecatedForwarder) {
+    static InternalProcessorContext adapt(final InternalApiProcessorContext<Object, Object> delegate) {
         if (delegate instanceof ProcessorContextAdapter) {
-            return ((ProcessorContextAdapter<?, ?>) delegate).delegate();
-        } else if (delegate instanceof InternalApiProcessorContext) {
-            return InternalProcessorContextReverseAdapter.adapt((InternalApiProcessorContext<Object, Object>) delegate);
+            return ((ProcessorContextAdapter<Object, Object>) delegate).delegate();
         } else {
-            return new ProcessorContextReverseAdapter(delegate, deprecatedForwarder);
+            return new ProcessorContextReverseAdapter(delegate);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private ProcessorContextReverseAdapter(final ProcessorContext<?, ?> delegate,
-                                           final DeprecatedForwarder deprecatedForwarder) {
-        this.delegate = (ProcessorContext<Object, Object>) delegate;
-        this.deprecatedForwarder = deprecatedForwarder;
+    private ProcessorContextReverseAdapter(final InternalApiProcessorContext<Object, Object> delegate) {
+        this.delegate = delegate;
     }
 
     @Override
@@ -92,8 +75,88 @@ public final class ProcessorContextReverseAdapter implements org.apache.kafka.st
     }
 
     @Override
-    public StreamsMetrics metrics() {
+    public StreamsMetricsImpl metrics() {
         return delegate.metrics();
+    }
+
+    @Override
+    public void setSystemTimeMs(final long timeMs) {
+        delegate.setSystemTimeMs(timeMs);
+    }
+
+    @Override
+    public long currentSystemTimeMs() {
+        return delegate.currentSystemTimeMs();
+    }
+
+    @Override
+    public ProcessorRecordContext recordContext() {
+        return delegate.recordContext();
+    }
+
+    @Override
+    public void setRecordContext(final ProcessorRecordContext recordContext) {
+        delegate.setRecordContext(recordContext);
+    }
+
+    @Override
+    public void setCurrentNode(final ProcessorNode<?, ?, ?, ?> currentNode) {
+        delegate.setCurrentNode(currentNode);
+    }
+
+    @Override
+    public ProcessorNode<?, ?, ?, ?> currentNode() {
+        return delegate.currentNode();
+    }
+
+    @Override
+    public ThreadCache cache() {
+        return delegate.cache();
+    }
+
+    @Override
+    public void initialize() {
+        delegate.initialize();
+    }
+
+    @Override
+    public void uninitialize() {
+        delegate.uninitialize();
+    }
+
+    @Override
+    public Task.TaskType taskType() {
+        return delegate.taskType();
+    }
+
+    @Override
+    public void transitionToActive(final StreamTask streamTask, final RecordCollector recordCollector, final ThreadCache newCache) {
+        delegate.transitionToActive(streamTask, recordCollector, newCache);
+    }
+
+    @Override
+    public void transitionToStandby(final ThreadCache newCache) {
+        delegate.transitionToStandby(newCache);
+    }
+
+    @Override
+    public void registerCacheFlushListener(final String namespace, final ThreadCache.DirtyEntryFlushListener listener) {
+        delegate.registerCacheFlushListener(namespace, listener);
+    }
+
+    @Override
+    public <T extends StateStore> T getStateStore(final StoreBuilder<T> builder) {
+        return delegate.getStateStore(builder);
+    }
+
+    @Override
+    public void logChange(final String storeName, final Bytes key, final byte[] value, final long timestamp) {
+        delegate.logChange(storeName, key, value, timestamp);
+    }
+
+    @Override
+    public String changelogFor(final String storeName) {
+        return delegate.changelogFor(storeName);
     }
 
     @Override
@@ -113,7 +176,7 @@ public final class ProcessorContextReverseAdapter implements org.apache.kafka.st
     }
 
     @Override
-    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) {
+    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) throws IllegalArgumentException {
         return delegate.schedule(interval, type, callback);
     }
 
@@ -130,7 +193,7 @@ public final class ProcessorContextReverseAdapter implements org.apache.kafka.st
     @Deprecated
     @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
-        deprecatedForwarder.forward(key, value, childIndex);
+        delegate.forward(key, value, To.child((currentNode().children()).get(childIndex).name()));
     }
 
     @Deprecated
@@ -177,5 +240,9 @@ public final class ProcessorContextReverseAdapter implements org.apache.kafka.st
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
         return delegate.appConfigsWithPrefix(prefix);
+    }
+
+    InternalApiProcessorContext<Object, Object> delegate() {
+        return delegate;
     }
 }

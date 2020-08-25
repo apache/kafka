@@ -42,8 +42,8 @@ public final class ProcessorContextAdapter<KForward, VForward>
 
     @SuppressWarnings("unchecked")
     public static <KForward, VForward> InternalApiProcessorContext<KForward, VForward> adapt(final InternalProcessorContext delegate) {
-        if (delegate instanceof InternalProcessorContextReverseAdapter) {
-            return (InternalApiProcessorContext<KForward, VForward>) ((InternalProcessorContextReverseAdapter) delegate).delegate();
+        if (delegate instanceof ProcessorContextReverseAdapter) {
+            return (InternalApiProcessorContext<KForward, VForward>) ((ProcessorContextReverseAdapter) delegate).delegate();
         } else {
             return new ProcessorContextAdapter<>(delegate);
         }
