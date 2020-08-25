@@ -390,6 +390,7 @@
       <!-- for tests -->
       <allow pkg="org.apache.kafka.connect.integration" />
       <allow pkg="org.apache.kafka.connect.mirror" />
+      <allow pkg="kafka.server" />
     </subpackage>
 
     <subpackage name="runtime">

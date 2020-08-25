@@ -2100,6 +2100,7 @@ project(':connect:mirror') {
 
     testRuntime project(':connect:runtime')
     testRuntime libs.slf4jlog4j
+    testRuntime libs.bcpkix
   }
 
   javadoc {
