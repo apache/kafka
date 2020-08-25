@@ -64,6 +64,8 @@ public class MeteredKeyValueStore<K, V>
     private Sensor allSensor;
     private Sensor rangeSensor;
     private Sensor flushSensor;
+    private Sensor e2eLatencySensor;
+    private ProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
     private final String threadId;
     private String taskId;
@@ -84,6 +86,7 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
+        this.context = context;
         taskId = context.taskId().toString();
         initStoreSerde(context);
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
@@ -96,6 +99,7 @@ public class MeteredKeyValueStore<K, V>
         rangeSensor = StateStoreMetrics.rangeSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         deleteSensor = StateStoreMetrics.deleteSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
@@ -148,6 +152,7 @@ public class MeteredKeyValueStore<K, V>
                     final V value) {
         try {
             maybeMeasureLatency(() -> wrapped().put(keyBytes(key), serdes.rawValue(value)), time, putSensor);
+            maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
@@ -157,11 +162,13 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V putIfAbsent(final K key,
                          final V value) {
-        return maybeMeasureLatency(
+        final V currentValue = maybeMeasureLatency(
             () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
             time,
             putIfAbsentSensor
         );
+        maybeRecordE2ELatency();
+        return currentValue;
     }
 
     @Override
@@ -240,6 +247,14 @@ public class MeteredKeyValueStore<K, V>
             byteEntries.add(KeyValue.pair(Bytes.wrap(serdes.rawKey(entry.key)), serdes.rawValue(entry.value)));
         }
         return byteEntries;
+    }
+
+    private void maybeRecordE2ELatency() {
+        if (e2eLatencySensor.shouldRecord()) {
+            final long currentTime = time.milliseconds();
+            final long e2eLatency =  currentTime - context.timestamp();
+            e2eLatencySensor.record(e2eLatency, currentTime);
+        }
     }
 
     private class MeteredKeyValueIterator implements KeyValueIterator<K, V> {

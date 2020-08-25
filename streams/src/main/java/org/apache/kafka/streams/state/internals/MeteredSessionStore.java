@@ -50,6 +50,8 @@ public class MeteredSessionStore<K, V>
     private Sensor fetchSensor;
     private Sensor flushSensor;
     private Sensor removeSensor;
+    private Sensor e2eLatencySensor;
+    private ProcessorContext context;
     private final String threadId;
     private String taskId;
 
@@ -69,6 +71,7 @@ public class MeteredSessionStore<K, V>
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
+        this.context = context;
         initStoreSerde(context);
         taskId = context.taskId().toString();
         streamsMetrics = (StreamsMetricsImpl) context.metrics();
@@ -77,6 +80,7 @@ public class MeteredSessionStore<K, V>
         fetchSensor = StateStoreMetrics.fetchSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         removeSensor = StateStoreMetrics.removeSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
@@ -128,6 +132,7 @@ public class MeteredSessionStore<K, V>
                 time,
                 putSensor
             );
+            maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
@@ -247,5 +252,13 @@ public class MeteredSessionStore<K, V>
 
     private Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    private void maybeRecordE2ELatency() {
+        if (e2eLatencySensor.shouldRecord()) {
+            final long currentTime = time.milliseconds();
+            final long e2eLatency =  currentTime - context.timestamp();
+            e2eLatencySensor.record(e2eLatency, currentTime);
+        }
     }
 }
