@@ -21,9 +21,18 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
-    private final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
+    public final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
 
     public static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> adapt(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
+        if (delegate == null) {
+            return null;
+        } else {
+            return new ProcessorAdapter<>(delegate);
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> adaptRaw(final org.apache.kafka.streams.processor.Processor delegate) {
         if (delegate == null) {
             return null;
         } else {
@@ -38,7 +47,7 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
-        delegate.init(ProcessorContextReverseAdapter.adapt((InternalApiProcessorContext<Object, Object>) context));
+        delegate.init(InternalProcessorContextReverseAdapter.adapt((InternalApiProcessorContext<Object, Object>) context));
     }
 
     @Override
