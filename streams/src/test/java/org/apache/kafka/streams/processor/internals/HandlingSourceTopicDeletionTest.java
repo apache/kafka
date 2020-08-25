@@ -36,7 +36,6 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.util.Properties;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
@@ -49,36 +48,18 @@ public class HandlingSourceTopicDeletionTest {
     private static final int NUM_BROKERS = 1;
     private static final int NUM_THREADS = 2;
     private static final long TIMEOUT = 60000;
-
+    private static final String INPUT_TOPIC = "inputTopic";
+    private static final String OUTPUT_TOPIC = "outputTopic";
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
-    // topic names
-    private static final String INPUT_TOPIC = "inputTopic";
-    private static final String OUTPUT_TOPIC = "outputTopic";
-
     @Rule
     public TestName testName = new TestName();
-
-    private final StreamsBuilder builder = new StreamsBuilder();
-    private Properties streamsConfiguration;
-    private KafkaStreams kafkaStreams;
 
     @Before
     public void before() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC, OUTPUT_TOPIC);
-
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
-        final String appId = "app-" + safeTestName;
-
-        streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
-        streamsConfiguration.put(StreamsConfig.METADATA_MAX_AGE_CONFIG, 2000);
     }
 
     @After
@@ -87,15 +68,24 @@ public class HandlingSourceTopicDeletionTest {
     }
 
     @Test
-    public void shouldShutdownAfterSourceTopicDeleted() throws InterruptedException, ExecutionException {
+    public void shouldThrowErrorAfterSourceTopicDeleted() throws InterruptedException {
+        final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(INPUT_TOPIC, Consumed.with(Serdes.Integer(), Serdes.String()))
             .to(OUTPUT_TOPIC, Produced.with(Serdes.Integer(), Serdes.String()));
-        startApplication();
-    }
 
-    private void startApplication() throws InterruptedException {
+        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String appId = "app-" + safeTestName;
+
+        final Properties streamsConfiguration = new Properties();
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
+        streamsConfiguration.put(StreamsConfig.METADATA_MAX_AGE_CONFIG, 2000);
+
         final Topology topology = builder.build();
-        kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
+        final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
 
         final AtomicBoolean calledUncaughtExceptionHandler = new AtomicBoolean(false);
         kafkaStreams.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler.set(true));
