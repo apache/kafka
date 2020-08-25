@@ -30,6 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -130,7 +131,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
     }
 
     @After
@@ -287,7 +288,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         bytesStore = getBytesStore();
 
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
         assertThat(
             results,
@@ -317,7 +318,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
         bytesStore = getBytesStore();
 
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
         final List<KeyValue<Windowed<String>, Long>> results = toList(bytesStore.fetch(Bytes.wrap(key.getBytes()), 0L, 60_000L));
         assertThat(
             results,
@@ -336,7 +337,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         // need to create a segment so we can attempt to write to it again.
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
         bytesStore.close();
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
         bytesStore.put(serializeKey(new Windowed<>(key, windows[1])), serializeValue(100));
     }
 
@@ -365,7 +366,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
     }
 
     private void shouldRestoreToByteStore(final TaskType taskType) {
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
         // 0 segments initially.
         assertEquals(0, bytesStore.getSegments().size());
         final String key = "a";
@@ -405,7 +406,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
         );
         final Time time = new SystemTime();
         context.setSystemTimeMs(time.milliseconds());
-        bytesStore.init(context, bytesStore);
+        bytesStore.init((StateStoreContext) context, bytesStore);
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
             // write a record to advance stream time, with a high enough timestamp

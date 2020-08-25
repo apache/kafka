@@ -21,6 +21,8 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -64,6 +66,16 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public StreamsMetricsImpl metrics() {
         return (StreamsMetricsImpl) super.metrics();
+    }
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record) {
+        forward(record.key(), record.value(), To.all().withTimestamp(record.timestamp()));
+    }
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record, final String childName) {
+        forward(record.key(), record.value(), To.child(childName).withTimestamp(record.timestamp()));
     }
 
     @Override

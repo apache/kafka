@@ -21,6 +21,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 
 import java.time.Duration;
+import java.util.Optional;
 
 /**
  * A processor of key-value pair records.
@@ -46,12 +47,17 @@ public interface Processor<KIn, VIn, KOut, VOut> {
     default void init(final ProcessorContext<KOut, VOut> context) {}
 
     /**
-     * Process the record with the given key and value.
+     * Process the record. Note that record metadata is undefined in cases such as a forward call from a punctuator.
      *
-     * @param key the key for the record
-     * @param value the value for the record
+     * @param record the record to process
+     * @param recordMetadata the metadata of the record, if it is defined. Note that as long as the processor is
+     *                       receiving a record downstream of a Source (i.e., the current record is coming from an
+     *                       input topic), the metadata is defined. On the other hand, if a parent processor has
+     *                       registered a punctuator and called {@link ProcessorContext#forward(Record)} from that
+     *                       punctuator, then there is no record from an input topic, and therefore the metadata
+     *                       would be undefined.
      */
-    void process(KIn key, VIn value);
+    void process(Record<KIn, VIn> record, Optional<RecordMetadata> recordMetadata);
 
     /**
      * Close this processor and clean up any resources. Be aware that {@code #close()} is called after an internal cleanup.

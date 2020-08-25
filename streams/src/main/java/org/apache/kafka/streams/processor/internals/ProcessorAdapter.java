@@ -19,9 +19,14 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+
+import java.util.Optional;
 
 public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
     private final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
+    private InternalProcessorContext context;
 
     public static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> adapt(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
         if (delegate == null) {
@@ -47,12 +52,25 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
-        delegate.init(ProcessorContextReverseAdapter.adapt((InternalApiProcessorContext<Object, Object>) context));
+        this.context = (InternalProcessorContext) context;
+        delegate.init((org.apache.kafka.streams.processor.ProcessorContext) context);
     }
 
     @Override
-    public void process(final KIn key, final VIn value) {
-        delegate.process(key, value);
+    public void process(final Record<KIn, VIn> record, final Optional<RecordMetadata> recordMetadata) {
+        final ProcessorRecordContext processorRecordContext = context.recordContext();
+        try {
+            context.setRecordContext(new ProcessorRecordContext(
+                record.timestamp(),
+                context.offset(),
+                context.partition(),
+                context.topic(),
+                record.headers()
+            ));
+            delegate.process(record.key(), record.value());
+        } finally {
+            context.setRecordContext(processorRecordContext);
+        }
     }
 
     @Override

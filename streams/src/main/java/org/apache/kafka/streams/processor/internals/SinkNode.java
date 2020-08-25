@@ -21,6 +21,10 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+
+import java.util.Optional;
 
 public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
 
@@ -76,19 +80,43 @@ public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut
         }
     }
 
-
     @Override
-    public void process(final KIn key, final VIn value) {
+    public void process(final Record<KIn, VIn> record, final Optional<RecordMetadata> recordMetadata) {
         final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
-        final long timestamp = context.timestamp();
+        final KIn key = record.key();
+        final VIn value = record.value();
+
+        final long timestamp = record.timestamp();
         if (timestamp < 0) {
-            throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
+            throw new StreamsException(
+                "Invalid (negative) timestamp of "
+                    + timestamp
+                    + " for output record <" + key + ":" + value + ">."
+            );
         }
 
-        final String topic = topicExtractor.extract(key, value, this.context.recordContext());
+        // Prefer the record metadata if defined,
+        // and fall back to the context (which is undefined and dummy values,
+        // but extractors may still depend on the current behavior.
+        final Optional<ProcessorRecordContext> maybeContext =
+            recordMetadata.map(
+                m -> new ProcessorRecordContext(timestamp, m.offset(), m.partition(), m.topic(), record.headers())
+            );
+        final ProcessorRecordContext contextForExtraction =
+            maybeContext.orElseGet(
+                () -> new ProcessorRecordContext(
+                    timestamp,
+                    context.offset(),
+                    context.partition(),
+                    context.topic(),
+                    record.headers()
+                )
+            );
 
-        collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
+        final String topic = topicExtractor.extract(key, value, contextForExtraction);
+
+        collector.send(topic, key, value, record.headers(), timestamp, keySerializer, valSerializer, partitioner);
     }
 
     /**

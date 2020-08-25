@@ -14,32 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor.api;
 
-import org.apache.kafka.streams.processor.To;
+public interface RecordMetadata {
+    /**
+     * @return  The topic of the original record received from Kafka
+     */
+    String topic();
 
-public class ToInternal extends To {
-    public ToInternal() {
-        super(To.all());
-    }
+    /**
+     * @return  The partition of the original record received from Kafka
+     */
+    int partition();
 
-    public ToInternal(final To to) {
-        super(to);
-    }
-
-    public void update(final To to) {
-        super.update(to);
-    }
-
-    public boolean hasTimestamp() {
-        return timestamp != -1;
-    }
-
-    public long timestamp() {
-        return timestamp;
-    }
-
-    public String child() {
-        return childName;
-    }
+    /**
+     * @return  The offset of the original record received from Kafka
+     */
+    long offset();
 }

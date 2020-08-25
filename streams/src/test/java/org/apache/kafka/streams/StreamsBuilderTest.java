@@ -39,6 +39,8 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -58,6 +60,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
@@ -106,8 +109,8 @@ public class StreamsBuilderTest {
                 }
 
                 @Override
-                public void process(final String key, final String value) {
-                    store.put(key, value);
+                public void process(final Record<String, String> record, final Optional<RecordMetadata> recordMetadata) {
+                    store.put(record.key(), record.value());
                 }
             }
         );
