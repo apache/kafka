@@ -17,10 +17,13 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.ArrayList;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, KOut, VOut> {
@@ -39,10 +42,10 @@ public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, K
     }
 
     @Override
-    public void process(final KIn key, final VIn value) {
+    public void process(final Record<KIn, VIn> record, final Optional<RecordMetadata> recordMetadata) {
         this.numReceived++;
-        this.keys.add(key);
-        this.values.add(value);
+        this.keys.add(record.key());
+        this.values.add(record.value());
     }
 
     @Override

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Optional;
 import java.util.Properties;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -28,6 +29,8 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.StreamsHeaders;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -202,7 +205,10 @@ public class ProcessorNodeTest {
         final InternalMockProcessorContext context = new InternalMockProcessorContext(streamsMetrics);
         final ProcessorNode<Object, Object, ?, ?> node = new ProcessorNode<>("name", new ClassCastProcessor(), Collections.emptySet());
         node.init(context);
-        final StreamsException se = assertThrows(StreamsException.class, () -> node.process("aKey", "aValue"));
+        final StreamsException se = assertThrows(
+            StreamsException.class,
+            () -> node.process(new Record<>("aKey", "aValue", -1, StreamsHeaders.emptyHeaders()), Optional.ofNullable(context.recordContext()))
+        );
         assertThat(se.getCause(), instanceOf(ClassCastException.class));
         assertThat(se.getMessage(), containsString("default Serdes"));
         assertThat(se.getMessage(), containsString("input types"));

@@ -19,6 +19,10 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+
+import java.util.Optional;
 
 public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
     private final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
@@ -47,12 +51,12 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext<KOut, VOut> context) {
-        delegate.init(ProcessorContextReverseAdapter.adapt((InternalApiProcessorContext<Object, Object>) context));
+        delegate.init((org.apache.kafka.streams.processor.ProcessorContext) context);
     }
 
     @Override
-    public void process(final KIn key, final VIn value) {
-        delegate.process(key, value);
+    public void process(final Record<KIn, VIn> record, final Optional<RecordMetadata> recordMetadata) {
+        delegate.process(record.key(), record.value());
     }
 
     @Override

@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
@@ -211,7 +212,7 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        public StateStore getStateStore(final String name) {
+        public <S extends StateStore> S getStateStore(final String name) {
             return null;
         }
 
@@ -229,6 +230,12 @@ public class AbstractProcessorContextTest {
                                     final Punctuator callback) throws IllegalArgumentException {
             return null;
         }
+
+        @Override
+        public <K, V> void forward(final Record<K, V> record) {}
+
+        @Override
+        public <K, V> void forward(final Record<K, V> record, final String childName) {}
 
         @Override
         public <K, V> void forward(final K key, final V value) {}

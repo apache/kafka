@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -197,7 +198,7 @@ public class ProcessorStateManager implements StateManager {
             if (stores.containsKey(store.name())) {
                 maybeRegisterStoreWithChangelogReader(store.name());
             } else {
-                store.init(processorContext, store);
+                store.init((StateStoreContext) processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
         }

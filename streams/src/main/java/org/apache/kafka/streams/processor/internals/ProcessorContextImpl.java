@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -30,13 +27,19 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
+import org.apache.kafka.streams.processor.api.StreamsHeaders;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
-import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
@@ -135,8 +138,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
      * @throws StreamsException if an attempt is made to access this state store from an unknown node
      * @throws UnsupportedOperationException if the current streamTask type is standby
      */
+    @SuppressWarnings("unchecked")
     @Override
-    public StateStore getStateStore(final String name) {
+    public <S extends StateStore> S  getStateStore(final String name) {
         throwUnsupportedOperationExceptionIfStandby("getStateStore");
         if (currentNode() == null) {
             throw new StreamsException("Accessing from an unknown node");
@@ -144,7 +148,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore globalStore = stateManager.getGlobalStore(name);
         if (globalStore != null) {
-            return getReadOnlyStore(globalStore);
+            return (S) getReadOnlyStore(globalStore);
         }
 
         if (!currentNode().stateStores.contains(name)) {
@@ -159,7 +163,43 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         final StateStore store = stateManager.getStore(name);
-        return getReadWriteStore(store);
+        return (S) getReadWriteStore(store);
+    }
+
+    @Override
+    public <K, V> void forward(final Record<K, V> record) {
+        forward(record, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final Record<K, V> record, final String childName) {
+        throwUnsupportedOperationExceptionIfStandby("forward");
+
+        final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
+        final ProcessorRecordContext previousContext = recordContext;
+
+        try {
+            if (recordContext != null && record.timestamp() != recordContext.timestamp()) {
+                recordContext = new ProcessorRecordContext(
+                    record.timestamp(),
+                    recordContext.offset(),
+                    recordContext.partition(),
+                    recordContext.topic(),
+                    recordContext.headers());
+            }
+
+            final List<? extends ProcessorNode<?, ?, ?, ?>> children = currentNode().children();
+            for (final ProcessorNode<?, ?, ?, ?> child : children) {
+                if (childName == null || child.name().equals(childName)) {
+                    forwardInternal((ProcessorNode<K, V, ?, ?>) child, record);
+                }
+            }
+
+        } finally {
+            recordContext = previousContext;
+            setCurrentNode(previousNode);
+        }
     }
 
     @Override
@@ -201,7 +241,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         try {
             toInternal.update(to);
-            if (toInternal.hasTimestamp()) {
+            if (toInternal.hasTimestamp() && recordContext != null) {
                 recordContext = new ProcessorRecordContext(
                     toInternal.timestamp(),
                     recordContext.offset(),
@@ -230,11 +270,27 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
+    private <K, V> void forwardInternal(final ProcessorNode<K, V, ?, ?> child,
+                                        final Record<K, V> record) {
+        setCurrentNode(child);
+
+        final Optional<RecordMetadata> recordMetadata = Optional.ofNullable(recordContext);
+
+        child.process(record, recordMetadata);
+
+        if (child.isTerminalNode()) {
+            streamTask.maybeRecordE2ELatency(record.timestamp(), currentSystemTimeMs(), child.name());
+        }
+    }
+
     private <K, V> void forward(final ProcessorNode<K, V, ?, ?> child,
                                 final K key,
                                 final V value) {
         setCurrentNode(child);
-        child.process(key, value);
+        child.process(
+            new Record<>(key, value, timestamp(), recordContext == null ? StreamsHeaders.emptyHeaders() : headers()),
+            Optional.ofNullable(recordContext)
+        );
         if (child.isTerminalNode()) {
             streamTask.maybeRecordE2ELatency(timestamp(), currentSystemTimeMs(), child.name());
         }
@@ -289,7 +345,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     public long timestamp() {
         throwUnsupportedOperationExceptionIfStandby("timestamp");
-        return super.timestamp();
+        if (recordContext == null) {
+            // we can't really tell if toInternal has a defined timestamp, but
+            // it might, so we fall back to it specifically when the record context
+            // is undefined. Note, this is the only piece of the record context that
+            // may be defined when the context as a whole is undefined.
+            return toInternal.timestamp();
+        } else {
+            return super.timestamp();
+        }
     }
 
     @Override

@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
@@ -131,7 +132,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         }
 
         sessionStore = storeBuilder.build();
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
     }
 
     @After
@@ -640,7 +641,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
                 Serdes.Long())
                 .withLoggingDisabled();
         final SessionStore<String, Long> sessionStore = storeBuilder.build();
-        sessionStore.init(context, sessionStore);
+        sessionStore.init((StateStoreContext) context, sessionStore);
         return context;
     }
 }

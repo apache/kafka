@@ -90,7 +90,7 @@ public interface ProcessorContext {
      * @param name The store name
      * @return The state store instance
      */
-    StateStore getStateStore(final String name);
+    <S extends StateStore> S getStateStore(final String name);
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during

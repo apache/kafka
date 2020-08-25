@@ -22,6 +22,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.StreamsHeaders;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -156,9 +157,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public Headers headers() {
         if (recordContext == null) {
-            throw new IllegalStateException("This should not happen as headers() should only be called while a record is processed");
+            return StreamsHeaders.emptyHeaders();
+        } else {
+            return recordContext.headers();
         }
-        return recordContext.headers();
     }
 
     /**

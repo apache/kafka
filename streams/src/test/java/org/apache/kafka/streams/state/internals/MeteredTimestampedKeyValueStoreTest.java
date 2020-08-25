@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -158,7 +159,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     private void init() {
         replay(inner, context);
-        metered.init(context, metered);
+        metered.init((StateStoreContext) context, metered);
     }
 
     @Test
@@ -194,7 +195,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             keySerde,
             valueSerde
         );
-        metered.init(context, metered);
+        metered.init((StateStoreContext) context, metered);
 
         metered.get(KEY);
         metered.put(KEY, VALUE_AND_TIMESTAMP);
@@ -430,7 +431,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             null
         );
         replay(inner, context);
-        store.init(context, inner);
+        store.init((StateStoreContext) context, inner);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000));
@@ -455,7 +456,7 @@ public class MeteredTimestampedKeyValueStoreTest {
             new ValueAndTimestampSerde<>(Serdes.Long())
         );
         replay(inner, context);
-        store.init(context, inner);
+        store.init((StateStoreContext) context, inner);
 
         try {
             store.put("key", ValueAndTimestamp.make(42L, 60000));
