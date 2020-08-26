@@ -234,16 +234,17 @@ private[log] object LogValidator extends Logging {
 
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
-    for (batch <- records.batches.asScala) {
+    records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, toMagicValue, brokerTopicStats)
 
       val recordErrors = new ArrayBuffer[ApiRecordError](0)
-      for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
+      var batchIndex = 0
+      batch.forEach { record =>
         validateRecord(batch, topicPartition, record, batchIndex, now, timestampType,
           timestampDiffMaxMs, compactedTopic, brokerTopicStats).foreach(recordError => recordErrors += recordError)
         // we fail the batch if any record fails, so we stop appending if any record fails
-        if (recordErrors.isEmpty)
-          builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
+        if (recordErrors.isEmpty) builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
+        batchIndex += 1
       }
 
       processRecordErrors(recordErrors)
@@ -279,14 +280,15 @@ private[log] object LogValidator extends Logging {
 
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
-    for (batch <- records.batches.asScala) {
+    records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, magic, brokerTopicStats)
 
       var maxBatchTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxBatchTimestamp = -1L
 
       val recordErrors = new ArrayBuffer[ApiRecordError](0)
-      for ((record, batchIndex) <- batch.asScala.view.zipWithIndex) {
+      var batchIndex = 0
+      batch.forEach { record =>
         validateRecord(batch, topicPartition, record, batchIndex, now, timestampType,
           timestampDiffMaxMs, compactedTopic, brokerTopicStats).foreach(recordError => recordErrors += recordError)
 
@@ -295,6 +297,7 @@ private[log] object LogValidator extends Logging {
           maxBatchTimestamp = record.timestamp
           offsetOfMaxBatchTimestamp = offset
         }
+        batchIndex += 1
       }
 
       processRecordErrors(recordErrors)
@@ -390,8 +393,7 @@ private[log] object LogValidator extends Logging {
     if (sourceCodec == NoCompressionCodec && firstBatch.isControlBatch)
       inPlaceAssignment = true
 
-    val batches = records.batches.asScala
-    for (batch <- batches) {
+    records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, toMagic, brokerTopicStats)
       uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
@@ -405,7 +407,7 @@ private[log] object LogValidator extends Logging {
       try {
         val recordErrors = new ArrayBuffer[ApiRecordError](0)
         var batchIndex = 0
-        for (record <- recordsIterator.asScala) {
+        recordsIterator.forEachRemaining { record =>
           val expectedOffset = expectedInnerOffset.getAndIncrement()
           val recordError = validateRecordCompression(batchIndex, record).orElse {
             validateRecord(batch, topicPartition, record, batchIndex, now,
