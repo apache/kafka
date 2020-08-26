@@ -522,7 +522,7 @@ public class KStreamSlidingWindowAggregateTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void testProcessorRandomInput() {
+    public void testAggregateRandomInput() {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
@@ -531,6 +531,8 @@ public class KStreamSlidingWindowAggregateTest {
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(10000)))
+            // The aggregator needs to sort the strings so the window value is the same for the final windows even when
+            // records are processed in a different order. Here, we sort alphabetically.
             .aggregate(
                 () -> "",
                 (key, value, aggregate) -> {
@@ -588,7 +590,7 @@ public class KStreamSlidingWindowAggregateTest {
                     results.replace(start, valueAndTimestamp);
                 }
             }
-            randomEqualityCheck(results, seed);
+            verifyRandomTestResults(results);
         } catch (final AssertionError t) {
             throw new AssertionError(
                 "Assertion failed in randomized test. Reproduce with seed: " + seed + ".",
@@ -604,7 +606,7 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    private void randomEqualityCheck(final Map<Long, ValueAndTimestamp<String>> actual, final Long seed) {
+    private void verifyRandomTestResults(final Map<Long, ValueAndTimestamp<String>> actual) {
         final Map<Long, ValueAndTimestamp<String>> expected = new HashMap<>();
         expected.put(0L, ValueAndTimestamp.make("A", 10L));
         expected.put(5L, ValueAndTimestamp.make("AB", 15L));
