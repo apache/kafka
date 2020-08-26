@@ -93,7 +93,9 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     Optional<Long> earliestLogOffset(TopicPartition topicPartition, int leaderEpoch) throws RemoteStorageException;
 
     /**
-     * Returns highest log offset of topic partition for the given leader epoch in remote storage.
+     * Returns highest log offset of topic partition for the given leader epoch in remote storage. This is used by
+     * remote log management subsystem to know upto which offset the segments have been copied to remote storage  for
+     * a given leader epoch.
      *
      * @param topicPartition topic partition
      * @param leaderEpoch    leader epoch
@@ -103,7 +105,7 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     Optional<Long> highestLogOffset(TopicPartition topicPartition, int leaderEpoch) throws RemoteStorageException;
 
     /**
-     * Deletes the log segment metadata for the given remoteLogSegmentId.
+     * Deletes the log segment metadata for the given remoteLogSegmentMetadata.
      *
      * @param remoteLogSegmentMetadata remote log segment metadata to be deleted.
      * @throws RemoteStorageException if there are any storage related errors occurred.
@@ -111,11 +113,10 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     void deleteRemoteLogSegmentMetadata(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException;
 
     /**
-     * List the remote log segment files of the given topicPartition.
-     * The RemoteLogManager of a follower uses this method to find out the remote data for the given topic partition.
+     * List the remote log segment metadata of the given topicPartition.
      * <p>
-     * This is used in while deleting a given topic partition to fetch all the remote log segments for the given  topic
-     * partition and set a tombstone marker for them to be deleted.
+     * This is used when a topic partition is deleted, to fetch all the remote log segments for the given topic
+     * partition and delete them .
      *
      * @return Iterator of remote segments, sorted by baseOffset in ascending order.
      */
@@ -124,14 +125,15 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
     }
 
     /**
-     * Returns iterator of remote segments, sorted by {@link RemoteLogSegmentMetadata#startOffset()} in ascending order
-     * which are >= the given min Offset.
+     * Returns iterator of remote log segment metadata, sorted by {@link RemoteLogSegmentMetadata#startOffset()} in
+     * ascending order which contains the given leader epoch. This is used by remote log retention management subsystem
+     * to fetch the segment metadata for a given leader epoch and cleansup based on retention policies.
      *
      * @param topicPartition topic partition
-     * @param minOffset      offset for which segment metadata is requested, inclusive,
+     * @param leaderEpoch    leader epoch
      * @return Iterator of remote segments, sorted by baseOffset in ascending order.
      */
-    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long minOffset);
+    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicPartition topicPartition, long leaderEpoch);
 
     /**
      * This method is invoked only when there are changes in leadership of the topic partitions that this broker is
