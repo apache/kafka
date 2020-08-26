@@ -32,20 +32,22 @@ import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
  */
 public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
+    // During the transition to KIP-478, we capture arguments passed from the old API to simplify
+    // the performance of casts that we still need to perform. This will eventually be removed.
     private final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> oldProcessorSupplier;
     private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
     private final String processorName;
 
     public ProcessorParameters(final org.apache.kafka.streams.processor.ProcessorSupplier<KIn, VIn> processorSupplier,
                                final String processorName) {
-        this.oldProcessorSupplier = processorSupplier;
+        oldProcessorSupplier = processorSupplier;
         this.processorSupplier = () -> ProcessorAdapter.adapt(processorSupplier.get());
         this.processorName = processorName;
     }
 
     public ProcessorParameters(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
                                final String processorName) {
-        this.oldProcessorSupplier = null;
+        oldProcessorSupplier = null;
         this.processorSupplier = processorSupplier;
         this.processorName = processorName;
     }

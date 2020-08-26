@@ -210,7 +210,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
         @SuppressWarnings("unchecked")
         public KTableKTableJoinNode<K, V1, V2, VR> build() {
-            return new KTableKTableJoinNode<>(nodeName,
+            return new KTableKTableJoinNode<>(
+                nodeName,
                 joinThisProcessorParameters,
                 joinOtherProcessorParameters,
                 new ProcessorParameters<>(
@@ -225,7 +226,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                 valueSerde,
                 joinThisStoreNames,
                 joinOtherStoreNames,
-                storeBuilder);
+                storeBuilder
+            );
         }
     }
 }

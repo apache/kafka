@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 
 public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
-    public final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
+    private final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate;
 
     public static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> adapt(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
         if (delegate == null) {

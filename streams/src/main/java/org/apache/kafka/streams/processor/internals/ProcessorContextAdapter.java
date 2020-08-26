@@ -170,7 +170,7 @@ public final class ProcessorContextAdapter<KForward, VForward>
 
     @SuppressWarnings("unchecked")
     @Override
-    public <S> S getStateStore(final String name) {
+    public <S extends StateStore> S getStateStore(final String name) {
         return (S) delegate.getStateStore(name);
     }
 

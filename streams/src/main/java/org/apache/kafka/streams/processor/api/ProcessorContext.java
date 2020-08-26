@@ -102,7 +102,7 @@ public interface ProcessorContext<KForward, VForward> {
      * @param name The store name
      * @return The state store instance
      */
-    <S> S getStateStore(final String name);
+    <S extends StateStore> S getStateStore(final String name);
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during

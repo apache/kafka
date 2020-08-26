@@ -61,7 +61,6 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -1196,33 +1195,25 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         final AtomicBoolean shouldThrow = new AtomicBoolean(false);
         final AtomicBoolean processed = new AtomicBoolean(false);
-        internalTopologyBuilder.addProcessor("proc", new ProcessorSupplier<Object, Object, Object, Object>() {
-            @Override
-            public Processor<Object, Object, Object, Object> get() {
-                return new Processor<Object, Object, Object, Object>() {
-                    private ProcessorContext<Object, Object> context;
+        internalTopologyBuilder.addProcessor(
+            "proc",
+            () -> new Processor<Object, Object, Object, Object>() {
 
-                    @Override
-                    public void init(final ProcessorContext<Object, Object> context) {
-                        this.context = context;
+                @Override
+                public void process(final Object key, final Object value) {
+                    if (shouldThrow.get()) {
+                        throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
+                    } else {
+                        processed.set(true);
                     }
+                }
 
-                    @Override
-                    public void process(final Object key, final Object value) {
-                        if (shouldThrow.get()) {
-                            throw new TaskCorruptedException(singletonMap(task1, new HashSet<TopicPartition>(singleton(storeChangelogTopicPartition))));
-                        } else {
-                            processed.set(true);
-                        }
-                    }
+                @Override
+                public void close() {
 
-                    @Override
-                    public void close() {
-
-                    }
-                };
-            }
-        }, "name");
+                }
+            },
+            "name");
         internalTopologyBuilder.addStateStore(
             Stores.keyValueStoreBuilder(
                 Stores.persistentKeyValueStore(storeName),
@@ -1596,19 +1587,20 @@ public class StreamThreadTest {
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
-        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> punctuateProcessor = () -> new org.apache.kafka.streams.processor.Processor<Object, Object>() {
-            @Override
-            public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
-                context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
-                context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
-            }
+        final org.apache.kafka.streams.processor.ProcessorSupplier<Object, Object> punctuateProcessor =
+            () -> new org.apache.kafka.streams.processor.Processor<Object, Object>() {
+                @Override
+                public void init(final org.apache.kafka.streams.processor.ProcessorContext context) {
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
+                    context.schedule(Duration.ofMillis(100L), PunctuationType.WALL_CLOCK_TIME, punctuatedWallClockTime::add);
+                }
 
-            @Override
-            public void process(final Object key, final Object value) {}
+                @Override
+                public void process(final Object key, final Object value) {}
 
-            @Override
-            public void close() {}
-        };
+                @Override
+                public void close() {}
+            };
 
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
         internalStreamsBuilder.buildAndOptimizeTopology();

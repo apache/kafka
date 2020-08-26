@@ -851,7 +851,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     /**
-     * We conflate V with Change<V> in many places. It might be nice to fix that eventually.
+     * We conflate V with Change<V> in many places. This will get fixed in the implementation of KIP-478.
      * For now, I'm just explicitly lying about the parameterized type.
      */
     @SuppressWarnings("unchecked")
