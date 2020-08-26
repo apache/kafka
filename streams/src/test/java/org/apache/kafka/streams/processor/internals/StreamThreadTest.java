@@ -1207,11 +1207,6 @@ public class StreamThreadTest {
                         processed.set(true);
                     }
                 }
-
-                @Override
-                public void close() {
-
-                }
             },
             "name");
         internalTopologyBuilder.addStateStore(
