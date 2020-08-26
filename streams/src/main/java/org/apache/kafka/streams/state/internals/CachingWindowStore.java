@@ -568,7 +568,6 @@ class CachingWindowStore
                 current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
             } else {
                 --currentSegmentId;
-//                lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
 
                 if (currentSegmentId < lastSegmentId) {
                     current = null;
