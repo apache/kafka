@@ -452,11 +452,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    // for testing
-    boolean poll(Timer timer) {
-        return poll(timer, true);
-    }
-
     /**
      * Poll for coordinator events. This ensures that the coordinator is known and that the consumer
      * has joined the group (if it is using group management). This also handles periodic offset commits
@@ -536,7 +531,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     /**
-     * Return the time to the next needed invocation of {@link #poll(Timer)}.
+     * Return the time to the next needed invocation of {@link ConsumerNetworkClient#poll(Timer)}.
      * @param now current time in milliseconds
      * @return the maximum time in milliseconds the caller should wait before the next invocation of poll()
      */
@@ -1472,5 +1467,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /* test-only classes below */
     RebalanceProtocol getProtocol() {
         return protocol;
+    }
+
+    boolean poll(Timer timer) {
+        return poll(timer, true);
     }
 }

@@ -392,6 +392,12 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Joins the group without starting the heartbeat thread.
      *
+     * If this function returns true, the state must always be in STABLE and heartbeat enabled.
+     * If this function returns false, the state can be in one of the following:
+     *  * UNJOINED: got error response but times out before being able to re-join, heartbeat disabled
+     *  * PREPARING_REBALANCE: not yet received join-group response before timeout, heartbeat disabled
+     *  * COMPLETING_REBALANCE: not yet received sync-group response before timeout, hearbeat enabled
+     *
      * Visible for testing.
      *
      * @param timer Timer bounding how long this method can block
@@ -450,10 +456,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.info("Generation data was cleared by heartbeat thread to {} and state is now {} before " +
                          "the rebalance callback is triggered, marking this rebalance as failed and retry",
                          generation, state);
-                    // we need to reset rejoinNeeded because it may be set to false in the SyncGroupResponseHandler already
                     resetStateAndRejoin();
                     resetJoinGroupFuture();
-                    return false;
                 }
             } else {
                 final RuntimeException exception = future.exception();
@@ -467,6 +471,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 else if (!future.isRetriable())
                     throw exception;
 
+                resetStateAndRejoin();
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
         }
@@ -643,7 +648,6 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("Attempt to join group returned {} error. Will set the member id as {} and then rejoin", error, memberId);
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID, memberId, null);
-                    AbstractCoordinator.this.resetStateAndRejoin();
                 }
                 future.raise(error);
             } else {
@@ -934,9 +938,7 @@ public abstract class AbstractCoordinator implements Closeable {
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
         log.debug("Resetting generation after encountering {} from {} response and requesting re-join", error, api);
 
-        // only reset the state to un-joined when it is not already in preparing rebalance
-        if (state != MemberState.PREPARING_REBALANCE)
-            state = MemberState.UNJOINED;
+        state = MemberState.UNJOINED;
 
         resetGeneration();
     }
@@ -944,7 +946,6 @@ public abstract class AbstractCoordinator implements Closeable {
     synchronized void resetGenerationOnLeaveGroup() {
         log.debug("Resetting generation due to consumer pro-actively leaving the group");
 
-        // always set the state to un-joined
         state = MemberState.UNJOINED;
 
         resetGeneration();

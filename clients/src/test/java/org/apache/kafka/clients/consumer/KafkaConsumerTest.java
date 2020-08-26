@@ -1257,9 +1257,6 @@ public class KafkaConsumerTest {
         time.sleep(heartbeatIntervalMs);
         TestUtils.waitForCondition(heartbeatReceived::get, "Heartbeat response did not occur within timeout.");
 
-        consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
-        assertTrue(heartbeatReceived.get());
-
         RuntimeException unsubscribeException = assertThrows(RuntimeException.class, consumer::unsubscribe);
         assertEquals(partitionLost + singleTopicPartition, unsubscribeException.getCause().getMessage());
     }
