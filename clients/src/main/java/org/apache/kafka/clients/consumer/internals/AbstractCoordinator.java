@@ -923,7 +923,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     protected synchronized boolean rebalanceInProgress() {
-        return this.state == MemberState.PREPARING_REBALANCE;
+        return this.state == MemberState.PREPARING_REBALANCE || this.state == MemberState.COMPLETING_REBALANCE;
     }
 
     protected synchronized String memberId() {
