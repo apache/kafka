@@ -725,7 +725,7 @@ public class KStreamSlidingWindowAggregateTest {
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table.toStream().process(supplier);
         final long seed = new Random().nextLong();
-        final Random shuffle = new Random(seed);
+        final Random shuffle = new Random(3515681529796806302L);
 
         try {
             final List<ValueAndTimestamp<String>> input = Arrays.asList(
