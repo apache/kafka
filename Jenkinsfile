@@ -49,29 +49,25 @@ void doValidation(String scalaVersion) {
 
 pipeline {
   agent { label 'ubuntu' }
-  stages {
-    stage {
-      parallel {
-        stage('JDK 8') {
-          tools {
-	    jdk 'JDK 1.8 (latest)'
-	  }
-	  steps {
-            sh 'gradle -version'
-            validation('2.12')
-          }
-        }
+  parallel {
+    stage('JDK 8') {
+      tools {
+	jdk 'JDK 1.8 (latest)'
+      }
+      steps {
+	sh 'gradle -version'
+	validation('2.12')
+      }
+    }
 
-        stage('JDK 11') {
-          tools {
-	    jdk 'JDK 11 (latest)'
-	  }
-	  steps {
-            sh 'gradle -version'
-            validation('2.13')
-	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
-          }
-        }
+    stage('JDK 11') {
+      tools {
+	jdk 'JDK 11 (latest)'
+      }
+      steps {
+	sh 'gradle -version'
+	validation('2.13')
+	// setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
       }
     }
   }
