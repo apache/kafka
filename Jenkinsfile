@@ -1,13 +1,12 @@
 pipeline {
   agent { label 'ubuntu' }
   stages {
-    stage('build') {
-      // First step
+    stage('pre') {
       steps {
         echo 'start'
       }
-
-      // Do some parallel stuff
+    }
+    stage('build') {
       parallel {
         stage('JDK 8') {
           tools {
@@ -20,12 +19,17 @@ pipeline {
 
         stage('JDK 11') {
           tools {
-	    jdk 'JDK 1.11 (latest)'
+	    jdk 'JDK 11 (latest)'
 	  }
 	  steps {
             sh 'gradle -version'
           }
         }
+      }
+    }
+    stage('post') {
+      steps {
+        echo 'finish'
       }
     }
   }
