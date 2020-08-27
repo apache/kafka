@@ -34,15 +34,17 @@ void setBuildStatus(String context, String message, String state) {
     ]);
 }
 
+def validation(String scalaVersion) {
+  sh "./gradlew -PscalaVersion=${scalaVersion} clean compileJava compileScala compileTestJava compileTestScala \
+    spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+    --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\" \
+    || { echo 'Validation steps failed'; exit 1; }"
+}
+
 pipeline {
   agent { label 'ubuntu' }
   stages {
-    stage('pre') {
-      steps {
-        echo 'start'
-      }
-    }
-    stage('build') {
+    stage {
       parallel {
         stage('JDK 8') {
           tools {
@@ -50,6 +52,7 @@ pipeline {
 	  }
 	  steps {
             sh 'gradle -version'
+            validation('2.12')
           }
         }
 
@@ -59,14 +62,10 @@ pipeline {
 	  }
 	  steps {
             sh 'gradle -version'
-	    setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
+            validation('2.13')
+	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
           }
         }
-      }
-    }
-    stage('post') {
-      steps {
-        echo 'finish'
       }
     }
   }
