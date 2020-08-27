@@ -45,6 +45,8 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
@@ -95,7 +97,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> storeLevelSensors = new HashMap<>();
+    private final ConcurrentMap<String, Deque<String>> storeLevelSensors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Deque<MetricName>> storeLevelMetrics = new ConcurrentHashMap<>();
 
     private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
@@ -274,11 +277,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return tagMap;
     }
 
-    public Map<String, String> storeLevelTagMap(final String threadId,
-                                                final String taskName,
+    public Map<String, String> storeLevelTagMap(final String taskName,
                                                 final String storeType,
                                                 final String storeName) {
-        final Map<String, String> tagMap = taskLevelTagMap(threadId, taskName);
+        final Map<String, String> tagMap = taskLevelTagMap(Thread.currentThread().getName(), taskName);
         tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
         return tagMap;
     }
@@ -402,34 +404,73 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             + SENSOR_PREFIX_DELIMITER + SENSOR_CACHE_LABEL + SENSOR_PREFIX_DELIMITER + cacheName;
     }
 
-    public final Sensor storeLevelSensor(final String threadId,
-                                         final String taskId,
+    public final Sensor storeLevelSensor(final String taskId,
                                          final String storeName,
                                          final String sensorName,
-                                         final Sensor.RecordingLevel recordingLevel,
+                                         final RecordingLevel recordingLevel,
                                          final Sensor... parents) {
-        final String key = storeSensorPrefix(threadId, taskId, storeName);
-        synchronized (storeLevelSensors) {
-            final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.getSensor(fullSensorName);
-            if (sensor == null) {
-                storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
-                return metrics.sensor(fullSensorName, recordingLevel, parents);
-            } else {
-                return sensor;
-            }
+        final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
+        final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
+        final Sensor sensor = metrics.getSensor(fullSensorName);
+        if (sensor == null) {
+            // since the keys in the map storeLevelSensors contain the name of the current thread and threads only
+            // access keys in which their name is contained, the value in the maps do not need to be thread safe
+            // and we can use a LinkedList here.
+            // TODO: In future, we could use thread local maps since each thread will exclusively access the set of keys
+            //  that contain its name. Similar is true for the other metric levels. Thread-level metrics need some
+            //  special attention, since they are created before the thread is constructed. The creation of those
+            //  metrics could be moved into the run() method of the thread.
+            storeLevelSensors.computeIfAbsent(key, ignored -> new LinkedList<>()).push(fullSensorName);
+            return metrics.sensor(fullSensorName, recordingLevel, parents);
+        }
+        return sensor;
+    }
+
+    public <T> void addStoreLevelMutableMetric(final String taskId,
+                                               final String metricsScope,
+                                               final String storeName,
+                                               final String name,
+                                               final String description,
+                                               final RecordingLevel recordingLevel,
+                                               final Gauge<T> valueProvider) {
+        final MetricName metricName = metrics.metricName(
+            name,
+            STATE_STORE_LEVEL_GROUP,
+            description,
+            storeLevelTagMap(taskId, metricsScope, storeName)
+        );
+        if (metrics.metric(metricName) == null) {
+            final MetricConfig metricConfig = new MetricConfig().recordLevel(recordingLevel);
+            final String key = storeSensorPrefix(Thread.currentThread().getName(), taskId, storeName);
+            metrics.addMetric(metricName, metricConfig, valueProvider);
+            storeLevelMetrics.computeIfAbsent(key, ignored -> new LinkedList<>()).push(metricName);
         }
     }
 
-    public final void removeAllStoreLevelSensors(final String threadId,
-                                                 final String taskId,
-                                                 final String storeName) {
+    public final void removeAllStoreLevelSensorsAndMetrics(final String taskId,
+                                                           final String storeName) {
+        final String threadId = Thread.currentThread().getName();
+        removeAllStoreLevelSensors(threadId, taskId, storeName);
+        removeAllStoreLevelMetrics(threadId, taskId, storeName);
+    }
+
+    private void removeAllStoreLevelSensors(final String threadId,
+                                            final String taskId,
+                                            final String storeName) {
         final String key = storeSensorPrefix(threadId, taskId, storeName);
-        synchronized (storeLevelSensors) {
-            final Deque<String> sensors = storeLevelSensors.remove(key);
-            while (sensors != null && !sensors.isEmpty()) {
-                metrics.removeSensor(sensors.pop());
-            }
+        final Deque<String> sensors = storeLevelSensors.remove(key);
+        while (sensors != null && !sensors.isEmpty()) {
+            metrics.removeSensor(sensors.pop());
+        }
+    }
+
+    private void removeAllStoreLevelMetrics(final String threadId,
+                                            final String taskId,
+                                            final String storeName) {
+        final String key = storeSensorPrefix(threadId, taskId, storeName);
+        final Deque<MetricName> metricNames = storeLevelMetrics.remove(key);
+        while (metricNames != null && !metricNames.isEmpty()) {
+            metrics.removeMetric(metricNames.pop());
         }
     }
 

@@ -18,19 +18,25 @@ package org.apache.kafka.streams.state.internals.metrics;
 
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
 import org.rocksdb.Cache;
 import org.rocksdb.RocksDB;
+import org.rocksdb.RocksDBException;
 import org.rocksdb.Statistics;
 import org.rocksdb.StatsLevel;
 import org.rocksdb.TickerType;
 import org.slf4j.Logger;
 
+import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE;
 
 public class RocksDBMetricsRecorder {
 
@@ -56,6 +62,8 @@ public class RocksDBMetricsRecorder {
         }
     }
 
+    private static final String ROCKSDB_PROPERTIES_PREFIX = "rocksdb.";
+
     private final Logger logger;
 
     private Sensor bytesWrittenToDatabaseSensor;
@@ -74,15 +82,12 @@ public class RocksDBMetricsRecorder {
     private final Map<String, DbAndCacheAndStatistics> storeToValueProviders = new ConcurrentHashMap<>();
     private final String metricsScope;
     private final String storeName;
-    private final String threadId;
     private TaskId taskId;
     private StreamsMetricsImpl streamsMetrics;
 
     public RocksDBMetricsRecorder(final String metricsScope,
-                                  final String threadId,
                                   final String storeName) {
         this.metricsScope = metricsScope;
-        this.threadId = threadId;
         this.storeName = storeName;
         final LogContext logContext = new LogContext(String.format("[RocksDB Metrics Recorder for %s] ", storeName));
         logger = logContext.logger(RocksDBMetricsRecorder.class);
@@ -113,7 +118,9 @@ public class RocksDBMetricsRecorder {
                 + "This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
-        initSensors(streamsMetrics, taskId);
+        final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
+        initSensors(streamsMetrics, metricContext);
+        initGauges(streamsMetrics, metricContext);
         this.taskId = taskId;
         this.streamsMetrics = streamsMetrics;
     }
@@ -151,9 +158,7 @@ public class RocksDBMetricsRecorder {
         }
     }
 
-    private void initSensors(final StreamsMetricsImpl streamsMetrics, final TaskId taskId) {
-        final RocksDBMetricContext metricContext =
-            new RocksDBMetricContext(threadId, taskId.toString(), metricsScope, storeName);
+    private void initSensors(final StreamsMetricsImpl streamsMetrics, final RocksDBMetricContext metricContext) {
         bytesWrittenToDatabaseSensor = RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricContext);
         bytesReadFromDatabaseSensor = RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricContext);
         memtableBytesFlushedSensor = RocksDBMetrics.memtableBytesFlushedSensor(streamsMetrics, metricContext);
@@ -167,6 +172,30 @@ public class RocksDBMetricsRecorder {
         bytesReadDuringCompactionSensor = RocksDBMetrics.bytesReadDuringCompactionSensor(streamsMetrics, metricContext);
         numberOfOpenFilesSensor = RocksDBMetrics.numberOfOpenFilesSensor(streamsMetrics, metricContext);
         numberOfFileErrorsSensor = RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricContext);
+    }
+
+    private void initGauges(final StreamsMetricsImpl streamsMetrics, final RocksDBMetricContext metricContext) {
+        RocksDBMetrics.addNumEntriesActiveMemTableMetric(streamsMetrics, metricContext, (metricsConfig, now) -> {
+            BigInteger result = BigInteger.valueOf(0);
+            for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
+                try {
+                    // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
+                    // BigInteger and construct the object from the byte representation of the value
+                    result = result.add(new BigInteger(1, longToBytes(
+                        valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE))));
+
+                } catch (final RocksDBException e) {
+                    throw new ProcessorStateException("Error adding RocksDB metric " + NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE, e);
+                }
+            }
+            return result;
+        });
+    }
+
+    private static byte[] longToBytes(final long data) {
+        final ByteBuffer conversionBuffer = ByteBuffer.allocate(Long.BYTES);
+        conversionBuffer.putLong(0, data);
+        return conversionBuffer.array();
     }
 
     public void removeValueProviders(final String segmentName) {

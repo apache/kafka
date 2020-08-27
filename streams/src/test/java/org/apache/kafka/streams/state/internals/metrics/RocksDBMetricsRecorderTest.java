@@ -83,7 +83,7 @@ public class RocksDBMetricsRecorderTest {
     private final StreamsMetricsImpl streamsMetrics = niceMock(StreamsMetricsImpl.class);
     private final RocksDBMetricsRecordingTrigger recordingTrigger = mock(RocksDBMetricsRecordingTrigger.class);
 
-    private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, THREAD_ID, STORE_NAME);
+    private final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
 
     @Before
     public void setUp() {
@@ -446,7 +446,7 @@ public class RocksDBMetricsRecorderTest {
     private void setUpMetricsMock() {
         mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
-            new RocksDBMetricContext(THREAD_ID, TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
+            new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
         expect(RocksDBMetrics.bytesWrittenToDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(bytesWrittenToDatabaseSensor);
         expect(RocksDBMetrics.bytesReadFromDatabaseSensor(eq(streamsMetrics), eq(metricsContext)))
@@ -471,13 +471,14 @@ public class RocksDBMetricsRecorderTest {
             .andReturn(numberOfOpenFilesSensor);
         expect(RocksDBMetrics.numberOfFileErrorsSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(numberOfFileErrorsSensor);
+        RocksDBMetrics.addNumEntriesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         replay(RocksDBMetrics.class);
     }
 
     private void setUpMetricsStubMock() {
         mockStatic(RocksDBMetrics.class);
         final RocksDBMetricContext metricsContext =
-            new RocksDBMetricContext(THREAD_ID, TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
+            new RocksDBMetricContext(TASK_ID1.toString(), METRICS_SCOPE, STORE_NAME);
         expect(RocksDBMetrics.bytesWrittenToDatabaseSensor(streamsMetrics, metricsContext))
             .andStubReturn(bytesWrittenToDatabaseSensor);
         expect(RocksDBMetrics.bytesReadFromDatabaseSensor(streamsMetrics, metricsContext))
@@ -502,6 +503,7 @@ public class RocksDBMetricsRecorderTest {
             .andStubReturn(numberOfOpenFilesSensor);
         expect(RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricsContext))
             .andStubReturn(numberOfFileErrorsSensor);
+        RocksDBMetrics.addNumEntriesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         replay(RocksDBMetrics.class);
     }
 }

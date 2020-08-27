@@ -56,6 +56,7 @@ import org.rocksdb.Statistics;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -71,6 +72,7 @@ import static org.easymock.EasyMock.notNull;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
@@ -578,7 +580,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldVerifyThatMetricsGetMeasurementsFromRocksDB() {
+    public void shouldVerifyThatMetricsRecordedFromStatisticsGetMeasurementsFromRocksDB() {
         final TaskId taskId = new TaskId(0, 0);
 
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
@@ -604,9 +606,45 @@ public class RocksDBStoreTest {
             "bytes-written-total",
             StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
             "description is not verified",
-            streamsMetrics.storeLevelTagMap(Thread.currentThread().getName(), taskId.toString(), METRICS_SCOPE, DB_NAME)
+            streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
         assertThat((double) bytesWrittenTotal.metricValue(), greaterThan(0d));
+    }
+
+    @Test
+    public void shouldVerifyThatMetricsRecordedFromPropertiesGetMeasurementsFromRocksDB() {
+        final TaskId taskId = new TaskId(0, 0);
+
+        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
+
+        context = EasyMock.niceMock(InternalMockProcessorContext.class);
+        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
+        EasyMock.expect(context.taskId()).andStubReturn(taskId);
+        EasyMock.expect(context.appConfigs())
+                .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
+        EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        EasyMock.replay(context);
+
+        rocksDBStore.init(context, rocksDBStore);
+
+        final Metric numberOfEntriesActiveMemTable = metrics.metric(new MetricName(
+            "num-entries-active-mem-table",
+            StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
+            "description is not verified",
+            streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
+        ));
+
+        assertThat(numberOfEntriesActiveMemTable, notNullValue());
+        assertThat(numberOfEntriesActiveMemTable.metricValue(), is(BigInteger.valueOf(0)));
+
+        final byte[] key = "hello".getBytes();
+        final byte[] value = "world".getBytes();
+        rocksDBStore.put(Bytes.wrap(key), value);
+
+        assertThat(numberOfEntriesActiveMemTable, notNullValue());
+        assertThat((BigInteger) numberOfEntriesActiveMemTable.metricValue(), greaterThan(BigInteger.valueOf(0)));
     }
 
     public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {
