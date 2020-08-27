@@ -72,6 +72,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     private static final Logger log = LoggerFactory.getLogger(RLMMWithTopicStorage.class);
 
+    public static final String REMOTE_LOG_METADATA_TOPIC_NAME = Topic.REMOTE_LOG_METADATA_TOPIC_NAME;
     public static final String REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP =
             "remote.log.metadata.topic.replication.factor";
     public static final String REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP = "remote.log.metadata.topic.partitions";
@@ -132,7 +133,10 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         int partitionNo = metadataPartitionFor(remoteLogSegmentId.topicPartition());
         try {
             final ProducerCallback callback = new ProducerCallback();
-            producer.send(new ProducerRecord<>(Topic.REMOTE_LOG_METADATA_TOPIC_NAME, partitionNo,
+            if(partitionNo >= noOfMetadataTopicPartitions) {
+                log.error("Chosen partition no [{}] is more than the partition count: [{}]", partitionNo, noOfMetadataTopicPartitions);
+            }
+            producer.send(new ProducerRecord<>(REMOTE_LOG_METADATA_TOPIC_NAME, partitionNo,
                             remoteLogSegmentId.topicPartition().toString(), remoteLogSegmentMetadata),
                     callback).get(PUBLISH_TIMEOUT_SECS, TimeUnit.SECONDS);
 
@@ -143,12 +147,12 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
             waitTillConsumerCatchesUp(recordMetadata);
         } catch (ExecutionException e) {
-            throw new KafkaException("Exception occurred while publishing message for remote-log-segment-id"
+            throw new KafkaException("Exception occurred while publishing message for remote-log-segment-id: "
                     + remoteLogSegmentId, e.getCause());
         } catch (KafkaException e) {
             throw e;
         } catch (Exception e) {
-            throw new KafkaException("Exception occurred while publishing message for remote-log-segment-id"
+            throw new KafkaException("Exception occurred while publishing message for remote-log-segment-id: "
                     + remoteLogSegmentId, e);
         }
     }
@@ -313,6 +317,10 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         partitionsWithSegmentIds = new ConcurrentHashMap<>();
     }
 
+    public int noOfMetadataTopicPartitions() {
+        return noOfMetadataTopicPartitions;
+    }
+
     @Override
     public synchronized void configure(Map<String, ?> configs) {
         if (configured) {
@@ -326,6 +334,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         Object propVal = configs.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP);
         noOfMetadataTopicPartitions =
                 (propVal == null) ? DEFAULT_REMOTE_LOG_METADATA_TOPIC_PARTITIONS : Integer.parseInt(propVal.toString());
+        log.info("No of remote log metadata topic partitions: [{}]", noOfMetadataTopicPartitions);
 
         logDir = (String) configs.get("log.dir");
         if (logDir == null || logDir.trim().isEmpty()) {
@@ -368,7 +377,7 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
             throw e;
         } catch (Exception e) {
             throw new RuntimeException("Error encountered while getting no of partitions of a remote log metadata " +
-                    "topic with name : " + Topic.REMOTE_LOG_METADATA_TOPIC_NAME);
+                    "topic with name : " + REMOTE_LOG_METADATA_TOPIC_NAME);
         }
     }
 
@@ -389,7 +398,9 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         ensureInitialized();
         Objects.requireNonNull(tp, "TopicPartition can not be null");
 
-        return Utils.toPositive(Utils.murmur2(tp.toString().getBytes(StandardCharsets.UTF_8)) )% noOfMetadataTopicPartitions;
+        int partitionNo = Utils.toPositive(Utils.murmur2(tp.toString().getBytes(StandardCharsets.UTF_8))) % noOfMetadataTopicPartitions;
+        log.debug("No of partitions [{}], partitionNo: [{}] for given topic: [{}]",  noOfMetadataTopicPartitions, partitionNo, tp);
+        return partitionNo;
     }
 
     private void createAdminClient() {

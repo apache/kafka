@@ -160,7 +160,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     }
 
     val rlmmProps = new util.HashMap[String, Any]()
-    rlmConfig.rsmProps.foreach { case (k, v) => rlmmProps.put(k, v) }
+    rlmConfig.rlmmProps.foreach { case (k, v) => rlmmProps.put(k, v) }
     rlmmProps.put(KafkaConfig.LogDirProp, logDir)
     rlmmProps.put(KafkaConfig.BrokerIdProp, brokerId)
     rlmmProps.put(CLUSTER_ID, clusterId)

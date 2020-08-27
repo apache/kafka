@@ -86,6 +86,39 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
   }
 
   @Test
+  def testRLMMTopicPartitions(): Unit = {
+    var mayBeRlmmWithTopicStorage: Option[RLMMWithTopicStorage] = None
+    try {
+      val brokerId = 0
+      val config = serverForId(brokerId).get.config
+      val partitionCountFromConfig = config.remoteLogMetadataTopicPartitions
+      val replicationFactor = config.remoteLogMetadataTopicReplicationFactor
+
+      mayBeRlmmWithTopicStorage = Some(createRLMMWithTopicStorage(tmpLogDirPathAsStr, brokerId))
+      val rlmmWithTopicStorage = mayBeRlmmWithTopicStorage.get
+      val partitionCountFromRlmm = rlmmWithTopicStorage.noOfMetadataTopicPartitions()
+
+      // sending messages so that the internal topic is created
+      rlmmWithTopicStorage.onPartitionLeadershipChanges(allTopicPartitions, Set.empty[TopicPartition].asJava)
+      rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp0_0_100)
+
+      // get the topic info using admin client and check it has the expected attributes
+      val admin = createAdminClient()
+      val topicName = RLMMWithTopicStorage.REMOTE_LOG_METADATA_TOPIC_NAME
+      val topicDescription = admin.describeTopics(Collections.singleton(topicName)).values().get(topicName).get()
+
+      Assert.assertTrue(topicDescription.isInternal)
+      Assert.assertEquals(partitionCountFromConfig, partitionCountFromRlmm)
+      Assert.assertEquals(partitionCountFromRlmm, topicDescription.partitions().size())
+
+      // check for whether they have the same no of replicas as it is configured
+      topicDescription.partitions().forEach(tp => Assert.assertEquals(replicationFactor, tp.replicas().size()))
+    } finally {
+      mayBeRlmmWithTopicStorage.foreach(x => x.close())
+    }
+  }
+
+  @Test
   @throws[Exception]
   def testPutAndGetRemoteLogMetadata(): Unit = {
 
