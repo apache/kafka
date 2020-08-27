@@ -445,13 +445,12 @@ public class StateStoreMetrics {
         );
     }
 
-    public static Sensor e2ELatencySensor(final String threadId,
-                                          final String taskId,
+    public static Sensor e2ELatencySensor(final String taskId,
                                           final String storeType,
                                           final String storeName,
                                           final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.storeLevelSensor(threadId, taskId, storeName, RECORD_E2E_LATENCY, RecordingLevel.TRACE);
-        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(threadId, taskId, storeType, storeName);
+        final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, RECORD_E2E_LATENCY, RecordingLevel.TRACE);
+        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMinAndMaxToSensor(
             sensor,
             STATE_STORE_LEVEL_GROUP,

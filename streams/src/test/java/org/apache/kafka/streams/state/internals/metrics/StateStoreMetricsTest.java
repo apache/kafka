@@ -338,9 +338,9 @@ public class StateStoreMetricsTest {
         final String descriptionOfMin = "The minimum " + e2eLatencyDescription;
         final String descriptionOfMax = "The maximum " + e2eLatencyDescription;
 
-        expect(streamsMetrics.storeLevelSensor(THREAD_ID, TASK_ID, STORE_NAME, metricName, RecordingLevel.TRACE))
+        expect(streamsMetrics.storeLevelSensor(TASK_ID, STORE_NAME, metricName, RecordingLevel.TRACE))
             .andReturn(expectedSensor);
-        expect(streamsMetrics.storeLevelTagMap(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
+        expect(streamsMetrics.storeLevelTagMap(TASK_ID, STORE_TYPE, STORE_NAME)).andReturn(storeTagMap);
         StreamsMetricsImpl.addAvgAndMinAndMaxToSensor(
             expectedSensor,
             STORE_LEVEL_GROUP,
@@ -353,7 +353,7 @@ public class StateStoreMetricsTest {
         replay(StreamsMetricsImpl.class, streamsMetrics);
 
         final Sensor sensor =
-            StateStoreMetrics.e2ELatencySensor(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
+            StateStoreMetrics.e2ELatencySensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics);
 
         verify(StreamsMetricsImpl.class, streamsMetrics);
         assertThat(sensor, is(expectedSensor));
