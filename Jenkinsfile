@@ -59,8 +59,8 @@ pipeline {
 	  }
 	  steps {
             sh 'gradle -version'
+	    setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
           }
-	  setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
         }
       }
     }
