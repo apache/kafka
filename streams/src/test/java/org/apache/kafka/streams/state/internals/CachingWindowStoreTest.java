@@ -663,7 +663,6 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
         cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
         cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
-        cachingStore.put(bytesKey("aa"), bytesValue("0006"), SEGMENT_INTERVAL + 1);
 
         verifyKeyValueList(
             asList(
@@ -677,8 +676,7 @@ public class CachingWindowStoreTest {
         verifyKeyValueList(
             asList(
                 windowedPair("aa", "0002", 0),
-                windowedPair("aa", "0004", 1),
-                windowedPair("aa", "0006", SEGMENT_INTERVAL + 1)),
+                windowedPair("aa", "0004", 1)),
             toList(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
@@ -688,8 +686,7 @@ public class CachingWindowStoreTest {
                 windowedPair("a", "0003", 1),
                 windowedPair("aa", "0002", 0),
                 windowedPair("aa", "0004", 1),
-                windowedPair("a", "0005", SEGMENT_INTERVAL),
-                windowedPair("aa", "0006", SEGMENT_INTERVAL + 1)
+                windowedPair("a", "0005", SEGMENT_INTERVAL)
             ),
             toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
@@ -702,7 +699,6 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
         cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
         cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
-        cachingStore.put(bytesKey("aa"), bytesValue("0006"), SEGMENT_INTERVAL + 1);
 
         verifyKeyValueList(
             asList(
@@ -715,7 +711,6 @@ public class CachingWindowStoreTest {
 
         verifyKeyValueList(
             asList(
-                windowedPair("aa", "0006", SEGMENT_INTERVAL + 1),
                 windowedPair("aa", "0004", 1),
                 windowedPair("aa", "0002", 0)),
             toList(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
@@ -723,7 +718,6 @@ public class CachingWindowStoreTest {
 
         verifyKeyValueList(
             asList(
-                windowedPair("aa", "0006", SEGMENT_INTERVAL + 1),
                 windowedPair("a", "0005", SEGMENT_INTERVAL),
                 windowedPair("aa", "0004", 1),
                 windowedPair("aa", "0002", 0),

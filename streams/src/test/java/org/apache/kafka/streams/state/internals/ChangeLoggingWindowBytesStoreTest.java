@@ -30,8 +30,6 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import java.time.Instant;
-
 import static java.time.Instant.ofEpochMilli;
 
 @RunWith(EasyMockRunner.class)
@@ -48,7 +46,6 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Mock(type = MockType.NICE)
     private ProcessorContextImpl context;
     private ChangeLoggingWindowBytesStore store;
-
 
     @Before
     public void setUp() {
@@ -100,7 +97,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
         EasyMock
-            .expect(inner.backwardFetch(bytesKey, Instant.ofEpochMilli(0), Instant.ofEpochMilli(10)))
+            .expect(inner.backwardFetch(bytesKey, 0, 10))
             .andReturn(KeyValueIterators.emptyWindowStoreIterator());
 
         init();
@@ -124,7 +121,7 @@ public class ChangeLoggingWindowBytesStoreTest {
     @Test
     public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
         EasyMock
-            .expect(inner.backwardFetch(bytesKey, bytesKey, Instant.ofEpochMilli(0), Instant.ofEpochMilli(1)))
+            .expect(inner.backwardFetch(bytesKey, bytesKey, 0, 1))
             .andReturn(KeyValueIterators.emptyIterator());
 
         init();

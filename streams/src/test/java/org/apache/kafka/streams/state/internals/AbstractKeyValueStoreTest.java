@@ -347,7 +347,7 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
-        assertThrows(NullPointerException.class, () -> store.put(1, null));
+        store.put(1, null);
     }
 
     @Test

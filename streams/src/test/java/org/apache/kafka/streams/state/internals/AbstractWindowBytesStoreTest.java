@@ -60,6 +60,7 @@ import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.toSet;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -334,17 +335,17 @@ public abstract class AbstractWindowBytesStoreTest {
         final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
         final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
 
-        assertArrayEquals(
-            new LinkedHashSet<>(asList(four, two, one)).toArray(),
-            toSet(windowStore.backwardFetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 4))).toArray()
+        assertEquals(
+            asList(four, two, one),
+            toList(windowStore.backwardFetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 4)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(asList(two, one, zero)).toArray(),
-            toSet(windowStore.backwardFetchAll(ofEpochMilli(startTime + 0), ofEpochMilli(startTime + 3))).toArray()
+        assertEquals(
+            asList(two, one, zero),
+            toList(windowStore.backwardFetchAll(ofEpochMilli(startTime + 0), ofEpochMilli(startTime + 3)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(asList(five, four, two, one)).toArray(),
-            toSet(windowStore.backwardFetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 5))).toArray()
+        assertEquals(
+            asList(five, four, two, one),
+            toList(windowStore.backwardFetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 5)))
         );
     }
 
@@ -438,69 +439,69 @@ public abstract class AbstractWindowBytesStoreTest {
         final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
         final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
 
-        assertArrayEquals(
-            new LinkedHashSet<>(asList(one, zero)).toArray(),
-            toSet(windowStore.backwardFetch(
+        assertEquals(
+            asList(one, zero),
+            toList(windowStore.backwardFetch(
                 0,
                 1,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(Collections.singletonList(one)).toArray(),
-            toSet(windowStore.backwardFetch(
+        assertEquals(
+            Collections.singletonList(one),
+            toList(windowStore.backwardFetch(
                 1,
                 1,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(asList(two, one)).toArray(),
-            toSet(windowStore.backwardFetch(
+        assertEquals(
+            asList(two, one),
+            toList(windowStore.backwardFetch(
                 1,
                 3,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(asList(two, one, zero)).toArray(),
-            toSet(windowStore.backwardFetch(
+        assertEquals(
+            asList(two, one, zero),
+            toList(windowStore.backwardFetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE))).toArray()
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(asList(five, four, two, one, zero)).toArray(),
-            toSet(windowStore.backwardFetch(
+        assertEquals(
+            asList(five, four, two, one, zero),
+            toList(windowStore.backwardFetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L))).toArray()
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(asList(five, four, two)).toArray(),
-            toSet(windowStore.backwardFetch(
+        assertEquals(
+            asList(five, four, two),
+            toList(windowStore.backwardFetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 2L),
-                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L))).toArray()
+                ofEpochMilli(startTime + 0L + WINDOW_SIZE + 5L)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(Collections.emptyList()).toArray(),
-            toSet(windowStore.backwardFetch(
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.backwardFetch(
                 4,
                 5,
                 ofEpochMilli(startTime + 2L),
-                ofEpochMilli(startTime + WINDOW_SIZE))).toArray()
+                ofEpochMilli(startTime + WINDOW_SIZE)))
         );
-        assertArrayEquals(
-            new LinkedHashSet<>(Collections.emptyList()).toArray(),
-            toSet(windowStore.backwardFetch(
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.backwardFetch(
                 0,
                 3,
                 ofEpochMilli(startTime + 3L),
-                ofEpochMilli(startTime + WINDOW_SIZE + 5))).toArray()
+                ofEpochMilli(startTime + WINDOW_SIZE + 5)))
         );
     }
 

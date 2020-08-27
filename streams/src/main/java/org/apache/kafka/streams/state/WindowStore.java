@@ -105,12 +105,28 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default WindowStoreIterator<V> fetch(final K key,
-                                         final Instant from,
-                                         final Instant to) {
+                                         final Instant timeFrom,
+                                         final Instant timeTo) {
         return fetch(
             key,
-            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
+    }
+
+    default WindowStoreIterator<V> backwardFetch(final K key,
+                                                 final long timeFrom,
+                                                 final long timeTo) throws IllegalArgumentException {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    default WindowStoreIterator<V> backwardFetch(final K key,
+                                                 final Instant timeFrom,
+                                                 final Instant timeTo) {
+        return backwardFetch(
+            key,
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
     }
 
     /**
@@ -133,13 +149,32 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
     @Override
     default KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                    final K to,
-                                                   final Instant fromTime,
-                                                   final Instant toTime) {
+                                                   final Instant timeFrom,
+                                                   final Instant timeTo) {
         return fetch(
             from,
             to,
-            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
-            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
+    }
+
+    default KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
+                                                          final K to,
+                                                          final long timeFrom,
+                                                          final long timeTo) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    default KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
+                                                          final K to,
+                                                          final Instant timeFrom,
+                                                          final Instant timeTo) {
+        return backwardFetch(
+            from,
+            to,
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
     }
 
     /**
@@ -155,9 +190,20 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     @Override
-    default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) {
+    default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant timeFrom, final Instant timeTo) {
         return fetchAll(
-            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
+    }
+
+    default KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom, final long timeTo) {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    default KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom, final Instant timeTo) {
+        return backwardFetchAll(
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
     }
 }

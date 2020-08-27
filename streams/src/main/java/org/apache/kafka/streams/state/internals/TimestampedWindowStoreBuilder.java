@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
 import java.util.Objects;
 
 public class TimestampedWindowStoreBuilder<K, V>
@@ -145,8 +144,8 @@ public class TimestampedWindowStoreBuilder<K, V>
 
         @Override
         public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
-                                                         final Instant timeFrom,
-                                                         final Instant timeTo) {
+                                                         final long timeFrom,
+                                                         final long timeTo) {
             return wrapped.backwardFetch(key, timeFrom, timeTo);
         }
 
@@ -162,8 +161,8 @@ public class TimestampedWindowStoreBuilder<K, V>
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
                                                                        final Bytes to,
-                                                                       final Instant timeFrom,
-                                                                       final Instant timeTo) {
+                                                                       final long timeFrom,
+                                                                       final long timeTo) {
             return wrapped.backwardFetch(from, to, timeFrom, timeTo);
         }
 
@@ -175,8 +174,8 @@ public class TimestampedWindowStoreBuilder<K, V>
         }
 
         @Override
-        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom,
-                                                                          final Instant timeTo) {
+        public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
+                                                                          final long timeTo) {
             return wrapped.backwardFetchAll(timeFrom, timeTo);
         }
 

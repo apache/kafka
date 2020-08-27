@@ -25,8 +25,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.time.Instant;
-
 /**
  * Simple wrapper around a {@link WindowStore} to support writing
  * updates to a changelog
@@ -73,26 +71,26 @@ class ChangeLoggingWindowBytesStore
 
     @Override
     public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
-                                                     final Instant from,
-                                                     final Instant to) {
-        return wrapped().backwardFetch(key, from, to);
+                                                     final long timeFrom,
+                                                     final long timeTo) {
+        return wrapped().backwardFetch(key, timeFrom, timeTo);
     }
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
-                                                           final long from,
+                                                           final long timeFrom,
                                                            final long to) {
-        return wrapped().fetch(keyFrom, keyTo, from, to);
+        return wrapped().fetch(keyFrom, keyTo, timeFrom, to);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
                                                                    final Bytes keyTo,
-                                                                   final Instant from,
-                                                                   final Instant to) {
-        return wrapped().backwardFetch(keyFrom, keyTo, from, to);
+                                                                   final long timeFrom,
+                                                                   final long timeTo) {
+        return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
     }
 
     @Override
@@ -114,8 +112,8 @@ class ChangeLoggingWindowBytesStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant timeFrom,
-                                                                      final Instant timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
+                                                                      final long timeTo) {
         return wrapped().backwardFetchAll(timeFrom, timeTo);
     }
 

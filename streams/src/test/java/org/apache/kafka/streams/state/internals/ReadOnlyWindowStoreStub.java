@@ -79,17 +79,15 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) throws IllegalArgumentException {
+    public WindowStoreIterator<V> fetch(final K key, final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
         return fetch(
             key,
-            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "from")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "to")));
     }
 
     @Override
-    public WindowStoreIterator<V> backwardFetch(final K key, final Instant from, final Instant to) throws IllegalArgumentException {
-        final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
+    public WindowStoreIterator<V> backwardFetch(final K key, final long timeFrom, final long timeTo) throws IllegalArgumentException {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
@@ -101,6 +99,16 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             }
         }
         return new TheWindowStoreIterator<>(results.iterator());
+    }
+
+    @Override
+    public WindowStoreIterator<V> backwardFetch(final K key,
+                                                final Instant timeFrom,
+                                                final Instant timeTo) throws IllegalArgumentException {
+        return backwardFetch(
+            key,
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
     }
 
     @Override
@@ -225,17 +233,14 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
         return fetchAll(
-            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
-            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "from")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "to")));
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
-        final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-
+    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom, final long timeTo) throws IllegalArgumentException {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
@@ -274,6 +279,13 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             }
 
         };
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom, final Instant timeTo) {
+        return backwardFetchAll(
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "timeFrom")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
     }
 
     @SuppressWarnings("deprecation")
@@ -319,22 +331,20 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                   final K to,
-                                                  final Instant fromTime,
-                                                  final Instant toTime) throws IllegalArgumentException {
+                                                  final Instant timeFrom,
+                                                  final Instant timeTo) throws IllegalArgumentException {
         return fetch(
             from,
             to,
-            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
-            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "fromTime")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "toTime")));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
                                                           final K to,
-                                                          final Instant fromTimeInstant,
-                                                          final Instant toTimeInstant) throws IllegalArgumentException {
-        final long timeFrom = ApiUtils.validateMillisecondInstant(fromTimeInstant, prepareMillisCheckFailMsgPrefix(fromTimeInstant, "fromTimeInstant"));
-        final long timeTo = ApiUtils.validateMillisecondInstant(toTimeInstant, prepareMillisCheckFailMsgPrefix(toTimeInstant, "toTimeInstant"));
+                                                          final long timeFrom,
+                                                          final long timeTo) throws IllegalArgumentException {
         if (!open) {
             throw new InvalidStateStoreException("Store is not open");
         }
@@ -370,6 +380,18 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             }
 
         };
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
+                                                          final K to,
+                                                          final Instant timeFrom,
+                                                          final Instant timeTo) {
+        return backwardFetch(
+            from,
+            to,
+            ApiUtils.validateMillisecondInstant(timeFrom, prepareMillisCheckFailMsgPrefix(timeFrom, "fromTime")),
+            ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "toTime")));
     }
 
     public void put(final K key, final V value, final long timestamp) {

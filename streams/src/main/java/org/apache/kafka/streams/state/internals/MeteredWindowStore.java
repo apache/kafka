@@ -33,8 +33,6 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
-import java.time.Instant;
-
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 public class MeteredWindowStore<K, V>
@@ -173,8 +171,8 @@ public class MeteredWindowStore<K, V>
 
     @Override
     public WindowStoreIterator<V> backwardFetch(final K key,
-                                                final Instant timeFrom,
-                                                final Instant timeTo) {
+                                                final long timeFrom,
+                                                final long timeTo) {
         return new MeteredWindowStoreIterator<>(
             wrapped().backwardFetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
@@ -201,8 +199,8 @@ public class MeteredWindowStore<K, V>
     @Override
     public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
                                                           final K to,
-                                                          final Instant timeFrom,
-                                                          final Instant timeTo) {
+                                                          final long timeFrom,
+                                                          final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
             fetchSensor,
@@ -224,8 +222,8 @@ public class MeteredWindowStore<K, V>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom,
-                                                             final Instant timeTo) {
+    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
+                                                             final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetchAll(timeFrom, timeTo),
             fetchSensor,

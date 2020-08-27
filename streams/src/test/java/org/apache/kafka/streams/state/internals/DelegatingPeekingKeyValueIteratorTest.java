@@ -80,16 +80,18 @@ public class DelegatingPeekingKeyValueIteratorTest {
 
     @Test
     public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndNextCalled() {
-        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
-        peekingIterator.next();
-        assertThrows(NoSuchElementException.class, peekingIterator::close);
+        try (final DelegatingPeekingKeyValueIterator<String, String> peekingIterator =
+            new DelegatingPeekingKeyValueIterator<>(name, store.all())) {
+            assertThrows(NoSuchElementException.class, peekingIterator::next);
+        }
     }
 
     @Test
     public void shouldThrowNoSuchElementWhenNoMoreItemsLeftAndPeekNextCalled() {
-        final DelegatingPeekingKeyValueIterator<String, String> peekingIterator = new DelegatingPeekingKeyValueIterator<>(name, store.all());
-        peekingIterator.peekNextKey();
-        assertThrows(NoSuchElementException.class, peekingIterator::close);
+        try (final DelegatingPeekingKeyValueIterator<String, String> peekingIterator =
+            new DelegatingPeekingKeyValueIterator<>(name, store.all())) {
+            assertThrows(NoSuchElementException.class, peekingIterator::peekNextKey);
+        }
     }
 
 

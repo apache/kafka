@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -34,12 +33,10 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.Instant;
 import java.util.LinkedList;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.executeAll;
 import static org.apache.kafka.streams.state.internals.ExceptionUtils.throwSuppressed;
 
@@ -219,15 +216,13 @@ class CachingWindowStore
 
     @Override
     public synchronized WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
-                                                                  final Instant from,
-                                                                  final Instant to) {
-        final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
+                                                                  final long timeFrom,
+                                                                  final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
 
-        final WindowStoreIterator<byte[]> underlyingIterator = wrapped().backwardFetch(key, from, to);
+        final WindowStoreIterator<byte[]> underlyingIterator = wrapped().backwardFetch(key, timeFrom, timeTo);
         if (context.cache() == null) {
             return underlyingIterator;
         }
@@ -296,8 +291,8 @@ class CachingWindowStore
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
                                                                    final Bytes to,
-                                                                   final Instant fromTime,
-                                                                   final Instant toTime) {
+                                                                   final long timeFrom,
+                                                                   final long timeTo) {
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -305,15 +300,12 @@ class CachingWindowStore
             return KeyValueIterators.emptyIterator();
         }
 
-        final long timeFrom = ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
-        final long timeTo = ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
-
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator =
-            wrapped().backwardFetch(from, to, fromTime, toTime);
+            wrapped().backwardFetch(from, to, timeFrom, timeTo);
         if (context.cache() == null) {
             return underlyingIterator;
         }
@@ -363,14 +355,11 @@ class CachingWindowStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final Instant from,
-                                                                      final Instant to) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
+                                                                      final long timeTo) {
         validateStoreOpen();
 
-        final long timeFrom = ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        final long timeTo = ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-
-        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().backwardFetchAll(from, to);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().backwardFetchAll(timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = context.cache().reverseAll(cacheName);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
@@ -554,6 +543,7 @@ class CachingWindowStore
         private void getNextSegmentIterator() {
             if (forward) {
                 ++currentSegmentId;
+                // updating as maxObservedTimestamp can change while iterating
                 lastSegmentId = cacheFunction.segmentId(Math.min(timeTo, maxObservedTimestamp.get()));
 
                 if (currentSegmentId > lastSegmentId) {
@@ -569,6 +559,7 @@ class CachingWindowStore
             } else {
                 --currentSegmentId;
 
+                // last segment id is stable when iterating backward, therefore no need to update
                 if (currentSegmentId < lastSegmentId) {
                     current = null;
                     return;

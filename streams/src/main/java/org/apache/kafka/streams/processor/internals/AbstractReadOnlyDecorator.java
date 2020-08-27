@@ -30,7 +30,6 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
-import java.time.Instant;
 import java.util.List;
 
 abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends WrappedStateStore<T, K, V> {
@@ -183,8 +182,8 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         public WindowStoreIterator<V> backwardFetch(final K key,
-                                                    final Instant timeFrom,
-                                                    final Instant timeTo) {
+                                                    final long timeFrom,
+                                                    final long timeTo) {
             return wrapped().backwardFetch(key, timeFrom, timeTo);
         }
 
@@ -200,8 +199,8 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         @Override
         public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
                                                               final K to,
-                                                              final Instant timeFrom,
-                                                              final Instant timeTo) {
+                                                              final long timeFrom,
+                                                              final long timeTo) {
             return wrapped().backwardFetch(from, to, timeFrom, timeTo);
         }
 
@@ -223,8 +222,8 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom,
-                                                                 final Instant timeTo) {
+        public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
+                                                                 final long timeTo) {
             return wrapped().backwardFetchAll(timeFrom, timeTo);
         }
     }
