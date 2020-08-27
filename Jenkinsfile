@@ -23,6 +23,7 @@ pipeline {
 	  }
 	  steps {
             sh 'gradle -version'
+            githubNotify context: 'JDK 11 build', description: 'Does this work?',  status: 'SUCCESS'
           }
         }
       }
