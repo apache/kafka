@@ -23,7 +23,9 @@ pipeline {
 	  }
 	  steps {
             sh 'gradle -version'
-            pullRequest.createStatus('SUCCESS', 'JDK 11 build', 'Does this work?')
+            script {
+              pullRequest.createStatus('SUCCESS', 'JDK 11 build', 'Does this work?')
+            }
           }
         }
       }
