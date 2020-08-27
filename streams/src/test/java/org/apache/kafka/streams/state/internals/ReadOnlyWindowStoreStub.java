@@ -29,7 +29,6 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +44,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>, StateStore {
 
     private final long windowSize;
-    private final Map<Long, NavigableMap<K, V>> data = new HashMap<>();
+    private final NavigableMap<Long, NavigableMap<K, V>> data = new TreeMap<>();
     private boolean open = true;
 
     ReadOnlyWindowStoreStub(final long windowSize) {
@@ -156,7 +155,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
-        for (final long now : data.keySet()) {
+        for (final long now : data.descendingKeySet()) {
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.descendingMap().entrySet()) {
@@ -245,7 +244,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
             throw new InvalidStateStoreException("Store is not open");
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
-        for (final long now : data.keySet()) {
+        for (final long now : data.descendingKeySet()) {
             if (!(now >= timeFrom && now <= timeTo)) {
                 continue;
             }
