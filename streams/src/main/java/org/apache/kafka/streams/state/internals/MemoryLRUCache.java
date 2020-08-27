@@ -146,8 +146,24 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
      * @throws UnsupportedOperationException at every invocation
      */
     @Override
+    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from, final Bytes to) {
+        throw new UnsupportedOperationException("MemoryLRUCache does not support reverseRange() function.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException at every invocation
+     */
+    @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         throw new UnsupportedOperationException("MemoryLRUCache does not support all() function.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException at every invocation
+     */
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+        throw new UnsupportedOperationException("MemoryLRUCache does not support reverseAll() function.");
     }
 
     @Override

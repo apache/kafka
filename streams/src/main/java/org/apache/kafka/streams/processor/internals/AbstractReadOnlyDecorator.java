@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.List;
+
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -91,8 +92,19 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
+        public KeyValueIterator<K, V> reverseRange(final K from,
+                                                   final K to) {
+            return wrapped().reverseRange(from, to);
+        }
+
+        @Override
         public KeyValueIterator<K, V> all() {
             return wrapped().all();
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseAll() {
+            return wrapped().reverseAll();
         }
 
         @Override

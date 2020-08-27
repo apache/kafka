@@ -88,6 +88,14 @@
 
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>
     <p>
+        In <code>KeyQueryMetadata</code> we deprecated <code>getActiveHost()</code>, <code>getStandbyHosts()</code> as well as <code>getPartition()</code>
+        and replaced them with <code>activeHost()</code>, <code>standbyHosts()</code> and <code>partition()</code> respectively.
+        <code>KeyQueryMetadata</code> was introduced in Kafka Streams 2.5 release with getter methods having prefix <code>get</code>.
+        The intend of this change is to bring the method names to Kafka custom to not use the <code>get</code> prefix for getter methods.
+        The old methods are deprecated and is not effected.
+        (Cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-648%3A+Renaming+getter+method+for+Interactive+Queries">KIP-648</a>.)
+    </p>
+    <p>
         The <code>StreamsConfig</code> variable for configuration parameter <code>"topology.optimization"</code>
         is renamed from <code>TOPOLOGY_OPTIMIZATION</code> to <code>TOPOLOGY_OPTIMIZATION_CONFIG</code>.
         The old variable is deprecated. Note, that the parameter name itself is not affected.
