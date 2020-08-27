@@ -54,7 +54,19 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private Sensor createSensor;
 
     public ProcessorNode(final String name) {
-        this(name, null, null);
+        this(name, (Processor<KIn, VIn, KOut, VOut>) null, null);
+    }
+
+    public ProcessorNode(final String name,
+                         final Processor<KIn, VIn, KOut, VOut> processor,
+                         final Set<String> stateStores) {
+
+        this.name = name;
+        this.processor = processor;
+        this.children = new ArrayList<>();
+        this.childByName = new HashMap<>();
+        this.stateStores = stateStores;
+        this.time = new SystemTime();
     }
 
     public ProcessorNode(final String name,
@@ -97,7 +109,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             maybeMeasureLatency(
                 () -> {
                     if (processor != null) {
-                        processor.init(ProcessorContextAdapter.shim(context));
+                        processor.init(ProcessorContextAdapter.adapt(context));
                     }
                 },
                 time,

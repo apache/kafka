@@ -678,9 +678,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, totalRecords, tp)
     consumer.assign(List(tp).asJava)
 
-    // poll should fail because there is no offset reset strategy set
+    // poll should fail because there is no offset reset strategy set.
+    // we fail only when resetting positions after coordinator is known, so using a long timeout.
     intercept[NoOffsetForPartitionException] {
-      consumer.poll(Duration.ofMillis(50))
+      consumer.poll(Duration.ofMillis(15000))
     }
 
     // seek to out of range position

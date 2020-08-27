@@ -149,7 +149,7 @@ class KafkaApisTest {
       clientId, 0)
     val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
 
     val expectedActions = Seq(
       new Action(operation, new ResourcePattern(resourceType, resourceName, PatternType.LITERAL),
@@ -183,7 +183,7 @@ class KafkaApisTest {
       clientId, 0)
     val requestContext = new RequestContext(requestHeader, "1", InetAddress.getLocalHost,
       KafkaPrincipal.ANONYMOUS, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
+      SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
 
     val expectedActions = Seq(
       new Action(operation, new ResourcePattern(resourceType, resourceName1, PatternType.LITERAL),
@@ -2244,7 +2244,7 @@ class KafkaApisTest {
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
     val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
-      listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY)
+      listenerName, SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false)
     new RequestChannel.Request(processor = 1, context = context, startTimeNanos = 0, MemoryPool.NONE, buffer,
       requestChannelMetrics)
   }

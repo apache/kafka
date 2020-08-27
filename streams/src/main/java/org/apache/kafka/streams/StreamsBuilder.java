@@ -30,11 +30,12 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -468,7 +469,7 @@ public class StreamsBuilder {
     /**
      * Adds a state store to the underlying {@link Topology}.
      * <p>
-     * It is required to connect state stores to {@link Processor Processors}, {@link Transformer Transformers},
+     * It is required to connect state stores to {@link org.apache.kafka.streams.processor.Processor Processors}, {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformers} before they can be used.
      *
      * @param builder the builder used to obtain this state store {@link StateStore} instance
@@ -482,7 +483,7 @@ public class StreamsBuilder {
     }
 
     /**
-     * @deprecated use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead
+     * @deprecated Use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead.
      */
     @Deprecated
     public synchronized <K, V>  StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
@@ -490,7 +491,7 @@ public class StreamsBuilder {
                                                               final String sourceName,
                                                               final Consumed<K, V> consumed,
                                                               final String processorName,
-                                                              final ProcessorSupplier<K, V> stateUpdateSupplier) {
+                                                              final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
@@ -499,7 +500,7 @@ public class StreamsBuilder {
             topic,
             new ConsumedInternal<>(consumed),
             processorName,
-            stateUpdateSupplier
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
         );
         return this;
     }
@@ -512,15 +513,58 @@ public class StreamsBuilder {
      * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving from the partitions
      * of the input topic.
      * <p>
-     * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
+     * The provided {@link org.apache.kafka.streams.processor.ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
      * records forwarded from the {@link SourceNode}. NOTE: you should not use the {@code Processor} to insert transformed records into
      * the global state store. This store uses the source topic as changelog and during restore will insert records directly
      * from the source.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
-     * It is not required to connect a global store to {@link Processor Processors}, {@link Transformer Transformers},
+     * It is not required to connect a global store to {@link org.apache.kafka.streams.processor.Processor Processors}, {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
+     *
+     * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
+     * @param topic                 the topic to source the data from
+     * @param consumed              the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
+     * @param stateUpdateSupplier   the instance of {@link org.apache.kafka.streams.processor.ProcessorSupplier}
+     * @return itself
+     * @throws TopologyException if the processor of state is already registered
+     * @deprecated Since 2.7.0; use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead.
+     */
+    @Deprecated
+    public synchronized <K, V> StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                             final String topic,
+                                                             final Consumed<K, V> consumed,
+                                                             final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
+        Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
+        Objects.requireNonNull(consumed, "consumed can't be null");
+        internalStreamsBuilder.addGlobalStore(
+            storeBuilder,
+            topic,
+            new ConsumedInternal<>(consumed),
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
+        );
+        return this;
+    }
+
+    /**
+     * Adds a global {@link StateStore} to the topology.
+     * The {@link StateStore} sources its data from all partitions of the provided input topic.
+     * There will be exactly one instance of this {@link StateStore} per Kafka Streams instance.
+     * <p>
+     * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving from the partitions
+     * of the input topic.
+     * <p>
+     * The provided {@link ProcessorSupplier}} will be used to create an
+     * {@link Processor} that will receive all records forwarded from the {@link SourceNode}.
+     * NOTE: you should not use the {@link Processor} to insert transformed records into
+     * the global state store. This store uses the source topic as changelog and during restore will insert records directly
+     * from the source.
+     * This {@link Processor} should be used to keep the {@link StateStore} up-to-date.
+     * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
+     * <p>
+     * It is not required to connect a global store to the {@link Processor Processors},
+     * {@link Transformer Transformers}, or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param topic                 the topic to source the data from
@@ -529,10 +573,10 @@ public class StreamsBuilder {
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
-    public synchronized <K, V> StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
-                                                             final String topic,
-                                                             final Consumed<K, V> consumed,
-                                                             final ProcessorSupplier<K, V> stateUpdateSupplier) {
+    public synchronized <KIn, VIn> StreamsBuilder addGlobalStore(final StoreBuilder<?> storeBuilder,
+                                                                 final String topic,
+                                                                 final Consumed<KIn, VIn> consumed,
+                                                                 final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(

@@ -49,6 +49,7 @@ public class MeteredWindowStore<K, V>
     private Sensor putSensor;
     private Sensor fetchSensor;
     private Sensor flushSensor;
+    private Sensor e2eLatencySensor;
     private ProcessorContext context;
     private final String threadId;
     private String taskId;
@@ -79,6 +80,7 @@ public class MeteredWindowStore<K, V>
         putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         fetchSensor = StateStoreMetrics.fetchSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
@@ -133,6 +135,7 @@ public class MeteredWindowStore<K, V>
                 time,
                 putSensor
             );
+            maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
@@ -216,5 +219,13 @@ public class MeteredWindowStore<K, V>
 
     private Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    private void maybeRecordE2ELatency() {
+        if (e2eLatencySensor.shouldRecord()) {
+            final long currentTime = time.milliseconds();
+            final long e2eLatency =  currentTime - context.timestamp();
+            e2eLatencySensor.record(e2eLatency, currentTime);
+        }
     }
 }

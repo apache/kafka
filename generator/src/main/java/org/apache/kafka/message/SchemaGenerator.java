@@ -82,7 +82,7 @@ final class SchemaGenerator {
     void generateSchemas(MessageSpec message) throws Exception {
         this.messageFlexibleVersions = message.flexibleVersions();
         // Generate schemas for inline structures
-        generateSchemas(message.generatedClassName(), message.struct(),
+        generateSchemas(message.dataClassName(), message.struct(),
             message.struct().versions());
 
         // Generate schemas for common structures

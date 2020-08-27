@@ -222,8 +222,9 @@ class CachingWindowStore
                                                            final long timeFrom,
                                                            final long timeTo) {
         if (from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
-                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
+                "This may be due to range arguments set in the wrong order, " +
+                "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                 "Note that the built-in numerical serdes do not follow this for negative numbers");
             return KeyValueIterators.emptyIterator();
         }
