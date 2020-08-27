@@ -34,7 +34,8 @@ void setBuildStatus(String context, String message, String state) {
     ]);
 }
 
-def validation(String scalaVersion) {
+void doValidation(String scalaVersion) {
+  echo "Scala Version: ${scalaVersion}"
   sh "./gradlew -PscalaVersion=${scalaVersion} clean compileJava compileScala compileTestJava compileTestScala \
     spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
     --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\" \
