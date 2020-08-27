@@ -1365,6 +1365,7 @@ class ReplicaManagerTest {
       new SimpleRecord("c".getBytes())
     )
 
+    val actionSize = replicaManager.delayedActions.size()
     replicaManager.appendRecords(
       timeout = 10,
       requiredAcks = -1,
@@ -1373,6 +1374,7 @@ class ReplicaManagerTest {
       entriesPerPartition = Map(topicPartition -> records),
       responseCallback = callback
     )
+    assertEquals(1 + actionSize, replicaManager.delayedActions.size())
     produceResult
   }
 

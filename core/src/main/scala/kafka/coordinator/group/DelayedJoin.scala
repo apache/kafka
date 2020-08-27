@@ -36,8 +36,13 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
                                  rebalanceTimeout: Long) extends DelayedOperation(rebalanceTimeout, Some(group.lock)) {
 
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete _)
-  override def onExpiration() = coordinator.onExpireJoin()
+  override def onExpiration() = {
+    coordinator.onExpireJoin()
+    tryToCompleteDelayedAction()
+  }
   override def onComplete() = coordinator.onCompleteJoin(group)
+
+  protected def tryToCompleteDelayedAction(): Unit = coordinator.groupManager.replicaManager.tryCompleteDelayedAction()
 }
 
 /**
@@ -56,6 +61,8 @@ private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
                                         remainingMs: Int) extends DelayedJoin(coordinator, group, delayMs) {
 
   override def tryComplete(): Boolean = false
+
+  override def onExpiration(): Unit = tryToCompleteDelayedAction()
 
   override def onComplete(): Unit = {
     group.inLock {

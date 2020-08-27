@@ -166,9 +166,10 @@ object AbstractCoordinatorConcurrencyTest {
       producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
       watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     }
-    def tryCompleteDelayedRequests(): Unit = {
-      watchKeys.map(producePurgatory.checkAndComplete)
-    }
+
+    def tryCompleteDelayedRequests(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
+
+    override def tryCompleteDelayedAction(): Unit = tryCompleteDelayedRequests()
 
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,

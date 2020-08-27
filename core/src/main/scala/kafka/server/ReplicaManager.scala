@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.Optional
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
@@ -558,10 +558,22 @@ class ReplicaManager(val config: KafkaConfig,
     localLog(topicPartition).map(_.parentDir)
   }
 
+  // visible for testing
+  val delayedActions = new LinkedBlockingQueue[() => Unit]()
+
+  def tryCompleteDelayedAction(): Unit = {
+    val action = delayedActions.poll()
+    if (action != null) action()
+  }
+
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied;
    * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
+   *
+   * Noted that all pending delayed check operations in a queue. All callers to ReplicaManager.appendRecords() are
+   * expected to take up to 1 item from that queue and check the completeness for all affected partitions, without
+   * holding any conflicting locks. (see tryToCompleteDelayedAction)
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -584,6 +596,27 @@ class ReplicaManager(val config: KafkaConfig,
                   new PartitionResponse(result.error, result.info.firstOffset.getOrElse(-1), result.info.logAppendTime,
                     result.info.logStartOffset, result.info.recordErrors.asJava, result.info.errorMessage)) // response status
       }
+
+      delayedActions.put {
+        () =>
+          localProduceResults.foreach {
+            case (topicPartition, result) =>
+              result.info.leaderHWIncremented.foreach {
+                incremented =>
+                  val requestKey = TopicPartitionOperationKey(topicPartition)
+                  if (incremented) {
+                    // some delayed operations may be unblocked after HW changed
+                    delayedProducePurgatory.checkAndComplete(requestKey)
+                    delayedFetchPurgatory.checkAndComplete(requestKey)
+                    delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+                  } else {
+                    // probably unblock some follower fetch requests since log end offset has been updated
+                    delayedFetchPurgatory.checkAndComplete(requestKey)
+                  }
+              }
+          }
+      }
+
 
       recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
 
