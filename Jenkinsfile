@@ -81,7 +81,7 @@ pipeline {
       matrix {
         agent { label 'ubuntu' }
         tools {
-          jdk "$JDK (latest)"
+          jdk "${JDK} (latest)"
         }
 	environment {
 	  SCALA_VERSION = "$SCALA"
@@ -105,6 +105,16 @@ pipeline {
             axis {
               name 'SCALA'
               values '2.12'
+            }
+          }
+          exclude {
+            axis {
+              name 'JDK'
+              values 'JDK 1.8'
+            }
+            axis {
+              name 'SCALA'
+              values '2.13'
             }
           }
         }
