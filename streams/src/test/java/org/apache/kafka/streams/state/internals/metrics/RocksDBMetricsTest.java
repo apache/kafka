@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
@@ -26,9 +27,11 @@ import org.junit.runner.RunWith;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.math.BigInteger;
 import java.util.Collections;
 import java.util.Map;
 
+import static org.easymock.EasyMock.eq;
 import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -44,10 +47,12 @@ import static org.powermock.api.easymock.PowerMock.verifyAll;
 public class RocksDBMetricsTest {
 
     private static final String STATE_LEVEL_GROUP = "stream-state-metrics";
-    private static final String THREAD_ID = "test-thread";
     private static final String TASK_ID = "test-task";
     private static final String STORE_TYPE = "test-store-type";
     private static final String STORE_NAME = "store";
+    private static final RocksDBMetricContext ROCKSDB_METRIC_CONTEXT =
+        new RocksDBMetricContext(TASK_ID, STORE_TYPE, STORE_NAME);
+
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
     private final StreamsMetricsImpl streamsMetrics = createStrictMock(StreamsMetricsImpl.class);
@@ -215,6 +220,27 @@ public class RocksDBMetricsTest {
         verifySumSensor(metricNamePrefix, true, description, RocksDBMetrics::numberOfFileErrorsSensor);
     }
 
+    @Test
+    public void shouldAddNumImmutableMemTableMetric() {
+        final String name = "num-entries-active-mem-table";
+        final String description = "Current total number of entries in the active memtable";
+        final Gauge<BigInteger> valueProvider = (config, now) -> BigInteger.valueOf(10);
+        streamsMetrics.addStoreLevelMutableMetric(
+            eq(TASK_ID),
+                eq(STORE_TYPE),
+                eq(STORE_NAME),
+                eq(name),
+                eq(description),
+                eq(RecordingLevel.INFO),
+                eq(valueProvider)
+        );
+        replay(streamsMetrics);
+
+        RocksDBMetrics.addNumEntriesActiveMemTableMetric(streamsMetrics, ROCKSDB_METRIC_CONTEXT, valueProvider);
+
+        verify(streamsMetrics);
+    }
+
     private void verifyRateAndTotalSensor(final String metricNamePrefix,
                                           final String descriptionOfTotal,
                                           final String descriptionOfRate,
@@ -268,14 +294,12 @@ public class RocksDBMetricsTest {
     private void setupStreamsMetricsMock(final String metricNamePrefix) {
         mockStatic(StreamsMetricsImpl.class);
         expect(streamsMetrics.storeLevelSensor(
-            THREAD_ID,
             TASK_ID,
             STORE_NAME,
             metricNamePrefix,
             RecordingLevel.DEBUG
         )).andReturn(sensor);
         expect(streamsMetrics.storeLevelTagMap(
-            THREAD_ID,
             TASK_ID,
             STORE_TYPE,
             STORE_NAME
@@ -286,8 +310,7 @@ public class RocksDBMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor =
-            sensorCreator.sensor(streamsMetrics, new RocksDBMetricContext(THREAD_ID, TASK_ID, STORE_TYPE, STORE_NAME));
+        final Sensor sensor = sensorCreator.sensor(streamsMetrics, ROCKSDB_METRIC_CONTEXT);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
