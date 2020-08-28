@@ -90,6 +90,7 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
+            doTest()
 	  }
 	  post {
 	    always {
@@ -109,6 +110,7 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
+            doTest()
 	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
 	  }
 	  post {
