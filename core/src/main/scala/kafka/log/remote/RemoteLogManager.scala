@@ -108,10 +108,8 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                        updateRemoteLogStartOffset: (TopicPartition, Long) => Unit,
                        rlmConfig: RemoteLogManagerConfig,
                        time: Time = Time.SYSTEM,
-                       localBootStrapServers: String,
                        brokerId: Int,
-                       clusterId: String = "",
-                       logDir: String) extends Logging with Closeable {
+                       clusterId: String = "", logDir: String) extends Logging with Closeable {
   private val leaderOrFollowerTasks: ConcurrentHashMap[TopicPartition, RLMTaskWithFuture] =
     new ConcurrentHashMap[TopicPartition, RLMTaskWithFuture]()
   private val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads,
@@ -134,16 +132,17 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
 
     val rsm = rsmClassLoader.loadClass(rlmConfig.remoteLogStorageManagerClass)
       .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
-    val rsmWrapper = new ClassLoaderAwareRemoteStorageManager(rsm, rsmClassLoader)
+    new ClassLoaderAwareRemoteStorageManager(rsm, rsmClassLoader)
+  }
 
+  private def configureRSM() = {
     val rsmProps = new util.HashMap[String, Any]()
     rlmConfig.rsmProps.foreach { case (k, v) => rsmProps.put(k, v) }
     rsmProps.put(KafkaConfig.RemoteLogRetentionMillisProp, rlmConfig.remoteLogRetentionMillis)
     rsmProps.put(KafkaConfig.RemoteLogRetentionBytesProp, rlmConfig.remoteLogRetentionBytes)
     rsmProps.put(KafkaConfig.BrokerIdProp, brokerId)
     rsmProps.put(CLUSTER_ID, clusterId)
-    rsmWrapper.configure(rsmProps)
-    rsmWrapper
+    remoteLogStorageManager.configure(rsmProps)
   }
 
   private def createRemoteLogMetadataManager(): RemoteLogMetadataManager = {
@@ -159,14 +158,17 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
         .newInstance().asInstanceOf[RemoteLogMetadataManager]
     }
 
+    rlmm
+  }
+
+  private def configureRLMM(localBootStrapServers:String): Unit = {
     val rlmmProps = new util.HashMap[String, Any]()
     rlmConfig.rlmmProps.foreach { case (k, v) => rlmmProps.put(k, v) }
     rlmmProps.put(KafkaConfig.LogDirProp, logDir)
     rlmmProps.put(KafkaConfig.BrokerIdProp, brokerId)
     rlmmProps.put(CLUSTER_ID, clusterId)
     rlmmProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, localBootStrapServers)
-    rlmm.configure(rlmmProps)
-    rlmm
+    remoteLogMetadataManager.configure(rlmmProps)
   }
 
   private val remoteLogStorageManager: ClassLoaderAwareRemoteStorageManager = createRemoteStorageManager()
@@ -194,8 +196,10 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
     convertToLeaderOrFollower(rlmTaskWithFuture.rlmTask)
   }
 
-  def onServerStarted(): Unit = {
-    remoteLogMetadataManager.onServerStarted()
+  def onEndpointCreated(serverEndPoint:String): Unit = {
+    // initialize and configure RSM and RLMM
+    configureRSM()
+    configureRLMM(serverEndPoint)
   }
 
   def storageManager(): RemoteStorageManager = {

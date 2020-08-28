@@ -124,9 +124,7 @@ class RemoteLogReaderTest {
 }
 
 class MockRemoteLogManager(threads: Int, taskQueueSize: Int)
-  extends RemoteLogManager((tp) => None, (tp, segment) => {}, MockRemoteLogManager.rlmConfig(threads, taskQueueSize),
-    new SystemTime, "localhost:9092", 1, "mock-cluster",
-    Files.createTempDirectory("kafka-test-").toString) {
+  extends RemoteLogManager((tp) => None, (tp, segment) => {}, MockRemoteLogManager.rlmConfig(threads, taskQueueSize), new SystemTime, 1, "mock-cluster", Files.createTempDirectory("kafka-test-").toString) {
   private val lock = new ReentrantReadWriteLock
 
   override def read(remoteStorageFetchInfo: RemoteStorageFetchInfo): FetchDataInfo = {

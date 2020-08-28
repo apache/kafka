@@ -36,7 +36,7 @@ import kafka.network.SocketServer
 import kafka.security.CredentialProvider
 import kafka.utils._
 import kafka.zk.{BrokerInfo, KafkaZkClient}
-import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils, CommonClientConfigs}
+import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, CommonClientConfigs, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter, _}
@@ -387,6 +387,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         dynamicConfigManager = new DynamicConfigManager(zkClient, dynamicConfigHandlers)
         dynamicConfigManager.startup()
 
+        // better to start RLM (RSM and RLMM) before processing any requests so that we may avoid missing any
+        //leader/isr requests.
+        val serverEndpoint = remoteLogManagerConfig.listenerName.map(ListenerName.normalised)
+          .map(l => brokerInfo.broker.endPoint(l)) // if no listener is found it throws BrokerEndPointNotAvailableException
+          .getOrElse(brokerInfo.broker.endPoints.head) // if no listener is configured, then return the first endpoint.
+        remoteLogManager.foreach(rlm => rlm.onEndpointCreated(serverEndpoint.host + ":" + serverEndpoint.port))
+
         socketServer.startProcessingRequests(authorizerFutures)
 
         brokerState.newState(RunningAsBroker)
@@ -395,7 +402,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         isStartingUp.set(false)
 
         AppInfoParser.registerAppInfo(metricsPrefix, config.brokerId.toString, metrics, time.milliseconds())
-        remoteLogManager.foreach(rlm => rlm.onServerStarted())
 
         info("started")
       }
@@ -428,24 +434,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         })
       }
 
-      val ep = remoteLogManagerConfig.listenerName match {
-        case Some(name) =>
-          info(s"### listener name matched with: $name")
-          val matchedEndpoints = advertisedEndPoints.filter(ep => name.equals(ep.listenerName.value()))
-          if(matchedEndpoints.isEmpty) {
-            throw new IllegalArgumentException(s"Listener with name ${name} does not exist on this broker")
-          }
-          matchedEndpoints.head
-        case None =>
-          info("### listener name did not match")
-          advertisedEndPoints.head
-      }
-      val serversStr: String =
-        if (ep.host == null || ep.host.trim.isEmpty) InetAddress.getLocalHost.getCanonicalHostName + ":" + ep.port
-        else ep.host + ":" + ep.port
-      info(s"#### serverStr: ${serversStr}")
-      Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time, serversStr,
-        config.brokerId, clusterId, config.logDirs.head))
+      Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time, config.brokerId, clusterId, config.logDirs.head))
     } else {
       None
     }

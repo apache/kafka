@@ -24,11 +24,12 @@ import java.util.{Collections, UUID}
 import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.log.remote.metadata.storage.RLMMWithTopicStorage
 import org.apache.kafka.common.log.remote.storage.RemoteLogSegmentMetadata.remoteLogSegmentId
 import org.apache.kafka.common.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.{Assert, Before, Test}
+import org.scalatest.Matchers.assertThrows
 
 import scala.jdk.CollectionConverters._
 
@@ -83,6 +84,44 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     super.setUp()
     tmpLogDirPath = Files.createTempDirectory("kafka-")
 
+  }
+
+  @Test
+  def testRLMMInitializedBeforeOps(): Unit = {
+    var mayBeRlmmWithTopicStorage: Option[RLMMWithTopicStorage] = None
+    try {
+      val brokerId = 0
+
+      mayBeRlmmWithTopicStorage = Some(createRLMMWithTopicStorage(tmpLogDirPathAsStr, brokerId, callConfigure = false))
+      val rlmmWithTopicStorage = mayBeRlmmWithTopicStorage.get
+
+      assertThrows[KafkaException] {
+        rlmmWithTopicStorage.earliestLogOffset(tp0, 1)
+      }
+
+      assertThrows[KafkaException] {
+        rlmmWithTopicStorage.highestLogOffset(tp0, 1)
+      }
+
+      assertThrows[KafkaException] {
+        rlmmWithTopicStorage.putRemoteLogSegmentData(rlSegMetTp0_0_100)
+      }
+
+      assertThrows[KafkaException] {
+        rlmmWithTopicStorage.remoteLogSegmentMetadata(tp0, 1L, 0)
+      }
+
+      assertThrows[KafkaException] {
+        rlmmWithTopicStorage.deleteRemoteLogSegmentMetadata(rlSegMetTp0_0_100)
+      }
+
+      assertThrows[KafkaException] {
+        rlmmWithTopicStorage.listRemoteLogSegments(tp0, 1)
+      }
+
+    } finally {
+      mayBeRlmmWithTopicStorage.foreach(x => x.close())
+    }
   }
 
   @Test
@@ -223,14 +262,15 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     }
   }
 
-  private def createRLMMWithTopicStorage(tmpLogDirPath: String, brokerId: Int = 1): RLMMWithTopicStorage = {
+  private def createRLMMWithTopicStorage(tmpLogDirPath: String, brokerId: Int = 1,
+                                         callConfigure: Boolean = true): RLMMWithTopicStorage = {
     val rlmmWithTopicStorage = new RLMMWithTopicStorage
-    configureRLMM(tmpLogDirPath, brokerId, rlmmWithTopicStorage)
+    if(callConfigure) configureRLMM(tmpLogDirPath, brokerId, rlmmWithTopicStorage)
     rlmmWithTopicStorage
   }
 
   private def configureRLMM(tmpLogDirPath: String, brokerId: Int,
-                            rlmmWithTopicStorage: RLMMWithTopicStorage) = {
+                            rlmmWithTopicStorage: RLMMWithTopicStorage): Unit = {
     val configs = new util.HashMap[String, Any]
     val logDir = new File(tmpLogDirPath, 1.toString)
     logDir.mkdirs()
@@ -238,7 +278,6 @@ class RLMMWithTopicStorageTest extends IntegrationTestHarness {
     configs.put(KafkaConfig.BrokerIdProp, brokerId)
     configs.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     rlmmWithTopicStorage.configure(configs)
-    rlmmWithTopicStorage.onServerStarted()
   }
 
   def waitTillReceiveExpected(fn: () => RemoteLogSegmentId, expected: RemoteLogSegmentId, waitTimeInMillis: Long = 30000): Boolean = {

@@ -151,10 +151,4 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
      * @param partitions topic partitions which have been stopped.
      */
     void onStopPartitions(Set<TopicPartition> partitions);
-
-    /**
-     * Callback to receive once server is started so that this class can run tasks which should be run only when the
-     * server is started.
-     */
-    void onServerStarted();
 }

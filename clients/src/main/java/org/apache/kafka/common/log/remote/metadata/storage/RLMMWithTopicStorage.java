@@ -41,6 +41,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -119,13 +120,13 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     @Override
     public void putRemoteLogSegmentData(RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws RemoteStorageException {
+        ensureInitialized();
+
         // insert remote log metadata into the topic.
         publishMessageToPartition(remoteLogSegmentMetadata);
     }
 
     private void publishMessageToPartition(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
-        ensureInitialized();
-
         log.info("Publishing messages to remote log metadata topic for remote log segment metadata [{}]",
                 remoteLogSegmentMetadata);
 
@@ -137,8 +138,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
                 log.error("Chosen partition no [{}] is more than the partition count: [{}]", partitionNo, noOfMetadataTopicPartitions);
             }
             producer.send(new ProducerRecord<>(REMOTE_LOG_METADATA_TOPIC_NAME, partitionNo,
-                            remoteLogSegmentId.topicPartition().toString(), remoteLogSegmentMetadata),
-                    callback).get(PUBLISH_TIMEOUT_SECS, TimeUnit.SECONDS);
+                            remoteLogSegmentId.topicPartition().toString(), remoteLogSegmentMetadata), callback)
+                    .get(PUBLISH_TIMEOUT_SECS, TimeUnit.SECONDS);
 
             final RecordMetadata recordMetadata = callback.recordMetadata();
             if (!recordMetadata.hasOffset()) {
@@ -252,10 +253,10 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         Objects.requireNonNull(leaderPartitions, "leaderPartitions can not be null");
         Objects.requireNonNull(followerPartitions, "followerPartitions can not be null");
 
+        ensureInitialized();
+
         log.info("Received leadership notifications with leader partitions {} and follower partitions {}",
                 leaderPartitions, followerPartitions);
-
-        initialize();
 
         final HashSet<TopicPartition> allPartitions = new HashSet<>(leaderPartitions);
         allPartitions.addAll(followerPartitions);
@@ -266,18 +267,11 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     public void onStopPartitions(Set<TopicPartition> partitions) {
         ensureInitialized();
 
-        initialize();
-
         // remove these partitions from the currently assigned topic partitions.
         consumerTask.removeAssignmentsForPartitions(partitions);
     }
 
-    @Override
-    public void onServerStarted() {
-        initialize();
-    }
-
-    private synchronized void initialize() {
+    private synchronized void initializeResources() {
         if (!initialized) {
             log.info("Initializing all the clients and resources.");
 
@@ -308,10 +302,17 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
 
     @Override
     public void close() throws IOException {
-        // closeClients
-        Utils.closeQuietly(producer, "Metadata Producer");
-        Utils.closeQuietly(consumer, "Metadata Consumer");
-        Utils.closeQuietly(adminClient, "Admin Client");
+        // close resources
+        try {
+            if (producer != null) producer.close(Duration.ofSeconds(60));
+        } catch (Exception ex) { /* ignore */}
+        try {
+            if (consumer != null) consumer.close(Duration.ofSeconds(60));
+        } catch (Exception ex) { /* ignore */}
+        try {
+            if (adminClient != null) adminClient.close(Duration.ofSeconds(60));
+        } catch (Exception ex) { /* ignore */}
+
         Utils.closeQuietly(consumerTask, "ConsumerTask");
         idWithSegmentMetadata = new ConcurrentSkipListMap<>();
         partitionsWithSegmentIds = new ConcurrentHashMap<>();
@@ -345,6 +346,9 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
         committedLogMetadataStore = new CommittedLogMetadataStore(metadataLogFile);
 
         configured = true;
+
+        initializeResources();
+
         log.info("RLMMWithTopicStorage is initialized: {}", this);
     }
 
@@ -382,6 +386,8 @@ public class RLMMWithTopicStorage implements RemoteLogMetadataManager, RemoteLog
     }
 
     public void updateRemoteLogSegmentMetadata(TopicPartition tp, RemoteLogSegmentMetadata metadata) {
+        ensureInitialized();
+
         final NavigableMap<Long, RemoteLogSegmentId> map = partitionsWithSegmentIds
                 .computeIfAbsent(tp, topicPartition -> new ConcurrentSkipListMap<>());
         if (metadata.markedForDeletion()) {
