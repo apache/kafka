@@ -23,6 +23,7 @@ import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -85,9 +86,6 @@ public class Sender implements Runnable {
     /* the maximum request size to attempt to send to the server */
     private final int maxRequestSize;
 
-    /* the number of acknowledgements to request from the server */
-    private final short acks;
-
     /* the number of times to retry a failed request before giving up */
     private final int retries;
 
@@ -118,20 +116,22 @@ public class Sender implements Runnable {
     // A per-partition queue of batches ordered by creation time for tracking the in-flight batches
     private final Map<TopicPartition, List<ProducerBatch>> inFlightBatches;
 
+    private DynamicProducerConfig dynamicConfig;
+
     public Sender(LogContext logContext,
                   KafkaClient client,
                   ProducerMetadata metadata,
                   RecordAccumulator accumulator,
                   boolean guaranteeMessageOrder,
                   int maxRequestSize,
-                  short acks,
                   int retries,
                   SenderMetricsRegistry metricsRegistry,
                   Time time,
                   int requestTimeoutMs,
                   long retryBackoffMs,
                   TransactionManager transactionManager,
-                  ApiVersions apiVersions) {
+                  ApiVersions apiVersions,
+                  ProducerConfig config) {
         this.log = logContext.logger(Sender.class);
         this.client = client;
         this.accumulator = accumulator;
@@ -139,7 +139,6 @@ public class Sender implements Runnable {
         this.guaranteeMessageOrder = guaranteeMessageOrder;
         this.maxRequestSize = maxRequestSize;
         this.running = true;
-        this.acks = acks;
         this.retries = retries;
         this.time = time;
         this.sensors = new SenderMetrics(metricsRegistry, metadata, client, time);
@@ -148,6 +147,7 @@ public class Sender implements Runnable {
         this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
+        this.dynamicConfig = new DynamicProducerConfig(client, config, time, logContext, requestTimeoutMs);
     }
 
     public List<ProducerBatch> inFlightBatches(TopicPartition tp) {
@@ -321,11 +321,13 @@ public class Sender implements Runnable {
         }
 
         long currentTimeMs = time.milliseconds();
-        long pollTimeout = sendProducerData(currentTimeMs);
+        dynamicConfig.maybeFetchConfigs(currentTimeMs);
+        currentTimeMs = time.milliseconds();
+        long pollTimeout = sendProducerData(currentTimeMs, dynamicConfig.getAcks());
         client.poll(pollTimeout, currentTimeMs);
     }
 
-    private long sendProducerData(long now) {
+    private long sendProducerData(long now, short acks) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
@@ -402,7 +404,7 @@ public class Sender implements Runnable {
             // otherwise the select time will be the time difference between now and the metadata expiry time;
             pollTimeout = 0;
         }
-        sendProduceRequests(batches, now);
+        sendProduceRequests(batches, now, acks);
         return pollTimeout;
     }
 
@@ -695,7 +697,7 @@ public class Sender implements Runnable {
     /**
      * Transfer the record batches into a list of produce requests on a per-node basis
      */
-    private void sendProduceRequests(Map<Integer, List<ProducerBatch>> collated, long now) {
+    private void sendProduceRequests(Map<Integer, List<ProducerBatch>> collated, long now, short acks) {
         for (Map.Entry<Integer, List<ProducerBatch>> entry : collated.entrySet())
             sendProduceRequest(now, entry.getKey(), acks, requestTimeoutMs, entry.getValue());
     }

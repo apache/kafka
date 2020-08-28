@@ -23,6 +23,8 @@ import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.common.Config
 import kafka.log.LogConfig
+import kafka.server.DynamicConfig.Client
+import kafka.server.DynamicConfig.ClientConfigs
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
@@ -30,7 +32,7 @@ import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, Config => JConfig}
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, ClientConfigAlteration}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.internals.Topic
@@ -365,19 +367,25 @@ object ConfigCommand extends Config {
         adminClient.incrementalAlterConfigs(Map(configResource -> alterLogLevelEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
 
       case ConfigType.User | ConfigType.Client =>
-        val nonQuotaConfigsToAdd = configsToBeAdded.keys.filterNot(QuotaConfigs.isQuotaConfig)
-        if (nonQuotaConfigsToAdd.nonEmpty)
-          throw new IllegalArgumentException(s"Only quota configs can be added for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $nonQuotaConfigsToAdd")
-        val nonQuotaConfigsToDelete = configsToBeDeleted.filterNot(QuotaConfigs.isQuotaConfig)
-        if (nonQuotaConfigsToDelete.nonEmpty)
-          throw new IllegalArgumentException(s"Only quota configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $nonQuotaConfigsToDelete")
+        val nonQuotaAndClientConfigsToAdd = configsToBeAdded.keys.filterNot(Client.isQuotaOrDynamicConfig)
+        if (nonQuotaAndClientConfigsToAdd.nonEmpty)
+          throw new IllegalArgumentException(s"Only quota and dynamic configs can be added for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $nonQuotaAndClientConfigsToAdd")
+        val nonQuotaAndClientConfigsToDelete = configsToBeDeleted.filterNot(Client.isQuotaOrDynamicConfig)
+        if (nonQuotaAndClientConfigsToDelete.nonEmpty)
+          throw new IllegalArgumentException(s"Only quota and dynamic configs can be deleted for '$entityTypeHead' using --bootstrap-server. Unexpected config names: $nonQuotaAndClientConfigsToDelete")
+        
+        val quotaConfigsToBeAddedMap = configsToBeAddedMap.filter{ case (key, _) => QuotaConfigs.isQuotaConfig(key)}
+        val quotaConfigsToBeDeleted = configsToBeDeleted.filter(QuotaConfigs.isQuotaConfig)
+        val clientConfigsToBeAddedMap = configsToBeAddedMap.filter{ case (key, _) => ClientConfigs.isClientConfig(key)}
+        val clientConfigsToBeDeleted = configsToBeDeleted.filter(ClientConfigs.isClientConfig)
 
+        val oldQuotaConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)
+        val oldClientConfig = getClientConfig(adminClient, entityTypes, entityNames)
 
-        val oldConfig = getClientQuotasConfig(adminClient, entityTypes, entityNames)
-
-        val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
-        if (invalidConfigs.nonEmpty)
-          throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+        val invalidQuotaConfigs = quotaConfigsToBeDeleted.filterNot(oldQuotaConfig.contains)
+        val invalidClientConfigs = clientConfigsToBeDeleted.filterNot(oldClientConfig.contains)
+        if (invalidQuotaConfigs.nonEmpty || invalidClientConfigs.nonEmpty)
+          throw new InvalidConfigurationException(s"Invalid config(s): ${(invalidQuotaConfigs ++ invalidClientConfigs).mkString(",")}")
 
         val alterEntityTypes = entityTypes.map { entType =>
           entType match {
@@ -394,16 +402,32 @@ object ConfigCommand extends Config {
         val entity = new ClientQuotaEntity(alterEntityMap)
 
         val alterOptions = new AlterClientQuotasOptions().validateOnly(false)
-        val alterOps = (configsToBeAddedMap.map { case (key, value) =>
+        val alterQuotaOps = (quotaConfigsToBeAddedMap.map { case (key, value) =>
           val doubleValue = try value.toDouble catch {
             case _: NumberFormatException =>
               throw new IllegalArgumentException(s"Cannot parse quota configuration value for ${key}: ${value}")
           }
           new ClientQuotaAlteration.Op(key, doubleValue)
-        } ++ configsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
+        } ++ quotaConfigsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
 
-        adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
-          .all().get(60, TimeUnit.SECONDS)
+        val alterConfigOps = (clientConfigsToBeAddedMap.map { case (key, value) =>
+          new ClientConfigAlteration.Op(key, value)
+        } ++ clientConfigsToBeDeleted.map(key => new ClientConfigAlteration.Op(key, null))).asJavaCollection
+
+
+        if (!alterQuotaOps.isEmpty) {
+          println("Sending alter quotas")
+          adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterQuotaOps)), alterOptions)
+            .all().get(60, TimeUnit.SECONDS)
+        }
+
+        if (!alterConfigOps.isEmpty) {
+          println(s"$alterConfigOps")
+          println("Sending alter configs")
+          adminClient.alterClientConfigs(Collections.singleton(new ClientConfigAlteration(entity, alterConfigOps)), alterOptions)
+            .all().get(60, TimeUnit.SECONDS)
+        }
+
 
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")
     }
@@ -424,6 +448,7 @@ object ConfigCommand extends Config {
         describeResourceConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
       case ConfigType.User | ConfigType.Client =>
         describeClientQuotasConfig(adminClient, entityTypes, entityNames)
+        describeClientConfig(adminClient, entityTypes, entityNames)
     }
   }
 
@@ -435,6 +460,8 @@ object ConfigCommand extends Config {
           adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get().asScala.toSeq
         case ConfigType.Broker | BrokerLoggerConfigType =>
           adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
+        case ConfigType.User =>
+          List("")
       })
 
     entities.foreach { entity =>
@@ -508,7 +535,27 @@ object ConfigCommand extends Config {
 
       val entityStr = (entitySubstr(ClientQuotaEntity.USER) ++ entitySubstr(ClientQuotaEntity.CLIENT_ID)).mkString(", ")
       val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
-      println(s"Configs for ${entityStr} are ${entriesStr}")
+      println(s"Quota configs for ${entityStr} are ${entriesStr}")
+    }
+  }
+
+  private def describeClientConfig(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
+    getAllClientConfigs(adminClient, entityTypes, entityNames).foreach { case (entity, entries) =>
+      val entityEntries = entity.entries.asScala
+
+      def entitySubstr(entityType: String): Option[String] =
+        entityEntries.get(entityType).map { name =>
+          val typeStr = entityType match {
+            case ClientQuotaEntity.USER => "user-principal"
+            case ClientQuotaEntity.CLIENT_ID => "client-id"
+          }
+          if (name != null) s"${typeStr} '${name}'"
+          else s"the default ${typeStr}"
+        }
+
+      val entityStr = (entitySubstr(ClientQuotaEntity.USER) ++ entitySubstr(ClientQuotaEntity.CLIENT_ID)).mkString(", ")
+      val entriesStr = entries.asScala.map(e => s"${e._1}=${e._2}").mkString(", ")
+      println(s"Dynamic configs for ${entityStr} are ${entriesStr}")
     }
   }
 
@@ -518,8 +565,22 @@ object ConfigCommand extends Config {
     getAllClientQuotasConfigs(adminClient, entityTypes, entityNames).headOption.map(_._2.asScala).getOrElse(Map.empty)
   }
 
+  private def getClientConfig(adminClient: Admin, entityTypes: List[String], entityNames: List[String]): Map[String, String] = {
+    getAllClientConfigs(adminClient, entityTypes, entityNames).headOption.map(_._2.asScala).getOrElse(Map.empty)
+  }
+
   private def getAllClientQuotasConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
-    val components = entityTypes.map(Some(_)).zipAll(entityNames.map(Some(_)), None, None).map { case (entityTypeOpt, entityNameOpt) =>
+    val components = getFilterComponents(entityTypes, entityNames)
+    adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala
+  }
+
+  private def getAllClientConfigs(adminClient: Admin, entityTypes: List[String], entityNames: List[String]) = {
+    val components = getFilterComponents(entityTypes, entityNames)
+    adminClient.describeClientConfigs(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala
+  }
+
+  private def getFilterComponents(entityTypes: List[String], entityNames: List[String]) = {
+    entityTypes.map(Some(_)).zipAll(entityNames.map(Some(_)), None, None).map { case (entityTypeOpt, entityNameOpt) =>
       val entityType = entityTypeOpt match {
         case Some(ConfigType.User) => ClientQuotaEntity.USER
         case Some(ConfigType.Client) => ClientQuotaEntity.CLIENT_ID
@@ -532,8 +593,6 @@ object ConfigCommand extends Config {
         case None => ClientQuotaFilterComponent.ofEntityType(entityType)
       }
     }
-
-    adminClient.describeClientQuotas(ClientQuotaFilter.containsOnly(components.asJava)).entities.get(30, TimeUnit.SECONDS).asScala
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {

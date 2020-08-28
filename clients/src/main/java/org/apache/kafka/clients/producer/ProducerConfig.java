@@ -101,6 +101,12 @@ public class ProducerConfig extends AbstractConfig {
                                            + " remains alive. This is the strongest available guarantee. This is equivalent to the acks=-1 setting."
                                            + "</ul>";
 
+    /**
+     * <code>enable.dynamic.config</code>
+     */
+    public static final String ENABLE_DYNAMIC_CONFIG_CONFIG = CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG;
+    public static final String ENABLE_DYNAMIC_CONFIG_DOC = CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_DOC;
+
     /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
     private static final String LINGER_MS_DOC = "The producer groups together any records that arrive in between request transmissions into a single batched request. "
@@ -308,6 +314,11 @@ public class ProducerConfig extends AbstractConfig {
                                         in("all", "-1", "0", "1"),
                                         Importance.HIGH,
                                         ACKS_DOC)
+                                .define(ENABLE_DYNAMIC_CONFIG_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.MEDIUM,
+                                        ENABLE_DYNAMIC_CONFIG_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
                                 .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0), Importance.MEDIUM, LINGER_MS_DOC)
@@ -551,7 +562,7 @@ public class ProducerConfig extends AbstractConfig {
         return userConfiguredTransactions || idempotenceEnabled;
     }
 
-    ProducerConfig(Map<?, ?> props, boolean doLog) {
+    public ProducerConfig(Map<?, ?> props, boolean doLog) {
         super(CONFIG, props, doLog);
     }
 

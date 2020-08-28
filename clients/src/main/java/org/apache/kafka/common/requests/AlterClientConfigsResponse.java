@@ -17,9 +17,9 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.message.AlterClientQuotasResponseData;
-import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntityData;
-import org.apache.kafka.common.message.AlterClientQuotasResponseData.EntryData;
+import org.apache.kafka.common.message.AlterClientConfigsResponseData;
+import org.apache.kafka.common.message.AlterClientConfigsResponseData.EntityData;
+import org.apache.kafka.common.message.AlterClientConfigsResponseData.EntryData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -32,11 +32,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class AlterClientQuotasResponse extends AbstractResponse {
+public class AlterClientConfigsResponse extends AbstractResponse {
 
-    private final AlterClientQuotasResponseData data;
+    private final AlterClientConfigsResponseData data;
 
-    public AlterClientQuotasResponse(Map<ClientQuotaEntity, ApiError> result, int throttleTimeMs) {
+    public AlterClientConfigsResponse(Map<ClientQuotaEntity, ApiError> result, int throttleTimeMs) {
         List<EntryData> entries = new ArrayList<>(result.size());
         for (Map.Entry<ClientQuotaEntity, ApiError> entry : result.entrySet()) {
             ApiError e = entry.getValue();
@@ -46,12 +46,12 @@ public class AlterClientQuotasResponse extends AbstractResponse {
                     .setEntity(toEntityData(entry.getKey())));
         }
 
-        this.data = new AlterClientQuotasResponseData()
+        this.data = new AlterClientConfigsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setEntries(entries);
     }
 
-    public AlterClientQuotasResponse(Collection<ClientQuotaEntity> entities, int throttleTimeMs, Throwable e) {
+    public AlterClientConfigsResponse(Collection<ClientQuotaEntity> entities, int throttleTimeMs, Throwable e) {
         ApiError apiError = ApiError.fromThrowable(e);
 
         List<EntryData> entries = new ArrayList<>(entities.size());
@@ -62,13 +62,13 @@ public class AlterClientQuotasResponse extends AbstractResponse {
                     .setEntity(toEntityData(entity)));
         }
 
-        this.data = new AlterClientQuotasResponseData()
+        this.data = new AlterClientConfigsResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setEntries(entries);
     }
 
-    public AlterClientQuotasResponse(Struct struct, short version) {
-        this.data = new AlterClientQuotasResponseData(struct, version);
+    public AlterClientConfigsResponse(Struct struct, short version) {
+        this.data = new AlterClientConfigsResponseData(struct, version);
     }
 
     public void complete(Map<ClientQuotaEntity, KafkaFutureImpl<Void>> futures) {
@@ -113,16 +113,16 @@ public class AlterClientQuotasResponse extends AbstractResponse {
     }
 
     private static List<EntityData> toEntityData(ClientQuotaEntity entity) {
-        List<AlterClientQuotasResponseData.EntityData> entityData = new ArrayList<>(entity.entries().size());
+        List<AlterClientConfigsResponseData.EntityData> entityData = new ArrayList<>(entity.entries().size());
         for (Map.Entry<String, String> entry : entity.entries().entrySet()) {
-            entityData.add(new AlterClientQuotasResponseData.EntityData()
+            entityData.add(new AlterClientConfigsResponseData.EntityData()
                     .setEntityType(entry.getKey())
                     .setEntityName(entry.getValue()));
         }
         return entityData;
     }
 
-    public static AlterClientQuotasResponse parse(ByteBuffer buffer, short version) {
-        return new AlterClientQuotasResponse(ApiKeys.ALTER_CLIENT_CONFIGS.parseResponse(version, buffer), version);
+    public static AlterClientConfigsResponse parse(ByteBuffer buffer, short version) {
+        return new AlterClientConfigsResponse(ApiKeys.ALTER_CLIENT_CONFIGS.parseResponse(version, buffer), version);
     }
 }

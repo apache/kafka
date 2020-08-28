@@ -50,6 +50,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.DescribeClientConfigsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
@@ -137,6 +138,8 @@ public abstract class AbstractCoordinator implements Closeable {
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
 
+    private DynamicConsumerConfig dynamicConfig;
+
 
     /**
      * Initialize the coordination manager.
@@ -155,6 +158,9 @@ public abstract class AbstractCoordinator implements Closeable {
         this.time = time;
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.dynamicConfig = new DynamicConsumerConfig(
+            client, rebalanceConfig, time, logContext
+        );
     }
 
     /**
@@ -356,6 +362,8 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         startHeartbeatThreadIfNeeded();
+        // This will only fetch configs and block for them if this is before the first JoinGroupRequest
+        dynamicConfig.maybeFetchInitialConfigs(time.milliseconds());
         return joinGroupIfNeeded(timer);
     }
 
@@ -504,11 +512,28 @@ public abstract class AbstractCoordinator implements Closeable {
                             log.info("Successfully joined group with generation {}", generation.generationId);
                             state = MemberState.STABLE;
                             rejoinNeeded = false;
-                            // record rebalance latency
-                            lastRebalanceEndMs = time.milliseconds();
-                            sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
-                            lastRebalanceStartMs = -1L;
 
+                            boolean shouldRecordRebalanceLatency = true;
+
+                            // If session timeout was dynamically updated
+                            if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate()) {
+                                if (rebalanceConfig.readyToUpdateTimeout()) {
+                                    // This join group request was to update the session timeout
+                                    rebalanceConfig.coordinatorTimeoutUpdated(); 
+                                    shouldRecordRebalanceLatency = false;
+                                } else {
+                                    // If there was a join group in progress then this is when the in-progress request is completed
+                                    // now another join request needs to be sent to update the session timeout
+                                    requestRejoin();
+                                    rebalanceConfig.setReadyToUpdateTimeout(true);
+                                }
+                            }
+                            if (shouldRecordRebalanceLatency) {
+                                // record rebalance latency
+                                lastRebalanceEndMs = time.milliseconds();
+                                sensors.successfulRebalanceSensor.record(lastRebalanceEndMs - lastRebalanceStartMs);
+                                lastRebalanceStartMs = -1L;
+                            }
                             if (heartbeatThread != null)
                                 heartbeatThread.enable();
                         } else {
@@ -554,7 +579,7 @@ public abstract class AbstractCoordinator implements Closeable {
         JoinGroupRequest.Builder requestBuilder = new JoinGroupRequest.Builder(
                 new JoinGroupRequestData()
                         .setGroupId(rebalanceConfig.groupId)
-                        .setSessionTimeoutMs(this.rebalanceConfig.sessionTimeoutMs)
+                        .setSessionTimeoutMs(this.rebalanceConfig.getSessionTimout())
                         .setMemberId(this.generation.memberId)
                         .setGroupInstanceId(this.rebalanceConfig.groupInstanceId.orElse(null))
                         .setProtocolType(protocolType())
@@ -1320,6 +1345,39 @@ public abstract class AbstractCoordinator implements Closeable {
 
                         client.pollNoWakeup();
                         long now = time.milliseconds();
+                        RequestFuture<ClientResponse> configsFuture = dynamicConfig.maybeFetchConfigs(now);
+                        if (configsFuture != null) {
+                            configsFuture.addListener(new RequestFutureListener<ClientResponse>() {
+                                @Override
+                                public void onSuccess(ClientResponse resp) {
+                                    synchronized (AbstractCoordinator.this) {
+                                        dynamicConfig.handleConfigsResponse((DescribeClientConfigsResponse) resp.responseBody());
+                                        // Need to rejoin group so that the coordinator changes the session timeout in this 
+                                        // group member's metadata if the session timeout was dynamically updated.
+                                        // Also need to reset timers in HB thread with new interval and timeout.
+                                        // 1. The heartbeat interval timer is reset when sentHeartbeat is called.
+                                        // 2. The session timeout timer is reset when receiveHeartbeat is called.
+                                        if (rebalanceConfig.coordinatorNeedsSessionTimeoutUpdate()) {
+                                            if (!rejoinNeededOrPending()) {
+                                                // No join group in progress so set the flags to send another
+                                                requestRejoin();
+                                                rebalanceConfig.setReadyToUpdateTimeout(true);
+                                            } else {
+                                                // If a join group request is in progress, need to wait for it to complete before sending another
+                                                rebalanceConfig.setReadyToUpdateTimeout(false);
+                                            }
+                                        }
+                                    }
+                                }
+                                @Override
+                                public void onFailure(RuntimeException e) {
+                                    synchronized (AbstractCoordinator.this) {
+                                        dynamicConfig.handleFailedConfigsResponse();
+                                    }
+                                }
+                            });
+                        }
+
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null || lookupCoordinator().failed())

@@ -53,6 +53,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ClientConfigAlteration;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
@@ -149,6 +150,8 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.AlterClientConfigsRequest;
+import org.apache.kafka.common.requests.AlterClientConfigsResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasRequest;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
@@ -176,6 +179,8 @@ import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
+import org.apache.kafka.common.requests.DescribeClientConfigsRequest;
+import org.apache.kafka.common.requests.DescribeClientConfigsResponse;
 import org.apache.kafka.common.requests.DescribeClientQuotasRequest;
 import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
@@ -4069,6 +4074,64 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
 
         return new AlterClientQuotasResult(Collections.unmodifiableMap(futures));
+    }
+
+    public DescribeClientConfigsResult describeClientConfigs(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
+        KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, String>>> future = new KafkaFutureImpl<>();
+
+        final long now = time.milliseconds();
+        runnable.call(new Call("describeClientConfigs", calcDeadlineMs(now, options.timeoutMs()),
+                new LeastLoadedNodeProvider()) {
+
+                @Override
+                DescribeClientConfigsRequest.Builder createRequest(int timeoutMs) {
+                    return new DescribeClientConfigsRequest.Builder(filter, null, false);
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    DescribeClientConfigsResponse response = (DescribeClientConfigsResponse) abstractResponse;
+                    response.complete(future);
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    future.completeExceptionally(throwable);
+                }
+            }, now);
+
+        return new DescribeClientConfigsResult(future);
+    }
+
+    @Override
+    public AlterClientConfigsResult alterClientConfigs(Collection<ClientConfigAlteration> entries, AlterClientQuotasOptions options) {
+        Map<ClientQuotaEntity, KafkaFutureImpl<Void>> futures = new HashMap<>(entries.size());
+        for (ClientConfigAlteration entry : entries) {
+            futures.put(entry.entity(), new KafkaFutureImpl<>());
+        }
+
+        final long now = time.milliseconds();
+        runnable.call(new Call("alterClientConfigs", calcDeadlineMs(now, options.timeoutMs()),
+                new LeastLoadedNodeProvider()) {
+
+                @Override
+                AlterClientConfigsRequest.Builder createRequest(int timeoutMs) {
+                    return new AlterClientConfigsRequest.Builder(entries, options.validateOnly());
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    AlterClientConfigsResponse response = (AlterClientConfigsResponse) abstractResponse;
+                    response.complete(futures);
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(futures.values(), throwable);
+                }
+            }, now);
+
+        return new AlterClientConfigsResult(Collections.unmodifiableMap(futures));
     }
 
     /**

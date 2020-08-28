@@ -64,6 +64,7 @@
 
     <subpackage name="config">
       <allow pkg="org.apache.kafka.common.config" />
+      <allow pkg="org.apache.kafka.common.quota" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.metrics" />
     </subpackage>

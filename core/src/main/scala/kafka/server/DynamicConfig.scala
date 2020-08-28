@@ -25,6 +25,8 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 
 import scala.jdk.CollectionConverters._
 
@@ -78,25 +80,49 @@ object DynamicConfig {
     def isQuotaConfig(name: String): Boolean = configNames.contains(name)
   }
 
+  object ClientConfigs {
+    val AcksOverrideProp = ProducerConfig.ACKS_CONFIG
+    val SessionTimeoutOverrideProp = CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG
+    val HeartbeatIntervalOverrideProp = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG
+    val SupportedConfigsProp = "supported.configs"
+
+    private val configNames = Set(AcksOverrideProp,
+      SessionTimeoutOverrideProp, HeartbeatIntervalOverrideProp, SupportedConfigsProp)
+
+    def isClientConfig(name: String): Boolean = configNames.contains(name)
+  }
+
   object Client {
     // Properties
     val ProducerByteRateOverrideProp = QuotaConfigs.ProducerByteRateOverrideProp
     val ConsumerByteRateOverrideProp = QuotaConfigs.ConsumerByteRateOverrideProp
     val RequestPercentageOverrideProp = QuotaConfigs.RequestPercentageOverrideProp
     val ControllerMutationOverrideProp = QuotaConfigs.ControllerMutationOverrideProp
+    val AcksOverrideProp = ClientConfigs.AcksOverrideProp
+    val SessionTimeoutOverrideProp = ClientConfigs.SessionTimeoutOverrideProp
+    val HeartbeatIntervalOverrideProp = ClientConfigs.HeartbeatIntervalOverrideProp
+    val SupportedConfigsProp = ClientConfigs.SupportedConfigsProp
 
     // Defaults
     val DefaultProducerOverride = ClientQuotaManagerConfig.QuotaDefault
     val DefaultConsumerOverride = ClientQuotaManagerConfig.QuotaDefault
     val DefaultRequestOverride = ClientRequestQuotaManager.QuotaRequestPercentDefault
     val DefaultControllerMutationOverride = ControllerMutationQuotaManager.QuotaControllerMutationDefault
+    val DefaultAcksOverride = "1"
+    val DefaultSessionTimeoutOverride = 10000
+    val DefaultHeartbeatIntervalOverride = 3000
+    val DefaultSupportedConfigs = ""
 
     // Documentation
     val ProducerOverrideDoc = "A rate representing the upper bound (bytes/sec) for producer traffic."
     val ConsumerOverrideDoc = "A rate representing the upper bound (bytes/sec) for consumer traffic."
     val RequestOverrideDoc = "A percentage representing the upper bound of time spent for processing requests."
+    val AcksOverrideDoc = "Number of acknowlegments to be received from replica assignments"
+    val SessionTimeoutOverrideDoc = "Consumer group session timeout"
+    val HeartbeatIntervalOverrideDoc = "Consumer group heartbeat interval"
     val ControllerMutationOverrideDoc = "The rate at which mutations are accepted for the create topics request, " +
       "the create partitions request and the delete topics request. The rate is accumulated by the number of partitions created or deleted."
+    val SupportedConfigsDoc = "Configs supported for each connection"
 
     // Definitions
     private val clientConfigs = new ConfigDef()
@@ -104,10 +130,24 @@ object DynamicConfig {
       .define(ConsumerByteRateOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ConsumerOverrideDoc)
       .define(RequestPercentageOverrideProp, DOUBLE, DefaultRequestOverride, MEDIUM, RequestOverrideDoc)
       .define(ControllerMutationOverrideProp, DOUBLE, DefaultControllerMutationOverride, MEDIUM, ControllerMutationOverrideDoc)
+      .define(AcksOverrideProp, STRING, DefaultAcksOverride, ConfigDef.ValidString.in("all", "-1", "0", "1"), HIGH, AcksOverrideDoc)
+      .define(
+        SessionTimeoutOverrideProp, 
+        INT, 
+        DefaultSessionTimeoutOverride, 
+        ConfigDef.Range.between(Defaults.GroupMinSessionTimeoutMs, Defaults.GroupMaxSessionTimeoutMs), 
+        HIGH, 
+        SessionTimeoutOverrideDoc)
+      .define(HeartbeatIntervalOverrideProp, INT, DefaultHeartbeatIntervalOverride, HIGH, HeartbeatIntervalOverrideDoc)
+      .define(SupportedConfigsProp, LIST, DefaultSupportedConfigs, MEDIUM, SupportedConfigsDoc)
 
     def configKeys = clientConfigs.configKeys
 
     def names = clientConfigs.names
+
+    def isQuotaOrDynamicConfig(name: String): Boolean = names.contains(name)
+
+    def typeOf(name: String): Option[ConfigDef.Type] = Option(configKeys.get(name)).map(_.`type`)
 
     def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
   }

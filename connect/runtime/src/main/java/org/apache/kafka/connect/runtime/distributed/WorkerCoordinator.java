@@ -100,7 +100,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.incrementalAssignor = new IncrementalCooperativeAssignor(logContext, time, maxDelay);
         this.eagerAssignor = new EagerAssignor(logContext);
         this.currentConnectProtocol = protocolCompatibility;
-        this.coordinatorDiscoveryTimeoutMs = config.heartbeatIntervalMs;
+        this.coordinatorDiscoveryTimeoutMs = config.getHeartbeatInterval();
         this.lastCompletedGenerationId = Generation.NO_GENERATION.generationId;
     }
 

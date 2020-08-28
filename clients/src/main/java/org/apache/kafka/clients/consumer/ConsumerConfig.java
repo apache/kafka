@@ -84,6 +84,12 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String HEARTBEAT_INTERVAL_MS_DOC = CommonClientConfigs.HEARTBEAT_INTERVAL_MS_DOC;
 
     /**
+     * <code>enable.dynamic.config</code>
+     */
+    public static final String ENABLE_DYNAMIC_CONFIG_CONFIG = CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_CONFIG;
+    public static final String ENABLE_DYNAMIC_CONFIG_DOC = CommonClientConfigs.ENABLE_DYNAMIC_CONFIG_DOC;
+
+    /**
      * <code>bootstrap.servers</code>
      */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -342,6 +348,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         3000,
                                         Importance.HIGH,
                                         HEARTBEAT_INTERVAL_MS_DOC)
+                                .define(ENABLE_DYNAMIC_CONFIG_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.MEDIUM,
+                                        ENABLE_DYNAMIC_CONFIG_DOC)
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.LIST,
                                         Collections.singletonList(RangeAssignor.class),

@@ -179,6 +179,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
         case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotasRequest(request)
+        case ApiKeys.DESCRIBE_CLIENT_CONFIGS => handleDescribeClientConfigsRequest(request)
+        case ApiKeys.ALTER_CLIENT_CONFIGS => handleAlterClientConfigsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3005,6 +3007,40 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
+  }
+
+  def handleDescribeClientConfigsRequest(request: RequestChannel.Request): Unit = {
+    val describeClientConfigsRequest = request.body[DescribeClientConfigsRequest]
+    if (authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
+      val user = request.session.principal.getName
+      val clientInfo = request.context.clientInformation
+      info(s"client information ${clientInfo.toString}")
+      val supportedConfigs = if (describeClientConfigsRequest.supportedConfigs == null) null else describeClientConfigsRequest.supportedConfigs.asScala.toList
+      val result = adminManager.describeClientConfigs(describeClientConfigsRequest.filter(user), supportedConfigs, request.context.connectionId)
+        .map { case (entity, configs) =>
+          entity -> configs.asJava
+        }.asJava
+
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new DescribeClientConfigsResponse(result, requestThrottleMs))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        describeClientConfigsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
+  }
+
+  def handleAlterClientConfigsRequest(request: RequestChannel.Request): Unit = {
+    val alterClientConfigsRequest = request.body[AlterClientConfigsRequest]
+
+    if (authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
+      val result = adminManager.alterClientConfigs(alterClientConfigsRequest.entries().asScala.toSeq,
+        alterClientConfigsRequest.validateOnly()).asJava
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new AlterClientConfigsResponse(result, requestThrottleMs))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        alterClientConfigsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
   }
 
