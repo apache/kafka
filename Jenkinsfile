@@ -54,12 +54,16 @@ void setBuildStatus(String context, String message, String state) {
 }
 
 def doValidation() {
-  sh '''
-    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-        --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\" \
-        || { echo 'Validation steps failed'; exit 1; }
-  '''
+  try {
+    sh '''
+      ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
+	  spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+	  --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\" \
+	  || { echo 'Validation steps failed'; exit 1; }
+    '''
+  } catch(err) {
+    error('Validation checks failed')
+  }
 }
 
 def doTest() {
