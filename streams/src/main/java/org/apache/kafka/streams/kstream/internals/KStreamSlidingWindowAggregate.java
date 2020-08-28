@@ -156,9 +156,8 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     // to catch the current record's right window, if it exists, without more calls to the store
                     timestamp + 1)
             ) {
-                KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next;
                 while (iterator.hasNext()) {
-                    next = iterator.next();
+                    final KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> next = iterator.next();
                     windowStartTimes.add(next.key.window().start());
                     final long startTime = next.key.window().start();
                     final long endTime = startTime + windows.timeDifferenceMs();
@@ -229,8 +228,13 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             if (windowEnd > closeTime) {
                 //get aggregate from existing window
                 final Agg oldAgg = getValueOrNull(valueAndTime);
-                //add record's value to existing aggregate
-                final Agg newAgg = windowStart == timestamp + 1 ? oldAgg : aggregator.apply(key, value, oldAgg);
+                final Agg newAgg;
+                // keep old aggregate if adding a right window, else add new record's value
+                if (windowStart == timestamp + 1) {
+                    newAgg = oldAgg;
+                } else {
+                    newAgg = aggregator.apply(key, value, oldAgg);
+                }
                 final long newTimestamp = oldAgg == null ? timestamp : Math.max(timestamp, valueAndTime.timestamp());
                 windowStore.put(
                     key,

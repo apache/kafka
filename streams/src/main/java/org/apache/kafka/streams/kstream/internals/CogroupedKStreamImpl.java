@@ -62,7 +62,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         groupPatterns.put((KGroupedStreamImpl<K, ?>) groupedStream,
-            (Aggregator<? super K, ? super Object, VOut>) aggregator);
+                          (Aggregator<? super K, ? super Object, VOut>) aggregator);
         return this;
     }
 
