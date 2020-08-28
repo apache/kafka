@@ -112,7 +112,6 @@ object DynamicConfig {
     val DefaultSessionTimeoutOverride = 10000
     val DefaultHeartbeatIntervalOverride = 3000
     val DefaultSupportedConfigs = ""
-\
 
     // Documentation
     val ProducerOverrideDoc = "A rate representing the upper bound (bytes/sec) for producer traffic."

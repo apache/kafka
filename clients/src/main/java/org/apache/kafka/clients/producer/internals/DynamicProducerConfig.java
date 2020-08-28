@@ -95,7 +95,7 @@ public class DynamicProducerConfig {
                 updater.sentConfigsRequest();
                 RequestCompletionHandler callback = response -> handleConfigsResponse(response);
                 ClientRequest clientRequest = client
-                    .newClientRequest(node.idString(), updater.newRequestBuilder(this.clientId, this.supportedConfigs), now, true, requestTimeoutMs, callback);
+                    .newClientRequest(node.idString(), updater.newRequestBuilder(this.clientId, this.supportedConfigs), now, true, requestTimeoutMs, null, null, callback);
                 this.client.send(clientRequest, now);
                 log.info("Sent DescribeClientConfigsRequest");
             }
