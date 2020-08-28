@@ -74,31 +74,6 @@ def doTest() {
   '''
 }
 
-
-def makeStage(String jdk, String scala) {
-  return {
-    stage(jdk) {
-      agent { label 'ubuntu' }
-      tools {
-	jdk '${jdk} (latest)'
-      }
-      environment {
-	SCALA_VERSION=scala
-      }
-      steps {
-	sh 'gradle -version'
-	doValidation()
-	doTest()
-      }
-      post {
-	always {
-	  junit '**/build/test-results/**/TEST-*.xml'
-	}
-      }
-    }
-  }
-}
-
 pipeline {
   agent none
   stages {
@@ -136,7 +111,6 @@ pipeline {
 	    sh 'gradle -version'
 	    doValidation()
             doTest()
-	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
 	  }
 	  post {
 	    always {
@@ -145,7 +119,25 @@ pipeline {
 	  }
 	}
        
-        makeStage("JDK 14", "2.13")
+	stage('JDK 14') {
+          agent { label 'ubuntu' }
+	  tools {
+	    jdk 'JDK 14 (latest)'
+	  }
+	  environment {
+	    SCALA_VERSION=2.13
+	  }
+	  steps {
+	    sh 'gradle -version'
+	    doValidation()
+            doTest()
+	  }
+	  post {
+	    always {
+	      junit '**/build/test-results/**/TEST-*.xml'
+	    }
+	  }
+	}
       }
     }
   }
