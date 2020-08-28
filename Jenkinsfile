@@ -58,7 +58,7 @@ pipeline {
 	  }
 	  steps {
 	    sh 'gradle -version'
-	    validation('2.12')
+	    doValidation('2.12')
 	  }
 	}
 
@@ -68,7 +68,7 @@ pipeline {
 	  }
 	  steps {
 	    sh 'gradle -version'
-	    validation('2.13')
+	    doValidation('2.13')
 	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
 	  }
 	}
