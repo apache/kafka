@@ -80,30 +80,34 @@ pipeline {
     stage('Build') {
       parallel {
 	stage('JDK 8') {
-	  tools {
-	    jdk 'JDK 1.8 (latest)'
-	  }
-          environment {
-            SCALA_VERSION=2.12
+          node {
+	    ools {
+	      jdk 'JDK 1.8 (latest)'
+	    }
+	    environment {
+	      SCALA_VERSION=2.12
+	    }
+	    steps {
+	      sh 'gradle -version'
+	      doValidation()
+	    }
           }
-	  steps {
-	    sh 'gradle -version'
-	    doValidation()
-	  }
 	}
 
 	stage('JDK 11') {
-	  tools {
-	    jdk 'JDK 11 (latest)'
-	  }
-          environment {
-            SCALA_VERSION=2.13
+          node {
+	    tools {
+	      jdk 'JDK 11 (latest)'
+	    }
+	    environment {
+	      SCALA_VERSION=2.13
+	    }
+	    steps {
+	      sh 'gradle -version'
+	      doValidation()
+	      // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
+	    }
           }
-	  steps {
-	    sh 'gradle -version'
-	    doValidation()
-	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
-	  }
 	}
       }
     }
