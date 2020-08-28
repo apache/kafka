@@ -43,7 +43,7 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
   }
   override def onComplete(): Unit = coordinator.onCompleteJoin(group)
 
-  protected def tryToCompleteDelayedAction(): Unit = coordinator.groupManager.replicaManager.tryCompleteDelayedAction()
+  private def tryToCompleteDelayedAction(): Unit = coordinator.groupManager.replicaManager.tryCompleteDelayedAction()
 }
 
 /**

@@ -563,8 +563,8 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    * try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
-   * are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle(),
-   * at which point, no conflicting locks will be held.
+   * are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
+   * expiration thread for certain delayed operations (e.g. DelayedJoin)
    */
   def tryCompleteDelayedAction(): Unit = {
     val action = delayedActions.poll()
@@ -576,8 +576,8 @@ class ReplicaManager(val config: KafkaConfig,
    * the callback function will be triggered either when timeout or the required acks are satisfied;
    * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
    *
-   * Noted that all pending delayed check operations in a queue. All callers to ReplicaManager.appendRecords() are
-   * expected to take up to 1 item from that queue and check the completeness for all affected partitions, without
+   * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecords()
+   * are expected to take up to 1 item from that queue and check the completeness for all affected partitions, without
    * holding any conflicting locks. (see tryToCompleteDelayedAction)
    */
   def appendRecords(timeout: Long,

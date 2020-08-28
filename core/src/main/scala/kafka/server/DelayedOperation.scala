@@ -99,16 +99,6 @@ abstract class DelayedOperation(override val delayMs: Long,
   def tryComplete(): Boolean
 
   /**
-   * Thread-safe variant of tryComplete() that attempts completion only if the lock can be acquired
-   * without blocking.
-   *
-   * If threadA acquires the lock and performs the check for completion before completion criteria is met
-   * and threadB satisfies the completion criteria, but fails to acquire the lock because threadA has not
-   * yet released the lock, we need to ensure that completion is attempted again without blocking threadA
-   * or threadB. `tryCompletePending` is set by threadB when it fails to acquire the lock and at least one
-   * of threadA or threadB will attempt completion of the operation if this flag is set. This ensures that
-   * every invocation of `maybeTryComplete` is followed by at least one invocation of `tryComplete` until
-   * the operation is actually completed.
    *
    * There is a long story about using "lock" or "tryLock".
    *
@@ -121,9 +111,9 @@ abstract class DelayedOperation(override val delayMs: Long,
    *
    * Now, we go back to use "lock" and make sure the thread which tries to complete delayed requests does NOT hold lock.
    * The approach is that ReplicaManager collects all actions, which are used to complete delayed requests, in a queue.
-   * KafkaApis.handle() picks up and then execute an action when no lock is held.
+   * KafkaApis.handle() and the expiration thread for certain delayed operations (e.g. DelayedJoin)
    */
-  private[server] def maybeTryComplete(): Boolean = inLock(lock)(tryComplete())
+  private[server] def safeTryComplete(): Boolean = inLock(lock)(tryComplete())
 
   /*
    * run() method defines a task that is executed on timeout
@@ -237,7 +227,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       }
     }
 
-    isCompletedByMe = operation.maybeTryComplete()
+    isCompletedByMe = operation.safeTryComplete()
     if (isCompletedByMe)
       return true
 
@@ -364,7 +354,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         if (curr.isCompleted) {
           // another thread has completed this operation, just remove it
           iter.remove()
-        } else if (curr.maybeTryComplete()) {
+        } else if (curr.safeTryComplete()) {
           iter.remove()
           completed += 1
         }
