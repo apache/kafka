@@ -388,11 +388,11 @@ public class SlidingWindowedKStreamImplTest {
 
     @Test
     public void shouldDropWindowsOutsideOfRetention() {
-        final WindowBytesStoreSupplier storeSupplies = Stores.inMemoryWindowStore("aggregated", ofMillis(1200L), ofMillis(100L), false);
+        final WindowBytesStoreSupplier storeSupplier = Stores.inMemoryWindowStore("aggregated", ofMillis(1200L), ofMillis(100L), false);
         windowedStream.aggregate(
             MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
-            Materialized.<String, String>as(storeSupplies)
+            Materialized.<String, String>as(storeSupplier)
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String())
                 .withCachingDisabled());

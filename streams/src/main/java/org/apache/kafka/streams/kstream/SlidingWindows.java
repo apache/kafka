@@ -48,9 +48,9 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * <ul>
  *     <li>window {@code [3000;8000]} contains [1] (created when first record enters the window)</li>
  *     <li>window {@code [4200;9200]} contains [1,2] (created when second record enters the window)</li>
- *     <li>window {@code [7400;124000]} contains [1,2,3] (created when third record enters the window)</li>
- *     <li>window {@code [8001;130001]} contains [2,3] (created when the first record drops out of the window)</li>
- *     <li>window {@code [9201;142001]} contains [3] (created when the second record drops out of the window)</li>
+ *     <li>window {@code [7400;12400]} contains [1,2,3] (created when third record enters the window)</li>
+ *     <li>window {@code [8001;13001]} contains [2,3] (created when the first record drops out of the window)</li>
+ *     <li>window {@code [9201;14201]} contains [3] (created when the second record drops out of the window)</li>
  * </ul>
  *<p>
  * Note that while SlidingWindows are of a fixed size, as are {@link TimeWindows}, the start and end points of the window
@@ -96,7 +96,7 @@ public final class SlidingWindows {
         if (timeDifferenceMs < 0) {
             throw new IllegalArgumentException("Window time difference must not be negative.");
         }
-        final String msgPrefixGrace = prepareMillisCheckFailMsgPrefix(grace, "afterWindowEnd");
+        final String msgPrefixGrace = prepareMillisCheckFailMsgPrefix(grace, "grace");
         final long graceMs = ApiUtils.validateMillisecondDuration(grace, msgPrefixGrace);
         if (graceMs < 0) {
             throw new IllegalArgumentException("Window grace period must not be negative.");
