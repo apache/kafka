@@ -109,6 +109,19 @@ abstract class DelayedOperation(override val delayMs: Long,
    * of threadA or threadB will attempt completion of the operation if this flag is set. This ensures that
    * every invocation of `maybeTryComplete` is followed by at least one invocation of `tryComplete` until
    * the operation is actually completed.
+   *
+   * There is a long story about using "lock" or "tryLock".
+   *
+   * 1) using lock - There was a lot of cases that a thread holds a group lock and then it tries to hold more group
+   * locks to complete delayed requests. Unfortunately, the scenario causes deadlock and so we had introduced the
+   * "tryLock" to avoid deadlock.
+   *
+   * 2) using tryLock -  However, the "tryLock" causes another issue that the delayed requests may be into
+   * oblivion if the thread, which should complete the delayed requests, fails to get the lock.
+   *
+   * Now, we go back to use "lock" and make sure the thread which tries to complete delayed requests does NOT hold lock.
+   * The approach is that ReplicaManager collects all actions, which are used to complete delayed requests, in a queue.
+   * KafkaApis.handle() picks up and then execute an action when no lock is held.
    */
   private[server] def maybeTryComplete(): Boolean = inLock(lock)(tryComplete())
 
