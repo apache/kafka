@@ -91,7 +91,8 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                 materialized,
                 builder,
                 CogroupedKStreamImpl.AGGREGATE_NAME);
-        return aggregateBuilder.build(groupPatterns,
+        return aggregateBuilder.build(
+                groupPatterns,
                 initializer,
                 new NamedInternal(named),
                 materialize(materializedInternal),
@@ -101,7 +102,6 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
                         null,
                 materializedInternal.valueSerde(),
                 materializedInternal.queryableStoreName(),
-                null,
                 sessionWindows,
                 sessionMerger);
     }

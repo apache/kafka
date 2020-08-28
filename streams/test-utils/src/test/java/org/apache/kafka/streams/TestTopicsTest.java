@@ -334,7 +334,7 @@ public class TestTopicsTest {
     public void testNonExistingOutputTopic() {
         final TestOutputTopic<Long, String> outputTopic =
             testDriver.createOutputTopic("no-exist", longSerde.deserializer(), stringSerde.deserializer());
-        assertThrows("Unknown topic", IllegalArgumentException.class, outputTopic::readRecord);
+        assertThrows("Uninitialized topic", NoSuchElementException.class, outputTopic::readRecord);
     }
 
     @Test

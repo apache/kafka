@@ -78,6 +78,8 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
         }
         latch.await()
       }
+
+      override def preempt(): Unit = {}
     }
     initialController.eventManager.put(illegalStateEvent)
     // Check that we have shutdown the scheduler (via onControllerResigned)

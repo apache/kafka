@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
+import org.apache.kafka.common.internals.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -228,9 +229,8 @@ public enum Errors {
             OutOfOrderSequenceException::new),
     DUPLICATE_SEQUENCE_NUMBER(46, "The broker received a duplicate sequence number.",
             DuplicateSequenceException::new),
-    INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch. Either there is a newer producer " +
-            "with the same transactionalId, or the producer's transaction has been expired by the broker.",
-            ProducerFencedException::new),
+    INVALID_PRODUCER_EPOCH(47, "Producer attempted to produce with an old epoch.",
+            InvalidProducerEpochException::new),
     INVALID_TXN_STATE(48, "The producer attempted a transactional operation in an invalid state.",
             InvalidTxnStateException::new),
     INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producer id which is not currently assigned to " +
@@ -320,10 +320,12 @@ public enum Errors {
     NO_REASSIGNMENT_IN_PROGRESS(85, "No partition reassignment is in progress.",
             NoReassignmentInProgressException::new),
     GROUP_SUBSCRIBED_TO_TOPIC(86, "Deleting offsets of a topic is forbidden while the consumer group is actively subscribed to it.",
-        GroupSubscribedToTopicException::new),
+            GroupSubscribedToTopicException::new),
     INVALID_RECORD(87, "This record has failed the validation on broker and hence will be rejected.", InvalidRecordException::new),
     UNSTABLE_OFFSET_COMMIT(88, "There are unstable offsets that need to be cleared.", UnstableOffsetCommitException::new),
-    THROTTLING_QUOTA_EXCEEDED(89, "The throttling quota has been exceeded.", ThrottlingQuotaExceededException::new);
+    THROTTLING_QUOTA_EXCEEDED(89, "The throttling quota has been exceeded.", ThrottlingQuotaExceededException::new),
+    PRODUCER_FENCED(90, "There is a newer producer with the same transactionalId " +
+            "which fences the current one.", ProducerFencedException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

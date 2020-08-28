@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -80,6 +81,12 @@ public class SmokeTestDriverIntegrationTest {
 
     @Test
     public void shouldWorkWithRebalance() throws InterruptedException {
+        Exit.setExitProcedure((statusCode, message) -> {
+            throw new AssertionError("Test called exit(). code:" + statusCode + " message:" + message);
+        });
+        Exit.setHaltProcedure((statusCode, message) -> {
+            throw new AssertionError("Test called halt(). code:" + statusCode + " message:" + message);
+        });
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 

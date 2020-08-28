@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -92,7 +93,9 @@ public class GlobalStateStoreProviderTest {
         final ProcessorContextImpl mockContext = niceMock(ProcessorContextImpl.class);
         expect(mockContext.applicationId()).andStubReturn("appId");
         expect(mockContext.metrics())
-            .andStubReturn(new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST));
+            .andStubReturn(
+                new StreamsMetricsImpl(new Metrics(), "threadName", StreamsConfig.METRICS_LATEST, new MockTime())
+            );
         expect(mockContext.taskId()).andStubReturn(new TaskId(0, 0));
         expect(mockContext.recordCollector()).andStubReturn(null);
         replay(mockContext);

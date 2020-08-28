@@ -297,12 +297,12 @@ public class QueryableStateIntegrationTest {
                         noMetadataKeys.add(key);
                         continue;
                     }
-                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.getActiveHost()));
+                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.activeHost()));
                     if (!pickInstanceByPort) {
-                        assertThat("Should have standbys to query from", !queryMetadata.getStandbyHosts().isEmpty());
+                        assertThat("Should have standbys to query from", !queryMetadata.standbyHosts().isEmpty());
                     }
 
-                    final int index = queryMetadata.getActiveHost().port();
+                    final int index = queryMetadata.activeHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final ReadOnlyKeyValueStore<String, Long> store =
                         IntegrationTestUtils.getStore(storeName, streamsWithKey, true, QueryableStoreTypes.keyValueStore());
@@ -354,14 +354,14 @@ public class QueryableStateIntegrationTest {
                         noMetadataKeys.add(key);
                         continue;
                     }
-                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.getActiveHost()));
+                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.activeHost()));
                     if (pickInstanceByPort) {
-                        assertThat(queryMetadata.getStandbyHosts().size(), equalTo(0));
+                        assertThat(queryMetadata.standbyHosts().size(), equalTo(0));
                     } else {
-                        assertThat("Should have standbys to query from", !queryMetadata.getStandbyHosts().isEmpty());
+                        assertThat("Should have standbys to query from", !queryMetadata.standbyHosts().isEmpty());
                     }
 
-                    final int index = queryMetadata.getActiveHost().port();
+                    final int index = queryMetadata.activeHost().port();
                     final KafkaStreams streamsWithKey = pickInstanceByPort ? streamsList.get(index) : streams;
                     final ReadOnlyWindowStore<String, Long> store =
                         IntegrationTestUtils.getStore(storeName, streamsWithKey, true, QueryableStoreTypes.windowStore());

@@ -77,15 +77,15 @@ public class TimeWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
             equalTo(ValueAndTimestamp.make(2L, 15L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make(2L, 550L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make(1L, 500L)));
     }
@@ -102,15 +102,15 @@ public class TimeWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
             equalTo(ValueAndTimestamp.make("1+2", 15L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("10+20", 550L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("3", 500L)));
     }
@@ -130,15 +130,15 @@ public class TimeWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
             equalTo(ValueAndTimestamp.make("0+1+2", 15L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("0+10+20", 550L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
             equalTo(ValueAndTimestamp.make("0+3", 500L)));
     }

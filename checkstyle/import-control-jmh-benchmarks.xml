@@ -19,7 +19,6 @@
 -->
 
 <import-control pkg="org.apache.kafka.jmh">
-
     <allow pkg="java"/>
     <allow pkg="scala"/>
     <allow pkg="javax.management"/>
@@ -49,6 +48,7 @@
     <allow pkg="org.mockito"/>
     <allow pkg="kafka.security.authorizer"/>
     <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="org.apache.kafka.clients"/>
 
     <subpackage name="cache">
     </subpackage>

@@ -53,28 +53,25 @@
         "about": "The topic name." },
       { "name": "PartitionResponses", "type": "[]FetchablePartitionResponse", "versions": "0+",
         "about": "The topic partitions.", "fields": [
-        { "name":  "PartitionHeader", "type": "PartitionHeader", "versions": "0+",
-          "fields":  [
-          { "name": "Partition", "type": "int32", "versions": "0+",
-            "about": "The partition index." },
-          { "name": "ErrorCode", "type": "int16", "versions": "0+",
-            "about": "The error code, or 0 if there was no fetch error." },
-          { "name": "HighWatermark", "type": "int64", "versions": "0+",
-            "about": "The current high water mark." },
-          { "name": "LastStableOffset", "type": "int64", "versions": "4+", "default": "-1", "ignorable": true,
-            "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)" },
-          { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
-            "about": "The current log start offset." },
-          { "name": "AbortedTransactions", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": true,
-            "about": "The aborted transactions.",  "fields": [
-            { "name": "ProducerId", "type": "int64", "versions": "4+", "entityType": "producerId",
-              "about": "The producer id associated with the aborted transaction." },
-            { "name": "FirstOffset", "type": "int64", "versions": "4+",
-              "about": "The first offset in the aborted transaction." }
-          ]},
-          { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "default": "-1", "ignorable": false,
-            "about": "The preferred read replica for the consumer to use on its next fetch request"}
+        { "name": "Partition", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The error code, or 0 if there was no fetch error." },
+        { "name": "HighWatermark", "type": "int64", "versions": "0+",
+          "about": "The current high water mark." },
+        { "name": "LastStableOffset", "type": "int64", "versions": "4+", "default": "-1", "ignorable": true,
+          "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)" },
+        { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
+          "about": "The current log start offset." },
+        { "name": "AbortedTransactions", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": true,
+          "about": "The aborted transactions.",  "fields": [
+          { "name": "ProducerId", "type": "int64", "versions": "4+", "entityType": "producerId",
+            "about": "The producer id associated with the aborted transaction." },
+          { "name": "FirstOffset", "type": "int64", "versions": "4+",
+            "about": "The first offset in the aborted transaction." }
         ]},
+        { "name": "PreferredReadReplica", "type": "int32", "versions": "11+", "default": "-1", "ignorable": false,
+          "about": "The preferred read replica for the consumer to use on its next fetch request"},
         { "name": "RecordSet", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data."}
       ]}
     ]}

@@ -101,8 +101,19 @@ public class ChangeLoggingKeyValueBytesStore
     }
 
     @Override
+    public KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
+                                                        final Bytes to) {
+        return wrapped().reverseRange(from, to);
+    }
+
+    @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         return wrapped().all();
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> reverseAll() {
+        return wrapped().reverseAll();
     }
 
     void log(final Bytes key,

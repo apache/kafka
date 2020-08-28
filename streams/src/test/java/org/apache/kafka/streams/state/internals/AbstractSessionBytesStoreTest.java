@@ -273,25 +273,25 @@ public abstract class AbstractSessionBytesStoreTest {
             new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("a", 0, Long.MAX_VALUE)
+                 sessionStore.findSessions("a", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 3L, 5L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("aa", 0, Long.MAX_VALUE)
+                 sessionStore.findSessions("aa", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(2L, 4L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE)
+                 sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(asList(1L, 2L, 3L, 4L, 5L))));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
-            sessionStore.findSessions("a", "aa", 10, 0)
+                 sessionStore.findSessions("a", "aa", 10, 0)
         ) {
             assertThat(valuesToSet(iterator), equalTo(new HashSet<>(Collections.singletonList(2L))));
         }
@@ -304,9 +304,9 @@ public abstract class AbstractSessionBytesStoreTest {
 
         sessionStore.init(context, sessionStore);
 
-        final Bytes key1 = Bytes.wrap(new byte[]{0});
-        final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
-        final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
+        final Bytes key1 = Bytes.wrap(new byte[] {0});
+        final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[] {0, 0, 0});
 
         sessionStore.put(new Windowed<>(key1, new SessionWindow(1, 100)), "1");
         sessionStore.put(new Windowed<>(key2, new SessionWindow(2, 100)), "2");
@@ -554,7 +554,8 @@ public abstract class AbstractSessionBytesStoreTest {
             assertThat(
                 messages,
                 hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }

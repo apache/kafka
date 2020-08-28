@@ -18,15 +18,21 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.transforms.Cast;
+import org.apache.kafka.connect.transforms.RegexRouter;
+import org.apache.kafka.connect.transforms.Transformation;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -484,5 +490,149 @@ public class TopicCreationTest {
         assertEquals(DEFAULT_REPLICATION_FACTOR, barTopicSpec.replicationFactor());
         assertEquals(barPartitions, barTopicSpec.numPartitions());
         assertThat(barTopicSpec.configs(), is(barTopicProps));
+    }
+
+    @Test
+    public void testTopicCreationWithSingleTransformation() {
+        sourceProps = defaultConnectorPropsWithTopicCreation();
+        sourceProps.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", FOO_GROUP, BAR_GROUP));
+        String xformName = "example";
+        String castType = "int8";
+        sourceProps.put("transforms", xformName);
+        sourceProps.put("transforms." + xformName + ".type", Cast.Value.class.getName());
+        sourceProps.put("transforms." + xformName + ".spec", castType);
+
+        sourceConfig = new SourceConnectorConfig(MOCK_PLUGINS, sourceProps, true);
+
+        Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
+        TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
+
+        assertTrue(topicCreation.isTopicCreationEnabled());
+        assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
+        assertThat(topicCreation.defaultTopicGroup(), is(groups.get(DEFAULT_TOPIC_CREATION_GROUP)));
+        assertEquals(2, topicCreation.topicGroups().size());
+        assertThat(topicCreation.topicGroups().keySet(), hasItems(FOO_GROUP, BAR_GROUP));
+        assertEquals(topicCreation.defaultTopicGroup(), topicCreation.findFirstGroup(FOO_TOPIC));
+        topicCreation.addTopic(FOO_TOPIC);
+        assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
+
+        List<Transformation<SourceRecord>> transformations = sourceConfig.transformations();
+        assertEquals(1, transformations.size());
+        Cast<SourceRecord> xform = (Cast<SourceRecord>) transformations.get(0);
+        SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
+        assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
+        assertEquals((byte) 42, transformed.value());
+    }
+
+    @Test
+    public void topicCreationWithTwoGroupsAndTwoTransformations() {
+        short fooReplicas = 3;
+        int partitions = 5;
+        int barPartitions = 1;
+
+        sourceProps = defaultConnectorPropsWithTopicCreation();
+        sourceProps.put(TOPIC_CREATION_GROUPS_CONFIG, String.join(",", FOO_GROUP, BAR_GROUP));
+        sourceProps.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(partitions));
+        // Setting here but they should be ignored for the default group
+        sourceProps.put(TOPIC_CREATION_PREFIX + FOO_GROUP + "." + INCLUDE_REGEX_CONFIG, FOO_TOPIC);
+        sourceProps.put(TOPIC_CREATION_PREFIX + FOO_GROUP + "." + REPLICATION_FACTOR_CONFIG, String.valueOf(fooReplicas));
+        sourceProps.put(TOPIC_CREATION_PREFIX + BAR_GROUP + "." + INCLUDE_REGEX_CONFIG, BAR_REGEX);
+        sourceProps.put(TOPIC_CREATION_PREFIX + BAR_GROUP + "." + PARTITIONS_CONFIG, String.valueOf(barPartitions));
+
+        String castName = "cast";
+        String castType = "int8";
+        sourceProps.put("transforms." + castName + ".type", Cast.Value.class.getName());
+        sourceProps.put("transforms." + castName + ".spec", castType);
+
+        String regexRouterName = "regex";
+        sourceProps.put("transforms." + regexRouterName + ".type", RegexRouter.class.getName());
+        sourceProps.put("transforms." + regexRouterName + ".regex", "(.*)");
+        sourceProps.put("transforms." + regexRouterName + ".replacement", "prefix-$1");
+
+        sourceProps.put("transforms", String.join(",", castName, regexRouterName));
+
+        Map<String, String> fooTopicProps = new HashMap<>();
+        fooTopicProps.put(RETENTION_MS_CONFIG, String.valueOf(TimeUnit.DAYS.toMillis(30)));
+        fooTopicProps.forEach((k, v) -> sourceProps.put(TOPIC_CREATION_PREFIX + FOO_GROUP + "." + k, v));
+
+        Map<String, String> barTopicProps = new HashMap<>();
+        barTopicProps.put(CLEANUP_POLICY_CONFIG, CLEANUP_POLICY_COMPACT);
+        barTopicProps.forEach((k, v) -> sourceProps.put(TOPIC_CREATION_PREFIX + BAR_GROUP + "." + k, v));
+
+        // verify config creation
+        sourceConfig = new SourceConnectorConfig(MOCK_PLUGINS, sourceProps, true);
+        assertTrue(sourceConfig.usesTopicCreation());
+        assertEquals(DEFAULT_REPLICATION_FACTOR, (short) sourceConfig.topicCreationReplicationFactor(DEFAULT_TOPIC_CREATION_GROUP));
+        assertEquals(partitions, (int) sourceConfig.topicCreationPartitions(DEFAULT_TOPIC_CREATION_GROUP));
+        assertThat(sourceConfig.topicCreationInclude(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.singletonList(".*")));
+        assertThat(sourceConfig.topicCreationExclude(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyList()));
+        assertThat(sourceConfig.topicCreationOtherConfigs(DEFAULT_TOPIC_CREATION_GROUP), is(Collections.emptyMap()));
+
+        // verify topic creation group is instantiated correctly
+        Map<String, TopicCreationGroup> groups = TopicCreationGroup.configuredGroups(sourceConfig);
+        assertEquals(3, groups.size());
+        assertThat(groups.keySet(), hasItems(DEFAULT_TOPIC_CREATION_GROUP, FOO_GROUP, BAR_GROUP));
+
+        // verify topic creation
+        TopicCreation topicCreation = TopicCreation.newTopicCreation(workerConfig, groups);
+        TopicCreationGroup defaultGroup = topicCreation.defaultTopicGroup();
+        // Default group will match all topics besides empty string
+        assertTrue(defaultGroup.matches(" "));
+        assertTrue(defaultGroup.matches(FOO_TOPIC));
+        assertTrue(defaultGroup.matches(BAR_TOPIC));
+        assertEquals(DEFAULT_TOPIC_CREATION_GROUP, defaultGroup.name());
+        TopicCreationGroup fooGroup = groups.get(FOO_GROUP);
+        assertFalse(fooGroup.matches(" "));
+        assertTrue(fooGroup.matches(FOO_TOPIC));
+        assertFalse(fooGroup.matches(BAR_TOPIC));
+        assertEquals(FOO_GROUP, fooGroup.name());
+        TopicCreationGroup barGroup = groups.get(BAR_GROUP);
+        assertTrue(barGroup.matches(BAR_TOPIC));
+        assertFalse(barGroup.matches(FOO_TOPIC));
+        assertEquals(BAR_GROUP, barGroup.name());
+
+        assertTrue(topicCreation.isTopicCreationEnabled());
+        assertTrue(topicCreation.isTopicCreationRequired(FOO_TOPIC));
+        assertTrue(topicCreation.isTopicCreationRequired(BAR_TOPIC));
+        assertEquals(2, topicCreation.topicGroups().size());
+        assertThat(topicCreation.topicGroups().keySet(), hasItems(FOO_GROUP, BAR_GROUP));
+        assertEquals(fooGroup, topicCreation.findFirstGroup(FOO_TOPIC));
+        assertEquals(barGroup, topicCreation.findFirstGroup(BAR_TOPIC));
+        topicCreation.addTopic(FOO_TOPIC);
+        topicCreation.addTopic(BAR_TOPIC);
+        assertFalse(topicCreation.isTopicCreationRequired(FOO_TOPIC));
+        assertFalse(topicCreation.isTopicCreationRequired(BAR_TOPIC));
+
+        // verify new topic properties
+        String otherTopic = "any-other-topic";
+        NewTopic defaultTopicSpec = topicCreation.findFirstGroup(otherTopic).newTopic(otherTopic);
+        assertEquals(otherTopic, defaultTopicSpec.name());
+        assertEquals(DEFAULT_REPLICATION_FACTOR, defaultTopicSpec.replicationFactor());
+        assertEquals(partitions, defaultTopicSpec.numPartitions());
+        assertThat(defaultTopicSpec.configs(), is(Collections.emptyMap()));
+
+        NewTopic fooTopicSpec = topicCreation.findFirstGroup(FOO_TOPIC).newTopic(FOO_TOPIC);
+        assertEquals(FOO_TOPIC, fooTopicSpec.name());
+        assertEquals(fooReplicas, fooTopicSpec.replicationFactor());
+        assertEquals(partitions, fooTopicSpec.numPartitions());
+        assertThat(fooTopicSpec.configs(), is(fooTopicProps));
+
+        NewTopic barTopicSpec = topicCreation.findFirstGroup(BAR_TOPIC).newTopic(BAR_TOPIC);
+        assertEquals(BAR_TOPIC, barTopicSpec.name());
+        assertEquals(DEFAULT_REPLICATION_FACTOR, barTopicSpec.replicationFactor());
+        assertEquals(barPartitions, barTopicSpec.numPartitions());
+        assertThat(barTopicSpec.configs(), is(barTopicProps));
+
+        List<Transformation<SourceRecord>> transformations = sourceConfig.transformations();
+        assertEquals(2, transformations.size());
+
+        Cast<SourceRecord> castXForm = (Cast<SourceRecord>) transformations.get(0);
+        SourceRecord transformed = castXForm.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
+        assertEquals(Schema.Type.INT8, transformed.valueSchema().type());
+        assertEquals((byte) 42, transformed.value());
+
+        RegexRouter<SourceRecord> regexRouterXForm = (RegexRouter<SourceRecord>) transformations.get(1);
+        transformed = regexRouterXForm.apply(new SourceRecord(null, null, "topic", 0, null, null, Schema.INT8_SCHEMA, 42));
+        assertEquals("prefix-topic", transformed.topic());
     }
 }

@@ -457,7 +457,7 @@ class TransactionMetadataTest {
 
     val result = txnMetadata.prepareIncrementProducerEpoch(30000, Some((lastProducerEpoch - 1).toShort),
       time.milliseconds())
-    assertEquals(Left(Errors.INVALID_PRODUCER_EPOCH), result)
+    assertEquals(Left(Errors.PRODUCER_FENCED), result)
   }
 
   private def testRotateProducerIdInOngoingState(state: TransactionState): Unit = {

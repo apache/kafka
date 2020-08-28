@@ -617,10 +617,13 @@ object TopicCommand extends Logging {
                          .describedAs("topic")
                          .ofType(classOf[String])
     private val nl = System.getProperty("line.separator")
-    private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered."  +
-                                             "The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
+    private val kafkaConfigsCanAlterTopicConfigsViaBootstrapServer =
+      " (the kafka-configs CLI supports altering topic configs with a --bootstrap-server option)"
+    private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered." +
+                                             " The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
                                              "See the Kafka documentation for full details on the topic configs." +
-                                             "It is supported only in combination with --create if --bootstrap-server option is used.")
+                                             " It is supported only in combination with --create if --bootstrap-server option is used" +
+                                             kafkaConfigsCanAlterTopicConfigsViaBootstrapServer + ".")
                            .withRequiredArg
                            .describedAs("name=value")
                            .ofType(classOf[String])
@@ -729,7 +732,8 @@ object TopicCommand extends Logging {
       if (has(createOpt) && !has(replicaAssignmentOpt) && has(zkConnectOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt, replicationFactorOpt)
       if (has(bootstrapServerOpt) && has(alterOpt)) {
-        CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt))
+        CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt),
+        Some(kafkaConfigsCanAlterTopicConfigsViaBootstrapServer))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt)
       }
 

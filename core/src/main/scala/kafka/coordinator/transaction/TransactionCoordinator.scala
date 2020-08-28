@@ -211,7 +211,7 @@ class TransactionCoordinator(brokerId: Int,
       Left(Errors.CONCURRENT_TRANSACTIONS)
     }
     else if (!expectedProducerIdAndEpoch.forall(isValidProducerId)) {
-      Left(Errors.INVALID_PRODUCER_EPOCH)
+      Left(Errors.PRODUCER_FENCED)
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
@@ -278,7 +278,7 @@ class TransactionCoordinator(brokerId: Int,
             if (txnMetadata.producerId != producerId) {
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             } else if (txnMetadata.producerEpoch != producerEpoch) {
-              Left(Errors.INVALID_PRODUCER_EPOCH)
+              Left(Errors.PRODUCER_FENCED)
             } else if (txnMetadata.pendingTransitionInProgress) {
               // return a retriable exception to let the client backoff and retry
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -382,7 +382,7 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.INVALID_PRODUCER_ID_MAPPING)
             // Strict equality is enforced on the client side requests, as they shouldn't bump the producer epoch.
             else if ((isFromClient && producerEpoch != txnMetadata.producerEpoch) || producerEpoch < txnMetadata.producerEpoch)
-              Left(Errors.INVALID_PRODUCER_EPOCH)
+              Left(Errors.PRODUCER_FENCED)
             else if (txnMetadata.pendingTransitionInProgress && txnMetadata.pendingState.get != PrepareEpochFence)
               Left(Errors.CONCURRENT_TRANSACTIONS)
             else txnMetadata.state match {
@@ -456,7 +456,7 @@ class TransactionCoordinator(brokerId: Int,
                       if (txnMetadata.producerId != producerId)
                         Left(Errors.INVALID_PRODUCER_ID_MAPPING)
                       else if (txnMetadata.producerEpoch != producerEpoch)
-                        Left(Errors.INVALID_PRODUCER_EPOCH)
+                        Left(Errors.PRODUCER_FENCED)
                       else if (txnMetadata.pendingTransitionInProgress)
                         Left(Errors.CONCURRENT_TRANSACTIONS)
                       else txnMetadata.state match {
@@ -539,7 +539,7 @@ class TransactionCoordinator(brokerId: Int,
           s"${txnIdAndPidEpoch.transactionalId} due to timeout")
 
       case error@(Errors.INVALID_PRODUCER_ID_MAPPING |
-                  Errors.INVALID_PRODUCER_EPOCH |
+                  Errors.PRODUCER_FENCED |
                   Errors.CONCURRENT_TRANSACTIONS) =>
         debug(s"Rollback of ongoing transaction for transactionalId ${txnIdAndPidEpoch.transactionalId} " +
           s"has been cancelled due to error $error")

@@ -85,8 +85,19 @@ abstract class AbstractReadWriteDecorator<T extends StateStore, K, V> extends Wr
         }
 
         @Override
+        public KeyValueIterator<K, V> reverseRange(final K from,
+                                                   final K to) {
+            return wrapped().reverseRange(from, to);
+        }
+
+        @Override
         public KeyValueIterator<K, V> all() {
             return wrapped().all();
+        }
+
+        @Override
+        public KeyValueIterator<K, V> reverseAll() {
+            return wrapped().reverseAll();
         }
 
         @Override

@@ -668,10 +668,10 @@ public abstract class AbstractWindowBytesStoreTest {
         final long windowSize = 0x7a00000000000000L;
         final long retentionPeriod = 0x7a00000000000000L;
         final WindowStore<String, String> windowStore = buildWindowStore(retentionPeriod,
-                                                                         windowSize,
-                                                                         false,
-                                                                         Serdes.String(),
-                                                                         Serdes.String());
+            windowSize,
+            false,
+            Serdes.String(),
+            Serdes.String());
 
         windowStore.init(context, windowStore);
 
@@ -754,15 +754,15 @@ public abstract class AbstractWindowBytesStoreTest {
     @Test
     public void shouldFetchAndIterateOverExactBinaryKeys() {
         final WindowStore<Bytes, String> windowStore = buildWindowStore(RETENTION_PERIOD,
-                                                                        WINDOW_SIZE,
-                                                                        true,
-                                                                        Serdes.Bytes(),
-                                                                        Serdes.String());
+            WINDOW_SIZE,
+            true,
+            Serdes.Bytes(),
+            Serdes.String());
         windowStore.init(context, windowStore);
 
-        final Bytes key1 = Bytes.wrap(new byte[]{0});
-        final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
-        final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
+        final Bytes key1 = Bytes.wrap(new byte[] {0});
+        final Bytes key2 = Bytes.wrap(new byte[] {0, 0});
+        final Bytes key3 = Bytes.wrap(new byte[] {0, 0, 0});
         windowStore.put(key1, "1", 0);
         windowStore.put(key2, "2", 0);
         windowStore.put(key3, "3", 0);
@@ -816,7 +816,8 @@ public abstract class AbstractWindowBytesStoreTest {
             assertThat(
                 messages,
                 hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
-                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " This may be due to range arguments set in the wrong order, " +
+                    "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }
@@ -1015,8 +1016,8 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @SuppressWarnings("deprecation")
     private void putFirstBatch(final WindowStore<Integer, String> store,
-        @SuppressWarnings("SameParameterValue") final long startTime,
-        final InternalMockProcessorContext context) {
+                               @SuppressWarnings("SameParameterValue") final long startTime,
+                               final InternalMockProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime));
         store.put(0, "zero");
         context.setRecordContext(createRecordContext(startTime + 1L));
@@ -1031,8 +1032,8 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @SuppressWarnings("deprecation")
     private void putSecondBatch(final WindowStore<Integer, String> store,
-        @SuppressWarnings("SameParameterValue") final long startTime,
-        final InternalMockProcessorContext context) {
+                                @SuppressWarnings("SameParameterValue") final long startTime,
+                                final InternalMockProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime + 3L));
         store.put(2, "two+1");
         context.setRecordContext(createRecordContext(startTime + 4L));
@@ -1048,7 +1049,7 @@ public abstract class AbstractWindowBytesStoreTest {
     }
 
     private Map<Integer, Set<String>> entriesByKey(final List<KeyValue<byte[], byte[]>> changeLog,
-        @SuppressWarnings("SameParameterValue") final long startTime) {
+                                                   @SuppressWarnings("SameParameterValue") final long startTime) {
         final HashMap<Integer, Set<String>> entriesByKey = new HashMap<>();
 
         for (final KeyValue<byte[], byte[]> entry : changeLog) {

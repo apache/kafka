@@ -19,6 +19,7 @@ package kafka.server
 import java.util.concurrent.TimeUnit
 
 import kafka.network.RequestChannel
+import kafka.utils.QuotaUtils
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.utils.Time
@@ -75,7 +76,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   }
 
   override protected def throttleTime(e: QuotaViolationException, timeMs: Long): Long = {
-    math.min(super.throttleTime(e, timeMs), maxThrottleTimeMs)
+    QuotaUtils.boundedThrottleTime(e, maxThrottleTimeMs, timeMs)
   }
 
   override protected def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {

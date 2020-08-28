@@ -25,7 +25,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
-import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.util.Map;
@@ -39,8 +38,6 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
-
-    private static final String TEST_ID = "reset-with-ssl-integration-test";
 
     private static final Map<String, Object> SSL_CONFIG;
 
@@ -71,28 +68,13 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
     @Before
     public void before() throws Exception {
-        testId = TEST_ID;
         cluster = CLUSTER;
         prepareTest();
     }
 
-    @After
+    @After 
     public void after() throws Exception {
         cleanupTest();
     }
 
-    @Test
-    public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
-    }
-
-    @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(false);
-    }
-
-    @Test
-    public void testReprocessingFromScratchAfterResetWithIntermediateInternalTopic() throws Exception {
-        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic(true);
-    }
 }

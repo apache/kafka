@@ -32,7 +32,7 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
                      final long retentionPeriod,
                      final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
-        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, Thread.currentThread().getName(), name);
+        metricsRecorder = new RocksDBMetricsRecorder(metricsScope, name);
     }
 
     @Override

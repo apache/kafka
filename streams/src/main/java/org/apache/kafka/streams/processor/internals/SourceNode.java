@@ -23,18 +23,18 @@ import org.apache.kafka.streams.kstream.internals.WrappingNullableDeserializer;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 
-public class SourceNode<K, V> extends ProcessorNode<K, V> {
+public class SourceNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
 
     private InternalProcessorContext context;
-    private Deserializer<K> keyDeserializer;
-    private Deserializer<V> valDeserializer;
+    private Deserializer<KIn> keyDeserializer;
+    private Deserializer<VIn> valDeserializer;
     private final TimestampExtractor timestampExtractor;
     private Sensor processAtSourceSensor;
 
     public SourceNode(final String name,
                       final TimestampExtractor timestampExtractor,
-                      final Deserializer<K> keyDeserializer,
-                      final Deserializer<V> valDeserializer) {
+                      final Deserializer<KIn> keyDeserializer,
+                      final Deserializer<VIn> valDeserializer) {
         super(name);
         this.timestampExtractor = timestampExtractor;
         this.keyDeserializer = keyDeserializer;
@@ -42,16 +42,16 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     }
 
     public SourceNode(final String name,
-                      final Deserializer<K> keyDeserializer,
-                      final Deserializer<V> valDeserializer) {
+                      final Deserializer<KIn> keyDeserializer,
+                      final Deserializer<VIn> valDeserializer) {
         this(name, null, keyDeserializer, valDeserializer);
     }
 
-    K deserializeKey(final String topic, final Headers headers, final byte[] data) {
+    KIn deserializeKey(final String topic, final Headers headers, final byte[] data) {
         return keyDeserializer.deserialize(topic, headers, data);
     }
 
-    V deserializeValue(final String topic, final Headers headers, final byte[] data) {
+    VIn deserializeValue(final String topic, final Headers headers, final byte[] data) {
         return valDeserializer.deserialize(topic, headers, data);
     }
 
@@ -74,10 +74,10 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
         // if deserializers are null, get the default ones from the context
         if (this.keyDeserializer == null) {
-            this.keyDeserializer = (Deserializer<K>) context.keySerde().deserializer();
+            this.keyDeserializer = (Deserializer<KIn>) context.keySerde().deserializer();
         }
         if (this.valDeserializer == null) {
-            this.valDeserializer = (Deserializer<V>) context.valueSerde().deserializer();
+            this.valDeserializer = (Deserializer<VIn>) context.valueSerde().deserializer();
         }
 
         // if deserializers are internal wrapping deserializers that may need to be given the default
@@ -92,7 +92,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
 
     @Override
-    public void process(final K key, final V value) {
+    public void process(final KIn key, final VIn value) {
         context.forward(key, value);
         processAtSourceSensor.record(1.0d, context.currentSystemTimeMs());
     }

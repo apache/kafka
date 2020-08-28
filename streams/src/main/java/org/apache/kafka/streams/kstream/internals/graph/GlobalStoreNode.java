@@ -17,26 +17,26 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-public class GlobalStoreNode<K, V, S extends StateStore> extends StateStoreNode<S> {
+public class GlobalStoreNode<KIn, VIn, S extends StateStore> extends StateStoreNode<S> {
 
     private final String sourceName;
     private final String topic;
-    private final ConsumedInternal<K, V> consumed;
+    private final ConsumedInternal<KIn, VIn> consumed;
     private final String processorName;
-    private final ProcessorSupplier<K, V> stateUpdateSupplier;
+    private final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier;
 
 
     public GlobalStoreNode(final StoreBuilder<S> storeBuilder,
                            final String sourceName,
                            final String topic,
-                           final ConsumedInternal<K, V> consumed,
+                           final ConsumedInternal<KIn, VIn> consumed,
                            final String processorName,
-                           final ProcessorSupplier<K, V> stateUpdateSupplier) {
+                           final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
 
         super(storeBuilder);
         this.sourceName = sourceName;

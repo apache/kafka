@@ -129,9 +129,6 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
-            materializedInternal.queryableStoreName(),
-            null,
-            null,
-            null);
+            materializedInternal.queryableStoreName());
     }
 }

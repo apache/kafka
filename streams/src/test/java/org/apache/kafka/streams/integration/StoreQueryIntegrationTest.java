@@ -123,7 +123,7 @@ public class StoreQueryIntegrationTest {
         final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams1, queryableStoreType);
         final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(TABLE_NAME, kafkaStreams2, queryableStoreType);
 
-        final boolean kafkaStreams1IsActive = (keyQueryMetadata.getActiveHost().port() % 2) == 1;
+        final boolean kafkaStreams1IsActive = (keyQueryMetadata.activeHost().port() % 2) == 1;
 
         // Assert that only active is able to query for a key by default
         assertThat(kafkaStreams1IsActive ? store1.get(key) : store2.get(key), is(notNullValue()));
@@ -156,11 +156,11 @@ public class StoreQueryIntegrationTest {
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
 
         //key belongs to this partition
-        final int keyPartition = keyQueryMetadata.getPartition();
+        final int keyPartition = keyQueryMetadata.partition();
 
         //key doesn't belongs to this partition
         final int keyDontBelongPartition = (keyPartition == 0) ? 1 : 0;
-        final boolean kafkaStreams1IsActive = (keyQueryMetadata.getActiveHost().port() % 2) == 1;
+        final boolean kafkaStreams1IsActive = (keyQueryMetadata.activeHost().port() % 2) == 1;
 
         StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> storeQueryParam =
             StoreQueryParameters.<ReadOnlyKeyValueStore<Integer, Integer>>fromNameAndType(TABLE_NAME, QueryableStoreTypes.keyValueStore())
@@ -265,7 +265,7 @@ public class StoreQueryIntegrationTest {
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
 
         //key belongs to this partition
-        final int keyPartition = keyQueryMetadata.getPartition();
+        final int keyPartition = keyQueryMetadata.partition();
 
         //key doesn't belongs to this partition
         final int keyDontBelongPartition = (keyPartition == 0) ? 1 : 0;
@@ -333,7 +333,7 @@ public class StoreQueryIntegrationTest {
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, new IntegerSerializer());
 
         //key belongs to this partition
-        final int keyPartition = keyQueryMetadata.getPartition();
+        final int keyPartition = keyQueryMetadata.partition();
 
         //key doesn't belongs to this partition
         final int keyDontBelongPartition = (keyPartition == 0) ? 1 : 0;

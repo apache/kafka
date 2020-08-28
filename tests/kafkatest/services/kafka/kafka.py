@@ -503,7 +503,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Running topic creation command...\n%s" % cmd)
         node.account.ssh(cmd)
 
-    def delete_topic(self, topic, node=None):
+    def delete_topic(self, topic, node=None, use_zk_to_delete_topic=False):
         """
         Delete a topic with the topics command
         :param topic:
@@ -513,14 +513,12 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
         self.logger.info("Deleting topic %s" % topic)
-        kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = fix_opts_for_new_jvm(node)
-        cmd += kafka_topic_script + " "
-        cmd += "--bootstrap-server %(bootstrap_servers)s --delete --topic %(topic)s " % {
-            'bootstrap_servers': self.bootstrap_servers(self.security_protocol),
-            'topic': topic
-        }
+        cmd += "%s %s --topic %s --delete %s" % \
+               (self._kafka_topics_cmd(node=node, use_zk_connection=use_zk_to_delete_topic),
+                self._topic_command_connect_setting(node=node, use_zk_connection=use_zk_to_delete_topic),
+                topic, self._kafka_topics_cmd_config(node=node, use_zk_connection=use_zk_to_delete_topic))
         self.logger.info("Running topic delete command...\n%s" % cmd)
         node.account.ssh(cmd)
 

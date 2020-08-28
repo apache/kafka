@@ -23,7 +23,8 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.common.metrics.stats.Rate
+import org.apache.kafka.common.metrics.QuotaViolationException
+import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert._
 import org.junit.Assert.assertEquals
@@ -38,26 +39,26 @@ class StrictControllerMutationQuotaTest {
     val sensor = metrics.sensor("sensor", new MetricConfig()
       .quota(Quota.upperBound(10))
       .timeWindow(1, TimeUnit.SECONDS)
-      .samples(11))
+      .samples(10))
     val metricName = metrics.metricName("rate", "test-group")
-    assertTrue(sensor.add(metricName, new Rate))
+    assertTrue(sensor.add(metricName, new TokenBucket))
 
     val quota = new StrictControllerMutationQuota(time, sensor)
     assertFalse(quota.isExceeded)
 
-    // Recording a first value at T to bring the avg rate to 9. Value is accepted
+    // Recording a first value at T to bring the tokens to 10. Value is accepted
     // because the quota is not exhausted yet.
     quota.record(90)
     assertFalse(quota.isExceeded)
     assertEquals(0, quota.throttleTime)
 
-    // Recording a second value at T to bring the avg rate to 18. Value is accepted
+    // Recording a second value at T to bring the tokens to -80. Value is accepted
     quota.record(90)
     assertFalse(quota.isExceeded)
     assertEquals(0, quota.throttleTime)
 
-    // Recording a third value at T is rejected immediately and rate is not updated
-    // because the quota is exhausted.
+    // Recording a third value at T is rejected immediately because there are not
+    // tokens available in the bucket.
     assertThrows(classOf[ThrottlingQuotaExceededException],
       () => quota.record(90))
     assertTrue(quota.isExceeded)
@@ -79,26 +80,26 @@ class PermissiveControllerMutationQuotaTest {
     val sensor = metrics.sensor("sensor", new MetricConfig()
       .quota(Quota.upperBound(10))
       .timeWindow(1, TimeUnit.SECONDS)
-      .samples(11))
+      .samples(10))
     val metricName = metrics.metricName("rate", "test-group")
-    assertTrue(sensor.add(metricName, new Rate))
+    assertTrue(sensor.add(metricName, new TokenBucket))
 
     val quota = new PermissiveControllerMutationQuota(time, sensor)
     assertFalse(quota.isExceeded)
 
-    // Recording a first value at T to bring the avg rate to 9. Value is accepted
+    // Recording a first value at T to bring the tokens 10. Value is accepted
     // because the quota is not exhausted yet.
     quota.record(90)
     assertFalse(quota.isExceeded)
     assertEquals(0, quota.throttleTime)
 
-    // Recording a second value at T to bring the avg rate to 18. Value is accepted
+    // Recording a second value at T to bring the tokens to -80. Value is accepted
     quota.record(90)
     assertFalse(quota.isExceeded)
     assertEquals(8000, quota.throttleTime)
 
-    // Recording a second value at T to bring the avg rate to 27. Value is accepted
-    // and rate is updated even though the quota is exhausted.
+    // Recording a second value at T to bring the tokens to -170. Value is accepted
+    // even though the quota is exhausted.
     quota.record(90)
     assertFalse(quota.isExceeded) // quota is never exceeded
     assertEquals(17000, quota.throttleTime)
@@ -115,7 +116,10 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val User = "ANONYMOUS"
   private val ClientId = "test-client"
 
-  private val config = ClientQuotaManagerConfig()
+  private val config = ClientQuotaManagerConfig(
+    numQuotaSamples = 10,
+    quotaWindowSizeSeconds = 1
+  )
 
   private def withQuotaManager(f: ControllerMutationQuotaManager => Unit): Unit = {
     val quotaManager = new ControllerMutationQuotaManager(config, metrics, time,"", None)
@@ -124,6 +128,22 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
     } finally {
       quotaManager.shutdown()
     }
+  }
+
+  @Test
+  def testThrottleTime(): Unit = {
+    import ControllerMutationQuotaManager._
+
+    val time = new MockTime(0, System.currentTimeMillis, 0)
+    val metrics = new Metrics(time)
+    val sensor = metrics.sensor("sensor")
+    val metricName = metrics.metricName("tokens", "test-group")
+    sensor.add(metricName, new TokenBucket)
+    val metric = metrics.metric(metricName)
+
+    assertEquals(0, throttleTimeMs(new QuotaViolationException(metric, 0, 10), time.milliseconds()))
+    assertEquals(500, throttleTimeMs(new QuotaViolationException(metric, -5, 10), time.milliseconds()))
+    assertEquals(1000, throttleTimeMs(new QuotaViolationException(metric, -10, 10), time.milliseconds()))
   }
 
   @Test
@@ -142,19 +162,19 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
 
       // Create a spike worth of 110 mutations.
-      // Current avg rate = 10 * 10 = 100/10 = 10 mutations per second.
+      // Current tokens in the bucket = 100
       // As we use the Strict enforcement, the quota is checked before updating the rate. Hence,
       // the spike is accepted and no quota violation error is raised.
       var throttleTime = maybeRecord(quotaManager, User, ClientId, 110)
       assertEquals("Should not be throttled", 0, throttleTime)
 
       // Create a spike worth of 110 mutations.
-      // Current avg rate = 10 * 10 + 110 = 210/10 = 21 mutations per second.
+      // Current tokens in the bucket = 100 - 110 = -10
       // As the quota is already violated, the spike is rejected immediately without updating the
       // rate. The client must wait:
-      // (21 - quota) / quota * window-size = (21 - 10) / 10 * 10 = 11 seconds
+      // 10 / 10 = 1s
       throttleTime = maybeRecord(quotaManager, User, ClientId, 110)
-      assertEquals("Should be throttled", 11000, throttleTime)
+      assertEquals("Should be throttled", 1000, throttleTime)
 
       // Throttle
       throttle(quotaManager, User, ClientId, throttleTime, callback)
@@ -171,7 +191,7 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(1, numCallbacks)
 
       // Retry to spike worth of 110 mutations after having waited the required throttle time.
-      // Current avg rate = 0 = 0/11 = 0 mutations per second.
+      // Current tokens in the bucket = 0
       throttleTime = maybeRecord(quotaManager, User, ClientId, 110)
       assertEquals("Should be throttled", 0, throttleTime)
     }

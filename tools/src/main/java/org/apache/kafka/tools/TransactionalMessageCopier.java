@@ -382,6 +382,6 @@ public class TransactionalMessageCopier {
                 consumer.close();
             }
         }
-        System.exit(0);
+        Exit.exit(0);
     }
 }

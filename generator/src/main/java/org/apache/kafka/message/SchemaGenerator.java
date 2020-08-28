@@ -82,7 +82,7 @@ final class SchemaGenerator {
     void generateSchemas(MessageSpec message) throws Exception {
         this.messageFlexibleVersions = message.flexibleVersions();
         // Generate schemas for inline structures
-        generateSchemas(message.generatedClassName(), message.struct(),
+        generateSchemas(message.dataClassName(), message.struct(),
             message.struct().versions());
 
         // Generate schemas for common structures
@@ -281,7 +281,12 @@ final class SchemaGenerator {
                 return nullable ? "Type.NULLABLE_BYTES" : "Type.BYTES";
             }
         } else if (type.isRecords()) {
-            return "Type.RECORDS";
+            headerGenerator.addImport(MessageGenerator.TYPE_CLASS);
+            if (fieldFlexibleVersions.contains(version)) {
+                return "Type.COMPACT_RECORDS";
+            } else {
+                return "Type.RECORDS";
+            }
         } else if (type.isArray()) {
             if (fieldFlexibleVersions.contains(version)) {
                 headerGenerator.addImport(MessageGenerator.COMPACT_ARRAYOF_CLASS);

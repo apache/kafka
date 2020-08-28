@@ -22,20 +22,20 @@ import org.apache.kafka.streams.kstream.internals.WrappingNullableSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 
-public class SinkNode<K, V> extends ProcessorNode<K, V> {
+public class SinkNode<KIn, VIn, KOut, VOut> extends ProcessorNode<KIn, VIn, KOut, VOut> {
 
-    private Serializer<K> keySerializer;
-    private Serializer<V> valSerializer;
-    private final TopicNameExtractor<K, V> topicExtractor;
-    private final StreamPartitioner<? super K, ? super V> partitioner;
+    private Serializer<KIn> keySerializer;
+    private Serializer<VIn> valSerializer;
+    private final TopicNameExtractor<KIn, VIn> topicExtractor;
+    private final StreamPartitioner<? super KIn, ? super VIn> partitioner;
 
     private InternalProcessorContext context;
 
     SinkNode(final String name,
-             final TopicNameExtractor<K, V> topicExtractor,
-             final Serializer<K> keySerializer,
-             final Serializer<V> valSerializer,
-             final StreamPartitioner<? super K, ? super V> partitioner) {
+             final TopicNameExtractor<KIn, VIn> topicExtractor,
+             final Serializer<KIn> keySerializer,
+             final Serializer<VIn> valSerializer,
+             final StreamPartitioner<? super KIn, ? super VIn> partitioner) {
         super(name);
 
         this.topicExtractor = topicExtractor;
@@ -48,7 +48,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
      * @throws UnsupportedOperationException if this method adds a child to a sink node
      */
     @Override
-    public void addChild(final ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<KOut, VOut, ?, ?> child) {
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
@@ -60,10 +60,10 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
         // if serializers are null, get the default ones from the context
         if (keySerializer == null) {
-            keySerializer = (Serializer<K>) context.keySerde().serializer();
+            keySerializer = (Serializer<KIn>) context.keySerde().serializer();
         }
         if (valSerializer == null) {
-            valSerializer = (Serializer<V>) context.valueSerde().serializer();
+            valSerializer = (Serializer<VIn>) context.valueSerde().serializer();
         }
 
         // if serializers are internal wrapping serializers that may need to be given the default serializer
@@ -78,7 +78,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
 
     @Override
-    public void process(final K key, final V value) {
+    public void process(final KIn key, final VIn value) {
         final RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
 
         final long timestamp = context.timestamp();

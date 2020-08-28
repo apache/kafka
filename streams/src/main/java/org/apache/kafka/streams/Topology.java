@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
@@ -721,7 +722,7 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            stateUpdateSupplier
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
         );
         return this;
     }
@@ -766,7 +767,7 @@ public class Topology {
             valueDeserializer,
             topic,
             processorName,
-            stateUpdateSupplier
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
         );
         return this;
     }

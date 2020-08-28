@@ -144,7 +144,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     }
 
     def verifySendSuccess(future: Future[RecordMetadata]): Unit = {
-      val recordMetadata = future.get(10, TimeUnit.SECONDS)
+      val recordMetadata = future.get(30, TimeUnit.SECONDS)
       assertEquals(topic, recordMetadata.topic)
       assertEquals(0, recordMetadata.partition)
       assertTrue(s"Invalid offset $recordMetadata", recordMetadata.offset >= 0)

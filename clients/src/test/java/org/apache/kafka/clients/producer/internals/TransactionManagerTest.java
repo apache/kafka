@@ -1303,7 +1303,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasAbortableError());
         transactionManager.beginAbort();
         runUntil(responseFuture::isDone);
-        assertFutureFailed(responseFuture);
+        assertProduceFutureFailed(responseFuture);
 
         // No partitions added, so no need to prepare EndTxn response
         runUntil(transactionManager::isReady);
@@ -1359,8 +1359,8 @@ public class TransactionManagerTest {
         transactionManager.beginAbort();
         runUntil(transactionManager::isReady);
         // neither produce request has been sent, so they should both be failed immediately
-        assertFutureFailed(authorizedTopicProduceFuture);
-        assertFutureFailed(unauthorizedTopicProduceFuture);
+        assertProduceFutureFailed(authorizedTopicProduceFuture);
+        assertProduceFutureFailed(unauthorizedTopicProduceFuture);
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(accumulator.hasIncomplete());
 
@@ -1417,7 +1417,7 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.NONE, producerId, epoch);
         runUntil(authorizedTopicProduceFuture::isDone);
 
-        assertFutureFailed(unauthorizedTopicProduceFuture);
+        assertProduceFutureFailed(unauthorizedTopicProduceFuture);
         assertNotNull(authorizedTopicProduceFuture.get());
         assertTrue(authorizedTopicProduceFuture.isDone());
 
@@ -1549,7 +1549,45 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testProducerFencedException() throws InterruptedException {
+    public void testProducerFencedExceptionInInitProducerId() {
+        verifyProducerFencedForInitProducerId(Errors.PRODUCER_FENCED);
+    }
+
+    @Test
+    public void testInvalidProducerEpochConvertToProducerFencedInInitProducerId() {
+        verifyProducerFencedForInitProducerId(Errors.INVALID_PRODUCER_EPOCH);
+    }
+
+    private void verifyProducerFencedForInitProducerId(Errors error) {
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(error, false, producerId, epoch);
+
+        runUntil(transactionManager::hasError);
+
+        assertEquals(ProducerFencedException.class, result.error().getClass());
+
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(
+            Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
+    }
+
+    @Test
+    public void testProducerFencedInAddPartitionToTxn() throws InterruptedException {
+        verifyProducerFencedForAddPartitionsToTxn(Errors.PRODUCER_FENCED);
+    }
+
+    @Test
+    public void testInvalidProducerEpochConvertToProducerFencedInAddPartitionToTxn() throws InterruptedException {
+        verifyProducerFencedForAddPartitionsToTxn(Errors.INVALID_PRODUCER_EPOCH);
+    }
+
+    private void verifyProducerFencedForAddPartitionsToTxn(Errors error) throws InterruptedException {
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -1559,9 +1597,37 @@ public class TransactionManagerTest {
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
 
         assertFalse(responseFuture.isDone());
-        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
-        prepareProduceResponse(Errors.INVALID_PRODUCER_EPOCH, producerId, epoch);
+        prepareAddPartitionsToTxnResponse(error, tp0, epoch, producerId);
 
+        verifyProducerFenced(responseFuture);
+    }
+
+    @Test
+    public void testProducerFencedInAddOffSetsToTxn() throws InterruptedException {
+        verifyProducerFencedForAddOffsetsToTxn(Errors.INVALID_PRODUCER_EPOCH);
+    }
+
+    @Test
+    public void testInvalidProducerEpochConvertToProducerFencedInAddOffSetsToTxn() throws InterruptedException {
+        verifyProducerFencedForAddOffsetsToTxn(Errors.INVALID_PRODUCER_EPOCH);
+    }
+
+    private void verifyProducerFencedForAddOffsetsToTxn(Errors error) throws InterruptedException {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata(consumerGroupId));
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+
+        assertFalse(responseFuture.isDone());
+        prepareAddOffsetsToTxnResponse(error, consumerGroupId, producerId, epoch);
+
+        verifyProducerFenced(responseFuture);
+    }
+
+    private void verifyProducerFenced(Future<RecordMetadata> responseFuture) throws InterruptedException {
         runUntil(responseFuture::isDone);
         assertTrue(transactionManager.hasError());
 
@@ -1579,6 +1645,68 @@ public class TransactionManagerTest {
         assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort());
         assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(
             Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
+    }
+
+    @Test
+    public void testInvalidProducerEpochConvertToProducerFencedInEndTxn() throws InterruptedException {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+        TransactionalRequestResult commitResult = transactionManager.beginCommit();
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        prepareProduceResponse(Errors.NONE, producerId, epoch);
+        prepareEndTxnResponse(Errors.INVALID_PRODUCER_EPOCH, TransactionResult.COMMIT, producerId, epoch);
+
+        runUntil(commitResult::isCompleted);
+        runUntil(responseFuture::isDone);
+
+        // make sure the exception was thrown directly from the follow-up calls.
+        assertThrows(KafkaException.class, () -> transactionManager.beginTransaction());
+        assertThrows(KafkaException.class, () -> transactionManager.beginCommit());
+        assertThrows(KafkaException.class, () -> transactionManager.beginAbort());
+        assertThrows(KafkaException.class, () -> transactionManager.sendOffsetsToTransaction(
+            Collections.emptyMap(), new ConsumerGroupMetadata("dummyId")));
+    }
+
+    @Test
+    public void testInvalidProducerEpochFromProduce() throws InterruptedException {
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        transactionManager.failIfNotReadyForSend();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        prepareProduceResponse(Errors.INVALID_PRODUCER_EPOCH, producerId, epoch);
+        prepareProduceResponse(Errors.NONE, producerId, epoch);
+
+        sender.runOnce();
+
+        runUntil(responseFuture::isDone);
+        assertFalse(transactionManager.hasError());
+
+        transactionManager.beginCommit();
+
+        TransactionManager.TxnRequestHandler handler = transactionManager.nextRequest(false);
+
+        // First we will get an EndTxn for commit.
+        assertNotNull(handler);
+        assertTrue(handler.requestBuilder() instanceof EndTxnRequest.Builder);
+
+        handler = transactionManager.nextRequest(false);
+
+        // Second we will see an InitPid for handling InvalidProducerEpoch.
+        assertNotNull(handler);
+        assertTrue(handler.requestBuilder() instanceof InitProducerIdRequest.Builder);
     }
 
     @Test
@@ -3096,10 +3224,7 @@ public class TransactionManagerTest {
     }
 
     private void verifyCommitOrAbortTransactionRetriable(TransactionResult firstTransactionResult,
-                                                         TransactionResult retryTransactionResult)
-            throws InterruptedException {
-        final short epoch = 1;
-
+                                                         TransactionResult retryTransactionResult) throws InterruptedException {
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -3386,7 +3511,7 @@ public class TransactionManagerTest {
         }
     }
 
-    private void assertFutureFailed(Future<RecordMetadata> future) throws InterruptedException {
+    private void assertProduceFutureFailed(Future<RecordMetadata> future) throws InterruptedException {
         assertTrue(future.isDone());
 
         try {

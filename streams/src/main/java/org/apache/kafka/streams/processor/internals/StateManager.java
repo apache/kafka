@@ -40,7 +40,9 @@ public interface StateManager {
 
     void flush();
 
-    void checkpoint(final Map<TopicPartition, Long> offsets);
+    void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets);
+
+    void checkpoint();
 
     Map<TopicPartition, Long> changelogOffsets();
 

@@ -65,7 +65,7 @@ public class KTableMapValuesTest {
             assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
                     new KeyValueTimestamp<>("B", 2, 25),
                     new KeyValueTimestamp<>("C", 3, 20),
-                    new KeyValueTimestamp<>("D", 4, 10)), supplier.theCapturedProcessor().processed);
+                    new KeyValueTimestamp<>("D", 4, 10)), supplier.theCapturedProcessor().processed());
         }
     }
 

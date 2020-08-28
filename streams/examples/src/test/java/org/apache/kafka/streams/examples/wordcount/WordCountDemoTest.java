@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.examples.wordcount;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -24,14 +25,19 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
@@ -47,11 +53,11 @@ public class WordCountDemoTest {
     private TestOutputTopic<String, Long> outputTopic;
 
     @Before
-    public void setup() {
+    public void setup() throws IOException {
         final StreamsBuilder builder = new StreamsBuilder();
         //Create Actual Stream Processing pipeline
         WordCountDemo.createWordCountStream(builder);
-        testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.getStreamsConfig());
+        testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.getStreamsConfig(null));
         inputTopic = testDriver.createInputTopic(WordCountDemo.INPUT_TOPIC, new StringSerializer(), new StringSerializer());
         outputTopic = testDriver.createOutputTopic(WordCountDemo.OUTPUT_TOPIC, new StringDeserializer(), new LongDeserializer());
     }
@@ -107,6 +113,20 @@ public class WordCountDemoTest {
         inputTopic.pipeValueList(inputValues);
         final Map<String, Long> actualWordCounts = outputTopic.readKeyValuesToMap();
         assertThat(actualWordCounts, equalTo(expectedWordCounts));
+    }
+
+    @Test
+    public void testGetStreamsConfig() throws IOException {
+        final File tmp = TestUtils.tempFile("bootstrap.servers=localhost:1234");
+        try {
+            Properties config = WordCountDemo.getStreamsConfig(new String[] {tmp.getPath()});
+            assertThat("localhost:1234", equalTo(config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)));
+
+            config = WordCountDemo.getStreamsConfig(new String[] {tmp.getPath(), "extra", "args"});
+            assertThat("localhost:1234", equalTo(config.getProperty(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)));
+        } finally {
+            Files.deleteIfExists(tmp.toPath());
+        }
     }
 
 }

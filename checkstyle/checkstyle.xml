@@ -103,6 +103,14 @@
       <property name="ignoreComments" value="true"/>
     </module>
 
+    <module name="Regexp">
+      <property name="id" value="dontUseSystemExit"/>
+      <property name="format" value="System\.exit"/>
+      <property name="illegalPattern" value="true"/>
+      <property name="ignoreComments" value="true"/>
+      <property name="message" value="'System.exit': Should not directly call System.exit, but Exit.exit instead."/>
+    </module>
+
     <!-- code quality -->
     <module name="MethodLength"/>
     <module name="ParameterNumber">

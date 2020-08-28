@@ -216,7 +216,7 @@ public class ProcessorStateManagerTest {
 
         assertThrows(
             IllegalStateException.class,
-            () -> stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 0L))
+            () -> stateMgr.updateChangelogOffsets(Collections.singletonMap(persistentStorePartition, 0L))
         );
     }
 
@@ -412,7 +412,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
-            assertFalse(checkpointFile.exists());
+            assertTrue(checkpointFile.exists());
             assertEquals(mkSet(
                 persistentStorePartition,
                 persistentStoreTwoPartition,
@@ -423,6 +423,47 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoPartition, 0L),
                 mkEntry(nonPersistentStorePartition, 0L)),
                 stateMgr.changelogOffsets()
+            );
+
+            assertNull(stateMgr.storeMetadata(irrelevantPartition));
+            assertNull(stateMgr.storeMetadata(persistentStoreTwoPartition).offset());
+            assertThat(stateMgr.storeMetadata(persistentStorePartition).offset(), equalTo(checkpointOffset));
+            assertNull(stateMgr.storeMetadata(nonPersistentStorePartition).offset());
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldInitializeOffsetsFromCheckpointFileAndDeleteIfEOSEnabled() throws IOException {
+        final long checkpointOffset = 10L;
+
+        final Map<TopicPartition, Long> offsets = mkMap(
+                mkEntry(persistentStorePartition, checkpointOffset),
+                mkEntry(nonPersistentStorePartition, checkpointOffset),
+                mkEntry(irrelevantPartition, 999L)
+        );
+        checkpoint.write(offsets);
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.registerStore(persistentStoreTwo, persistentStoreTwo.stateRestoreCallback);
+            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+            stateMgr.initializeStoreOffsetsFromCheckpoint(true);
+
+            assertFalse(checkpointFile.exists());
+            assertEquals(mkSet(
+                    persistentStorePartition,
+                    persistentStoreTwoPartition,
+                    nonPersistentStorePartition),
+                    stateMgr.changelogPartitions());
+            assertEquals(mkMap(
+                    mkEntry(persistentStorePartition, checkpointOffset + 1L),
+                    mkEntry(persistentStoreTwoPartition, 0L),
+                    mkEntry(nonPersistentStorePartition, 0L)),
+                    stateMgr.changelogOffsets()
             );
 
             assertNull(stateMgr.storeMetadata(irrelevantPartition));
@@ -513,7 +554,8 @@ public class ProcessorStateManagerTest {
             // make sure that flush is called in the proper order
             assertThat(persistentStore.getLastFlushCount(), Matchers.lessThan(nonPersistentStore.getLastFlushCount()));
 
-            stateMgr.checkpoint(ackedOffsets);
+            stateMgr.updateChangelogOffsets(ackedOffsets);
+            stateMgr.checkpoint();
 
             assertTrue(checkpointFile.exists());
 
@@ -547,10 +589,11 @@ public class ProcessorStateManagerTest {
             assertThat(storeMetadata.offset(), equalTo(100L));
 
             // should ignore irrelevant topic partitions
-            stateMgr.checkpoint(mkMap(
+            stateMgr.updateChangelogOffsets(mkMap(
                 mkEntry(persistentStorePartition, 220L),
                 mkEntry(irrelevantPartition, 9000L)
             ));
+            stateMgr.checkpoint();
 
             assertThat(stateMgr.storeMetadata(irrelevantPartition), equalTo(null));
             assertThat(storeMetadata.offset(), equalTo(220L));
@@ -572,7 +615,7 @@ public class ProcessorStateManagerTest {
 
             stateMgr.restore(storeMetadata, singletonList(consumerRecord));
 
-            stateMgr.checkpoint(emptyMap());
+            stateMgr.checkpoint();
 
             final Map<TopicPartition, Long> read = checkpoint.read();
             assertThat(read, equalTo(singletonMap(persistentStorePartition, 100L)));
@@ -592,7 +635,8 @@ public class ProcessorStateManagerTest {
             final StateStoreMetadata storeMetadata = stateMgr.storeMetadata(nonPersistentStorePartition);
             assertThat(storeMetadata, notNullValue());
 
-            stateMgr.checkpoint(singletonMap(nonPersistentStorePartition, 876L));
+            stateMgr.updateChangelogOffsets(singletonMap(nonPersistentStorePartition, 876L));
+            stateMgr.checkpoint();
 
             final Map<TopicPartition, Long> read = checkpoint.read();
             assertThat(read, equalTo(emptyMap()));
@@ -616,7 +660,8 @@ public class ProcessorStateManagerTest {
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
 
-            stateMgr.checkpoint(singletonMap(persistentStorePartition, 987L));
+            stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 987L));
+            stateMgr.checkpoint();
 
             final Map<TopicPartition, Long> read = checkpoint.read();
             assertThat(read, equalTo(emptyMap()));
@@ -722,7 +767,9 @@ public class ProcessorStateManagerTest {
         stateDirectory.clean();
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(ProcessorStateManager.class)) {
-            stateMgr.checkpoint(singletonMap(persistentStorePartition, 10L));
+            stateMgr.updateChangelogOffsets(singletonMap(persistentStorePartition, 10L));
+            stateMgr.checkpoint();
+
 
             boolean foundExpectedLogMessage = false;
             for (final LogCaptureAppender.Event event : appender.getEvents()) {
@@ -896,10 +943,11 @@ public class ProcessorStateManagerTest {
             assertThat(stateMgr.storeMetadata(nonPersistentStorePartition), notNullValue());
             assertThat(stateMgr.storeMetadata(persistentStorePartition), notNullValue());
 
-            stateMgr.checkpoint(mkMap(
+            stateMgr.updateChangelogOffsets(mkMap(
                 mkEntry(nonPersistentStorePartition, 876L),
                 mkEntry(persistentStorePartition, 666L))
             );
+            stateMgr.checkpoint();
 
             // reset the state and offsets, for example as in a corrupted task
             stateMgr.close();

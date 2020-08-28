@@ -101,6 +101,6 @@ public class GlobalKTableJoinsTest {
             streamInputTopic.pipeInput("3", "c", 3L);
         }
 
-        assertEquals(expected, supplier.theCapturedProcessor().lastValueAndTimestampPerKey);
+        assertEquals(expected, supplier.theCapturedProcessor().lastValueAndTimestampPerKey());
     }
 }

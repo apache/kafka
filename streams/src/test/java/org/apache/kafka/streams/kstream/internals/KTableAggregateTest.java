@@ -108,7 +108,7 @@ public class KTableAggregateTest {
                     new KeyValueTimestamp<>("B", "0+2-2+4-4+7", 18L),
                     new KeyValueTimestamp<>("C", "0+5-5", 10L),
                     new KeyValueTimestamp<>("C", "0+5-5+8", 10L)),
-                supplier.theCapturedProcessor().processed);
+                supplier.theCapturedProcessor().processed());
         }
     }
 
@@ -171,7 +171,7 @@ public class KTableAggregateTest {
                         new KeyValueTimestamp<>("4", "0+4", 23),
                         new KeyValueTimestamp<>("4", "0+4-4", 23),
                         new KeyValueTimestamp<>("7", "0+7", 22)),
-                supplier.theCapturedProcessor().processed);
+                supplier.theCapturedProcessor().processed());
         }
     }
 
@@ -204,7 +204,7 @@ public class KTableAggregateTest {
                     new KeyValueTimestamp<>("blue", 1L, 12),
                     new KeyValueTimestamp<>("yellow", 1L, 15),
                     new KeyValueTimestamp<>("green", 2L, 12)),
-                supplier.theCapturedProcessor().processed);
+                supplier.theCapturedProcessor().processed());
         }
     }
 
@@ -288,7 +288,7 @@ public class KTableAggregateTest {
                     new KeyValueTimestamp<>("1", "", 12),
                     new KeyValueTimestamp<>("1", "2", 12L)
                 ),
-                proc.processed
+                proc.processed()
             );
         }
     }

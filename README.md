@@ -13,7 +13,7 @@ Scala 2.13 is used by default, see below for how to use a different Scala versio
 ### Build a jar and run it ###
     ./gradlew jar
 
-Follow instructions in https://kafka.apache.org/documentation.html#quickstart
+Follow instructions in https://kafka.apache.org/quickstart
 
 ### Build source jar ###
     ./gradlew srcJar

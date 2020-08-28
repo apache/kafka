@@ -18,7 +18,9 @@
   "type": "request",
   "name": "AddOffsetsToTxnRequest",
   // Version 1 is the same as version 0.
-  "validVersions": "0-1",
+  //
+  // Version 2 adds the support for new error code PRODUCER_FENCED.
+  "validVersions": "0-2",
   "flexibleVersions": "none",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+", "entityType": "transactionalId",

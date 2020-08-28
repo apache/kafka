@@ -194,9 +194,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     sensorAccess.getOrCreate(
       replicationType.toString,
       InactiveSensorExpirationTimeSeconds,
-      rateMetricName,
-      Some(getQuotaMetricConfig(quota)),
-      new SimpleRate
+      sensor => sensor.add(rateMetricName, new SimpleRate, getQuotaMetricConfig(quota))
     )
   }
 }

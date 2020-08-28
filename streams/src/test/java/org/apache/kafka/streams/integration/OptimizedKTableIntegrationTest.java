@@ -119,7 +119,7 @@ public class OptimizedKTableIntegrationTest {
         final KeyQueryMetadata keyQueryMetadata = kafkaStreams1.queryMetadataForKey(TABLE_NAME, key, (topic, somekey, value, numPartitions) -> 0);
 
         // Assert that the current value in store reflects all messages being processed
-        if ((keyQueryMetadata.getActiveHost().port() % 2) == 1) {
+        if ((keyQueryMetadata.activeHost().port() % 2) == 1) {
             assertThat(store1.get(key), is(equalTo(batch1NumMessages - 1)));
             kafkaStreams1WasFirstActive = true;
         } else {

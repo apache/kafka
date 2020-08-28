@@ -379,9 +379,19 @@ public class EosTestDriver extends SmokeTestUtil {
         final IntegerDeserializer integerDeserializer = new IntegerDeserializer();
         for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords : receivedRecords.entrySet()) {
             final TopicPartition inputTopicPartition = new TopicPartition("data", partitionRecords.getKey().partition());
-            final Iterator<ConsumerRecord<byte[], byte[]>> expectedRecord = expectedRecords.get(inputTopicPartition).iterator();
+            final List<ConsumerRecord<byte[], byte[]>> receivedRecordsForPartition = partitionRecords.getValue();
+            final List<ConsumerRecord<byte[], byte[]>> expectedRecordsForPartition = expectedRecords.get(inputTopicPartition);
 
-            for (final ConsumerRecord<byte[], byte[]> receivedRecord : partitionRecords.getValue()) {
+            System.out.println(partitionRecords.getKey() + " with " + receivedRecordsForPartition.size() + ", " +
+                    inputTopicPartition + " with " + expectedRecordsForPartition.size());
+
+            final Iterator<ConsumerRecord<byte[], byte[]>> expectedRecord = expectedRecordsForPartition.iterator();
+            RuntimeException exception = null;
+            for (final ConsumerRecord<byte[], byte[]> receivedRecord : receivedRecordsForPartition) {
+                if (!expectedRecord.hasNext()) {
+                    exception = new RuntimeException("Result verification failed for " + receivedRecord + " since there's no more expected record");
+                }
+
                 final ConsumerRecord<byte[], byte[]> expected = expectedRecord.next();
 
                 final String receivedKey = stringDeserializer.deserialize(receivedRecord.topic(), receivedRecord.key());
@@ -390,8 +400,12 @@ public class EosTestDriver extends SmokeTestUtil {
                 final int expectedValue = integerDeserializer.deserialize(expected.topic(), expected.value());
 
                 if (!receivedKey.equals(expectedKey) || receivedValue != expectedValue) {
-                    throw new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + expectedKey + "," + expectedValue + "> but was <" + receivedKey + "," + receivedValue + ">");
+                    exception = new RuntimeException("Result verification failed for " + receivedRecord + " expected <" + expectedKey + "," + expectedValue + "> but was <" + receivedKey + "," + receivedValue + ">");
                 }
+            }
+
+            if (exception != null) {
+                throw exception;
             }
         }
     }

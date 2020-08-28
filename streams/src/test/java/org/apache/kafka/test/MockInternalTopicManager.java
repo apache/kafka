@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.test;
 
-import java.util.Collections;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,10 +37,11 @@ public class MockInternalTopicManager extends InternalTopicManager {
     private final MockConsumer<byte[], byte[]> restoreConsumer;
     private final boolean mockCreateInternalTopics;
 
-    public MockInternalTopicManager(final StreamsConfig streamsConfig,
+    public MockInternalTopicManager(final Time time,
+                                    final StreamsConfig streamsConfig,
                                     final MockConsumer<byte[], byte[]> restoreConsumer,
                                     final boolean mockCreateInternalTopics) {
-        super(Admin.create(streamsConfig.originals()), streamsConfig);
+        super(time, Admin.create(streamsConfig.originals()), streamsConfig);
 
         this.restoreConsumer = restoreConsumer;
         this.mockCreateInternalTopics = mockCreateInternalTopics;
@@ -64,8 +66,7 @@ public class MockInternalTopicManager extends InternalTopicManager {
 
     @Override
     protected Map<String, Integer> getNumPartitions(final Set<String> topics,
-                                                    final Set<String> tempUnknownTopics,
-                                                    final boolean hasRemainingRetries) {
+                                                    final Set<String> tempUnknownTopics) {
         final Map<String, Integer> partitions = new HashMap<>();
         for (final String topic : topics) {
             partitions.put(topic, restoreConsumer.partitionsFor(topic) == null ?  null : restoreConsumer.partitionsFor(topic).size());

@@ -69,9 +69,12 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void checkpoint(final Map<TopicPartition, Long> offsets) {
-        this.offsets.putAll(offsets);
+    public void updateChangelogOffsets(final Map<TopicPartition, Long> writtenOffsets) {
+        this.offsets.putAll(writtenOffsets);
     }
+
+    @Override
+    public void checkpoint() {}
 
     @Override
     public StateStore getStore(final String name) {

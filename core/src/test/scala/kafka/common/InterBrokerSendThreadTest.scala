@@ -64,7 +64,7 @@ class InterBrokerSendThreadTest {
       override def generateRequests() = List[RequestAndCompletionHandler](handler)
     }
 
-    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, handler.handler)
+    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, null, null, handler.handler)
 
     EasyMock.expect(networkClient.newClientRequest(
       EasyMock.eq("1"),
@@ -72,6 +72,8 @@ class InterBrokerSendThreadTest {
       EasyMock.anyLong(),
       EasyMock.eq(true),
       EasyMock.eq(requestTimeoutMs),
+      EasyMock.eq(null),
+      EasyMock.eq(null),
       EasyMock.same(handler.handler)))
       .andReturn(clientRequest)
 
@@ -101,7 +103,7 @@ class InterBrokerSendThreadTest {
       override def generateRequests() = List[RequestAndCompletionHandler](requestAndCompletionHandler)
     }
 
-    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, requestAndCompletionHandler.handler)
+    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestTimeoutMs, null, null, requestAndCompletionHandler.handler)
 
     EasyMock.expect(networkClient.newClientRequest(
       EasyMock.eq("1"),
@@ -109,6 +111,8 @@ class InterBrokerSendThreadTest {
       EasyMock.anyLong(),
       EasyMock.eq(true),
       EasyMock.eq(requestTimeoutMs),
+      EasyMock.eq(null),
+      EasyMock.eq(null),
       EasyMock.same(requestAndCompletionHandler.handler)))
       .andReturn(clientRequest)
 
@@ -152,6 +156,8 @@ class InterBrokerSendThreadTest {
       time.milliseconds(),
       true,
       requestTimeoutMs,
+      null,
+      null,
       handler.handler)
     time.sleep(1500)
 
@@ -161,6 +167,8 @@ class InterBrokerSendThreadTest {
       EasyMock.eq(time.milliseconds()),
       EasyMock.eq(true),
       EasyMock.eq(requestTimeoutMs),
+      EasyMock.eq(null),
+      EasyMock.eq(null),
       EasyMock.same(handler.handler)))
       .andReturn(clientRequest)
 

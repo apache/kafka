@@ -53,6 +53,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -780,13 +781,27 @@ public final class MessageTest {
         assertEquals(expected.toString(), message2.toString());
     }
 
+    @SuppressWarnings("unchecked")
     private void testJsonRoundTrip(short version, Message message, Message expected) throws Exception {
-        JsonNode jsonNode = message.toJson(version);
-        Message message2 = message.getClass().newInstance();
-        message2.fromJson(jsonNode, version);
+        String jsonConverter = jsonConverterTypeName(message.getClass().getTypeName());
+        Class<?> converter = Class.forName(jsonConverter);
+        Method writeMethod = converter.getMethod("write", message.getClass(), short.class);
+        JsonNode jsonNode = (JsonNode) writeMethod.invoke(null, message, version);
+        Method readMethod = converter.getMethod("read", JsonNode.class, short.class);
+        Message message2 = (Message) readMethod.invoke(null, jsonNode, version);
         assertEquals(expected, message2);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());
+    }
+
+    private static String jsonConverterTypeName(String source) {
+        int outerClassIndex = source.lastIndexOf('$');
+        if (outerClassIndex == -1) {
+            return  source + "JsonConverter";
+        } else {
+            return source.substring(0, outerClassIndex) + "JsonConverter$" +
+                source.substring(outerClassIndex + 1) + "JsonConverter";
+        }
     }
 
     /**

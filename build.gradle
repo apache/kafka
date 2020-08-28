@@ -74,10 +74,18 @@ allprojects {
         }
       }
     }
-    configurations {
-      runtime {
+    configurations.all {
+      // zinc is the Scala incremental compiler, it has a configuration for its own dependencies
+      // that are unrelated to the project dependencies, we should not change them
+      if (name != "zinc") {
         resolutionStrategy {
           force(
+            // ensure we have a single version of scala jars in the classpath, we enable inlining
+            // in the scala compiler for the `core` module so binary compatibility is only
+            // guaranteed if the exact same version of the scala jars is used for compilation
+            // and at runtime
+            libs.scalaLibrary,
+            libs.scalaReflect,
             // ensures we have a single version of jackson-annotations in the classpath even if
             // some modules only have a transitive reference to an older version
             libs.jacksonAnnotations,
@@ -966,6 +974,7 @@ project(':examples') {
 
 project(':generator') {
   dependencies {
+    compile libs.argparse4j
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
     compile libs.jacksonJaxrsJsonProvider
@@ -1042,10 +1051,12 @@ project(':clients') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "org.apache.kafka.common.message",
-             "src/generated/java/org/apache/kafka/common/message",
-             "src/main/resources/common/message",
-             "ApiMessageTypeGenerator" ]
+    args = [ "-p", "org.apache.kafka.common.message",
+             "-o", "src/generated/java/org/apache/kafka/common/message",
+             "-i", "src/main/resources/common/message",
+             "-t", "ApiMessageTypeGenerator",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+           ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
@@ -1053,10 +1064,11 @@ project(':clients') {
   task processTestMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "org.apache.kafka.common.message",
-             "src/generated-test/java/org/apache/kafka/common/message",
-             "src/test/resources/common/message",
-             "none" ]
+    args = [ "-p", "org.apache.kafka.common.message",
+             "-o", "src/generated-test/java/org/apache/kafka/common/message",
+             "-i", "src/test/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+           ]
     inputs.dir("src/test/resources/common/message")
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
@@ -1191,10 +1203,11 @@ project(':streams') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "org.apache.kafka.streams.internals.generated",
-             "src/generated/java/org/apache/kafka/streams/internals/generated",
-             "src/main/resources/common/message",
-             "none" ]
+    args = [ "-p", "org.apache.kafka.streams.internals.generated",
+             "-o", "src/generated/java/org/apache/kafka/streams/internals/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"
+           ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
   }
@@ -1284,6 +1297,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-23:test',
             ':streams:upgrade-system-tests-24:test',
             ':streams:upgrade-system-tests-25:test',
+            ':streams:upgrade-system-tests-26:test',
             ':streams:examples:test'
     ]
   )
@@ -1534,6 +1548,18 @@ project(':streams:upgrade-system-tests-25') {
 
   dependencies {
     testCompile libs.kafkaStreams_25
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-26') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-26"
+
+  dependencies {
+    testCompile libs.kafkaStreams_26
   }
 
   systemTestLibs {

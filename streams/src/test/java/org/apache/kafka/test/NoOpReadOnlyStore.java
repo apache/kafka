@@ -78,6 +78,7 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
             new File(context.stateDir() + File.separator + name).mkdir();
         }
         this.initialized = true;
+        context.register(root, (k, v) -> { });
     }
 
     @Override

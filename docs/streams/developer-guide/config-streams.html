@@ -203,7 +203,7 @@
           </tr>
           <tr class="row-even"><td>commit.interval.ms</td>
             <td>Low</td>
-            <td colspan="2">The frequency with which to save the position (offsets in source topics) of tasks.</td>
+            <td colspan="2">The frequency in milliseconds with which to save the position (offsets in source topics) of tasks.</td>
             <td>30000 milliseconds</td>
           </tr>
           <tr class="row-odd"><td>default.deserialization.exception.handler</td>
@@ -243,8 +243,8 @@
           </tr>
           <tr class="row-even"><td>max.task.idle.ms</td>
             <td>Medium</td>
-            <td colspan="2">Maximum amount of time a stream task will stay idle while waiting for all partitions to contain data and avoid potential out-of-order record
-              processing across multiple input streams.</td>
+            <td colspan="2">Maximum amount of time in milliseconds a stream task will stay idle while waiting for all partitions to contain data
+              and avoid potential out-of-order record processing across multiple input streams.</td>
             <td>0 milliseconds</td>
           </tr>
           <tr class="row-odd"><td>max.warmup.replicas</td>
@@ -269,8 +269,8 @@
           </tr>
           <tr class="row-odd"><td>metrics.sample.window.ms</td>
             <td>Low</td>
-            <td colspan="2">The window of time a metrics sample is computed over.</td>
-            <td>30000 milliseconds</td>
+            <td colspan="2">The window of time in milliseconds a metrics sample is computed over.</td>
+            <td>30000 milliseconds (30 seconds)</td>
           </tr>
           <tr class="row-even"><td>num.standby.replicas</td>
             <td>Medium</td>
@@ -289,7 +289,7 @@
           </tr>
           <tr class="row-odd"><td>probing.rebalance.interval.ms</td>
             <td>Low</td>
-            <td colspan="2">The maximum time to wait before triggering a rebalance to probe for warmup replicas that have sufficiently caught up.</td>
+            <td colspan="2">The maximum time in milliseconds to wait before triggering a rebalance to probe for warmup replicas that have sufficiently caught up.</td>
             <td>600000 milliseconds (10 minutes)</td>
           </tr>
           <tr class="row-even"><td>processing.guarantee</td>
@@ -308,15 +308,10 @@
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.</td>
             <td>1</td>
           </tr>
-          <tr class="row-odd"><td>retries</td>
-              <td>Medium</td>
-              <td colspan="2">The number of retries for broker requests that return a retryable error. </td>
-              <td>0</td>
-          </tr>
           <tr class="row-even"><td>retry.backoff.ms</td>
               <td>Medium</td>
               <td colspan="2">The amount of time in milliseconds, before a request is retried. This applies if the <code class="docutils literal"><span class="pre">retries</span></code> parameter is configured to be greater than 0. </td>
-              <td>100</td>
+              <td>100 milliseconds</td>
           </tr>
           <tr class="row-odd"><td>rocksdb.config.setter</td>
             <td>Medium</td>
@@ -326,12 +321,17 @@
           <tr class="row-even"><td>state.cleanup.delay.ms</td>
             <td>Low</td>
             <td colspan="2">The amount of time in milliseconds to wait before deleting state when a partition has migrated.</td>
-            <td>600000 milliseconds</td>
+            <td>600000 milliseconds (10 minutes)</td>
           </tr>
           <tr class="row-odd"><td>state.dir</td>
             <td>High</td>
             <td colspan="2">Directory location for state stores.</td>
             <td><code class="docutils literal"><span class="pre">/tmp/kafka-streams</span></code></td>
+          </tr>
+          <tr class="row-odd"><td>task.timeout.ms</td>
+            <td>Medium</td>
+            <td colspan="2">The maximum amount of time in milliseconds a task might stall due to internal errors and retries until an error is raised. For a timeout of <code>0 ms</code>, a task would raise an error for the first internal error. For any timeout larger than <code>0 ms</code>, a task will retry at least once before an error is raised.</td>
+            <td>300000 milliseconds (5 minutes)</td>
           </tr>
           <tr class="row-even"><td>topology.optimization</td>
             <td>Medium</td>
@@ -346,7 +346,7 @@
           <tr class="row-even"><td>windowstore.changelog.additional.retention.ms</td>
             <td>Low</td>
             <td colspan="2">Added to a windows maintainMs to ensure data is not deleted from the log prematurely. Allows for clock drift.</td>
-            <td>86400000 milliseconds = 1 day</td>
+            <td>86400000 milliseconds (1 day)</td>
           </tr>
           </tbody>
         </table>
