@@ -74,6 +74,29 @@ def doTest() {
   '''
 }
 
+
+def buildStage(String jdk, String scala) {
+  stage(jdk) {
+    agent { label 'ubuntu' }
+    tools {
+      jdk '${jdk} (latest)'
+    }
+    environment {
+      SCALA_VERSION=scala
+    }
+    steps {
+      sh 'gradle -version'
+      doValidation()
+      doTest()
+    }
+    post {
+      always {
+	junit '**/build/test-results/**/TEST-*.xml'
+      }
+    }
+  }
+}
+
 pipeline {
   agent none
   stages {
@@ -119,6 +142,8 @@ pipeline {
 	    }
 	  }
 	}
+       
+        makeStage("JDK 14", "2.13")
       }
     }
   }
