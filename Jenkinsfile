@@ -75,7 +75,7 @@ def doTest() {
 }
 
 pipeline {
-  agent { label 'ubuntu' }
+  agent none
   stages {
     stage('Build') {
       parallel {
@@ -90,6 +90,11 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
+	  }
+	  post {
+	    always {
+	      junit '**/build/test-results/**/TEST-*.xml'
+	    }
 	  }
 	}
 
@@ -106,13 +111,13 @@ pipeline {
 	    doValidation()
 	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
 	  }
+	  post {
+	    always {
+	      junit '**/build/test-results/**/TEST-*.xml'
+	    }
+	  }
 	}
       }
-    }
-  }
-  post {
-    always {
-      junit '**/build/test-results/**/TEST-*.xml'
     }
   }
 }
