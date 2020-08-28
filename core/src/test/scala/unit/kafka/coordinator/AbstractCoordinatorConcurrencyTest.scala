@@ -17,10 +17,10 @@
 
 package kafka.coordinator
 
-import java.util.{Collections, Random}
-import java.util.concurrent.{ConcurrentHashMap, Executors}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
+import java.util.concurrent.{ConcurrentHashMap, Executors}
+import java.util.{Collections, Random}
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.{AppendOrigin, Log}
@@ -97,7 +97,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   }
 
   def enableCompletion(): Unit = {
-    replicaManager.tryCompleteDelayedRequests()
+    replicaManager.tryCompleteDelayedAction()
     scheduler.tick()
   }
 
@@ -167,9 +167,7 @@ object AbstractCoordinatorConcurrencyTest {
       watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     }
 
-    def tryCompleteDelayedRequests(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
-
-    override def tryCompleteDelayedAction(): Unit = tryCompleteDelayedRequests()
+    override def tryCompleteDelayedAction(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
 
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,
@@ -205,7 +203,6 @@ object AbstractCoordinatorConcurrencyTest {
       val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
       watchKeys ++= producerRequestKeys
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-      tryCompleteDelayedRequests()
     }
     override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
       Some(RecordBatch.MAGIC_VALUE_V2)

@@ -47,7 +47,6 @@ abstract class DelayedOperation(override val delayMs: Long,
   extends TimerTask with Logging {
 
   private val completed = new AtomicBoolean(false)
-  private val tryCompletePending = new AtomicBoolean(false)
   // Visible for testing
   private[server] val lock: Lock = lockOpt.getOrElse(new ReentrantLock)
 
@@ -111,30 +110,7 @@ abstract class DelayedOperation(override val delayMs: Long,
    * every invocation of `maybeTryComplete` is followed by at least one invocation of `tryComplete` until
    * the operation is actually completed.
    */
-  private[server] def maybeTryComplete(): Boolean = {
-    var retry = false
-    var done = false
-    do {
-      if (lock.tryLock()) {
-        try {
-          tryCompletePending.set(false)
-          done = tryComplete()
-        } finally {
-          lock.unlock()
-        }
-        // While we were holding the lock, another thread may have invoked `maybeTryComplete` and set
-        // `tryCompletePending`. In this case we should retry.
-        retry = tryCompletePending.get()
-      } else {
-        // Another thread is holding the lock. If `tryCompletePending` is already set and this thread failed to
-        // acquire the lock, then the thread that is holding the lock is guaranteed to see the flag and retry.
-        // Otherwise, we should set the flag and retry on this thread since the thread holding the lock may have
-        // released the lock and returned by the time the flag is set.
-        retry = !tryCompletePending.getAndSet(true)
-      }
-    } while (!isCompleted && retry)
-    done
-  }
+  private[server] def maybeTryComplete(): Boolean = inLock(lock)(tryComplete())
 
   /*
    * run() method defines a task that is executed on timeout

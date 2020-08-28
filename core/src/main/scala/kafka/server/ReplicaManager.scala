@@ -561,6 +561,11 @@ class ReplicaManager(val config: KafkaConfig,
   // visible for testing
   val delayedActions = new LinkedBlockingQueue[() => Unit]()
 
+  /**
+   * try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
+   * are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle(),
+   * at which point, no conflicting locks will be held.
+   */
   def tryCompleteDelayedAction(): Unit = {
     val action = delayedActions.poll()
     if (action != null) action()
@@ -616,7 +621,6 @@ class ReplicaManager(val config: KafkaConfig,
               }
           }
       }
-
 
       recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
 

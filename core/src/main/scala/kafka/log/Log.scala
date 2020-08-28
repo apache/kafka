@@ -85,6 +85,8 @@ object LogAppendInfo {
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  * @param lastOffsetOfFirstBatch The last offset of the first batch
+ * @param leaderHWIncremented true if the high watermark is increased when appending record. Otherwise, false.
+ *                            this field is updated after appending record so it has default value option.
  */
 case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
