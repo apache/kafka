@@ -34,16 +34,12 @@ void setBuildStatus(String context, String message, String state) {
     ]);
 }
 
-void doValidation(String scalaVersion) {
-  echo "Scala Version: ${scalaVersion}"
-  environment {
-    SCALA_VERSION = scalaVersion
-  }
+def doValidation() {
   sh '''
     ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-      spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-      --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\" \
-      || { echo 'Validation steps failed'; exit 1; }
+        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+        --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\" \
+        || { echo 'Validation steps failed'; exit 1; }
   '''
 }
 
@@ -56,9 +52,12 @@ pipeline {
 	  tools {
 	    jdk 'JDK 1.8 (latest)'
 	  }
+          environment {
+            SCALA_VERSION=2.12
+          }
 	  steps {
 	    sh 'gradle -version'
-	    doValidation('2.12')
+	    doValidation()
 	  }
 	}
 
@@ -66,9 +65,12 @@ pipeline {
 	  tools {
 	    jdk 'JDK 11 (latest)'
 	  }
+          environment {
+            SCALA_VERSION=2.13
+          }
 	  steps {
 	    sh 'gradle -version'
-	    doValidation('2.13')
+	    doValidation()
 	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
 	  }
 	}
