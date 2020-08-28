@@ -78,47 +78,51 @@ pipeline {
   agent none
   stages {
     stage('Build') {
-      parallel {
-	stage('JDK 8') {
-          agent { label 'ubuntu' }
-	  tools {
-	    jdk 'JDK 1.8 (latest)'
-	  }
-	  environment {
-	    SCALA_VERSION=2.12
-	  }
-	  steps {
-	    sh 'gradle -version'
-	    doValidation()
-            doTest()
-	  }
-	  post {
-	    always {
-	      junit '**/build/test-results/**/TEST-*.xml'
-	    }
-	  }
+      matrix {
+        agent { label 'ubuntu' }
+        tools {
+          jdk "$JDK (latest)"
+        }
+	environment {
+	  SCALA_VERSION = "$SCALA"
 	}
-
-	stage('JDK 11') {
-          agent { label 'ubuntu' }
-	  tools {
-	    jdk 'JDK 11 (latest)'
-	  }
-	  environment {
-	    SCALA_VERSION=2.13
-	  }
-	  steps {
-	    sh 'gradle -version'
-	    doValidation()
-            doTest()
-	    // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
-	  }
-	  post {
-	    always {
-	      junit '**/build/test-results/**/TEST-*.xml'
+        axes {
+          axis {
+            name 'JDK'
+            values 'JDK 1.8', 'JDK 11', 'JDK 14'
+          }
+          axis {
+            name 'SCALA'
+            values '2.12', '2.13'
+          }
+        }
+        excludes {
+          exclude {
+            axis {
+              name 'JDK'
+              values 'JDK 11', 'JDK 14'
+            }
+            axis {
+              name 'SCALA'
+              values '2.12'
+            }
+          }
+        }
+        stages {
+          stage("BuildVersion") {
+	    steps {
+	      sh 'gradle -version'
+	      doValidation()
+	      doTest()
+	      // setBuildStatus("continuous-integration/jenkins/test-check-1", "Check is running", "PENDING")
 	    }
-	  }
-	}
+	    post {
+	      always {
+		junit '**/build/test-results/**/TEST-*.xml'
+	      }
+	    }
+          }
+        }
       }
     }
   }
