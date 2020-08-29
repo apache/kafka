@@ -1019,8 +1019,9 @@ class Log(@volatile private var _dir: File,
   def appendAsLeader(records: MemoryRecords,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.Client,
-                     interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
-    append(records, origin, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch, ignoreRecordSize = false)
+                     interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion,
+                     bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): LogAppendInfo = {
+    append(records, origin, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch, Some(bufferSupplier), ignoreRecordSize = false)
   }
 
   /**
@@ -1036,6 +1037,7 @@ class Log(@volatile private var _dir: File,
       interBrokerProtocolVersion = ApiVersion.latestVersion,
       assignOffsets = false,
       leaderEpoch = -1,
+      None,
       // disable to check the validation of record size since the record is already accepted by leader.
       ignoreRecordSize = true)
   }
@@ -1051,6 +1053,7 @@ class Log(@volatile private var _dir: File,
    * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
+   * @param bufferSupplier The supplier used to allocate buffers if assignOffsets is true
    * @param ignoreRecordSize true to skip validation of record size.
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @throws OffsetsOutOfOrderException If out of order offsets found in 'records'
@@ -1062,6 +1065,7 @@ class Log(@volatile private var _dir: File,
                      interBrokerProtocolVersion: ApiVersion,
                      assignOffsets: Boolean,
                      leaderEpoch: Int,
+                     bufferSupplier: Option[BufferSupplier],
                      ignoreRecordSize: Boolean): LogAppendInfo = {
     maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
       val appendInfo = analyzeAndValidateRecords(records, origin, ignoreRecordSize)
@@ -1096,7 +1100,9 @@ class Log(@volatile private var _dir: File,
               leaderEpoch,
               origin,
               interBrokerProtocolVersion,
-              brokerTopicStats)
+              brokerTopicStats,
+              bufferSupplier.getOrElse(throw new IllegalArgumentException(
+                "bufferSupplier should be defined if assignOffsets is true")))
           } catch {
             case e: IOException =>
               throw new KafkaException(s"Error validating messages while appending to log $name", e)

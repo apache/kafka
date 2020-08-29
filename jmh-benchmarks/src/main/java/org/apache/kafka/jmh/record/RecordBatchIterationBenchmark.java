@@ -157,7 +157,7 @@ public class RecordBatchIterationBenchmark {
                 false,  messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0,
                 new AppendOrigin.Client$(),
                 ApiVersion.latestVersion(),
-                brokerTopicStats);
+                brokerTopicStats, bufferSupplier);
     }
 
     @Benchmark

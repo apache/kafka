@@ -32,7 +32,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{BufferSupplier, FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -208,7 +208,8 @@ class TransactionStateManager(brokerId: Int,
           internalTopicsAllowed = true,
           origin = AppendOrigin.Coordinator,
           recordsPerPartition,
-          removeFromCacheCallback)
+          removeFromCacheCallback,
+          bufferSupplier = BufferSupplier.NO_CACHING)
       }
 
     }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
@@ -480,7 +481,8 @@ class TransactionStateManager(brokerId: Int,
                              coordinatorEpoch: Int,
                              newMetadata: TxnTransitMetadata,
                              responseCallback: Errors => Unit,
-                             retryOnError: Errors => Boolean = _ => false): Unit = {
+                             retryOnError: Errors => Boolean = _ => false,
+                             bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -633,7 +635,8 @@ class TransactionStateManager(brokerId: Int,
                 internalTopicsAllowed = true,
                 origin = AppendOrigin.Coordinator,
                 recordsPerPartition,
-                updateCacheCallback)
+                updateCacheCallback,
+                bufferSupplier = bufferSupplier)
 
               trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }

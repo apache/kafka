@@ -30,7 +30,7 @@ import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConversionStats}
+import org.apache.kafka.common.record.{BufferSupplier, MemoryRecords, RecordBatch, RecordConversionStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.EasyMock
 import org.junit.{After, Before}
@@ -177,7 +177,8 @@ object AbstractCoordinatorConcurrencyTest {
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
-                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()): Unit = {
+                               processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
+                               bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return

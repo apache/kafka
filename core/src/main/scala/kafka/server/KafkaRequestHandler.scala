@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.record.BufferSupplier
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 
 import scala.collection.mutable
@@ -42,6 +43,7 @@ class KafkaRequestHandler(id: Int,
                           time: Time) extends Runnable with Logging {
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
   private val shutdownComplete = new CountDownLatch(1)
+  private val bufferSupplier = BufferSupplier.create
   @volatile private var stopped = false
 
   def run(): Unit = {
@@ -60,14 +62,14 @@ class KafkaRequestHandler(id: Int,
       req match {
         case RequestChannel.ShutdownRequest =>
           debug(s"Kafka request handler $id on broker $brokerId received shut down command")
-          shutdownComplete.countDown()
+          completeShutdown()
           return
 
         case request: RequestChannel.Request =>
           try {
             request.requestDequeueTimeNanos = endTime
             trace(s"Kafka request handler $id on broker $brokerId handling request $request")
-            apis.handle(request)
+            apis.handle(request, bufferSupplier)
           } catch {
             case e: FatalExitError =>
               shutdownComplete.countDown()
@@ -80,6 +82,11 @@ class KafkaRequestHandler(id: Int,
         case null => // continue
       }
     }
+    completeShutdown()
+  }
+
+  private def completeShutdown(): Unit = {
+    bufferSupplier.close()
     shutdownComplete.countDown()
   }
 
