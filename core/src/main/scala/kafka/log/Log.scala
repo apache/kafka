@@ -86,7 +86,7 @@ object LogAppendInfo {
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  * @param lastOffsetOfFirstBatch The last offset of the first batch
  * @param leaderHWIncremented true if the high watermark is increased when appending record. Otherwise, false.
- *                            the default value is false and it will be updated after appending record.
+ *                            this field is updated after appending record so the default value is None.
  */
 case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
@@ -103,7 +103,7 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          lastOffsetOfFirstBatch: Long,
                          recordErrors: Seq[RecordError] = List(),
                          errorMessage: String = null,
-                         leaderHWIncremented: Boolean = false) {
+                         leaderHWIncremented: Option[Boolean] = None) {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
    * For magic versions 2 and newer, this method will return first offset. For magic versions

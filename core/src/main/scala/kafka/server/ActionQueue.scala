@@ -34,15 +34,10 @@ class ActionQueue {
   def add(action: () => Unit): Unit = queue.put(action)
 
   /**
-   * picks up a action to complete.
+   * picks up an action to complete.
    */
   def tryCompleteAction(): Unit = {
     val action = queue.poll()
     if (action != null) action()
   }
-
-  /**
-   * @return number of actions kept by this queue
-   */
-  def size: Int = queue.size()
 }
