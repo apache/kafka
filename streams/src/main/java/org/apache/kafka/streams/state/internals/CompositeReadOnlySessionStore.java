@@ -22,6 +22,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 
@@ -43,6 +44,73 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(final K key,
+                                                         final Instant earliestSessionEndTime,
+                                                         final Instant latestSessionStartTime) {
+        Objects.requireNonNull(key, "key can't be null");
+        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        for (final ReadOnlySessionStore<K, V> store : stores) {
+            try {
+                final KeyValueIterator<Windowed<K>, V> result = store.findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+                if (!result.hasNext()) {
+                    result.close();
+                } else {
+                    return result;
+                }
+            } catch (final InvalidStateStoreException ise) {
+                throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
+                    " and may have been migrated to another instance; " +
+                    "please re-discover its location from the state metadata. " +
+                    "Original error message: " + ise.toString());
+            }
+        }
+        return KeyValueIterators.emptyIterator();
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(final K keyFrom,
+                                                         final K keyTo,
+                                                         final Instant earliestSessionEndTime,
+                                                         final Instant latestSessionStartTime) {
+        Objects.requireNonNull(keyFrom, "keyFrom can't be null");
+        Objects.requireNonNull(keyTo, "keyTo can't be null");
+        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        for (final ReadOnlySessionStore<K, V> store : stores) {
+            try {
+                final KeyValueIterator<Windowed<K>, V> result = store.findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+                if (!result.hasNext()) {
+                    result.close();
+                } else {
+                    return result;
+                }
+            } catch (final InvalidStateStoreException ise) {
+                throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
+                    " and may have been migrated to another instance; " +
+                    "please re-discover its location from the state metadata. " +
+                    "Original error message: " + ise.toString());
+            }
+        }
+        return KeyValueIterators.emptyIterator();
+    }
+
+    @Override
+    public V fetchSession(final K key, final Instant sessionStartTime, final Instant sessionEndTime) {
+        Objects.requireNonNull(key, "key can't be null");
+        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        for (final ReadOnlySessionStore<K, V> store : stores) {
+            try {
+                return store.fetchSession(key, sessionStartTime, sessionEndTime);
+            } catch (final InvalidStateStoreException ise) {
+                throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
+                    " and may have been migrated to another instance; " +
+                    "please re-discover its location from the state metadata. " +
+                    "Original error message: " + ise.toString());
+            }
+        }
+        return null;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         Objects.requireNonNull(key, "key can't be null");
         final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
@@ -56,22 +124,22 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
                 }
             } catch (final InvalidStateStoreException ise) {
                 throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
-                                                             " and may have been migrated to another instance; " +
-                                                             "please re-discover its location from the state metadata. " +
-                                                             "Original error message: " + ise.toString());
+                    " and may have been migrated to another instance; " +
+                    "please re-discover its location from the state metadata. " +
+                    "Original error message: " + ise.toString());
             }
         }
         return KeyValueIterators.emptyIterator();
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
-        Objects.requireNonNull(from, "from can't be null");
-        Objects.requireNonNull(to, "to can't be null");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> store.fetch(from, to);
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom, final K keyTo) {
+        Objects.requireNonNull(keyFrom, "from can't be null");
+        Objects.requireNonNull(keyTo, "to can't be null");
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlySessionStore<K, V>> nextIteratorFunction = store -> store.fetch(keyFrom, keyTo);
         return new DelegatingPeekingKeyValueIterator<>(storeName,
-                                                       new CompositeKeyValueIterator<>(
-                                                               storeProvider.stores(storeName, queryableStoreType).iterator(),
-                                                               nextIteratorFunction));
+            new CompositeKeyValueIterator<>(
+                storeProvider.stores(storeName, queryableStoreType).iterator(),
+                nextIteratorFunction));
     }
 }

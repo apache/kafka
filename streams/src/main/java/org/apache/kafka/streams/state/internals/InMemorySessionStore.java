@@ -138,18 +138,18 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
-    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
+    public byte[] fetchSession(final Bytes key, final long sessionStartTime, final long sessionEndTime) {
         removeExpiredSegments();
 
         Objects.requireNonNull(key, "key cannot be null");
 
         // Only need to search if the record hasn't expired yet
-        if (endTime > observedStreamTime - retentionPeriod) {
-            final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(endTime);
+        if (sessionEndTime > observedStreamTime - retentionPeriod) {
+            final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(sessionEndTime);
             if (keyMap != null) {
                 final ConcurrentNavigableMap<Long, byte[]> startTimeMap = keyMap.get(key);
                 if (startTimeMap != null) {
-                    return startTimeMap.get(startTime);
+                    return startTimeMap.get(sessionStartTime);
                 }
             }
         }
@@ -205,15 +205,15 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
 
-        Objects.requireNonNull(from, "from key cannot be null");
-        Objects.requireNonNull(to, "to key cannot be null");
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
 
         removeExpiredSegments();
 
 
-        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
+        return registerNewIterator(keyFrom, keyTo, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
     }
 
     @Override

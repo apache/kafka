@@ -67,8 +67,8 @@ class ChangeLoggingSessionBytesStore
     }
 
     @Override
-    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
-        return wrapped().fetchSession(key, startTime, endTime);
+    public byte[] fetchSession(final Bytes key, final long sessionStartTime, final long sessionEndTime) {
+        return wrapped().fetchSession(key, sessionStartTime, sessionEndTime);
     }
 
     @Override
@@ -77,7 +77,7 @@ class ChangeLoggingSessionBytesStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
-        return wrapped().fetch(from, to);
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo) {
+        return wrapped().fetch(keyFrom, keyTo);
     }
 }

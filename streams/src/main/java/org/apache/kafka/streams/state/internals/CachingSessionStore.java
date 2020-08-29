@@ -200,17 +200,17 @@ class CachingSessionStore
     }
 
     @Override
-    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
+    public byte[] fetchSession(final Bytes key, final long sessionStartTime, final long sessionEndTime) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         if (context.cache() == null) {
-            return wrapped().fetchSession(key, startTime, endTime);
+            return wrapped().fetchSession(key, sessionStartTime, sessionEndTime);
         } else {
-            final Bytes bytesKey = SessionKeySchema.toBinary(key, startTime, endTime);
+            final Bytes bytesKey = SessionKeySchema.toBinary(key, sessionStartTime, sessionEndTime);
             final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
             final LRUCacheEntry entry = context.cache().get(cacheName, cacheKey);
             if (entry == null) {
-                return wrapped().fetchSession(key, startTime, endTime);
+                return wrapped().fetchSession(key, sessionStartTime, sessionEndTime);
             } else {
                 return entry.value();
             }
@@ -224,11 +224,11 @@ class CachingSessionStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
-                                                           final Bytes to) {
-        Objects.requireNonNull(from, "from cannot be null");
-        Objects.requireNonNull(to, "to cannot be null");
-        return findSessions(from, to, 0, Long.MAX_VALUE);
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
+                                                           final Bytes keyTo) {
+        Objects.requireNonNull(keyFrom, "from cannot be null");
+        Objects.requireNonNull(keyTo, "to cannot be null");
+        return findSessions(keyFrom, keyTo, 0, Long.MAX_VALUE);
     }
 
     public void flush() {
