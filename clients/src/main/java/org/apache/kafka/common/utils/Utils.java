@@ -1271,4 +1271,10 @@ public final class Utils {
         }
         return map;
     }
+
+    public static <K, V> Map<K, V> initializeMap(Collection<K> keys, Supplier<V> valueSupplier) {
+        Map<K, V> res = new HashMap<>();
+        keys.forEach(key -> res.put(key, valueSupplier.get()));
+        return res;
+    }
 }

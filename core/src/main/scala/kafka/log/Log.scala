@@ -36,6 +36,7 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
 import kafka.utils._
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.DescribeProducersResponseData
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
@@ -940,6 +941,19 @@ class Log(@volatile private var _dir: File,
     }
     loadedProducers.values.foreach(producerStateManager.update)
     completedTxns.foreach(producerStateManager.completeTxn)
+  }
+
+  def activeProducers: Seq[DescribeProducersResponseData.ProducerState] = {
+    lock synchronized {
+      producerStateManager.activeProducers.map { case (producerId, state) =>
+        new DescribeProducersResponseData.ProducerState()
+          .setProducerId(producerId)
+          .setProducerEpoch(state.producerEpoch)
+          .setLastSequence(state.lastSeq)
+          .setLastTimestamp(state.lastTimestamp)
+          .setCurrentTxnStartTimestamp(state.currentTxnFirstOffset.getOrElse(-1L))
+      }
+    }.toSeq
   }
 
   private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {

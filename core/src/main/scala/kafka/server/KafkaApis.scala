@@ -51,7 +51,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
-import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnResponseData, AlterConfigsResponseData, AlterPartitionReassignmentsResponseData, AlterReplicaLogDirsResponseData, CreateAclsResponseData, CreatePartitionsResponseData, CreateTopicsResponseData, DeleteAclsResponseData, DeleteGroupsResponseData, DeleteRecordsResponseData, DeleteTopicsResponseData, DescribeAclsResponseData, DescribeConfigsResponseData, DescribeGroupsResponseData, DescribeLogDirsResponseData, DescribeProducersResponseData, EndTxnResponseData, ExpireDelegationTokenResponseData, FindCoordinatorResponseData, HeartbeatResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsResponseData, ListPartitionReassignmentsResponseData, MetadataResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteResponseData, RenewDelegationTokenResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData, StopReplicaResponseData, SyncGroupResponseData, UpdateMetadataResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
@@ -77,7 +77,6 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.message.MetadataResponseData
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
 import org.apache.kafka.server.authorizer._
 
@@ -181,6 +180,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotasRequest(request)
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentialsRequest(request)
+        case ApiKeys.DESCRIBE_PRODUCERS => handleDescribeProducersRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -3052,6 +3052,44 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
+  }
+
+  def handleDescribeProducersRequest(request: RequestChannel.Request): Unit = {
+    val describeProducersRequest = request.body[DescribeProducersRequest]
+
+    def partitionError(topicPartition: TopicPartition, error: Errors): DescribeProducersResponseData.PartitionResponse = {
+      new DescribeProducersResponseData.PartitionResponse()
+        .setPartitionIndex(topicPartition.partition)
+        .setErrorCode(error.code)
+    }
+
+    val response = new DescribeProducersResponseData()
+    describeProducersRequest.data.topics.forEach { topicRequest =>
+      val topicResponse = new DescribeProducersResponseData.TopicResponse()
+        .setName(topicRequest.name)
+      val topicError = if (!authorize(request.context, DESCRIBE, TOPIC, topicRequest.name))
+        Some(Errors.TOPIC_AUTHORIZATION_FAILED)
+      else if (!metadataCache.contains(topicRequest.name))
+        Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+      else
+        None
+
+      topicRequest.partitionIndexes.forEach { partitionId =>
+        val topicPartition = new TopicPartition(topicRequest.name, partitionId)
+        val partitionResponse = topicError match {
+          case Some(error) => partitionError(topicPartition, error)
+          case None => replicaManager.activeProducerState(topicPartition)
+        }
+        topicResponse.partitions.add(partitionResponse)
+      }
+
+      if (!topicResponse.partitions.isEmpty) {
+        response.topics.add(topicResponse)
+      }
+    }
+
+    sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new DescribeProducersResponse(response.setThrottleTimeMs(requestThrottleMs)))
   }
 
   // private package for testing

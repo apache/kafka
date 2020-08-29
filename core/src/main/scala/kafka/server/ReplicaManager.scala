@@ -40,7 +40,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
-import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
+import org.apache.kafka.common.message.{DescribeLogDirsResponseData, DescribeProducersResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
@@ -1893,4 +1893,14 @@ class ReplicaManager(val config: KafkaConfig,
 
     controller.electLeaders(partitions, electionType, electionCallback)
   }
+
+  def activeProducerState(requestPartition: TopicPartition): DescribeProducersResponseData.PartitionResponse = {
+    getPartitionOrError(requestPartition) match {
+      case Left(error) => new DescribeProducersResponseData.PartitionResponse()
+          .setPartitionIndex(requestPartition.partition)
+          .setErrorCode(error.code)
+      case Right(partition) => partition.activeProducerState
+    }
+  }
+
 }

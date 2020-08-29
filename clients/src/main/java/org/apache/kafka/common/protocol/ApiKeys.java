@@ -16,8 +16,14 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
+import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData;
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData;
+import org.apache.kafka.common.message.AlterClientQuotasRequestData;
+import org.apache.kafka.common.message.AlterClientQuotasResponseData;
+import org.apache.kafka.common.message.AlterConfigsRequestData;
+import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
@@ -25,14 +31,8 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ApiMessageType;
-import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
-import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
-import org.apache.kafka.common.message.AlterClientQuotasRequestData;
-import org.apache.kafka.common.message.AlterClientQuotasResponseData;
-import org.apache.kafka.common.message.AlterConfigsRequestData;
-import org.apache.kafka.common.message.AlterConfigsResponseData;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateAclsRequestData;
@@ -63,6 +63,8 @@ import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
+import org.apache.kafka.common.message.DescribeProducersRequestData;
+import org.apache.kafka.common.message.DescribeProducersResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
@@ -109,10 +111,10 @@ import org.apache.kafka.common.message.StopReplicaRequestData;
 import org.apache.kafka.common.message.StopReplicaResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
-import org.apache.kafka.common.message.UpdateMetadataRequestData;
-import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
+import org.apache.kafka.common.message.UpdateMetadataRequestData;
+import org.apache.kafka.common.message.UpdateMetadataResponseData;
 import org.apache.kafka.common.message.WriteTxnMarkersRequestData;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.types.Schema;
@@ -225,7 +227,9 @@ public enum ApiKeys {
     DESCRIBE_USER_SCRAM_CREDENTIALS(50, "DescribeUserScramCredentials", DescribeUserScramCredentialsRequestData.SCHEMAS,
             DescribeUserScramCredentialsResponseData.SCHEMAS),
     ALTER_USER_SCRAM_CREDENTIALS(51, "AlterUserScramCredentials", AlterUserScramCredentialsRequestData.SCHEMAS,
-            AlterUserScramCredentialsResponseData.SCHEMAS);
+            AlterUserScramCredentialsResponseData.SCHEMAS),
+    DESCRIBE_PRODUCERS(52, "DescribeProducers", DescribeProducersRequestData.SCHEMAS,
+            DescribeProducersResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

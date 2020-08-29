@@ -60,7 +60,7 @@ public class MetadataResponse extends AbstractResponse {
     public static final int NO_LEADER_ID = -1;
     public static final int AUTHORIZED_OPERATIONS_OMITTED = Integer.MIN_VALUE;
 
-    private final MetadataResponseData data;
+    public final MetadataResponseData data;
     private volatile Holder holder;
     private final boolean hasReliableLeaderEpochs;
 

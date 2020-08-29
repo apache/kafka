@@ -27,7 +27,7 @@ import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE
 
 public class DescribeGroupsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DescribeGroupsRequest> {
-        private final DescribeGroupsRequestData data;
+        public final DescribeGroupsRequestData data;
 
         public Builder(DescribeGroupsRequestData data) {
             super(ApiKeys.DESCRIBE_GROUPS);

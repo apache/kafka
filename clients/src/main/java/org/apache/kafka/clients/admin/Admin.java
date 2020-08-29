@@ -1215,6 +1215,12 @@ public interface Admin extends AutoCloseable {
      */
     AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options);
 
+    default DescribeProducersResult describeProducers(Collection<TopicPartition> partitions) {
+        return describeProducers(partitions, new DescribeProducersOptions());
+    }
+
+    DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
+
     /**
      * Describe all SASL/SCRAM credentials.
      *

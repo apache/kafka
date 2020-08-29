@@ -248,6 +248,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new DescribeUserScramCredentialsRequest(struct, apiVersion);
             case ALTER_USER_SCRAM_CREDENTIALS:
                 return new AlterUserScramCredentialsRequest(struct, apiVersion);
+            case DESCRIBE_PRODUCERS:
+                return new DescribeProducersRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

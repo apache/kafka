@@ -34,7 +34,9 @@ import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
+import org.apache.kafka.clients.admin.internals.DescribeProducersRequestDriver;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
+import org.apache.kafka.clients.admin.internals.RequestDriver;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -718,20 +720,36 @@ public class KafkaAdminClient extends AdminClient {
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
-        private int tries = 0;
+        protected int tries;
         private boolean aborted = false;
         private Node curNode = null;
-        private long nextAllowedTryMs = 0;
+        private long nextAllowedTryMs;
 
-        Call(boolean internal, String callName, long deadlineMs, NodeProvider nodeProvider) {
+        Call(boolean internal,
+             String callName,
+             long nextAllowedTryMs,
+             int tries,
+             long deadlineMs,
+             NodeProvider nodeProvider
+        ) {
             this.internal = internal;
             this.callName = callName;
+            this.nextAllowedTryMs = nextAllowedTryMs;
+            this.tries = tries;
             this.deadlineMs = deadlineMs;
             this.nodeProvider = nodeProvider;
         }
 
+        Call(boolean internal, String callName, long deadlineMs, NodeProvider nodeProvider) {
+            this(internal, callName, 0, 0, deadlineMs, nodeProvider);
+        }
+
         Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
-            this(false, callName, deadlineMs, nodeProvider);
+            this(false, callName, 0, 0, deadlineMs, nodeProvider);
+        }
+
+        Call(String callName, long nextAllowedTryMs, int tries, long deadlineMs, NodeProvider nodeProvider) {
+            this(false, callName, nextAllowedTryMs, tries, deadlineMs, nodeProvider);
         }
 
         protected Node curNode() {
@@ -811,8 +829,7 @@ public class KafkaAdminClient extends AdminClient {
          *
          * @return          The AbstractRequest builder.
          */
-        @SuppressWarnings("rawtypes")
-        abstract AbstractRequest.Builder createRequest(int timeoutMs);
+        abstract AbstractRequest.Builder<?> createRequest(int timeoutMs);
 
         /**
          * Process the call response.
@@ -4256,7 +4273,20 @@ public class KafkaAdminClient extends AdminClient {
 
     private static byte[] getSaltedPasword(ScramMechanism publicScramMechanism, byte[] password, byte[] salt, int iterations) throws NoSuchAlgorithmException, InvalidKeyException {
         return new ScramFormatter(org.apache.kafka.common.security.scram.internals.ScramMechanism.forMechanismName(publicScramMechanism.mechanismName()))
-                .hi(password, salt, iterations);
+            .hi(password, salt, iterations);
+    }
+
+    @Override
+    public DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options) {
+        if (partitions.isEmpty()) {
+            return new DescribeProducersResult(Collections.emptyMap());
+        }
+        long currentTimeMs = time.milliseconds();
+        long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
+        DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
+            partitions, options, deadlineMs, retryBackoffMs);
+        maybeSendRequests(currentTimeMs, driver);
+        return new DescribeProducersResult(driver.futures());
     }
 
     /**
@@ -4270,4 +4300,38 @@ public class KafkaAdminClient extends AdminClient {
             return subLevelErrors.get(subKey).exception();
         }
     }
+
+    private <K, V> void maybeSendRequests(long currentTimeMs, RequestDriver<K, V> driver) {
+        for (RequestDriver<K, V>.RequestSpec spec : driver.poll()) {
+            runnable.call(newCall(driver, spec), currentTimeMs);
+        }
+    }
+
+    private <K, V> Call newCall(RequestDriver<K, V> driver, RequestDriver<K, V>.RequestSpec spec) {
+        NodeProvider nodeProvider = spec.scope.destinationBrokerId().isPresent() ?
+            new ConstantNodeIdProvider(spec.scope.destinationBrokerId().getAsInt()) :
+            new LeastLoadedNodeProvider();
+
+        return new Call("", spec.nextAllowedTryMs, spec.tries, spec.deadlineMs, nodeProvider) {
+            @Override
+            AbstractRequest.Builder<?> createRequest(int timeoutMs) {
+                return spec.request;
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                long currentTimeMs = time.milliseconds();
+                driver.onResponse(currentTimeMs, spec, response);
+                maybeSendRequests(currentTimeMs, driver);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                long currentTimeMs = time.milliseconds();
+                driver.onFailure(currentTimeMs, spec, throwable);
+                maybeSendRequests(currentTimeMs, driver);
+            }
+        };
+    }
+
 }
