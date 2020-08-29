@@ -509,7 +509,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {
     override def run(txn: Transaction): Unit = {
       transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback)
-      replicaManager.tryCompleteDelayedAction()
+      replicaManager.tryCompleteDelayedRequests()
     }
     override def awaitAndVerify(txn: Transaction): Unit = {
       val initPidResult = result.getOrElse(throw new IllegalStateException("InitProducerId has not completed"))
@@ -526,7 +526,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
             txnMetadata.producerEpoch,
             partitions,
             resultCallback)
-        replicaManager.tryCompleteDelayedAction()
+        replicaManager.tryCompleteDelayedRequests()
       }
     }
     override def awaitAndVerify(txn: Transaction): Unit = {
@@ -599,13 +599,13 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
         }
       }
       txnStateManager.enableTransactionalIdExpiration()
-      replicaManager.tryCompleteDelayedAction()
+      replicaManager.tryCompleteDelayedRequests()
       time.sleep(txnConfig.removeExpiredTransactionalIdsIntervalMs + 1)
     }
 
     override def await(): Unit = {
       val (_, success) = TestUtils.computeUntilTrue({
-        replicaManager.tryCompleteDelayedAction()
+        replicaManager.tryCompleteDelayedRequests()
         transactions.forall(txn => transactionMetadata(txn).isEmpty)
       })(identity)
       assertTrue("Transaction not expired", success)

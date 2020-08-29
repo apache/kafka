@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import kafka.server.{DelayedOperation, DelayedOperationPurgatory, GroupKey}
+import kafka.server.{ActionQueue, DelayedOperation, DelayedOperationPurgatory, GroupKey}
 
 import scala.math.{max, min}
 
@@ -33,6 +33,7 @@ import scala.math.{max, min}
  */
 private[group] class DelayedJoin(coordinator: GroupCoordinator,
                                  group: GroupMetadata,
+                                 actionQueue: ActionQueue,
                                  rebalanceTimeout: Long) extends DelayedOperation(rebalanceTimeout, Some(group.lock)) {
 
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete _)
@@ -43,7 +44,7 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
   }
   override def onComplete(): Unit = coordinator.onCompleteJoin(group)
 
-  private def tryToCompleteDelayedAction(): Unit = coordinator.groupManager.replicaManager.tryCompleteDelayedAction()
+  private def tryToCompleteDelayedAction(): Unit = actionQueue.tryCompleteAction()
 }
 
 /**
@@ -57,9 +58,10 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
 private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
                                         purgatory: DelayedOperationPurgatory[DelayedJoin],
                                         group: GroupMetadata,
+                                        actionQueue: ActionQueue,
                                         configuredRebalanceDelay: Int,
                                         delayMs: Int,
-                                        remainingMs: Int) extends DelayedJoin(coordinator, group, delayMs) {
+                                        remainingMs: Int) extends DelayedJoin(coordinator, group, actionQueue, delayMs) {
 
   override def tryComplete(): Boolean = false
 
@@ -72,6 +74,7 @@ private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
         purgatory.tryCompleteElseWatch(new InitialDelayedJoin(coordinator,
           purgatory,
           group,
+          actionQueue,
           configuredRebalanceDelay,
           delay,
           remaining

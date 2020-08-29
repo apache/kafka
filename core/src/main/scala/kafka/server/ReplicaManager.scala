@@ -18,7 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.Optional
-import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
@@ -179,7 +179,8 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
                      val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
-                     threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
+                     threadNamePrefix: Option[String],
+                     actionQueue: ActionQueue) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
            metrics: Metrics,
@@ -192,7 +193,8 @@ class ReplicaManager(val config: KafkaConfig,
            brokerTopicStats: BrokerTopicStats,
            metadataCache: MetadataCache,
            logDirFailureChannel: LogDirFailureChannel,
-           threadNamePrefix: Option[String] = None) = {
+           threadNamePrefix: Option[String] = None,
+           actionQueue: ActionQueue) = {
     this(config, metrics, time, zkClient, scheduler, logManager, isShuttingDown,
       quotaManagers, brokerTopicStats, metadataCache, logDirFailureChannel,
       DelayedOperationPurgatory[DelayedProduce](
@@ -206,7 +208,7 @@ class ReplicaManager(val config: KafkaConfig,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
       DelayedOperationPurgatory[DelayedElectLeader](
         purgatoryName = "ElectLeader", brokerId = config.brokerId),
-      threadNamePrefix)
+      threadNamePrefix, actionQueue)
   }
 
   /* epoch of the controller that last changed the leader */
@@ -558,19 +560,6 @@ class ReplicaManager(val config: KafkaConfig,
     localLog(topicPartition).map(_.parentDir)
   }
 
-  // visible for testing
-  val delayedActions = new LinkedBlockingQueue[() => Unit]()
-
-  /**
-   * try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
-   * are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
-   * expiration thread for certain delayed operations (e.g. DelayedJoin)
-   */
-  def tryCompleteDelayedAction(): Unit = {
-    val action = delayedActions.poll()
-    if (action != null) action()
-  }
-
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied;
@@ -602,22 +591,19 @@ class ReplicaManager(val config: KafkaConfig,
                     result.info.logStartOffset, result.info.recordErrors.asJava, result.info.errorMessage)) // response status
       }
 
-      delayedActions.put {
+      actionQueue.add {
         () =>
           localProduceResults.foreach {
             case (topicPartition, result) =>
-              result.info.leaderHWIncremented.foreach {
-                incremented =>
-                  val requestKey = TopicPartitionOperationKey(topicPartition)
-                  if (incremented) {
-                    // some delayed operations may be unblocked after HW changed
-                    delayedProducePurgatory.checkAndComplete(requestKey)
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                    delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-                  } else {
-                    // probably unblock some follower fetch requests since log end offset has been updated
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                  }
+              val requestKey = TopicPartitionOperationKey(topicPartition)
+              if (result.info.leaderHWIncremented) {
+                // some delayed operations may be unblocked after HW changed
+                delayedProducePurgatory.checkAndComplete(requestKey)
+                delayedFetchPurgatory.checkAndComplete(requestKey)
+                delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+              } else {
+                // probably unblock some follower fetch requests since log end offset has been updated
+                delayedFetchPurgatory.checkAndComplete(requestKey)
               }
           }
       }

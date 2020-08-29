@@ -1010,7 +1010,7 @@ class Partition(val topicPartition: TopicPartition,
       }
     }
 
-    info.copy(leaderHWIncremented = Some(leaderHWIncremented))
+    info.copy(leaderHWIncremented = leaderHWIncremented)
   }
 
   def readRecords(fetchOffset: Long,

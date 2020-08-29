@@ -22,6 +22,7 @@ import kafka.cluster.PartitionStateStore;
 import kafka.log.CleanerConfig;
 import kafka.log.LogConfig;
 import kafka.log.LogManager;
+import kafka.server.ActionQueue;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.LogDirFailureChannel;
@@ -134,7 +135,8 @@ public class CheckpointBench {
                 brokerTopicStats,
                 metadataCache,
                 this.failureChannel,
-                Option.empty());
+                Option.empty(),
+                new ActionQueue());
         replicaManager.startup();
 
         List<TopicPartition> topicPartitions = new ArrayList<>();

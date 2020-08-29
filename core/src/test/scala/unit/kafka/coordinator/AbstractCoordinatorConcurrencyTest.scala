@@ -97,7 +97,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   }
 
   def enableCompletion(): Unit = {
-    replicaManager.tryCompleteDelayedAction()
+    replicaManager.tryCompleteDelayedRequests()
     scheduler.tick()
   }
 
@@ -158,7 +158,7 @@ object AbstractCoordinatorConcurrencyTest {
   }
 
   class TestReplicaManager extends ReplicaManager(
-    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None) {
+    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, new ActionQueue) {
 
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
     var watchKeys: mutable.Set[TopicPartitionOperationKey] = _
@@ -167,7 +167,9 @@ object AbstractCoordinatorConcurrencyTest {
       watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     }
 
-    override def tryCompleteDelayedAction(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
+    def tryCompleteDelayedRequests(): Unit = {
+      watchKeys.map(producePurgatory.checkAndComplete)
+    }
 
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,

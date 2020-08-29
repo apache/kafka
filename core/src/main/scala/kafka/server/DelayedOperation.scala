@@ -111,7 +111,8 @@ abstract class DelayedOperation(override val delayMs: Long,
    *
    * Now, we go back to use "lock" and make sure the thread which tries to complete delayed requests does NOT hold lock.
    * The approach is that ReplicaManager collects all actions, which are used to complete delayed requests, in a queue.
-   * KafkaApis.handle() and the expiration thread for certain delayed operations (e.g. DelayedJoin)
+   * KafkaApis.handle() and the expiration thread for certain delayed operations (e.g. DelayedJoin) pick up and then
+   * execute an action when no lock is held.
    */
   private[server] def safeTryComplete(): Boolean = inLock(lock)(tryComplete())
 

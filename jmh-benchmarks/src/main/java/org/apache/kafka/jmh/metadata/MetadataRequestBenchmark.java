@@ -21,6 +21,7 @@ import kafka.controller.KafkaController;
 import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
+import kafka.server.ActionQueue;
 import kafka.server.AdminManager;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -181,7 +182,8 @@ public class MetadataRequestBenchmark {
             brokerTopicStats,
             "clusterId",
             new SystemTime(),
-            null);
+            null,
+            new ActionQueue());
     }
 
     @TearDown(Level.Trial)

@@ -134,7 +134,8 @@ class KafkaApisTest {
       brokerTopicStats,
       clusterId,
       time,
-      null
+      null,
+      new ActionQueue
     )
   }
 

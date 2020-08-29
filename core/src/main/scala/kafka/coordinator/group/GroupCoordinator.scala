@@ -57,7 +57,8 @@ class GroupCoordinator(val brokerId: Int,
                        val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
                        val joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
                        time: Time,
-                       metrics: Metrics) extends Logging {
+                       metrics: Metrics,
+                       actionQueue: ActionQueue) extends Logging {
   import GroupCoordinator._
 
   type JoinCallback = JoinGroupResult => Unit
@@ -1093,11 +1094,12 @@ class GroupCoordinator(val brokerId: Int,
       new InitialDelayedJoin(this,
         joinPurgatory,
         group,
+        actionQueue,
         groupConfig.groupInitialRebalanceDelayMs,
         groupConfig.groupInitialRebalanceDelayMs,
         max(group.rebalanceTimeoutMs - groupConfig.groupInitialRebalanceDelayMs, 0))
     else
-      new DelayedJoin(this, group, group.rebalanceTimeoutMs)
+      new DelayedJoin(this, group, actionQueue, group.rebalanceTimeoutMs)
 
     group.transitionTo(PreparingRebalance)
 
@@ -1166,7 +1168,7 @@ class GroupCoordinator(val brokerId: Int,
         // until session timeout removes all the non-responsive members.
         error(s"Group ${group.groupId} could not complete rebalance because no members rejoined")
         joinPurgatory.tryCompleteElseWatch(
-          new DelayedJoin(this, group, group.rebalanceTimeoutMs),
+          new DelayedJoin(this, group, actionQueue, group.rebalanceTimeoutMs),
           Seq(GroupKey(group.groupId)))
       } else {
         group.initNextGeneration()
@@ -1289,10 +1291,11 @@ object GroupCoordinator {
             zkClient: KafkaZkClient,
             replicaManager: ReplicaManager,
             time: Time,
-            metrics: Metrics): GroupCoordinator = {
+            metrics: Metrics,
+            actionQueue: ActionQueue): GroupCoordinator = {
     val heartbeatPurgatory = DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
     val joinPurgatory = DelayedOperationPurgatory[DelayedJoin]("Rebalance", config.brokerId)
-    apply(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+    apply(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, time, metrics, actionQueue)
   }
 
   private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
@@ -1314,7 +1317,8 @@ object GroupCoordinator {
             heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
             time: Time,
-            metrics: Metrics): GroupCoordinator = {
+            metrics: Metrics,
+            actionQueue: ActionQueue): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,
@@ -1323,7 +1327,7 @@ object GroupCoordinator {
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, zkClient, time, metrics)
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time, metrics)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time, metrics, actionQueue)
   }
 
   private def memberLeaveError(memberIdentity: MemberIdentity,
