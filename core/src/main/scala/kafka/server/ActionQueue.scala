@@ -37,7 +37,10 @@ class ActionQueue {
    * picks up an action to complete.
    */
   def tryCompleteAction(): Unit = {
-    val action = queue.poll()
-    if (action != null) action()
+    var action = queue.poll()
+    while (action != null) {
+      action()
+      action = queue.poll()
+    }
   }
 }

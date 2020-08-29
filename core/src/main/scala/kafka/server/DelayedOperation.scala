@@ -41,6 +41,9 @@ import scala.collection.mutable.ListBuffer
  * forceComplete().
  *
  * A subclass of DelayedOperation needs to provide an implementation of both onComplete() and tryComplete().
+ *
+ * Noted that if you add a future delayed operation that calls ReplicaManager.appendRecords() in onComplete()
+ * like DelayedJoin, you must be aware that this operation's onExpiration() needs to call actionQueue.tryCompleteAction().
  */
 abstract class DelayedOperation(override val delayMs: Long,
                                 lockOpt: Option[Lock] = None)

@@ -68,6 +68,13 @@ object LogAppendInfo {
       offsetsMonotonic = false, -1L, recordErrors, errorMessage)
 }
 
+sealed trait LeaderHWChange
+object LeaderHWChange {
+  case object Incremental extends LeaderHWChange
+  case object Same extends LeaderHWChange
+  case object None extends LeaderHWChange
+}
+
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
  *
@@ -85,8 +92,9 @@ object LogAppendInfo {
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  * @param lastOffsetOfFirstBatch The last offset of the first batch
- * @param leaderHWIncremented true if the high watermark is increased when appending record. Otherwise, false.
- *                            this field is updated after appending record so the default value is None.
+ * @param leaderHWChange Incremental if the high watermark need to be increased after appending record.
+ *                       Same if high watermark is not changed. None is the default value and it means append is failed
+ *
  */
 case class LogAppendInfo(var firstOffset: Option[Long],
                          var lastOffset: Long,
@@ -103,7 +111,7 @@ case class LogAppendInfo(var firstOffset: Option[Long],
                          lastOffsetOfFirstBatch: Long,
                          recordErrors: Seq[RecordError] = List(),
                          errorMessage: String = null,
-                         leaderHWIncremented: Option[Boolean] = None) {
+                         leaderHWChange: LeaderHWChange = LeaderHWChange.None) {
   /**
    * Get the first offset if it exists, else get the last offset of the first batch
    * For magic versions 2 and newer, this method will return first offset. For magic versions

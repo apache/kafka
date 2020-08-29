@@ -596,17 +596,17 @@ class ReplicaManager(val config: KafkaConfig,
           localProduceResults.foreach {
             case (topicPartition, result) =>
               val requestKey = TopicPartitionOperationKey(topicPartition)
-              result.info.leaderHWIncremented.foreach {
-                leaderHWIncremented =>
-                  if (leaderHWIncremented) {
-                    // some delayed operations may be unblocked after HW changed
-                    delayedProducePurgatory.checkAndComplete(requestKey)
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                    delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-                  } else {
-                    // probably unblock some follower fetch requests since log end offset has been updated
-                    delayedFetchPurgatory.checkAndComplete(requestKey)
-                  }
+              result.info.leaderHWChange match {
+                case LeaderHWChange.Incremental =>
+                  // some delayed operations may be unblocked after HW changed
+                  delayedProducePurgatory.checkAndComplete(requestKey)
+                  delayedFetchPurgatory.checkAndComplete(requestKey)
+                  delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+                case LeaderHWChange.Same =>
+                  // probably unblock some follower fetch requests since log end offset has been updated
+                  delayedFetchPurgatory.checkAndComplete(requestKey)
+                case LeaderHWChange.None =>
+                  // nothing
               }
           }
       }
