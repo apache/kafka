@@ -489,10 +489,11 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
     assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
 
+    val bufferSupplier = BufferSupplier.create
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
-    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client, requiredAcks = 0)
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0)
+    partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client, requiredAcks = 0, bufferSupplier)
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, bufferSupplier)
     assertEquals("Expected leader's HW not move", partition.localLogOrException.logStartOffset,
       partition.localLogOrException.highWatermark)
 
@@ -745,7 +746,7 @@ class PartitionTest extends AbstractPartitionTest {
       new SimpleRecord("k2".getBytes, "v2".getBytes),
       new SimpleRecord("k3".getBytes, "v3".getBytes)),
       baseOffset = 0L)
-    partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0)
+    partition.appendRecordsToLeader(records, origin = AppendOrigin.Client, requiredAcks = 0, BufferSupplier.create)
 
     def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
       val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
@@ -861,11 +862,13 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
     assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
 
+    val bufferSupplier = BufferSupplier.create
+
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
     val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, origin = AppendOrigin.Client,
-      requiredAcks = 0).lastOffset
-    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0)
+      requiredAcks = 0, bufferSupplier).lastOffset
+    partition.appendRecordsToLeader(batch2, origin = AppendOrigin.Client, requiredAcks = 0, bufferSupplier)
     assertEquals("Expected leader's HW not move", partition.localLogOrException.logStartOffset,
       partition.log.get.highWatermark)
 
@@ -907,7 +910,7 @@ class PartitionTest extends AbstractPartitionTest {
     val currentLeaderEpochStartOffset = partition.localLogOrException.logEndOffset
 
     // append records with the latest leader epoch
-    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0)
+    partition.appendRecordsToLeader(batch3, origin = AppendOrigin.Client, requiredAcks = 0, bufferSupplier)
 
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     updateFollowerFetchState(follower1, LogOffsetMetadata(0))
@@ -999,10 +1002,12 @@ class PartitionTest extends AbstractPartitionTest {
       // Append records to partitions, one partition-per-thread
       val futures = partitions.map { partition =>
         executor.submit((() => {
+          val bufferSupplier = BufferSupplier.create
           (1 to 10000).foreach { _ =>
             partition.appendRecordsToLeader(createRecords(baseOffset = 0),
               origin = AppendOrigin.Client,
-              requiredAcks = 0)
+              requiredAcks = 0,
+              bufferSupplier)
           }
         }): Runnable)
       }

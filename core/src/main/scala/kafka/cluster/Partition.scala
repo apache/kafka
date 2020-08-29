@@ -986,7 +986,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   def appendRecordsToLeader(records: MemoryRecords, origin: AppendOrigin, requiredAcks: Int,
-                            bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): LogAppendInfo = {
+                            bufferSupplier: BufferSupplier): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderLogIfLocal match {
         case Some(leaderLog) =>
