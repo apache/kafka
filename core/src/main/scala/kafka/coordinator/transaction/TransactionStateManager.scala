@@ -482,7 +482,7 @@ class TransactionStateManager(brokerId: Int,
                              newMetadata: TxnTransitMetadata,
                              responseCallback: Errors => Unit,
                              retryOnError: Errors => Boolean = _ => false,
-                             bufferSupplier: BufferSupplier = BufferSupplier.NO_CACHING): Unit = {
+                             bufferSupplier: BufferSupplier): Unit = {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
