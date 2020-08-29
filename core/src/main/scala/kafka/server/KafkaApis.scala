@@ -191,7 +191,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
         // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
         // expiration thread for certain delayed operations (e.g. DelayedJoin)
-        actionQueue.tryCompleteAction()
+        actionQueue.tryCompleteActions()
       } catch {
         case e: Throwable =>
           error("failed to complete delayed actions", e)

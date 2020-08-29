@@ -34,9 +34,9 @@ class ActionQueue {
   def add(action: () => Unit): Unit = queue.put(action)
 
   /**
-   * picks up an action to complete.
+   * try to complete all delayed actions
    */
-  def tryCompleteAction(): Unit = {
+  def tryCompleteActions(): Unit = {
     var action = queue.poll()
     while (action != null) {
       action()
