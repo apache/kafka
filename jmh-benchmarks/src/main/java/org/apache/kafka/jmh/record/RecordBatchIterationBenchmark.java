@@ -23,6 +23,7 @@ import kafka.log.LogValidator;
 import kafka.message.CompressionCodec;
 import kafka.server.BrokerTopicStats;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.CompressionType;
@@ -49,6 +50,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Random;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.record.RecordBatch.CURRENT_MAGIC_VALUE;
 
@@ -82,6 +84,12 @@ public class RecordBatchIterationBenchmark {
 
     @Param(value = {"NO_CACHING", "CREATE"})
     private String bufferSupplierStr;
+
+    @Param(value = {"5"})
+    private int maxHeaderSize = 5;
+
+    @Param(value = {"10", "30"})
+    private int headerKeySize = 15;
 
     // zero starting offset is much faster for v1 batches, but that will almost never happen
     private int startingOffset;
@@ -122,11 +130,30 @@ public class RecordBatchIterationBenchmark {
         }
     }
 
+    private static Header[] createHeaders(int maxHeaderSize, int headerKeySize) {
+        char[] headerChars = new char[headerKeySize];
+        Arrays.fill(headerChars, 'a');
+        String headerKey = new String(headerChars);
+        byte[] headerValue = new byte[0];
+        return IntStream.range(0, maxHeaderSize).mapToObj(index -> new Header() {
+            @Override
+            public String key() {
+                return headerKey;
+            }
+
+            @Override
+            public byte[] value() {
+                return headerValue;
+            }
+        }).toArray(Header[]::new);
+    }
+
     private ByteBuffer createBatch(int batchSize) {
+        Header[] headers = createHeaders(maxHeaderSize, headerKeySize);
         byte[] value = new byte[messageSize];
         final ByteBuffer buf = ByteBuffer.allocate(
             AbstractRecords.estimateSizeInBytesUpperBound(messageVersion, compressionType, new byte[0], value,
-                    Record.EMPTY_HEADERS) * batchSize
+                    headers) * batchSize
         );
 
         final MemoryRecordsBuilder builder =
@@ -142,7 +169,7 @@ public class RecordBatchIterationBenchmark {
                     break;
             }
 
-            builder.append(0, null, value);
+            builder.append(0, null, value, headers);
         }
         return builder.build().buffer();
     }
@@ -150,7 +177,7 @@ public class RecordBatchIterationBenchmark {
     @Benchmark
     public void measureValidation(Blackhole bh) throws IOException {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
-        LogValidator.validateMessagesAndAssignOffsetsCompressed(records, new TopicPartition("a", 0),
+        LogValidator.validateMessagesAndAssignOffsets(records, new TopicPartition("a", 0),
                 new LongRef(startingOffset), Time.SYSTEM, System.currentTimeMillis(),
                 CompressionCodec.getCompressionCodec(compressionType.id),
                 CompressionCodec.getCompressionCodec(compressionType.id),
