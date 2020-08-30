@@ -25,9 +25,11 @@ import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -177,6 +179,38 @@ public class InternalTopologyBuilderTest {
     @Test(expected = NullPointerException.class)
     public void testAddProcessorWithNullParents() {
         builder.addProcessor("processor", new MockApiProcessorSupplier<>(), (String) null);
+    }
+
+    @Test
+    public void testAddProcessorWithBadSupplier() {
+        final Processor<Object, Object, Object, Object> processor = new MockApiProcessor<>();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> builder.addProcessor("processor", () -> processor, (String) null)
+        );
+        assertThat(exception.getMessage(), equalTo(
+                "ProcessorSupplier generates single reference. ProcessorSupplier#get() must return " +
+                "a new object each time it is called."));
+    }
+
+    @Test
+    public void testAddGlobalStoreWithBadSupplier() {
+        final org.apache.kafka.streams.processor.api.Processor<?, ?, Void, Void> processor = new MockApiProcessorSupplier<Object, Object, Void, Void>().get();
+        final IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+            () -> builder.addGlobalStore(
+                        new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+                        "globalSource",
+                        null,
+                        null,
+                        null,
+                        "globalTopic",
+                        "global-processor",
+                () -> processor)
+        );
+        assertThat(exception.getMessage(), equalTo(
+                "ProcessorSupplier generates single reference. ProcessorSupplier#get() must return " +
+                "a new object each time it is called."));
     }
 
     @Test

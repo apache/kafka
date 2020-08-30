@@ -18,6 +18,12 @@ package org.apache.kafka.streams.internals;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.Queue;
+import java.util.Set;
+import java.util.function.Supplier;
 
 import static java.lang.String.format;
 
@@ -74,5 +80,32 @@ public final class ApiUtils {
      */
     public static String prepareMillisCheckFailMsgPrefix(final Object value, final String name) {
         return format(MILLISECOND_VALIDATION_FAIL_MSG_FRMT, name, value);
+    }
+
+    /**
+     * @throws IllegalArgumentException if the same instance is obtained each time
+     */
+    public static void checkSupplier(final Supplier<?> supplier) {
+        if (supplier.get() == supplier.get()) {
+            final String supplierClass = getAllImplementedInterfaces(supplier.getClass()).stream()
+                    .map(Class::getSimpleName)
+                    .filter(name -> name.contains("Supplier") && !name.equals("Supplier"))
+                    .findFirst().orElse("Supplier");
+            throw new IllegalArgumentException(String.format("%s generates single reference." +
+                    " %s#get() must return a new object each time it is called.", supplierClass, supplierClass));
+        }
+    }
+
+    private static Set<Class<?>> getAllImplementedInterfaces(final Class<?> clazz) {
+        final Set<Class<?>> set = new LinkedHashSet<>();
+        final Queue<Class<?>> queue = new LinkedList<>(Collections.singleton(clazz));
+        while (!queue.isEmpty()) {
+            for (final Class<?> iface: queue.remove().getInterfaces()) {
+                if (set.add(iface)) {
+                    queue.add(iface);
+                }
+            }
+        }
+        return set;
     }
 }
