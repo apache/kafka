@@ -17,10 +17,10 @@
 
 package kafka.coordinator
 
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.Lock
 import java.util.concurrent.{ConcurrentHashMap, Executors}
 import java.util.{Collections, Random}
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.locks.Lock
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.{AppendOrigin, Log}
@@ -97,7 +97,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   }
 
   def enableCompletion(): Unit = {
-    replicaManager.tryCompleteDelayedRequests()
+    replicaManager.tryCompleteActions()
     scheduler.tick()
   }
 
@@ -158,7 +158,7 @@ object AbstractCoordinatorConcurrencyTest {
   }
 
   class TestReplicaManager extends ReplicaManager(
-    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, new ActionQueue) {
+    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None) {
 
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
     var watchKeys: mutable.Set[TopicPartitionOperationKey] = _
@@ -167,9 +167,7 @@ object AbstractCoordinatorConcurrencyTest {
       watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     }
 
-    def tryCompleteDelayedRequests(): Unit = {
-      watchKeys.map(producePurgatory.checkAndComplete)
-    }
+    override def tryCompleteActions(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
 
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,

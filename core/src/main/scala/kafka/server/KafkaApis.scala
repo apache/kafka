@@ -109,8 +109,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 brokerTopicStats: BrokerTopicStats,
                 val clusterId: String,
                 time: Time,
-                val tokenManager: DelegationTokenManager,
-                actionQueue: ActionQueue) extends Logging {
+                val tokenManager: DelegationTokenManager) extends Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
@@ -187,15 +186,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       case e: FatalExitError => throw e
       case e: Throwable => handleError(request, e)
     } finally {
-      try {
-        // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
-        // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
-        // expiration thread for certain delayed operations (e.g. DelayedJoin)
-        actionQueue.tryCompleteActions()
-      } catch {
-        case e: Throwable =>
-          error("failed to complete delayed actions", e)
-      }
+      // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
+      // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
+      // expiration thread for certain delayed operations (e.g. DelayedJoin)
+      replicaManager.tryCompleteActions()
       // The local completion time may be set while processing the request. Only record it if it's unset.
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds

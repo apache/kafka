@@ -25,7 +25,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
-import kafka.server.{ActionQueue, DelayedOperationPurgatory, KafkaConfig}
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
@@ -93,7 +93,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     joinPurgatory = new DelayedOperationPurgatory[DelayedJoin]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics(), new ActionQueue)
+    groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time, new Metrics())
     groupCoordinator.startup(false)
   }
 
@@ -146,7 +146,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
     groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory,
-      joinPurgatory, timer.time, new Metrics(), new ActionQueue)
+      joinPurgatory, timer.time, new Metrics())
     groupCoordinator.startup(false)
 
     val members = new Group(s"group", nMembersPerGroup, groupCoordinator, replicaManager)
@@ -207,7 +207,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false, "clientId", "clientHost",
        DefaultRebalanceTimeout, DefaultSessionTimeout,
        protocolType, protocols, responseCallback)
-      replicaManager.tryCompleteDelayedRequests()
+      replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val joinGroupResult = await(member, DefaultRebalanceTimeout)
@@ -231,7 +231,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
         groupCoordinator.handleSyncGroup(member.groupId, member.generationId, member.memberId,
           Some(protocolType), Some(protocolName), member.groupInstanceId, Map.empty[String, Array[Byte]], responseCallback)
       }
-      replicaManager.tryCompleteDelayedRequests()
+      replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
       val result = await(member, DefaultSessionTimeout)
@@ -249,7 +249,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def runWithCallback(member: GroupMember, responseCallback: HeartbeatCallback): Unit = {
       groupCoordinator.handleHeartbeat(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, responseCallback)
-      replicaManager.tryCompleteDelayedRequests()
+      replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val error = await(member, DefaultSessionTimeout)
@@ -264,7 +264,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
     override def runWithCallback(member: GroupMember, responseCallback: OffsetFetchCallback): Unit = {
       val (error, partitionData) = groupCoordinator.handleFetchOffsets(member.groupId, requireStable = true, None)
-      replicaManager.tryCompleteDelayedRequests()
+      replicaManager.tryCompleteActions()
       responseCallback(error, partitionData)
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
@@ -284,7 +284,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, offsets, responseCallback)
-      replicaManager.tryCompleteDelayedRequests()
+      replicaManager.tryCompleteActions()
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val offsets = await(member, 500)
@@ -312,7 +312,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
         groupCoordinator.handleTxnCommitOffsets(member.group.groupId, producerId, producerEpoch,
           JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty, JoinGroupRequest.UNKNOWN_GENERATION_ID,
           offsets, callbackWithTxnCompletion)
-        replicaManager.tryCompleteDelayedRequests()
+        replicaManager.tryCompleteActions()
       } finally if (isRandomOrder) lock.unlock()
     }
   }

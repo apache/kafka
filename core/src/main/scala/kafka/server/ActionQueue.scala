@@ -17,30 +17,40 @@
 
 package kafka.server
 
-import java.util.concurrent.LinkedBlockingDeque
+import java.util.concurrent.ConcurrentLinkedQueue
+
+import kafka.utils.Logging
 
 /**
  * This queue is used to collect actions which need to be executed later. One use case is that ReplicaManager#appendRecords
  * produces record changes so we need to check and complete delayed requests. In order to avoid conflicting locking,
  * we add those actions to this queue and then complete them at the end of KafkaApis.handle() or DelayedJoin.onExpiration.
  */
-class ActionQueue {
-  private val queue = new LinkedBlockingDeque[() => Unit]()
+class ActionQueue extends Logging {
+  private val queue = new ConcurrentLinkedQueue[() => Unit]()
 
   /**
    * add action to this queue.
    * @param action action
    */
-  def add(action: () => Unit): Unit = queue.put(action)
+  def add(action: () => Unit): Unit = queue.add(action)
 
   /**
    * try to complete all delayed actions
    */
   def tryCompleteActions(): Unit = {
-    var action = queue.poll()
-    while (action != null) {
-      action()
-      action = queue.poll()
+    val maxToComplete = queue.size()
+    var count = 0
+    var done = false
+    while (!done && count < maxToComplete) {
+      try {
+        val action = queue.poll()
+        if (action == null) done = true
+        else action()
+      } catch {
+        case e: Throwable =>
+          error("failed to complete delayed actions", e)
+      } finally count += 1
     }
   }
 }
