@@ -17,10 +17,13 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class ThrottleTest {
     /**
@@ -50,21 +53,21 @@ public class ThrottleTest {
     public void testThrottle() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         ThrottleMock throttle = new ThrottleMock(time, 3);
-        Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(0, time.milliseconds());
-        Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(0, time.milliseconds());
-        Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(0, time.milliseconds());
-        Assert.assertTrue(throttle.increment());
-        Assert.assertEquals(100, time.milliseconds());
+        assertFalse(throttle.increment());
+        assertEquals(0, time.milliseconds());
+        assertFalse(throttle.increment());
+        assertEquals(0, time.milliseconds());
+        assertFalse(throttle.increment());
+        assertEquals(0, time.milliseconds());
+        assertTrue(throttle.increment());
+        assertEquals(100, time.milliseconds());
         time.sleep(50);
-        Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(150, time.milliseconds());
-        Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(150, time.milliseconds());
-        Assert.assertTrue(throttle.increment());
-        Assert.assertEquals(200, time.milliseconds());
+        assertFalse(throttle.increment());
+        assertEquals(150, time.milliseconds());
+        assertFalse(throttle.increment());
+        assertEquals(150, time.milliseconds());
+        assertTrue(throttle.increment());
+        assertEquals(200, time.milliseconds());
     }
 };
 
