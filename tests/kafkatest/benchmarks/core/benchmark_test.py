@@ -68,8 +68,8 @@ class Benchmark(Test):
     @parametrize(acks=1, topic=TOPIC_REP_ONE)
     @parametrize(acks=1, topic=TOPIC_REP_THREE)
     @parametrize(acks=-1, topic=TOPIC_REP_THREE)
-    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none", "snappy"], security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
-    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none", "snappy"], security_protocol=['PLAINTEXT'])
+    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none", "snappy", "lz4", "zstd"], security_protocol=['SSL'], tls_version=['TLSv1.2', 'TLSv1.3'])
+    @matrix(acks=[1], topic=[TOPIC_REP_THREE], message_size=[10, 100, 1000, 10000, 100000], compression_type=["none", "snappy", "lz4", "zstd"], security_protocol=['PLAINTEXT'])
     @cluster(num_nodes=7)
     @parametrize(acks=1, topic=TOPIC_REP_THREE, num_producers=3)
     def test_producer_throughput(self, acks, topic, num_producers=1, message_size=DEFAULT_RECORD_SIZE,
@@ -102,8 +102,8 @@ class Benchmark(Test):
         return compute_aggregate_throughput(self.producer)
 
     @cluster(num_nodes=5)
-    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'], compression_type=["none", "snappy"])
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"])
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'], compression_type=["none", "snappy", "lz4", "zstd"])
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy", "lz4", "zstd"])
     def test_long_term_producer_throughput(self, compression_type="none",
                                            security_protocol='PLAINTEXT', tls_version=None,
                                            interbroker_security_protocol=None, client_version=str(DEV_BRANCH),
@@ -159,10 +159,10 @@ class Benchmark(Test):
         return data
 
     @cluster(num_nodes=5)
-    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'], compression_type=["none", "snappy"])
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"])
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'], compression_type=["none", "snappy", "lz4", "zstd"])
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy", "lz4", "zstd"])
     @cluster(num_nodes=6)
-    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy"])
+    @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'], compression_type=["none", "snappy", "lz4", "zstd"])
     def test_end_to_end_latency(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                 interbroker_security_protocol=None, client_version=str(DEV_BRANCH),
                                 broker_version=str(DEV_BRANCH)):
@@ -191,8 +191,8 @@ class Benchmark(Test):
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])
 
     @cluster(num_nodes=6)
-    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'], compression_type=["none", "snappy"])
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"])
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'], compression_type=["none", "snappy", "lz4", "zstd"])
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy", "lz4", "zstd"])
     def test_producer_and_consumer(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                    interbroker_security_protocol=None,
                                    client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH)):
@@ -238,8 +238,8 @@ class Benchmark(Test):
         return data
 
     @cluster(num_nodes=6)
-    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'], compression_type=["none", "snappy"])
-    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy"])
+    @matrix(security_protocol=['SSL'], interbroker_security_protocol=['PLAINTEXT'], tls_version=['TLSv1.2', 'TLSv1.3'], compression_type=["none", "snappy", "lz4", "zstd"])
+    @matrix(security_protocol=['PLAINTEXT'], compression_type=["none", "snappy", "lz4", "zstd"])
     def test_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT", tls_version=None,
                                  interbroker_security_protocol=None, num_consumers=1,
                                  client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH)):
