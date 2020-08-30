@@ -31,6 +31,7 @@ import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -1109,6 +1110,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         public RecordQueue createQueue(final TopicPartition partition) {
             final SourceNode<?, ?, ?, ?> source = topology.source(partition.topic());
+            if (source == null) {
+                throw new TopologyException(
+                        "Topic is unkown to the topology. " +
+                                "This may happen if different KafkaStreams instances of the same application execute different Topologies. " +
+                                "Note that Topologies are only identical if all operators are added in the same order."
+                );
+            }
+
             final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
             final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
             return new RecordQueue(

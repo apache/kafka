@@ -51,6 +51,14 @@ import java.util.regex.Pattern;
 /**
  * {@code StreamsBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
+ * <p>
+ * It is a requirement that the processing logic ({@link Topology}) be defined in a deterministic way,
+ * as in, the order in which all operators are added must be predictable and the same across all application
+ * instances.
+ * Topologies are only identical if all operators are added in the same order.
+ * If different {@link KafkaStreams} instances of the same application build different topologies the result may be
+ * incompatible runtime code and unexpected results or errors
+ *
  * @see Topology
  * @see KStream
  * @see KTable
