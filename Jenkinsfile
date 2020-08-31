@@ -26,15 +26,19 @@ def setupGradle() {
 }
 
 def doValidation() {
-  try {
-    sh '''
+  def ret = sh script: '''
       ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
           spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
           --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
-    '''
-  } catch(err) {
-    error('Validation checks failed, aborting this build')
+    ''', returnStatus: true
+  if (ret == 143) {
+    echo 'Got a SIGTERM'
+    currentBuild.result = 'ABORTED'
+  } else if (ret != 0) {
+    echo 'Validation checks failed, aborting this build'
+    currentBuild.result = 'FAILURE'
   }
+  sh 'exit ${ret}'
 }
 
 def doTest() {
