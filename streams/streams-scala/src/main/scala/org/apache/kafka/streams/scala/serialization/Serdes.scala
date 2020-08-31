@@ -43,12 +43,6 @@ object Serdes extends LowPrioritySerdes {
   implicit def javaIntegerSerde: Serde[java.lang.Integer] = JSerdes.Integer()
   implicit def uuidSerde: Serde[UUID] = JSerdes.UUID()
 
-  implicit def timeWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.TimeWindowedSerde[T] =
-    new WindowedSerdes.TimeWindowedSerde[T](tSerde)
-
-  implicit def sessionWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.SessionWindowedSerde[T] =
-    new WindowedSerdes.SessionWindowedSerde[T](tSerde)
-
   def fromFn[T >: Null](serializer: T => Array[Byte], deserializer: Array[Byte] => Option[T]): Serde[T] =
     JSerdes.serdeFrom(
       new Serializer[T] {
