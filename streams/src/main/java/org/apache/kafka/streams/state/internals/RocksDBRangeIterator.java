@@ -29,32 +29,50 @@ class RocksDBRangeIterator extends RocksDbIterator {
     // comparator to be pluggable, and the default is lexicographic, so it's
     // safe to just force lexicographic comparator here for now.
     private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-    private final byte[] rawToKey;
+    private final byte[] rawLastKey;
+    private final boolean forward;
 
     RocksDBRangeIterator(final String storeName,
                          final RocksIterator iter,
                          final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
                          final Bytes from,
-                         final Bytes to) {
-        super(storeName, iter, openIterators);
-        iter.seek(from.get());
-        rawToKey = to.get();
-        if (rawToKey == null) {
-            throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
+                         final Bytes to,
+                         final boolean forward) {
+        super(storeName, iter, openIterators, forward);
+        this.forward = forward;
+        if (forward) {
+            iter.seek(from.get());
+            rawLastKey = to.get();
+            if (rawLastKey == null) {
+                throw new NullPointerException("RocksDBRangeIterator: RawLastKey is null for key " + to);
+            }
+        } else {
+            iter.seekForPrev(to.get());
+            rawLastKey = from.get();
+            if (rawLastKey == null) {
+                throw new NullPointerException("RocksDBRangeIterator: RawLastKey is null for key " + from);
+            }
         }
     }
 
     @Override
     public KeyValue<Bytes, byte[]> makeNext() {
         final KeyValue<Bytes, byte[]> next = super.makeNext();
-
         if (next == null) {
             return allDone();
         } else {
-            if (comparator.compare(next.key.get(), rawToKey) <= 0) {
-                return next;
+            if (forward) {
+                if (comparator.compare(next.key.get(), rawLastKey) <= 0) {
+                    return next;
+                } else {
+                    return allDone();
+                }
             } else {
-                return allDone();
+                if (comparator.compare(next.key.get(), rawLastKey) >= 0) {
+                    return next;
+                } else {
+                    return allDone();
+                }
             }
         }
     }
