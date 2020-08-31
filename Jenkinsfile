@@ -20,7 +20,7 @@
 def setupGradle() {
   // Delete gradle cache to workaround cache corruption bugs, see KAFKA-3167
   dir('.gradle') {
-    deleteDir
+    deleteDir()
   }
   sh './gradlew -version'
 }
