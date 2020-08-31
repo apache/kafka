@@ -14,20 +14,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
+package org.apache.kafka.message;
 
-import java.util.Map;
+import java.io.BufferedWriter;
 
-/**
- * A {@link StreamsConfig} that does not log its configuration on construction.
- *
- * This producer cleaner output for unit tests using the {@code test-utils},
- * since logging the config is not really valuable in this context.
- */
-public class QuietStreamsConfig extends StreamsConfig {
-    public QuietStreamsConfig(final Map<?, ?> props) {
-        super(props, false);
-    }
+public interface MessageClassGenerator {
+    /**
+     * The short name of the converter class we are generating.  For example,
+     * FetchRequestDataJsonConverter.java.
+     */
+    String outputName(MessageSpec spec);
+
+    /**
+     * Generate the convertere, and then write it out.
+     *
+     * @param spec      The message to generate a converter for.
+     * @param writer    The writer to write out the state to.
+     */
+    void generateAndWrite(MessageSpec spec, BufferedWriter writer) throws Exception;
 }

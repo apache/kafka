@@ -86,7 +86,7 @@ public class RocksDBMetricsRecorder {
     }
 
     private static final String ROCKSDB_PROPERTIES_PREFIX = "rocksdb.";
-    private static final ByteBuffer CONVERSION_BUFFER = ByteBuffer.allocate(Long.BYTES);
+
 
     private final Logger logger;
 
@@ -106,16 +106,13 @@ public class RocksDBMetricsRecorder {
     private final Map<String, DbAndCacheAndStatistics> storeToValueProviders = new ConcurrentHashMap<>();
     private final String metricsScope;
     private final String storeName;
-    private final String threadId;
     private TaskId taskId;
     private StreamsMetricsImpl streamsMetrics;
     private boolean singleCache = true;
 
     public RocksDBMetricsRecorder(final String metricsScope,
-                                  final String threadId,
                                   final String storeName) {
         this.metricsScope = metricsScope;
-        this.threadId = threadId;
         this.storeName = storeName;
         final LogContext logContext = new LogContext(String.format("[RocksDB Metrics Recorder for %s] ", storeName));
         logger = logContext.logger(RocksDBMetricsRecorder.class);
@@ -146,8 +143,7 @@ public class RocksDBMetricsRecorder {
                 + "This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
-        final RocksDBMetricContext metricContext =
-            new RocksDBMetricContext(threadId, taskId.toString(), metricsScope, storeName);
+        final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
         initSensors(streamsMetrics, metricContext);
         initGauges(streamsMetrics, metricContext, true);
         this.taskId = taskId;
@@ -166,9 +162,26 @@ public class RocksDBMetricsRecorder {
                 " has been already added. This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
+        verifyStatistics(segmentName, statistics);
         verifyDbAndCacheAndStatistics(segmentName, db, cache, statistics);
-        logger.debug("Adding value providers for segment {} of store {} of task {}", segmentName, storeName, taskId);
+        logger.debug("Adding value providers for store {} of task {}", segmentName, taskId);
         storeToValueProviders.put(segmentName, new DbAndCacheAndStatistics(db, cache, statistics));
+    }
+
+    private void verifyStatistics(final String segmentName, final Statistics statistics) {
+        if (!storeToValueProviders.isEmpty() && (
+                statistics == null &&
+                storeToValueProviders.values().stream().anyMatch(valueProviders -> valueProviders.statistics != null)
+                ||
+                statistics != null &&
+                storeToValueProviders.values().stream().anyMatch(valueProviders -> valueProviders.statistics == null))) {
+
+            throw new IllegalStateException("Statistics for segment " + segmentName + " of task " + taskId +
+                " is" + (statistics == null ? " " : " not ") + "null although the statistics of another segment in this " +
+                "metrics recorder is" + (statistics != null ? " " : " not ") + "null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
+        }
     }
 
     private void verifyDbAndCacheAndStatistics(final String segmentName,
@@ -384,8 +397,9 @@ public class RocksDBMetricsRecorder {
     }
 
     private static byte[] longToBytes(final long data) {
-        CONVERSION_BUFFER.putLong(0, data);
-        return CONVERSION_BUFFER.array();
+        final ByteBuffer conversionBuffer = ByteBuffer.allocate(Long.BYTES);
+        conversionBuffer.putLong(0, data);
+        return conversionBuffer.array();
     }
 
     public void removeValueProviders(final String segmentName) {

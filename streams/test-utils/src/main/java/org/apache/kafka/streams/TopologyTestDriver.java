@@ -43,7 +43,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.KeyValueStoreFacade;
-import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -52,6 +51,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ChangelogRegister;
+import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
@@ -299,7 +299,7 @@ public class TopologyTestDriver implements Closeable {
     private TopologyTestDriver(final InternalTopologyBuilder builder,
                                final Properties config,
                                final long initialWallClockTimeMs) {
-        final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
+        final StreamsConfig streamsConfig = new ClientUtils.QuietStreamsConfig(config);
         logIfTaskIdleEnabled(streamsConfig);
 
         logContext = new LogContext("topology-test-driver ");
@@ -349,7 +349,7 @@ public class TopologyTestDriver implements Closeable {
             logContext
         );
 
-        setupGlobalTask(streamsConfig, streamsMetrics, cache);
+        setupGlobalTask(mockWallClockTime, streamsConfig, streamsMetrics, cache);
         setupTask(streamsConfig, streamsMetrics, cache);
     }
 
@@ -406,7 +406,8 @@ public class TopologyTestDriver implements Closeable {
         stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory);
     }
 
-    private void setupGlobalTask(final StreamsConfig streamsConfig,
+    private void setupGlobalTask(final Time mockWallClockTime,
+                                 final StreamsConfig streamsConfig,
                                  final StreamsMetricsImpl streamsMetrics,
                                  final ThreadCache cache) {
         if (globalTopology != null) {
@@ -423,6 +424,7 @@ public class TopologyTestDriver implements Closeable {
 
             globalStateManager = new GlobalStateManagerImpl(
                 logContext,
+                mockWallClockTime,
                 globalTopology,
                 globalConsumer,
                 stateDirectory,
@@ -607,7 +609,7 @@ public class TopologyTestDriver implements Closeable {
                 task.process(mockWallClockTime.milliseconds());
                 task.maybePunctuateStreamTime();
                 commit(task.prepareCommit());
-                task.postCommit();
+                task.postCommit(true);
                 captureOutputsAndReEnqueueInternalResults();
             }
             if (task.hasRecordsQueued()) {
@@ -753,7 +755,7 @@ public class TopologyTestDriver implements Closeable {
         if (task != null) {
             task.maybePunctuateSystemTime();
             commit(task.prepareCommit());
-            task.postCommit();
+            task.postCommit(true);
         }
         completeAllProcessableWork();
     }
@@ -802,10 +804,10 @@ public class TopologyTestDriver implements Closeable {
 
     private Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(final String topicName) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topicName);
-        if (outputRecords == null) {
-            if (!processorTopology.sinkTopics().contains(topicName)) {
-                throw new IllegalArgumentException("Unknown topic: " + topicName);
-            }
+        if (outputRecords == null && !processorTopology.sinkTopics().contains(topicName)) {
+            log.warn("Unrecognized topic: {}, this can occur if dynamic routing is used and no output has been "
+                         + "sent to this topic yet. If not using a TopicNameExtractor, check that the output topic "
+                         + "is correct.", topicName);
         }
         return outputRecords;
     }
@@ -1175,7 +1177,7 @@ public class TopologyTestDriver implements Closeable {
         if (task != null) {
             task.suspend();
             task.prepareCommit();
-            task.postCommit();
+            task.postCommit(true);
             task.closeClean();
         }
         if (globalStateTask != null) {

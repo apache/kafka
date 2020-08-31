@@ -68,7 +68,6 @@ import static org.powermock.api.easymock.PowerMock.replay;
 
 public class RocksDBMetricsRecorderGaugesTest {
     private static final String METRICS_SCOPE = "metrics-scope";
-    private static final String THREAD_ID = "thread-id";
     private static final TaskId TASK_ID = new TaskId(0, 0);
     private static final String STORE_NAME = "store-name";
     private static final String SEGMENT_STORE_NAME_1 = "segment-store-name-1";
@@ -205,7 +204,7 @@ public class RocksDBMetricsRecorderGaugesTest {
     private void runAndVerifySumOfProperties(final String propertyName) throws Exception {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
-        final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, THREAD_ID, STORE_NAME);
+        final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
 
         recorder.init(streamsMetrics, TASK_ID);
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
@@ -229,7 +228,7 @@ public class RocksDBMetricsRecorderGaugesTest {
     private void runAndVerifyBlockCacheMetricsWithSingleCache(final String propertyName) throws Exception {
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime());
-        final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, THREAD_ID, STORE_NAME);
+        final RocksDBMetricsRecorder recorder = new RocksDBMetricsRecorder(METRICS_SCOPE, STORE_NAME);
 
         recorder.init(streamsMetrics, TASK_ID);
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
@@ -251,7 +250,7 @@ public class RocksDBMetricsRecorderGaugesTest {
 
         final Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
         final Map<String, String> tagMap = mkMap(
-            mkEntry(THREAD_ID_TAG, THREAD_ID),
+            mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
             mkEntry(TASK_ID_TAG, TASK_ID.toString()),
             mkEntry(METRICS_SCOPE + "-" + STORE_ID_TAG, STORE_NAME)
         );
