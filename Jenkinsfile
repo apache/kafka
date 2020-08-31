@@ -29,8 +29,8 @@ def doValidation() {
   try {
     sh '''
       ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-	  spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-	  --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
+        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+        --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
     '''
   } catch(err) {
     error('Validation checks failed, aborting this build')
@@ -41,7 +41,7 @@ def doTest() {
   try {
     sh '''
       ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
-	  --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@"
+          --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@"
     '''
   } catch(err) {
     echo 'Some tests failed, marking this build UNSTABLE'
@@ -65,31 +65,31 @@ def doStreamsArchetype() {
   dir('streams/quickstart') {
     sh '''
       mvn clean install -Dgpg.skip  \
-	  || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
+          || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
     '''
 
     sh '''
       mkdir test-streams-archetype && cd test-streams-archetype \
-	  || { echo 'Could not create test directory for stream quickstart archetype'; exit 1; }
+          || { echo 'Could not create test directory for stream quickstart archetype'; exit 1; }
     '''
 
     sh '''
       echo "Y" | mvn archetype:generate \
-	  -DarchetypeCatalog=local \
-	  -DarchetypeGroupId=org.apache.kafka \
-	  -DarchetypeArtifactId=streams-quickstart-java \
-	  -DarchetypeVersion=$version \
-	  -DgroupId=streams.examples \
-	  -DartifactId=streams.examples \
-	  -Dversion=0.1 \
-	  -Dpackage=myapps \
-	  || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
+          -DarchetypeCatalog=local \
+          -DarchetypeGroupId=org.apache.kafka \
+          -DarchetypeArtifactId=streams-quickstart-java \
+          -DarchetypeVersion=$version \
+          -DgroupId=streams.examples \
+          -DartifactId=streams.examples \
+          -Dversion=0.1 \
+          -Dpackage=myapps \
+          || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
     '''
 
     dir('streams.examples') {
       sh '''
-	mvn compile \
-	    || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
+        mvn compile \
+            || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
       '''
     }
   }
@@ -110,90 +110,90 @@ pipeline {
   stages {
     stage('Build') {
       parallel {
-	stage('JDK 8') {
+        stage('JDK 8') {
           agent { label 'ubuntu' }
-	  tools {
-	    jdk 'JDK 1.8 (latest)'
+          tools {
+            jdk 'JDK 1.8 (latest)'
             maven 'Maven 3.6.3'
-	  }
+          }
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
           }
-	  environment {
-	    SCALA_VERSION=2.12
-	  }
-	  steps {
+          environment {
+            SCALA_VERSION=2.12
+          }
+          steps {
             setupGradle()
             doValidation()
             doTest()
             tryStreamsArchetype()
-	  }
-	  post {
-	    success {
-	      junit '**/build/test-results/**/TEST-*.xml'
-	    }
-	    unstable {
-	      junit '**/build/test-results/**/TEST-*.xml'
-	    }
-	  }
-	}
+          }
+          post {
+            success {
+              junit '**/build/test-results/**/TEST-*.xml'
+            }
+            unstable {
+              junit '**/build/test-results/**/TEST-*.xml'
+            }
+          }
+        }
 
-	stage('JDK 11') {
+        stage('JDK 11') {
           agent { label 'ubuntu' }
-	  tools {
-	    jdk 'JDK 11 (latest)'
-	  }
+          tools {
+            jdk 'JDK 11 (latest)'
+          }
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
           }
-	  environment {
-	    SCALA_VERSION=2.13
-	  }
-	  steps {
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
             setupGradle()
             doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 11'
-	  }
-	  post {
-	    success {
-	      junit '**/build/test-results/**/TEST-*.xml'
-	    }
-	    unstable {
-	      junit '**/build/test-results/**/TEST-*.xml'
-	    }
-	  }
-	}
+          }
+          post {
+            success {
+              junit '**/build/test-results/**/TEST-*.xml'
+            }
+            unstable {
+              junit '**/build/test-results/**/TEST-*.xml'
+            }
+          }
+        }
        
-	stage('JDK 14') {
+        stage('JDK 14') {
           agent { label 'ubuntu' }
-	  tools {
-	    jdk 'JDK 14 (latest)'
-	  }
+          tools {
+            jdk 'JDK 14 (latest)'
+          }
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
           }
-	  environment {
-	    SCALA_VERSION=2.13
-	  }
-	  steps {
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
             setupGradle()
             doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 14'
-	  }
-	  post {
-	    success {
-	      junit '**/build/test-results/**/TEST-*.xml'
-	    }
-	    unstable {
-	      junit '**/build/test-results/**/TEST-*.xml'
-	    }
-	  }
-	}
+          }
+          post {
+            success {
+              junit '**/build/test-results/**/TEST-*.xml'
+            }
+            unstable {
+              junit '**/build/test-results/**/TEST-*.xml'
+            }
+          }
+        }
       }
     }
   }
