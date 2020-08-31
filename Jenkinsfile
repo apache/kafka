@@ -25,7 +25,7 @@ def doValidation() {
 	  --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
     '''
   } catch(err) {
-    error('Validation checks failed')
+    error('Validation checks failed, aborting this build')
   }
 }
 
@@ -36,7 +36,8 @@ def doTest() {
 	  --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@"
     '''
   } catch(err) {
-    error('Tests failed')
+    echo 'Some tests failed, marking this build UNSTABLE'
+    currentBuild.result = 'UNSTABLE'
   }
 }
 
@@ -84,8 +85,17 @@ def doStreamsArchetype() {
       '''
     }
   }
-  
 }
+
+def tryStreamsArchetype() {
+  try {
+    doStreamsArchetype()
+  } catch(err) {
+    echo 'Failed to build Kafka Streams archetype, marking this build UNSTABLE'
+    currentBuild.result = 'UNSTABLE'
+  }
+}
+
 
 pipeline {
   agent none
@@ -109,10 +119,13 @@ pipeline {
 	    sh 'gradle -version'
 	    doValidation()
             doTest()
-            doStreamsArchetype()
+            tryStreamsArchetype()
 	  }
 	  post {
-	    always {
+	    success {
+	      junit '**/build/test-results/**/TEST-*.xml'
+	    }
+	    unstable {
 	      junit '**/build/test-results/**/TEST-*.xml'
 	    }
 	  }
@@ -137,7 +150,10 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for Java 11'
 	  }
 	  post {
-	    always {
+	    success {
+	      junit '**/build/test-results/**/TEST-*.xml'
+	    }
+	    unstable {
 	      junit '**/build/test-results/**/TEST-*.xml'
 	    }
 	  }
@@ -162,7 +178,10 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for Java 14'
 	  }
 	  post {
-	    always {
+	    success {
+	      junit '**/build/test-results/**/TEST-*.xml'
+	    }
+	    unstable {
 	      junit '**/build/test-results/**/TEST-*.xml'
 	    }
 	  }
