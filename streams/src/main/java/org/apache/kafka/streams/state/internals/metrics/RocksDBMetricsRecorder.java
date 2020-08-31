@@ -198,8 +198,7 @@ public class RocksDBMetricsRecorder {
             }
             if (storeToValueProviders.size() == 1 && cache != valueProviders.cache) {
                 singleCache = false;
-            } else if (singleCache && cache != valueProviders.cache ||
-                        !singleCache && cache == valueProviders.cache) {
+            } else if (singleCache && cache != valueProviders.cache || !singleCache && cache == valueProviders.cache) {
                 throw new IllegalStateException("Caches for store " + storeName + " of task " + taskId +
                     " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
                     "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
@@ -361,6 +360,8 @@ public class RocksDBMetricsRecorder {
             BigInteger result = BigInteger.valueOf(0);
             for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
                 try {
+                    // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
+                    // BigInteger and construct the object from the byte representation of the value
                     result = result.add(new BigInteger(1, longToBytes(
                         valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
                     )));
@@ -378,11 +379,15 @@ public class RocksDBMetricsRecorder {
             for (final DbAndCacheAndStatistics valueProvider : storeToValueProviders.values()) {
                 try {
                     if (singleCache) {
+                        // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
+                        // BigInteger and construct the object from the byte representation of the value
                         result = new BigInteger(1, longToBytes(
                             valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
                         ));
                         break;
                     } else {
+                        // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
+                        // BigInteger and construct the object from the byte representation of the value
                         result = result.add(new BigInteger(1, longToBytes(
                             valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
                         )));

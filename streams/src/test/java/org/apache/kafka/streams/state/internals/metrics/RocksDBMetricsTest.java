@@ -468,13 +468,13 @@ public class RocksDBMetricsTest {
 
     private void runAndVerifyMutableMetric(final String name, final String description, final Runnable metricAdder) {
         streamsMetrics.addStoreLevelMutableMetric(
-                eq(TASK_ID),
-                eq(STORE_TYPE),
-                eq(STORE_NAME),
-                eq(name),
-                eq(description),
-                eq(RecordingLevel.INFO),
-                eq(VALUE_PROVIDER)
+            eq(TASK_ID),
+            eq(STORE_TYPE),
+            eq(STORE_NAME),
+            eq(name),
+            eq(description),
+            eq(RecordingLevel.INFO),
+            eq(VALUE_PROVIDER)
         );
         replay(streamsMetrics);
 

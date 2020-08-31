@@ -48,8 +48,6 @@ import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
-import org.rocksdb.CompactionOptionsFIFO;
-import org.rocksdb.CompactionStyle;
 import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
@@ -645,19 +643,6 @@ public class RocksDBStoreTest {
         assertThat((BigInteger) numberOfEntriesActiveMemTable.metricValue(), greaterThan(BigInteger.valueOf(0)));
     }
 
-    public static class RocksDBConfigSetterForFifoCompaction implements RocksDBConfigSetter {
-        public RocksDBConfigSetterForFifoCompaction(){}
-
-        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            options.setCompactionStyle(CompactionStyle.FIFO);
-            options.setCompactionOptionsFIFO(new CompactionOptionsFIFO());
-            options.compactionOptionsFIFO().setAllowCompaction(false);
-        }
-
-        public void close(final String storeName, final Options options) {
-        }
-    }
-
     @Test
     public void shouldVerifyThatPropertyBasedMetricsUseValidPropertyName() {
         final TaskId taskId = new TaskId(0, 0);
@@ -667,7 +652,6 @@ public class RocksDBStoreTest {
             new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
 
         final Properties props = StreamsTestUtils.getStreamsConfig();
-        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetterForFifoCompaction.class);
         context = EasyMock.niceMock(InternalMockProcessorContext.class);
         EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
         EasyMock.expect(context.taskId()).andStubReturn(taskId);
