@@ -74,6 +74,60 @@ def doTest() {
   '''
 }
 
+def doStreamsTests() {
+  // Verify that Kafka Streams archetype compiles
+  sh '''
+    ./gradlew streams:install clients:install connect:json:install connect:api:install \
+         || { echo 'Could not install kafka-streams.jar (and dependencies) locally`'; exit 1; }
+  '''
+
+  sh '''
+    version=`grep "^version=" gradle.properties | cut -d= -f 2` \
+        || { echo 'Could not get version from `gradle.properties`'; exit 1; }
+  '''
+
+  sh '''
+    cd streams/quickstart \
+        || { echo 'Could not change into directory `streams/quickstart`'; exit 1; }
+  '''
+
+  // variable $MAVEN_LATEST__HOME is provided by Jenkins (see build configuration)
+  sh 'mvn=$MAVEN_LATEST__HOME/bin/mvn'
+
+  sh '''
+    $mvn clean install -Dgpg.skip  \
+        || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
+  '''
+
+  sh '''
+    mkdir test-streams-archetype && cd test-streams-archetype \
+        || { echo 'Could not create test directory for stream quickstart archetype'; exit 1; }
+  '''
+
+  sh '''
+    echo "Y" | $mvn archetype:generate \
+	-DarchetypeCatalog=local \
+	-DarchetypeGroupId=org.apache.kafka \
+	-DarchetypeArtifactId=streams-quickstart-java \
+	-DarchetypeVersion=$version \
+	-DgroupId=streams.examples \
+	-DartifactId=streams.examples \
+	-Dversion=0.1 \
+	-Dpackage=myapps \
+	|| { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
+  '''
+
+  sh '''
+    cd streams.examples \
+        || { echo 'Could not change into directory `streams.examples`'; exit 1; }
+  '''
+
+  sh '''
+    $mvn compile \
+        || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
+  '''
+}
+
 pipeline {
   agent none
   stages {
@@ -90,7 +144,8 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
-            doTest()
+            //doTest()
+            doStreamsTests()
 	  }
 	  post {
 	    always {
@@ -111,6 +166,7 @@ pipeline {
 	    sh 'gradle -version'
 	    doValidation()
             doTest()
+            echo 'Skipping Kafka Streams archetype test for Java 11'
 	  }
 	  post {
 	    always {
@@ -131,6 +187,7 @@ pipeline {
 	    sh 'gradle -version'
 	    doValidation()
             doTest()
+            echo 'Skipping Kafka Streams archetype test for Java 14'
 	  }
 	  post {
 	    always {
