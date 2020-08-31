@@ -1010,7 +1010,7 @@ class Partition(val topicPartition: TopicPartition,
       }
     }
 
-    info.copy(leaderHWChange = if (leaderHWIncremented) LeaderHWChange.Incremental else LeaderHWChange.Same)
+    info.copy(leaderHwChange = if (leaderHWIncremented) LeaderHwChange.Increased else LeaderHwChange.Same)
   }
 
   def readRecords(fetchOffset: Long,
