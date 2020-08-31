@@ -19,7 +19,6 @@ package kafka.api
 
 import com.yammer.metrics.core.Gauge
 import java.io.File
-import java.util
 import java.util.Collections
 import java.util.concurrent.ExecutionException
 
@@ -29,13 +28,12 @@ import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType._
-import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
 import org.apache.kafka.common.resource._
@@ -559,13 +557,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   }
 
   protected def createScramAdminClient(scramMechanism: String, user: String, password: String): Admin = {
-    val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
-    config.put(SaslConfigs.SASL_JAAS_CONFIG, jaasScramClientLoginModule(scramMechanism, user, password))
-    Admin.create(config)
+    createAdminClient(brokerList, securityProtocol, trustStoreFile, clientSaslProperties,
+      scramMechanism, user, password)
   }
 
   // Consume records, ignoring at most one TopicAuthorization exception from previously sent request

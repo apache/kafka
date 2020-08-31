@@ -18,7 +18,9 @@
 package kafka.api
 
 import java.io.File
+import java.util
 import java.util.Properties
+
 import javax.security.auth.login.Configuration
 
 import scala.collection.Seq
@@ -27,10 +29,11 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.{Admin, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
+import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.Time
@@ -158,6 +161,17 @@ trait SaslSetup {
   def createPrivilegedAdminClient(): Admin = {
     // create an admin client instance that is authorized to create credentials
     throw new UnsupportedOperationException("Must implement this if a test needs to use it")
+  }
+
+  def createAdminClient(brokerList: String, securityProtocol: SecurityProtocol, trustStoreFile: Option[File],
+                        clientSaslProperties: Option[Properties], scramMechanism: String, user: String, password: String) : Admin = {
+    val config = new util.HashMap[String, Object]
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val securityProps: util.Map[Object, Object] =
+      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
+    config.put(SaslConfigs.SASL_JAAS_CONFIG, jaasScramClientLoginModule(scramMechanism, user, password))
+    Admin.create(config)
   }
 
   def createScramCredentialsViaPrivilegedAdminClient(userName: String, password: String): Unit = {

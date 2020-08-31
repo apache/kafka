@@ -14,7 +14,6 @@ package kafka.api
 
 import java.nio.file.Files
 import java.time.Duration
-import java.util
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
@@ -30,7 +29,6 @@ import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGr
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.ConfigEntityChangeNotificationZNode
-import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with SaslSetup {
@@ -59,7 +57,10 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
   }
 
-  override def createPrivilegedAdminClient() = createScramAdminClient(JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+  override def createPrivilegedAdminClient() = {
+    createAdminClient(brokerList, securityProtocol, trustStoreFile, clientSaslProperties,
+      kafkaClientSaslMechanism, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+  }
 
   @Before
   override def setUp(): Unit = {
@@ -251,15 +252,5 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     producerConfig.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1")
     producerConfig.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     createProducer()
-  }
-
-  private def createScramAdminClient(user: String, password: String): Admin = {
-    val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
-    config.put(SaslConfigs.SASL_JAAS_CONFIG, jaasScramClientLoginModule(kafkaClientSaslMechanism, user, password))
-    Admin.create(config)
   }
 }
