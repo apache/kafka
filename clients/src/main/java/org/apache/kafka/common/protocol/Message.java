@@ -17,8 +17,6 @@
 
 package org.apache.kafka.common.protocol;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -101,46 +99,6 @@ public interface Message {
      *                      by this software.
      */
     Struct toStruct(short version);
-
-    /**
-     * Reads this message from a Jackson JsonNode object.  This will overwrite
-     * all relevant fields with information from the Struct.
-     *
-     * For the most part, we expect every JSON object in the input to be the
-     * correct type.  There is one exception: we will deserialize numbers
-     * represented as strings.  If the numeric string begins with 0x, we will
-     * treat the number as hexadecimal.
-     *
-     * Note that we expect to see NullNode objects created for null entries.
-     * Therefore, please configure your Jackson ObjectMapper with
-     * setSerializationInclusion({@link JsonInclude.Include#ALWAYS}).
-     * Other settings may silently omit the nulls, which is not the
-     * semantic that Kafka RPC uses.  (Including a field and setting it to
-     * null is different than not including the field.)
-     *
-     * @param node          The source node.
-     * @param version       The version to use.
-     *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
-     *                      If the specified JSON can't be processed with the
-     *                      specified message version.
-     */
-    void fromJson(JsonNode node, short version);
-
-    /**
-     * Convert this message to a JsonNode.
-     *
-     * Note that 64-bit numbers will be serialized as strings rather than as integers.
-     * The reason is because JavaScript can't represent numbers above 2**52 accurately.
-     * Therefore, for maximum interoperability, we represent these numbers as strings.
-     *
-     * @param version       The version to use.
-     *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
-     *                      If the specified version is too new to be supported
-     *                      by this software.
-     */
-    JsonNode toJson(short version);
 
     /**
      * Returns a list of tagged fields which this software can't understand.
