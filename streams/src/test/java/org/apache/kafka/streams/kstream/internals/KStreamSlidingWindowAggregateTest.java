@@ -101,10 +101,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
 
         final Map<Long, ValueAndTimestamp<String>> actual = new HashMap<>();
-        for (final KeyValueTimestamp<Object, Object> entry : supplier.theCapturedProcessor().processed) {
-            final Windowed<String> window = (Windowed<String>) entry.key();
+        for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
+            final Windowed<String> window = entry.key();
             final Long start = window.window().start();
-            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make((String) entry.value(), entry.timestamp());
+            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
             if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
                 actual.replace(start, valueAndTimestamp);
             }
@@ -152,10 +152,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
 
         final Map<Long, ValueAndTimestamp<String>> actual = new HashMap<>();
-        for (final KeyValueTimestamp<Object, Object> entry : supplier.theCapturedProcessor().processed) {
-            final Windowed<String> window = (Windowed<String>) entry.key();
+        for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
+            final Windowed<String> window = entry.key();
             final Long start = window.window().start();
-            final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make((String) entry.value(), entry.timestamp());
+            final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
             if (actual.putIfAbsent(start, valueAndTimestamp) != null) {
                 actual.replace(start, valueAndTimestamp);
             }
@@ -324,7 +324,7 @@ public class KStreamSlidingWindowAggregateTest {
                         // FINAL WINDOW: D@16 left window created when D@16 processed
                         new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(6, 16)), "0+4+2+5", 16)
                         ),
-                supplier.theCapturedProcessor().processed
+                supplier.theCapturedProcessor().processed()
         );
     }
 
@@ -582,10 +582,10 @@ public class KStreamSlidingWindowAggregateTest {
 
             final Map<Long, ValueAndTimestamp<String>> results = new HashMap<>();
 
-            for (final KeyValueTimestamp<Object, Object> entry : supplier.theCapturedProcessor().processed) {
-                final Windowed<String> window = (Windowed<String>) entry.key();
+            for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
+                final Windowed<String> window = entry.key();
                 final Long start = window.window().start();
-                final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make((String) entry.value(), entry.timestamp());
+                final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
                 if (results.putIfAbsent(start, valueAndTimestamp) != null) {
                     results.replace(start, valueAndTimestamp);
                 }

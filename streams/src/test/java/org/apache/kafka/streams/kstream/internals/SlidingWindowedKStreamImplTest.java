@@ -81,31 +81,31 @@ public class SlidingWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
             equalTo(ValueAndTimestamp.make(1L, 100L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
             equalTo(ValueAndTimestamp.make(1L, 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
             equalTo(ValueAndTimestamp.make(2L, 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
             equalTo(ValueAndTimestamp.make(1L, 500L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
             equalTo(ValueAndTimestamp.make(2L, 200L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
             equalTo(ValueAndTimestamp.make(1L, 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
             equalTo(ValueAndTimestamp.make(1L, 200L)));
     }
@@ -122,31 +122,31 @@ public class SlidingWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
             equalTo(ValueAndTimestamp.make("1", 100L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
             equalTo(ValueAndTimestamp.make("2", 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
             equalTo(ValueAndTimestamp.make("1+2", 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
             equalTo(ValueAndTimestamp.make("3", 500L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
             equalTo(ValueAndTimestamp.make("10+20", 200L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
             equalTo(ValueAndTimestamp.make("20", 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
             equalTo(ValueAndTimestamp.make("10", 200L)));
     }
@@ -166,31 +166,31 @@ public class SlidingWindowedKStreamImplTest {
             processData(driver);
         }
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(0L, 100L))),
             equalTo(ValueAndTimestamp.make("0+1", 100L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(101L, 201L))),
             equalTo(ValueAndTimestamp.make("0+2", 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(50L, 150L))),
             equalTo(ValueAndTimestamp.make("0+1+2", 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("1", new TimeWindow(400L, 500L))),
             equalTo(ValueAndTimestamp.make("0+3", 500L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(100L, 200L))),
             equalTo(ValueAndTimestamp.make("0+10+20", 200L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(50L, 150L))),
             equalTo(ValueAndTimestamp.make("0+20", 150L)));
         assertThat(
-            supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey()
                 .get(new Windowed<>("2", new TimeWindow(151L, 251L))),
             equalTo(ValueAndTimestamp.make("0+10", 200L)));
     }
