@@ -29,8 +29,8 @@ def doValidation() {
   try {
     sh '''
       ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-        --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
+          spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+          --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
     '''
   } catch(err) {
     error('Validation checks failed, aborting this build')
