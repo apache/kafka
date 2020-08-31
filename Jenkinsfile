@@ -125,7 +125,7 @@ pipeline {
 	  }
 	  steps {
             setupGradle()
-	    doValidation()
+            doValidation()
             doTest()
             tryStreamsArchetype()
 	  }
@@ -153,7 +153,7 @@ pipeline {
 	  }
 	  steps {
             setupGradle()
-	    doValidation()
+            doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 11'
 	  }
@@ -181,7 +181,7 @@ pipeline {
 	  }
 	  steps {
             setupGradle()
-	    doValidation()
+            doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 14'
 	  }
