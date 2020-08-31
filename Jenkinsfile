@@ -131,6 +131,9 @@ pipeline {
 	    jdk 'JDK 1.8 (latest)'
             maven 'Maven 3.6.3'
 	  }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+          }
 	  environment {
 	    SCALA_VERSION=2.12
 	  }
@@ -152,6 +155,9 @@ pipeline {
 	  tools {
 	    jdk 'JDK 11 (latest)'
 	  }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+          }
 	  environment {
 	    SCALA_VERSION=2.13
 	  }
@@ -173,6 +179,9 @@ pipeline {
 	  tools {
 	    jdk 'JDK 14 (latest)'
 	  }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+          }
 	  environment {
 	    SCALA_VERSION=2.13
 	  }
