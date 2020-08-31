@@ -145,7 +145,7 @@ public class RocksDBMetricsRecorder {
         }
         final RocksDBMetricContext metricContext = new RocksDBMetricContext(taskId.toString(), metricsScope, storeName);
         initSensors(streamsMetrics, metricContext);
-        initGauges(streamsMetrics, metricContext, true);
+        initGauges(streamsMetrics, metricContext);
         this.taskId = taskId;
         this.streamsMetrics = streamsMetrics;
     }
@@ -243,8 +243,7 @@ public class RocksDBMetricsRecorder {
     }
 
     private void initGauges(final StreamsMetricsImpl streamsMetrics,
-                            final RocksDBMetricContext metricContext,
-                            final boolean fifoCompaction) {
+                            final RocksDBMetricContext metricContext) {
         RocksDBMetrics.addNumImmutableMemTableMetric(
             streamsMetrics,
             metricContext,
