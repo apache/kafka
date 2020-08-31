@@ -53,11 +53,13 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
   }
 
+  override def createPrivilegedAdminClient() = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
+
   override def configureSecurityAfterServersStart(): Unit = {
     super.configureSecurityAfterServersStart()
 
     // create scram credential for user "scram-user"
-    createScramCredentialWithScramAdminClient(clientPrincipal.getName, clientPassword)
+    createScramCredentialsViaPrivilegedAdminClient(clientPrincipal.getName, clientPassword)
     waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal.getName, kafkaClientSaslMechanism)
 
     //create a token with "scram-user" credentials
@@ -107,17 +109,6 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
       TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
         "Timed out waiting for token to propagate to all servers")
       token
-    } finally {
-      adminClient.close()
-    }
-  }
-
-  private def createScramCredentialWithScramAdminClient(user: String, password: String) = {
-    // connect with the broker credentials
-    val adminClient = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
-    try {
-      // create the SCRAM credential for the given user
-      createScramCredentials(adminClient, user, password)
     } finally {
       adminClient.close()
     }

@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ResourceNotFoundException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -28,7 +29,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 /**
@@ -56,25 +56,31 @@ public class DescribeUserScramCredentialsResult {
      * descriptions complete successfully.
      */
     public KafkaFuture<Map<String, UserScramCredentialsDescription>> all() {
-        return KafkaFuture.allOf(dataFuture).thenApply(v -> {
-            DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
-            /* Check to make sure every individual described user succeeded.  Note that a successfully described user
-             * is one that appears with *either* a NONE error code or a RESOURCE_NOT_FOUND error code. The
-             * RESOURCE_NOT_FOUND means the client explicitly requested a describe of that particular user but it could
-             * not be described because it does not exist; such a user will not appear as a key in the returned map.
-             */
-            Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalFirstFailedDescribe =
-                    data.results().stream().filter(result ->
-                        result.errorCode() != Errors.NONE.code() && result.errorCode() != Errors.RESOURCE_NOT_FOUND.code()).findFirst();
-            if (optionalFirstFailedDescribe.isPresent()) {
-                throw Errors.forCode(optionalFirstFailedDescribe.get().errorCode()).exception(optionalFirstFailedDescribe.get().errorMessage());
+        final KafkaFutureImpl<Map<String, UserScramCredentialsDescription>> retval = new KafkaFutureImpl<>();
+        dataFuture.whenComplete((data, throwable) -> {
+            if (throwable != null) {
+                retval.completeExceptionally(throwable);
+            } else {
+                /* Check to make sure every individual described user succeeded.  Note that a successfully described user
+                 * is one that appears with *either* a NONE error code or a RESOURCE_NOT_FOUND error code. The
+                 * RESOURCE_NOT_FOUND means the client explicitly requested a describe of that particular user but it could
+                 * not be described because it does not exist; such a user will not appear as a key in the returned map.
+                 */
+                Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalFirstFailedDescribe =
+                        data.results().stream().filter(result ->
+                                result.errorCode() != Errors.NONE.code() && result.errorCode() != Errors.RESOURCE_NOT_FOUND.code()).findFirst();
+                if (optionalFirstFailedDescribe.isPresent()) {
+                    retval.completeExceptionally(Errors.forCode(optionalFirstFailedDescribe.get().errorCode()).exception(optionalFirstFailedDescribe.get().errorMessage()));
+                } else {
+                    Map<String, UserScramCredentialsDescription> retvalMap = new HashMap<>();
+                    data.results().stream().forEach(userResult ->
+                            retvalMap.put(userResult.user(), new UserScramCredentialsDescription(userResult.user(),
+                                    getScramCredentialInfosFor(userResult))));
+                    retval.complete(retvalMap);
+                }
             }
-            Map<String, UserScramCredentialsDescription> retval = new HashMap<>();
-            data.results().stream().forEach(userResult ->
-                    retval.put(userResult.user(), new UserScramCredentialsDescription(userResult.user(),
-                            getScramCredentialInfosFor(userResult))));
-            return retval;
         });
+        return retval;
     }
 
     /**
@@ -88,12 +94,17 @@ public class DescribeUserScramCredentialsResult {
      * include users that have a credential but that could not be described.
      */
     public KafkaFuture<List<String>> users() {
-        return KafkaFuture.allOf(dataFuture).thenApply(v -> {
-            DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
-            return data.results().stream()
-                    .filter(result -> result.errorCode() != Errors.RESOURCE_NOT_FOUND.code())
-                    .map(result -> result.user()).collect(Collectors.toList());
+        final KafkaFutureImpl<List<String>> retval = new KafkaFutureImpl<>();
+        dataFuture.whenComplete((data, throwable) -> {
+            if (throwable != null) {
+                retval.completeExceptionally(throwable);
+            } else {
+                retval.complete(data.results().stream()
+                        .filter(result -> result.errorCode() != Errors.RESOURCE_NOT_FOUND.code())
+                        .map(result -> result.user()).collect(Collectors.toList()));
+            }
         });
+        return retval;
     }
 
     /**
@@ -105,22 +116,29 @@ public class DescribeUserScramCredentialsResult {
      * {@link org.apache.kafka.common.errors.ResourceNotFoundException}.
      */
     public KafkaFuture<UserScramCredentialsDescription> description(String userName) {
-        return KafkaFuture.allOf(dataFuture).thenApply(v -> {
-            DescribeUserScramCredentialsResponseData data = valueFromFutureGuaranteedToSucceedAtThisPoint(dataFuture);
-            // it is possible that there is no future for this user (for example, the original describe request was for
-            // users 1, 2, and 3 but this is looking for user 4), so explicitly take care of that case
-            Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalUserResult =
-                    data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
-            if (!optionalUserResult.isPresent()) {
-                throw new ResourceNotFoundException("No such user: " + userName);
+        final KafkaFutureImpl<UserScramCredentialsDescription> retval = new KafkaFutureImpl<>();
+        dataFuture.whenComplete((data, throwable) -> {
+            if (throwable != null) {
+                retval.completeExceptionally(throwable);
+            } else {
+                // it is possible that there is no future for this user (for example, the original describe request was
+                // for users 1, 2, and 3 but this is looking for user 4), so explicitly take care of that case
+                Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalUserResult =
+                        data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
+                if (!optionalUserResult.isPresent()) {
+                    retval.completeExceptionally(new ResourceNotFoundException("No such user: " + userName));
+                } else {
+                    DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult = optionalUserResult.get();
+                    if (userResult.errorCode() != Errors.NONE.code()) {
+                        // RESOURCE_NOT_FOUND is included here
+                        retval.completeExceptionally(Errors.forCode(userResult.errorCode()).exception(userResult.errorMessage()));
+                    } else {
+                        retval.complete(new UserScramCredentialsDescription(userResult.user(), getScramCredentialInfosFor(userResult)));
+                    }
+                }
             }
-            DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult = optionalUserResult.get();
-            if (userResult.errorCode() != Errors.NONE.code()) {
-                // RESOURCE_NOT_FOUND is included here
-                throw Errors.forCode(userResult.errorCode()).exception(userResult.errorMessage());
-            }
-            return new UserScramCredentialsDescription(userResult.user(), getScramCredentialInfosFor(userResult));
         });
+        return retval;
     }
 
     private static List<ScramCredentialInfo> getScramCredentialInfosFor(
@@ -128,18 +146,5 @@ public class DescribeUserScramCredentialsResult {
         return userResult.credentialInfos().stream().map(c ->
                 new ScramCredentialInfo(ScramMechanism.fromType(c.mechanism()), c.iterations()))
                 .collect(Collectors.toList());
-    }
-
-    private static <T> T valueFromFutureGuaranteedToSucceedAtThisPoint(KafkaFuture<T> future) {
-        try {
-            return future.get();
-        } catch (InterruptedException e) {
-            // could happen; convert it to an unchecked exception
-            Thread.currentThread().interrupt();
-            throw new RuntimeException(e);
-        } catch (ExecutionException e) {
-            // will never happen since it is assumed the future will succeed
-            throw new RuntimeException(e);
-        }
     }
 }

@@ -59,6 +59,8 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     createScramCredentials(zkConnect, JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
   }
 
+  override def createPrivilegedAdminClient() = createScramAdminClient(JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
+
   @Before
   override def setUp(): Unit = {
     startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both,
@@ -204,7 +206,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   }
 
   private def createClientCredential(): Unit = {
-    createScramCredentialWithScramAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
   }
 
   private def sendOneRecord(producer: KafkaProducer[Array[Byte], Array[Byte]], maxWaitMs: Long = 15000): Unit = {
@@ -259,16 +261,5 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
     securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
     config.put(SaslConfigs.SASL_JAAS_CONFIG, jaasScramClientLoginModule(kafkaClientSaslMechanism, user, password))
     Admin.create(config)
-  }
-
-  private def createScramCredentialWithScramAdminClient(user: String, password: String) = {
-    // connect with the admin credentials
-    val adminClient = createScramAdminClient(JaasTestUtils.KafkaScramAdmin, JaasTestUtils.KafkaScramAdminPassword)
-    try {
-      // create the SCRAM credential for the given user
-      createScramCredentials(adminClient, user, password)
-    } finally {
-      adminClient.close()
-    }
   }
 }

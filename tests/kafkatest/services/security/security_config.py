@@ -287,14 +287,14 @@ class SecurityConfig(TemplateRenderer):
         if java_version(node) <= 11 and self.properties.get('tls.version') == 'TLSv1.3':
             self.properties.update({'tls.version': 'TLSv1.2'})
 
-    def setup_credentials(self, node, path, connect, creating_broker_user):
-        if creating_broker_user:
-            self.maybe_create_scram_credentials(node, connect, path, self.interbroker_sasl_mechanism,
-                 SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
-        else:
-            self.maybe_create_scram_credentials(node, connect, path, self.client_sasl_mechanism,
-                                                SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD,
-                                                self.export_kafka_opts_for_admin_client_as_broker())
+    def maybe_setup_broker_scram_credentials(self, node, path, connect):
+        self.maybe_create_scram_credentials(node, connect, path, self.interbroker_sasl_mechanism,
+                                            SecurityConfig.SCRAM_BROKER_USER, SecurityConfig.SCRAM_BROKER_PASSWORD)
+
+    def maybe_setup_client_scram_credentials(self, node, path, connect):
+        self.maybe_create_scram_credentials(node, connect, path, self.client_sasl_mechanism,
+                                            SecurityConfig.SCRAM_CLIENT_USER, SecurityConfig.SCRAM_CLIENT_PASSWORD,
+                                            self.export_kafka_opts_for_admin_client_as_broker())
 
     def maybe_create_scram_credentials(self, node, connect, path, mechanism, user_name, password, kafka_opts_for_admin_client_as_broker = ""):
         if self.has_sasl and self.is_sasl_scram(mechanism):

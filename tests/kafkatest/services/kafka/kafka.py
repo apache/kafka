@@ -372,7 +372,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
 
         self.security_config.setup_node(node)
-        self.security_config.setup_credentials(node, self.path, "--zookeeper %s %s" % (self.zk_connect_setting(), self.zk.zkTlsConfigFileOption()), creating_broker_user=True)
+        self.security_config.maybe_setup_broker_scram_credentials(node, self.path, "--zookeeper %s %s" % (self.zk_connect_setting(), self.zk.zkTlsConfigFileOption()))
 
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
@@ -393,7 +393,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # existing credentials from ZK and dynamic update of credentials in Kafka are tested.
         # We use the admin client and connect as the broker user when creating the client (non-broker) credentials
         # if Kafka supports KIP-554, otherwise we use ZooKeeper.
-        self.security_config.setup_credentials(node, self.path, self._connect_setting_kafka_configs_scram(node), creating_broker_user=False)
+        self.security_config.maybe_setup_client_scram_credentials(node, self.path, self._connect_setting_kafka_configs_scram(node))
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:

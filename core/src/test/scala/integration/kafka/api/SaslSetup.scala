@@ -155,7 +155,22 @@ trait SaslSetup {
     JaasTestUtils.scramClientLoginModule(clientSaslScramMechanism, scramUser, scramPassword)
   }
 
-  def createScramCredentials(adminClient: Admin, userName: String, password: String): Unit = {
+  def createPrivilegedAdminClient(): Admin = {
+    // create an admin client instance that is authorized to create credentials
+    throw new UnsupportedOperationException("Must implement this if a test needs to use it")
+  }
+
+  def createScramCredentialsViaPrivilegedAdminClient(userName: String, password: String): Unit = {
+    val privilegedAdminClient = createPrivilegedAdminClient() // must explicitly implement this method
+    try {
+      // create the SCRAM credential for the given user
+      createScramCredentials(privilegedAdminClient, userName, password)
+    } finally {
+      privilegedAdminClient.close()
+    }
+  }
+
+    def createScramCredentials(adminClient: Admin, userName: String, password: String): Unit = {
     val results = adminClient.alterUserScramCredentials(PublicScramMechanism.values().filter(_ != PublicScramMechanism.UNKNOWN).map(mechanism =>
       new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(mechanism, 4096), password)
         .asInstanceOf[UserScramCredentialAlteration]).toList.asJava)
