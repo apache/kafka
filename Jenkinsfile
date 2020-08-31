@@ -17,49 +17,12 @@
  *
  */
 
-def getRepoURL() {
-  sh "git config --get remote.origin.url > .git/remote-url"
-  return readFile(".git/remote-url").trim()
-}
-
-def getCommitSha() {
-  sh "git rev-parse HEAD > .git/current-commit"
-  return readFile(".git/current-commit").trim()
-}
-
-void setBuildStatus(String context, String message, String state) {
-    // workaround https://issues.jenkins-ci.org/browse/JENKINS-38674
-    repoUrl = getRepoURL()
-    commitSha = getCommitSha()
-
-    echo "Setting status ${repoUrl}:${commitSha} :: ${context} -> ${state} -- ${message}"
-    echo "scm.branches: ${scm.branches}"
-    echo "scm: ${scm}"
-    step([
-        $class: "GitHubCommitStatusSetter",
-        // Repo needs to be manually specified because it tries to set
-        // status on jenkins-common as well -- anything in context --
-        // if we aren't specific
-        reposSource: [$class: "ManuallyEnteredRepositorySource", url: repoUrl],
-        // SHA needs to be manually specified because git commit info
-        // isn't available via standard env vars, and statuses might
-        // be set before we do the Jenkinsfile-based SCM checkout step
-        // that gets commit info.
-        commitShaSource: [$class: "ManuallyEnteredShaSource", sha: commitSha],
-        // Log errors, default just swallows without logging anything
-        errorHandlers: [[$class: 'ShallowAnyErrorHandler']],
-        contextSource: [$class: "ManuallyEnteredCommitContextSource", context: context],
-        statusResultSource: [ $class: "ConditionalStatusResultSource", results: [[$class: "AnyBuildResult", message: message, state: state]] ]
-    ]);
-}
-
 def doValidation() {
   try {
     sh '''
       ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
 	  spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-	  --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\" \
-	  || { echo 'Validation steps failed'; exit 1; }
+	  --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
     '''
   } catch(err) {
     error('Validation checks failed')
@@ -67,15 +30,17 @@ def doValidation() {
 }
 
 def doTest() {
-  sh '''
-    ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
-        --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
-        || { echo 'Test steps failed'; exit 1; }
-  '''
+  try {
+    sh '''
+      ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
+	  --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@"
+    '''
+  } catch(err) {
+    error('Tests failed')
+  }
 }
 
 def doStreamsArchetype() {
-  // Verify that Kafka Streams archetype compiles
   echo 'Verify that Kafka Streams archetype compiles'
 
   sh '''
@@ -136,15 +101,14 @@ pipeline {
           options {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
-            ansiColor('xterm')
           }
 	  environment {
 	    SCALA_VERSION=2.12
 	  }
 	  steps {
 	    sh 'gradle -version'
-	    //doValidation()
-            //doTest()
+	    doValidation()
+            doTest()
             doStreamsArchetype()
 	  }
 	  post {
@@ -161,6 +125,7 @@ pipeline {
 	  }
           options {
             timeout(time: 8, unit: 'HOURS') 
+            timestamps()
           }
 	  environment {
 	    SCALA_VERSION=2.13
@@ -168,7 +133,7 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
-            //doTest()
+            doTest()
             echo 'Skipping Kafka Streams archetype test for Java 11'
 	  }
 	  post {
@@ -185,6 +150,7 @@ pipeline {
 	  }
           options {
             timeout(time: 8, unit: 'HOURS') 
+            timestamps()
           }
 	  environment {
 	    SCALA_VERSION=2.13
@@ -192,7 +158,7 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
-            //doTest()
+            doTest()
             echo 'Skipping Kafka Streams archetype test for Java 14'
 	  }
 	  post {
