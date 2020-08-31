@@ -74,8 +74,10 @@ def doTest() {
   '''
 }
 
-def doStreamsTests() {
+def doStreamsArchetype() {
   // Verify that Kafka Streams archetype compiles
+  echo 'Verify that Kafka Streams archetype compiles'
+
   sh '''
     ./gradlew streams:install clients:install connect:json:install connect:api:install \
          || { echo 'Could not install kafka-streams.jar (and dependencies) locally`'; exit 1; }
@@ -109,15 +111,15 @@ def doStreamsTests() {
 	  -Dpackage=myapps \
 	  || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
     '''
+
+    dir('streams.examples') {
+      sh '''
+	mvn compile \
+	    || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
+      '''
+    }
   }
   
-  dir('streams.examples') {
-    sh '''
-      mvn compile \
-          || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
-    '''
-
-  }
 }
 
 pipeline {
@@ -141,7 +143,7 @@ pipeline {
 	    sh 'gradle -version'
 	    //doValidation()
             //doTest()
-            doStreamsTests()
+            doStreamsArchetype()
 	  }
 	  post {
 	    always {
