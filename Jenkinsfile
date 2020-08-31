@@ -135,6 +135,8 @@ pipeline {
 	  }
           options {
             timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+            ansiColor('xterm')
           }
 	  environment {
 	    SCALA_VERSION=2.12
@@ -166,7 +168,7 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
-            doTest()
+            //doTest()
             echo 'Skipping Kafka Streams archetype test for Java 11'
 	  }
 	  post {
@@ -190,7 +192,7 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
-            doTest()
+            //doTest()
             echo 'Skipping Kafka Streams archetype test for Java 14'
 	  }
 	  post {
