@@ -100,6 +100,7 @@ public class RocksDBMetricsIntegrationTest {
     private static final String BYTES_WRITTEN_DURING_COMPACTION_RATE = "bytes-written-compaction-rate";
     private static final String NUMBER_OF_OPEN_FILES = "number-open-files";
     private static final String NUMBER_OF_FILE_ERRORS = "number-file-errors-total";
+    private static final String NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE = "num-entries-active-mem-table";
 
     @Parameters(name = "{0}")
     public static Collection<Object[]> data() {
@@ -255,6 +256,7 @@ public class RocksDBMetricsIntegrationTest {
         checkMetricByName(listMetricStore, BYTES_WRITTEN_DURING_COMPACTION_RATE, 1);
         checkMetricByName(listMetricStore, NUMBER_OF_OPEN_FILES, 1);
         checkMetricByName(listMetricStore, NUMBER_OF_FILE_ERRORS, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE, 1);
     }
 
     private void checkMetricByName(final List<Metric> listMetric,

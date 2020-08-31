@@ -118,6 +118,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
 
             final long timestamp = context().timestamp();
+
             processInOrder(key, value, timestamp);
         }
 
@@ -143,6 +144,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
             // Store the previous record
             Long previousRecord = null;
+
             try (
                 final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(
                     key,
@@ -175,10 +177,11 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     }
                 }
             }
+
             //create right window for previous record
             if (previousRecord != null) {
                 final long previousRightWinStart = previousRecord + 1;
-                if (rightWindowNecessaryAndPossible(windowStartTimes, previousRightWinStart, timestamp)) {
+                if (!windowStartTimes.contains(previousRightWinStart)) {
                     final TimeWindow window = new TimeWindow(previousRightWinStart, previousRightWinStart + windows.timeDifferenceMs());
                     final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
                     putAndForward(window, valueAndTime, key, value, closeTime, timestamp);

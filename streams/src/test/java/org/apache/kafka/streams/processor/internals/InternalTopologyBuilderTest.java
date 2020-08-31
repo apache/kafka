@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -270,14 +271,15 @@ public class InternalTopologyBuilderTest {
         builder.addSource(null, "source-1", null, null, null, Pattern.compile("topic-1"));
         builder.addSource(null, "source-2", null, null, null, Pattern.compile("topic-2"));
         builder.addGlobalStore(
-                new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
-                "globalSource",
-                null,
-                null,
-                null,
-                "globalTopic",
-                "global-processor",
-                new MockProcessorSupplier<>());
+            new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(),
+            "globalSource",
+            null,
+            null,
+            null,
+            "globalTopic",
+            "global-processor",
+            new MockApiProcessorSupplier<>()
+        );
         builder.initializeSubscription();
 
         final Pattern expectedPattern = Pattern.compile("topic-1|topic-2");
@@ -298,7 +300,8 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockProcessorSupplier<>());
+            new MockApiProcessorSupplier<>()
+        );
         builder.initializeSubscription();
 
         assertThat(builder.sourceTopicCollection(), equalTo(asList("topic-1", "topic-2")));
@@ -403,7 +406,7 @@ public class InternalTopologyBuilderTest {
             null,
             "global-topic",
             "global-processor",
-            new MockProcessorSupplier<>()
+            new MockApiProcessorSupplier<>()
         );
 
         final TopologyException exception = assertThrows(
@@ -434,7 +437,7 @@ public class InternalTopologyBuilderTest {
                 null,
                 "global-topic",
                 "global-processor",
-                new MockProcessorSupplier<>()
+                new MockApiProcessorSupplier<>()
             )
         );
 
@@ -459,7 +462,7 @@ public class InternalTopologyBuilderTest {
             null,
             "global-topic",
             "global-processor",
-            new MockProcessorSupplier<>()
+            new MockApiProcessorSupplier<>()
         );
 
         final TopologyException exception = assertThrows(
@@ -472,7 +475,7 @@ public class InternalTopologyBuilderTest {
                 null,
                 "global-topic",
                 "global-processor-2",
-                new MockProcessorSupplier<>()
+                new MockApiProcessorSupplier<>()
             )
         );
 
@@ -667,7 +670,7 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockProcessorSupplier<>()
+            new MockApiProcessorSupplier<>()
         );
         newNodeGroups = builder.nodeGroups();
         assertNotEquals(oldNodeGroups, newNodeGroups);
@@ -961,7 +964,8 @@ public class InternalTopologyBuilderTest {
             null,
             "anyTopicName",
             sameNameForSourceAndProcessor,
-            new MockProcessorSupplier<>());
+            new MockApiProcessorSupplier<>()
+        );
     }
 
     @Test
@@ -1104,7 +1108,8 @@ public class InternalTopologyBuilderTest {
             null,
             globalTopic,
             "global-processor",
-            new MockProcessorSupplier<>());
+            new MockApiProcessorSupplier<>()
+        );
         builder.initializeSubscription();
 
         assertThat(builder.buildGlobalStateTopology().storeToChangelogTopic().get(globalStoreName), is(globalTopic));
