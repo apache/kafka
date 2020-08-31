@@ -4143,7 +4143,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         });
         // Creating an upsertion may throw InvalidKeyException or NoSuchAlgorithmException,
-        // so keep track of which users are affected by such a failure and immediately fail all their alterations
+        // so keep track of which users are affected by such a failure so we can fail all their alterations later
         final Map<String, Map<ScramMechanism, AlterUserScramCredentialsRequestData.ScramCredentialUpsertion>> userInsertions = new HashMap<>();
         alterations.stream().filter(a -> a instanceof UserScramCredentialUpsertion)
                 .filter(alteration -> !userIllegalAlterationExceptions.containsKey(alteration.user()))
@@ -4179,7 +4179,7 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 });
 
-        // submit alterations for users that do not have an illegal alteration as identified above
+        // submit alterations only for users that do not have an illegal alteration as identified above
         Call call = new Call("alterUserScramCredentials", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
             @Override
