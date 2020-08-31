@@ -144,7 +144,7 @@ pipeline {
 	  steps {
 	    sh 'gradle -version'
 	    doValidation()
-            //doTest()
+            doTest()
             doStreamsTests()
 	  }
 	  post {
