@@ -17,6 +17,14 @@
  *
  */
 
+def setupGradle() {
+  // Delete gradle cache to workaround cache corruption bugs, see KAFKA-3167
+  dir('.gradle') {
+    deleteDir
+  }
+  sh './gradlew -version'
+}
+
 def doValidation() {
   try {
     sh '''
@@ -116,7 +124,7 @@ pipeline {
 	    SCALA_VERSION=2.12
 	  }
 	  steps {
-	    sh 'gradle -version'
+            setupGradle()
 	    doValidation()
             doTest()
             tryStreamsArchetype()
@@ -144,7 +152,7 @@ pipeline {
 	    SCALA_VERSION=2.13
 	  }
 	  steps {
-	    sh 'gradle -version'
+            setupGradle()
 	    doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 11'
@@ -172,7 +180,7 @@ pipeline {
 	    SCALA_VERSION=2.13
 	  }
 	  steps {
-	    sh 'gradle -version'
+            setupGradle()
 	    doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 14'
