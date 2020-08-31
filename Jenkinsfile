@@ -38,6 +38,7 @@ def doTest() {
     ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
         --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed -PignoreFailures=true "$@"
   '''
+  junit '**/build/test-results/**/TEST-*.xml'
 }
 
 def doStreamsArchetype() {
@@ -120,14 +121,6 @@ pipeline {
             doTest()
             tryStreamsArchetype()
           }
-          post {
-            success {
-              junit '**/build/test-results/**/TEST-*.xml'
-            }
-            unstable {
-              junit '**/build/test-results/**/TEST-*.xml'
-            }
-          }
         }
 
         stage('JDK 11') {
@@ -148,14 +141,6 @@ pipeline {
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
-          post {
-            success {
-              junit '**/build/test-results/**/TEST-*.xml'
-            }
-            unstable {
-              junit '**/build/test-results/**/TEST-*.xml'
-            }
-          }
         }
        
         stage('JDK 14') {
@@ -175,14 +160,6 @@ pipeline {
             doValidation()
             doTest()
             echo 'Skipping Kafka Streams archetype test for Java 14'
-          }
-          post {
-            success {
-              junit '**/build/test-results/**/TEST-*.xml'
-            }
-            unstable {
-              junit '**/build/test-results/**/TEST-*.xml'
-            }
           }
         }
       }
