@@ -124,8 +124,6 @@ public class StreamsMetricsImplTest {
     private final static String DESCRIPTION3 = "description number three";
     private final static Gauge<String> VALUE_PROVIDER = (config, now) -> "mutable-value";
 
-
-
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
     private final String metricNamePrefix = "metric";
