@@ -26,31 +26,18 @@ def setupGradle() {
 }
 
 def doValidation() {
-  def ret = sh script: '''
-      ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-          spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-          --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
-    ''', returnStatus: true
-  if (ret == 143) {
-    echo 'Got a SIGTERM'
-    currentBuild.result = 'ABORTED'
-  } else if (ret != 0) {
-    echo 'Validation checks failed, aborting this build'
-    currentBuild.result = 'FAILURE'
-  }
-  sh 'exit ${ret}'
+  sh '''
+    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
+        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+        --profile --no-daemon --continue -PxmlSpotBugsReport=true \"$@\"
+  '''
 }
 
 def doTest() {
-  try {
-    sh '''
-      ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
-          --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@"
-    '''
-  } catch(err) {
-    echo 'Some tests failed, marking this build UNSTABLE'
-    currentBuild.result = 'UNSTABLE'
-  }
+  sh '''
+    ./gradlew -PscalaVersion=$SCALA_VERSION unitTest integrationTest \
+        --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed -PignoreFailures=true "$@"
+  '''
 }
 
 def doStreamsArchetype() {
