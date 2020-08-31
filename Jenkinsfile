@@ -91,11 +91,9 @@ def doStreamsTests() {
         || { echo 'Could not change into directory `streams/quickstart`'; exit 1; }
   '''
 
-  // variable $MAVEN_LATEST__HOME is provided by Jenkins (see build configuration)
-  sh 'mvn=$MAVEN_LATEST__HOME/bin/mvn'
 
   sh '''
-    $mvn clean install -Dgpg.skip  \
+    mvn clean install -Dgpg.skip  \
         || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
   '''
 
@@ -105,7 +103,7 @@ def doStreamsTests() {
   '''
 
   sh '''
-    echo "Y" | $mvn archetype:generate \
+    echo "Y" | mvn archetype:generate \
 	-DarchetypeCatalog=local \
 	-DarchetypeGroupId=org.apache.kafka \
 	-DarchetypeArtifactId=streams-quickstart-java \
@@ -123,7 +121,7 @@ def doStreamsTests() {
   '''
 
   sh '''
-    $mvn compile \
+    mvn compile \
         || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
   '''
 }
@@ -137,14 +135,15 @@ pipeline {
           agent { label 'ubuntu' }
 	  tools {
 	    jdk 'JDK 1.8 (latest)'
+            maven 'Maven 3.6.3'
 	  }
 	  environment {
 	    SCALA_VERSION=2.12
 	  }
 	  steps {
 	    sh 'gradle -version'
-	    doValidation()
-            doTest()
+	    //doValidation()
+            //doTest()
             doStreamsTests()
 	  }
 	  post {
