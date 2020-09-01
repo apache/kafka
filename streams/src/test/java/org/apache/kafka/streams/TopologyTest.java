@@ -1075,7 +1075,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 "    Processor: KTABLE-FILTER-0000000003 (stores: [])\n" +
@@ -1095,7 +1095,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000004\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 // Previously, this was
@@ -1120,7 +1120,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 "    Processor: KTABLE-FILTER-0000000003 (stores: [store-name])\n" +

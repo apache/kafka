@@ -123,7 +123,7 @@ public class StreamsBuilderTest {
 
         assertThat(
             topology.stateStores().size(),
-            equalTo(2));
+            equalTo(1));
         assertThat(
             topology.processorConnectedStateStores("KSTREAM-JOIN-0000000005"),
             equalTo(Collections.singleton("store")));

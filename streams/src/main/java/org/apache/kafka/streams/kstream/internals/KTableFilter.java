@@ -46,9 +46,11 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public void enableSendingOldValues() {
-        parent.enableSendingOldValues();
-        sendOldValues = true;
+    public boolean enableSendingOldValues(final boolean onlyIfMaterialized) {
+        if (parent.enableSendingOldValues(onlyIfMaterialized)) {
+            sendOldValues = true;
+        }
+        return sendOldValues;
     }
 
     private V computeValue(final K key, final V value) {

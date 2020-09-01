@@ -322,7 +322,7 @@ public class KTableKTableLeftJoinTest {
         table2 = builder.table(topic2, consumed);
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
+        ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues(false);
 
         supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);

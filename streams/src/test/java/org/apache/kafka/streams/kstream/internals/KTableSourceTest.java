@@ -324,7 +324,7 @@ public class KTableSourceTest {
         @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
-        table1.enableSendingOldValues();
+        table1.enableSendingOldValues(false);
         assertTrue(table1.sendingOldValueEnabled());
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();

@@ -77,10 +77,16 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     }
 
     @Override
-    public void enableSendingOldValues() {
-        parent1.enableSendingOldValues();
-        parent2.enableSendingOldValues();
+    public boolean enableSendingOldValues(final boolean onlyIfMaterialized) {
+        if (!parent1.enableSendingOldValues(onlyIfMaterialized)) {
+            throw new IllegalStateException("Table-table joins should always be materialized");
+        }
+
+        if (!parent2.enableSendingOldValues(onlyIfMaterialized)) {
+            throw new IllegalStateException("Table-table joins should always be materialized");
+        }
         sendOldValues = true;
+        return true;
     }
 
     public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,

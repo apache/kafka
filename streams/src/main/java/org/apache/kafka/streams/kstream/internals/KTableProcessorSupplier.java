@@ -22,5 +22,13 @@ public interface KTableProcessorSupplier<K, V, T> extends ProcessorSupplier<K, C
 
     KTableValueGetterSupplier<K, T> view();
 
-    void enableSendingOldValues();
+    /**
+     * Potentially enables sending old values.
+     *
+     * @param onlyIfMaterialized if {@code true}, only enable sending old values if already materialized.
+     *                           If {@code false}, force materialization.
+     * @return {@code true} is sending old values is enabled, i.e. either because {@code onlyIfMaterialized} was
+     * {@code false} or some upstream node is materialized.
+     */
+    boolean enableSendingOldValues(boolean onlyIfMaterialized);
 }

@@ -182,6 +182,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final KTableProcessorSupplier<K, V, V> processorSupplier =
             new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
 
+        processorSupplier.enableSendingOldValues(true);
+
         final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
         );
@@ -194,7 +196,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
-        final KTableImpl<K, Object, V> kTable = new KTableImpl<>(
+        return new KTableImpl<>(
             name,
             keySerde,
             valueSerde,
@@ -203,10 +205,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             processorSupplier,
             tableNode,
             builder);
-
-        kTable.enableSendingOldValues();
-
-        return kTable;
     }
 
     @Override
@@ -705,10 +703,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Set<String> allSourceNodes = ensureCopartitionWith(Collections.singleton((AbstractStream<K, VO>) other));
 
         if (leftOuter) {
-            enableSendingOldValues();
+            enableSendingOldValues(false);
         }
         if (rightOuter) {
-            ((KTableImpl<?, ?, ?>) other).enableSendingOldValues();
+            ((KTableImpl<?, ?, ?>) other).enableSendingOldValues(false);
         }
 
         final KTableKTableAbstractJoin<K, VR, V, VO> joinThis;
@@ -811,7 +809,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
 
-        this.enableSendingOldValues();
+        this.enableSendingOldValues(false);
         return new KGroupedTableImpl<>(
             builder,
             selectName,
@@ -836,18 +834,25 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @SuppressWarnings("unchecked")
-    public void enableSendingOldValues() {
+    public boolean enableSendingOldValues(final boolean onlyIfMaterialized) {
         if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {
                 final KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
+                if (onlyIfMaterialized && !source.materialized()) {
+                    return false;
+                }
                 source.enableSendingOldValues();
             } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
                 ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
             } else {
-                ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValues();
+                final KTableProcessorSupplier<K, S, V> tableProcessorSupplier = (KTableProcessorSupplier<K, S, V>) processorSupplier;
+                if (!tableProcessorSupplier.enableSendingOldValues(onlyIfMaterialized)) {
+                    return false;
+                }
             }
             sendOldValues = true;
         }
+        return true;
     }
 
     boolean sendingOldValueEnabled() {
@@ -971,11 +976,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         //Old values are a useful optimization. The old values from the foreignKeyTable table are compared to the new values,
         //such that identical values do not cause a prefixScan. PrefixScan and propagation can be expensive and should
         //not be done needlessly.
-        ((KTableImpl<?, ?, ?>) foreignKeyTable).enableSendingOldValues();
+        ((KTableImpl<?, ?, ?>) foreignKeyTable).enableSendingOldValues(false);
 
         //Old values must be sent such that the ForeignJoinSubscriptionSendProcessorSupplier can propagate deletions to the correct node.
         //This occurs whenever the extracted foreignKey changes values.
-        enableSendingOldValues();
+        enableSendingOldValues(false);
 
         final NamedInternal renamed = new NamedInternal(joinName);
 
