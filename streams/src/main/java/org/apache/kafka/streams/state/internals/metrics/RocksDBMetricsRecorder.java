@@ -162,26 +162,9 @@ public class RocksDBMetricsRecorder {
                 " has been already added. This is a bug in Kafka Streams. " +
                 "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
         }
-        verifyStatistics(segmentName, statistics);
         verifyDbAndCacheAndStatistics(segmentName, db, cache, statistics);
         logger.debug("Adding value providers for store {} of task {}", segmentName, taskId);
         storeToValueProviders.put(segmentName, new DbAndCacheAndStatistics(db, cache, statistics));
-    }
-
-    private void verifyStatistics(final String segmentName, final Statistics statistics) {
-        if (!storeToValueProviders.isEmpty() && (
-                statistics == null &&
-                storeToValueProviders.values().stream().anyMatch(valueProviders -> valueProviders.statistics != null)
-                ||
-                statistics != null &&
-                storeToValueProviders.values().stream().anyMatch(valueProviders -> valueProviders.statistics == null))) {
-
-            throw new IllegalStateException("Statistics for segment " + segmentName + " of task " + taskId +
-                " is" + (statistics == null ? " " : " not ") + "null although the statistics of another segment in this " +
-                "metrics recorder is" + (statistics != null ? " " : " not ") + "null. " +
-                "This is a bug in Kafka Streams. " +
-                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues");
-        }
     }
 
     private void verifyDbAndCacheAndStatistics(final String segmentName,
@@ -189,8 +172,8 @@ public class RocksDBMetricsRecorder {
                                                final Cache cache,
                                                final Statistics statistics) {
         for (final DbAndCacheAndStatistics valueProviders : storeToValueProviders.values()) {
-            verifyIfSomeAreNull(segmentName, statistics, valueProviders.statistics, "statistics");
-            verifyIfSomeAreNull(segmentName, cache, valueProviders.cache, "cache");
+            verifyConsistencyOfValueProvidersAcrossSegments(segmentName, statistics, valueProviders.statistics, "statistics");
+            verifyConsistencyOfValueProvidersAcrossSegments(segmentName, cache, valueProviders.cache, "cache");
             if (db == valueProviders.db) {
                 throw new IllegalStateException("DB instance for store " + segmentName + " of task " + taskId +
                     " was already added for another segment as a value provider. This is a bug in Kafka Streams. " +
@@ -206,10 +189,10 @@ public class RocksDBMetricsRecorder {
         }
     }
 
-    private void verifyIfSomeAreNull(final String segmentName,
-                                     final Object newValueProvider,
-                                     final Object oldValueProvider,
-                                     final String valueProviderName) {
+    private void verifyConsistencyOfValueProvidersAcrossSegments(final String segmentName,
+                                                                 final Object newValueProvider,
+                                                                 final Object oldValueProvider,
+                                                                 final String valueProviderName) {
         if (newValueProvider == null && oldValueProvider != null ||
             newValueProvider != null && oldValueProvider == null) {
 

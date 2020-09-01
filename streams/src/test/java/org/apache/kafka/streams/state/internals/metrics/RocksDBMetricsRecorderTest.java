@@ -184,7 +184,7 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
-    public void shouldThrowIfStatisticsToAddIsNullButExsitingStatisticsIsNotNull() {
+    public void shouldThrowIfStatisticsToAddIsNullButExsitingStatisticsAreNotNull() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
 
         final Throwable exception = assertThrows(
