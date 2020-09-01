@@ -314,6 +314,7 @@ subprojects {
 
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs

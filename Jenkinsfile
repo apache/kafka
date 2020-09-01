@@ -160,7 +160,7 @@ pipeline {
             setupGradle()
             doValidation()
             doTest()
-            echo 'Skipping Kafka Streams archetype test for Java 14'
+            echo 'Skipping Kafka Streams archetype test for Java 15'
           }
         }
       }
