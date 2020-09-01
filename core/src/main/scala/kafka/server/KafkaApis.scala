@@ -3030,10 +3030,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!controller.isActive) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
-    } else if (request.context.principal.tokenAuthenticated) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, new UnsupportedByAuthenticationException(
-          "Altering User SCRAM credentials is not allowed when authenticating with a delegation token")))
     } else if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
       val result = adminManager.alterUserScramCredentials(
         alterUserScramCredentialsRequest.data.upsertions().asScala, alterUserScramCredentialsRequest.data.deletions().asScala)
