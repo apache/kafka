@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -756,7 +757,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(METRICS_RECORDING_LEVEL_CONFIG,
                     Type.STRING,
                     Sensor.RecordingLevel.INFO.toString(),
-                    in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                    in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString(), RecordingLevel.TRACE.toString()),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
             .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,

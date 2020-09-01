@@ -118,25 +118,25 @@ public class KTableImplTest {
                 new KeyValueTimestamp<>("C", "03", 0),
                 new KeyValueTimestamp<>("D", "04", 0),
                 new KeyValueTimestamp<>("A", "05", 10),
-                new KeyValueTimestamp<>("A", "06", 8)), processors.get(0).processed);
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(0).processed());
         assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
                 new KeyValueTimestamp<>("B", 2, 100),
                 new KeyValueTimestamp<>("C", 3, 0),
                 new KeyValueTimestamp<>("D", 4, 0),
                 new KeyValueTimestamp<>("A", 5, 10),
-                new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed);
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed());
         assertEquals(asList(new KeyValueTimestamp<>("A", null, 5),
                 new KeyValueTimestamp<>("B", 2, 100),
                 new KeyValueTimestamp<>("C", null, 0),
                 new KeyValueTimestamp<>("D", 4, 0),
                 new KeyValueTimestamp<>("A", null, 10),
-                new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed);
+                new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed());
         assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
                 new KeyValueTimestamp<>("B", "02", 100),
                 new KeyValueTimestamp<>("C", "03", 0),
                 new KeyValueTimestamp<>("D", "04", 0),
                 new KeyValueTimestamp<>("A", "05", 10),
-                new KeyValueTimestamp<>("A", "06", 8)), processors.get(3).processed);
+                new KeyValueTimestamp<>("A", "06", 8)), processors.get(3).processed());
     }
 
     @Test

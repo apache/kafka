@@ -37,6 +37,12 @@
     // Since the client is sending the ApiVersionsRequest in order to discover what
     // versions are supported, the client does not know the best version to use.
     { "name": "ClientId", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
-      "flexibleVersions": "none", "about": "The client ID string." }
+      "flexibleVersions": "none", "about": "The client ID string." },
+    { "name": "InitialPrincipalName", "type": "string", "tag": 0, "taggedVersions": "2+",
+      "nullableVersions": "2+", "default": "null", "ignorable": true,
+      "about": "Optional value of the initial principal name when the request is redirected by a broker, for audit logging and quota purpose." },
+    { "name": "InitialClientId", "type": "string", "tag": 1, "taggedVersions": "2+",
+      "nullableVersions": "2+", "default": "null", "ignorable": true,
+      "about": "Optional value of the initial client id when the request is redirected by a broker, for quota purpose." }
   ]
 }
