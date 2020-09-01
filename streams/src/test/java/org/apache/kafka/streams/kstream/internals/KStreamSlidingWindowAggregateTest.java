@@ -590,9 +590,9 @@ public class KStreamSlidingWindowAggregateTest {
             final Map<Long, ValueAndTimestamp<String>> results = new HashMap<>();
 
             for (final KeyValueTimestamp<Windowed<String>, String> entry : supplier.theCapturedProcessor().processed()) {
-                final Windowed<String> window = (Windowed<String>) entry.key();
+                final Windowed<String> window = entry.key();
                 final Long start = window.window().start();
-                final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make((String) entry.value(), entry.timestamp());
+                final ValueAndTimestamp valueAndTimestamp = ValueAndTimestamp.make(entry.value(), entry.timestamp());
                 if (results.putIfAbsent(start, valueAndTimestamp) != null) {
                     results.replace(start, valueAndTimestamp);
                 }

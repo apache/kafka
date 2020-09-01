@@ -118,19 +118,19 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             }
 
             final long timestamp = context().timestamp();
-
-            processInOrder(key, value, timestamp);
-        }
-
-        public void processInOrder(final K key, final V value, final long timestamp) {
-
-            observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             if (timestamp < windows.timeDifferenceMs()) {
                 processEarly(key, value, timestamp, closeTime);
                 return;
             }
+
+            processInOrder(key, value, timestamp, closeTime);
+        }
+
+        public void processInOrder(final K key, final V value, final long timestamp, final long closeTime) {
+
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
 
             final Set<Long> windowStartTimes = new HashSet<>();
 
@@ -142,8 +142,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             boolean leftWinAlreadyCreated = false;
             boolean rightWinAlreadyCreated = false;
 
-            // Store the previous record
-            Long previousRecord = null;
+            Long previousRecordTimestamp = null;
 
             try (
                 final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(
@@ -158,30 +157,30 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     windowStartTimes.add(next.key.window().start());
                     final long startTime = next.key.window().start();
                     final long endTime = startTime + windows.timeDifferenceMs();
+                    final long windowMaxRecordTimestamp = next.value.timestamp();
 
                     if (endTime < timestamp) {
                         leftWinAgg = next.value;
-                        // update to store the previous record
-                        previousRecord = next.value.timestamp();
+                        previousRecordTimestamp = windowMaxRecordTimestamp;
                     } else if (endTime == timestamp) {
                         leftWinAlreadyCreated = true;
-                        if (next.value.timestamp() < timestamp) {
-                            previousRecord = next.value.timestamp();
+                        if (windowMaxRecordTimestamp < timestamp) {
+                            previousRecordTimestamp = windowMaxRecordTimestamp;
                         }
                         putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
                     } else if (endTime > timestamp && startTime <= timestamp) {
                         rightWinAgg = next.value;
                         putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
-                    } else {
+                    } else if (startTime == timestamp + 1){
                         rightWinAlreadyCreated = true;
                     }
                 }
             }
 
             //create right window for previous record
-            if (previousRecord != null) {
-                final long previousRightWinStart = previousRecord + 1;
-                if (!windowStartTimes.contains(previousRightWinStart)) {
+            if (previousRecordTimestamp != null) {
+                final long previousRightWinStart = previousRecordTimestamp + 1;
+                if (rightWindowNecessaryAndPossible(windowStartTimes, previousRightWinStart, timestamp)) {
                     final TimeWindow window = new TimeWindow(previousRightWinStart, previousRightWinStart + windows.timeDifferenceMs());
                     final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
                     putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
@@ -192,7 +191,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             if (!leftWinAlreadyCreated) {
                 final ValueAndTimestamp<Agg> valueAndTime;
                 // if there's a right window that the new record could create && previous record falls within left window -> new record's left window is not empty
-                if (previousRecord != null && leftWindowNotEmpty(previousRecord, timestamp)) {
+                if (previousRecordTimestamp != null && leftWindowNotEmpty(previousRecordTimestamp, timestamp)) {
                     valueAndTime = ValueAndTimestamp.make(leftWinAgg.value(), timestamp);
                 } else {
                     valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
@@ -201,19 +200,19 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
             }
             if (!rightWinAlreadyCreated && rightWindowIsNotEmpty(rightWinAgg, timestamp)) {
-                createRightWindow(timestamp, rightWinAgg, key, value, closeTime);
+                createCurrentRecordRightWindow(timestamp, rightWinAgg, key);
             }
         }
 
         /**
-         * Created to handle records that have a timestamp > 0 but < timeDifference. These records would create
-         * windows with negative start times, which is not supported. Instead, they will fall within the [0, timeDifference]
-         * window, and we will update their right windows as new records come in later
+         * Created to handle records where 0 < timestamp < timeDifferenceMs. These records would create
+         * windows with negative start times, which is not supported. Instead, they will fall within the [0, timeDifferenceMs]
+         * window, and we will update or create their right windows as new records come in later
          */
         private void processEarly(final K key, final V value, final long timestamp, final long closeTime) {
-            ValueAndTimestamp<Agg> rightWinAgg = null;
-            //window from [0,timeDifference] that holds all early records
+            // A window from [0, timeDifferenceMs] that holds all early records
             KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> combinedWindow = null;
+            ValueAndTimestamp<Agg> rightWinAgg = null;
             boolean rightWinAlreadyCreated = false;
             final Set<Long> windowStartTimes = new HashSet<>();
 
@@ -232,11 +231,15 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     next = iterator.next();
                     windowStartTimes.add(next.key.window().start());
                     final long startTime = next.key.window().start();
+                    final long windowMaxRecordTimestamp = next.value.timestamp();
 
                     if (startTime == 0) {
                         combinedWindow = next;
-                        if (next.value.timestamp() < timestamp) {
-                            previousRecordTimestamp = next.value.timestamp();
+                        if (windowMaxRecordTimestamp < timestamp) {
+                            // If maxRecordTimestamp > timestamp, the current record is out-of-order, meaning that the
+                            // previous record's right window would have been created already by other records. This
+                            // will always be true for early records, as they all fall within [0, timeDifferenceMs].
+                            previousRecordTimestamp = windowMaxRecordTimestamp;
                         }
 
                     } else if (startTime <= timestamp) {
@@ -254,35 +257,43 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 rightWinAgg = combinedWindow.value;
             }
 
+            //create the right window for the previous record if the previous record exists and the window hasn't already been created
+            if (previousRecordTimestamp != null && !windowStartTimes.contains(previousRecordTimestamp + 1)) {
+                final TimeWindow window = new TimeWindow(previousRecordTimestamp + 1, previousRecordTimestamp + 1 + windows.timeDifferenceMs());
+                final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
+                putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
+            }
+
             if (combinedWindow == null) {
                 final TimeWindow window = new TimeWindow(0, windows.timeDifferenceMs());
                 final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
                 putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
 
             } else {
-                //create the right window for the previous record if the previous record exists and the window hasn't already been created
-                if (previousRecordTimestamp != null && !windowStartTimes.contains(previousRecordTimestamp + 1)) {
-                    final TimeWindow window = new TimeWindow(previousRecordTimestamp + 1, previousRecordTimestamp + 1 + windows.timeDifferenceMs());
-                    final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(initializer.apply(), timestamp);
-                    putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
-                }
                 //update the combined window with the new aggregate
                 putAndForward(combinedWindow.key.window(), combinedWindow.value, key, value, closeTime, timestamp);
             }
             //create right window for new record if needed
             if (!rightWinAlreadyCreated && rightWindowIsNotEmpty(rightWinAgg, timestamp)) {
-                createRightWindow(timestamp, rightWinAgg, key, value, closeTime);
+                createCurrentRecordRightWindow(timestamp, rightWinAgg, key);
             }
         }
 
-        private void createRightWindow(final long timestamp,
-                                       final ValueAndTimestamp<Agg> rightWinAgg,
-                                       final K key,
-                                       final V value,
-                                       final long closeTime) {
+        private void createCurrentRecordRightWindow(final long timestamp,
+                                                    final ValueAndTimestamp<Agg> rightWinAgg,
+                                                    final K key) {
             final TimeWindow window = new TimeWindow(timestamp + 1, timestamp + 1 + windows.timeDifferenceMs());
-            final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(getValueOrNull(rightWinAgg), Math.max(rightWinAgg.timestamp(), timestamp));
-            putAndForward(window, valueAndTime, key, value, closeTime, timestamp);
+            final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(getValueOrNull(rightWinAgg), rightWinAgg.timestamp());
+            final long windowStart = window.start();
+            windowStore.put(
+                key,
+                valueAndTime,
+                windowStart);
+            tupleForwarder.maybeForward(
+                new Windowed<K>(key, window),
+                getValueOrNull(rightWinAgg),
+                null,
+                rightWinAgg.timestamp());
         }
 
         private boolean leftWindowNotEmpty(final long previousTimestamp, final long currentTimestamp) {
@@ -311,13 +322,8 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             if (windowEnd > closeTime) {
                 //get aggregate from existing window
                 final Agg oldAgg = getValueOrNull(valueAndTime);
-                final Agg newAgg;
-                // keep old aggregate if adding a right window, else add new record's value
-                if (windowStart == timestamp + 1) {
-                    newAgg = oldAgg;
-                } else {
-                    newAgg = aggregator.apply(key, value, oldAgg);
-                }
+                final Agg newAgg = aggregator.apply(key, value, oldAgg);
+
                 final long newTimestamp = oldAgg == null ? timestamp : Math.max(timestamp, valueAndTime.timestamp());
                 windowStore.put(
                     key,

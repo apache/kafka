@@ -239,7 +239,6 @@ public class KGroupedStreamImplTest {
             inputTopic.pipeInput("2", "B", 1000L);
             inputTopic.pipeInput("3", "C", 600L);
         }
-
         assertThat(supplier.theCapturedProcessor().processed(), equalTo(Arrays.asList(
                 // processing A@500
                 new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 500L),
