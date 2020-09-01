@@ -37,7 +37,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param time start timestamp (inclusive) of the window
      * @return The value or {@code null} if no value is found in the window
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       If {@code null} is used for any key.
+     * @throws NullPointerException       if {@code null} is used for any key.
      */
     V fetch(K key, long time);
 
@@ -72,7 +72,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeTo   time range end (inclusive), where iteration ends.
      * @return an iterator over key-value pairs {@code <timestamp, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       If {@code null} is used for key.
+     * @throws NullPointerException       if {@code null} is used for key.
      * @deprecated Use {@link #fetch(Object, Instant, Instant)} instead
      */
     @Deprecated
@@ -109,7 +109,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeTo   time range end (inclusive), where iteration ends.
      * @return an iterator over key-value pairs {@code <timestamp, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       If {@code null} is used for key.
+     * @throws NullPointerException       if {@code null} is used for key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
     WindowStoreIterator<V> fetch(K key, Instant timeFrom, Instant timeTo) throws IllegalArgumentException;
@@ -147,7 +147,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeTo   time range end (inclusive), where iteration starts.
      * @return an iterator over key-value pairs {@code <timestamp, value>}, from end to beginning of time.
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       If {@code null} is used for key.
+     * @throws NullPointerException       if {@code null} is used for key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
     WindowStoreIterator<V> backwardFetch(K key, long timeFrom, long timeTo);
@@ -165,7 +165,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeTo   time range end (inclusive), where iteration ends.
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       If {@code null} is used for any key.
+     * @throws NullPointerException       if {@code null} is used for any key.
      * @deprecated Use {@link #fetch(Object, Object, Instant, Instant)} instead
      */
     @Deprecated
@@ -182,7 +182,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeTo   time range end (inclusive), where iteration ends.
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       If {@code null} is used for any key.
+     * @throws NullPointerException       if {@code null} is used for any key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant timeFrom, Instant timeTo)
@@ -200,7 +200,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeTo   time range end (inclusive), where iteration starts.
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from end to beginning of time.
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException       If {@code null} is used for any key.
+     * @throws NullPointerException       if {@code null} is used for any key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
     KeyValueIterator<Windowed<K>, V> backwardFetch(K from, K to, long timeFrom, long timeTo);
