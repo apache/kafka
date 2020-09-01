@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-kafka.server
+package kafka.server
 
 import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
