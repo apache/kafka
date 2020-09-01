@@ -25,7 +25,7 @@ import org.apache.kafka.common.serialization.{Deserializer, Serde, Serdes => JSe
 import org.apache.kafka.streams.kstream.WindowedSerdes
 
 @deprecated(
-  "Use org.apache.kafka.streams.scala.serialization.Serdes. For WindowedSerdes.TimeWindowedSerde and WindowedSerdes.SessionWindowedSerde use explicit constructors.",
+  "Use org.apache.kafka.streams.scala.serialization.Serdes. For WindowedSerdes.TimeWindowedSerde, use explicit constructors.",
   "2.7.0"
 )
 object Serdes {
