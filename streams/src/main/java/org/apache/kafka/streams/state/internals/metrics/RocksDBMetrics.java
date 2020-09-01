@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
+import java.math.BigInteger;
 import java.util.Objects;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_SUFFIX;
@@ -56,6 +58,7 @@ public class RocksDBMetrics {
     private static final String COMPACTION_TIME_MAX = COMPACTION_TIME + MAX_SUFFIX;
     private static final String NUMBER_OF_OPEN_FILES = "number-open-files";
     private static final String NUMBER_OF_FILE_ERRORS = "number-file-errors";
+    static final String NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE = "num-entries-active-mem-table";
 
     private static final String BYTES_WRITTEN_TO_DB_RATE_DESCRIPTION =
         "Average number of bytes written per second to the RocksDB state store";
@@ -94,26 +97,22 @@ public class RocksDBMetrics {
     private static final String COMPACTION_TIME_MAX_DESCRIPTION = "Maximum time spent on compaction in ms";
     private static final String NUMBER_OF_OPEN_FILES_DESCRIPTION = "Number of currently open files";
     private static final String NUMBER_OF_FILE_ERRORS_DESCRIPTION = "Total number of file errors occurred";
+    private static final String NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE_DESCRIPTION =
+            "Current total number of entries in the active memtable";
 
     public static class RocksDBMetricContext {
-        private final String threadId;
         private final String taskName;
         private final String metricsScope;
         private final String storeName;
 
-        public RocksDBMetricContext(final String threadId,
-                                    final String taskName,
+        public RocksDBMetricContext(final String taskName,
                                     final String metricsScope,
                                     final String storeName) {
-            this.threadId = threadId;
             this.taskName = taskName;
             this.metricsScope = metricsScope;
             this.storeName = storeName;
         }
 
-        public String threadId() {
-            return threadId;
-        }
         public String taskName() {
             return taskName;
         }
@@ -133,15 +132,14 @@ public class RocksDBMetrics {
                 return false;
             }
             final RocksDBMetricContext that = (RocksDBMetricContext) o;
-            return Objects.equals(threadId, that.threadId) &&
-                Objects.equals(taskName, that.taskName) &&
+            return Objects.equals(taskName, that.taskName) &&
                 Objects.equals(metricsScope, that.metricsScope) &&
                 Objects.equals(storeName, that.storeName);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(threadId, taskName, metricsScope, storeName);
+            return Objects.hash(taskName, metricsScope, storeName);
         }
     }
 
@@ -152,7 +150,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -171,7 +168,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -190,7 +186,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -209,7 +204,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -227,7 +221,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -245,7 +238,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -263,7 +255,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -281,7 +272,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -300,7 +290,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -318,7 +307,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -336,7 +324,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -354,7 +341,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -372,7 +358,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -390,7 +375,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -408,7 +392,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -426,7 +409,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -444,7 +426,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -463,7 +444,6 @@ public class RocksDBMetrics {
             sensor,
             STATE_STORE_LEVEL_GROUP,
             streamsMetrics.storeLevelTagMap(
-                metricContext.threadId(),
                 metricContext.taskName(),
                 metricContext.metricsScope(),
                 metricContext.storeName()
@@ -474,11 +454,24 @@ public class RocksDBMetrics {
         return sensor;
     }
 
+    public static void addNumEntriesActiveMemTableMetric(final StreamsMetricsImpl streamsMetrics,
+                                                         final RocksDBMetricContext metricContext,
+                                                         final Gauge<BigInteger> valueProvider) {
+        streamsMetrics.addStoreLevelMutableMetric(
+            metricContext.taskName(),
+            metricContext.metricsScope(),
+            metricContext.storeName(),
+            NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE,
+            NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE_DESCRIPTION,
+            RecordingLevel.INFO,
+            valueProvider
+        );
+    }
+
     private static Sensor createSensor(final StreamsMetricsImpl streamsMetrics,
                                        final RocksDBMetricContext metricContext,
                                        final String sensorName) {
         return streamsMetrics.storeLevelSensor(
-            metricContext.threadId(),
             metricContext.taskName(),
             metricContext.storeName(),
             sensorName,
