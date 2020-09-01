@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.ArrayList;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.FixedOrderMap;
@@ -148,7 +147,6 @@ public class ProcessorStateManager implements StateManager {
 
     private final TaskId taskId;
     private final boolean eosEnabled;
-    private final ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -182,7 +180,6 @@ public class ProcessorStateManager implements StateManager {
         this.taskId = taskId;
         this.taskType = taskType;
         this.eosEnabled = eosEnabled;
-        this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
 
         this.baseDir = stateDirectory.directoryForTask(taskId);
@@ -194,9 +191,7 @@ public class ProcessorStateManager implements StateManager {
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
-            if (stores.containsKey(store.name())) {
-                maybeRegisterStoreWithChangelogReader(store.name());
-            } else {
+            if (!stores.containsKey(store.name())) {
                 store.init(processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
@@ -280,22 +275,6 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    private void maybeRegisterStoreWithChangelogReader(final String storeName) {
-        if (isLoggingEnabled(storeName)) {
-            changelogReader.register(getStorePartition(storeName), this);
-        }
-    }
-
-    private List<TopicPartition> getAllChangelogTopicPartitions() {
-        final List<TopicPartition> allChangelogPartitions = new ArrayList<>();
-        for (final StateStoreMetadata storeMetadata : stores.values()) {
-            if (storeMetadata.changelogPartition != null) {
-                allChangelogPartitions.add(storeMetadata.changelogPartition);
-            }
-        }
-        return allChangelogPartitions;
-    }
-
     @Override
     public File baseDir() {
         return baseDir;
@@ -330,8 +309,6 @@ public class ProcessorStateManager implements StateManager {
 
         stores.put(storeName, storeMetadata);
 
-        maybeRegisterStoreWithChangelogReader(storeName);
-
         log.debug("Registered state store {} to its state manager", storeName);
     }
 
@@ -342,10 +319,6 @@ public class ProcessorStateManager implements StateManager {
         } else {
             return null;
         }
-    }
-
-    Collection<TopicPartition> changelogPartitions() {
-        return changelogOffsets().keySet();
     }
 
     void markChangelogAsCorrupted(final Collection<TopicPartition> partitions) {
@@ -360,6 +333,10 @@ public class ProcessorStateManager implements StateManager {
             throw new IllegalStateException("Some partitions " + partitions + " are not contained in the store list of task " +
                 taskId + " marking as corrupted, this is not expected");
         }
+    }
+
+    Collection<TopicPartition> changelogPartitions() {
+        return changelogOffsets().keySet();
     }
 
     @Override
@@ -513,8 +490,6 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        changelogReader.unregister(getAllChangelogTopicPartitions());
-
         RuntimeException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
@@ -552,8 +527,7 @@ public class ProcessorStateManager implements StateManager {
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
-        final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
-        changelogReader.unregister(allChangelogs);
+        final Collection<TopicPartition> allChangelogs = changelogPartitions();
     }
 
     void transitionTaskType(final TaskType newType, final LogContext logContext) {
@@ -606,7 +580,7 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    private  TopicPartition getStorePartition(final String storeName) {
+    private TopicPartition getStorePartition(final String storeName) {
         // NOTE we assume the partition of the topic can always be inferred from the task id;
         // if user ever use a custom partition grouper (deprecated in KIP-528) this would break and
         // it is not a regression (it would always break anyways)

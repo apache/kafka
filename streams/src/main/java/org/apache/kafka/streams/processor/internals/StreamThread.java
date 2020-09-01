@@ -275,10 +275,9 @@ public class StreamThread extends Thread {
     private StreamThread.StateListener stateListener;
 
     private final StateRestoreThread restoreThread;
-    private final ChangelogReader changelogReader;
-    private final ConsumerRebalanceListener rebalanceListener;
     private final Consumer<byte[], byte[]> mainConsumer;
     private final Consumer<byte[], byte[]> restoreConsumer;
+    private final ConsumerRebalanceListener rebalanceListener;
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
 
@@ -475,7 +474,6 @@ public class StreamThread extends Thread {
         this.taskManager = taskManager;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
-        this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
 
@@ -487,7 +485,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
 
-        this.restoreThread = new StateRestoreThread(time, config, threadId, changelogReader);
+        this.restoreThread = new StateRestoreThread(time, threadId, changelogReader);
     }
 
     @SuppressWarnings("deprecation")
@@ -659,15 +657,10 @@ public class StreamThread extends Thread {
 
         // only try to initialize the assigned tasks
         // if the state is still in PARTITION_ASSIGNED after the poll call
-        if (state == State.PARTITIONS_ASSIGNED
-            || state == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
+        if (state == State.PARTITIONS_ASSIGNED) {
+            restoreThread.addInitializedTasks(taskManager.tryInitializeNewTasks());
 
-            // transit to restore active is idempotent so we can call it multiple times
-            changelogReader.enforceRestoreActive();
-
-            if (taskManager.tryToCompleteRestoration()) {
-                changelogReader.transitToUpdateStandby();
-
+            if (taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs())) {
                 setState(State.RUNNING);
             }
         }
@@ -927,11 +920,6 @@ public class StreamThread extends Thread {
             log.error("Failed to close task manager due to the following error:", e);
         }
         try {
-            changelogReader.clear();
-        } catch (final Throwable e) {
-            log.error("Failed to close changelog reader due to the following error:", e);
-        }
-        try {
             mainConsumer.close();
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);
@@ -1063,13 +1051,9 @@ public class StreamThread extends Thread {
 
     Consumer<byte[], byte[]> restoreConsumer() {
         return restoreConsumer;
-    };
+    }
 
     Admin adminClient() {
         return adminClient;
     }
-
-    InternalTopologyBuilder internalTopologyBuilder() {
-        return builder;
-    };
 }

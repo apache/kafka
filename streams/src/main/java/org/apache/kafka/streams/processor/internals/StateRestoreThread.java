@@ -16,18 +16,23 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
-import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 
@@ -38,39 +43,101 @@ public class StateRestoreThread extends Thread {
 
     private final Time time;
     private final Logger log;
-    private final StreamsConfig config;
     private final ChangelogReader changelogReader;
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
-    private final ConcurrentLinkedDeque<TaskCorruptedException> corruptedExceptions;
+    private final LinkedBlockingDeque<AbstractTask> initializedTasks;
+    private final LinkedBlockingDeque<AbstractTask> closedTasks;
+    private final AtomicReference<Set<TopicPartition>> completedChangelogs;
+    private final LinkedBlockingDeque<TaskCorruptedException> corruptedExceptions;
 
     public boolean isRunning() {
         return isRunning.get();
     }
 
     public StateRestoreThread(final Time time,
-                              final StreamsConfig config,
                               final String threadClientId,
                               final ChangelogReader changelogReader) {
         super(threadClientId);
         this.time = time;
-        this.config = config;
         this.changelogReader = changelogReader;
-        this.corruptedExceptions = new ConcurrentLinkedDeque<>();
+        this.closedTasks = new LinkedBlockingDeque<>();
+        this.initializedTasks = new LinkedBlockingDeque<>();
+        this.corruptedExceptions = new LinkedBlockingDeque<>();
+        this.completedChangelogs = new AtomicReference<>(Collections.emptySet());
 
         final String logPrefix = String.format("state-restore-thread [%s] ", threadClientId);
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
     }
 
+    private synchronized void waitIfAllChangelogsCompleted() {
+        final Set<TopicPartition> allChangelogs = changelogReader.allChangelogs();
+        if (allChangelogs.equals(changelogReader.completedChangelogs())) {
+            log.debug("All changelogs {} have completed restoration so far, will wait " +
+                    "until new changelogs are registered", allChangelogs);
+
+            while (initializedTasks.isEmpty()) {
+                try {
+                    wait();
+                } catch (final InterruptedException e) {
+                    // do nothing
+                }
+            }
+        }
+    }
+
+    public synchronized void addInitializedTasks(final List<AbstractTask> tasks) {
+        if (!tasks.isEmpty()) {
+            initializedTasks.addAll(tasks);
+            notifyAll();
+        }
+    }
+
+    public synchronized void addClosedTasks(final List<AbstractTask> tasks) {
+        if (!tasks.isEmpty()) {
+            closedTasks.addAll(tasks);
+            notifyAll();
+        }
+    }
+
+    public Set<TopicPartition> completedChangelogs() {
+        return completedChangelogs.get();
+    }
+
     @Override
     public void run() {
         try {
             while (isRunning()) {
-                final long startMs = time.milliseconds();
+                waitIfAllChangelogsCompleted();
 
+                // a task being recycled maybe in both closed and initialized tasks,
+                // and hence we should process the closed ones first and then initialized ones
+                final List<AbstractTask> tasks = new ArrayList<>();
+                closedTasks.drainTo(tasks);
+
+                if (!tasks.isEmpty()) {
+                    for (final AbstractTask task : tasks) {
+                        // TODO: we should consider also call the listener if the
+                        //       changelog is not yet completed
+                        changelogReader.unregister(task.changelogPartitions());
+                    }
+                }
+
+                tasks.clear();
+                initializedTasks.drainTo(tasks);
+
+                if (!tasks.isEmpty()) {
+                    for (final AbstractTask task : tasks) {
+                        for (final TopicPartition partition : task.changelogPartitions()) {
+                            changelogReader.register(partition, task.stateMgr);
+                        }
+                    }
+                }
+
+                // try to restore some changelogs
+                final long startMs = time.milliseconds();
                 try {
-                    // try to restore some changelogs, if there's nothing to restore it would wait inside this call
                     final int numRestored = changelogReader.restore();
                     // TODO: we should record the restoration related metrics
                     log.info("Restored {} records in {} ms", numRestored, time.milliseconds() - startMs);
@@ -88,12 +155,21 @@ public class StateRestoreThread extends Thread {
                 } catch (final TimeoutException e) {
                     log.info("Encountered timeout when restoring states, will retry in the next loop");
                 }
+
+                // finally update completed changelogs
+                completedChangelogs.set(changelogReader.completedChangelogs());
             }
         } catch (final Exception e) {
             log.error("Encountered the following exception while restoring states " +
                     "and the thread is going to shut down: ", e);
             throw e;
         } finally {
+            try {
+                changelogReader.clear();
+            } catch (final Throwable e) {
+                log.error("Failed to close changelog reader due to the following error:", e);
+            }
+
             shutdownLatch.countDown();
         }
     }

@@ -814,7 +814,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         // once we are in update active mode, we should not try to update limit offset
         time.setCurrentTimeMs(now + 202L);
-        changelogReader.enforceRestoreActive();
+        changelogReader.transitToRestoreActive();
         assertEquals(0, changelogReader.restore());
         assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -930,7 +930,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
         // transition to restore active is idempotent
-        changelogReader.enforceRestoreActive();
+        changelogReader.transitToRestoreActive();
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
         changelogReader.transitToUpdateStandby();
@@ -958,7 +958,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(Collections.emptySet(), consumer.paused());
         assertEquals(STANDBY_UPDATING, changelogReader.state());
 
-        changelogReader.enforceRestoreActive();
+        changelogReader.transitToRestoreActive();
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
         assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
         assertEquals(mkSet(tp1, tp2), consumer.paused());

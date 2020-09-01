@@ -76,7 +76,6 @@ public abstract class AbstractTask implements Task {
         }
     }
 
-
     @Override
     public TaskId id() {
         return id;

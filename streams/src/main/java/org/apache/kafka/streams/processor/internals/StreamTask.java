@@ -201,7 +201,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws StreamsException fatal error, should close the thread
      */
     @Override
-    public void initializeIfNeeded() {
+    public boolean initializeIfNeeded() {
         if (state() == State.CREATED) {
             recordCollector.initialize();
 
@@ -215,7 +215,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             transitionTo(State.RESTORING);
 
             log.info("Initialized");
+
+            return true;
         }
+
+        return false;
     }
 
     /**
@@ -224,6 +228,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void completeRestoration() {
         switch (state()) {
+            case CREATED:
+            case SUSPENDED:
             case RUNNING:
                 return;
 
@@ -239,8 +245,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 break;
 
-            case CREATED:
-            case SUSPENDED:
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while completing restoration for active task " + id);
 

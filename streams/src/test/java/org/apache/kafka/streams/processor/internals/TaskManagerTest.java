@@ -843,7 +843,7 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(emptySet());
         consumer.resume(eq(emptySet()));
         expectLastCall();
-        changeLogReader.enforceRestoreActive();
+        changeLogReader.transitToRestoreActive();
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
@@ -869,13 +869,13 @@ public class TaskManagerTest {
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void initializeIfNeeded() {
+            public boolean initializeIfNeeded() {
                 throw new LockException("can't lock");
             }
         };
         final Task task01 = new StateMachineTask(taskId01, taskId01Partitions, true) {
             @Override
-            public void initializeIfNeeded() {
+            public boolean initializeIfNeeded() {
                 throw new TimeoutException("timed out");
             }
         };
@@ -886,7 +886,7 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(emptySet());
         consumer.resume(eq(emptySet()));
         expectLastCall();
-        changeLogReader.enforceRestoreActive();
+        changeLogReader.transitToRestoreActive();
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(asList(task00, task01)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
@@ -927,7 +927,7 @@ public class TaskManagerTest {
         expect(consumer.assignment()).andReturn(emptySet());
         consumer.resume(eq(emptySet()));
         expectLastCall();
-        changeLogReader.enforceRestoreActive();
+        changeLogReader.transitToRestoreActive();
         expectLastCall();
         expect(activeTaskCreator.createTasks(anyObject(), eq(assignment))).andReturn(singletonList(task00)).anyTimes();
         expect(standbyTaskCreator.createTasks(eq(emptyMap()))).andReturn(emptyList()).anyTimes();
@@ -2697,13 +2697,17 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void initializeIfNeeded() {
+        public boolean initializeIfNeeded() {
             if (state() == State.CREATED) {
                 transitionTo(State.RESTORING);
                 if (!active) {
                     transitionTo(State.RUNNING);
                 }
+
+                return true;
             }
+
+            return false;
         }
 
         @Override

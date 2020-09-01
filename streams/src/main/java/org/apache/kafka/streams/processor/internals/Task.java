@@ -113,7 +113,7 @@ public interface Task {
      * @throws LockException could happen when multi-threads within the single instance, could retry
      * @throws StreamsException fatal error, should close the thread
      */
-    void initializeIfNeeded();
+    boolean initializeIfNeeded();
 
     /**
      * @throws StreamsException fatal error, should close the thread

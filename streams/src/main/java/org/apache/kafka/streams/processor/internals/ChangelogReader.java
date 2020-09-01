@@ -32,19 +32,11 @@ public interface ChangelogReader extends ChangelogRegister {
     int restore();
 
     /**
-     * Transit to restore active changelogs mode
-     */
-    void enforceRestoreActive();
-
-    /**
-     * Transit to update standby changelogs mode
-     */
-    void transitToUpdateStandby();
-
-    /**
      * @return the changelog partitions that have been completed restoring
      */
     Set<TopicPartition> completedChangelogs();
+
+    Set<TopicPartition> allChangelogs();
 
     /**
      * Clear all partitions

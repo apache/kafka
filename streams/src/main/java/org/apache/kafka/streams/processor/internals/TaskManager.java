@@ -446,62 +446,62 @@ public class TaskManager {
     }
 
     /**
+     * Tries to initialize any newly assigned tasks, so that they can be restored by the restoration threads
+     */
+    public List<AbstractTask> tryInitializeNewTasks() {
+        final List<AbstractTask> initializedTasks = new LinkedList<>();
+        for (final Task task : tasks.values()) {
+            try {
+                if (task.initializeIfNeeded()) {
+                    initializedTasks.add((AbstractTask) task);
+                }
+            } catch (final LockException | TimeoutException e) {
+                // it is possible that if there are multiple threads within the instance that one thread
+                // trying to grab the task from the other, while the other has not released the lock since
+                // it did not participate in the rebalance. In this case we can just retry in the next iteration
+                log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
+            }
+        }
+
+        return initializedTasks;
+    }
+
+    /**
      * Tries to initialize any new or still-uninitialized tasks, then checks if they can/have completed restoration.
      *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      * @return {@code true} if all tasks are fully restored
      */
-    boolean tryToCompleteRestoration() {
-        boolean allRunning = true;
+    boolean tryToCompleteRestoration(final Set<TopicPartition> restoredChangelogs) {
+        boolean allActiveTasksRestored = true;
+        for (final Task task : activeTaskIterable()) {
+            if (restoredChangelogs.containsAll(task.changelogPartitions())) {
+                try {
+                    task.completeRestoration();
+                } catch (final TimeoutException e) {
+                    log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e);
 
-        final List<Task> activeTasks = new LinkedList<>();
-        for (final Task task : tasks.values()) {
-            try {
-                task.initializeIfNeeded();
-            } catch (final LockException | TimeoutException e) {
-                // it is possible that if there are multiple threads within the instance that one thread
-                // trying to grab the task from the other, while the other has not released the lock since
-                // it did not participate in the rebalance. In this case we can just retry in the next iteration
-                log.debug("Could not initialize {} due to the following exception; will retry", task.id(), e);
-                allRunning = false;
-            }
-
-            if (task.isActive()) {
-                activeTasks.add(task);
-            }
-        }
-
-        if (allRunning && !activeTasks.isEmpty()) {
-
-            final Set<TopicPartition> restored = changelogReader.completedChangelogs();
-
-            for (final Task task : activeTasks) {
-                if (restored.containsAll(task.changelogPartitions())) {
-                    try {
-                        task.completeRestoration();
-                    } catch (final TimeoutException e) {
-                        log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e);
-
-                        allRunning = false;
-                    }
-                } else {
-                    // we found a restoring task that isn't done restoring, which is evidence that
-                    // not all tasks are running
-                    log.debug("Task {} has not completed restoration, will check next time", task.id());
-
-                    allRunning = false;
-                    break;
+                    allActiveTasksRestored = false;
                 }
+            } else {
+                // we found a restoring task that isn't done restoring, which is evidence that
+                // not all tasks are running
+                log.debug("Task {} has not completed restoration, will check next time", task.id());
+
+                allActiveTasksRestored = false;
+                break;
             }
         }
 
-        if (allRunning) {
+        if (allActiveTasksRestored) {
             // we can call resume multiple times since it is idempotent.
+            // TODO: we should allow some restored active tasks to be processed even if
+            //       others are still restoring
             mainConsumer.resume(mainConsumer.assignment());
         }
 
-        return allRunning;
+        return allActiveTasksRestored;
     }
 
     /**
