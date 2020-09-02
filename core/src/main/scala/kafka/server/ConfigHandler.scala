@@ -19,23 +19,11 @@ package kafka.server
 
 import java.util.Properties
 
-import DynamicConfig.Broker._
-import kafka.api.ApiVersion
-import kafka.controller.KafkaController
-import kafka.log.{LogConfig, LogManager}
-import kafka.security.CredentialProvider
-import kafka.server.Constants._
-import kafka.server.QuotaFactory.QuotaManagers
-import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
-
-import scala.jdk.CollectionConverters._
-import scala.collection.Seq
-import scala.util.Try
 
 /**
   * The ConfigHandler is used to process config change notifications received by the DynamicConfigManager
@@ -194,15 +182,27 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
 
   def processConfigChanges(brokerId: String, properties: Properties): Unit = {
     def getOrDefault(prop: String): Long = {
-      if (properties.containsKey(prop))
-        properties.getProperty(prop).toLong
-      else
-        DefaultReplicationThrottledRate
+      brokerConfig.dynamicConfig.currentDynamicBrokerConfigs get prop match {
+        case Some(value) => value.toLong
+        case None => {
+          brokerConfig.dynamicConfig.currentDynamicDefaultConfigs get prop match {
+            case Some(defaultV) => defaultV.toLong
+            case None => DefaultReplicationThrottledRate
+          }
+        }
+      }
     }
-    if (brokerId == ConfigEntityName.Default)
-      brokerConfig.dynamicConfig.updateDefaultConfig(properties)
-    else if (brokerConfig.brokerId == brokerId.trim.toInt) {
-      brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
+
+    val mayChanged =
+      if (brokerId == ConfigEntityName.Default) {
+        brokerConfig.dynamicConfig.updateDefaultConfig(properties)
+        true
+      } else if (brokerConfig.brokerId == brokerId.trim.toInt) {
+        brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
+        true
+      } else false
+
+    if(mayChanged){
       quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp).toDouble))
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))

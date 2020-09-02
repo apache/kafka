@@ -88,7 +88,13 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     */
   def updateQuota(quota: Quota): Unit = {
     inWriteLock(lock) {
+      if (this.quota == null)
+        debug(s"Quota gets initialized for ${rateMetricName}, value ${quota.bound()}")
+      else
+        debug(s"Quota gets updated for ${rateMetricName}, old value ${this.quota.bound()}, new value ${quota.bound()}")
+
       this.quota = quota
+
       //The metric could be expired by another thread, so use a local variable and null check.
       val metric = metrics.metrics.get(rateMetricName)
       if (metric != null) {
