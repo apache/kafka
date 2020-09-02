@@ -40,6 +40,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Seq, mutable}
 
 class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
+  import ReassignPartitionsIntegrationTest._
+
   @Rule
   def globalTimeout: Timeout = Timeout.millis(300000)
 
@@ -420,72 +422,6 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       info1.curLogDirs.getOrElse(new TopicPartition("foo", 0), ""))
   }
 
-  private def runVerifyAssignment(adminClient: Admin, jsonString: String,
-                                  preserveThrottles: Boolean) = {
-    println(s"==> verifyAssignment(adminClient, jsonString=${jsonString})")
-    verifyAssignment(adminClient, jsonString, preserveThrottles)
-  }
-
-  private def waitForVerifyAssignment(adminClient: Admin, jsonString: String,
-                                      preserveThrottles: Boolean,
-                                      expectedResult: VerifyAssignmentResult): Unit = {
-    var latestResult: VerifyAssignmentResult = null
-    TestUtils.waitUntilTrue(
-      () => {
-        latestResult = runVerifyAssignment(adminClient, jsonString, preserveThrottles)
-        expectedResult.equals(latestResult)
-      }, s"Timed out waiting for verifyAssignment result ${expectedResult}.  " +
-        s"The latest result was ${latestResult}", pause = 10L)
-  }
-
-  private def runVerifyAssignment(zkClient: KafkaZkClient, jsonString: String,
-                                  preserveThrottles: Boolean) = {
-    println(s"==> verifyAssignment(zkClient, jsonString=${jsonString})")
-    verifyAssignment(zkClient, jsonString, preserveThrottles)
-  }
-
-  private def waitForVerifyAssignment(zkClient: KafkaZkClient, jsonString: String,
-                                      preserveThrottles: Boolean,
-                                      expectedResult: VerifyAssignmentResult): Unit = {
-    var latestResult: VerifyAssignmentResult = null
-    TestUtils.waitUntilTrue(
-      () => {
-        println(s"==> verifyAssignment(zkClient, jsonString=${jsonString}, " +
-          s"preserveThrottles=${preserveThrottles})")
-        latestResult = verifyAssignment(zkClient, jsonString, preserveThrottles)
-        expectedResult.equals(latestResult)
-      }, s"Timed out waiting for verifyAssignment result ${expectedResult}.  " +
-        s"The latest result was ${latestResult}", pause = 10L)
-  }
-
-  private def runExecuteAssignment(adminClient: Admin,
-                        additional: Boolean,
-                        reassignmentJson: String,
-                        interBrokerThrottle: Long,
-                        replicaAlterLogDirsThrottle: Long) = {
-    println(s"==> executeAssignment(adminClient, additional=${additional}, " +
-      s"reassignmentJson=${reassignmentJson}, " +
-      s"interBrokerThrottle=${interBrokerThrottle}, " +
-      s"replicaAlterLogDirsThrottle=${replicaAlterLogDirsThrottle}))")
-    executeAssignment(adminClient, additional, reassignmentJson,
-      interBrokerThrottle, replicaAlterLogDirsThrottle)
-  }
-
-  private def runExecuteAssignment(zkClient: KafkaZkClient,
-                                   reassignmentJson: String,
-                                   interBrokerThrottle: Long) = {
-    println(s"==> executeAssignment(adminClient, " +
-      s"reassignmentJson=${reassignmentJson}, " +
-      s"interBrokerThrottle=${interBrokerThrottle})")
-    executeAssignment(zkClient, reassignmentJson, interBrokerThrottle)
-  }
-
-  private def runCancelAssignment(adminClient: Admin, jsonString: String,
-                                  preserveThrottles: Boolean) = {
-    println(s"==> cancelAssignment(adminClient, jsonString=${jsonString})")
-    cancelAssignment(adminClient, jsonString, preserveThrottles)
-  }
-
   class BrokerDirs(result: DescribeLogDirsResult, val brokerId: Int) {
     val logDirs = new mutable.HashSet[String]
     val curLogDirs = new mutable.HashMap[TopicPartition, String]
@@ -594,5 +530,73 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
         servers.clear()
       }
     }
+  }
+}
+
+object ReassignPartitionsIntegrationTest {
+  def runVerifyAssignment(adminClient: Admin, jsonString: String,
+                          preserveThrottles: Boolean) = {
+    println(s"==> verifyAssignment(adminClient, jsonString=${jsonString})")
+    verifyAssignment(adminClient, jsonString, preserveThrottles)
+  }
+
+  def runVerifyAssignment(zkClient: KafkaZkClient, jsonString: String,
+                          preserveThrottles: Boolean) = {
+    println(s"==> verifyAssignment(zkClient, jsonString=${jsonString})")
+    verifyAssignment(zkClient, jsonString, preserveThrottles)
+  }
+
+  def waitForVerifyAssignment(adminClient: Admin, jsonString: String,
+                              preserveThrottles: Boolean,
+                              expectedResult: VerifyAssignmentResult): Unit = {
+    var latestResult: VerifyAssignmentResult = null
+    TestUtils.waitUntilTrue(
+      () => {
+        latestResult = runVerifyAssignment(adminClient, jsonString, preserveThrottles)
+        expectedResult.equals(latestResult)
+      }, s"Timed out waiting for verifyAssignment result ${expectedResult}.  " +
+        s"The latest result was ${latestResult}", pause = 10L)
+  }
+
+  def waitForVerifyAssignment(zkClient: KafkaZkClient, jsonString: String,
+                              preserveThrottles: Boolean,
+                              expectedResult: VerifyAssignmentResult): Unit = {
+    var latestResult: VerifyAssignmentResult = null
+    TestUtils.waitUntilTrue(
+      () => {
+        println(s"==> verifyAssignment(zkClient, jsonString=${jsonString}, " +
+          s"preserveThrottles=${preserveThrottles})")
+        latestResult = verifyAssignment(zkClient, jsonString, preserveThrottles)
+        expectedResult.equals(latestResult)
+      }, s"Timed out waiting for verifyAssignment result ${expectedResult}.  " +
+        s"The latest result was ${latestResult}", pause = 10L)
+  }
+
+  def runExecuteAssignment(adminClient: Admin,
+                           additional: Boolean,
+                           reassignmentJson: String,
+                           interBrokerThrottle: Long,
+                           replicaAlterLogDirsThrottle: Long) = {
+    println(s"==> executeAssignment(adminClient, additional=${additional}, " +
+      s"reassignmentJson=${reassignmentJson}, " +
+      s"interBrokerThrottle=${interBrokerThrottle}, " +
+      s"replicaAlterLogDirsThrottle=${replicaAlterLogDirsThrottle}))")
+    executeAssignment(adminClient, additional, reassignmentJson,
+      interBrokerThrottle, replicaAlterLogDirsThrottle)
+  }
+
+  def runExecuteAssignment(zkClient: KafkaZkClient,
+                           reassignmentJson: String,
+                           interBrokerThrottle: Long) = {
+    println(s"==> executeAssignment(adminClient, " +
+      s"reassignmentJson=${reassignmentJson}, " +
+      s"interBrokerThrottle=${interBrokerThrottle})")
+    executeAssignment(zkClient, reassignmentJson, interBrokerThrottle)
+  }
+
+  def runCancelAssignment(adminClient: Admin, jsonString: String,
+                          preserveThrottles: Boolean) = {
+    println(s"==> cancelAssignment(adminClient, jsonString=${jsonString})")
+    cancelAssignment(adminClient, jsonString, preserveThrottles)
   }
 }
