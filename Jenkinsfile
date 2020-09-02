@@ -31,6 +31,23 @@ def doValidation() {
         spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
   '''
+  publishHTML([
+    allowMissing: false, 
+    alwaysLinkToLastBuild: false, 
+    keepAll: false, 
+    reportDir: '**/build/reports/checkstyle', 
+    reportFiles: 'main.html', 
+    reportName: 'Checkstyle Report', 
+    reportTitles: ''])
+
+  publishHTML([
+    allowMissing: false, 
+    alwaysLinkToLastBuild: false, 
+    keepAll: false, 
+    reportDir: '**/build/reports/spotbugs', 
+    reportFiles: 'main.html', 
+    reportName: 'Spotbugs Report', 
+    reportTitles: ''])
 }
 
 def doTest() {
