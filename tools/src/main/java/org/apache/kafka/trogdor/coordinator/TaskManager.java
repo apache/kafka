@@ -127,7 +127,12 @@ public final class TaskManager {
      */
     private long nextWorkerId;
 
-    TaskManager(Platform platform, Scheduler scheduler, long firstWorkerId) {
+    /**
+     * The TrogdorMetrics for this coordinator.
+     */
+    private TrogdorMetrics trogdorMetrics;
+
+    TaskManager(Platform platform, Scheduler scheduler, long firstWorkerId, TrogdorMetrics trogdorMetrics) {
         this.platform = platform;
         this.scheduler = scheduler;
         this.time = scheduler.time();
@@ -143,6 +148,7 @@ public final class TaskManager {
         }
         log.info("Created TaskManager for agent(s) on: {}",
             Utils.join(nodeManagers.keySet(), ", "));
+        this.trogdorMetrics = trogdorMetrics;
     }
 
     class ManagedTask {
@@ -395,11 +401,13 @@ public final class TaskManager {
                 log.error("Unable to find nodes for task {}", task.id, e);
                 task.doneMs = time.milliseconds();
                 task.state = TaskStateType.DONE;
+                trogdorMetrics.recordDoneTask();
                 task.maybeSetError("Unable to find nodes for task: " + e.getMessage());
                 return null;
             }
             log.info("Running task {} on node(s): {}", task.id, Utils.join(nodeNames, ", "));
             task.state = TaskStateType.RUNNING;
+            trogdorMetrics.recordRunningTask();
             task.startedMs = time.milliseconds();
             for (String workerName : nodeNames) {
                 long workerId = nextWorkerId++;
@@ -479,6 +487,12 @@ public final class TaskManager {
                 case DONE:
                     log.info("Can't cancel task {} because it is already done.", id);
                     break;
+            }
+            if (task.state == TaskStateType.RUNNING) {
+                trogdorMetrics.recordRunningTask();
+            }
+            if (task.state == TaskStateType.DONE) {
+                trogdorMetrics.recordDoneTask();
             }
             return null;
         }
@@ -596,6 +610,7 @@ public final class TaskManager {
         if (activeWorkerIds.isEmpty()) {
             task.doneMs = time.milliseconds();
             task.state = TaskStateType.DONE;
+            trogdorMetrics.recordDoneTask();
             log.info("{}: Task {} is now complete on {} with error: {}",
                 nodeName, task.id, Utils.join(task.workerIds.keySet(), ", "),
                 task.error.isEmpty() ? "(none)" : task.error);

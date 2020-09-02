@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
+import org.apache.kafka.trogdor.coordinator.TrogdorMetrics;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
@@ -92,6 +93,8 @@ public final class Agent {
 
     private final Time time;
 
+    final TrogdorMetrics trogdorMetrics;
+
     /**
      * Create a new Agent.
      *
@@ -107,6 +110,8 @@ public final class Agent {
         this.serverStartMs = time.milliseconds();
         this.workerManager = new WorkerManager(platform, scheduler);
         this.restServer = restServer;
+        this.trogdorMetrics = Platform.MetricsContainer.buildMetrics(Time.SYSTEM);
+        trogdorMetrics.recordActiveAgent();
         resource.setAgent(this);
     }
 
@@ -122,6 +127,7 @@ public final class Agent {
     public void waitForShutdown() throws Exception {
         restServer.waitForShutdown();
         workerManager.waitForShutdown();
+        Platform.MetricsContainer.close();
     }
 
     public AgentStatusResponse status() throws Exception {
