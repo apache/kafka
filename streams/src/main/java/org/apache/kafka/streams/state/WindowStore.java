@@ -113,9 +113,11 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
             ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
     }
 
-    WindowStoreIterator<V> backwardFetch(final K key,
-                                         final long timeFrom,
-                                         final long timeTo);
+    default WindowStoreIterator<V> backwardFetch(final K key,
+                                                 final long timeFrom,
+                                                 final long timeTo) {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
     default WindowStoreIterator<V> backwardFetch(final K key,
@@ -156,10 +158,12 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
             ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
     }
 
-    KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
-                                                   final K keyTo,
-                                                   final long timeFrom,
-                                                   final long timeTo);
+    default KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                           final K keyTo,
+                                                           final long timeFrom,
+                                                           final long timeTo) {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
     default KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
@@ -192,7 +196,9 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
             ApiUtils.validateMillisecondInstant(timeTo, prepareMillisCheckFailMsgPrefix(timeTo, "timeTo")));
     }
 
-    KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom, final long timeTo);
+    default KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom, final long timeTo) {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
     default KeyValueIterator<Windowed<K>, V> backwardFetchAll(final Instant timeFrom, final Instant timeTo) throws IllegalArgumentException {
