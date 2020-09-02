@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.clients.CommonClientConfigDefs;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -220,23 +222,23 @@ public class AbstractConfigTest {
     public void testUnused() {
         Properties props = new Properties();
         String configValue = "org.apache.kafka.common.config.AbstractConfigTest$ConfiguredFakeMetricsReporter";
-        props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
+        props.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, configValue);
         props.put(FakeMetricsReporterConfig.EXTRA_CONFIG, "my_value");
         TestConfig config = new TestConfig(props);
 
         assertTrue("metric.extra_config should be marked unused before getConfiguredInstances is called",
             config.unused().contains(FakeMetricsReporterConfig.EXTRA_CONFIG));
 
-        config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
+        config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
         assertTrue("All defined configurations should be marked as used", config.unused().isEmpty());
     }
 
     private void testValidInputs(String configValue) {
         Properties props = new Properties();
-        props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
+        props.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, configValue);
         TestConfig config = new TestConfig(props);
         try {
-            config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
+            config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
         } catch (ConfigException e) {
             fail("No exceptions are expected here, valid props are :" + props);
         }
@@ -244,10 +246,10 @@ public class AbstractConfigTest {
 
     private void testInvalidInputs(String configValue) {
         Properties props = new Properties();
-        props.put(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, configValue);
+        props.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, configValue);
         TestConfig config = new TestConfig(props);
         try {
-            config.getConfiguredInstances(TestConfig.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
+            config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
             fail("Expected a config exception due to invalid props :" + props);
         } catch (KafkaException e) {
             // this is good
@@ -372,15 +374,9 @@ public class AbstractConfigTest {
 
         private static final ConfigDef CONFIG;
 
-        public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
-        private static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters.";
-
         static {
-            CONFIG = new ConfigDef().define(METRIC_REPORTER_CLASSES_CONFIG,
-                                            Type.LIST,
-                                            "",
-                                            Importance.LOW,
-                                            METRIC_REPORTER_CLASSES_DOC);
+            CONFIG = new ConfigDef()
+                    .define(CommonClientConfigDefs.metricReporterClasses());
         }
 
         public TestConfig(Map<?, ?> props) {

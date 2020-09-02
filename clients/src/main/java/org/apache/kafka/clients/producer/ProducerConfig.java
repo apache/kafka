@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.CommonClientConfigDefs;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.Collections;
@@ -31,8 +31,8 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_DOC;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
@@ -53,7 +53,6 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
-    private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
 
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
@@ -222,9 +221,9 @@ public class ProducerConfig extends AbstractConfig {
             "Note that transactions requires a cluster of at least three brokers by default what is the recommended setting for production; for development you can change this, by adjusting broker setting `transaction.state.log.replication.factor`.";
 
     static {
-        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Collections.emptyList(), new ConfigDef.NonNullValidator(), Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+        CONFIG = new ConfigDef().define(CommonClientConfigDefs.bootstrapServers(ConfigDef.NO_DEFAULT_VALUE, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC))
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
-                                .define(RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
+                                .define(CommonClientConfigDefs.retries(0, RETRIES_DOC))
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
                                         "1",
@@ -234,8 +233,8 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
                                 .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0L), Importance.MEDIUM, LINGER_MS_DOC)
-                                .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CommonClientConfigs.CLIENT_ID_DOC)
-                                .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(-1), Importance.MEDIUM, CommonClientConfigs.SEND_BUFFER_DOC)
+                                .define(CommonClientConfigDefs.clientId(CLIENT_ID_DOC))
+                                .define(CommonClientConfigDefs.sendBufferBytes(128 * 1024))
                                 .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(-1), Importance.MEDIUM, CommonClientConfigs.RECEIVE_BUFFER_DOC)
                                 .define(MAX_REQUEST_SIZE_CONFIG,
                                         Type.INT,
@@ -243,41 +242,21 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_REQUEST_SIZE_DOC)
-                                .define(RECONNECT_BACKOFF_MS_CONFIG, Type.LONG, 50L, atLeast(0L), Importance.LOW, CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
-                                .define(RECONNECT_BACKOFF_MAX_MS_CONFIG, Type.LONG, 1000L, atLeast(0L), Importance.LOW, CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
-                                .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), Importance.LOW, CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                                .define(CommonClientConfigDefs.reconnectBackoffMs(50L))
+                                .define(CommonClientConfigDefs.reconnectBackoffMaxMs(1000L))
+                                .define(CommonClientConfigDefs.retryBackoffMs(100L))
                                 .define(MAX_BLOCK_MS_CONFIG,
                                         Type.LONG,
                                         60 * 1000,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_BLOCK_MS_DOC)
-                                .define(REQUEST_TIMEOUT_MS_CONFIG,
-                                        Type.INT,
-                                        30 * 1000,
-                                        atLeast(0),
-                                        Importance.MEDIUM,
-                                        REQUEST_TIMEOUT_MS_DOC)
-                                .define(METADATA_MAX_AGE_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), Importance.LOW, METADATA_MAX_AGE_DOC)
-                                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
-                                        Type.LONG,
-                                        30000,
-                                        atLeast(0),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC)
-                                .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT, 2, atLeast(1), Importance.LOW, CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
-                                .define(METRICS_RECORDING_LEVEL_CONFIG,
-                                        Type.STRING,
-                                        Sensor.RecordingLevel.INFO.toString(),
-                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
-                                .define(METRIC_REPORTER_CLASSES_CONFIG,
-                                        Type.LIST,
-                                        Collections.emptyList(),
-                                        new ConfigDef.NonNullValidator(),
-                                        Importance.LOW,
-                                        CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                                .define(CommonClientConfigDefs.requestTimeoutMs(30 * 1000, REQUEST_TIMEOUT_MS_DOC))
+                                .define(CommonClientConfigDefs.metadataMaxAge(5 * 60 * 1000L))
+                                .define(CommonClientConfigDefs.metricsSampleWindowMs(30_000L))
+                                .define(CommonClientConfigDefs.metricsNumSamplesConfig(2))
+                                .define(CommonClientConfigDefs.metricsRecordingLevel())
+                                .define(CommonClientConfigDefs.metricReporterClasses())
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
                                         Type.INT,
                                         5,
@@ -293,11 +272,7 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.HIGH,
                                         VALUE_SERIALIZER_CLASS_DOC)
                                 /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
-                                .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
-                                        Type.LONG,
-                                        9 * 60 * 1000,
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
+                                .define(CommonClientConfigDefs.connectionsMaxIdleMs(9 * 60 * 1000L))
                                 .define(PARTITIONER_CLASS_CONFIG,
                                         Type.CLASS,
                                         DefaultPartitioner.class,
@@ -308,11 +283,7 @@ public class ProducerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         INTERCEPTOR_CLASSES_DOC)
-                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
-                                        Type.STRING,
-                                        CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-                                        Importance.MEDIUM,
-                                        CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(CommonClientConfigDefs.securityProtocol())
                                 .withClientSslSupport()
                                 .withClientSaslSupport()
                                 .define(ENABLE_IDEMPOTENCE_CONFIG,

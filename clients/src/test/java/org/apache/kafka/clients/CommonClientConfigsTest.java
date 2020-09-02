@@ -25,7 +25,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.junit.Assert.assertEquals;
 
 public class CommonClientConfigsTest {
@@ -33,18 +32,8 @@ public class CommonClientConfigsTest {
         private static final ConfigDef CONFIG;
         static {
             CONFIG = new ConfigDef()
-                .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
-                    ConfigDef.Type.LONG,
-                    50L,
-                    atLeast(0L),
-                    ConfigDef.Importance.LOW,
-                    "")
-                .define(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG,
-                    ConfigDef.Type.LONG,
-                    1000L,
-                    atLeast(0L),
-                    ConfigDef.Importance.LOW,
-                    "");
+                .define(CommonClientConfigDefs.reconnectBackoffMs(50L))
+                .define(CommonClientConfigDefs.reconnectBackoffMaxMs(1000L));
         }
 
         @Override
