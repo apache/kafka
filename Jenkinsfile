@@ -99,7 +99,7 @@ def tryStreamsArchetype() {
 
 
 pipeline {
-  agent none
+  agent { label 'ubuntu' }
   stages {
     stage('Build') {
       parallel {
