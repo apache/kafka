@@ -13,7 +13,7 @@
 package kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.text.{ParseException, SimpleDateFormat}
+import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, Properties}
 
 import joptsimple.OptionException
@@ -26,43 +26,10 @@ import org.apache.kafka.test
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.jdk.CollectionConverters._
 import scala.collection.Seq
+import scala.jdk.CollectionConverters._
 
-class TimeConversionTests {
 
-  @Test
-  def testDateTimeFormats(): Unit = {
-    //check valid formats
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXX"))
-    invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX"))
-
-    //check some invalid formats
-    try {
-      invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"))
-      fail("Call to getDateTime should fail")
-    } catch {
-      case _: ParseException =>
-    }
-
-    try {
-      invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"))
-      fail("Call to getDateTime should fail")
-    } catch {
-      case _: ParseException =>
-    }
-  }
-
-  private def invokeGetDateTimeMethod(format: SimpleDateFormat): Unit = {
-    val checkpoint = new Date()
-    val timestampString = format.format(checkpoint)
-    ConsumerGroupCommand.convertTimestamp(timestampString)
-  }
-
-}
 
 /**
   * Test cases by:
