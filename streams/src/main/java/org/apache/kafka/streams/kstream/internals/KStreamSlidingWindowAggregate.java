@@ -156,12 +156,12 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 try {
                     windowStore.backwardFetch(key, 0L, 0L);
                     reverseIteratorPossible = true;
-                } catch (UnsupportedOperationException e)  {
+                } catch (final UnsupportedOperationException e)  {
                     reverseIteratorPossible = false;
                 }
             }
 
-            if (reverseIteratorPossible == true) {
+            if (reverseIteratorPossible) {
                 processReverse(key, value, timestamp, closeTime);
             } else {
                 processInOrder(key, value, timestamp, closeTime);
@@ -401,7 +401,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         private void createCurrentRecordLeftWindow(final Long previousRecordTimestamp,
                                                final long timestamp,
-                                               ValueAndTimestamp<Agg> leftWinAgg,
+                                               final ValueAndTimestamp<Agg> leftWinAgg,
                                                final K key,
                                                final V value,
                                                final long closeTime) {
