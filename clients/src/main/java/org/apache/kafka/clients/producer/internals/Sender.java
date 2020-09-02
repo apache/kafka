@@ -441,7 +441,7 @@ public class Sender implements Runnable {
         AbstractRequest.Builder<?> requestBuilder = nextRequestHandler.requestBuilder();
         Node targetNode = null;
         try {
-            targetNode = awaitNodeReady(nextRequestHandler.coordinatorType());
+            targetNode = awaitNodeReady(nextRequestHandler.coordinatorType(), nextRequestHandler.coordinatorKey());
             if (targetNode == null) {
                 maybeFindCoordinatorAndRetry(nextRequestHandler);
                 return true;
@@ -509,9 +509,9 @@ public class Sender implements Runnable {
         return running;
     }
 
-    private Node awaitNodeReady(FindCoordinatorRequest.CoordinatorType coordinatorType) throws IOException {
+    private Node awaitNodeReady(FindCoordinatorRequest.CoordinatorType coordinatorType, String coordinatorKey) throws IOException {
         Node node = coordinatorType != null ?
-                transactionManager.coordinator(coordinatorType) :
+                transactionManager.coordinator(coordinatorType, coordinatorKey) :
                 client.leastLoadedNode(time.milliseconds());
 
         if (node != null && NetworkClientUtils.awaitReady(client, node, time, requestTimeoutMs)) {

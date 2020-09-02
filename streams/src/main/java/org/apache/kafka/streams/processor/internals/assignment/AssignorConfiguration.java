@@ -379,5 +379,15 @@ public final class AssignorConfiguration {
                 "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
                 "\n}";
         }
+
+        @Override
+        public String toString() {
+            return "AssignmentConfigs{" +
+                "\n  acceptableRecoveryLag=" + acceptableRecoveryLag +
+                "\n  maxWarmupReplicas=" + maxWarmupReplicas +
+                "\n  numStandbyReplicas=" + numStandbyReplicas +
+                "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
+                "\n}";
+        }
     }
 }
