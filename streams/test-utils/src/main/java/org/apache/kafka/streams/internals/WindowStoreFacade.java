@@ -56,12 +56,17 @@ public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> imp
     }
 
     @Override
-    public WindowStoreIterator<V> backwardFetch(K key, long timeFrom, long timeTo) {
+    public WindowStoreIterator<V> backwardFetch(final K key,
+                                                final long timeFrom,
+                                                final long timeTo) {
         return backwardFetch(key, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetch(K keyFrom, K keyTo, long timeFrom, long timeTo) {
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                          final K keyTo,
+                                                          final long timeFrom,
+                                                          final long timeTo) {
         return backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(timeFrom), Instant.ofEpochMilli(timeTo));
     }
 
