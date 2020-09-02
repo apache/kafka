@@ -206,6 +206,7 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `maxParallelForks`: limits the maximum number of processes for each task.
+* `ignoreFailures`: ignore test failures from junit
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.

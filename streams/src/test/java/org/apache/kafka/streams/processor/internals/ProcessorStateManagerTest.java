@@ -184,8 +184,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
-            changelogReader,
-            mkMap(
+                mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
@@ -205,7 +204,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
-            changelogReader, mkMap(
+                mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTopicName)
             ),
@@ -381,8 +380,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
-            changelogReader,
-            emptyMap(),
+                emptyMap(),
             emptySet());
 
         try {
@@ -653,8 +651,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
-            changelogReader,
-            emptyMap(),
+                emptyMap(),
             emptySet());
 
         try {
@@ -995,8 +992,7 @@ public class ProcessorStateManagerTest {
             eosEnabled,
             logContext,
             stateDirectory,
-            changelogReader,
-            mkMap(
+                mkMap(
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)

@@ -304,15 +304,6 @@ public class StreamThread extends Thread {
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
-        final StoreChangelogReader changelogReader = new StoreChangelogReader(
-            time,
-            config,
-            logContext,
-            adminClient,
-            restoreConsumer,
-            userStateRestoreListener
-        );
-
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
         final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
@@ -320,7 +311,6 @@ public class StreamThread extends Thread {
             config,
             streamsMetrics,
             stateDirectory,
-            changelogReader,
             cache,
             time,
             clientSupplier,
@@ -333,12 +323,10 @@ public class StreamThread extends Thread {
             config,
             streamsMetrics,
             stateDirectory,
-            changelogReader,
             threadId,
             log
         );
         final TaskManager taskManager = new TaskManager(
-            changelogReader,
             processId,
             logPrefix,
             activeTaskCreator,
@@ -368,7 +356,6 @@ public class StreamThread extends Thread {
         }
 
         final Consumer<byte[], byte[]> mainConsumer = clientSupplier.getConsumer(consumerConfigs);
-        changelogReader.setMainConsumer(mainConsumer);
         taskManager.setMainConsumer(mainConsumer);
 
         final StreamThread streamThread = new StreamThread(
@@ -377,7 +364,7 @@ public class StreamThread extends Thread {
             adminClient,
             mainConsumer,
             restoreConsumer,
-            changelogReader,
+            userStateRestoreListener,
             originalReset,
             taskManager,
             streamsMetrics,
@@ -428,7 +415,7 @@ public class StreamThread extends Thread {
                         final Admin adminClient,
                         final Consumer<byte[], byte[]> mainConsumer,
                         final Consumer<byte[], byte[]> restoreConsumer,
-                        final ChangelogReader changelogReader,
+                        final StateRestoreListener userStateRestoreListener,
                         final String originalReset,
                         final TaskManager taskManager,
                         final StreamsMetricsImpl streamsMetrics,
@@ -485,7 +472,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
 
-        this.restoreThread = new StateRestoreThread(time, threadId, changelogReader);
+        this.restoreThread = new StateRestoreThread(time, config, threadId, adminClient, mainConsumer, restoreConsumer, userStateRestoreListener);
     }
 
     @SuppressWarnings("deprecation")

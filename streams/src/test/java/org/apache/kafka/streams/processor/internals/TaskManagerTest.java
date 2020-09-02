@@ -166,7 +166,6 @@ public class TaskManagerTest {
 
     private void setUpTaskManager(final StreamThread.ProcessingMode processingMode) {
         taskManager = new TaskManager(
-            changeLogReader,
             UUID.randomUUID(),
             "taskManagerTest",
             activeTaskCreator,

@@ -218,20 +218,18 @@ public class StoreChangelogReader implements ChangelogReader {
     // this state may be concurrently accessed by different threads and hence need to be guarded
     private ChangelogReaderState state;
 
-    void setMainConsumer(final Consumer<byte[], byte[]> consumer) {
-        this.mainConsumer = consumer;
-    }
-
     public StoreChangelogReader(final Time time,
                                 final StreamsConfig config,
                                 final LogContext logContext,
                                 final Admin adminClient,
+                                final Consumer<byte[], byte[]> mainConsumer,
                                 final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener stateRestoreListener) {
         this.time = time;
         this.log = logContext.logger(StoreChangelogReader.class);
         this.state = ChangelogReaderState.ACTIVE_RESTORING;
         this.adminClient = adminClient;
+        this.mainConsumer = mainConsumer;
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 

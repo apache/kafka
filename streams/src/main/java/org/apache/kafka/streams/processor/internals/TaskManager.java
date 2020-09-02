@@ -69,14 +69,13 @@ public class TaskManager {
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
     private final Logger log;
-    private final ChangelogReader changelogReader;
     private final UUID processId;
     private final String logPrefix;
-    private final ActiveTaskCreator activeTaskCreator;
-    private final StandbyTaskCreator standbyTaskCreator;
-    private final InternalTopologyBuilder builder;
     private final Admin adminClient;
     private final StateDirectory stateDirectory;
+    private final InternalTopologyBuilder builder;
+    private final ActiveTaskCreator activeTaskCreator;
+    private final StandbyTaskCreator standbyTaskCreator;
     private final StreamThread.ProcessingMode processingMode;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
@@ -93,8 +92,7 @@ public class TaskManager {
     private final Set<TaskId> lockedTaskDirectories = new HashSet<>();
     private java.util.function.Consumer<Set<TopicPartition>> resetter;
 
-    TaskManager(final ChangelogReader changelogReader,
-                final UUID processId,
+    TaskManager(final UUID processId,
                 final String logPrefix,
                 final ActiveTaskCreator activeTaskCreator,
                 final StandbyTaskCreator standbyTaskCreator,
@@ -102,7 +100,6 @@ public class TaskManager {
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
                 final StreamThread.ProcessingMode processingMode) {
-        this.changelogReader = changelogReader;
         this.processId = processId;
         this.logPrefix = logPrefix;
         this.activeTaskCreator = activeTaskCreator;

@@ -53,7 +53,6 @@ class ActiveTaskCreator {
     private final StreamsConfig config;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
-    private final ChangelogReader storeChangelogReader;
     private final ThreadCache cache;
     private final Time time;
     private final KafkaClientSupplier clientSupplier;
@@ -68,7 +67,6 @@ class ActiveTaskCreator {
                       final StreamsConfig config,
                       final StreamsMetricsImpl streamsMetrics,
                       final StateDirectory stateDirectory,
-                      final ChangelogReader storeChangelogReader,
                       final ThreadCache cache,
                       final Time time,
                       final KafkaClientSupplier clientSupplier,
@@ -79,7 +77,6 @@ class ActiveTaskCreator {
         this.config = config;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
-        this.storeChangelogReader = storeChangelogReader;
         this.cache = cache;
         this.time = time;
         this.clientSupplier = clientSupplier;
@@ -149,7 +146,6 @@ class ActiveTaskCreator {
                 StreamThread.eosEnabled(config),
                 logContext,
                 stateDirectory,
-                storeChangelogReader,
                 topology.storeToChangelogTopic(),
                 partitions
             );

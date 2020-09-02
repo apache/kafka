@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -56,19 +60,26 @@ public class StateRestoreThread extends Thread {
     }
 
     public StateRestoreThread(final Time time,
+                              final StreamsConfig config,
                               final String threadClientId,
-                              final ChangelogReader changelogReader) {
+                              final Admin adminClient,
+                              final Consumer<byte[], byte[]> mainConsumer,
+                              final Consumer<byte[], byte[]> restoreConsumer,
+                              final StateRestoreListener userStateRestoreListener) {
         super(threadClientId);
+
+        final String logPrefix = String.format("state-restore-thread [%s] ", threadClientId);
+        final LogContext logContext = new LogContext(logPrefix);
+
         this.time = time;
-        this.changelogReader = changelogReader;
+        this.log = logContext.logger(getClass());
         this.closedTasks = new LinkedBlockingDeque<>();
         this.initializedTasks = new LinkedBlockingDeque<>();
         this.corruptedExceptions = new LinkedBlockingDeque<>();
         this.completedChangelogs = new AtomicReference<>(Collections.emptySet());
 
-        final String logPrefix = String.format("state-restore-thread [%s] ", threadClientId);
-        final LogContext logContext = new LogContext(logPrefix);
-        this.log = logContext.logger(getClass());
+        this.changelogReader = new StoreChangelogReader(
+            time, config, logContext, adminClient, mainConsumer, restoreConsumer, userStateRestoreListener);
     }
 
     private synchronized void waitIfAllChangelogsCompleted() {

@@ -171,7 +171,6 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean eosEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
-                                 final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;

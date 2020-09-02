@@ -19,6 +19,7 @@ package org.apache.kafka.streams.scala
 import java.util.Properties
 
 import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
+import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.scala.utils.StreamToTableJoinScalaIntegrationTestBase
@@ -40,7 +41,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Grouped, Produced,
     // Consumed and Joined instances. So all APIs below that accept Grouped, Produced, Consumed or Joined will
     // get these instances automatically
-    import Serdes._
+    import org.apache.kafka.streams.scala.serialization.Serdes._
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
@@ -84,7 +85,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     // DefaultSerdes brings into scope implicit serdes (mostly for primitives) that will set up all Grouped, Produced,
     // Consumed and Joined instances. So all APIs below that accept Grouped, Produced, Consumed or Joined will
     // get these instances automatically
-    import Serdes._
+    import org.apache.kafka.streams.scala.serialization.Serdes._
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
@@ -132,16 +133,16 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
-    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
-    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.stringSerde.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.stringSerde.getClass.getName)
 
     val builder: StreamsBuilderJ = new StreamsBuilderJ()
 
     val userClicksStream: KStreamJ[String, JLong] =
-      builder.stream[String, JLong](userClicksTopicJ, Consumed.`with`(Serdes.String, Serdes.JavaLong))
+      builder.stream[String, JLong](userClicksTopicJ, Consumed.`with`(Serdes.stringSerde, Serdes.javaLongSerde))
 
     val userRegionsTable: KTableJ[String, String] =
-      builder.table[String, String](userRegionsTopicJ, Consumed.`with`(Serdes.String, Serdes.String))
+      builder.table[String, String](userRegionsTopicJ, Consumed.`with`(Serdes.stringSerde, Serdes.stringSerde))
 
     // Join the stream against the table.
     val valueJoinerJ: ValueJoiner[JLong, String, (String, JLong)] =
@@ -149,7 +150,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     val userClicksJoinRegion: KStreamJ[String, (String, JLong)] = userClicksStream.leftJoin(
       userRegionsTable,
       valueJoinerJ,
-      Joined.`with`[String, JLong, String](Serdes.String, Serdes.JavaLong, Serdes.String)
+      Joined.`with`[String, JLong, String](Serdes.stringSerde, Serdes.javaLongSerde, Serdes.stringSerde)
     )
 
     // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
@@ -159,11 +160,11 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
-      .groupByKey(Grouped.`with`(Serdes.String, Serdes.JavaLong))
+      .groupByKey(Grouped.`with`(Serdes.stringSerde, Serdes.javaLongSerde))
       .reduce((v1, v2) => v1 + v2)
 
     // Write the (continuously updating) results to the output topic.
-    clicksPerRegion.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))
+    clicksPerRegion.toStream.to(outputTopicJ, Produced.`with`(Serdes.stringSerde, Serdes.javaLongSerde))
 
     val streams = new KafkaStreamsJ(builder.build(), streamsConfiguration)
 
