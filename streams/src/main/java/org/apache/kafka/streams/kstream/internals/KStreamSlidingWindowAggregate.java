@@ -272,20 +272,27 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                         }
                         putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
                     } else if (endTime == timestamp) {
+                        if (windowMaxRecordTimestamp < timestamp) {
+                            previousRecordTimestamp = windowMaxRecordTimestamp;
+                        }
                         putAndForward(next.key.window(), next.value, key, value, closeTime, timestamp);
                         leftWinAlreadyCreated = true;
                     } else if (endTime < timestamp) {
                         leftWinAgg = next.value;
                         previousRecordTimestamp = windowMaxRecordTimestamp;
-                        final long previousRightWinStart = previousRecordTimestamp + 1;
-                        if (rightWindowNecessaryAndPossible(windowStartTimes, previousRightWinStart, timestamp)) {
-                            createPreviousRightWindow(previousRightWinStart, timestamp, key, value, closeTime);
-                            break;
-                        }
+                        break;
                     } else {
                         //determine if current record's right window exists, will only be true at most once, on the first pass
                         rightWinAlreadyCreated = true;
                     }
+                }
+            }
+
+            //create right window for previous record
+            if (previousRecordTimestamp != null) {
+                final long previousRightWinStart = previousRecordTimestamp + 1;
+                if (rightWindowNecessaryAndPossible(windowStartTimes, previousRightWinStart, timestamp)) {
+                    createPreviousRightWindow(previousRightWinStart, timestamp, key, value, closeTime);
                 }
             }
 
