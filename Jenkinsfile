@@ -176,7 +176,7 @@ pipeline {
             includes: '**/build/reports/checkstyle/*',
             keepAll: false,
             reportDir: '',
-            reportFiles: 'main.html',
+            reportFiles: '**/main.html',
             reportName: 'Checkstyle Report',
             reportTitles: ''])
        
