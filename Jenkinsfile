@@ -35,19 +35,17 @@ def doValidation() {
     allowMissing: false, 
     alwaysLinkToLastBuild: false, 
     keepAll: false, 
-    reportDir: '**/build/reports/checkstyle', 
+    includes: '**/build/reports/checkstyle', 
     reportFiles: 'main.html', 
-    reportName: 'Checkstyle Report', 
-    reportTitles: ''])
+    reportName: 'Checkstyle Report'])
 
   publishHTML([
     allowMissing: false, 
     alwaysLinkToLastBuild: false, 
     keepAll: false, 
-    reportDir: '**/build/reports/spotbugs', 
+    includes: '**/build/reports/spotbugs', 
     reportFiles: 'main.html', 
-    reportName: 'Spotbugs Report', 
-    reportTitles: ''])
+    reportName: 'Spotbugs Report'])
 }
 
 def doTest() {
