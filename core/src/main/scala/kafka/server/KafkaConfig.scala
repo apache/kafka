@@ -1140,7 +1140,7 @@ object KafkaConfig {
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, HIGH, CompressionTypeDoc)
 
       /** ********* Transaction management configuration ***********/
-      .define(TransactionalIdExpirationMsProp, INT, Defaults.TransactionalIdExpirationMs, atLeast(1), HIGH, TransactionalIdExpirationMsDoc)
+      .define(TransactionalIdExpirationMsProp, LONG, Defaults.TransactionalIdExpirationMs, atLeast(1), HIGH, TransactionalIdExpirationMsDoc)
       .define(TransactionsMaxTimeoutMsProp, INT, Defaults.TransactionsMaxTimeoutMs, atLeast(1), HIGH, TransactionsMaxTimeoutMsDoc)
       .define(TransactionsTopicMinISRProp, INT, Defaults.TransactionsTopicMinISR, atLeast(1), HIGH, TransactionsTopicMinISRDoc)
       .define(TransactionsLoadBufferSizeProp, INT, Defaults.TransactionsLoadBufferSize, atLeast(1), HIGH, TransactionsLoadBufferSizeDoc)
@@ -1559,7 +1559,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val offsetsTopicCompressionCodec = Option(getInt(KafkaConfig.OffsetsTopicCompressionCodecProp)).map(value => CompressionCodec.getCompressionCodec(value)).orNull
 
   /** ********* Transaction management configuration ***********/
-  val transactionalIdExpirationMs = getInt(KafkaConfig.TransactionalIdExpirationMsProp)
+  val transactionalIdExpirationMs = getLong(KafkaConfig.TransactionalIdExpirationMsProp)
   val transactionMaxTimeoutMs = getInt(KafkaConfig.TransactionsMaxTimeoutMsProp)
   val transactionTopicMinISR = getInt(KafkaConfig.TransactionsTopicMinISRProp)
   val transactionsLoadBufferSize = getInt(KafkaConfig.TransactionsLoadBufferSizeProp)

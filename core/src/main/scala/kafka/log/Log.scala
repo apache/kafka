@@ -227,7 +227,7 @@ class Log(@volatile private var _dir: File,
           scheduler: Scheduler,
           brokerTopicStats: BrokerTopicStats,
           val time: Time,
-          val maxProducerIdExpirationMs: Int,
+          val maxProducerIdExpirationMs: Long,
           val producerIdExpirationCheckIntervalMs: Int,
           val topicPartition: TopicPartition,
           val producerStateManager: ProducerStateManager,
@@ -2486,7 +2486,7 @@ object Log {
             scheduler: Scheduler,
             brokerTopicStats: BrokerTopicStats,
             time: Time = Time.SYSTEM,
-            maxProducerIdExpirationMs: Int,
+            maxProducerIdExpirationMs: Long,
             producerIdExpirationCheckIntervalMs: Int,
             logDirFailureChannel: LogDirFailureChannel): Log = {
     val topicPartition = Log.parseTopicPartitionName(dir)
