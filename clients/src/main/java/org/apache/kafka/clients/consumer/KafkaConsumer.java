@@ -2478,4 +2478,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     String getClientId() {
         return clientId;
     }
+
+	@Override
+	public void setMaxPollRecords(int maxPollRecords) {
+		fetcher.setMaxPollRecords(maxPollRecords);	
+	}
+
+	@Override
+	public int getMaxPollRecords() {
+		return fetcher.getMaxPollRecords();
+	}
 }

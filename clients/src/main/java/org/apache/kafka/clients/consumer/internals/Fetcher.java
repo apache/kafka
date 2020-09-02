@@ -138,7 +138,7 @@ public class Fetcher<K, V> implements Closeable {
     private final int fetchSize;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
-    private final int maxPollRecords;
+    private int maxPollRecords;
     private final boolean checkCrcs;
     private final String clientRackId;
     private final ConsumerMetadata metadata;
@@ -205,6 +205,14 @@ public class Fetcher<K, V> implements Closeable {
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.nodesWithPendingFetchRequests = new HashSet<>();
     }
+    
+    public int getMaxPollRecords() {
+		return maxPollRecords;
+	}
+
+	public void setMaxPollRecords(int maxPollRecords) {
+		this.maxPollRecords = maxPollRecords;
+	}
 
     /**
      * Represents data about an offset returned by a broker.

@@ -75,6 +75,16 @@ public interface Consumer<K, V> extends Closeable {
      * @see KafkaConsumer#unsubscribe()
      */
     void unsubscribe();
+    
+    /**
+     * @see KafkaConsumer#setMaxPollRecords(int)
+     */
+    void setMaxPollRecords(int maxPollRecords);
+    
+    /**
+     * @see KafkaConsumer#getMaxPollRecords()
+     */
+    int getMaxPollRecords();
 
     /**
      * @see KafkaConsumer#poll(long)
