@@ -308,14 +308,12 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                                                     final ValueAndTimestamp<Agg> rightWinAgg,
                                                     final K key) {
             final TimeWindow window = new TimeWindow(timestamp + 1, timestamp + 1 + windows.timeDifferenceMs());
-            final ValueAndTimestamp<Agg> valueAndTime = ValueAndTimestamp.make(rightWinAgg.value(), rightWinAgg.timestamp());
-            final long windowStart = window.start();
             windowStore.put(
                 key,
-                valueAndTime,
-                windowStart);
+                rightWinAgg,
+                window.start());
             tupleForwarder.maybeForward(
-                new Windowed<K>(key, window),
+                new Windowed<>(key, window),
                 rightWinAgg.value(),
                 null,
                 rightWinAgg.timestamp());
