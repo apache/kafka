@@ -332,6 +332,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case SUSPENDED:
                 // just transit the state without any logical changes: suspended and restoring states
                 // are not actually any different for inner modules
+
+                // Deleting checkpoint file before transition to RESTORING state (KAFKA-10362)
+                try {
+                    stateMgr.deleteCheckPointFile();
+                    log.debug("Deleted check point file");
+                } catch (final IOException error) {
+                    log.error("Check point file not found");
+                }
+
                 transitionTo(State.RESTORING);
                 log.info("Resumed to restoring state");
 
