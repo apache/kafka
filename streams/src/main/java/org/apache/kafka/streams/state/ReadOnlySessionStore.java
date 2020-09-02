@@ -40,7 +40,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for
      * @param latestSessionStartTime the end timestamp of the latest session to search for
      * @return iterator of sessions with the matching key and aggregated values
-     * @throws NullPointerException If null is used for key.
+     * @throws NullPointerException if null is used for key.
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                     final Instant earliestSessionEndTime,
@@ -57,7 +57,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for
      * @param latestSessionStartTime the end timestamp of the latest session to search for
      * @return iterator of sessions with the matching keys and aggregated values
-     * @throws NullPointerException If null is used for any key.
+     * @throws NullPointerException if null is used for any key.
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom,
                                                     final K keyTo,
@@ -71,7 +71,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @param sessionStartTime start timestamp of the session
      * @param sessionEndTime   end timestamp of the session
      * @return The value or {@code null} if no session associated with the key can be found
-     * @throws NullPointerException If {@code null} is used for any key.
+     * @throws NullPointerException if {@code null} is used for any key.
      */
     AGG fetchSession(final K key, final Instant sessionStartTime, final Instant sessionEndTime);
 
@@ -84,7 +84,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      *
      * @param key record key to find aggregated session values for
      * @return KeyValueIterator containing all sessions for the provided key.
-     * @throws NullPointerException If null is used for key.
+     * @throws NullPointerException if null is used for key.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K key);
 
@@ -98,7 +98,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @param keyFrom first key in the range to find aggregated session values for
      * @param keyTo   last key in the range to find aggregated session values for
      * @return KeyValueIterator containing all sessions for the provided key.
-     * @throws NullPointerException If null is used for any of the keys.
+     * @throws NullPointerException if null is used for any of the keys.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom, final K keyTo);
 }
