@@ -1046,7 +1046,8 @@ class AdminManager(val config: KafkaConfig,
             .setUser(user)
             .setErrorCode(Errors.RESOURCE_NOT_FOUND.code)
             .setErrorMessage(usernameMustNotBeEmptyMsg)) }
-        val duplicatedUsers = users.get.groupBy(identity).collect { case (x, Seq(_, _, _*)) => x }
+        val duplicatedUsers = users.get.groupBy(identity).filter(
+          userAndOccurrencesTuple => userAndOccurrencesTuple._2.length > 1).keys
         duplicatedUsers.filterNot(illegalUsers.contains).foreach { user =>
           userResults += (user -> new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
             .setUser(user)
@@ -1157,7 +1158,8 @@ class AdminManager(val config: KafkaConfig,
     val initiallyValidUserMechanismPairs = (upsertions.filter(upsertion => !invalidUsers.contains(upsertion.name)).map(upsertion => (upsertion.name, upsertion.mechanism)) ++
       deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism)))
 
-    val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(p => (p._1, s"${p._1}:${mechanismName(p._2)}")).collect { case (x, Seq(_, _, _*)) => x._1 }.toSet
+    val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(identity).filter (
+      userMechanismPairAndOccurrencesTuple => userMechanismPairAndOccurrencesTuple._2.length > 1).keys.map(userMechanismPair => userMechanismPair._1).toSet
     usersWithDuplicateUserMechanismPairs.foreach { user =>
       retval.results.add(new AlterUserScramCredentialsResult()
         .setUser(user)
