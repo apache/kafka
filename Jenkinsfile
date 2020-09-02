@@ -31,25 +31,6 @@ def doValidation() {
         spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
         --profile --no-daemon --continue -PxmlSpotBugsReport=true
   '''
-  publishHTML([
-    allowMissing: false, 
-    alwaysLinkToLastBuild: false, 
-    includes: '**/build/reports/checkstyle/*',
-    keepAll: false, 
-    reportDir: '',
-    reportFiles: 'main.html', 
-    reportName: 'Checkstyle Report',
-    reportTitles: ''])
-
-  publishHTML([
-    allowMissing: false, 
-    alwaysLinkToLastBuild: false, 
-    includes: '**/build/reports/spotbugs/*', 
-    keepAll: false, 
-    reportDir: '',
-    reportFiles: 'main.html', 
-    reportName: 'Spotbugs Report',
-    reportTitles: ''])
 }
 
 def doTest() {
@@ -138,7 +119,8 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            //doTest()
+            stash includes: '**/build/reports/checkstyle/*', name: 'jdk8-checkstyle'
             tryStreamsArchetype()
           }
         }
@@ -158,7 +140,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            //doTest()
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
@@ -178,9 +160,26 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            //doTest()
             echo 'Skipping Kafka Streams archetype test for Java 15'
           }
+        }
+      }
+    }
+    stage('Reports') {
+      steps {
+        dir('jdk8-reports') {
+          unstash 'jdk8-checkstyle'
+          publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: false,
+            includes: '**/build/reports/checkstyle/*',
+            keepAll: false,
+            reportDir: '',
+            reportFiles: 'main.html',
+            reportName: 'Checkstyle Report',
+            reportTitles: ''])
+       
         }
       }
     }
