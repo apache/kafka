@@ -139,6 +139,32 @@ class AdminClient(val time: Time,
     response.groups.asScala.map(group => GroupOverview(group.groupId, group.protocolType)).toList
   }
 
+  def leaveGroup(groupId: String, clientId: String)  {
+    findAllBrokers.foreach { broker =>
+      broker -> {
+        try {
+          if (clientId.equals("*")) {
+            describeGroup(groupId, 3000).consumers.get.foreach { consumer =>
+              consumer -> {
+                val response = send(broker, ApiKeys.LEAVE_GROUP,
+                  new LeaveGroupRequest.Builder(groupId, consumer.consumerId)).asInstanceOf[LeaveGroupResponse]
+                response.error.maybeThrow()
+              }
+            }
+          } else {
+            val response = send(broker, ApiKeys.LEAVE_GROUP,
+              new LeaveGroupRequest.Builder(groupId, clientId)).asInstanceOf[LeaveGroupResponse]
+            response.error.maybeThrow()
+          }
+        } catch {
+          case e: Exception =>
+            debug(s"Failed to leave group from broker $broker", e)
+            List[GroupOverview]()
+        }
+      }
+    }
+  }
+
   def getApiVersions(node: Node): List[ApiVersion] = {
     val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
     response.error.maybeThrow()
@@ -331,6 +357,34 @@ class AdminClient(val time: Time,
         case "Stable" =>
           val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(Utils.readBytes(consumer.memberAssignment)))
           assignment.partitions.asScala.toList
+        case _ =>
+          List()
+      })
+    }.toList
+
+    ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
+  }
+
+  def describeGroup(groupId: String, timeoutMs: Long = 0): ConsumerGroupSummary = {
+
+    def isValidGroupResponse(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
+      metadata.error == Errors.NONE
+
+    val startTime = time.milliseconds
+    val coordinator = findCoordinator(groupId, timeoutMs)
+    var metadata = describeConsumerGroupHandler(coordinator, groupId)
+
+    while (!isValidGroupResponse(metadata) && time.milliseconds - startTime < timeoutMs) {
+      debug(s"The group response for group '$groupId' is invalid. Retrying the request as the group is initializing ...")
+      Thread.sleep(retryBackoffMs)
+      metadata = describeConsumerGroupHandler(coordinator, groupId)
+    }
+
+    if (!isValidGroupResponse(metadata))
+      throw new TimeoutException("The consumer group command timed out while waiting for group to initialize")
+
+    val consumers = metadata.members.asScala.map { consumer =>
+      ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
         case _ =>
           List()
       })
