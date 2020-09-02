@@ -17,15 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import java.time.Duration;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Metric;
@@ -39,6 +30,15 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+
+import java.time.Duration;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -1085,6 +1085,17 @@ public interface Admin extends AutoCloseable {
      * @return The MembershipChangeResult.
      */
     RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options);
+
+    /**
+     * Remove members from the consumer group by given member identities.
+     * <p>
+     * For possible error codes, refer to {@link LeaveGroupResponse}.
+     *
+     * @param groupId The ID of the group to remove member from.
+     * @param memberIds The groupInstanceIds of the members te be removed.
+     * @return The MembershipChangeResult.
+     */
+    RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, Collection<String> memberIds);
 
     /**
      * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.

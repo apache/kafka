@@ -3738,6 +3738,16 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, Collection<String> memberIds) {
+        Set<MemberToRemove> members = new HashSet<>();
+        memberIds.forEach(memberId -> {
+            members.add(new MemberToRemove(memberId));
+        });
+        RemoveMembersFromConsumerGroupOptions options = new RemoveMembersFromConsumerGroupOptions(members);
+        return removeMembersFromConsumerGroup(groupId, options);
+    }
+
+    @Override
     public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId,
                                                                                RemoveMembersFromConsumerGroupOptions options) {
         final long startFindCoordinatorMs = time.milliseconds();
