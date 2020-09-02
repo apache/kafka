@@ -290,7 +290,7 @@ public class VerifiableProducer implements AutoCloseable {
         }
     }
 
-    /** Returns a string to publish: ether 'valuePrefix'.'val' or 'val' **/
+    /** Returns a string to publish: ether 'valuePrefix'.'val' or 'val' */
     public String getValue(long val) {
         if (this.valuePrefix != null) {
             return String.format("%d.%d", this.valuePrefix, val);

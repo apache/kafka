@@ -78,7 +78,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
         this.maintainDurationMs = maintainDurationMs;
     }
 
-    /** Private constructor for preserving segments. Can be removed along with Windows.segments. **/
+    /** Private constructor for preserving segments. Can be removed along with Windows.segments. */
     @Deprecated
     private TimeWindows(final long sizeMs,
                         final long advanceMs,
