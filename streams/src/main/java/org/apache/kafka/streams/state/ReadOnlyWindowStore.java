@@ -150,8 +150,6 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       if {@code null} is used for key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    WindowStoreIterator<V> backwardFetch(K key, long timeFrom, long timeTo);
-
     WindowStoreIterator<V> backwardFetch(K key, Instant timeFrom, Instant timeTo) throws IllegalArgumentException;
 
     /**
@@ -159,8 +157,8 @@ public interface ReadOnlyWindowStore<K, V> {
      * <p>
      * This iterator must be closed after use.
      *
-     * @param from     the first key in the range
-     * @param to       the last key in the range
+     * @param keyFrom     the first key in the range
+     * @param keyTo       the last key in the range
      * @param timeFrom time range start (inclusive), where iteration starts.
      * @param timeTo   time range end (inclusive), where iteration ends.
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
@@ -169,15 +167,15 @@ public interface ReadOnlyWindowStore<K, V> {
      * @deprecated Use {@link #fetch(Object, Object, Instant, Instant)} instead
      */
     @Deprecated
-    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
+    KeyValueIterator<Windowed<K>, V> fetch(K keyFrom, K keyTo, long timeFrom, long timeTo);
 
     /**
      * Get all the key-value pairs in the given key range and time range from all the existing windows.
      * <p>
      * This iterator must be closed after use.
      *
-     * @param from     the first key in the range
-     * @param to       the last key in the range
+     * @param keyFrom     the first key in the range
+     * @param keyTo       the last key in the range
      * @param timeFrom time range start (inclusive), where iteration starts.
      * @param timeTo   time range end (inclusive), where iteration ends.
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from beginning to end of time.
@@ -185,7 +183,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       if {@code null} is used for any key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant timeFrom, Instant timeTo)
+    KeyValueIterator<Windowed<K>, V> fetch(K keyFrom, K keyTo, Instant timeFrom, Instant timeTo)
         throws IllegalArgumentException;
 
     /**
@@ -194,8 +192,8 @@ public interface ReadOnlyWindowStore<K, V> {
      * <p>
      * This iterator must be closed after use.
      *
-     * @param from     the first key in the range
-     * @param to       the last key in the range
+     * @param keyFrom     the first key in the range
+     * @param keyTo       the last key in the range
      * @param timeFrom time range start (inclusive), where iteration ends.
      * @param timeTo   time range end (inclusive), where iteration starts.
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}, from end to beginning of time.
@@ -203,9 +201,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       if {@code null} is used for any key.
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    KeyValueIterator<Windowed<K>, V> backwardFetch(K from, K to, long timeFrom, long timeTo);
-
-    KeyValueIterator<Windowed<K>, V> backwardFetch(K from, K to, Instant timeFrom, Instant timeTo)
+    KeyValueIterator<Windowed<K>, V> backwardFetch(K keyFrom, K keyTo, Instant timeFrom, Instant timeTo)
         throws IllegalArgumentException;
 
 
@@ -264,7 +260,5 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws NullPointerException       if {@code null} is used for any key
      * @throws IllegalArgumentException   if duration is negative or can't be represented as {@code long milliseconds}
      */
-    KeyValueIterator<Windowed<K>, V> backwardFetchAll(long timeFrom, long timeTo);
-
     KeyValueIterator<Windowed<K>, V> backwardFetchAll(Instant timeFrom, Instant timeTo) throws IllegalArgumentException;
 }

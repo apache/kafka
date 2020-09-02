@@ -189,19 +189,19 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
 
         @Override
         @Deprecated
-        public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                      final K to,
+        public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                      final K keyTo,
                                                       final long timeFrom,
                                                       final long timeTo) {
-            return wrapped().fetch(from, to, timeFrom, timeTo);
+            return wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
-                                                              final K to,
+        public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                              final K keyTo,
                                                               final long timeFrom,
                                                               final long timeTo) {
-            return wrapped().backwardFetch(from, to, timeFrom, timeTo);
+            return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override

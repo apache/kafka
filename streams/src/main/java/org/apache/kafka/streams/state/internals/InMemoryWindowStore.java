@@ -200,19 +200,19 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Deprecated
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
-                                                           final Bytes to,
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
+                                                           final Bytes keyTo,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        return fetch(from, to, timeFrom, timeTo, true);
+        return fetch(keyFrom, keyTo, timeFrom, timeTo, true);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
-                                                                   final Bytes to,
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
+                                                                   final Bytes keyTo,
                                                                    final long timeFrom,
                                                                    final long timeTo) {
-        return fetch(from, to, timeFrom, timeTo, false);
+        return fetch(keyFrom, keyTo, timeFrom, timeTo, false);
     }
 
     KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,

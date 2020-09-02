@@ -184,12 +184,12 @@ public class MeteredWindowStore<K, V>
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                  final K to,
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                  final K keyTo,
                                                   final long timeFrom,
                                                   final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
+            wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
             fetchSensor,
             streamsMetrics,
             serdes,
@@ -197,12 +197,12 @@ public class MeteredWindowStore<K, V>
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K from,
-                                                          final K to,
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                          final K keyTo,
                                                           final long timeFrom,
                                                           final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().backwardFetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
+            wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
             fetchSensor,
             streamsMetrics,
             serdes,

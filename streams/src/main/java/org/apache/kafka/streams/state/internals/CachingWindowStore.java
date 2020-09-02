@@ -244,11 +244,11 @@ class CachingWindowStore
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
-                                                           final Bytes to,
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
+                                                           final Bytes keyTo,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        if (from.compareTo(to) > 0) {
+        if (keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
                 "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
@@ -261,20 +261,20 @@ class CachingWindowStore
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator =
-            wrapped().fetch(from, to, timeFrom, timeTo);
+            wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
         if (context.cache() == null) {
             return underlyingIterator;
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(from, to, timeFrom, timeTo, true) :
+            new CacheIteratorWrapper(keyFrom, keyTo, timeFrom, timeTo, true) :
             context.cache().range(
                 cacheName,
-                cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
-                cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
+                cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
+                cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
             );
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from, to, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
@@ -289,11 +289,11 @@ class CachingWindowStore
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes from,
-                                                                   final Bytes to,
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
+                                                                   final Bytes keyTo,
                                                                    final long timeFrom,
                                                                    final long timeTo) {
-        if (from.compareTo(to) > 0) {
+        if (keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                 + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
                 "Note that the built-in numerical serdes do not follow this for negative numbers");
@@ -305,20 +305,20 @@ class CachingWindowStore
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator =
-            wrapped().backwardFetch(from, to, timeFrom, timeTo);
+            wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         if (context.cache() == null) {
             return underlyingIterator;
         }
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(from, to, timeFrom, timeTo, false) :
+            new CacheIteratorWrapper(keyFrom, keyTo, timeFrom, timeTo, false) :
             context.cache().reverseRange(
                 cacheName,
-                cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
-                cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
+                cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, timeFrom)),
+                cacheFunction.cacheKey(keySchema.upperRange(keyTo, timeTo))
             );
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from, to, timeFrom, timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom, keyTo, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
