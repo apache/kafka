@@ -337,8 +337,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                 try {
                     stateMgr.deleteCheckPointFile();
                     log.debug("Deleted check point file");
-                } catch (final IOException error) {
-                    log.error("Check point file not found");
+                } catch (final IOException ioe) {
+                    log.error("Encountered error while deleting the checkpoint file due to this exception", ioe);
                 }
 
                 transitionTo(State.RESTORING);
