@@ -35,6 +35,7 @@ import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
 import org.apache.kafka.clients.admin.internals.DescribeProducersRequestDriver;
+import org.apache.kafka.clients.admin.internals.DescribeTransactionsRequestDriver;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.admin.internals.RequestDriver;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
@@ -4287,6 +4288,19 @@ public class KafkaAdminClient extends AdminClient {
             partitions, options, deadlineMs, retryBackoffMs);
         maybeSendRequests(currentTimeMs, driver);
         return new DescribeProducersResult(driver.futures());
+    }
+
+    @Override
+    public DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options) {
+        if (transactionalIds.isEmpty()) {
+            return new DescribeTransactionsResult(Collections.emptyMap());
+        }
+        long currentTimeMs = time.milliseconds();
+        long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
+        DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
+            transactionalIds, deadlineMs, retryBackoffMs);
+        maybeSendRequests(currentTimeMs, driver);
+        return new DescribeTransactionsResult(driver.futures());
     }
 
     /**

@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
+import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.internals.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
@@ -331,7 +332,8 @@ public enum Errors {
             "which fences the current one.", ProducerFencedException::new),
     RESOURCE_NOT_FOUND(91, "A request illegally referred to a resource that does not exist.", ResourceNotFoundException::new),
     DUPLICATE_RESOURCE(92, "A request illegally referred to the same resource twice.", DuplicateResourceException::new),
-    UNACCEPTABLE_CREDENTIAL(93, "Requested credential would not meet criteria for acceptability.", UnacceptableCredentialException::new);
+    UNACCEPTABLE_CREDENTIAL(93, "Requested credential would not meet criteria for acceptability.", UnacceptableCredentialException::new),
+    TRANSACTIONAL_ID_NOT_FOUND(91, "The transactionalId could not be found", TransactionalIdNotFoundException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

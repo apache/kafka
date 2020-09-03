@@ -132,10 +132,6 @@ public class MetadataRequestDriverTest {
         assertEquals(OptionalInt.of(3), spec1.scope.destinationBrokerId());
     }
 
-    private RequestDriver<TopicPartition, String>.RequestSpec findRequest(TopicPartition tp) {
-        
-    }
-
     @Test
     public void testRetryLeaderDiscovery() {
         TopicPartition tp0 = new TopicPartition("foo", 0);

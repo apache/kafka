@@ -71,7 +71,7 @@ public class CoordinatorRequestDriverTest {
         assertEquals(0, spec1.nextAllowedTryMs);
         assertTrue(spec1.request instanceof FindCoordinatorRequest.Builder);
         FindCoordinatorRequest.Builder findCoordinatorRequest1 = (FindCoordinatorRequest.Builder) spec1.request;
-        assertEquals(group1.key, findCoordinatorRequest1.data().key());
+        assertEquals(group1.idValue, findCoordinatorRequest1.data().key());
         assertEquals(group1.type.id(), findCoordinatorRequest1.data().keyType());
 
         RequestDriver<CoordinatorKey, String>.RequestSpec spec2 = requests.stream()
@@ -86,7 +86,7 @@ public class CoordinatorRequestDriverTest {
         assertEquals(0, spec2.nextAllowedTryMs);
         assertTrue(spec2.request instanceof FindCoordinatorRequest.Builder);
         FindCoordinatorRequest.Builder findCoordinatorRequest2 = (FindCoordinatorRequest.Builder) spec2.request;
-        assertEquals(group2.key, findCoordinatorRequest2.data().key());
+        assertEquals(group2.idValue, findCoordinatorRequest2.data().key());
         assertEquals(group2.type.id(), findCoordinatorRequest2.data().keyType());
     }
 
@@ -122,7 +122,7 @@ public class CoordinatorRequestDriverTest {
         assertEquals(0, requestSpec1.nextAllowedTryMs);
         assertTrue(requestSpec1.request instanceof DescribeGroupsRequest.Builder);
         DescribeGroupsRequest.Builder request = (DescribeGroupsRequest.Builder) requestSpec1.request;
-        assertEquals(singletonList(group1.key), request.data.groups());
+        assertEquals(singletonList(group1.idValue), request.data.groups());
 
         RequestDriver<CoordinatorKey, String>.RequestSpec lookupSpec2 = lookupRequests.stream()
             .filter(spec -> spec.keys.contains(group2))
@@ -146,7 +146,7 @@ public class CoordinatorRequestDriverTest {
         assertEquals(0, requestSpec2.nextAllowedTryMs);
         assertTrue(requestSpec2.request instanceof DescribeGroupsRequest.Builder);
         DescribeGroupsRequest.Builder request2 = (DescribeGroupsRequest.Builder) requestSpec2.request;
-        assertEquals(singletonList(group2.key), request2.data.groups());
+        assertEquals(singletonList(group2.idValue), request2.data.groups());
     }
 
     @Test
@@ -191,7 +191,7 @@ public class CoordinatorRequestDriverTest {
         assertEquals(Collections.emptyList(), driver.poll());
         GroupAuthorizationException groupAuthorizationException = assertFutureThrows(
             driver.futures().get(group1), GroupAuthorizationException.class);
-        assertEquals(group1.key, groupAuthorizationException.groupId());
+        assertEquals(group1.idValue, groupAuthorizationException.groupId());
     }
 
     private final class TestCoordinatorRequestDriver extends CoordinatorRequestDriver<String> {
@@ -204,7 +204,7 @@ public class CoordinatorRequestDriverTest {
         AbstractRequest.Builder<?> buildFulfillmentRequest(Set<CoordinatorKey> coordinatorKeys) {
             return new DescribeGroupsRequest.Builder(new DescribeGroupsRequestData()
                 .setGroups(coordinatorKeys.stream()
-                    .map(coordinatorKey -> coordinatorKey.key)
+                    .map(coordinatorKey -> coordinatorKey.idValue)
                     .collect(Collectors.toList())));
         }
 

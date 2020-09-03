@@ -24,11 +24,14 @@ import kafka.utils.{Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.DescribeTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
+import org.apache.kafka.common.utils.{CollectionUtils, LogContext, ProducerIdAndEpoch, Time}
+
+import scala.jdk.CollectionConverters._
 
 object TransactionCoordinator {
 
@@ -251,6 +254,46 @@ class TransactionCoordinator(brokerId: Int,
           fatal(errorMsg)
           throw new IllegalStateException(errorMsg)
 
+      }
+    }
+  }
+
+  def handleDescribeTransactions(transactionalId: String): DescribeTransactionsResponseData.TransactionState = {
+    val transactionState = new DescribeTransactionsResponseData.TransactionState()
+      .setTransactionalId(transactionalId)
+
+    if (transactionalId == null || transactionalId.isEmpty) {
+      transactionState.setErrorCode(Errors.INVALID_REQUEST.code)
+    } else {
+      txnManager.getTransactionState(transactionalId) match {
+        case Left(error) =>
+          transactionState.setErrorCode(error.code)
+        case Right(None) =>
+          transactionState.setErrorCode(Errors.TRANSACTIONAL_ID_NOT_FOUND.code)
+        case Right(Some(coordinatorEpochAndMetadata)) =>
+          val txnMetadata = coordinatorEpochAndMetadata.transactionMetadata
+          txnMetadata.inLock {
+
+            // TODO: This partition list is incomplete when in the PrepareXX states. Do we
+            // want the full set in the transaction, or should we just document that the
+            // returned partitions are only those which have not had markers written to yet.
+            // The latter could actually be more useful in practice.
+
+            val partitionsByTopic = CollectionUtils.groupPartitionsByTopic(txnMetadata.topicPartitions.asJava)
+            partitionsByTopic.forEach { (topic, partitions) =>
+              new DescribeTransactionsResponseData.TopicData()
+                .setName(topic)
+                .setPartitionIndexes(partitions)
+            }
+
+            transactionState
+              .setErrorCode(Errors.NONE.code)
+              .setProducerId(txnMetadata.producerId)
+              .setProducerEpoch(txnMetadata.producerEpoch)
+              .setTransactionState(txnMetadata.state.toString)
+              .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
+              .setTransactionStartTimeMs(txnMetadata.txnStartTimestamp)
+          }
       }
     }
   }

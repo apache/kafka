@@ -21,11 +21,11 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import java.util.Objects;
 
 public class CoordinatorKey {
-    public final String key;
+    public final String idValue;
     public final FindCoordinatorRequest.CoordinatorType type;
 
-    public CoordinatorKey(String key, FindCoordinatorRequest.CoordinatorType type) {
-        this.key = key;
+    public CoordinatorKey(String idValue, FindCoordinatorRequest.CoordinatorType type) {
+        this.idValue = idValue;
         this.type = type;
     }
 
@@ -34,19 +34,19 @@ public class CoordinatorKey {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         CoordinatorKey that = (CoordinatorKey) o;
-        return Objects.equals(key, that.key) &&
+        return Objects.equals(idValue, that.idValue) &&
             type == that.type;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(key, type);
+        return Objects.hash(idValue, type);
     }
 
     @Override
     public String toString() {
         return "CoordinatorKey(" +
-            "key='" + key + '\'' +
+            "idValue='" + idValue + '\'' +
             ", type=" + type +
             ')';
     }

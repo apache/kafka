@@ -65,8 +65,13 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeProducersRequestData;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
+<<<<<<< HEAD
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
+=======
+import org.apache.kafka.common.message.DescribeTransactionsRequestData;
+import org.apache.kafka.common.message.DescribeTransactionsResponseData;
+>>>>>>> Add support for the `DescribeTransactions` API
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.EndTxnRequestData;
@@ -229,7 +234,9 @@ public enum ApiKeys {
     ALTER_USER_SCRAM_CREDENTIALS(51, "AlterUserScramCredentials", AlterUserScramCredentialsRequestData.SCHEMAS,
             AlterUserScramCredentialsResponseData.SCHEMAS),
     DESCRIBE_PRODUCERS(52, "DescribeProducers", DescribeProducersRequestData.SCHEMAS,
-            DescribeProducersResponseData.SCHEMAS);
+            DescribeProducersResponseData.SCHEMAS),
+    DESCRIBE_TRANSACTIONS(53, "DescribeTransactions", DescribeTransactionsRequestData.SCHEMAS,
+                       DescribeTransactionsResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

@@ -75,10 +75,6 @@ public final class CollectionUtils {
     /**
      * Group a collection of partitions by topic
      *
-     * @param partitions
-     * @param buildGroup
-     * @param addToGroup
-     * @param <T>
      * @return The map used to group the partitions
      */
     public static <T> Map<String, T> groupPartitionsByTopic(

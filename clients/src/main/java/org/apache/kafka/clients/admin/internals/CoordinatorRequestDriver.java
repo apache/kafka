@@ -53,7 +53,7 @@ public abstract class CoordinatorRequestDriver<V> extends RequestDriver<Coordina
         CoordinatorKey key = requireSingleton(keys);
         return new FindCoordinatorRequest.Builder(
             new FindCoordinatorRequestData()
-                .setKey(key.key)
+                .setKey(key.idValue)
                 .setKeyType(key.type.id())
         );
     }
@@ -78,7 +78,7 @@ public abstract class CoordinatorRequestDriver<V> extends RequestDriver<Coordina
 
             case GROUP_AUTHORIZATION_FAILED:
                 completeExceptionally(key, new GroupAuthorizationException("FindCoordinator request for groupId " +
-                    "`" + key + "` failed due to authorization failure", key.key));
+                    "`" + key + "` failed due to authorization failure", key.idValue));
                 break;
 
             case TRANSACTIONAL_ID_AUTHORIZATION_FAILED:

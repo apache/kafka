@@ -1221,6 +1221,12 @@ public interface Admin extends AutoCloseable {
 
     DescribeProducersResult describeProducers(Collection<TopicPartition> partitions, DescribeProducersOptions options);
 
+    default DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds) {
+        return describeTransactions(transactionalIds, new DescribeTransactionsOptions());
+    }
+
+    DescribeTransactionsResult describeTransactions(Collection<String> transactionalIds, DescribeTransactionsOptions options);
+
     /**
      * Describe all SASL/SCRAM credentials.
      *

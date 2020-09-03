@@ -103,6 +103,11 @@ object CommandLineUtils extends Logging {
     Exit.exit(1, Some(message))
   }
 
+  def printErrorMessageAndDie(message: String): Nothing = {
+    System.err.println(message)
+    Exit.exit(1, Some(message))
+  }
+
   def printVersionAndDie(): Nothing = {
     System.out.println(VersionInfo.getVersionString)
     Exit.exit(0)
