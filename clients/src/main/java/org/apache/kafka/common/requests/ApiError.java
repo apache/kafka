@@ -60,6 +60,11 @@ public class ApiError {
         this.message = message;
     }
 
+    public ApiError(short code, String message) {
+        this.error = Errors.forCode(code);
+        this.message = message;
+    }
+
     public void write(Struct struct) {
         struct.set(ERROR_CODE, error.code());
         if (error != Errors.NONE)

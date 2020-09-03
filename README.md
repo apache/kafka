@@ -13,7 +13,7 @@ Scala 2.13 is used by default, see below for how to use a different Scala versio
 ### Build a jar and run it ###
     ./gradlew jar
 
-Follow instructions in https://kafka.apache.org/documentation.html#quickstart
+Follow instructions in https://kafka.apache.org/quickstart
 
 ### Build source jar ###
     ./gradlew srcJar
@@ -106,6 +106,10 @@ This is for `core`, `examples` and `clients`
 
     ./gradlew core:jar
     ./gradlew core:test
+
+Streams has multiple sub-projects, but you can run all the tests:
+
+    ./gradlew :streams:testAll
 
 ### Listing all gradle tasks ###
     ./gradlew tasks
@@ -202,6 +206,7 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
 * `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `maxParallelForks`: limits the maximum number of processes for each task.
+* `ignoreFailures`: ignore test failures from junit
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.

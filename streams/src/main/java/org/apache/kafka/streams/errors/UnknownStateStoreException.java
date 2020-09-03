@@ -14,20 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.internals;
-
-import org.apache.kafka.streams.StreamsConfig;
-
-import java.util.Map;
+package org.apache.kafka.streams.errors;
 
 /**
- * A {@link StreamsConfig} that does not log its configuration on construction.
- *
- * This producer cleaner output for unit tests using the {@code test-utils},
- * since logging the config is not really valuable in this context.
+ * Indicates that the state store being queried is unknown, i.e., the state store does either not exist in your topology
+ * or it is not queryable.
  */
-public class QuietStreamsConfig extends StreamsConfig {
-    public QuietStreamsConfig(final Map<?, ?> props) {
-        super(props, false);
+public class UnknownStateStoreException extends InvalidStateStoreException {
+
+    private static final long serialVersionUID = 1L;
+
+    public UnknownStateStoreException(final String message) {
+        super(message);
     }
+
+    public UnknownStateStoreException(final String message, final Throwable throwable) {
+        super(message, throwable);
+    }
+
 }

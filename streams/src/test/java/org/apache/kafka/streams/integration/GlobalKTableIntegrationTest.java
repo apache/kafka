@@ -138,8 +138,8 @@ public class GlobalKTableIntegrationTest {
                     return false;
                 }
                 final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
-                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey);
-                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey);
+                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey());
+                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey());
                 return result.equals(expected);
             },
             30000L,
@@ -191,8 +191,8 @@ public class GlobalKTableIntegrationTest {
                     return false;
                 }
                 final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
-                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey);
-                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey);
+                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey());
+                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey());
                 return result.equals(expected);
             },
             30000L,
@@ -220,8 +220,8 @@ public class GlobalKTableIntegrationTest {
                     return false;
                 }
                 final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
-                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey);
-                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey);
+                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey());
+                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey());
                 return result.equals(expected);
             },
             30000L,
@@ -274,8 +274,8 @@ public class GlobalKTableIntegrationTest {
                     return false;
                 }
                 final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
-                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey);
-                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey);
+                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey());
+                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey());
                 return result.equals(expected);
             },
             30000L,

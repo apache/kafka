@@ -25,64 +25,65 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Plugin interface for allowing creation of SSLEngine object in a custom way.
- * Example: You want to use custom way to load your key material and trust material needed for SSLContext.
- * However, keep in mind that this is complementary to the existing Java Security Provider's mechanism and not a competing
- * solution.
+ * Plugin interface for allowing creation of <code>SSLEngine</code> object in a custom way.
+ * For example, you can use this to customize loading your key material and trust material needed for <code>SSLContext</code>.
+ * This is complementary to the existing Java Security Provider mechanism which allows the entire provider
+ * to be replaced with a custom provider. In scenarios where only the configuration mechanism for SSL engines
+ * need to be updated, this interface provides a convenient method for overriding the default implementation.
  */
 public interface SslEngineFactory extends Configurable, Closeable {
 
     /**
-     * Create a new SSLEngine object to be used by the client.
+     * Creates a new <code>SSLEngine</code> object to be used by the client.
      *
      * @param peerHost               The peer host to use. This is used in client mode if endpoint validation is enabled.
      * @param peerPort               The peer port to use. This is a hint and not used for validation.
      * @param endpointIdentification Endpoint identification algorithm for client mode.
-     * @return The new SSLEngine.
+     * @return The new <code>SSLEngine</code>.
      */
     SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification);
 
     /**
-     * Create a new SSLEngine object to be used by the server.
+     * Creates a new <code>SSLEngine</code> object to be used by the server.
      *
      * @param peerHost               The peer host to use. This is a hint and not used for validation.
      * @param peerPort               The peer port to use. This is a hint and not used for validation.
-     * @return The new SSLEngine.
+     * @return The new <code>SSLEngine</code>.
      */
     SSLEngine createServerSslEngine(String peerHost, int peerPort);
 
     /**
-     * Returns true if SSLEngine needs to be rebuilt. This method will be called when reconfiguration is triggered on
-     * {@link org.apache.kafka.common.security.ssl.SslFactory}. Based on the <i>nextConfigs</i>, this method will
-     * decide whether underlying SSLEngine object needs to be rebuilt. If this method returns true, the
-     * {@link org.apache.kafka.common.security.ssl.SslFactory} will re-create instance of this object and run other
-     * checks before deciding to use the new object for the <i>new incoming connection</i> requests.The existing connections
+     * Returns true if <code>SSLEngine</code> needs to be rebuilt. This method will be called when reconfiguration is triggered on
+     * the <code>SslFactory</code> used to create SSL engines. Based on the new configs provided in <i>nextConfigs</i>, this method
+     * will decide whether underlying <code>SSLEngine</code> object needs to be rebuilt. If this method returns true, the
+     * <code>SslFactory</code> will create a new instance of this object with <i>nextConfigs</i> and run other
+     * checks before deciding to use the new object for <i>new incoming connection</i> requests. Existing connections
      * are not impacted by this and will not see any changes done as part of reconfiguration.
+     * <p>
+     * For example, if the implementation depends on file-based key material, it can check if the file was updated
+     * compared to the previous/last-loaded timestamp and return true.
+     * </>
      *
-     * <pre>
-     *     Example: If the implementation depends on the file based key material it can check if the file is updated
-     *     compared to the previous/last-loaded timestamp and return true.
-     * </pre>
-     *
-     * @param nextConfigs       The configuration we want to use.
-     * @return                  True only if the underlying SSLEngine object should be rebuilt.
+     * @param nextConfigs       The new configuration we want to use.
+     * @return                  True only if the underlying <code>SSLEngine</code> object should be rebuilt.
      */
     boolean shouldBeRebuilt(Map<String, Object> nextConfigs);
 
     /**
      * Returns the names of configs that may be reconfigured.
+     * @return Names of configuration options that are dynamically reconfigurable.
      */
     Set<String> reconfigurableConfigs();
 
     /**
-     * Returns keystore.
-     * @return
+     * Returns keystore configured for this factory.
+     * @return The keystore for this factory or null if a keystore is not configured.
      */
     KeyStore keystore();
 
     /**
-     * Returns truststore.
-     * @return
+     * Returns truststore configured for this factory.
+     * @return The truststore for this factory or null if a truststore is not configured.
      */
     KeyStore truststore();
 }

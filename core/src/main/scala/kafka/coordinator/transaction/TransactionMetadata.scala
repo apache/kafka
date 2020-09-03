@@ -249,10 +249,10 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
           // the transaction log, so a retry that spans a coordinator change will fail. We expect this to be a rare case.
           Right(producerEpoch, lastProducerEpoch)
         else {
-          // Otherwise, the producer has a fenced epoch and should receive an INVALID_PRODUCER_EPOCH error
+          // Otherwise, the producer has a fenced epoch and should receive an PRODUCER_FENCED error
           info(s"Expected producer epoch $expectedEpoch does not match current " +
             s"producer epoch $producerEpoch or previous producer epoch $lastProducerEpoch")
-          Left(Errors.INVALID_PRODUCER_EPOCH)
+          Left(Errors.PRODUCER_FENCED)
         }
     }
 

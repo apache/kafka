@@ -155,6 +155,8 @@ public class Fetcher<K, V> implements Closeable {
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
     private final Set<Integer> nodesWithPendingFetchRequests;
     private final ApiVersions apiVersions;
+    private final AtomicInteger metadataUpdateVersion = new AtomicInteger(-1);
+
 
     private CompletedFetch nextInLineFetch = null;
 
@@ -310,7 +312,7 @@ public class Fetcher<K, V> implements Closeable {
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, partitionData);
 
-                                    Iterator<? extends RecordBatch> batches = partitionData.records.batches().iterator();
+                                    Iterator<? extends RecordBatch> batches = partitionData.records().batches().iterator();
                                     short responseVersion = resp.requestHeader().apiVersion();
 
                                     completedFetches.add(new CompletedFetch(partition, partitionData,
@@ -486,10 +488,8 @@ public class Fetcher<K, V> implements Closeable {
             throw exception;
 
         // Validate each partition against the current leader and epoch
-        subscriptions.assignedPartitions().forEach(topicPartition -> {
-            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(topicPartition);
-            subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, topicPartition, leaderAndEpoch);
-        });
+        // If we see a new metadata version, check all partitions
+        validatePositionsOnMetadataChange();
 
         // Collect positions needing validation, with backoff
         Map<TopicPartition, FetchPosition> partitionsToValidate = subscriptions
@@ -616,7 +616,7 @@ public class Fetcher<K, V> implements Closeable {
                             // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                             // potential data loss due to an exception in a following record.
                             FetchResponse.PartitionData partition = records.partitionData;
-                            if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
+                            if (fetched.isEmpty() && (partition.records() == null || partition.records().sizeInBytes() == 0)) {
                                 completedFetches.poll();
                             }
                             throw e;
@@ -722,9 +722,11 @@ public class Fetcher<K, V> implements Closeable {
     // Visible for testing
     void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
         FetchPosition position = new FetchPosition(
-                offsetData.offset, offsetData.leaderEpoch, metadata.currentLeader(partition));
+            offsetData.offset,
+            Optional.empty(), // This will ensure we skip validation
+            metadata.currentLeader(partition));
         offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
-        subscriptions.maybeSeekUnvalidated(partition, position.offset, requestedResetStrategy);
+        subscriptions.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
     }
 
     private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
@@ -782,6 +784,7 @@ public class Fetcher<K, V> implements Closeable {
         final Map<Node, Map<TopicPartition, FetchPosition>> regrouped =
             regroupFetchPositionsByLeader(partitionsToValidate);
 
+        long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
         regrouped.forEach((node, fetchPositions) -> {
             if (node.isEmpty()) {
                 metadata.requestUpdate();
@@ -804,7 +807,7 @@ public class Fetcher<K, V> implements Closeable {
                 return;
             }
 
-            subscriptions.setNextAllowedRetry(fetchPositions.keySet(), time.milliseconds() + requestTimeoutMs);
+            subscriptions.setNextAllowedRetry(fetchPositions.keySet(), nextResetTimeMs);
 
             RequestFuture<OffsetForEpochResult> future =
                 offsetsForLeaderEpochClient.sendAsyncRequest(node, fetchPositions);
@@ -1121,16 +1124,27 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * If we have seen new metadata (as tracked by {@link org.apache.kafka.clients.Metadata#updateVersion()}), then
+     * we should check that all of the assignments have a valid position.
+     */
+    private void validatePositionsOnMetadataChange() {
+        int newMetadataUpdateVersion = metadata.updateVersion();
+        if (metadataUpdateVersion.getAndSet(newMetadataUpdateVersion) != newMetadataUpdateVersion) {
+            subscriptions.assignedPartitions().forEach(topicPartition -> {
+                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(topicPartition);
+                subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, topicPartition, leaderAndEpoch);
+            });
+        }
+    }
+
+    /**
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
-        // Ensure the position has an up-to-date leader
-        subscriptions.assignedPartitions().forEach(tp ->
-            subscriptions.maybeValidatePositionForCurrentLeader(apiVersions, tp, metadata.currentLeader(tp))
-        );
+        validatePositionsOnMetadataChange();
 
         long currentTimeMs = time.milliseconds();
 
@@ -1142,6 +1156,7 @@ public class Fetcher<K, V> implements Closeable {
 
             Optional<Node> leaderOpt = position.currentLeader.leader;
             if (!leaderOpt.isPresent()) {
+                log.debug("Requesting metadata update for partition {} since the position {} is missing the current leader node", partition, position);
                 metadata.requestUpdate();
                 continue;
             }
@@ -1154,7 +1169,6 @@ public class Fetcher<K, V> implements Closeable {
                 // If we try to send during the reconnect blackout window, then the request is just
                 // going to be failed anyway before being sent, so skip the send for now
                 log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
-
             } else if (this.nodesWithPendingFetchRequests.contains(node.id())) {
                 log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
             } else {
@@ -1210,7 +1224,7 @@ public class Fetcher<K, V> implements Closeable {
         FetchResponse.PartitionData<Records> partition = nextCompletedFetch.partitionData;
         long fetchOffset = nextCompletedFetch.nextFetchOffset;
         CompletedFetch completedFetch = null;
-        Errors error = partition.error;
+        Errors error = partition.error();
 
         try {
             if (!subscriptions.hasValidPosition(tp)) {
@@ -1227,11 +1241,11 @@ public class Fetcher<K, V> implements Closeable {
                 }
 
                 log.trace("Preparing to read {} bytes of data for partition {} with offset {}",
-                        partition.records.sizeInBytes(), tp, position);
-                Iterator<? extends RecordBatch> batches = partition.records.batches().iterator();
+                        partition.records().sizeInBytes(), tp, position);
+                Iterator<? extends RecordBatch> batches = partition.records().batches().iterator();
                 completedFetch = nextCompletedFetch;
 
-                if (!batches.hasNext() && partition.records.sizeInBytes() > 0) {
+                if (!batches.hasNext() && partition.records().sizeInBytes() > 0) {
                     if (completedFetch.responseVersion < 3) {
                         // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
                         Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
@@ -1249,26 +1263,26 @@ public class Fetcher<K, V> implements Closeable {
                     }
                 }
 
-                if (partition.highWatermark >= 0) {
-                    log.trace("Updating high watermark for partition {} to {}", tp, partition.highWatermark);
-                    subscriptions.updateHighWatermark(tp, partition.highWatermark);
+                if (partition.highWatermark() >= 0) {
+                    log.trace("Updating high watermark for partition {} to {}", tp, partition.highWatermark());
+                    subscriptions.updateHighWatermark(tp, partition.highWatermark());
                 }
 
-                if (partition.logStartOffset >= 0) {
-                    log.trace("Updating log start offset for partition {} to {}", tp, partition.logStartOffset);
-                    subscriptions.updateLogStartOffset(tp, partition.logStartOffset);
+                if (partition.logStartOffset() >= 0) {
+                    log.trace("Updating log start offset for partition {} to {}", tp, partition.logStartOffset());
+                    subscriptions.updateLogStartOffset(tp, partition.logStartOffset());
                 }
 
-                if (partition.lastStableOffset >= 0) {
-                    log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset);
-                    subscriptions.updateLastStableOffset(tp, partition.lastStableOffset);
+                if (partition.lastStableOffset() >= 0) {
+                    log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset());
+                    subscriptions.updateLastStableOffset(tp, partition.lastStableOffset());
                 }
 
-                if (partition.preferredReadReplica.isPresent()) {
-                    subscriptions.updatePreferredReadReplica(completedFetch.partition, partition.preferredReadReplica.get(), () -> {
+                if (partition.preferredReadReplica().isPresent()) {
+                    subscriptions.updatePreferredReadReplica(completedFetch.partition, partition.preferredReadReplica().get(), () -> {
                         long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
                         log.debug("Updating preferred read replica for partition {} to {}, set to expire at {}",
-                                tp, partition.preferredReadReplica.get(), expireTimeMs);
+                                tp, partition.preferredReadReplica().get(), expireTimeMs);
                         return expireTimeMs;
                     });
                 }
@@ -1630,13 +1644,13 @@ public class Fetcher<K, V> implements Closeable {
         }
 
         private PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData<?> partition) {
-            if (partition.abortedTransactions == null || partition.abortedTransactions.isEmpty())
+            if (partition.abortedTransactions() == null || partition.abortedTransactions().isEmpty())
                 return null;
 
             PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = new PriorityQueue<>(
-                    partition.abortedTransactions.size(), Comparator.comparingLong(o -> o.firstOffset)
+                    partition.abortedTransactions().size(), Comparator.comparingLong(o -> o.firstOffset)
             );
-            abortedTransactions.addAll(partition.abortedTransactions);
+            abortedTransactions.addAll(partition.abortedTransactions());
             return abortedTransactions;
         }
 
