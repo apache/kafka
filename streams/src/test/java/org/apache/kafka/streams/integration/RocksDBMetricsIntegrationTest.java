@@ -100,6 +100,28 @@ public class RocksDBMetricsIntegrationTest {
     private static final String BYTES_WRITTEN_DURING_COMPACTION_RATE = "bytes-written-compaction-rate";
     private static final String NUMBER_OF_OPEN_FILES = "number-open-files";
     private static final String NUMBER_OF_FILE_ERRORS = "number-file-errors-total";
+    private static final String NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE = "num-entries-active-mem-table";
+    private static final String NUMBER_OF_DELETES_ACTIVE_MEMTABLE = "num-deletes-active-mem-table";
+    private static final String NUMBER_OF_ENTRIES_IMMUTABLE_MEMTABLES = "num-entries-imm-mem-tables";
+    private static final String NUMBER_OF_DELETES_IMMUTABLE_MEMTABLES = "num-deletes-imm-mem-tables";
+    private static final String NUMBER_OF_IMMUTABLE_MEMTABLES = "num-immutable-mem-table";
+    private static final String CURRENT_SIZE_OF_ACTIVE_MEMTABLE = "cur-size-active-mem-table";
+    private static final String CURRENT_SIZE_OF_ALL_MEMTABLES = "cur-size-all-mem-tables";
+    private static final String SIZE_OF_ALL_MEMTABLES = "size-all-mem-tables";
+    private static final String MEMTABLE_FLUSH_PENDING = "mem-table-flush-pending";
+    private static final String NUMBER_OF_RUNNING_FLUSHES = "num-running-flushes";
+    private static final String COMPACTION_PENDING = "compaction-pending";
+    private static final String NUMBER_OF_RUNNING_COMPACTIONS = "num-running-compactions";
+    private static final String ESTIMATED_BYTES_OF_PENDING_COMPACTION = "estimate-pending-compaction-bytes";
+    private static final String TOTAL_SST_FILES_SIZE = "total-sst-files-size";
+    private static final String LIVE_SST_FILES_SIZE = "live-sst-files-size";
+    private static final String NUMBER_OF_LIVE_VERSIONS = "num-live-versions";
+    private static final String CAPACITY_OF_BLOCK_CACHE = "block-cache-capacity";
+    private static final String USAGE_OF_BLOCK_CACHE = "block-cache-usage";
+    private static final String PINNED_USAGE_OF_BLOCK_CACHE = "block-cache-pinned-usage";
+    private static final String ESTIMATED_NUMBER_OF_KEYS = "estimate-num-keys";
+    private static final String ESTIMATED_MEMORY_OF_TABLE_READERS = "estimate-table-readers-mem";
+    private static final String NUMBER_OF_BACKGROUND_ERRORS = "background-errors";
 
     @Parameters(name = "{0}")
     public static Collection<Object[]> data() {
@@ -163,6 +185,7 @@ public class RocksDBMetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         return streamsConfiguration;
     }
 
@@ -201,7 +224,7 @@ public class RocksDBMetricsIntegrationTest {
         kafkaStreams.close();
     }
 
-    private void produceRecords() throws Exception {
+    private void produceRecords() {
         final MockTime mockTime = new MockTime(WINDOW_SIZE.toMillis());
         final Properties prop = TestUtils.producerConfig(
             CLUSTER.bootstrapServers(),
@@ -255,6 +278,28 @@ public class RocksDBMetricsIntegrationTest {
         checkMetricByName(listMetricStore, BYTES_WRITTEN_DURING_COMPACTION_RATE, 1);
         checkMetricByName(listMetricStore, NUMBER_OF_OPEN_FILES, 1);
         checkMetricByName(listMetricStore, NUMBER_OF_FILE_ERRORS, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_ENTRIES_ACTIVE_MEMTABLE, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_DELETES_ACTIVE_MEMTABLE, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_ENTRIES_IMMUTABLE_MEMTABLES, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_DELETES_IMMUTABLE_MEMTABLES, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_IMMUTABLE_MEMTABLES, 1);
+        checkMetricByName(listMetricStore, CURRENT_SIZE_OF_ACTIVE_MEMTABLE, 1);
+        checkMetricByName(listMetricStore, CURRENT_SIZE_OF_ALL_MEMTABLES, 1);
+        checkMetricByName(listMetricStore, SIZE_OF_ALL_MEMTABLES, 1);
+        checkMetricByName(listMetricStore, MEMTABLE_FLUSH_PENDING, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_RUNNING_FLUSHES, 1);
+        checkMetricByName(listMetricStore, COMPACTION_PENDING, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_RUNNING_COMPACTIONS, 1);
+        checkMetricByName(listMetricStore, ESTIMATED_BYTES_OF_PENDING_COMPACTION, 1);
+        checkMetricByName(listMetricStore, TOTAL_SST_FILES_SIZE, 1);
+        checkMetricByName(listMetricStore, LIVE_SST_FILES_SIZE, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_LIVE_VERSIONS, 1);
+        checkMetricByName(listMetricStore, CAPACITY_OF_BLOCK_CACHE, 1);
+        checkMetricByName(listMetricStore, USAGE_OF_BLOCK_CACHE, 1);
+        checkMetricByName(listMetricStore, PINNED_USAGE_OF_BLOCK_CACHE, 1);
+        checkMetricByName(listMetricStore, ESTIMATED_NUMBER_OF_KEYS, 1);
+        checkMetricByName(listMetricStore, ESTIMATED_MEMORY_OF_TABLE_READERS, 1);
+        checkMetricByName(listMetricStore, NUMBER_OF_BACKGROUND_ERRORS, 1);
     }
 
     private void checkMetricByName(final List<Metric> listMetric,
