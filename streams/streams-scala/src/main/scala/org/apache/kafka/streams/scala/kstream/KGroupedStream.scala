@@ -21,6 +21,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.kstream.internals.KTableImpl
+import org.apache.kafka.streams.scala.serialization.Serdes
 import org.apache.kafka.streams.kstream.{
   SessionWindows,
   Window,
@@ -63,7 +64,7 @@ class KGroupedStream[K, V](val inner: KGroupedStreamJ[K, V]) {
     new KTable(
       javaCountTable.mapValues[Long](
         ((l: java.lang.Long) => Long2long(l)).asValueMapper,
-        Materialized.`with`[K, Long, ByteArrayKeyValueStore](tableImpl.keySerde(), Serdes.Long)
+        Materialized.`with`[K, Long, ByteArrayKeyValueStore](tableImpl.keySerde(), Serdes.longSerde)
       )
     )
   }
