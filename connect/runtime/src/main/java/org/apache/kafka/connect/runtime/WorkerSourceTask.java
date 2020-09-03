@@ -475,7 +475,7 @@ class WorkerSourceTask extends WorkerTask {
     public boolean commitOffsets() {
         long commitTimeoutMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
-        log.trace("{} Committing offsets", this);
+        log.debug("{} Committing offsets", this);
 
         long started = time.milliseconds();
         long timeout = started + commitTimeoutMs;
