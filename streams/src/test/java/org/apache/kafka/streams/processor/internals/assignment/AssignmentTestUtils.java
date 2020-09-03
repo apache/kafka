@@ -32,7 +32,6 @@ import org.hamcrest.Matcher;
 
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -43,7 +42,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.entriesToMap;
@@ -118,7 +116,7 @@ public final class AssignmentTestUtils {
         );
 
         expect(adminClient.listOffsets(anyObject())).andStubReturn(result);
-        expect(result.all()).andReturn(allFuture);
+        expect(result.all()).andStubReturn(allFuture);
 
         EasyMock.replay(result);
         return adminClient;

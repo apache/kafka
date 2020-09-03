@@ -1,4 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.processor.internals;
+
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
@@ -20,6 +37,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
@@ -35,10 +53,10 @@ import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTask
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.easymock.EasyMock;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,7 +66,7 @@ import org.slf4j.LoggerFactory;
 
 @RunWith(value = Parameterized.class)
 public class StreamsAssignmentScaleTest {
-    final static long MAX_ASSIGNMENT_DURATION = 30 * 1000L; //each individual assignment should complete within 20s
+    final static long MAX_ASSIGNMENT_DURATION = 60 * 1000L; //each individual assignment should complete within 20s
     final static String APPLICATION_ID = "streams-assignment-scale-test";
 
     private final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
@@ -58,8 +76,8 @@ public class StreamsAssignmentScaleTest {
     @Parameterized.Parameters(name = "task assignor = {0}")
     public static Collection<Object[]> parameters() {
         return asList(
-            new Object[]{HighAvailabilityTaskAssignor.class},
             new Object[]{StickyTaskAssignor.class},
+            new Object[]{HighAvailabilityTaskAssignor.class},
             new Object[]{FallbackPriorTaskAssignor.class}
         );
     }
@@ -68,35 +86,36 @@ public class StreamsAssignmentScaleTest {
         this.taskAssignor = taskAssignor;
     }
 
-    @Test(timeout = 90 * 1000)
+    @Test(timeout = 120 * 1000)
     public void testLargePartitionCount() {
-        shouldCompleteLargeAssignmentInReasonableTime(1, 3_000, 1, 1);
+        shouldCompleteLargeAssignmentInReasonableTime(3_000, 1, 1, 1);
     }
 
-    @Test(timeout = 90 * 1000)
+    @Test(timeout = 120 * 1000)
     public void testLargeNumConsumers() {
-        shouldCompleteLargeAssignmentInReasonableTime(1, 1_000, 1_000, 1);
+        shouldCompleteLargeAssignmentInReasonableTime(1_000, 1_000, 1, 1);
     }
 
-    @Test(timeout = 90 * 1000)
-    public void testLargeAssignment() {
-        shouldCompleteLargeAssignmentInReasonableTime(10, 1_000, 100, 10);
+    @Test(timeout = 120 * 1000)
+    public void testManyStandbys() {
+        shouldCompleteLargeAssignmentInReasonableTime(1_000, 100, 1, 50);
     }
 
-    private void shouldCompleteLargeAssignmentInReasonableTime(final int numTopics,
-                                                               final int numPartitionsPerTopic,
-                                                               final int numConsumers,
+    @Test(timeout = 120 * 1000)
+    public void testManyThreadsPerClient() {
+        shouldCompleteLargeAssignmentInReasonableTime(1_000, 10, 1000, 1);
+    }
+
+    private void shouldCompleteLargeAssignmentInReasonableTime(final int numPartitions,
+                                                               final int numClients,
+                                                               final int numThreadsPerClient,
                                                                final int numStandbys) {
-        final List<String> topics = new ArrayList<>();
-        for (int i = 1; i <= numTopics; ++i) {
-            topics.add("topic" + i);
-        }
-
+        final List<String> topic = singletonList("topic");
         final Map<TopicPartition, Long> changelogEndOffsets = new HashMap<>();
-        for (int p = 0; p < numPartitionsPerTopic; ++p) {
+        for (int p = 0; p < numPartitions; ++p) {
             changelogEndOffsets.put(new TopicPartition(APPLICATION_ID + "-store-changelog", p), 100_000L);
         }
-        final List<PartitionInfo> partitionInfos = getPartitionInfos(numTopics, numPartitionsPerTopic);
+        final List<PartitionInfo> partitionInfos = getPartitionInfos(numPartitions);
         final Cluster clusterMetadata = new Cluster(
             "cluster",
             Collections.singletonList(Node.noNode()),
@@ -106,14 +125,17 @@ public class StreamsAssignmentScaleTest {
         );
 
         final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-        builder.addSource(null, "source", null, null, null, topics.toArray(new String[0]));
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
+        builder.addSource(null, "source", null, null, null, "topic");
+        builder.addProcessor("processor", new MockApiProcessorSupplier<>(), "source");
         builder.addStateStore(new MockKeyValueStoreBuilder("store", false), "processor");
         builder.setApplicationId(APPLICATION_ID);
         builder.buildTopology();
 
+        final Consumer<byte[], byte[]> mainConsumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
         expect(taskManager.builder()).andReturn(builder).anyTimes();
+        expect(taskManager.mainConsumer()).andStubReturn(mainConsumer);
+        expect(mainConsumer.committed(new HashSet<>())).andStubReturn(Collections.emptyMap());
         final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
 
         final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
@@ -137,17 +159,19 @@ public class StreamsAssignmentScaleTest {
             false
         );
         partitionAssignor.configure(configMap);
-        EasyMock.replay(taskManager, adminClient);
+        EasyMock.replay(taskManager, adminClient, mainConsumer);
 
         partitionAssignor.setInternalTopicManager(mockInternalTopicManager);
 
         final Map<String, Subscription> subscriptions = new HashMap<>();
-        for (int i = 0; i < numConsumers; ++i) {
-            subscriptions.put("consumer-" + i,
-                              new Subscription(
-                                  topics,
-                                  getInfo(uuidForInt(i), EMPTY_TASKS, EMPTY_TASKS).encode())
-            );
+        for (int client = 0; client < numClients; ++client) {
+            for (int i = 0; i < numThreadsPerClient; ++i) {
+                subscriptions.put("consumer-" + client + "-" + i,
+                                  new Subscription(
+                                      topic,
+                                      getInfo(uuidForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode())
+                );
+            }
         }
 
         final long firstAssignmentStartMs = System.currentTimeMillis();
@@ -162,17 +186,19 @@ public class StreamsAssignmentScaleTest {
         }
 
         // Use the assignment to generate the subscriptions' prev task data for the next rebalance
-        for (int i = 0; i < numConsumers; ++i) {
-            final String consumer = "consumer-" + i;
-            final Assignment assignment = firstAssignments.get(consumer);
-            final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
+        for (int client = 0; client < numClients; ++client) {
+            for (int i = 0; i < numThreadsPerClient; ++i) {
+                final String consumer = "consumer-" + client + "-" + i;
+                final Assignment assignment = firstAssignments.get(consumer);
+                final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
 
-            subscriptions.put("consumer-" + i,
-                              new Subscription(
-                                  topics,
-                                  getInfo(uuidForInt(i), new HashSet<>(info.activeTasks()), info.standbyTasks().keySet()).encode(),
-                                  assignment.partitions())
-            );
+                subscriptions.put(consumer,
+                                  new Subscription(
+                                      topic,
+                                      getInfo(uuidForInt(i), new HashSet<>(info.activeTasks()), info.standbyTasks().keySet()).encode(),
+                                      assignment.partitions())
+                );
+            }
         }
 
         final long secondAssignmentStartMs = System.currentTimeMillis();
@@ -185,15 +211,13 @@ public class StreamsAssignmentScaleTest {
             log.info("Second assignment took {}ms.", secondAssignmentDuration);
         }
 
-        assertThat(secondAssignments.size(), is(numConsumers));
+        assertThat(secondAssignments.size(), is(numClients * numThreadsPerClient));
     }
 
-    private static List<PartitionInfo> getPartitionInfos(final int numTopics, final int numPartitionsPerTopic) {
+    private static List<PartitionInfo> getPartitionInfos(final int numPartitionsPerTopic) {
         final List<PartitionInfo> partitionInfos = new ArrayList<>();
-        for (int t = 1; t <= numTopics; ++t) { // topic numbering starts from 1
-            for (int p = 0; p < numPartitionsPerTopic; ++p) {
-                partitionInfos.add(new PartitionInfo("topic" + t, p, Node.noNode(), new Node[0], new Node[0]));
-            }
+        for (int p = 0; p < numPartitionsPerTopic; ++p) {
+            partitionInfos.add(new PartitionInfo("topic", p, Node.noNode(), new Node[0], new Node[0]));
         }
         return  partitionInfos;
     }
