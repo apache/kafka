@@ -59,13 +59,16 @@ public class RocksDBMetricsRecorderTest {
     private final static String STORE_NAME = "store-name";
     private final static String SEGMENT_STORE_NAME_1 = "segment-store-name-1";
     private final static String SEGMENT_STORE_NAME_2 = "segment-store-name-2";
+    private final static String SEGMENT_STORE_NAME_3 = "segment-store-name-3";
 
     private final RocksDB dbToAdd1 = mock(RocksDB.class);
     private final RocksDB dbToAdd2 = mock(RocksDB.class);
+    private final RocksDB dbToAdd3 = mock(RocksDB.class);
     private final Cache cacheToAdd1 = mock(Cache.class);
     private final Cache cacheToAdd2 = mock(Cache.class);
     private final Statistics statisticsToAdd1 = mock(Statistics.class);
     private final Statistics statisticsToAdd2 = mock(Statistics.class);
+    private final Statistics statisticsToAdd3 = mock(Statistics.class);
 
     private final Sensor bytesWrittenToDatabaseSensor = createMock(Sensor.class);
     private final Sensor bytesReadFromDatabaseSensor = createMock(Sensor.class);
@@ -157,43 +160,127 @@ public class RocksDBMetricsRecorderTest {
         );
         assertThat(
             exception.getMessage(),
-            is("Value providers for store \"" + SEGMENT_STORE_NAME_1 + "\" of task " + TASK_ID1 +
-                    " has been already added. This is a bug in Kafka Streams. " +
-                    "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            is("Value providers for store " + SEGMENT_STORE_NAME_1 + " of task " + TASK_ID1 +
+                " has been already added. This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
     @Test
-    public void shouldThrowIfStatisticsForOnlyOneSegmentOutOfMultipleIsNull() {
-        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
-
-        final Throwable exception = assertThrows(
-            IllegalStateException.class,
-            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd1, cacheToAdd1, null)
-        );
-        assertThat(
-            exception.getMessage(),
-            is("Statistics for store \"" + SEGMENT_STORE_NAME_2 + "\" of task " + TASK_ID1 +
-                    " is null although the statistics of another store in this metrics recorder is not null. " +
-                    "This is a bug in Kafka Streams. " +
-                    "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
-        );
-    }
-
-    @Test
-    public void shouldThrowIfStatisticsForOnlyOneSegmentOutOfMultipleIsNotNull() {
+    public void shouldThrowIfStatisticsToAddIsNotNullButExsitingStatisticsAreNull() {
         recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, null);
 
         final Throwable exception = assertThrows(
             IllegalStateException.class,
-            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd1, cacheToAdd1, statisticsToAdd1)
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2)
         );
         assertThat(
             exception.getMessage(),
-            is("Statistics for store \"" + SEGMENT_STORE_NAME_2 + "\" of task " + TASK_ID1 +
-                    " is not null although the statistics of another store in this metrics recorder is null. " +
-                    "This is a bug in Kafka Streams. " +
-                    "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+            is("Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " is not null although the statistics of another segment in this metrics recorder is null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+        );
+    }
+
+    @Test
+    public void shouldThrowIfStatisticsToAddIsNullButExsitingStatisticsAreNotNull() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, null)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("Statistics for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " is null although the statistics of another segment in this metrics recorder is not null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+        );
+    }
+
+    @Test
+    public void shouldThrowIfCacheToAddIsNullButExsitingCacheIsNotNull() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, null, statisticsToAdd1);
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd1, statisticsToAdd1)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " is not null although the cache of another segment in this metrics recorder is null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+        );
+    }
+
+    @Test
+    public void shouldThrowIfCacheToAddIsNotNullButExistingCacheIsNull() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, null, statisticsToAdd2)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("Cache for segment " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " is null although the cache of another segment in this metrics recorder is not null. " +
+                "This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+        );
+    }
+
+    @Test
+    public void shouldThrowIfCacheToAddIsNotSameAsAllExistingCaches() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd1, statisticsToAdd2);
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_3, dbToAdd3, cacheToAdd2, statisticsToAdd3)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
+                " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+        );
+    }
+
+    @Test
+    public void shouldThrowIfCacheToAddIsSameAsOnlyOneOfMultipleCaches() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+        recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd2, cacheToAdd2, statisticsToAdd2);
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_3, dbToAdd3, cacheToAdd1, statisticsToAdd3)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("Caches for store " + STORE_NAME + " of task " + TASK_ID1 +
+                " are either not all distinct or do not all refer to the same cache. This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
+        );
+    }
+
+    @Test
+    public void shouldThrowIfDbToAddWasAlreadyAddedForOtherSegment() {
+        recorder.addValueProviders(SEGMENT_STORE_NAME_1, dbToAdd1, cacheToAdd1, statisticsToAdd1);
+
+        final Throwable exception = assertThrows(
+            IllegalStateException.class,
+            () -> recorder.addValueProviders(SEGMENT_STORE_NAME_2, dbToAdd1, cacheToAdd2, statisticsToAdd2)
+        );
+        assertThat(
+            exception.getMessage(),
+            is("DB instance for store " + SEGMENT_STORE_NAME_2 + " of task " + TASK_ID1 +
+                " was already added for another segment as a value provider. This is a bug in Kafka Streams. " +
+                "Please open a bug report under https://issues.apache.org/jira/projects/KAFKA/issues")
         );
     }
 
@@ -471,7 +558,28 @@ public class RocksDBMetricsRecorderTest {
             .andReturn(numberOfOpenFilesSensor);
         expect(RocksDBMetrics.numberOfFileErrorsSensor(eq(streamsMetrics), eq(metricsContext)))
             .andReturn(numberOfFileErrorsSensor);
+        RocksDBMetrics.addNumImmutableMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addCurSizeActiveMemTable(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addCurSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), anyObject());
         RocksDBMetrics.addNumEntriesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumEntriesImmMemTablesMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumDeletesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumDeletesImmMemTablesMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addMemTableFlushPending(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumRunningFlushesMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addCompactionPendingMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumRunningCompactionsMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addEstimatePendingCompactionBytesMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addTotalSstFilesSizeMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addLiveSstFilesSizeMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumLiveVersionMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addBlockCacheCapacityMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addBlockCacheUsageMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addBlockCachePinnedUsageMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addEstimateNumKeysMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addEstimateTableReadersMemMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         replay(RocksDBMetrics.class);
     }
 
@@ -503,7 +611,28 @@ public class RocksDBMetricsRecorderTest {
             .andStubReturn(numberOfOpenFilesSensor);
         expect(RocksDBMetrics.numberOfFileErrorsSensor(streamsMetrics, metricsContext))
             .andStubReturn(numberOfFileErrorsSensor);
+        RocksDBMetrics.addNumImmutableMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addCurSizeActiveMemTable(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addCurSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addSizeAllMemTables(eq(streamsMetrics), eq(metricsContext), anyObject());
         RocksDBMetrics.addNumEntriesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumEntriesImmMemTablesMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumDeletesActiveMemTableMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumDeletesImmMemTablesMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addMemTableFlushPending(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumRunningFlushesMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addCompactionPendingMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumRunningCompactionsMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addEstimatePendingCompactionBytesMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addTotalSstFilesSizeMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addLiveSstFilesSizeMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addNumLiveVersionMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addBlockCacheCapacityMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addBlockCacheUsageMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addBlockCachePinnedUsageMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addEstimateNumKeysMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addEstimateTableReadersMemMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
+        RocksDBMetrics.addBackgroundErrorsMetric(eq(streamsMetrics), eq(metricsContext), anyObject());
         replay(RocksDBMetrics.class);
     }
 }

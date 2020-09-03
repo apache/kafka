@@ -2443,11 +2443,11 @@
                       <h5><a class="toc-backref" href="#id34">KTable-KTable Foreign-Key
                           Join</a></h5>
                       <p>KTable-KTable foreign-key joins are always <em>non-windowed</em>
-                        joins. Foreign-key joins are analogous to joins in SQL. As a rough example: 
+                        joins. Foreign-key joins are analogous to joins in SQL. As a rough example:
                         <div><code class="docutils literal"><span class="pre">
-                        SELECT ... FROM {this KTable} 
-                        JOIN {other KTable} 
-                        ON {other.key} = {result of foreignKeyExtractor(this.value)} ... 
+                        SELECT ... FROM {this KTable}
+                        JOIN {other KTable}
+                        ON {other.key} = {result of foreignKeyExtractor(this.value)} ...
                         </span></code></div>
                         The output of the operation is a new KTable containing the join result.
                         </p>
@@ -2457,7 +2457,7 @@
                           internal" href="#streams_concepts_ktable"><span class="std
                             std-ref">table duals</span></a>. A foreign-key extractor
                         function is applied to the left record, with a new intermediate
-                        record created and is used to lookup and join with the corresponding 
+                        record created and is used to lookup and join with the corresponding
                         primary key on the right hand side table.
                         The result is a new KTable that represents the changelog stream
                         of the join operation.</p>
@@ -3740,7 +3740,7 @@ groupedTable
             <p>The library also has several utility abstractions and modules that the user needs to use for proper semantics.</p>
             <ul>
               <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.ImplicitConversions</span></code>: Module that brings into scope the implicit conversions between the Scala and Java classes.</li>
-              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.Serdes</span></code>: Module that contains all primitive SerDes that can be imported as implicits and a helper to create custom SerDes.</li>
+              <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.serialization.Serdes</span></code>: Module that contains all primitive SerDes that can be imported as implicits and a helper to create custom SerDes.</li>
             </ul>
             <p>The library is cross-built with Scala 2.12 and 2.13. To reference the library compiled against Scala {{scalaVersion}} include the following in your maven <code>pom.xml</code> add the following:</p>
             <pre class="brush: xml;">

@@ -484,13 +484,13 @@ public class KStreamAggregationIntegrationTest {
                 new TimeWindowedDeserializer<>(new StringDeserializer(), 500L),
                 new StringDeserializer(),
                 String.class,
-                25);
+                30);
 
         final String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
                 new TimeWindowedDeserializer<String>(),
                 new StringDeserializer(),
                 String.class,
-                25,
+                30,
                 true);
 
         final Comparator<KeyValueTimestamp<Windowed<String>, String>> comparator =
@@ -587,14 +587,14 @@ public class KStreamAggregationIntegrationTest {
                 new TimeWindowedDeserializer<>(),
                 new IntegerDeserializer(),
                 String.class,
-                15);
+                30);
 
         // read from ConsoleConsumer
         final String resultFromConsoleConsumer = readWindowedKeyedMessagesViaConsoleConsumer(
                 new TimeWindowedDeserializer<String>(),
                 new IntegerDeserializer(),
                 String.class,
-                15,
+                30,
                 true);
 
         final Comparator<KeyValueTimestamp<Windowed<String>, Integer>> comparator =

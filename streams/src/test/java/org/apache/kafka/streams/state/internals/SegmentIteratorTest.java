@@ -37,6 +37,7 @@ import java.util.NoSuchElementException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class SegmentIteratorTest {
@@ -54,14 +55,14 @@ public class SegmentIteratorTest {
     @Before
     public void before() {
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
-                TestUtils.tempDirectory(),
-                Serdes.String(),
-                Serdes.String(),
-                new MockRecordCollector(),
-                new ThreadCache(
-                    new LogContext("testCache "),
-                    0,
-                    new MockStreamsMetrics(new Metrics())));
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.String(),
+            new MockRecordCollector(),
+            new ThreadCache(
+                new LogContext("testCache "),
+                0,
+                new MockStreamsMetrics(new Metrics())));
         segmentOne.init(context, segmentOne);
         segmentTwo.init(context, segmentTwo);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
@@ -86,7 +87,8 @@ public class SegmentIteratorTest {
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
-            Bytes.wrap("z".getBytes()));
+            Bytes.wrap("z".getBytes()),
+            true);
 
         assertTrue(iterator.hasNext());
         assertEquals("a", new String(iterator.peekNextKey().get()));
@@ -108,15 +110,64 @@ public class SegmentIteratorTest {
     }
 
     @Test
+    public void shouldIterateBackwardOverAllSegments() {
+        iterator = new SegmentIterator<>(
+            Arrays.asList(segmentTwo, segmentOne).iterator(), //store should pass the segments in the right order
+            hasNextCondition,
+            Bytes.wrap("a".getBytes()),
+            Bytes.wrap("z".getBytes()),
+            false);
+
+        assertTrue(iterator.hasNext());
+        assertEquals("d", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("d", "4"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("c", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("c", "3"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
+
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
     public void shouldNotThrowExceptionOnHasNextWhenStoreClosed() {
         iterator = new SegmentIterator<>(
             Collections.singletonList(segmentOne).iterator(),
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
-            Bytes.wrap("z".getBytes()));
+            Bytes.wrap("z".getBytes()),
+            true);
 
         iterator.currentIterator = segmentOne.all();
         segmentOne.close();
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldOnlyIterateOverSegmentsInBackwardRange() {
+        iterator = new SegmentIterator<>(
+            Arrays.asList(segmentOne, segmentTwo).iterator(),
+            hasNextCondition,
+            Bytes.wrap("a".getBytes()),
+            Bytes.wrap("b".getBytes()),
+            false);
+
+        assertTrue(iterator.hasNext());
+        assertEquals("b", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("b", "2"), toStringKeyValue(iterator.next()));
+
+        assertTrue(iterator.hasNext());
+        assertEquals("a", new String(iterator.peekNextKey().get()));
+        assertEquals(KeyValue.pair("a", "1"), toStringKeyValue(iterator.next()));
+
         assertFalse(iterator.hasNext());
     }
 
@@ -126,7 +177,8 @@ public class SegmentIteratorTest {
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
-            Bytes.wrap("b".getBytes()));
+            Bytes.wrap("b".getBytes()),
+            true);
 
         assertTrue(iterator.hasNext());
         assertEquals("a", new String(iterator.peekNextKey().get()));
@@ -139,26 +191,28 @@ public class SegmentIteratorTest {
         assertFalse(iterator.hasNext());
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
     public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() {
         iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("f".getBytes()),
-            Bytes.wrap("h".getBytes()));
+            Bytes.wrap("h".getBytes()),
+            true);
 
-        iterator.peekNextKey();
+        assertThrows(NoSuchElementException.class, () -> iterator.peekNextKey());
     }
 
-    @Test(expected = NoSuchElementException.class)
+    @Test
     public void shouldThrowNoSuchElementOnNextIfNoNext() {
         iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("f".getBytes()),
-            Bytes.wrap("h".getBytes()));
+            Bytes.wrap("h".getBytes()),
+            true);
 
-        iterator.next();
+        assertThrows(NoSuchElementException.class, () -> iterator.next());
     }
 
     private KeyValue<String, String> toStringKeyValue(final KeyValue<Bytes, byte[]> binaryKv) {
