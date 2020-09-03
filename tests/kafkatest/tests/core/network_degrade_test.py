@@ -134,5 +134,5 @@ class NetworkDegradeTest(Test):
         acceptable_rates = [r for r in measured_rates if low_kbps < r < high_kbps]
 
         msg = "Expected most of the measured rates to be within an order of magnitude of target %d." % rate_limit_kbit
-        msg += " This means `tc` did not limit the bandwidth as expected. Measured rates %s" % str(measured_rates)
+        msg += " This means `tc` did not limit the bandwidth as expected."
         assert len(acceptable_rates) > 5, msg
