@@ -43,7 +43,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
-public class HandlingSourceTopicDeletionTest {
+public class HandlingSourceTopicDeletionIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
     private static final int NUM_THREADS = 2;
@@ -85,25 +85,30 @@ public class HandlingSourceTopicDeletionTest {
         streamsConfiguration.put(StreamsConfig.METADATA_MAX_AGE_CONFIG, 2000);
 
         final Topology topology = builder.build();
-        final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
+        final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsConfiguration);
+        final AtomicBoolean calledUncaughtExceptionHandler1 = new AtomicBoolean(false);
+        kafkaStreams1.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler1.set(true));
+        kafkaStreams1.start();
+        final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, streamsConfiguration);
+        final AtomicBoolean calledUncaughtExceptionHandler2 = new AtomicBoolean(false);
+        kafkaStreams2.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler2.set(true));
+        kafkaStreams2.start();
 
-        final AtomicBoolean calledUncaughtExceptionHandler = new AtomicBoolean(false);
-        kafkaStreams.setUncaughtExceptionHandler((thread, exception) -> calledUncaughtExceptionHandler.set(true));
-        kafkaStreams.start();
         TestUtils.waitForCondition(
-            () -> kafkaStreams.state() == State.RUNNING,
+            () -> kafkaStreams1.state() == State.RUNNING && kafkaStreams2.state() == State.RUNNING,
             TIMEOUT,
-            () -> "Kafka Streams application did not reach state RUNNING"
+            () -> "Kafka Streams clients did not reach state RUNNING"
         );
 
         CLUSTER.deleteTopicAndWait(INPUT_TOPIC);
 
         TestUtils.waitForCondition(
-            () -> kafkaStreams.state() == State.ERROR,
+            () -> kafkaStreams1.state() == State.ERROR && kafkaStreams2.state() == State.ERROR,
             TIMEOUT,
-            () -> "Kafka Streams application did not reach state ERROR"
+            () -> "Kafka Streams clients did not reach state ERROR"
         );
 
-        assertThat(calledUncaughtExceptionHandler.get(), is(true));
+        assertThat(calledUncaughtExceptionHandler1.get(), is(true));
+        assertThat(calledUncaughtExceptionHandler2.get(), is(true));
     }
 }
