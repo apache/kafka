@@ -571,7 +571,7 @@ class WorkerSourceTask extends WorkerTask {
         finishSuccessfulFlush();
         long durationMillis = time.milliseconds() - started;
         recordCommitSuccess(durationMillis);
-        log.trace("{} Finished commitOffsets successfully in {} ms",
+        log.debug("{} Finished commitOffsets successfully in {} ms",
                 this, durationMillis);
 
         commitSourceTask();
