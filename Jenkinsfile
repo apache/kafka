@@ -121,6 +121,7 @@ pipeline {
             doValidation()
             //doTest()
             stash includes: '**/build/reports/checkstyle/*', name: 'jdk8-checkstyle'
+            stash includes: '**/build/reports/spotbugs/*', name: 'jdk8-spotbugs'
             tryStreamsArchetype()
           }
         }
@@ -179,7 +180,17 @@ pipeline {
             reportFiles: '**/main.html',
             reportName: 'Checkstyle Report',
             reportTitles: ''])
-       
+
+          unstash 'jdk8-spotbugs'
+          publishHTML([
+            allowMissing: false,
+            alwaysLinkToLastBuild: false,
+            includes: '**/build/reports/spotbugs/*',
+            keepAll: false,
+            reportDir: '',
+            reportFiles: '**/main.html',
+            reportName: 'Spotbugs Report',
+            reportTitles: ''])
         }
       }
     }
