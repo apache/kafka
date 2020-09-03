@@ -16,8 +16,16 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Collection;
+import java.util.Map.Entry;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.ListOffsetsResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.Task;
+import org.easymock.EasyMock;
 import org.hamcrest.BaseMatcher;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
@@ -40,6 +48,9 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.common.utils.Utils.entriesToMap;
 import static org.apache.kafka.common.utils.Utils.intersection;
+import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.expect;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
@@ -77,12 +88,7 @@ public final class AssignmentTestUtils {
     public static final TaskId TASK_2_3 = new TaskId(2, 3);
 
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
-    public static final List<TaskId> EMPTY_TASK_LIST = emptyList();
-    public static final Map<TaskId, Long> EMPTY_TASK_OFFSET_SUMS = emptyMap();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
-
-    private AssignmentTestUtils() {}
-
 
     static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<UUID, ClientState> clientStates = new HashMap<>();
@@ -92,6 +98,52 @@ public final class AssignmentTestUtils {
             ++nthState;
         }
         return clientStates;
+    }
+
+    // If you don't care about setting the end offsets for each specific topic partition, the helper method
+    // getTopicPartitionOffsetMap is useful for building this input map for all partitions
+    public static AdminClient createMockAdminClientForAssignor(final Map<TopicPartition, Long> changelogEndOffsets) {
+        final AdminClient adminClient = EasyMock.createMock(AdminClient.class);
+
+        final ListOffsetsResult result = EasyMock.createNiceMock(ListOffsetsResult.class);
+        final KafkaFutureImpl<Map<TopicPartition, ListOffsetsResultInfo>> allFuture = new KafkaFutureImpl<>();
+        allFuture.complete(changelogEndOffsets.entrySet().stream().collect(Collectors.toMap(
+            Entry::getKey,
+            t -> {
+                final ListOffsetsResultInfo info = EasyMock.createNiceMock(ListOffsetsResultInfo.class);
+                expect(info.offset()).andStubReturn(t.getValue());
+                EasyMock.replay(info);
+                return info;
+            }))
+        );
+
+        expect(adminClient.listOffsets(anyObject())).andStubReturn(result);
+        expect(result.all()).andReturn(allFuture);
+
+        EasyMock.replay(result);
+        return adminClient;
+    }
+
+    public static SubscriptionInfo getInfo(final UUID processId,
+                                           final Set<TaskId> prevTasks,
+                                           final Set<TaskId> standbyTasks) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks));
+    }
+
+    public static SubscriptionInfo getInfo(final UUID processId,
+                                           final Set<TaskId> prevTasks,
+                                           final Set<TaskId> standbyTasks,
+                                           final String userEndPoint) {
+        return new SubscriptionInfo(
+            LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks));
+    }
+
+    // Stub offset sums for when we only care about the prev/standby task sets, not the actual offsets
+    private static Map<TaskId, Long> getTaskOffsetSums(final Collection<TaskId> activeTasks, final Collection<TaskId> standbyTasks) {
+        final Map<TaskId, Long> taskOffsetSums = activeTasks.stream().collect(Collectors.toMap(t -> t, t -> Task.LATEST_OFFSET));
+        taskOffsetSums.putAll(standbyTasks.stream().collect(Collectors.toMap(t -> t, t -> 0L)));
+        return taskOffsetSums;
     }
 
     /**
