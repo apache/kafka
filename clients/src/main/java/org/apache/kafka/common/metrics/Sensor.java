@@ -53,10 +53,18 @@ public final class Sensor {
     private final Object metricLock;
 
     private static class StatAndConfig {
+        public final MetricName metricName;
         public final Stat stat;
-        public final MetricConfig config;
+        public MetricConfig config;
 
+        // used for a compound stat
         StatAndConfig(Stat stat, MetricConfig config) {
+            this(stat, config, null);
+        }
+
+        // used for measurable stat to enable updating metric config associated with the stat
+        StatAndConfig(Stat stat, MetricConfig config, MetricName metricName) {
+            this.metricName = metricName;
             this.stat = stat;
             this.config = config;
         }
@@ -324,9 +332,33 @@ public final class Sensor {
             );
             registry.registerMetric(metric);
             metrics.put(metric.metricName(), metric);
-            stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig));
+            stats.add(new StatAndConfig(Objects.requireNonNull(stat), statConfig, metricName));
             return true;
         }
+    }
+
+    /**
+     * Update config of a measurable stat and metric registered with this sensor that corresponds to a given metric name
+     * @param metricName The name of the metric to update
+     * @param config     New configuration for this metric
+     * @return true if config was updated, false if sensor expired or metric is not registered with the sensor
+     */
+    public synchronized boolean update(final MetricName metricName, final MetricConfig config) {
+        if (hasExpired()) {
+            return false;
+        } else if (metrics.containsKey(metricName)) {
+            final KafkaMetric metric = registry.metric(metricName);
+            metric.config(config);
+            synchronized (metricLock()) {
+                for (StatAndConfig statAndConfig : this.stats) {
+                    if (metricName.equals(statAndConfig.metricName)) {
+                        statAndConfig.config = config;
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**

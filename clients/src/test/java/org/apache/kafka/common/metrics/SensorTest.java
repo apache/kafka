@@ -309,6 +309,39 @@ public class SensorTest {
         metrics.close();
     }
 
+    @Test
+    public void testQuotaUpdateWithTokenBucket() {
+        final Time time = new MockTime(0, System.currentTimeMillis(), 0);
+        final Metrics metrics = new Metrics(time);
+        final Sensor sensor = metrics.sensor("sensor", new MetricConfig()
+                .quota(Quota.upperBound(40))
+                .timeWindow(1, TimeUnit.SECONDS)
+                .samples(10));
+        final MetricName metricName = metrics.metricName("tb", "test-group");
+        assertTrue(sensor.add(metricName, new TokenBucket()));
+        final KafkaMetric tkMetric = metrics.metric(metricName);
+        final MetricConfig updatedConfig = new MetricConfig()
+                .quota(Quota.upperBound(2))
+                .timeWindow(1, TimeUnit.SECONDS)
+                .samples(10);
+
+        // verify that it is not enough to update config in the metric
+        tkMetric.config(updatedConfig);
+
+        // recording a value that uses up the burst based on updated quota will use the initial quota config
+        // and should not throw an exception
+        sensor.record(30, time.milliseconds());
+
+        // sleep one sample window to accumulate more tokens with the old quota
+        time.sleep(1000);
+
+        // // updating quota via sensor properly updates quotas for token bucket
+        assertTrue("Failed to update metric config", sensor.update(metricName, updatedConfig));
+        assertThrows(QuotaViolationException.class, () -> sensor.record(30, time.milliseconds()));
+
+        metrics.close();
+    }
+
     private void strictRecord(Sensor sensor, double value, long timeMs) {
         synchronized (sensor) {
             sensor.checkQuotas(timeMs);
