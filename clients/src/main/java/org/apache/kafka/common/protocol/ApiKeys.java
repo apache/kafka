@@ -65,13 +65,10 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeProducersRequestData;
 import org.apache.kafka.common.message.DescribeProducersResponseData;
-<<<<<<< HEAD
-import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
-import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
-=======
 import org.apache.kafka.common.message.DescribeTransactionsRequestData;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
->>>>>>> Add support for the `DescribeTransactions` API
+import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.EndTxnRequestData;
@@ -98,6 +95,8 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.ListTransactionsRequestData;
+import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -236,7 +235,9 @@ public enum ApiKeys {
     DESCRIBE_PRODUCERS(52, "DescribeProducers", DescribeProducersRequestData.SCHEMAS,
             DescribeProducersResponseData.SCHEMAS),
     DESCRIBE_TRANSACTIONS(53, "DescribeTransactions", DescribeTransactionsRequestData.SCHEMAS,
-                       DescribeTransactionsResponseData.SCHEMAS);
+                       DescribeTransactionsResponseData.SCHEMAS),
+    LIST_TRANSACTIONS(54, "ListTransactions", ListTransactionsRequestData.SCHEMAS,
+                          ListTransactionsResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

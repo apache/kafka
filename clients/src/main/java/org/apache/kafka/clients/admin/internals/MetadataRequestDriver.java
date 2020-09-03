@@ -36,7 +36,7 @@ import java.util.function.Function;
 
 public abstract class MetadataRequestDriver<V> extends RequestDriver<TopicPartition, V> {
     private static final Logger log = LoggerFactory.getLogger(MetadataRequestDriver.class);
-    private static final RequestScope REQUEST_CONTEXT = new RequestScope() {
+    private static final RequestScope SINGLE_REQUEST_SCOPE = new RequestScope() {
     };
 
     public MetadataRequestDriver(
@@ -51,7 +51,7 @@ public abstract class MetadataRequestDriver<V> extends RequestDriver<TopicPartit
     RequestScope lookupScope(TopicPartition key) {
         // Metadata requests can group topic partitions arbitrarily, so they can all share
         // the same request context
-        return REQUEST_CONTEXT;
+        return SINGLE_REQUEST_SCOPE;
     }
 
     @Override

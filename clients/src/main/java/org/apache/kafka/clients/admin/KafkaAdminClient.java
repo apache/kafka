@@ -36,6 +36,7 @@ import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
 import org.apache.kafka.clients.admin.internals.DescribeProducersRequestDriver;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsRequestDriver;
+import org.apache.kafka.clients.admin.internals.ListTransactionsRequestDriver;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.admin.internals.RequestDriver;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
@@ -4303,6 +4304,15 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeTransactionsResult(driver.futures());
     }
 
+    @Override
+    public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
+        long currentTimeMs = time.milliseconds();
+        long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
+        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
+        maybeSendRequests(currentTimeMs, driver);
+        return new ListTransactionsResult(driver.lookupFuture());
+    }
+
     /**
      * Get a sub level error when the request is in batch. If given key was not found,
      * return an {@link IllegalArgumentException}.
@@ -4326,6 +4336,7 @@ public class KafkaAdminClient extends AdminClient {
             new ConstantNodeIdProvider(spec.scope.destinationBrokerId().getAsInt()) :
             new LeastLoadedNodeProvider();
 
+        // FIXME: Add name to RequestSpec
         return new Call("", spec.nextAllowedTryMs, spec.tries, spec.deadlineMs, nodeProvider) {
             @Override
             AbstractRequest.Builder<?> createRequest(int timeoutMs) {

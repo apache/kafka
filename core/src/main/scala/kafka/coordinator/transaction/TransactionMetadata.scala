@@ -25,7 +25,7 @@ import org.apache.kafka.common.record.RecordBatch
 
 import scala.collection.{immutable, mutable}
 
-private[transaction] sealed trait TransactionState { def byte: Byte }
+private[transaction] sealed trait TransactionState { def id: Byte }
 
 /**
  * Transaction has not existed yet
@@ -33,7 +33,7 @@ private[transaction] sealed trait TransactionState { def byte: Byte }
  * transition: received AddPartitionsToTxnRequest => Ongoing
  *             received AddOffsetsToTxnRequest => Ongoing
  */
-private[transaction] case object Empty extends TransactionState { val byte: Byte = 0 }
+private[transaction] case object Empty extends TransactionState { val id: Byte = 0 }
 
 /**
  * Transaction has started and ongoing
@@ -43,46 +43,46 @@ private[transaction] case object Empty extends TransactionState { val byte: Byte
  *             received AddPartitionsToTxnRequest => Ongoing
  *             received AddOffsetsToTxnRequest => Ongoing
  */
-private[transaction] case object Ongoing extends TransactionState { val byte: Byte = 1 }
+private[transaction] case object Ongoing extends TransactionState { val id: Byte = 1 }
 
 /**
  * Group is preparing to commit
  *
  * transition: received acks from all partitions => CompleteCommit
  */
-private[transaction] case object PrepareCommit extends TransactionState { val byte: Byte = 2}
+private[transaction] case object PrepareCommit extends TransactionState { val id: Byte = 2}
 
 /**
  * Group is preparing to abort
  *
  * transition: received acks from all partitions => CompleteAbort
  */
-private[transaction] case object PrepareAbort extends TransactionState { val byte: Byte = 3 }
+private[transaction] case object PrepareAbort extends TransactionState { val id: Byte = 3 }
 
 /**
  * Group has completed commit
  *
  * Will soon be removed from the ongoing transaction cache
  */
-private[transaction] case object CompleteCommit extends TransactionState { val byte: Byte = 4 }
+private[transaction] case object CompleteCommit extends TransactionState { val id: Byte = 4 }
 
 /**
  * Group has completed abort
  *
  * Will soon be removed from the ongoing transaction cache
  */
-private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
+private[transaction] case object CompleteAbort extends TransactionState { val id: Byte = 5 }
 
 /**
   * TransactionalId has expired and is about to be removed from the transaction cache
   */
-private[transaction] case object Dead extends TransactionState { val byte: Byte = 6 }
+private[transaction] case object Dead extends TransactionState { val id: Byte = 6 }
 
 /**
   * We are in the middle of bumping the epoch and fencing out older producers.
   */
 
-private[transaction] case object PrepareEpochFence extends TransactionState { val byte: Byte = 7}
+private[transaction] case object PrepareEpochFence extends TransactionState { val id: Byte = 7}
 
 private[transaction] object TransactionMetadata {
   def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
@@ -99,7 +99,21 @@ private[transaction] object TransactionMetadata {
     new TransactionMetadata(transactionalId, producerId, lastProducerId, producerEpoch, lastProducerEpoch,
       txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
-  def byteToState(byte: Byte): TransactionState = {
+  def fromName(name: String): Option[TransactionState] = {
+    name match {
+      case "Empty" => Some(Empty)
+      case "Ongoing" => Some(Ongoing)
+      case "PrepareCommit" => Some(PrepareCommit)
+      case "PrepareAbort" => Some(PrepareAbort)
+      case "CompleteCommit" => Some(CompleteCommit)
+      case "CompleteAbort" => Some(CompleteAbort)
+      case "PrepareEpochFence" => Some(PrepareEpochFence)
+      case "Dead" => Some(Dead)
+      case _ => None
+    }
+  }
+
+  def fromId(byte: Byte): TransactionState = {
     byte match {
       case 0 => Empty
       case 1 => Ongoing

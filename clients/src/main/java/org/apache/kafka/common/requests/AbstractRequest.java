@@ -252,6 +252,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new DescribeProducersRequest(struct, apiVersion);
             case DESCRIBE_TRANSACTIONS:
                 return new DescribeTransactionsRequest(struct, apiVersion);
+            case LIST_TRANSACTIONS:
+                return new ListTransactionsRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

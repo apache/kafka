@@ -120,6 +120,10 @@ public abstract class RequestDriver<K, V> {
     void map(K key, Integer brokerId) {
         lookupMap.remove(key);
         fulfillmentMap.put(new BrokerScope(brokerId), key);
+
+        // To allow for derived keys, we create futures dynamically if they
+        // do not already exist in the future map
+        futures.computeIfAbsent(key, k -> new KafkaFutureImpl<>());
     }
 
     /**

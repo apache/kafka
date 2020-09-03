@@ -78,6 +78,42 @@ object TransactionCommand extends Logging {
     rows.foreach(printRow)
   }
 
+  private def listTransactions(
+    admin: Admin
+  ): Unit = {
+    val result = try {
+      admin.listTransactions()
+        .allByBrokerId()
+        .get()
+    } catch {
+      case e: ExecutionException =>
+        val cause = e.getCause
+        debug("Failed to list transactions due to exception", e)
+        printErrorMessageAndDie(s"Failed to list transactions: ${cause.getMessage}: " +
+          s"Enable debug logging for additional detail")
+    }
+
+    val headers = Array(
+      "TransactionalId",
+      "Coordinator",
+      "ProducerId",
+      "TransactionState"
+    )
+
+    val rows = result.asScala.flatMap { case (brokerId, transactions) =>
+      transactions.asScala.map { transaction =>
+        Array(
+          transaction.transactionalId,
+          brokerId.toString,
+          transaction.producerId.toString,
+          transaction.transactionState.toString
+        )
+      }
+    }.toSeq
+
+    prettyPrintTable(headers, rows)
+  }
+
   private def describeTransactions(
     admin: Admin,
     transactionalId: String
@@ -201,6 +237,9 @@ object TransactionCommand extends Logging {
           printErrorMessageAndDie("The --describe action requires the " +
             "--transactional-id argument")
       }
+    } else if (commandOptions.options.has(commandOptions.listOption)) {
+      // FIXME: Implement brokerId filtering
+      listTransactions(admin)
     }
   }
 }
@@ -252,6 +291,10 @@ private final class TransactionCommandOptions(args: Array[String]) extends Comma
     "Used to describe the transaction state of a specific transactional id " +
       "(requires --transactional-id)")
 
+  val listOption = parser
+    .accepts("list",
+      "Used to list transactions")
+
   val describeProducersOption = parser
     .accepts("describe-producers",
       "Used to describe active transactional/idempotent producers " +
@@ -259,7 +302,7 @@ private final class TransactionCommandOptions(args: Array[String]) extends Comma
 
   options = parser.parse(args: _*)
 
-  if (Seq(describeOption, describeProducersOption).count(options.has) != 1) {
+  if (Seq(listOption, describeOption, describeProducersOption).count(options.has) != 1) {
     CommandLineUtils.printUsageAndDie(parser,
       "Command must include exactly one action: --describe-producers")
   }

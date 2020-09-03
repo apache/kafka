@@ -119,6 +119,8 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
+import org.apache.kafka.common.message.ListTransactionsRequestData;
+import org.apache.kafka.common.message.ListTransactionsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetDeleteRequestData;
@@ -501,6 +503,9 @@ public class RequestResponseTest {
         checkRequest(createDescribeTransactionsRequest(), true);
         checkErrorResponse(createDescribeTransactionsRequest(), unknownServerException, true);
         checkResponse(createDescribeTransactionsResponse(), 0, true);
+        checkRequest(createListTransactionsRequest(), true);
+        checkErrorResponse(createListTransactionsRequest(), unknownServerException, true);
+        checkResponse(createListTransactionsResponse(), 0, true);
     }
 
     @Test
@@ -2459,13 +2464,36 @@ public class RequestResponseTest {
                         .setPartitionIndexes(asList(1, 3, 5, 7)),
                     new DescribeTransactionsResponseData.TopicData()
                         .setName("bar")
-                        .setPartitionIndexes(asList(1, 3, 5, 7))
+                        .setPartitionIndexes(asList(1, 3))
                 )),
             new DescribeTransactionsResponseData.TransactionState()
                 .setErrorCode(Errors.NOT_COORDINATOR.code())
                 .setTransactionalId("t3")
         ));
         return new DescribeTransactionsResponse(data);
+    }
+
+    private ListTransactionsRequest createListTransactionsRequest() {
+        return new ListTransactionsRequest.Builder(new ListTransactionsRequestData()
+            .setStatesFilter(singletonList("Ongoing"))
+            .setProducerIdFilter(asList(1L, 2L, 15L))
+        ).build();
+    }
+
+    private ListTransactionsResponse createListTransactionsResponse() {
+        ListTransactionsResponseData response = new ListTransactionsResponseData();
+        response.setErrorCode(Errors.NONE.code());
+        response.setTransactionStates(Arrays.asList(
+            new ListTransactionsResponseData.TransactionState()
+                .setTransactionalId("foo")
+                .setProducerId(12345L)
+                .setTransactionState("Ongoing"),
+            new ListTransactionsResponseData.TransactionState()
+                .setTransactionalId("bar")
+                .setProducerId(98765L)
+                .setTransactionState("PrepareAbort")
+        ));
+        return new ListTransactionsResponse(response);
     }
 
 }

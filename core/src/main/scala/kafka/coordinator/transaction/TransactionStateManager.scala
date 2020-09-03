@@ -29,6 +29,7 @@ import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.ListTransactionsResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max}
 import org.apache.kafka.common.protocol.Errors
@@ -38,8 +39,8 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
-import scala.jdk.CollectionConverters._
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 
 object TransactionStateManager {
@@ -221,6 +222,44 @@ class TransactionStateManager(brokerId: Int,
   def putTransactionStateIfNotExists(txnMetadata: TransactionMetadata): Either[Errors, CoordinatorEpochAndTxnMetadata] = {
     getAndMaybeAddTransactionState(txnMetadata.transactionalId, Some(txnMetadata)).map(_.getOrElse(
       throw new IllegalStateException(s"Unexpected empty transaction metadata returned while putting $txnMetadata")))
+  }
+
+  def listTransactionStates(
+    filteredProducerIds: Set[Long],
+    filteredStateNames: Set[String]
+  ): Either[Errors, List[ListTransactionsResponseData.TransactionState]] = {
+    inReadLock(stateLock) {
+      if (loadingPartitions.nonEmpty) {
+        Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+      } else {
+        val filteredStates = filteredStateNames.flatMap(TransactionMetadata.fromName)
+        val states = mutable.ListBuffer.empty[ListTransactionsResponseData.TransactionState]
+
+        def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
+          if (txnMetadata.state == Dead) {
+            false
+          } else {
+            (filteredProducerIds.isEmpty && filteredStates.isEmpty) ||
+              filteredProducerIds.contains(txnMetadata.producerId) ||
+              filteredStates.contains(txnMetadata.state)
+          }
+        }
+
+        transactionMetadataCache.foreach { case (_, cache) =>
+          cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
+            txnMetadata.inLock {
+              if (shouldInclude(txnMetadata)) {
+                states += new ListTransactionsResponseData.TransactionState()
+                  .setTransactionalId(txnMetadata.transactionalId)
+                  .setProducerId(txnMetadata.producerId)
+                  .setTransactionState(txnMetadata.state.toString)
+              }
+            }
+          }
+        }
+        Right(states.toList)
+      }
+    }
   }
 
   /**

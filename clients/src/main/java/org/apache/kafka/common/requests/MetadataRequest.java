@@ -36,7 +36,7 @@ public class MetadataRequest extends AbstractRequest {
         private static final MetadataRequestData ALL_TOPICS_REQUEST_DATA = new MetadataRequestData().
             setTopics(null).setAllowAutoTopicCreation(true);
 
-        private final MetadataRequestData data;
+        public final MetadataRequestData data;
 
         public Builder(MetadataRequestData data) {
             super(ApiKeys.METADATA);

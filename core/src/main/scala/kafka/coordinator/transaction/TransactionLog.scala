@@ -151,7 +151,7 @@ object TransactionLog {
     value.set(ProducerIdField, txnMetadata.producerId)
     value.set(ProducerEpochField, txnMetadata.producerEpoch)
     value.set(TxnTimeoutField, txnMetadata.txnTimeoutMs)
-    value.set(TxnStatusField, txnMetadata.txnState.byte)
+    value.set(TxnStatusField, txnMetadata.txnState.id)
     value.set(TxnEntryTimestampField, txnMetadata.txnLastUpdateTimestamp)
     value.set(TxnStartTimestampField, txnMetadata.txnStartTimestamp)
 
@@ -218,7 +218,7 @@ object TransactionLog {
         val timeout = value.getInt(TxnTimeoutField)
 
         val stateByte = value.getByte(TxnStatusField)
-        val state = TransactionMetadata.byteToState(stateByte)
+        val state = TransactionMetadata.fromId(stateByte)
         val entryTimestamp = value.getLong(TxnEntryTimestampField)
         val startTimestamp = value.getLong(TxnStartTimestampField)
 
