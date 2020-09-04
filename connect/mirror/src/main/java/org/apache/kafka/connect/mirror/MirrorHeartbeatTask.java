@@ -63,9 +63,10 @@ public class MirrorHeartbeatTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
-        if (interval.toMillis < 0) {
+        if (interval.toMillis() < 0L) {
             return null;
         }
+
         // pause to throttle, unless we've stopped
         if (stopped.await(interval.toMillis(), TimeUnit.MILLISECONDS)) {
             // SourceWorkerTask expects non-zero batches or null
