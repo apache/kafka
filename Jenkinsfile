@@ -61,29 +61,26 @@ def doStreamsArchetype() {
           || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
     '''
 
-    sh '''
-      rm -rf test-streams-archetype && mkdir test-streams-archetype && cd test-streams-archetype \
-          || { echo 'Could not create test directory for stream quickstart archetype'; exit 1; }
-    '''
-
-    sh '''
-      echo "Y" | mvn archetype:generate \
-          -DarchetypeCatalog=local \
-          -DarchetypeGroupId=org.apache.kafka \
-          -DarchetypeArtifactId=streams-quickstart-java \
-          -DarchetypeVersion=$version \
-          -DgroupId=streams.examples \
-          -DartifactId=streams.examples \
-          -Dversion=0.1 \
-          -Dpackage=myapps \
-          || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
-    '''
-
-    dir('streams.examples') {
+    dir('test-streams-archetype') {
       sh '''
-        mvn compile \
-            || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
+        echo "Y" | mvn archetype:generate \
+            -DarchetypeCatalog=local \
+            -DarchetypeGroupId=org.apache.kafka \
+            -DarchetypeArtifactId=streams-quickstart-java \
+            -DarchetypeVersion=$version \
+            -DgroupId=streams.examples \
+            -DartifactId=streams.examples \
+            -Dversion=0.1 \
+            -Dpackage=myapps \
+            || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
       '''
+
+      dir('streams.examples') {
+        sh '''
+          mvn compile \
+              || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
+        '''
+      }
     }
   }
 }
