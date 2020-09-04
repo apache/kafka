@@ -56,7 +56,7 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testReplicatesHeartbeatsByDefault() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"), 
+        MirrorConnectorCommon connector = new MirrorConnectorCommon(new SourceAndTarget("source", "target"), 
             new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
@@ -64,7 +64,7 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testReplicatesHeartbeatsDespiteFilter() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+        MirrorConnectorCommon connector = new MirrorConnectorCommon(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), x -> false, new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
@@ -72,7 +72,7 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testNoCycles() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+        MirrorConnectorCommon connector = new MirrorConnectorCommon(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), x -> true, x -> true);
         assertFalse(connector.shouldReplicateTopic("target.topic1"), "should not allow cycles");
         assertFalse(connector.shouldReplicateTopic("target.source.topic1"), "should not allow cycles");
@@ -83,7 +83,7 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testAclFiltering() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+        MirrorConnectorCommon connector = new MirrorConnectorCommon(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), x -> true, x -> true);
         assertFalse(connector.shouldReplicateAcl(
             new AclBinding(new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
@@ -95,7 +95,7 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testAclTransformation() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+        MirrorConnectorCommon connector = new MirrorConnectorCommon(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), x -> true, x -> true);
         AclBinding allowAllAclBinding = new AclBinding(
             new ResourcePattern(ResourceType.TOPIC, "test_topic", PatternType.LITERAL),
@@ -117,7 +117,7 @@ public class MirrorSourceConnectorTest {
     
     @Test
     public void testConfigPropertyFiltering() {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
+        MirrorConnectorCommon connector = new MirrorConnectorCommon(new SourceAndTarget("source", "target"),
             new DefaultReplicationPolicy(), x -> true, new DefaultConfigPropertyFilter());
         ArrayList<ConfigEntry> entries = new ArrayList<>();
         entries.add(new ConfigEntry("name-1", "value-1"));
@@ -178,9 +178,9 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testRefreshTopicPartitions() throws Exception {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
-        connector.initialize(mock(ConnectorContext.class));
+        MirrorConnectorCommon connector = new MirrorConnectorCommon(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter(), mock(ConnectorContext.class));
+
         connector = spy(connector);
 
         Config topicConfig = new Config(Arrays.asList(
@@ -220,9 +220,9 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testRefreshTopicPartitionsTopicOnTargetFirst() throws Exception {
-        MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter());
-        connector.initialize(mock(ConnectorContext.class));
+        MirrorConnectorCommon connector = new MirrorConnectorCommon(new SourceAndTarget("source", "target"),
+                new DefaultReplicationPolicy(), new DefaultTopicFilter(), new DefaultConfigPropertyFilter(), mock(ConnectorContext.class));
+
         connector = spy(connector);
 
         Config topicConfig = new Config(Arrays.asList(

@@ -40,8 +40,7 @@ public class MirrorSourceTaskTest {
         headers.add("header2", new byte[]{'p', 'q', 'r', 's', 't'});
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("topic1", 2, 3L, 4L,
             TimestampType.CREATE_TIME, 0L, 5, 6, key, value, headers);
-        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask("cluster7",
-            new DefaultReplicationPolicy(), 50);
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask("cluster7", new DefaultReplicationPolicy());
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(consumerRecord);
         assertEquals("cluster7.topic1", sourceRecord.topic());
         assertEquals(2, sourceRecord.kafkaPartition().intValue());
@@ -56,7 +55,7 @@ public class MirrorSourceTaskTest {
 
     @Test
     public void testOffsetSync() {
-        MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(50);
+        MirrorTaskCommon.PartitionState partitionState = new MirrorTaskCommon.PartitionState(50);
 
         assertTrue(partitionState.update(0, 100), "always emit offset sync on first update");
         assertTrue(partitionState.update(2, 102), "upstream offset skipped -> resync");
@@ -72,7 +71,7 @@ public class MirrorSourceTaskTest {
 
     @Test
     public void testZeroOffsetSync() {
-        MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(0);
+        MirrorTaskCommon.PartitionState partitionState = new MirrorTaskCommon.PartitionState(0);
 
         // if max offset lag is zero, should always emit offset syncs
         assertTrue(partitionState.update(0, 100));
