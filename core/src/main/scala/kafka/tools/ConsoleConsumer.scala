@@ -474,7 +474,6 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
-  var headersDeserializer: Option[Deserializer[_]] = None
 
   override def configure(configs: Map[String, _]): Unit = {
     getPropertyIfExists(configs, "print.timestamp", getBoolProperty).foreach(printTimestamp = _)

@@ -95,7 +95,6 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         }
 
         // toBinary was used to serialize the data
-
         return WindowKeySchema.from(data, windowSize, inner, topic);
     }
 
