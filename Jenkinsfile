@@ -62,7 +62,7 @@ def doStreamsArchetype() {
     '''
 
     sh '''
-      mkdir test-streams-archetype && cd test-streams-archetype \
+      rm -rf test-streams-archetype && mkdir test-streams-archetype && cd test-streams-archetype \
           || { echo 'Could not create test directory for stream quickstart archetype'; exit 1; }
     '''
 
