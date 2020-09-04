@@ -543,7 +543,6 @@ public class StreamsConfig extends AbstractConfig {
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
     private static final String WINDOW_SIZE_MS_DOC = "Passes window size to the deserializer in order to calculate window end times. Default is Long.MAX_VALUE";
 
-
     /** {@code upgrade.from} */
     @SuppressWarnings("WeakerAccess")
     public static final String UPGRADE_FROM_CONFIG = "upgrade.from";

@@ -68,7 +68,6 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
                 windowSize = (Long) configs.get(StreamsConfig.WINDOW_SIZE_MS_CONFIG);
             }
         }
-
         if (inner == null) {
             final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
             final String value = (String) configs.get(propertyName);

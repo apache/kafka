@@ -240,7 +240,6 @@ public class KStreamAggregationIntegrationTest {
         final long secondBatchWindowStart = secondBatchTimestamp / 500 * 500;
         final long secondBatchWindowEnd = secondBatchWindowStart + 500;
 
-
         final List<KeyValueTimestamp<Windowed<String>, String>> expectResult = Arrays.asList(
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchWindowStart, firstBatchWindowEnd)), "A", firstBatchTimestamp),
                 new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchWindowStart, secondBatchWindowEnd)), "A", secondBatchTimestamp),
@@ -1059,7 +1058,6 @@ public class KStreamAggregationIntegrationTest {
         consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
         consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
         consumerProperties.put(StreamsConfig.WINDOW_SIZE_MS_CONFIG, 500L);
-
         if (keyDeserializer instanceof TimeWindowedDeserializer || keyDeserializer instanceof SessionWindowedDeserializer) {
             consumerProperties.setProperty(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
                 Serdes.serdeFrom(innerClass).getClass().getName());
