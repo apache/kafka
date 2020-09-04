@@ -16,13 +16,17 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.DynamicClientConfigUpdater;
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.requests.DescribeClientConfigsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsRequest;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -50,13 +54,20 @@ public class DynamicConsumerConfig {
 
     private final DynamicClientConfigUpdater updater;
 
+    private final List<String> supportedConfigs;
+
     public DynamicConsumerConfig(ConsumerNetworkClient client, GroupRebalanceConfig config, Time time, LogContext logContext) {
         this.rebalanceConfig = config;
-        this.updater = new DynamicClientConfigUpdater(rebalanceConfig.dynamicConfigExpireMs, rebalanceConfig.dynamicConfigEnabled, time);
         this.log = logContext.logger(DynamicConsumerConfig.class);
         this.client = client;
         this.clientId = rebalanceConfig.clientId;
         this.previousDynamicConfigs = new HashMap<>();
+        this.supportedConfigs = new ArrayList<>();
+        supportedConfigs.add(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
+        supportedConfigs.add(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.updater = new DynamicClientConfigUpdater(
+            rebalanceConfig.dynamicConfigExpireMs, rebalanceConfig.dynamicConfigEnabled, time
+        );
     }
     
     /**
@@ -75,13 +86,13 @@ public class DynamicConsumerConfig {
             Node node = client.leastLoadedNode();
             if (node != null && client.ready(node, now)) {
                 log.info("Trying to fetch initial dynamic configs before join group request");
-                RequestFuture<ClientResponse> configsFuture = client.send(node, updater.newRequestBuilder(this.clientId));
+                RequestFuture<ClientResponse> configsFuture = client.send(node, updater.newRequestBuilder(this.clientId, this.supportedConfigs));
                 updater.sentConfigsRequest();
                 client.poll(configsFuture);
                 if (configsFuture.isDone()) {
-                    DescribeConfigsResponse configsResponse = (DescribeConfigsResponse) configsFuture.value().responseBody();
+                    DescribeClientConfigsResponse configsResponse = (DescribeClientConfigsResponse) configsFuture.value().responseBody();
                     updater.receiveInitialConfigs();
-                    handleDescribeConfigsResponse(configsResponse);
+                    handleConfigsResponse(configsResponse);
                 }
             }
         }
@@ -99,7 +110,7 @@ public class DynamicConsumerConfig {
             Node node = client.leastLoadedNode();
             if (node != null && client.ready(node, now)) {
                 log.info("Sending periodic describe configs request for dynamic config update");
-                RequestFuture<ClientResponse> configsFuture = client.send(node, updater.newRequestBuilder(this.clientId));
+                RequestFuture<ClientResponse> configsFuture = client.send(node, updater.newRequestBuilder(this.clientId, this.supportedConfigs));
                 updater.sentConfigsRequest();
                 return configsFuture;
             }
@@ -116,7 +127,7 @@ public class DynamicConsumerConfig {
      * or by disabling this feature if the broker is incompatible.
      * @param resp {@link DescribeConfigsResponse}
      */
-    public void handleDescribeConfigsResponse(DescribeConfigsResponse configsResponse) {
+    public void handleConfigsResponse(DescribeClientConfigsResponse configsResponse) {
         Map<String, String> dynamicConfigs = updater.createResultMapAndHandleErrors(configsResponse, log);
         log.info("DescribeConfigsResponse received");
         updater.receiveConfigs();

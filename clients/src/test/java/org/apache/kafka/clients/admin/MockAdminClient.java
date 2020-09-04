@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
+import org.apache.kafka.common.config.ClientConfigAlteration;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
@@ -823,6 +824,16 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options) {
+        throw new UnsupportedOperationException("Not implement yet");
+    }
+
+    @Override
+    public DescribeClientConfigsResult describeClientConfigs(ClientQuotaFilter filter, DescribeClientQuotasOptions options) {
+        throw new UnsupportedOperationException("Not implement yet");
+    }
+
+    @Override
+    public AlterClientConfigsResult alterClientConfigs(Collection<ClientConfigAlteration> entries, AlterClientQuotasOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
     }
 

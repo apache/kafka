@@ -244,6 +244,10 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new DescribeClientQuotasRequest(struct, apiVersion);
             case ALTER_CLIENT_QUOTAS:
                 return new AlterClientQuotasRequest(struct, apiVersion);
+            case DESCRIBE_CLIENT_CONFIGS:
+                return new DescribeClientConfigsRequest(struct, apiVersion);
+            case ALTER_CLIENT_CONFIGS:
+                return new AlterClientConfigsRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

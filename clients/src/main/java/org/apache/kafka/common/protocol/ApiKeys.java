@@ -27,6 +27,8 @@ import org.apache.kafka.common.message.AddOffsetsToTxnRequestData;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
+import org.apache.kafka.common.message.AlterClientConfigsRequestData;
+import org.apache.kafka.common.message.AlterClientConfigsResponseData;
 import org.apache.kafka.common.message.AlterClientQuotasRequestData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
 import org.apache.kafka.common.message.AlterConfigsRequestData;
@@ -51,6 +53,8 @@ import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DescribeAclsRequestData;
 import org.apache.kafka.common.message.DescribeAclsResponseData;
+import org.apache.kafka.common.message.DescribeClientConfigsRequestData;
+import org.apache.kafka.common.message.DescribeClientConfigsResponseData;
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.message.DescribeConfigsRequestData;
@@ -217,7 +221,11 @@ public enum ApiKeys {
     DESCRIBE_CLIENT_QUOTAS(48, "DescribeClientQuotas", DescribeClientQuotasRequestData.SCHEMAS,
             DescribeClientQuotasResponseData.SCHEMAS),
     ALTER_CLIENT_QUOTAS(49, "AlterClientQuotas", AlterClientQuotasRequestData.SCHEMAS,
-            AlterClientQuotasResponseData.SCHEMAS);
+            AlterClientQuotasResponseData.SCHEMAS),
+    DESCRIBE_CLIENT_CONFIGS(50, "DescribeClientConfigs", DescribeClientConfigsRequestData.SCHEMAS,
+            DescribeClientConfigsResponseData.SCHEMAS),
+    ALTER_CLIENT_CONFIGS(51, "AlterClientConfigs", AlterClientConfigsRequestData.SCHEMAS,
+            AlterClientConfigsResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

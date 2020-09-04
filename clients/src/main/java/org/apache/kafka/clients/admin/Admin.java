@@ -35,6 +35,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ClientConfigAlteration;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
@@ -1213,6 +1214,18 @@ public interface Admin extends AutoCloseable {
      * @return the AlterClientQuotasResult containing the result
      */
     AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options);
+
+    default DescribeClientConfigsResult describeClientConfigs(ClientQuotaFilter filter) {
+        return describeClientConfigs(filter, new DescribeClientQuotasOptions());
+    }
+
+    DescribeClientConfigsResult describeClientConfigs(ClientQuotaFilter filter, DescribeClientQuotasOptions options);
+
+    default AlterClientConfigsResult alterClientConfigs(Collection<ClientConfigAlteration> entries) {
+        return alterClientConfigs(entries, new AlterClientQuotasOptions());
+    }
+
+    AlterClientConfigsResult alterClientConfigs(Collection<ClientConfigAlteration> entries, AlterClientQuotasOptions options);
 
     /**
      * Get the metrics kept by the adminClient

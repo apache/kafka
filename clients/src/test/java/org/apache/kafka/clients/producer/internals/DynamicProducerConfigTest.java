@@ -18,19 +18,17 @@ package org.apache.kafka.clients.producer.internals;
 
 import static org.junit.Assert.assertEquals;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.message.DescribeConfigsResponseData;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.requests.DescribeClientConfigsResponse;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -68,7 +66,7 @@ public class DynamicProducerConfigTest {
         assertEquals(1, client.inFlightRequestCount());
     
         // Respond to trigger callback
-        client.respond(describeConfigsResponse(Errors.NONE));
+        client.respond(describeConfigsResponse(new HashMap<>()));
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
        
         // Advance clock to before the dynamic config expiration
@@ -93,7 +91,7 @@ public class DynamicProducerConfigTest {
         assertEquals(1, client.inFlightRequestCount());
     
         // Respond with invalid request error code
-        client.respond(describeConfigsResponse(Errors.INVALID_REQUEST));
+        client.respond(invalidDescribeConfigsResponse());
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
        
         // Make sure that when the INVALID_REQUEST code is recieved in the callback, 
@@ -112,7 +110,7 @@ public class DynamicProducerConfigTest {
         Map<String, String> configs = new HashMap<>();
         configs.put("acks", "0");
         // Send DescribeConfigsResponse with acks value that is a valid override
-        client.respond(describeConfigsResponse(configs, Errors.NONE));
+        client.respond(describeConfigsResponse(configs));
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
 
         // The original acks value should be overriden with the dynamic value
@@ -133,7 +131,7 @@ public class DynamicProducerConfigTest {
         // Send DescribeConfigsResponse with acks value that is invalid for this client since idempotence was user enabled
         Map<String, String> configs = new HashMap<>();
         configs.put("acks", "0");
-        client.respond(describeConfigsResponse(configs, Errors.NONE));
+        client.respond(describeConfigsResponse(configs));
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
         
         // Make sure that we don't override the acks value with a value that is invalid
@@ -148,7 +146,7 @@ public class DynamicProducerConfigTest {
         // Send DescribeConfigsResponse with acks set
         Map<String, String> configs = new HashMap<>();
         configs.put("acks", "0");
-        client.respond(describeConfigsResponse(configs, Errors.NONE));
+        client.respond(describeConfigsResponse(configs));
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
         assertEquals(Short.valueOf("0"), dynamicConfigs.getAcks());
         
@@ -158,33 +156,22 @@ public class DynamicProducerConfigTest {
 
         // Send DescribeConfigsResponse without setting acks
         configs.remove("acks");
-        client.respond(describeConfigsResponse(configs, Errors.NONE));
+        client.respond(describeConfigsResponse(configs));
         client.poll(REQUEST_TIMEOUT, time.milliseconds());
         
         // Reverted to static configuration
         assertEquals(Short.valueOf("-1"), dynamicConfigs.getAcks());
     }
-    
-    public DescribeConfigsResponse describeConfigsResponse(Errors error) {
-        return describeConfigsResponse(Collections.emptyMap(), error);
+
+    public DescribeClientConfigsResponse invalidDescribeConfigsResponse() {
+        return new DescribeClientConfigsResponse(0, new InvalidRequestException("Operation not supported"));
     }
 
-    public DescribeConfigsResponse describeConfigsResponse(Map<String, String> configs, Errors error) {
-        List<DescribeConfigsResponseData.DescribeConfigsResult> results = new ArrayList<DescribeConfigsResponseData.DescribeConfigsResult>();
-        DescribeConfigsResponseData.DescribeConfigsResult result = new DescribeConfigsResponseData.DescribeConfigsResult();
-        result.setErrorCode(error.code());
-        result.setConfigs(createConfigEntries(configs));
-        results.add(result);
-        return new DescribeConfigsResponse(new DescribeConfigsResponseData().setResults(results));
-    }
-
-    public List<DescribeConfigsResponseData.DescribeConfigsResourceResult> createConfigEntries(Map<String, String> configs) {
-        List<DescribeConfigsResponseData.DescribeConfigsResourceResult> results = new ArrayList<>();
-
-        configs.entrySet().forEach(entry -> {
-            results.add(new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(entry.getKey()).setValue(entry.getValue()));
-        });
-
-        return results;
+    public DescribeClientConfigsResponse describeConfigsResponse(Map<String, String> configs) {
+        Map<String, String> mockEntity = new HashMap<>();
+        mockEntity.put("user", "alice");
+        Map<ClientQuotaEntity, Map<String, String>> entityConfigs = new HashMap<>();
+        entityConfigs.put(new ClientQuotaEntity(mockEntity), configs);
+        return new DescribeClientConfigsResponse(entityConfigs, 0);
     }
 }

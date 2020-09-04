@@ -25,13 +25,12 @@ import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.DynamicConfig.ClientConfigs
-import kafka.server.DynamicConfig.Client
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig, ClientConfigAlteration}
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
@@ -433,35 +432,6 @@ class AdminManager(val config: KafkaConfig,
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
-          case ConfigResource.Type.USER_CLIENT =>
-            val (userSanitizedEntityName, sanitizedClientIdEntity) = encodedEntityToSanitizedUserClientId(resource.resourceName)
-            val fullSanitizedEntityName = userSanitizedEntityName.concat("/clients/").concat(sanitizedClientIdEntity)
-
-            val userClientIdProps = adminZkClient.fetchEntityConfig(ConfigType.User, fullSanitizedEntityName)
-            val userDefaultClientIdProps = adminZkClient.fetchEntityConfig(ConfigType.User, s"$userSanitizedEntityName/clients/<default>")
-            val overlayedProps = new Properties()
-            overlayedProps.putAll(userDefaultClientIdProps)
-            overlayedProps.putAll(userClientIdProps)
-            val configMap = overlayedProps.asScala.flatMap { case (key, value) =>
-              if (ClientConfigs.isClientConfig(key)) {
-                Some(key.toString -> value.toString)
-              } else {
-                None
-              }
-            }
-
-            // Resort to default dynamic client config if configs are not specified for the client-id
-            createResponseConfig(
-              configMap,
-              createClientConfigEntry(
-                resource.resourceName, 
-                userClientIdProps, 
-                userDefaultClientIdProps, 
-                perClientIdConfig = (sanitizedClientIdEntity != ConfigEntityName.Default),
-                includeSynonyms, 
-                includeDocumentation
-              )
-            )
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }
         configResult.setResourceName(resource.resourceName).setResourceType(resource.resourceType)
@@ -628,13 +598,6 @@ class AdminManager(val config: KafkaConfig,
             if (!validateOnly)
               alterLogLevelConfigs(alterConfigOps)
             resource -> ApiError.NONE
-          case ConfigResource.Type.USER_CLIENT =>
-            val (userSanitizedEntityName, sanitizedClientIdEntity) = encodedEntityToSanitizedUserClientId(resource.name)
-            val fullSanitizedEntityName = userSanitizedEntityName.concat("/clients/").concat(sanitizedClientIdEntity)
-            val configProps = adminZkClient.fetchEntityConfig(ConfigType.User, fullSanitizedEntityName)
-            prepareIncrementalConfigs(alterConfigOps, configProps, DynamicConfig.Client.configKeys.asScala)
-            adminZkClient.changeConfigs(ConfigType.User, fullSanitizedEntityName, configProps)
-            resource -> ApiError.NONE
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
@@ -778,36 +741,6 @@ class AdminManager(val config: KafkaConfig,
     allSynonyms.dropWhile(s => s.name != name).toList // e.g. drop listener overrides when describing base config
   }
 
-  def createClientConfigEntry(entityName: String, dynamicProps: Properties, dynamicDefaultProps: Properties,
-                             perClientIdConfig: Boolean, includeSynonyms: Boolean, includeDocumentation: Boolean)
-                             (name: String, value: Any) = {
-    val allSynonyms = {
-      val list = mutable.Buffer[DescribeConfigsResponseData.DescribeConfigsSynonym]()
-      if (dynamicProps.containsKey(name) && perClientIdConfig) {
-        list += new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name)
-        .setValue(dynamicProps.getProperty(name).toString).setSource(ConfigSource.DYNAMIC_CLIENT_CONFIG.id)
-      } 
-      if (dynamicDefaultProps.containsKey(name)) {
-        list += new DescribeConfigsResponseData.DescribeConfigsSynonym().setName(name)
-        .setValue(dynamicDefaultProps.getProperty(name).toString).setSource(ConfigSource.DYNAMIC_DEFAULT_CLIENT_CONFIG.id)
-      }
-      list
-    }
-
-    // dynamic client-id config takes precedence over dynamic defaults
-    val source = if (dynamicProps.containsKey(name) && perClientIdConfig) ConfigSource.DYNAMIC_CLIENT_CONFIG.id 
-                 else ConfigSource.DYNAMIC_DEFAULT_CLIENT_CONFIG.id
-
-    val dataType = configResponseType(Client.typeOf(name))
-
-    val synonyms = if (!includeSynonyms) List.empty else allSynonyms
-    new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
-    .setValue(value.toString)
-    .setConfigSource(source)
-    .setSynonyms(synonyms.asJava)
-    .setConfigType(dataType.id)
-  }
-
   private def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                                     (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
     val configEntryType = LogConfig.configType(name)
@@ -863,22 +796,13 @@ class AdminManager(val config: KafkaConfig,
       case Some(name) => Sanitizer.sanitize(name)
     }
 
+  private def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
+
   private def desanitizeEntityName(sanitizedEntityName: String): String =
     sanitizedEntityName match {
       case ConfigEntityName.Default => null
       case name => Sanitizer.desanitize(name)
     }
-
-  private def encodedEntityToSanitizedUserClientId(encodedEntity: String): (String, String) = {
-    val entityNames = encodedEntity.split(":")
-    val userEntity = entityNames(0)
-    val clientEntity = if (entityNames.length == 2) entityNames(1) else null
-
-    val sanitizedUserEntity = sanitizeEntityName(userEntity)
-    val sanitizedClientId = sanitizeEntityName(clientEntity)
-
-    (sanitizedUserEntity, sanitizedClientId)
-  }
 
   private def entityToSanitizedUserClientId(entity: ClientQuotaEntity): (Option[String], Option[String]) = {
     if (entity.entries.isEmpty)
@@ -903,7 +827,7 @@ class AdminManager(val config: KafkaConfig,
     new ClientQuotaEntity((user.map(u => ClientQuotaEntity.USER -> u) ++ clientId.map(c => ClientQuotaEntity.CLIENT_ID -> c)).toMap.asJava)
   }
 
-  def describeClientQuotas(filter: ClientQuotaFilter): Map[ClientQuotaEntity, Map[String, Double]] = {
+  private def getFilterComponents(filter: ClientQuotaFilter): (Option[ClientQuotaFilterComponent], Option[ClientQuotaFilterComponent]) = {
     var userComponent: Option[ClientQuotaFilterComponent] = None
     var clientIdComponent: Option[ClientQuotaFilterComponent] = None
     filter.components.forEach { component =>
@@ -923,24 +847,37 @@ class AdminManager(val config: KafkaConfig,
           throw new UnsupportedVersionException(s"Custom entity type '${et}' not supported")
       }
     }
+    (userComponent, clientIdComponent)
+  }
+
+  def describeClientQuotas(filter: ClientQuotaFilter): Map[ClientQuotaEntity, Map[String, Double]] = {
+    val (userComponent, clientIdComponent) = getFilterComponents(filter)
     handleDescribeClientQuotas(userComponent, clientIdComponent, filter.strict)
   }
 
-  def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
-    clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
+  private def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String], strict: Boolean): Boolean = nameComponent match {
+      case Some(component) =>
+        toOption(component.`match`) match {
+          case Some(n) => name.exists(_ == n)
+          case None => name.isDefined
+        }
+      case None =>
+        !name.isDefined || !strict
+  }
 
-    def toOption(opt: java.util.Optional[String]): Option[String] =
-      if (opt == null)
-        None
-      else if (opt.isPresent)
-        Some(opt.get)
-      else
-        Some(null)
+  private def toOption(opt: java.util.Optional[String]): Option[String] = {
+    if (opt == null)
+      None
+    else if (opt.isPresent)
+      Some(opt.get)
+    else
+      Some(null)
+  }
 
+  private def getUserClientIdEntries(userComponent: Option[ClientQuotaFilterComponent], clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean) = {
     val user = userComponent.flatMap(c => toOption(c.`match`))
     val clientId = clientIdComponent.flatMap(c => toOption(c.`match`))
 
-    def sanitized(name: Option[String]): String = name.map(n => sanitizeEntityName(n)).getOrElse("")
     val sanitizedUser = sanitized(user)
     val sanitizedClientId = sanitized(clientId)
 
@@ -983,16 +920,11 @@ class AdminManager(val config: KafkaConfig,
     else
       Map.empty
 
-    def matches(nameComponent: Option[ClientQuotaFilterComponent], name: Option[String]): Boolean = nameComponent match {
-      case Some(component) =>
-        toOption(component.`match`) match {
-          case Some(n) => name.exists(_ == n)
-          case None => name.isDefined
-        }
-      case None =>
-        !name.isDefined || !strict
-    }
+    (userEntries, clientIdEntries, bothEntries)
+  }
 
+  def handleDescribeClientQuotas(userComponent: Option[ClientQuotaFilterComponent],
+    clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean): Map[ClientQuotaEntity, Map[String, Double]] = {
     def fromProps(props: Map[String, String]): Map[String, Double] = {
       props.map { case (key, value) =>
         val doubleValue = try value.toDouble catch {
@@ -1003,9 +935,11 @@ class AdminManager(val config: KafkaConfig,
       }
     }
 
+    val (userEntries, clientIdEntries, bothEntries) = getUserClientIdEntries(userComponent, clientIdComponent, strict)
+
     (userEntries ++ clientIdEntries ++ bothEntries).map { case ((u, c), p) =>
       val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isQuotaConfig(key) }
-      if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
+      if (quotaProps.nonEmpty && matches(userComponent, u, strict) && matches(clientIdComponent, c, strict))
         Some(userClientIdToEntity(u, c) -> fromProps(quotaProps))
       else
         None
@@ -1054,6 +988,114 @@ class AdminManager(val config: KafkaConfig,
       } catch {
         case e: Throwable =>
           info(s"Error encountered while updating client quotas", e)
+          ApiError.fromThrowable(e)
+      }
+      entry.entity -> apiError
+    }.toMap
+  }
+
+  def describeClientConfigs(filter: ClientQuotaFilter, applicationRequest: Boolean, supportedConfigs: List[String]): java.util.Map[ClientQuotaEntity, java.util.Map[String, String]] = {
+    val (userComponent, clientIdComponent) = getFilterComponents(filter)
+    if (!applicationRequest) {
+      handleDescribeClientConfigs(userComponent, clientIdComponent, filter.strict)
+    } else {
+      handleDynamicClientConfigs(userComponent, clientIdComponent, supportedConfigs)
+    }
+  }
+
+  def handleDescribeClientConfigs(userComponent: Option[ClientQuotaFilterComponent],
+    clientIdComponent: Option[ClientQuotaFilterComponent], strict: Boolean): java.util.Map[ClientQuotaEntity, java.util.Map[String, String]] = {
+    val (userEntries, _, bothEntries) = getUserClientIdEntries(userComponent, clientIdComponent, strict)
+
+    (userEntries ++ bothEntries).map { case ((u, c), p) =>
+      val configProps = p.asScala.filter { case (key, _) => ClientConfigs.isClientConfig(key) }
+      if (configProps.nonEmpty && matches(userComponent, u, strict) && matches(clientIdComponent, c, strict))
+        Some(userClientIdToEntity(u, c) -> configProps.asJava)
+      else
+        None
+    }.flatten.toMap.asJava
+  }
+
+  def handleDynamicClientConfigs(userComponent: Option[ClientQuotaFilterComponent],
+    clientIdComponent: Option[ClientQuotaFilterComponent], supportedConfigs: List[String]): java.util.Map[ClientQuotaEntity, java.util.Map[String, String]] = {
+    val user = userComponent.flatMap(c => toOption(c.`match`))
+    val clientId = clientIdComponent.flatMap(c => toOption(c.`match`))
+
+    val sanitizedUser = sanitized(user)
+    val sanitizedClientId = sanitized(clientId)
+
+    val userConfig = adminZkClient.fetchEntityConfig(ConfigType.User, sanitizedUser)
+    val userClientIdConfig = adminZkClient.fetchEntityConfig(ConfigType.User, s"${sanitizedUser}/clients/${sanitizedClientId}")
+    val resolvedProps = new Properties()
+    resolvedProps.putAll(userConfig)
+    resolvedProps.putAll(userClientIdConfig)
+    val configMap = resolvedProps.asScala.flatMap { case (key, value) => {
+        if (ClientConfigs.isClientConfigAndNotRegistration(key)) {
+          Some(key -> value)
+        } else {
+          None
+        }
+      }
+    }.toMap.asJava
+
+    registerSupportedConfigs(user, clientId, userClientIdConfig, supportedConfigs)
+
+    Map(userClientIdToEntity(user, clientId) -> configMap).asJava
+  }
+
+  def registerSupportedConfigs(user: Option[String], clientId: Option[String], props: Properties, supportedConfigs: List[String]): Unit = {
+    if (supportedConfigs != null) {
+      val sanitizedUser = sanitized(user)
+      val sanitizedClientId = sanitized(clientId)
+      // val compatibilityJson = props.getProperty("supported.configs") 
+      // This could be a json where each entry is a set of registered configs for the entity
+      // There can be multiple entries since there can be more than one client associated 
+      // with a user/client-id entity
+      // 
+      // This can give the user an idea of how many clients support a certain dynamic config
+      //
+      // Currently not all entries are kept, only the latest 
+      // registration (user will only see compatibility of the last client that registered under the entity)
+
+      props.setProperty("supported.configs", s"${supportedConfigs.mkString(",")}")
+
+      info(s"Updating supported.configs for <${user.get}, ${clientId.get}> ${props.getProperty("supported.configs")}")
+
+      adminZkClient.changeConfigs(ConfigType.User, s"${sanitizedUser}/clients/${sanitizedClientId}", props)
+    }
+  }
+
+  def alterClientConfigs(entries: Seq[ClientConfigAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
+    def alterEntityConfigs(entity: ClientQuotaEntity, ops: Iterable[ClientConfigAlteration.Op]): Unit = {
+      val (path, configType, configKeys) = entityToSanitizedUserClientId(entity) match {
+        case (Some(user), Some(clientId)) => (user + "/clients/" + clientId, ConfigType.User, DynamicConfig.Client.configKeys)
+        case (Some(user), None) => (user, ConfigType.User, DynamicConfig.Client.configKeys)
+        case _ => throw new InvalidRequestException("Invalid empty client config entity")
+      }
+
+      val props = adminZkClient.fetchEntityConfig(configType, path)
+      ops.foreach { op =>
+        op.value match {
+          case null =>
+            props.remove(op.key)
+          case value => configKeys.get(op.key) match {
+            case null =>
+              throw new InvalidRequestException(s"Invalid configuration key ${op.key}")
+            case key => 
+              props.setProperty(op.key, value.toString)
+          }
+        }
+      }
+      if (!validateOnly)
+        adminZkClient.changeConfigs(configType, path, props)
+    }
+    entries.map { entry =>
+      val apiError = try {
+        alterEntityConfigs(entry.entity, entry.ops.asScala)
+        ApiError.NONE
+      } catch {
+        case e: Throwable =>
+          info(s"Error encountered while updating client configs", e)
           ApiError.fromThrowable(e)
       }
       entry.entity -> apiError

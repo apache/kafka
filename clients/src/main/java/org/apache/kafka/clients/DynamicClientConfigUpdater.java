@@ -16,20 +16,20 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.config.ConfigResource;
-import org.apache.kafka.common.message.DescribeConfigsRequestData;
-import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource;
+import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.common.quota.ClientQuotaFilter;
+import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.DescribeConfigsRequest;
+import org.apache.kafka.common.requests.DescribeClientConfigsRequest;
+import org.apache.kafka.common.requests.DescribeClientConfigsResponse;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
-import org.apache.kafka.common.requests.DescribeConfigsResponse;
 
 /**
  * Handles the interval for which a dynamic client configuration request should be sent 
@@ -47,7 +47,7 @@ public class DynamicClientConfigUpdater {
     /* Clock to use */
     private Time time;
 
-    /* Set to disable the dynamic client config feature */ 
+    /* Set to enable the dynamic client config feature */ 
     private boolean enable;
 
     /* Have initial dynamic configs been discovered */
@@ -108,37 +108,30 @@ public class DynamicClientConfigUpdater {
     }
 
     /**
-     * @return {@link DescribeConfigsRequest.Builder}
+     * @return {@link DescribeClientConfigsRequest.Builder}
      */
-    public AbstractRequest.Builder<?> newRequestBuilder(String clientId) {
-        DescribeConfigsResource resource = new DescribeConfigsResource()
-            .setResourceName(clientId)
-            .setResourceType(ConfigResource.Type.CLIENT.id())
-            .setConfigurationKeys(null);
-        DescribeConfigsRequestData data = new DescribeConfigsRequestData();
-        List<DescribeConfigsResource> resources = new ArrayList<>();
-        resources.add(resource);
-        data.setResources(resources);
-        return new DescribeConfigsRequest.Builder(data);
+    public AbstractRequest.Builder<?> newRequestBuilder(String clientId, List<String> supportedConfigs) {
+        ClientQuotaFilterComponent clientIdComponent = ClientQuotaFilterComponent.ofEntity(ClientQuotaEntity.CLIENT_ID, clientId);
+        ClientQuotaFilter filter = ClientQuotaFilter.containsOnly(Collections.singleton(clientIdComponent));
+        supportedConfigs = initialConfigsFetched ? null : supportedConfigs;
+        return new DescribeClientConfigsRequest.Builder(filter, supportedConfigs, true);
     }
 
     /**
-     * Create the map of dynamic configs or set the feature to be disabled if we 
-     * recieve a {@link org.apache.kafka.common.errors.InvalidRequestException} error code from the broker
+     * Create the map of dynamic configs or set the feature to be disabled if
+     * a {@link org.apache.kafka.common.errors.InvalidRequestException} error code is received from the broker
      * @param configsResponse
      * @param log
      * @return map of dynamic configs
      */
-    public Map<String, String> createResultMapAndHandleErrors(DescribeConfigsResponse configsResponse, Logger log) {
+    public Map<String, String> createResultMapAndHandleErrors(DescribeClientConfigsResponse configsResponse, Logger log) {
         Map<String, String> dynamicConfigs = new HashMap<>();
-        configsResponse.resultMap().entrySet().forEach(entry -> {
-            if (entry.getValue().errorCode() == Errors.INVALID_REQUEST.code()) {
-                log.info("DynamicConfiguration not compatible with the broker, this feature will be disabled");
-                enable = false;
-                return;
-            }
-            entry.getValue().configs().forEach(config -> dynamicConfigs.put(config.name(), config.value()));
-        });
+        if (configsResponse.errorCode() == Errors.INVALID_REQUEST.code()) {
+            log.info("The broker does not support dynamic client config requests.");
+            enable = false;
+        } else {
+            dynamicConfigs = configsResponse.resultMap(log);
+        }
 
         return dynamicConfigs;
     }
