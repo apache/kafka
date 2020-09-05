@@ -138,7 +138,6 @@ public class ProducerPerformance {
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-
                 if (payloadFilePath != null) {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 }
@@ -147,7 +146,7 @@ public class ProducerPerformance {
                 while (e.hasMoreElements()) {
                     String key = (String) e.nextElement();
                     System.out.println(key + " -- " + headerProps.getProperty(key));
-                    record.headers().add(key, headerProps.getProperty(key).getBytes());
+                    record.headers().add(key, headerProps.getProperty(key).getBytes("UTF-8"));
                 } 
                 long sendStartMs = System.currentTimeMillis();
                 Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
@@ -194,7 +193,6 @@ public class ProducerPerformance {
                 Exit.exit(1);
             }
         }
-
     }
 
     /** Get the command-line argument parser. */
