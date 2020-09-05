@@ -61,6 +61,7 @@ def doStreamsArchetype() {
           || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
     '''
 
+/*
     dir('test-streams-archetype') {
       sh '''
         echo "Y" | mvn archetype:generate \
@@ -81,6 +82,7 @@ def doStreamsArchetype() {
               || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
         '''
       }
+*/
     }
   }
 }
@@ -116,7 +118,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            //doTest()
+            doTest()
             stash includes: '**/build/reports/checkstyle/*', name: 'jdk8-checkstyle'
             stash includes: '**/build/reports/spotbugs/*', name: 'jdk8-spotbugs'
             tryStreamsArchetype()
@@ -138,7 +140,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            //doTest()
+            doTest()
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
@@ -158,7 +160,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            //doTest()
+            doTest()
             echo 'Skipping Kafka Streams archetype test for Java 15'
           }
         }
