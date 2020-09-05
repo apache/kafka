@@ -17,29 +17,34 @@
 
 package kafka.admin
 
+
 import java.time.{Duration, Instant}
 import java.util.Properties
 
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
-import joptsimple.{OptionException, OptionSpec}
 import kafka.utils._
-import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.ListOffsetResponse
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{ConsumerGroupState, KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
-import scala.annotation.nowarn
-import scala.collection.immutable.TreeMap
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq, immutable, mutable}
-import scala.jdk.CollectionConverters._
-import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
+import joptsimple.OptionSpec
+import org.apache.kafka.common.protocol.Errors
+
+import scala.collection.immutable.TreeMap
+import scala.reflect.ClassTag
+import org.apache.kafka.common.requests.ListOffsetResponse
+import org.apache.kafka.common.ConsumerGroupState
+import joptsimple.OptionException
+
+import scala.annotation.nowarn
 
 object ConsumerGroupCommand extends Logging {
 

@@ -13,7 +13,7 @@
 package kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.text.SimpleDateFormat
+import java.text.{SimpleDateFormat}
 import java.util.{Calendar, Date, Properties}
 
 import joptsimple.OptionException
@@ -26,8 +26,8 @@ import org.apache.kafka.test
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.Seq
 import scala.jdk.CollectionConverters._
+import scala.collection.Seq
 
 
 
