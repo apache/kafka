@@ -431,5 +431,4 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             }
         }
     }
-
 }

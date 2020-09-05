@@ -47,7 +47,6 @@ public class ChangeLoggingWindowBytesStoreTest {
     private ProcessorContextImpl context;
     private ChangeLoggingWindowBytesStore store;
 
-
     @Before
     public void setUp() {
         store = new ChangeLoggingWindowBytesStore(inner, false);
@@ -96,6 +95,18 @@ public class ChangeLoggingWindowBytesStoreTest {
     }
 
     @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetching() {
+        EasyMock
+            .expect(inner.backwardFetch(bytesKey, 0, 10))
+            .andReturn(KeyValueIterators.emptyWindowStoreIterator());
+
+        init();
+
+        store.backwardFetch(bytesKey, ofEpochMilli(0), ofEpochMilli(10));
+        EasyMock.verify(inner);
+    }
+
+    @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
         EasyMock
             .expect(inner.fetch(bytesKey, bytesKey, 0, 1))
@@ -104,6 +115,18 @@ public class ChangeLoggingWindowBytesStoreTest {
         init();
 
         store.fetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
+        EasyMock.verify(inner);
+    }
+
+    @Test
+    public void shouldDelegateToUnderlyingStoreWhenBackwardFetchingRange() {
+        EasyMock
+            .expect(inner.backwardFetch(bytesKey, bytesKey, 0, 1))
+            .andReturn(KeyValueIterators.emptyIterator());
+
+        init();
+
+        store.backwardFetch(bytesKey, bytesKey, ofEpochMilli(0), ofEpochMilli(1));
         EasyMock.verify(inner);
     }
 

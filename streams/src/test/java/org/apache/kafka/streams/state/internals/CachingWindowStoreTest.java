@@ -95,10 +95,7 @@ public class CachingWindowStoreTest {
     public void setUp() {
         keySchema = new WindowKeySchema();
         bytesStore = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
-        underlyingStore = new RocksDBWindowStore(
-            bytesStore,
-            false,
-            WINDOW_SIZE);
+        underlyingStore = new RocksDBWindowStore(bytesStore, false, WINDOW_SIZE);
         final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
         keyDeserializer.setIsChangelogTopic(true);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>(keyDeserializer, new StringDeserializer());
@@ -296,6 +293,29 @@ public class CachingWindowStoreTest {
 
     @Test
     @SuppressWarnings("deprecation")
+    public void shouldGetAllBackwardFromCache() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("b"), bytesValue("b"));
+        cachingStore.put(bytesKey("c"), bytesValue("c"));
+        cachingStore.put(bytesKey("d"), bytesValue("d"));
+        cachingStore.put(bytesKey("e"), bytesValue("e"));
+        cachingStore.put(bytesKey("f"), bytesValue("f"));
+        cachingStore.put(bytesKey("g"), bytesValue("g"));
+        cachingStore.put(bytesKey("h"), bytesValue("h"));
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.backwardAll();
+        final String[] array = {"h", "g", "f", "e", "d", "c", "b", "a"};
+        for (final String s : array) {
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey(s), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+                s);
+        }
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
     public void shouldFetchAllWithinTimestampRange() {
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
@@ -328,6 +348,49 @@ public class CachingWindowStoreTest {
         final KeyValueIterator<Windowed<Bytes>, byte[]> iterator2 =
             cachingStore.fetchAll(ofEpochMilli(5), ofEpochMilli(7));
         for (int i = 5; i <= 7; i++) {
+            final String str = array[i];
+            verifyWindowedKeyValue(
+                iterator2.next(),
+                new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
+                str);
+        }
+        assertFalse(iterator2.hasNext());
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void shouldFetchAllBackwardWithinTimestampRange() {
+        final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (int i = 0; i < array.length; i++) {
+            context.setTime(i);
+            cachingStore.put(bytesKey(array[i]), bytesValue(array[i]));
+        }
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+            cachingStore.backwardFetchAll(ofEpochMilli(0), ofEpochMilli(7));
+        for (int i = array.length - 1; i >= 0; i--) {
+            final String str = array[i];
+            verifyWindowedKeyValue(
+                iterator.next(),
+                new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
+                str);
+        }
+        assertFalse(iterator.hasNext());
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator1 =
+            cachingStore.backwardFetchAll(ofEpochMilli(2), ofEpochMilli(4));
+        for (int i = 4; i >= 2; i--) {
+            final String str = array[i];
+            verifyWindowedKeyValue(
+                iterator1.next(),
+                new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
+                str);
+        }
+        assertFalse(iterator1.hasNext());
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator2 =
+            cachingStore.backwardFetchAll(ofEpochMilli(5), ofEpochMilli(7));
+        for (int i = 7; i >= 5; i--) {
             final String str = array[i];
             verifyWindowedKeyValue(
                 iterator2.next(),
@@ -456,6 +519,18 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    public void shouldIterateBackwardAcrossWindows() {
+        cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
+
+        final WindowStoreIterator<byte[]> fetch =
+            cachingStore.backwardFetch(bytesKey("1"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP + WINDOW_SIZE, "b");
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP, "a");
+        assertFalse(fetch.hasNext());
+    }
+
+    @Test
     public void shouldIterateCacheAndStore() {
         final Bytes key = Bytes.wrap("1".getBytes());
         bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
@@ -464,6 +539,18 @@ public class CachingWindowStoreTest {
             cachingStore.fetch(bytesKey("1"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
         verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP, "a");
         verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP + WINDOW_SIZE, "b");
+        assertFalse(fetch.hasNext());
+    }
+
+    @Test
+    public void shouldIterateBackwardCacheAndStore() {
+        final Bytes key = Bytes.wrap("1".getBytes());
+        bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
+        cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
+        final WindowStoreIterator<byte[]> fetch =
+            cachingStore.backwardFetch(bytesKey("1"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP + WINDOW_SIZE, "b");
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP, "a");
         assertFalse(fetch.hasNext());
     }
 
@@ -487,6 +574,25 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    public void shouldIterateBackwardCacheAndStoreKeyRange() {
+        final Bytes key = Bytes.wrap("1".getBytes());
+        bytesStore.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
+        cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> fetchRange =
+            cachingStore.backwardFetch(key, bytesKey("2"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
+        verifyWindowedKeyValue(
+            fetchRange.next(),
+            new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP + WINDOW_SIZE, DEFAULT_TIMESTAMP + WINDOW_SIZE + WINDOW_SIZE)),
+            "b");
+        verifyWindowedKeyValue(
+            fetchRange.next(),
+            new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
+            "a");
+        assertFalse(fetchRange.hasNext());
+    }
+
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldClearNamespaceCacheOnClose() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
@@ -495,23 +601,23 @@ public class CachingWindowStoreTest {
         assertEquals(0, cache.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
         cachingStore.close();
-        cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10)));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore() {
         cachingStore.close();
-        cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10)));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         cachingStore.close();
-        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        assertThrows(InvalidStateStoreException.class, () -> cachingStore.put(bytesKey("a"), bytesValue("a")));
     }
 
     @Test
@@ -529,6 +635,24 @@ public class CachingWindowStoreTest {
         );
         final List<KeyValue<Long, byte[]>> actual =
             toList(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+        verifyKeyValueList(expected, actual);
+    }
+
+    @Test
+    public void shouldBackwardFetchAndIterateOverExactKeys() {
+        cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
+        cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
+        cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
+        cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
+        cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
+
+        final List<KeyValue<Long, byte[]>> expected = asList(
+            KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005")),
+            KeyValue.pair(1L, bytesValue("0003")),
+            KeyValue.pair(0L, bytesValue("0001"))
+        );
+        final List<KeyValue<Long, byte[]>> actual =
+            toList(cachingStore.backwardFetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         verifyKeyValueList(expected, actual);
     }
 
@@ -569,6 +693,42 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    public void shouldFetchAndIterateOverKeyBackwardRange() {
+        cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
+        cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
+        cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
+        cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
+        cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
+
+        verifyKeyValueList(
+            asList(
+                windowedPair("a", "0005", SEGMENT_INTERVAL),
+                windowedPair("a", "0003", 1),
+                windowedPair("a", "0001", 0)
+            ),
+            toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
+
+        verifyKeyValueList(
+            asList(
+                windowedPair("aa", "0004", 1),
+                windowedPair("aa", "0002", 0)),
+            toList(cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
+
+        verifyKeyValueList(
+            asList(
+                windowedPair("a", "0005", SEGMENT_INTERVAL),
+                windowedPair("aa", "0004", 1),
+                windowedPair("aa", "0002", 0),
+                windowedPair("a", "0003", 1),
+                windowedPair("a", "0001", 0)
+            ),
+            toList(cachingStore.backwardFetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
+    }
+
+    @Test
     public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch() {
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 1);
@@ -584,10 +744,28 @@ public class CachingWindowStoreTest {
         assertFalse(keyRangeIterator.hasNext());
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
+    public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeBackwardFetch() {
+        cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
+        cachingStore.put(bytesKey("aa"), bytesValue("0002"), 1);
+        cachingStore.put(bytesKey("aa"), bytesValue("0003"), 2);
+        cachingStore.put(bytesKey("aaa"), bytesValue("0004"), 3);
+
+        final WindowStoreIterator<byte[]> singleKeyIterator =
+            cachingStore.backwardFetch(bytesKey("aa"), Instant.ofEpochMilli(0L), Instant.ofEpochMilli(5L));
+        final KeyValueIterator<Windowed<Bytes>, byte[]> keyRangeIterator =
+            cachingStore.backwardFetch(bytesKey("aa"), bytesKey("aa"), Instant.ofEpochMilli(0L), Instant.ofEpochMilli(5L));
+
+        assertEquals(stringFrom(singleKeyIterator.next().value), stringFrom(keyRangeIterator.next().value));
+        assertEquals(stringFrom(singleKeyIterator.next().value), stringFrom(keyRangeIterator.next().value));
+        assertFalse(singleKeyIterator.hasNext());
+        assertFalse(keyRangeIterator.hasNext());
+    }
+
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
-        cachingStore.put(null, bytesValue("anyValue"));
+        assertThrows(NullPointerException.class, () -> cachingStore.put(null, bytesValue("anyValue")));
     }
 
     @Test
@@ -596,19 +774,19 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("a"), null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnFetchNullKey() {
-        cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        cachingStore.fetch(null, bytesKey("anyTo"), ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, bytesKey("anyTo"), ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        cachingStore.fetch(bytesKey("anyFrom"), null, ofEpochMilli(1L), ofEpochMilli(2L));
+        assertThrows(NullPointerException.class, () -> cachingStore.fetch(bytesKey("anyFrom"), null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
     @Test
@@ -626,6 +804,26 @@ public class CachingWindowStoreTest {
                 hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
                     " This may be due to range arguments set in the wrong order, " +
                     "or serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
+                    " Note that the built-in numerical serdes do not follow this for negative numbers")
+            );
+        }
+    }
+
+    @Test
+    public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey() {
+        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
+        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+
+        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingWindowStore.class)) {
+            final KeyValueIterator<Windowed<Bytes>, byte[]> iterator =
+                cachingStore.backwardFetch(keyFrom, keyTo, Instant.ofEpochMilli(0L), Instant.ofEpochMilli(10L));
+            assertFalse(iterator.hasNext());
+
+            final List<String> messages = appender.getMessages();
+            assertThat(
+                messages,
+                hasItem("Returning empty iterator for fetch with invalid key range: from > to." +
+                    " This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes." +
                     " Note that the built-in numerical serdes do not follow this for negative numbers")
             );
         }

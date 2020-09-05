@@ -106,6 +106,11 @@ public class StreamsMetricsImplTest {
     private final static String STORE_ID_TAG = "-state-id";
     private final static String STORE_NAME1 = "store1";
     private final static String STORE_NAME2 = "store2";
+    private final static Map<String, String> STORE_LEVEL_TAG_MAP = mkMap(
+        mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
+        mkEntry(TASK_ID_TAG, TASK_ID1),
+        mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
+    );
     private final static String RECORD_CACHE_ID_TAG = "record-cache-id";
     private final static String ENTITY_NAME = "test-entity";
     private final static String OPERATION_NAME = "test-operation";
@@ -125,11 +130,6 @@ public class StreamsMetricsImplTest {
     private final String group = "group";
     private final Map<String, String> tags = mkMap(mkEntry("tag", "value"));
     private final Map<String, String> clientLevelTags = mkMap(mkEntry(CLIENT_ID_TAG, CLIENT_ID));
-    private final Map<String, String> storeLevelTagMap = mkMap(
-        mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
-        mkEntry(TASK_ID_TAG, TASK_ID1),
-        mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
-    );
     private final MetricName metricName1 =
         new MetricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags);
     private final MetricName metricName2 =
@@ -427,9 +427,9 @@ public class StreamsMetricsImplTest {
     public void shouldAddNewStoreLevelMutableMetric() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
-            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap))
+        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
             .andReturn(metricName);
         expect(metrics.metric(metricName)).andReturn(null);
         metrics.addMetric(eq(metricName), eqMetricConfig(metricConfig), eq(VALUE_PROVIDER));
@@ -453,8 +453,8 @@ public class StreamsMetricsImplTest {
     public void shouldNotAddStoreLevelMutableMetricIfAlreadyExists() {
         final Metrics metrics = mock(Metrics.class);
         final MetricName metricName =
-            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap))
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
+        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
             .andReturn(metricName);
         expect(metrics.metric(metricName)).andReturn(mock(KafkaMetric.class));
         replay(metrics);
@@ -478,12 +478,12 @@ public class StreamsMetricsImplTest {
         final Metrics metrics = niceMock(Metrics.class);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, CLIENT_ID, VERSION, time);
         final MetricName metricName1 =
-            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap);
+            new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricName metricName2 =
-            new MetricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, storeLevelTagMap);
-        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, storeLevelTagMap))
+            new MetricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, STORE_LEVEL_TAG_MAP);
+        expect(metrics.metricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP))
             .andReturn(metricName1);
-        expect(metrics.metricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, storeLevelTagMap))
+        expect(metrics.metricName(METRIC_NAME2, STATE_STORE_LEVEL_GROUP, DESCRIPTION2, STORE_LEVEL_TAG_MAP))
             .andReturn(metricName2);
         final Capture<String> sensorKeys = addSensorsOnAllLevels(metrics, streamsMetrics);
         resetToDefault(metrics);
