@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Arrays;
+import java.util.Enumeration;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -41,6 +42,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
 
 public class ProducerPerformance {
@@ -59,6 +61,7 @@ public class ProducerPerformance {
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
+            String headersPath = res.getString("headersFile");
             String transactionalId = res.getString("transactionalId");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
@@ -86,6 +89,11 @@ public class ProducerPerformance {
                 for (String payload : payloadList) {
                     payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
                 }
+            }
+            
+            Properties headerProps = new Properties();
+            if(headersPath!=null) {
+                headerProps.putAll(Utils.loadProps(headersPath));
             }
 
             Properties props = new Properties();
@@ -137,6 +145,13 @@ public class ProducerPerformance {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 }
                 record = new ProducerRecord<>(topicName, payload);
+
+                Enumeration e = headerProps.propertyNames();
+                while (e.hasMoreElements()) {
+                    String key = (String) e.nextElement();
+                    System.out.println(key + " -- " + headerProps.getProperty(key));
+                    record.headers().add(key, headerProps.getProperty(key).getBytes());
+                } 
 
                 long sendStartMs = System.currentTimeMillis();
                 Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
@@ -230,6 +245,14 @@ public class ProducerPerformance {
                 .help("file to read the message payloads from. This works only for UTF-8 encoded text files. " +
                         "Payloads will be read from this file and a payload will be randomly selected when sending messages. " +
                         "Note that you must provide exactly one of --record-size or --payload-file.");
+
+        parser.addArgument("--headers-file")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("HEADERS-FILE")
+                .dest("headersFile")
+                .help("properties file for associating each record with headers");
 
         parser.addArgument("--payload-delimiter")
                 .action(store())
