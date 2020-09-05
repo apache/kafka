@@ -42,7 +42,6 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
 
 public class ProducerPerformance {
@@ -52,7 +51,6 @@ public class ProducerPerformance {
 
         try {
             Namespace res = parser.parseArgs(args);
-
             /* parse args */
             String topicName = res.getString("topic");
             long numRecords = res.getLong("numRecords");
@@ -92,7 +90,7 @@ public class ProducerPerformance {
             }
             
             Properties headerProps = new Properties();
-            if(headersPath!=null) {
+            if (headersPath != null) {
                 headerProps.putAll(Utils.loadProps(headersPath));
             }
 
@@ -145,14 +143,12 @@ public class ProducerPerformance {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 }
                 record = new ProducerRecord<>(topicName, payload);
-
                 Enumeration e = headerProps.propertyNames();
                 while (e.hasMoreElements()) {
                     String key = (String) e.nextElement();
                     System.out.println(key + " -- " + headerProps.getProperty(key));
                     record.headers().add(key, headerProps.getProperty(key).getBytes());
                 } 
-
                 long sendStartMs = System.currentTimeMillis();
                 Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
                 producer.send(record, cb);
