@@ -30,10 +30,8 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.junit.Before;
 import org.junit.Test;
 
-
 import java.time.Duration;
 import java.util.Collections;
-
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -42,7 +40,6 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-
 
 public class StreamsResetterTest {
 
