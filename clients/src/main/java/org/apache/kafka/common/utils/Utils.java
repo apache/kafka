@@ -1275,12 +1275,11 @@ public final class Utils {
         return map;
     }
 
-
     /**
-     * Convert a ISO8601 based TimeStamp to Epoch Value
+     * Convert an ISO8601 based timestamp to an epoch value
      * @param timestamp to be converted
-     * @return Epoch Value of a given TimeStamp
-     * @throws ParseException For TimeStamp that don't follow ISO8601 format
+     * @return epoch value of a given timestamp
+     * @throws ParseException for timestamp that doesn't follow ISO8601 format
      */
     public static long getDateTime(String timestamp) throws ParseException {
         final String[] timestampParts = timestamp.split("T");
