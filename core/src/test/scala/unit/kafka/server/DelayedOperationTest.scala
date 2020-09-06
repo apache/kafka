@@ -33,12 +33,12 @@ import scala.jdk.CollectionConverters._
 
 class DelayedOperationTest {
 
-  var purgatory: DelayedOperationPurgatory[MockDelayedOperation] = null
+  var purgatory: DelayedOperationPurgatory[DelayedOperation] = null
   var executorService: ExecutorService = null
 
   @Before
   def setUp(): Unit = {
-    purgatory = DelayedOperationPurgatory[MockDelayedOperation](purgatoryName = "mock")
+    purgatory = DelayedOperationPurgatory[DelayedOperation](purgatoryName = "mock")
   }
 
   @After
@@ -46,6 +46,28 @@ class DelayedOperationTest {
     purgatory.shutdown()
     if (executorService != null)
       executorService.shutdown()
+  }
+
+  @Test
+  def testLockInTryCompleteElseWatch(): Unit = {
+    var executionCount = 0
+    val op = new DelayedOperation(100000L) {
+      override def onExpiration(): Unit = {}
+      override def onComplete(): Unit = {}
+      override def tryComplete(): Boolean = {
+        // 1) tryCompleteElseWatch calls tryComplete without lock before adding it to watch list
+        // 2) tryCompleteElseWatch calls tryComplete (again) with lock after adding it to watch list
+        try if (executionCount == 0) assertFalse(lock.asInstanceOf[ReentrantLock].isHeldByCurrentThread)
+        else assertTrue(lock.asInstanceOf[ReentrantLock].isHeldByCurrentThread) finally executionCount += 1
+        false
+      }
+      override def safeTryComplete(): Boolean = {
+        fail("tryCompleteElseWatch should not use safeTryComplete")
+        super.safeTryComplete()
+      }
+    }
+    purgatory.tryCompleteElseWatch(op, Seq("key"))
+    assertEquals(2, executionCount)
   }
 
   @Test

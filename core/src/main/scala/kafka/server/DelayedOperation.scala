@@ -214,26 +214,27 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
     // At this point the only thread that can attempt this operation is this current thread
     // Hence it is safe to tryComplete() without a lock
-    var isCompletedByMe = operation.tryComplete()
-    if (isCompletedByMe)
-      return true
+    if (operation.tryComplete()) return true
 
-    var watchCreated = false
-    for(key <- watchKeys) {
-      // If the operation is already completed, stop adding it to the rest of the watcher list.
-      if (operation.isCompleted)
-        return false
-      watchForOperation(key, operation)
-
-      if (!watchCreated) {
-        watchCreated = true
-        estimatedTotalOperations.incrementAndGet()
+    // There is a potential deadlock if we don't hold the lock while adding the operation to watch list and do the
+    // final tryComplete() check. For example,
+    // 1) thread_a holds lock_a
+    // 2) thread_a is executing tryCompleteElseWatch
+    // 3) thread_a adds the op to watch list
+    // 4) thread_b holds lock of op to complete op
+    // 5) thread_b calls op's onComplete which requiring lock_a
+    // 6) thread_a requires lock of op to call safeTryComplete
+    if (inLock(operation.lock) {
+      var watchCreated = false
+      watchKeys.foreach { key =>
+        watchForOperation(key, operation)
+        if (!watchCreated) {
+          watchCreated = true
+          estimatedTotalOperations.incrementAndGet()
+        }
       }
-    }
-
-    isCompletedByMe = operation.safeTryComplete()
-    if (isCompletedByMe)
-      return true
+      operation.tryComplete()
+    }) return true
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
     if (!operation.isCompleted) {
