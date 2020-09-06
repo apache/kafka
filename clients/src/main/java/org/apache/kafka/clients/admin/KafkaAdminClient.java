@@ -39,6 +39,7 @@ import org.apache.kafka.clients.admin.internals.DescribeTransactionsRequestDrive
 import org.apache.kafka.clients.admin.internals.ListTransactionsRequestDriver;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.admin.internals.RequestDriver;
+import org.apache.kafka.clients.admin.internals.AbortTransactionRequestDriver;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -307,6 +308,7 @@ public class KafkaAdminClient extends AdminClient {
     static final String NETWORK_THREAD_PREFIX = "kafka-admin-client-thread";
 
     private final Logger log;
+    private final LogContext logContext;
 
     /**
      * The default timeout to use for an operation.
@@ -562,6 +564,7 @@ public class KafkaAdminClient extends AdminClient {
                              LogContext logContext) {
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
+        this.logContext = logContext;
         this.requestTimeoutMs = config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.defaultApiTimeoutMs = configureDefaultApiTimeoutMs(config);
         this.time = time;
@@ -4287,7 +4290,7 @@ public class KafkaAdminClient extends AdminClient {
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
             partitions, options, deadlineMs, retryBackoffMs);
-        maybeSendRequests(currentTimeMs, driver);
+        maybeSendRequests(driver, currentTimeMs);
         return new DescribeProducersResult(driver.futures());
     }
 
@@ -4300,7 +4303,7 @@ public class KafkaAdminClient extends AdminClient {
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
         DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
             transactionalIds, deadlineMs, retryBackoffMs);
-        maybeSendRequests(currentTimeMs, driver);
+        maybeSendRequests(driver, currentTimeMs);
         return new DescribeTransactionsResult(driver.futures());
     }
 
@@ -4309,8 +4312,18 @@ public class KafkaAdminClient extends AdminClient {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
         ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
-        maybeSendRequests(currentTimeMs, driver);
+        maybeSendRequests(driver, currentTimeMs);
         return new ListTransactionsResult(driver.lookupFuture());
+    }
+
+    @Override
+    public AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options) {
+        long currentTimeMs = time.milliseconds();
+        long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
+        AbortTransactionRequestDriver driver = new AbortTransactionRequestDriver(spec, deadlineMs,
+            retryBackoffMs, logContext);
+        maybeSendRequests(driver, currentTimeMs);
+        return new AbortTransactionResult(driver.futures());
     }
 
     /**
@@ -4325,7 +4338,7 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private <K, V> void maybeSendRequests(long currentTimeMs, RequestDriver<K, V> driver) {
+    private <K, V> void maybeSendRequests(RequestDriver<K, V> driver, long currentTimeMs) {
         for (RequestDriver<K, V>.RequestSpec spec : driver.poll()) {
             runnable.call(newCall(driver, spec), currentTimeMs);
         }
@@ -4347,14 +4360,14 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 long currentTimeMs = time.milliseconds();
                 driver.onResponse(currentTimeMs, spec, response);
-                maybeSendRequests(currentTimeMs, driver);
+                maybeSendRequests(driver, currentTimeMs);
             }
 
             @Override
             void handleFailure(Throwable throwable) {
                 long currentTimeMs = time.milliseconds();
                 driver.onFailure(currentTimeMs, spec, throwable);
-                maybeSendRequests(currentTimeMs, driver);
+                maybeSendRequests(driver, currentTimeMs);
             }
         };
     }

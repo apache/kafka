@@ -39,6 +39,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaFilter
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, ResourceType => AdminResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder, SecurityProtocol}
@@ -417,7 +418,7 @@ class RequestQuotaTest extends BaseRequestTest {
           )
 
         case ApiKeys.WRITE_TXN_MARKERS =>
-          new WriteTxnMarkersRequest.Builder(List.empty.asJava)
+          new WriteTxnMarkersRequest.Builder(List.empty[TxnMarkerEntry].asJava)
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
           new TxnOffsetCommitRequest.Builder(

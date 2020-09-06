@@ -75,6 +75,7 @@ public class DescribeTransactionsResult {
         private final OptionalLong transactionStartTimeMs;
         private final Set<TopicPartition> topicPartitions;
 
+        // TODO: We need to use `TransactionState`
         public TransactionState(
             String state,
             long producerId,

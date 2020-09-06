@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -134,11 +135,17 @@ public class DescribeProducersRequestDriver extends MetadataRequestDriver<Partit
                             activeProducer.currentTxnStartTimestamp() < 0 ?
                                 OptionalLong.empty() :
                                 OptionalLong.of(activeProducer.currentTxnStartTimestamp());
+                        OptionalInt coordinatorEpoch =
+                            activeProducer.coordinatorEpoch() < 0 ?
+                                OptionalInt.empty() :
+                                OptionalInt.of(activeProducer.coordinatorEpoch());
+
                         return new ProducerState(
                             activeProducer.producerId(),
                             activeProducer.producerEpoch(),
                             activeProducer.lastSequence(),
                             activeProducer.lastTimestamp(),
+                            coordinatorEpoch,
                             currentTransactionFirstOffset
                         );
                     }).collect(Collectors.toList());

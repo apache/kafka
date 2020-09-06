@@ -1233,6 +1233,12 @@ public interface Admin extends AutoCloseable {
 
     ListTransactionsResult listTransactions(ListTransactionsOptions options);
 
+    default AbortTransactionResult abortTransaction(AbortTransactionSpec spec) {
+        return abortTransaction(spec, new AbortTransactionOptions());
+    }
+
+    AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options);
+
     /**
      * Describe all SASL/SCRAM credentials.
      *

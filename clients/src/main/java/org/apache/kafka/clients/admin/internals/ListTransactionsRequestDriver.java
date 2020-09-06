@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class ListTransactionsRequestDriver extends AllBrokerRequestDriver<Collection<TransactionListing>> {
+    // TODO: Use `LogContext`
     private static final Logger log = LoggerFactory.getLogger(ListTransactionsRequestDriver.class);
 
     private final ListTransactionsOptions options;

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -24,6 +25,8 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.ExecutionException;
 
@@ -54,7 +57,7 @@ public class DescribeProducersResult {
                         results.put(entry.getKey(), entry.getValue().get());
                     } catch (InterruptedException | ExecutionException e) {
                         // This should be unreachable, because allOf ensured that all the futures completed successfully.
-                        throw new RuntimeException(e);
+                        throw new KafkaException(e);
                     }
                 }
                 return results;
@@ -78,6 +81,7 @@ public class DescribeProducersResult {
         private final int producerEpoch;
         private final int lastSequence;
         private final long lastTimestamp;
+        private final OptionalInt coordinatorEpoch;
         private final OptionalLong currentTransactionStartOffset;
 
         public ProducerState(
@@ -85,12 +89,14 @@ public class DescribeProducersResult {
             int producerEpoch,
             int lastSequence,
             long lastTimestamp,
+            OptionalInt coordinatorEpoch,
             OptionalLong currentTransactionStartOffset
         ) {
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
             this.lastSequence = lastSequence;
             this.lastTimestamp = lastTimestamp;
+            this.coordinatorEpoch = coordinatorEpoch;
             this.currentTransactionStartOffset = currentTransactionStartOffset;
         }
 
@@ -112,6 +118,41 @@ public class DescribeProducersResult {
 
         public OptionalLong currentTransactionStartOffset() {
             return currentTransactionStartOffset;
+        }
+
+        public OptionalInt coordinatorEpoch() {
+            return coordinatorEpoch;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ProducerState that = (ProducerState) o;
+            return producerId == that.producerId &&
+                producerEpoch == that.producerEpoch &&
+                lastSequence == that.lastSequence &&
+                lastTimestamp == that.lastTimestamp &&
+                Objects.equals(coordinatorEpoch, that.coordinatorEpoch) &&
+                Objects.equals(currentTransactionStartOffset, that.currentTransactionStartOffset);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(producerId, producerEpoch, lastSequence, lastTimestamp,
+                coordinatorEpoch, currentTransactionStartOffset);
+        }
+
+        @Override
+        public String toString() {
+            return "ProducerState(" +
+                "producerId=" + producerId +
+                ", producerEpoch=" + producerEpoch +
+                ", lastSequence=" + lastSequence +
+                ", lastTimestamp=" + lastTimestamp +
+                ", coordinatorEpoch=" + coordinatorEpoch +
+                ", currentTransactionStartOffset=" + currentTransactionStartOffset +
+                ')';
         }
     }
 

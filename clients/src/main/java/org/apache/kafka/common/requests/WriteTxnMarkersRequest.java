@@ -105,6 +105,11 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
 
         public final WriteTxnMarkersRequestData data;
 
+        public Builder(WriteTxnMarkersRequestData data) {
+            super(ApiKeys.WRITE_TXN_MARKERS);
+            this.data = data;
+        }
+
         public Builder(final List<TxnMarkerEntry> markers) {
             super(ApiKeys.WRITE_TXN_MARKERS);
             List<WritableTxnMarker> dataMarkers = new ArrayList<>();
@@ -130,6 +135,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
 
         @Override
         public WriteTxnMarkersRequest build(short version) {
+            // TODO: We need to rewrite the request for differences between version 0 and 1
             return new WriteTxnMarkersRequest(data, version);
         }
     }

@@ -501,7 +501,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
     private static ArgumentParser argParser() {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("verifiable-consumer")
+                .newFor("verifiable-consumer")
+                .build()
                 .defaultHelp(true)
                 .description("This tool consumes messages from a specific topic and emits consumer events (e.g. group rebalances, received messages, and offsets committed) as JSON objects to STDOUT.");
         MutuallyExclusiveGroup connectionGroup = parser.addMutuallyExclusiveGroup("Connection Group")

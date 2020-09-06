@@ -57,7 +57,7 @@ versions += [
   activation: "1.1.1",
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
-  argparse4j: "0.7.0",
+  argparse4j: "0.8.1",
   bcpkix: "1.66",
   checkstyle: "8.20",
   commonsCli: "1.4",

@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
+import java.util.Objects;
 import java.util.OptionalInt;
 
 /**
@@ -37,5 +38,26 @@ public class DescribeProducersOptions extends AbstractOptions<DescribeProducersO
 
     public OptionalInt brokerId() {
         return brokerId;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DescribeProducersOptions that = (DescribeProducersOptions) o;
+        return Objects.equals(brokerId, that.brokerId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(brokerId);
+    }
+
+    @Override
+    public String toString() {
+        return "DescribeProducersOptions(" +
+            "brokerId=" + brokerId +
+            ", timeoutMs=" + timeoutMs +
+            ')';
     }
 }
