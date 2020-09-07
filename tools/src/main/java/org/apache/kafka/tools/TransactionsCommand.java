@@ -28,8 +28,8 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
-import org.apache.kafka.clients.admin.DescribeTransactionsResult;
-import org.apache.kafka.clients.admin.ListTransactionsResult.TransactionListing;
+import org.apache.kafka.clients.admin.TransactionListing;
+import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
@@ -75,7 +75,7 @@ public abstract class TransactionsCommand {
     abstract void addSubparser(Subparsers subparsers);
 
     /**
-     * Execute the command.
+     * Execute the command logic.
      */
     abstract void execute(Admin admin, Namespace ns, PrintStream out) throws Exception;
 
@@ -300,7 +300,7 @@ public abstract class TransactionsCommand {
             String[] headers = new String[]{
                 "ProducerId",
                 "ProducerEpoch",
-                "CoordinatorEpoch",
+                "LatestCoordinatorEpoch",
                 "LastSequence",
                 "LastTimestamp",
                 "CurrentTransactionStartOffset"
@@ -354,7 +354,7 @@ public abstract class TransactionsCommand {
         public void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
             String transactionalId = ns.getString("transactional_id");
 
-            final DescribeTransactionsResult.TransactionState result;
+            final TransactionDescription result;
             try {
                 result = admin.describeTransactions(singleton(transactionalId))
                     .transactionalIdResult(transactionalId)
@@ -365,8 +365,8 @@ public abstract class TransactionsCommand {
                 return;
             }
 
-            // TODO: Do we want a way to return coordinator ID?
             String[] headers = new String[]{
+                "CoordinatorId",
                 "TransactionalId",
                 "ProducerId",
                 "ProducerEpoch",
@@ -390,10 +390,11 @@ public abstract class TransactionsCommand {
             }
 
             String[] row = new String[]{
+                String.valueOf(result.coordinatorId()),
                 transactionalId,
                 String.valueOf(result.producerId()),
                 String.valueOf(result.producerEpoch()),
-                result.state(),
+                result.state().toString(),
                 String.valueOf(result.transactionTimeoutMs()),
                 transactionStartTimeMsColumnValue,
                 transactionDurationMsColumnValue,

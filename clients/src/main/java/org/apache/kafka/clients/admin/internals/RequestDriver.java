@@ -34,7 +34,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 /**
  * The `KafkaAdminClient`'s internal `Call` primitive is not a good fit for multi-stage
@@ -201,7 +201,8 @@ public abstract class RequestDriver<K, V> {
     ) {
         clearInflightRequest(currentTimeMs, spec);
         if (spec.scope instanceof RequestDriver.BrokerScope) {
-            handleFulfillmentResponse(spec.keys, response);
+            int brokerId = ((BrokerScope) spec.scope).destinationBrokerId;
+            handleFulfillmentResponse(brokerId, spec.keys, response);
         } else {
             handleLookupResponse(spec.keys, response);
         }
@@ -246,14 +247,14 @@ public abstract class RequestDriver<K, V> {
      * Build the fulfillment request. The set of keys are derived during the Lookup stage
      * as the set of keys which all map to the same destination broker.
      */
-    abstract AbstractRequest.Builder<?> buildFulfillmentRequest(Set<K> keys);
+    abstract AbstractRequest.Builder<?> buildFulfillmentRequest(Integer brokerId, Set<K> keys);
 
     /**
      * Callback that is invoked when a Fulfillment request returns successfully.
      * The handler should parse the response, check for errors, update mappings as
      * needed, and complete any futures which can be completed.
      */
-    abstract void handleFulfillmentResponse(Set<K> keys, AbstractResponse response);
+    abstract void handleFulfillmentResponse(Integer brokerId, Set<K> keys, AbstractResponse response);
 
     private void clearInflightRequest(long currentTimeMs, RequestSpec spec) {
         RequestState requestState = requestStates.get(spec.scope);
@@ -265,7 +266,7 @@ public abstract class RequestDriver<K, V> {
     private <T extends RequestScope> void collectRequests(
         List<RequestSpec> requests,
         BiMultimap<T, K> multimap,
-        Function<Set<K>, AbstractRequest.Builder<?>> buildRequest
+        BiFunction<Set<K>, T, AbstractRequest.Builder<?>> buildRequest
     ) {
         for (Map.Entry<T, Set<K>> entry : multimap.entrySet()) {
             T scope = entry.getKey();
@@ -280,7 +281,7 @@ public abstract class RequestDriver<K, V> {
                 continue;
             }
 
-            AbstractRequest.Builder<?> request = buildRequest.apply(keys);
+            AbstractRequest.Builder<?> request = buildRequest.apply(keys, scope);
             RequestSpec spec = new RequestSpec(
                 scope,
                 new HashSet<>(keys), // copy to avoid exposing mutable state
@@ -299,7 +300,7 @@ public abstract class RequestDriver<K, V> {
         collectRequests(
             requests,
             lookupMap,
-            this::buildLookupRequest
+            (keys, scope) -> buildLookupRequest(keys)
         );
     }
 
@@ -307,7 +308,7 @@ public abstract class RequestDriver<K, V> {
         collectRequests(
             requests,
             fulfillmentMap,
-            this::buildFulfillmentRequest
+            (keys, scope) -> buildFulfillmentRequest(scope.destinationBrokerId, keys)
         );
     }
 

@@ -18,28 +18,25 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.OptionalLong;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 @InterfaceStability.Evolving
 public class DescribeTransactionsResult {
-    private final Map<CoordinatorKey, KafkaFutureImpl<TransactionState>> futures;
+    private final Map<CoordinatorKey, KafkaFutureImpl<TransactionDescription>> futures;
 
-    DescribeTransactionsResult(Map<CoordinatorKey, KafkaFutureImpl<TransactionState>> futures) {
+    DescribeTransactionsResult(Map<CoordinatorKey, KafkaFutureImpl<TransactionDescription>> futures) {
         this.futures = futures;
     }
 
-    public KafkaFuture<TransactionState> transactionalIdResult(String transactionalId) {
+    public KafkaFuture<TransactionDescription> transactionalIdResult(String transactionalId) {
         CoordinatorKey key = buildKey(transactionalId);
-        KafkaFuture<TransactionState> future = futures.get(key);
+        KafkaFuture<TransactionDescription> future = futures.get(key);
         if (future == null) {
             throw new IllegalArgumentException("TransactionalId " +
                 "`" + transactionalId + "` was not included in the request");
@@ -51,11 +48,11 @@ public class DescribeTransactionsResult {
         return new CoordinatorKey(transactionalId, FindCoordinatorRequest.CoordinatorType.TRANSACTION);
     }
 
-    public KafkaFuture<Map<String, TransactionState>> all() {
+    public KafkaFuture<Map<String, TransactionDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
             .thenApply(nil -> {
-                Map<String, TransactionState> results = new HashMap<>(futures.size());
-                for (Map.Entry<CoordinatorKey, KafkaFutureImpl<TransactionState>> entry : futures.entrySet()) {
+                Map<String, TransactionDescription> results = new HashMap<>(futures.size());
+                for (Map.Entry<CoordinatorKey, KafkaFutureImpl<TransactionDescription>> entry : futures.entrySet()) {
                     try {
                         results.put(entry.getKey().idValue, entry.getValue().get());
                     } catch (InterruptedException | ExecutionException e) {
@@ -67,53 +64,4 @@ public class DescribeTransactionsResult {
             });
     }
 
-    public static class TransactionState {
-        private final String state;
-        private final long producerId;
-        private final int producerEpoch;
-        private final long transactionTimeoutMs;
-        private final OptionalLong transactionStartTimeMs;
-        private final Set<TopicPartition> topicPartitions;
-
-        // TODO: We need to use `TransactionState`
-        public TransactionState(
-            String state,
-            long producerId,
-            int producerEpoch,
-            long transactionTimeoutMs,
-            OptionalLong transactionStartTimeMs,
-            Set<TopicPartition> topicPartitions
-        ) {
-            this.state = state;
-            this.producerId = producerId;
-            this.producerEpoch = producerEpoch;
-            this.transactionTimeoutMs = transactionTimeoutMs;
-            this.transactionStartTimeMs = transactionStartTimeMs;
-            this.topicPartitions = topicPartitions;
-        }
-
-        public String state() {
-            return state;
-        }
-
-        public long producerId() {
-            return producerId;
-        }
-
-        public int producerEpoch() {
-            return producerEpoch;
-        }
-
-        public long transactionTimeoutMs() {
-            return transactionTimeoutMs;
-        }
-
-        public OptionalLong transactionStartTimeMs() {
-            return transactionStartTimeMs;
-        }
-
-        public Set<TopicPartition> topicPartitions() {
-            return topicPartitions;
-        }
-    }
 }

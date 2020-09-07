@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.admin.DescribeTransactionsResult.TransactionState;
+import org.apache.kafka.clients.admin.TransactionDescription;
+import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
@@ -38,7 +39,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class DescribeTransactionsRequestDriver extends CoordinatorRequestDriver<TransactionState> {
+public class DescribeTransactionsRequestDriver extends CoordinatorRequestDriver<TransactionDescription> {
     private static final Logger log = LoggerFactory.getLogger(DescribeTransactionsRequestDriver.class);
 
     public DescribeTransactionsRequestDriver(
@@ -52,7 +53,7 @@ public class DescribeTransactionsRequestDriver extends CoordinatorRequestDriver<
     }
 
     @Override
-    AbstractRequest.Builder<?> buildFulfillmentRequest(Set<CoordinatorKey> keys) {
+    AbstractRequest.Builder<?> buildFulfillmentRequest(Integer brokerId, Set<CoordinatorKey> keys) {
         DescribeTransactionsRequestData request = new DescribeTransactionsRequestData();
         List<String> transactionalIds = keys.stream().map(key -> key.idValue).collect(Collectors.toList());
         request.setTransactionalIds(transactionalIds);
@@ -60,7 +61,7 @@ public class DescribeTransactionsRequestDriver extends CoordinatorRequestDriver<
     }
 
     @Override
-    void handleFulfillmentResponse(Set<CoordinatorKey> keys, AbstractResponse abstractResponse) {
+    void handleFulfillmentResponse(Integer brokerId, Set<CoordinatorKey> keys, AbstractResponse abstractResponse) {
         DescribeTransactionsResponse response = (DescribeTransactionsResponse) abstractResponse;
         for (DescribeTransactionsResponseData.TransactionState transactionState : response.data().transactionStates()) {
             CoordinatorKey transactionalIdKey = asCoordinatorKey(transactionState.transactionalId());
@@ -75,8 +76,9 @@ public class DescribeTransactionsRequestDriver extends CoordinatorRequestDriver<
                 OptionalLong.empty() :
                 OptionalLong.of(transactionState.transactionStartTimeMs());
 
-            complete(transactionalIdKey, new TransactionState(
-                transactionState.transactionState(),
+            complete(transactionalIdKey, new TransactionDescription(
+                brokerId,
+                TransactionState.parse(transactionState.transactionState()),
                 transactionState.producerId(),
                 transactionState.producerEpoch(),
                 transactionState.transactionTimeoutMs(),

@@ -280,7 +280,7 @@ public class MetadataRequestDriverTest {
         }
 
         @Override
-        AbstractRequest.Builder<?> buildFulfillmentRequest(Set<TopicPartition> topicPartitions) {
+        AbstractRequest.Builder<?> buildFulfillmentRequest(Integer brokerId, Set<TopicPartition> topicPartitions) {
             DescribeProducersRequestData request = new DescribeProducersRequestData();
             DescribeProducersRequest.Builder builder = new DescribeProducersRequest.Builder(request);
 
@@ -294,7 +294,7 @@ public class MetadataRequestDriverTest {
         }
 
         @Override
-        void handleFulfillmentResponse(Set<TopicPartition> keys, AbstractResponse response) {
+        void handleFulfillmentResponse(Integer brokerId, Set<TopicPartition> keys, AbstractResponse response) {
             throw new UnsupportedOperationException();
         }
     }

@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
-import org.apache.kafka.clients.admin.ListTransactionsResult.TransactionListing;
+import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.message.ListTransactionsRequestData;

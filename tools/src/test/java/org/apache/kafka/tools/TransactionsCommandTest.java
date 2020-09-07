@@ -25,7 +25,8 @@ import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerS
 import org.apache.kafka.clients.admin.DescribeProducersResult.ProducerState;
 import org.apache.kafka.clients.admin.DescribeTransactionsResult;
 import org.apache.kafka.clients.admin.ListTransactionsResult;
-import org.apache.kafka.clients.admin.ListTransactionsResult.TransactionListing;
+import org.apache.kafka.clients.admin.TransactionDescription;
+import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
@@ -66,7 +67,7 @@ public class TransactionsCommandTest {
     private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     private final PrintStream out = new PrintStream(outputStream);
     private final MockTime time = new MockTime();
-    Admin admin = Mockito.mock(Admin.class);
+    private final Admin admin = Mockito.mock(Admin.class);
 
     @Before
     public void setupExitProcedure() {
@@ -160,7 +161,7 @@ public class TransactionsCommandTest {
         List<List<String>> table = readOutputAsTable();
         assertEquals(3, table.size());
 
-        List<String> expectedHeaders = asList("ProducerId", "ProducerEpoch", "CoordinatorEpoch",
+        List<String> expectedHeaders = asList("ProducerId", "ProducerEpoch", "LatestCoordinatorEpoch",
             "LastSequence", "LastTimestamp", "CurrentTransactionStartOffset");
         assertEquals(expectedHeaders, table.get(0));
 
@@ -236,10 +237,13 @@ public class TransactionsCommandTest {
 
         DescribeTransactionsResult describeResult = Mockito.mock(DescribeTransactionsResult.class);
 
+        int coordinatorId = 5;
         long transactionStartTime = time.milliseconds();
-        KafkaFuture<DescribeTransactionsResult.TransactionState> describeFuture = KafkaFutureImpl.completedFuture(
-            new DescribeTransactionsResult.TransactionState(
-                "Ongoing",
+
+        KafkaFuture<TransactionDescription> describeFuture = KafkaFutureImpl.completedFuture(
+            new TransactionDescription(
+                coordinatorId,
+                TransactionState.ONGOING,
                 12345L,
                 15,
                 10000,
@@ -259,6 +263,7 @@ public class TransactionsCommandTest {
         assertEquals(2, table.size());
 
         List<String> expectedHeaders = asList(
+            "CoordinatorId",
             "TransactionalId",
             "ProducerId",
             "ProducerEpoch",
@@ -271,6 +276,7 @@ public class TransactionsCommandTest {
         assertEquals(expectedHeaders, table.get(0));
 
         List<String> expectedRow = asList(
+            String.valueOf(coordinatorId),
             transactionalId,
             "12345",
             "15",

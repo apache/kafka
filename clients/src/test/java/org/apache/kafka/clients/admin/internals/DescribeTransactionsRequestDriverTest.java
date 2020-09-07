@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.admin.DescribeTransactionsResult;
-import org.apache.kafka.clients.admin.DescribeTransactionsResult.TransactionState;
+import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -66,15 +65,15 @@ public class DescribeTransactionsRequestDriverTest {
         );
 
         // Send `FindCoordinator` requests
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> lookupRequests = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> lookupRequests = driver.poll();
         assertEquals(2, lookupRequests.size());
 
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec lookupSpec1 =
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec lookupSpec1 =
             findRequestWithKey(transactionalId1, lookupRequests);
         assertRetryBackoff(0, lookupSpec1);
         assertFindCoordinatorRequest(transactionalId1, lookupSpec1);
 
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec loookupSpec2 =
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec loookupSpec2 =
             findRequestWithKey(transactionalId2, lookupRequests);
         assertRetryBackoff(0, loookupSpec2);
         assertFindCoordinatorRequest(transactionalId2, loookupSpec2);
@@ -89,15 +88,15 @@ public class DescribeTransactionsRequestDriverTest {
             findCoordinatorResponse(OptionalInt.of(coordinator2)));
 
         // Send `DescribeTransactions` requests
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> requests = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> requests = driver.poll();
         assertEquals(2, requests.size());
 
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec requestSpec1 =
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec requestSpec1 =
             findRequestWithKey(transactionalId1, requests);
         assertRetryBackoff(0, requestSpec1);
         assertDescribeTransactionsRequest(singleton(transactionalId1), coordinator1, requestSpec1);
 
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec requestSpec2 =
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec requestSpec2 =
             findRequestWithKey(transactionalId2, requests);
         assertRetryBackoff(0, requestSpec2);
         assertDescribeTransactionsRequest(singleton(transactionalId2), coordinator2, requestSpec2);
@@ -116,15 +115,15 @@ public class DescribeTransactionsRequestDriverTest {
         // We are all done, so there should be no requests left to be sent
         assertEquals(Collections.emptyList(), driver.poll());
 
-        KafkaFutureImpl<TransactionState> future1 = driver.futures()
+        KafkaFutureImpl<TransactionDescription> future1 = driver.futures()
             .get(DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId1));
-        KafkaFutureImpl<TransactionState> future2 = driver.futures()
+        KafkaFutureImpl<TransactionDescription> future2 = driver.futures()
             .get(DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId2));
 
         assertTrue(future1.isDone());
-        assertMatchingTransactionState(transactionState1, future1.get());
+        assertMatchingTransactionState(coordinator1, transactionState1, future1.get());
         assertTrue(future2.isDone());
-        assertMatchingTransactionState(transactionState2, future2.get());
+        assertMatchingTransactionState(coordinator2, transactionState2, future2.get());
     }
 
     @Test
@@ -140,15 +139,15 @@ public class DescribeTransactionsRequestDriverTest {
         );
 
         // Send `FindCoordinator` requests
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> lookupRequests = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> lookupRequests = driver.poll();
         assertEquals(2, lookupRequests.size());
 
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec lookupSpec1 =
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec lookupSpec1 =
             findRequestWithKey(transactionalId1, lookupRequests);
         assertRetryBackoff(0, lookupSpec1);
         assertFindCoordinatorRequest(transactionalId1, lookupSpec1);
 
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec loookupSpec2 =
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec loookupSpec2 =
             findRequestWithKey(transactionalId2, lookupRequests);
         assertRetryBackoff(0, loookupSpec2);
         assertFindCoordinatorRequest(transactionalId2, loookupSpec2);
@@ -164,10 +163,10 @@ public class DescribeTransactionsRequestDriverTest {
             findCoordinatorResponse(OptionalInt.of(coordinator)));
 
         // Send `DescribeTransactions` request
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> requests = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> requests = driver.poll();
         assertEquals(1, requests.size());
 
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec requestSpec = requests.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec requestSpec = requests.get(0);
         assertRetryBackoff(0, requestSpec);
         assertDescribeTransactionsRequest(transactionalIds, coordinator, requestSpec);
 
@@ -184,15 +183,15 @@ public class DescribeTransactionsRequestDriverTest {
         // We are all done, so there should be no requests left to be sent
         assertEquals(Collections.emptyList(), driver.poll());
 
-        KafkaFutureImpl<TransactionState> future1 = driver.futures()
+        KafkaFutureImpl<TransactionDescription> future1 = driver.futures()
             .get(DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId1));
-        KafkaFutureImpl<TransactionState> future2 = driver.futures()
+        KafkaFutureImpl<TransactionDescription> future2 = driver.futures()
             .get(DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId2));
 
         assertTrue(future1.isDone());
-        assertMatchingTransactionState(transactionState1, future1.get());
+        assertMatchingTransactionState(coordinator, transactionState1, future1.get());
         assertTrue(future2.isDone());
-        assertMatchingTransactionState(transactionState2, future2.get());
+        assertMatchingTransactionState(coordinator, transactionState2, future2.get());
     }
 
     @Test
@@ -206,9 +205,9 @@ public class DescribeTransactionsRequestDriverTest {
         );
 
         // Send first `FindCoordinator` request
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> lookupRequests = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> lookupRequests = driver.poll();
         assertEquals(1, lookupRequests.size());
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec lookupSpec = lookupRequests.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec lookupSpec = lookupRequests.get(0);
         assertRetryBackoff(0, lookupSpec);
         assertFindCoordinatorRequest(transactionalId, lookupSpec);
 
@@ -217,9 +216,9 @@ public class DescribeTransactionsRequestDriverTest {
             findCoordinatorResponse(OptionalInt.of(coordinator)));
 
         // Send `DescribeTransactions` request
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> requests1 = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> requests1 = driver.poll();
         assertEquals(1, requests1.size());
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec requestSpec1 = requests1.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec requestSpec1 = requests1.get(0);
         assertRetryBackoff(0, requestSpec1);
         assertDescribeTransactionsRequest(singleton(transactionalId), coordinator, requestSpec1);
 
@@ -233,9 +232,9 @@ public class DescribeTransactionsRequestDriverTest {
 
         // Send retry `DescribeTransactions` request
         assertFalse(futureFor(driver, transactionalId).isDone());
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> requests2 = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> requests2 = driver.poll();
         assertEquals(1, requests2.size());
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec requestSpec2 = requests2.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec requestSpec2 = requests2.get(0);
         assertRetryBackoff(1, requestSpec2);
         assertDescribeTransactionsRequest(singleton(transactionalId), coordinator, requestSpec2);
     }
@@ -251,9 +250,9 @@ public class DescribeTransactionsRequestDriverTest {
         );
 
         // Send first `FindCoordinator` request
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> lookupRequests1 = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> lookupRequests1 = driver.poll();
         assertEquals(1, lookupRequests1.size());
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec lookupSpec1 = lookupRequests1.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec lookupSpec1 = lookupRequests1.get(0);
         assertRetryBackoff(0, lookupSpec1);
         assertFindCoordinatorRequest(transactionalId, lookupSpec1);
 
@@ -262,9 +261,9 @@ public class DescribeTransactionsRequestDriverTest {
             findCoordinatorResponse(OptionalInt.of(coordinator)));
 
         // Send `DescribeTransactions` request
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> requests = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> requests = driver.poll();
         assertEquals(1, requests.size());
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec requestSpec = requests.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec requestSpec = requests.get(0);
         assertDescribeTransactionsRequest(singleton(transactionalId), coordinator, requestSpec);
 
         driver.onResponse(time.milliseconds(), requestSpec, new DescribeTransactionsResponse(
@@ -276,9 +275,9 @@ public class DescribeTransactionsRequestDriverTest {
 
         // Send second `FindCoordinator` request
         assertFalse(futureFor(driver, transactionalId).isDone());
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> lookupRequests2 = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> lookupRequests2 = driver.poll();
         assertEquals(1, lookupRequests2.size());
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec lookupSpec2 = lookupRequests2.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec lookupSpec2 = lookupRequests2.get(0);
         assertRetryBackoff(1, lookupSpec2);
         assertFindCoordinatorRequest(transactionalId, lookupSpec2);
     }
@@ -294,9 +293,9 @@ public class DescribeTransactionsRequestDriverTest {
         );
 
         // Send first `FindCoordinator` request
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> lookupRequests1 = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> lookupRequests1 = driver.poll();
         assertEquals(1, lookupRequests1.size());
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec lookupSpec1 = lookupRequests1.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec lookupSpec1 = lookupRequests1.get(0);
         assertRetryBackoff(0, lookupSpec1);
         assertFindCoordinatorRequest(transactionalId, lookupSpec1);
 
@@ -305,9 +304,9 @@ public class DescribeTransactionsRequestDriverTest {
             findCoordinatorResponse(OptionalInt.of(coordinator)));
 
         // Send `DescribeTransactions` request
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> requests = driver.poll();
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> requests = driver.poll();
         assertEquals(1, requests.size());
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec requestSpec = requests.get(0);
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec requestSpec = requests.get(0);
         assertDescribeTransactionsRequest(singleton(transactionalId), coordinator, requestSpec);
 
         driver.onResponse(time.milliseconds(), requestSpec, new DescribeTransactionsResponse(
@@ -317,12 +316,12 @@ public class DescribeTransactionsRequestDriverTest {
                     .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())))
         ));
 
-        KafkaFutureImpl<TransactionState> future = futureFor(driver, transactionalId);
+        KafkaFutureImpl<TransactionDescription> future = futureFor(driver, transactionalId);
         assertTrue(future.isDone());
         assertFutureThrows(future, UnknownServerException.class);
     }
 
-    private KafkaFutureImpl<DescribeTransactionsResult.TransactionState> futureFor(
+    private KafkaFutureImpl<TransactionDescription> futureFor(
         DescribeTransactionsRequestDriver driver,
         String transactionalId
     ) {
@@ -330,13 +329,13 @@ public class DescribeTransactionsRequestDriverTest {
         return driver.futures().get(key);
     }
 
-    private RequestDriver<CoordinatorKey, TransactionState>.RequestSpec findRequestWithKey(
+    private RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec findRequestWithKey(
         String transactionalId,
-        List<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> requests
+        List<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> requests
     ) {
         CoordinatorKey key = DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId);
 
-        Optional<RequestDriver<CoordinatorKey, TransactionState>.RequestSpec> firstMatch = requests.stream()
+        Optional<RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec> firstMatch = requests.stream()
             .filter(spec -> spec.keys.contains(key))
             .findFirst();
 
@@ -348,7 +347,7 @@ public class DescribeTransactionsRequestDriverTest {
     private void assertDescribeTransactionsRequest(
         Set<String> expectedTransactionalIds,
         int expectedCoordinatorId,
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec spec
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec spec
     ) {
         Set<CoordinatorKey> keys = expectedTransactionalIds.stream()
             .map(DescribeTransactionsRequestDriver::asCoordinatorKey)
@@ -363,7 +362,7 @@ public class DescribeTransactionsRequestDriverTest {
 
     private void assertFindCoordinatorRequest(
         String expectedTransactionalId,
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec spec
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec spec
     ) {
         CoordinatorKey key = DescribeTransactionsRequestDriver.asCoordinatorKey(expectedTransactionalId);
         assertEquals(singleton(key), spec.keys);
@@ -377,7 +376,7 @@ public class DescribeTransactionsRequestDriverTest {
 
     private void assertRetryBackoff(
         int expectedTries,
-        RequestDriver<CoordinatorKey, TransactionState>.RequestSpec spec
+        RequestDriver<CoordinatorKey, TransactionDescription>.RequestSpec spec
     ) {
         assertEquals(deadlineMs, spec.deadlineMs);
         assertEquals(expectedTries, spec.tries);
@@ -434,9 +433,11 @@ public class DescribeTransactionsRequestDriverTest {
     }
 
     private void assertMatchingTransactionState(
+        int expectedCoordinatorId,
         DescribeTransactionsResponseData.TransactionState expected,
-        DescribeTransactionsResult.TransactionState actual
+        TransactionDescription actual
     ) {
+        assertEquals(expectedCoordinatorId, actual.coordinatorId());
         assertEquals(expected.producerId(), actual.producerId());
         assertEquals(expected.producerEpoch(), actual.producerEpoch());
         assertEquals(expected.transactionTimeoutMs(), actual.transactionTimeoutMs());

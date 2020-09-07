@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.AbortTransactionSpec;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
-import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -55,7 +54,7 @@ public class AbortTransactionRequestDriver extends MetadataRequestDriver<Void> {
     }
 
     @Override
-    WriteTxnMarkersRequest.Builder buildFulfillmentRequest(Set<TopicPartition> topicPartitions) {
+    WriteTxnMarkersRequest.Builder buildFulfillmentRequest(Integer brokerId, Set<TopicPartition> topicPartitions) {
         if (!topicPartitions.equals(singleton(topicPartition))) {
             throw new IllegalArgumentException("Received unexpected topic partitions " + topicPartitions +
                 " (expected " + singleton(topicPartition) + ")");
@@ -71,7 +70,7 @@ public class AbortTransactionRequestDriver extends MetadataRequestDriver<Void> {
     }
 
     @Override
-    void handleFulfillmentResponse(Set<TopicPartition> keys, AbstractResponse abstractResponse) {
+    void handleFulfillmentResponse(Integer brokerId, Set<TopicPartition> keys, AbstractResponse abstractResponse) {
         WriteTxnMarkersResponse response = (WriteTxnMarkersResponse) abstractResponse;
         List<WriteTxnMarkersResponseData.WritableTxnMarkerResult> markerResponses = response.data.markers();
 

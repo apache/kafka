@@ -26,7 +26,7 @@ public enum TransactionState {
     COMPLETE_COMMIT("CompleteCommit"),
     EMPTY("Empty"),
     PREPARE_EPOCH_FENCE("PrepareEpochFence"),
-    UNKNOWN("Unknown"); // FIXME: I hate this
+    UNKNOWN("Unknown");
 
     private final static HashMap<String, TransactionState> NAME_TO_ENUM;
 

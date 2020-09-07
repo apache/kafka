@@ -109,16 +109,14 @@ public abstract class AllBrokerRequestDriver<V> extends RequestDriver<AllBrokerR
     abstract AbstractRequest.Builder<?> buildFulfillmentRequest(Integer brokerId);
 
     @Override
-    AbstractRequest.Builder<?> buildFulfillmentRequest(Set<BrokerKey> keys) {
-        Integer brokerId = requireSingleBrokerKey(keys);
+    AbstractRequest.Builder<?> buildFulfillmentRequest(Integer brokerId, Set<BrokerKey> keys) {
         return buildFulfillmentRequest(brokerId);
     }
 
     abstract void handleFulfillmentResponse(Integer brokerId, AbstractResponse response);
 
     @Override
-    void handleFulfillmentResponse(Set<BrokerKey> keys, AbstractResponse response) {
-        Integer brokerId = requireSingleBrokerKey(keys);
+    void handleFulfillmentResponse(Integer brokerId, Set<BrokerKey> keys, AbstractResponse response) {
         handleFulfillmentResponse(brokerId, response);
     }
 
@@ -128,19 +126,6 @@ public abstract class AllBrokerRequestDriver<V> extends RequestDriver<AllBrokerR
 
     void complete(Integer brokerId, V value) {
         super.complete(new BrokerKey(OptionalInt.of(brokerId)), value);
-    }
-
-    private Integer requireSingleBrokerKey(Set<BrokerKey> keys) {
-        if (keys.size() != 1) {
-            throw new IllegalArgumentException("Unexpected fulfillment mapping " + keys);
-        }
-
-        BrokerKey key = keys.iterator().next();
-        if (!key.brokerId.isPresent()) {
-            throw new IllegalArgumentException("Unexpected fulfillment key " + key);
-        }
-
-        return key.brokerId.getAsInt();
     }
 
     public static class BrokerKey {

@@ -65,7 +65,7 @@ public class DescribeProducersRequestDriver extends MetadataRequestDriver<Partit
     }
 
     @Override
-    DescribeProducersRequest.Builder buildFulfillmentRequest(Set<TopicPartition> topicPartitions) {
+    DescribeProducersRequest.Builder buildFulfillmentRequest(Integer brokerId, Set<TopicPartition> topicPartitions) {
         DescribeProducersRequestData request = new DescribeProducersRequestData();
         DescribeProducersRequest.Builder builder = new DescribeProducersRequest.Builder(request);
 
@@ -115,7 +115,7 @@ public class DescribeProducersRequestDriver extends MetadataRequestDriver<Partit
     }
 
     @Override
-    void handleFulfillmentResponse(Set<TopicPartition> keys, AbstractResponse abstractResponse) {
+    void handleFulfillmentResponse(Integer brokerId, Set<TopicPartition> keys, AbstractResponse abstractResponse) {
         DescribeProducersResponse response = (DescribeProducersResponse) abstractResponse;
 
         for (DescribeProducersResponseData.TopicResponse topicResponse : response.data().topics()) {

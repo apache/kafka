@@ -201,7 +201,7 @@ public class CoordinatorRequestDriverTest {
         }
 
         @Override
-        AbstractRequest.Builder<?> buildFulfillmentRequest(Set<CoordinatorKey> coordinatorKeys) {
+        AbstractRequest.Builder<?> buildFulfillmentRequest(Integer brokerId, Set<CoordinatorKey> coordinatorKeys) {
             return new DescribeGroupsRequest.Builder(new DescribeGroupsRequestData()
                 .setGroups(coordinatorKeys.stream()
                     .map(coordinatorKey -> coordinatorKey.idValue)
@@ -209,7 +209,7 @@ public class CoordinatorRequestDriverTest {
         }
 
         @Override
-        void handleFulfillmentResponse(Set<CoordinatorKey> keys, AbstractResponse response) {
+        void handleFulfillmentResponse(Integer brokerId, Set<CoordinatorKey> keys, AbstractResponse response) {
             throw new UnsupportedOperationException();
         }
     }

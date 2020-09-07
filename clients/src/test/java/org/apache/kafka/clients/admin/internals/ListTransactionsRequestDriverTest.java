@@ -17,8 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
-import org.apache.kafka.clients.admin.ListTransactionsResult;
-import org.apache.kafka.clients.admin.ListTransactionsResult.TransactionListing;
+import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.admin.internals.AllBrokerRequestDriver.BrokerKey;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -241,7 +240,7 @@ public class ListTransactionsRequestDriverTest {
 
     private void assertExpectedTransactionState(
         ListTransactionsResponseData.TransactionState expected,
-        ListTransactionsResult.TransactionListing actual
+        TransactionListing actual
     ) {
         assertEquals(expected.transactionalId(), actual.transactionalId());
         assertEquals(expected.producerId(), actual.producerId());

@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -113,49 +112,6 @@ public class ListTransactionsResult {
             }
         });
         return resultFuture;
-    }
-
-    public static class TransactionListing {
-        private final String transactionalId;
-        private final long producerId;
-        private final TransactionState transactionState;
-
-        public TransactionListing(
-            String transactionalId,
-            long producerId,
-            TransactionState transactionState
-        ) {
-            this.transactionalId = transactionalId;
-            this.producerId = producerId;
-            this.transactionState = transactionState;
-        }
-
-        public String transactionalId() {
-            return transactionalId;
-        }
-
-        public long producerId() {
-            return producerId;
-        }
-
-        public TransactionState transactionState() {
-            return transactionState;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            TransactionListing that = (TransactionListing) o;
-            return producerId == that.producerId &&
-                Objects.equals(transactionalId, that.transactionalId) &&
-                transactionState == that.transactionState;
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(transactionalId, producerId, transactionState);
-        }
     }
 
 }
