@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.connect.integration;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.transforms.Filter;
@@ -36,6 +31,11 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -44,6 +44,9 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TRANSFORMS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
+import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
@@ -73,20 +76,21 @@ public class TransformationIntegrationTest {
     @Before
     public void setup() {
         // setup Connect worker properties
-        Map<String, String> exampleWorkerProps = new HashMap<>();
-        exampleWorkerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(5_000));
+        Map<String, String> workerProps = new HashMap<>();
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(5_000));
 
         // setup Kafka broker properties
-        Properties exampleBrokerProps = new Properties();
-        exampleBrokerProps.put("auto.create.topics.enable", "false");
+        Properties brokerProps = new Properties();
+        // This is required because tests in this class also test per-connector topic creation with transformations
+        brokerProps.put("auto.create.topics.enable", "false");
 
         // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
                 .numBrokers(1)
-                .workerProps(exampleWorkerProps)
-                .brokerProps(exampleBrokerProps)
+                .workerProps(workerProps)
+                .brokerProps(brokerProps)
                 .build();
 
         // start the clusters
@@ -262,15 +266,14 @@ public class TransformationIntegrationTest {
     }
 
     /**
-     * Test the {@link Filter} transformer with a
-     * {@link HasHeaderKey} predicate on a source connector.
+     * Test the {@link Filter} transformer with a {@link HasHeaderKey} predicate on a source connector.
+     * Note that this test uses topic creation configs to allow the source connector to create
+     * the topic when it tries to produce the first source record, instead of requiring the topic
+     * to exist before the connector starts.
      */
     @Test
-    public void testFilterOnHasHeaderKeyWithSourceConnector() throws Exception {
+    public void testFilterOnHasHeaderKeyWithSourceConnectorAndTopicCreation() throws Exception {
         assertConnectReady();
-
-        // create test topic
-        connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS);
 
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
@@ -288,6 +291,9 @@ public class TransformationIntegrationTest {
         props.put(PREDICATES_CONFIG, "headerPredicate");
         props.put(PREDICATES_CONFIG + ".headerPredicate.type", HasHeaderKey.class.getSimpleName());
         props.put(PREDICATES_CONFIG + ".headerPredicate.name", "header-8");
+        // custom topic creation is used, so there's no need to proactively create the test topic
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(-1));
+        props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(NUM_TOPIC_PARTITIONS));
 
         // expect all records to be produced by the connector
         connectorHandle.expectedRecords(NUM_RECORDS_PRODUCED);

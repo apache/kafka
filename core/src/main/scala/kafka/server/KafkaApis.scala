@@ -179,6 +179,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.OFFSET_DELETE => handleOffsetDeleteRequest(request)
         case ApiKeys.DESCRIBE_CLIENT_QUOTAS => handleDescribeClientQuotasRequest(request)
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotasRequest(request)
+        case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
+        case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentialsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1417,7 +1419,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val states = if (listGroupsRequest.data.statesFilter == null)
       // Handle a null array the same as empty
       immutable.Set[String]()
-    else 
+    else
       listGroupsRequest.data.statesFilter.asScala.toSet
 
     def createResponse(throttleMs: Int, groups: List[GroupOverview], error: Errors): AbstractResponse = {
@@ -1989,11 +1991,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(result: InitProducerIdResult): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        val finalError =
+          if (initProducerIdRequest.version < 4 && result.error == Errors.PRODUCER_FENCED) {
+            // For older clients, they could not understand the new PRODUCER_FENCED error code,
+            // so we need to return the INVALID_PRODUCER_EPOCH to have the same client handling logic.
+            Errors.INVALID_PRODUCER_EPOCH
+          } else {
+            result.error
+          }
         val responseData = new InitProducerIdResponseData()
           .setProducerId(result.producerId)
           .setProducerEpoch(result.producerEpoch)
           .setThrottleTimeMs(requestThrottleMs)
-          .setErrorCode(result.error.code)
+          .setErrorCode(finalError.code)
         val responseBody = new InitProducerIdResponse(responseData)
         trace(s"Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
         responseBody
@@ -2022,8 +2032,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
+          val finalError =
+            if (endTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
+              // For older clients, they could not understand the new PRODUCER_FENCED error code,
+              // so we need to return the INVALID_PRODUCER_EPOCH to have the same client handling logic.
+              Errors.INVALID_PRODUCER_EPOCH
+            } else {
+              error
+            }
           val responseBody = new EndTxnResponse(new EndTxnResponseData()
-            .setErrorCode(error.code())
+            .setErrorCode(finalError.code)
             .setThrottleTimeMs(requestThrottleMs))
           trace(s"Completed ${endTxnRequest.data.transactionalId}'s EndTxnRequest " +
             s"with committed: ${endTxnRequest.data.committed}, " +
@@ -2191,11 +2209,21 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         def sendResponseCallback(error: Errors): Unit = {
           def createResponse(requestThrottleMs: Int): AbstractResponse = {
+            val finalError =
+              if (addPartitionsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
+                // For older clients, they could not understand the new PRODUCER_FENCED error code,
+                // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
+                Errors.INVALID_PRODUCER_EPOCH
+              } else {
+                error
+              }
+
             val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
-              partitionsToAdd.map{tp => (tp, error)}.toMap.asJava)
+              partitionsToAdd.map{tp => (tp, finalError)}.toMap.asJava)
             trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
             responseBody
           }
+
 
           sendResponseMaybeThrottle(request, createResponse)
         }
@@ -2230,9 +2258,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
+          val finalError =
+            if (addOffsetsToTxnRequest.version < 2 && error == Errors.PRODUCER_FENCED) {
+              // For older clients, they could not understand the new PRODUCER_FENCED error code,
+              // so we need to return the old INVALID_PRODUCER_EPOCH to have the same client handling logic.
+              Errors.INVALID_PRODUCER_EPOCH
+            } else {
+              error
+            }
+
           val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(
             new AddOffsetsToTxnResponseData()
-              .setErrorCode(error.code)
+              .setErrorCode(finalError.code)
               .setThrottleTimeMs(requestThrottleMs))
           trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId on partition " +
             s"$offsetTopicPartition: errors: $error from client ${request.header.clientId}")
@@ -2970,6 +3007,37 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterClientQuotasRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
+  }
+
+  def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
+    val describeUserScramCredentialsRequest = request.body[DescribeUserScramCredentialsRequest]
+
+    if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME)) {
+      val result = adminManager.describeUserScramCredentials(
+        Option(describeUserScramCredentialsRequest.data.users.asScala.map(_.name).toList))
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        describeUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    }
+  }
+
+  def handleAlterUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
+    val alterUserScramCredentialsRequest = request.body[AlterUserScramCredentialsRequest]
+
+    if (!controller.isActive) {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception))
+    } else if (authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+      val result = adminManager.alterUserScramCredentials(
+        alterUserScramCredentialsRequest.data.upsertions().asScala, alterUserScramCredentialsRequest.data.deletions().asScala)
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new AlterUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        alterUserScramCredentialsRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
   }
 

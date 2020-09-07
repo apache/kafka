@@ -27,6 +27,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -117,12 +118,20 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public List<S> segments(final long timeFrom, final long timeTo) {
+    public List<S> segments(final long timeFrom, final long timeTo, final boolean forward) {
         final List<S> result = new ArrayList<>();
-        final NavigableMap<Long, S> segmentsInRange = segments.subMap(
-            segmentId(timeFrom), true,
-            segmentId(timeTo), true
-        );
+        final NavigableMap<Long, S> segmentsInRange;
+        if (forward) {
+            segmentsInRange = segments.subMap(
+                segmentId(timeFrom), true,
+                segmentId(timeTo), true
+            );
+        } else {
+            segmentsInRange = segments.subMap(
+                segmentId(timeFrom), true,
+                segmentId(timeTo), true
+            ).descendingMap();
+        }
         for (final S segment : segmentsInRange.values()) {
             if (segment.isOpen()) {
                 result.add(segment);
@@ -132,9 +141,15 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public List<S> allSegments() {
+    public List<S> allSegments(final boolean forward) {
         final List<S> result = new ArrayList<>();
-        for (final S segment : segments.values()) {
+        final Collection<S> values;
+        if (forward) {
+            values = segments.values();
+        } else {
+            values = segments.descendingMap().values();
+        }
+        for (final S segment : values) {
             if (segment.isOpen()) {
                 result.add(segment);
             }

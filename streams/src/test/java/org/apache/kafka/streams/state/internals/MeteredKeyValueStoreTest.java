@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
@@ -124,16 +125,19 @@ public class MeteredKeyValueStoreTest {
 
     @Before
     public void before() {
+        final Time mockTime = new MockTime();
         metered = new MeteredKeyValueStore<>(
             inner,
             STORE_TYPE,
-            new MockTime(),
+            mockTime,
             Serdes.String(),
             Serdes.String()
         );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         expect(context.applicationId()).andStubReturn(APPLICATION_ID);
-        expect(context.metrics()).andStubReturn(new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion));
+        expect(context.metrics()).andStubReturn(
+            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, mockTime)
+        );
         expect(context.taskId()).andStubReturn(taskId);
         expect(context.changelogFor(STORE_NAME)).andStubReturn(CHANGELOG_TOPIC);
         expect(inner.name()).andStubReturn(STORE_NAME);

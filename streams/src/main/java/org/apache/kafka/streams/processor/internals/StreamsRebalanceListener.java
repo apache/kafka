@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.slf4j.Logger;
@@ -51,12 +52,11 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         // NB: all task management is already handled by:
         // org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.onAssignment
         if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-            log.error("Received error code {} - shutdown", assignmentErrorCode.get());
-            streamThread.shutdown();
-        } else {
-            streamThread.setState(State.PARTITIONS_ASSIGNED);
+            log.error("Received error code {}", assignmentErrorCode.get());
+            throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
         }
 
+        streamThread.setState(State.PARTITIONS_ASSIGNED);
         taskManager.handleRebalanceComplete();
     }
 

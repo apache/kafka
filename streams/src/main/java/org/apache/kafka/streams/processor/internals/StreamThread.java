@@ -80,27 +80,28 @@ public class StreamThread extends Thread {
      *          |      +-----+-------+
      *          +<---- | Starting (1)|----->+
      *          |      +-----+-------+      |
-     *          |            |              |
-     *          |            |              |
-     *          |            v              |
-     *          |      +-----+-------+      |
-     *          +<---- | Partitions  |      |
+     *          |                           |
+     *          |            +<----------+  |
+     *          |            |           |  |
+     *          |            v           |  |
+     *          |      +-----+-------+   |  |
+     *          +<---- | Partitions  | --+  |
      *          |      | Revoked (2) | <----+
      *          |      +-----+-------+      |
      *          |           |  ^            |
-     *          |           |  |            |
      *          |           v  |            |
      *          |      +-----+-------+      |
      *          +<---- | Partitions  |      |
      *          |      | Assigned (3)| <----+
      *          |      +-----+-------+      |
      *          |            |              |
-     *          |            |--------------+
-     *          |            v              |
-     *          |      +-----+-------+      |
+     *          |            +<----------+  |
+     *          |            |           |  |
+     *          |            v           |  |
+     *          |      +-----+-------+   |  |
+     *          |      |             | --+  |
      *          |      | Running (4) | ---->+
      *          |      +-----+-------+
-     *          |            |
      *          |            |
      *          |            v
      *          |      +-----+-------+
@@ -635,8 +636,8 @@ public class StreamThread extends Thread {
 
         final long pollLatency = advanceNowAndComputeLatency();
 
+        pollSensor.record(pollLatency, now);
         if (records != null && !records.isEmpty()) {
-            pollSensor.record(pollLatency, now);
             pollRecordsSensor.record(records.count(), now);
             taskManager.addRecordsToTasks(records);
         }

@@ -88,7 +88,7 @@ public class KTableSourceTest {
                 new KeyValueTimestamp<>("D", 4, 13L),
                 new KeyValueTimestamp<>("A", null, 14L),
                 new KeyValueTimestamp<>("B", null, 15L)),
-            supplier.theCapturedProcessor().processed);
+            supplier.theCapturedProcessor().processed());
     }
 
     @Test

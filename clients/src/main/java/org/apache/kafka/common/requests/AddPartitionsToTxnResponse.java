@@ -38,7 +38,8 @@ import java.util.Map;
  *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
  *   - {@link Errors#INVALID_TXN_STATE}
  *   - {@link Errors#INVALID_PRODUCER_ID_MAPPING}
- *   - {@link Errors#INVALID_PRODUCER_EPOCH}
+ *   - {@link Errors#INVALID_PRODUCER_EPOCH} // for version <=1
+ *   - {@link Errors#PRODUCER_FENCED}
  *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  *   - {@link Errors#TRANSACTIONAL_ID_AUTHORIZATION_FAILED}
  *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
