@@ -149,7 +149,7 @@ class CachingSessionStore
         validateStoreOpen();
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime, false) :
+            new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime, true) :
             context.cache().range(cacheName,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
@@ -161,7 +161,7 @@ class CachingSessionStore
             keySchema.hasNextCondition(key, key, earliestSessionEndTime, latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
-        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, false);
+        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
     }
 
     @Override
@@ -171,7 +171,7 @@ class CachingSessionStore
         validateStoreOpen();
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime, true) :
+            new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime, false) :
             context.cache().reverseRange(cacheName,
                 cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
                 cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
@@ -186,7 +186,7 @@ class CachingSessionStore
             latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
             new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
-        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, true);
+        return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction, false);
     }
 
     @Override
@@ -324,7 +324,7 @@ class CachingSessionStore
         private final Bytes keyFrom;
         private final Bytes keyTo;
         private final long latestSessionStartTime;
-        private final boolean reverse;
+        private final boolean forward;
 
         private long lastSegmentId;
         private long currentSegmentId;
@@ -336,28 +336,31 @@ class CachingSessionStore
         private CacheIteratorWrapper(final Bytes key,
                                      final long earliestSessionEndTime,
                                      final long latestSessionStartTime,
-                                     final boolean reverse) {
-            this(key, key, earliestSessionEndTime, latestSessionStartTime, reverse);
+                                     final boolean forward) {
+            this(key, key, earliestSessionEndTime, latestSessionStartTime, forward);
         }
 
         private CacheIteratorWrapper(final Bytes keyFrom,
                                      final Bytes keyTo,
                                      final long earliestSessionEndTime,
                                      final long latestSessionStartTime,
-                                     final boolean reverse) {
+                                     final boolean forward) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.latestSessionStartTime = latestSessionStartTime;
             this.lastSegmentId = cacheFunction.segmentId(maxObservedTimestamp);
             this.segmentInterval = cacheFunction.getSegmentInterval();
-            this.reverse = reverse;
+            this.forward = forward;
 
             this.currentSegmentId = cacheFunction.segmentId(earliestSessionEndTime);
 
             setCacheKeyRange(earliestSessionEndTime, currentSegmentLastTime());
 
-            if (reverse) this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
-            else this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            if (forward) {
+                this.current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            } else {
+                this.current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+            }
         }
 
         @Override
@@ -428,8 +431,11 @@ class CachingSessionStore
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
 
             current.close();
-            if (reverse) current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
-            else current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            if (forward) {
+                current = context.cache().range(cacheName, cacheKeyFrom, cacheKeyTo);
+            } else {
+                current = context.cache().reverseRange(cacheName, cacheKeyFrom, cacheKeyTo);
+            }
         }
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {

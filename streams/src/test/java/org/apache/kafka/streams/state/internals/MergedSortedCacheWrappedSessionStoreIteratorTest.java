@@ -127,7 +127,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
     @Test
     public void shouldIterateBothStoreAndCache() {
-        final MergedSortedCacheSessionStoreIterator iterator = createIterator(storeKvs, cacheKvs, false);
+        final MergedSortedCacheSessionStoreIterator iterator = createIterator(storeKvs, cacheKvs, true);
         assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey.get())));
         assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey.get())));
         assertFalse(iterator.hasNext());
@@ -135,7 +135,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
     @Test
     public void shouldReverseIterateBothStoreAndCache() {
-        final MergedSortedCacheSessionStoreIterator iterator = createIterator(storeKvs, cacheKvs, true);
+        final MergedSortedCacheSessionStoreIterator iterator = createIterator(storeKvs, cacheKvs, false);
         assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>(cacheKey, cacheWindow), cacheKey.get())));
         assertThat(iterator.next(), equalTo(KeyValue.pair(new Windowed<>(storeKey, storeWindow), storeKey.get())));
         assertFalse(iterator.hasNext());
@@ -143,13 +143,13 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
     private MergedSortedCacheSessionStoreIterator createIterator(final Iterator<KeyValue<Windowed<Bytes>, byte[]>> storeKvs,
                                                                  final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs,
-                                                                 final boolean reverse) {
+                                                                 final boolean forward) {
         final DelegatingPeekingKeyValueIterator<Windowed<Bytes>, byte[]> storeIterator =
             new DelegatingPeekingKeyValueIterator<>("store", new KeyValueIteratorStub<>(storeKvs));
 
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator =
             new DelegatingPeekingKeyValueIterator<>("cache", new KeyValueIteratorStub<>(cacheKvs));
-        return new MergedSortedCacheSessionStoreIterator(cacheIterator, storeIterator, SINGLE_SEGMENT_CACHE_FUNCTION, reverse);
+        return new MergedSortedCacheSessionStoreIterator(cacheIterator, storeIterator, SINGLE_SEGMENT_CACHE_FUNCTION, forward);
     }
 
 }

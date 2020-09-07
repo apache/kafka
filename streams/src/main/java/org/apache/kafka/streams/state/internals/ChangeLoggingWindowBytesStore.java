@@ -25,8 +25,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.time.Instant;
-
 /**
  * Simple wrapper around a {@link WindowStore} to support writing
  * updates to a changelog
@@ -93,14 +91,6 @@ class ChangeLoggingWindowBytesStore
                                                                    final long timeFrom,
                                                                    final long timeTo) {
         return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
-                                                                   final Bytes keyTo,
-                                                                   final Instant from,
-                                                                   final Instant to) {
-        return wrapped().backwardFetch(keyFrom, keyTo, from, to);
     }
 
     @Override
