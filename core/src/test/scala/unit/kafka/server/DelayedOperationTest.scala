@@ -66,6 +66,26 @@ class DelayedOperationTest {
   }
 
   @Test
+  def testSafeTryCompleteAndElse(): Unit = {
+    def op(shouldComplete: Boolean) = new DelayedOperation(100000L) {
+      override def onExpiration(): Unit = {}
+      override def onComplete(): Unit = {}
+      override def tryComplete(): Boolean = {
+        assertTrue(lock.asInstanceOf[ReentrantLock].isHeldByCurrentThread)
+        shouldComplete
+      }
+    }
+    var pass = false
+    assertFalse(op(false).safeTryCompleteAndElse {
+      pass = true
+    })
+    assertTrue(pass)
+    assertTrue(op(true).safeTryCompleteAndElse {
+      fail("this method should NOT be executed")
+    })
+  }
+
+  @Test
   def testRequestSatisfaction(): Unit = {
     val r1 = new MockDelayedOperation(100000L)
     val r2 = new MockDelayedOperation(100000L)

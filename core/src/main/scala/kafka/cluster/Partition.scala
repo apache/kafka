@@ -103,19 +103,7 @@ class DelayedOperations(topicPartition: TopicPartition,
     fetch.checkAndComplete(TopicPartitionOperationKey(topicPartition))
   }
 
-  def checkAndCompleteProduce(): Unit = {
-    produce.checkAndComplete(TopicPartitionOperationKey(topicPartition))
-  }
-
-  def checkAndCompleteDeleteRecords(): Unit = {
-    deleteRecords.checkAndComplete(TopicPartitionOperationKey(topicPartition))
-  }
-
   def numDelayedDelete: Int = deleteRecords.numDelayed
-
-  def numDelayedFetch: Int = fetch.numDelayed
-
-  def numDelayedProduce: Int = produce.numDelayed
 }
 
 object Partition extends KafkaMetricsGroup {

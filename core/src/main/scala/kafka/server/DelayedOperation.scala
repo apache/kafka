@@ -102,20 +102,21 @@ abstract class DelayedOperation(override val delayMs: Long,
   def tryComplete(): Boolean
 
   /**
-   *
-   * There is a long story about using "lock" or "tryLock".
-   *
-   * 1) using lock - There was a lot of cases that a thread holds a group lock and then it tries to hold more group
-   * locks to complete delayed requests. Unfortunately, the scenario causes deadlock and so we had introduced the
-   * "tryLock" to avoid deadlock.
-   *
-   * 2) using tryLock -  However, the "tryLock" causes another issue that the delayed requests may be into
-   * oblivion if the thread, which should complete the delayed requests, fails to get the lock.
-   *
-   * Now, we go back to use "lock" and make sure the thread which tries to complete delayed requests does NOT hold lock.
-   * The approach is that ReplicaManager collects all actions, which are used to complete delayed requests, in a queue.
-   * KafkaApis.handle() and the expiration thread for certain delayed operations (e.g. DelayedJoin) pick up and then
-   * execute delayed actions when no lock is held.
+   * Thread-safe variant of tryComplete() and call extra function if first tryComplete returns false
+   * @param f else function to be executed after first tryComplete returns false
+   * @return result of tryComplete
+   */
+  private[server] def safeTryCompleteAndElse(f: => Unit): Boolean = inLock(lock) {
+    if (tryComplete()) true
+    else {
+      f
+      // last completion check
+      tryComplete()
+    }
+  }
+
+  /**
+   * Thread-safe variant of tryComplete()
    */
   private[server] def safeTryComplete(): Boolean = inLock(lock)(tryComplete())
 
@@ -213,34 +214,30 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     // expire reaper will clean it up periodically.
     //
     // ==============[story about lock]==============
-    // There is a potential deadlock in practice if we don't hold the lock while adding the operation to watch
+    // There is a potential deadlock between the callers to tryCompleteElseWatch() and checkAndComplete() in practice
+    // if we don't hold the lock while adding the operation to watch
     // list and do the final tryComplete() check. For example,
     // 1) thread_a holds readlock of stateLock from TransactionStateManager
     // 2) thread_a is executing tryCompleteElseWatch
     // 3) thread_a adds op to watch list
     // 4) thread_b requires writelock of stateLock from TransactionStateManager (blocked by thread_a)
-    // 5) thread_c holds lock of op (from watch list)
+    // 5) thread_c calls checkAndComplete () and holds lock of op
     // 6) thread_c is waiting readlock of stateLock to complete op (blocked by thread_b)
     // 7) thread_a is waiting lock of op to call safeTryComplete (blocked by thread_c)
     //
     // Noted that current approach can't prevent all deadlock. For example,
     // 1) thread_a gets lock of op
     // 2) thread_a adds op to watch list
-    // 3) thread_a calls op#tryComplete (and it requires lock_b)
+    // 3) thread_a calls op#tryComplete (and it tries to require lock_b)
     // 4) thread_b holds lock_b
     // 5) thread_b sees op from watch list
     // 6) thread_b needs lock of op
-    // The above story produces a deadlock but it is not an issue in production yet since there is no reason for the
-    // caller of a delayed operation to hold any lock while calling tryComplete. Therefore, in step 4 above, the first
-    // lock that thread_b (assuming it's well designed) can acquire should be the lock in delayed operation.
-    if (inLock(operation.lock) {
-      if (operation.tryComplete()) true
-      else {
-        watchKeys.foreach(key => watchForOperation(key, operation))
-        if (watchKeys.nonEmpty) estimatedTotalOperations.incrementAndGet()
-        // last completion check
-        operation.tryComplete()
-      }
+    // To avoid the above scenario, we recommend DelayedOperationPurgatory.checkAndComplete() be called without holding
+    // any lock. Since DelayedOperationPurgatory.checkAndComplete() completes delayed operations asynchronously,
+    // holding a lock to make the call is often unnecessary.
+    if (operation.safeTryCompleteAndElse {
+      watchKeys.foreach(key => watchForOperation(key, operation))
+      if (watchKeys.nonEmpty) estimatedTotalOperations.incrementAndGet()
     }) return true
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
