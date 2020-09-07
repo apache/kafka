@@ -24,6 +24,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.NonEmptyListValidator;
+import org.apache.kafka.connect.transforms.util.RegexValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.math.BigDecimal;
@@ -36,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
@@ -45,18 +47,24 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
     public static final String OVERVIEW_DOC =
             "Mask specified fields with a valid null value for the field type (i.e. 0, false, empty string, and so on)."
                     + "<p/>For numeric and string fields, an optional replacement value can be specified that is converted to the correct type."
+                    + "<p/>Furthermore, For string fields, Regex can be applied with replacement."
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName()
                     + "</code>) or value (<code>" + Value.class.getName() + "</code>).";
 
     private static final String FIELDS_CONFIG = "fields";
     private static final String REPLACEMENT_CONFIG = "replacement";
+    private static final String REGEX_CONFIG = "regex";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(FIELDS_CONFIG, ConfigDef.Type.LIST, ConfigDef.NO_DEFAULT_VALUE, new NonEmptyListValidator(),
                     ConfigDef.Importance.HIGH, "Names of fields to mask.")
             .define(REPLACEMENT_CONFIG, ConfigDef.Type.STRING, null, new ConfigDef.NonEmptyString(),
                     ConfigDef.Importance.LOW, "Custom value replacement, that will be applied to all"
-                            + " 'fields' values (numeric or non-empty string values only).");
+                            + " 'fields' values (numeric or non-empty string values only) or to some values"
+                            + " matched regex (non-empty string values only).")
+            .define(REGEX_CONFIG, ConfigDef.Type.STRING, "^[\\w\\W]*", new RegexValidator(),
+                    ConfigDef.Importance.LOW, "Regular expression to use for matching. it will be"
+                            + " applied when the field type is String and replacement is set.");
 
     private static final String PURPOSE = "mask fields";
 
@@ -89,12 +97,14 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
 
     private Set<String> maskedFields;
     private String replacement;
+    private Pattern pattern;
 
     @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         maskedFields = new HashSet<>(config.getList(FIELDS_CONFIG));
         replacement = config.getString(REPLACEMENT_CONFIG);
+        pattern = Pattern.compile(config.getString(REGEX_CONFIG));
     }
 
     @Override
@@ -129,13 +139,16 @@ public abstract class MaskField<R extends ConnectRecord<R>> implements Transform
         if (value == null) {
             return null;
         }
-        return replacement == null ? maskWithNullValue(value) : maskWithCustomReplacement(value, replacement);
+        return replacement == null ? maskWithNullValue(value) : maskWithCustomReplacement(value, replacement, pattern);
     }
 
-    private static Object maskWithCustomReplacement(Object value, String replacement) {
+    private static Object maskWithCustomReplacement(Object value, String replacement, Pattern pattern) {
         Function<String, ?> replacementMapper = REPLACEMENT_MAPPING_FUNC.get(value.getClass());
         if (replacementMapper == null) {
             throw new DataException("Cannot mask value of type " + value.getClass() + " with custom replacement.");
+        }
+        if (value instanceof String) {
+            return pattern.matcher(String.valueOf(value)).replaceAll(replacement);
         }
         try {
             return replacementMapper.apply(replacement);
