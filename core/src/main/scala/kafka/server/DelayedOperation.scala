@@ -211,29 +211,36 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     // if the operation is completed (by another thread) between the two tryComplete() calls, the
     // operation is unnecessarily added for watch. However, this is a less severe issue since the
     // expire reaper will clean it up periodically.
-
-    // At this point the only thread that can attempt this operation is this current thread
-    // Hence it is safe to tryComplete() without a lock
-    if (operation.tryComplete()) return true
-
-    // There is a potential deadlock if we don't hold the lock while adding the operation to watch list and do the
-    // final tryComplete() check. For example,
-    // 1) thread_a holds lock_a
+    //
+    // ==============[story about lock]==============
+    // There is a potential deadlock in practice if we don't hold the lock while adding the operation to watch
+    // list and do the final tryComplete() check. For example,
+    // 1) thread_a holds readlock of stateLock from TransactionStateManager
     // 2) thread_a is executing tryCompleteElseWatch
-    // 3) thread_a adds the op to watch list
-    // 4) thread_b holds lock of op to complete op
-    // 5) thread_b calls op's onComplete which requiring lock_a
-    // 6) thread_a requires lock of op to call safeTryComplete
+    // 3) thread_a adds op to watch list
+    // 4) thread_b requires writelock of stateLock from TransactionStateManager (blocked by thread_a)
+    // 5) thread_c holds lock of op (from watch list)
+    // 6) thread_c is waiting readlock of stateLock to complete op (blocked by thread_b)
+    // 7) thread_a is waiting lock of op to call safeTryComplete (blocked by thread_c)
+    //
+    // Noted that current approach can't prevent all deadlock. For example,
+    // 1) thread_a gets lock of op
+    // 2) thread_a adds op to watch list
+    // 3) thread_a calls op#tryComplete (and it requires lock_b)
+    // 4) thread_b holds lock_b
+    // 5) thread_b sees op from watch list
+    // 6) thread_b needs lock of op
+    // The above story produces a deadlock but it is not an issue in production yet since there is no reason for the
+    // caller of a delayed operation to hold any lock while calling tryComplete. Therefore, in step 4 above, the first
+    // lock that thread_b (assuming it's well designed) can acquire should be the lock in delayed operation.
     if (inLock(operation.lock) {
-      var watchCreated = false
-      watchKeys.foreach { key =>
-        watchForOperation(key, operation)
-        if (!watchCreated) {
-          watchCreated = true
-          estimatedTotalOperations.incrementAndGet()
-        }
+      if (operation.tryComplete()) true
+      else {
+        watchKeys.foreach(key => watchForOperation(key, operation))
+        if (watchKeys.nonEmpty) estimatedTotalOperations.incrementAndGet()
+        // last completion check
+        operation.tryComplete()
       }
-      operation.tryComplete()
     }) return true
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also

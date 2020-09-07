@@ -50,15 +50,11 @@ class DelayedOperationTest {
 
   @Test
   def testLockInTryCompleteElseWatch(): Unit = {
-    var executionCount = 0
     val op = new DelayedOperation(100000L) {
       override def onExpiration(): Unit = {}
       override def onComplete(): Unit = {}
       override def tryComplete(): Boolean = {
-        // 1) tryCompleteElseWatch calls tryComplete without lock before adding it to watch list
-        // 2) tryCompleteElseWatch calls tryComplete (again) with lock after adding it to watch list
-        try if (executionCount == 0) assertFalse(lock.asInstanceOf[ReentrantLock].isHeldByCurrentThread)
-        else assertTrue(lock.asInstanceOf[ReentrantLock].isHeldByCurrentThread) finally executionCount += 1
+        assertTrue(lock.asInstanceOf[ReentrantLock].isHeldByCurrentThread)
         false
       }
       override def safeTryComplete(): Boolean = {
@@ -67,7 +63,6 @@ class DelayedOperationTest {
       }
     }
     purgatory.tryCompleteElseWatch(op, Seq("key"))
-    assertEquals(2, executionCount)
   }
 
   @Test
