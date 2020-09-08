@@ -21,14 +21,16 @@ package org.apache.kafka.streams.scala
 
 import java.util
 
-import org.apache.kafka.common.serialization.{Deserializer, Serde, Serdes => JSerdes, Serializer}
-import org.apache.kafka.streams.kstream.WindowedSerdes
+import org.apache.kafka.common.serialization.{Deserializer, Serde, Serializer, Serdes => JSerdes}
+import org.apache.kafka.streams.kstream.{TimeWindowedDeserializer, TimeWindowedSerializer, Windowed, WindowedSerdes}
+import org.slf4j.{Logger, LoggerFactory}
 
 @deprecated(
   "Use org.apache.kafka.streams.scala.serialization.Serdes. For WindowedSerdes.TimeWindowedSerde, use explicit constructors.",
   "2.7.0"
 )
 object Serdes {
+  val LOG: Logger = LoggerFactory.getLogger(getClass)
   implicit def String: Serde[String] = JSerdes.String()
   implicit def Long: Serde[Long] = JSerdes.Long().asInstanceOf[Serde[Long]]
   implicit def JavaLong: Serde[java.lang.Long] = JSerdes.Long()
@@ -41,8 +43,19 @@ object Serdes {
   implicit def Integer: Serde[Int] = JSerdes.Integer().asInstanceOf[Serde[Int]]
   implicit def JavaInteger: Serde[java.lang.Integer] = JSerdes.Integer()
 
-  implicit def timeWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.TimeWindowedSerde[T] =
-    new WindowedSerdes.TimeWindowedSerde[T](tSerde)
+  implicit def timeWindowedSerde[T](implicit inner: Serde[T]): Serde[Windowed[T]] =
+    new JSerdes.WrapperSerde[Windowed[T]](
+      new TimeWindowedSerializer[T](inner.serializer),
+      new TimeWindowedDeserializer[T](inner.deserializer) {
+        override def deserialize(topic: String, data: Array[Byte]): Windowed[T] = {
+          LOG.warn(
+            "Implicit `timeWindowedSerde` produces incorrect end times on deserialization. " +
+              "Explicitly declare a new TimeWindowedDeserializer instead."
+          )
+          super.deserialize(topic, data)
+        }
+      }
+    )
 
   implicit def sessionWindowedSerde[T](implicit tSerde: Serde[T]): WindowedSerdes.SessionWindowedSerde[T] =
     new WindowedSerdes.SessionWindowedSerde[T](tSerde)
