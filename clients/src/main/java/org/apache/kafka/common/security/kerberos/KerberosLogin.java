@@ -238,7 +238,7 @@ public class KerberosLogin extends AbstractLogin {
                             break;
                         } catch (LoginException le) {
                             if (retry > 0) {
-                                log.warn("[Principal={}]: Error when trying to re-Login, but will retry ", principal, e);
+                                log.warn("[Principal={}]: Error when trying to re-Login, but will retry ", principal, le);
                                 --retry;
                                 // sleep for 10 seconds.
                                 try {
