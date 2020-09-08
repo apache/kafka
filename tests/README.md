@@ -11,7 +11,10 @@ Running tests using docker
 Docker containers can be used for running kafka system tests locally.
 * Requirements
   - Docker 1.12.3 (or higher) is installed and running on the machine.
-  - Test require that Kafka, including system test libs, is built. This can be done by running ./gradlew clean systemTestLibs
+  - Test requires that Kafka, including system test libs, is built. This can be done by running
+```
+./gradlew clean systemTestLibs
+```
 * Run all tests
 ```
 bash tests/docker/run_tests.sh
