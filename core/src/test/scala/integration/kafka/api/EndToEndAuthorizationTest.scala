@@ -28,6 +28,7 @@ import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
 import kafka.server._
 import kafka.utils._
+import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.acl._
@@ -68,6 +69,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   override def configureSecurityBeforeServersStart(): Unit = {
     AclCommand.main(clusterActionArgs)
+    AclCommand.main(clusterAlterArgs)
     AclCommand.main(topicBrokerReadAclArgs)
   }
 
@@ -100,6 +102,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--add",
                                           s"--cluster",
                                           s"--operation=ClusterAction",
+                                          s"--allow-principal=$kafkaPrincipal")
+  // necessary to create SCRAM credentials via the admin client using the broker's credentials
+  // without this we would need to create the SCRAM credentials via ZooKeeper
+  def clusterAlterArgs: Array[String] = Array("--authorizer-properties",
+                                          s"zookeeper.connect=$zkConnect",
+                                          s"--add",
+                                          s"--cluster",
+                                          s"--operation=Alter",
                                           s"--allow-principal=$kafkaPrincipal")
   def topicBrokerReadAclArgs: Array[String] = Array("--authorizer-properties",
                                           s"zookeeper.connect=$zkConnect",
@@ -164,7 +174,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                           s"--producer",
                                           s"--allow-principal=$clientPrincipal")
 
-  def ClusterActionAcl = Set(new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW))
+  def ClusterActionAndClusterAlterAcls = Set(new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, CLUSTER_ACTION, ALLOW),
+    new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, ALTER, ALLOW))
   def TopicBrokerReadAcl = Set(new AccessControlEntry(kafkaPrincipal.toString, WildcardHost, READ, ALLOW))
   def GroupReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
   def TopicReadAcl = Set(new AccessControlEntry(clientPrincipal.toString, WildcardHost, READ, ALLOW))
@@ -191,7 +202,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   override def setUp(): Unit = {
     super.setUp()
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(ClusterActionAcl, s.dataPlaneRequestProcessor.authorizer.get, clusterResource)
+      TestUtils.waitAndVerifyAcls(ClusterActionAndClusterAlterAcls, s.dataPlaneRequestProcessor.authorizer.get, clusterResource)
       TestUtils.waitAndVerifyAcls(TopicBrokerReadAcl, s.dataPlaneRequestProcessor.authorizer.get, new ResourcePattern(TOPIC, "*", LITERAL))
     }
     // create the test topic with all the brokers as replicas
@@ -543,6 +554,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       assertEquals(part, record.partition)
       assertEquals(offset.toLong, record.offset)
     }
+  }
+
+  protected def createScramAdminClient(scramMechanism: String, user: String, password: String): Admin = {
+    createAdminClient(brokerList, securityProtocol, trustStoreFile, clientSaslProperties,
+      scramMechanism, user, password)
   }
 
   // Consume records, ignoring at most one TopicAuthorization exception from previously sent request
