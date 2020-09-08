@@ -38,11 +38,13 @@ class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTes
     createScramCredentials(zkConnect, kafkaPrincipal.getName, kafkaPassword)
   }
 
+  override def createPrivilegedAdminClient() = createScramAdminClient(kafkaClientSaslMechanism, kafkaPrincipal.getName, kafkaPassword)
+
   @Before
   override def setUp(): Unit = {
     super.setUp()
     // Create client credentials after starting brokers so that dynamic credential creation is also tested
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
-    createScramCredentials(zkConnect, JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
+    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramPassword)
+    createScramCredentialsViaPrivilegedAdminClient(JaasTestUtils.KafkaScramUser2, JaasTestUtils.KafkaScramPassword2)
   }
 }

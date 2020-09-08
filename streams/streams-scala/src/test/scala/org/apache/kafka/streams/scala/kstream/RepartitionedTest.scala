@@ -20,8 +20,8 @@ package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.internals.RepartitionedInternal
 import org.apache.kafka.streams.processor.StreamPartitioner
-import org.apache.kafka.streams.scala.Serdes._
-import org.apache.kafka.streams.scala.Serdes
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import org.apache.kafka.streams.scala.serialization.Serdes
 import org.junit.runner.RunWith
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.junit.JUnitRunner
@@ -33,16 +33,16 @@ class RepartitionedTest extends FlatSpec with Matchers {
     val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long]
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
   }
 
   "Create a Repartitioned with numPartitions" should "create a Repartitioned with Serdes and numPartitions" in {
     val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long](5)
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalRepartitioned.numberOfPartitions shouldBe 5
 
   }
@@ -51,8 +51,8 @@ class RepartitionedTest extends FlatSpec with Matchers {
     val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long]("repartitionTopic")
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalRepartitioned.name shouldBe "repartitionTopic"
   }
 
@@ -63,8 +63,8 @@ class RepartitionedTest extends FlatSpec with Matchers {
     val repartitioned: Repartitioned[String, Long] = Repartitioned.`with`[String, Long](partitioner)
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalRepartitioned.streamPartitioner shouldBe partitioner
   }
 
@@ -79,8 +79,8 @@ class RepartitionedTest extends FlatSpec with Matchers {
         .withStreamPartitioner(partitioner)
 
     val internalRepartitioned = new RepartitionedInternal(repartitioned)
-    internalRepartitioned.keySerde.getClass shouldBe Serdes.String.getClass
-    internalRepartitioned.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalRepartitioned.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalRepartitioned.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalRepartitioned.numberOfPartitions shouldBe 5
     internalRepartitioned.name shouldBe "repartitionTopic"
     internalRepartitioned.streamPartitioner shouldBe partitioner

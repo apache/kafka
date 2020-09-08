@@ -57,13 +57,18 @@ class KafkaVersion(LooseVersion):
 
     def supports_tls_to_zookeeper(self):
         # indicate if KIP-515 is available
-        return self > LATEST_2_4
+        return self >= V_2_5_0
 
     def reassign_partitions_command_supports_bootstrap_server(self):
         return self >= V_2_5_0
 
     def kafka_configs_command_uses_bootstrap_server(self):
+        # everything except User SCRAM Credentials (KIP-554)
         return self >= V_2_6_0
+
+    def kafka_configs_command_uses_bootstrap_server_scram(self):
+        # User SCRAM Credentials (KIP-554)
+        return self >= V_2_7_0
 
 def get_version(node=None):
     """Return the version attached to the given node.
@@ -158,3 +163,7 @@ LATEST_2_5 = V_2_5_1
 # 2.6.x versions
 V_2_6_0 = KafkaVersion("2.6.0")
 LATEST_2_6 = V_2_6_0
+
+# 2.7.x versions
+V_2_7_0 = KafkaVersion("2.7.0")
+LATEST_2_7 = V_2_7_0
