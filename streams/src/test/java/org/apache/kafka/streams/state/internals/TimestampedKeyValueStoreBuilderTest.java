@@ -37,6 +37,7 @@ import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(EasyMockRunner.class)
 public class TimestampedKeyValueStoreBuilderTest {
@@ -145,29 +146,29 @@ public class TimestampedKeyValueStoreBuilderTest {
     }
 
     @SuppressWarnings("all")
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfInnerIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
+        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
+        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
+        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime()));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
+        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+        assertThrows(NullPointerException.class, () -> new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
     }
 
 }
