@@ -203,14 +203,16 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   def tryCompleteElseWatch(operation: T, watchKeys: Seq[Any]): Boolean = {
     assert(watchKeys.nonEmpty, "The watch key list can't be empty")
 
-    // The cost of tryComplete() is typically proportional to the number of keys. Calling
-    // tryComplete() for each key is going to be expensive if there are many keys. Instead,
-    // we do the check in the following way through safeTryCompleteOrElse().
+    // The cost of tryComplete() is typically proportional to the number of keys. Calling tryComplete() for each key is
+    // going to be expensive if there are many keys. Instead, we do the check in the following way through safeTryCompleteOrElse().
+    // If the operation is not completed, we just add the operation to all keys. Then we call tryComplete() again. At
+    // this time, if the operation is still not completed, we are guaranteed that it won't miss any future triggering
+    // event since the operation is already on the watcher list for all keys.
     //
     // ==============[story about lock]==============
-    // We hold the operation's lock while adding the operation to watch list and doing the tryComplete() check. This is
-    // to avoid a potential deadlock between the callers to tryCompleteElseWatch() and checkAndComplete(). For example,
-    // the following deadlock can happen if the lock is only held for the final tryComplete() check,
+    // Through safeTryCompleteOrElse(), we hold the operation's lock while adding the operation to watch list and doing
+    // the tryComplete() check. This is to avoid a potential deadlock between the callers to tryCompleteElseWatch() and
+    // checkAndComplete(). For example, the following deadlock can happen if the lock is only held for the final tryComplete()
     // 1) thread_a holds readlock of stateLock from TransactionStateManager
     // 2) thread_a is executing tryCompleteElseWatch
     // 3) thread_a adds op to watch list
@@ -219,11 +221,11 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     // 6) thread_c is waiting readlock of stateLock to complete op (blocked by thread_b)
     // 7) thread_a is waiting lock of op to call safeTryComplete (blocked by thread_c)
     //
-    // Noted that current approach can't prevent all deadlock. For example,
-    // 1) thread_a gets lock of op
+    // Note that even with the current approach, deadlocks could still be introduced. For example,
+    // 1) thread_a calls tryCompleteElseWatch() and gets lock of op
     // 2) thread_a adds op to watch list
-    // 3) thread_a calls op#tryComplete (and it tries to require lock_b)
-    // 4) thread_b holds lock_b
+    // 3) thread_a calls op#tryComplete and tries to require lock_b
+    // 4) thread_b holds lock_b and calls checkAndComplete()
     // 5) thread_b sees op from watch list
     // 6) thread_b needs lock of op
     // To avoid the above scenario, we recommend DelayedOperationPurgatory.checkAndComplete() be called without holding

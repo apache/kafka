@@ -18,7 +18,7 @@
 package kafka.coordinator.group
 
 import java.util.Properties
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
 import kafka.common.OffsetAndMetadata
@@ -59,16 +59,6 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       new CommitOffsetsOperation,
       new HeartbeatOperation,
       new LeaveGroupOperation
-  )
-
-  private val allOperationsWithTxn = Seq(
-    new JoinGroupOperation,
-    new SyncGroupOperation,
-    new OffsetFetchOperation,
-    new CommitTxnOffsetsOperation,
-    new CompleteTxnOperation,
-    new HeartbeatOperation,
-    new LeaveGroupOperation
   )
 
   var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = _
@@ -113,13 +103,6 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }.toSet
   }
 
-  /**
-   * handleTxnCommitOffsets does not complete delayed requests now so it causes error if handleTxnCompletion is executed
-   * before completing delayed request. In random mode, we use this global lock to prevent such error.
-   */
-  private var isRandomOrder = false
-  private val lock = new ReentrantLock()
-
   @Test
   def testConcurrentGoodPathSequence(): Unit = {
     verifyConcurrentOperations(createGroupMembers, allOperations)
@@ -127,13 +110,33 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   @Test
   def testConcurrentTxnGoodPathSequence(): Unit = {
-    verifyConcurrentOperations(createGroupMembers, allOperationsWithTxn)
+    verifyConcurrentOperations(createGroupMembers, Seq(
+      new JoinGroupOperation,
+      new SyncGroupOperation,
+      new OffsetFetchOperation,
+      new CommitTxnOffsetsOperation,
+      new CompleteTxnOperation,
+      new HeartbeatOperation,
+      new LeaveGroupOperation
+    ))
   }
 
   @Test
   def testConcurrentRandomSequence(): Unit = {
-    isRandomOrder = true
-    verifyConcurrentRandomSequences(createGroupMembers, allOperationsWithTxn)
+    /**
+     * handleTxnCommitOffsets does not complete delayed requests now so it causes error if handleTxnCompletion is executed
+     * before completing delayed request. In random mode, we use this global lock to prevent such error.
+     */
+    val lock = new ReentrantLock()
+    verifyConcurrentRandomSequences(createGroupMembers, Seq(
+      new JoinGroupOperation,
+      new SyncGroupOperation,
+      new OffsetFetchOperation,
+      new CommitTxnOffsetsOperation(lock = Some(lock)),
+      new CompleteTxnOperation(lock = Some(lock)),
+      new HeartbeatOperation,
+      new LeaveGroupOperation
+    ))
   }
 
   @Test
@@ -292,7 +295,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
   }
 
-  class CommitTxnOffsetsOperation extends CommitOffsetsOperation {
+  class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends CommitOffsetsOperation {
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
       val tp = new TopicPartition("topic", 0)
       val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
@@ -307,17 +310,17 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
           offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
         responseCallback(errors)
       }
-      if (isRandomOrder) lock.lock()
+      lock.foreach(_.lock())
       try {
         groupCoordinator.handleTxnCommitOffsets(member.group.groupId, producerId, producerEpoch,
           JoinGroupRequest.UNKNOWN_MEMBER_ID, Option.empty, JoinGroupRequest.UNKNOWN_GENERATION_ID,
           offsets, callbackWithTxnCompletion)
         replicaManager.tryCompleteActions()
-      } finally if (isRandomOrder) lock.unlock()
+      } finally lock.foreach(_.unlock())
     }
   }
 
-  class CompleteTxnOperation extends GroupOperation[CompleteTxnCallbackParams, CompleteTxnCallback] {
+  class CompleteTxnOperation(lock: Option[Lock] = None) extends GroupOperation[CompleteTxnCallbackParams, CompleteTxnCallback] {
     override def responseCallback(responsePromise: Promise[CompleteTxnCallbackParams]): CompleteTxnCallback = {
       val callback: CompleteTxnCallback = error => responsePromise.success(error)
       callback
@@ -325,12 +328,12 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def runWithCallback(member: GroupMember, responseCallback: CompleteTxnCallback): Unit = {
       val producerId = 1000L
       val offsetsPartitions = (0 to numPartitions).map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, _))
-      if (isRandomOrder) lock.lock()
+      lock.foreach(_.lock())
       try {
         groupCoordinator.groupManager.handleTxnCompletion(producerId,
           offsetsPartitions.map(_.partition).toSet, isCommit = random.nextBoolean)
         responseCallback(Errors.NONE)
-      } finally if (isRandomOrder) lock.unlock()
+      } finally lock.foreach(_.unlock())
 
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
