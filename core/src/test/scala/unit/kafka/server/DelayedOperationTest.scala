@@ -66,7 +66,7 @@ class DelayedOperationTest {
   }
 
   @Test
-  def testSafeTryCompleteAndElse(): Unit = {
+  def testSafeTryCompleteOrElse(): Unit = {
     def op(shouldComplete: Boolean) = new DelayedOperation(100000L) {
       override def onExpiration(): Unit = {}
       override def onComplete(): Unit = {}
@@ -76,11 +76,11 @@ class DelayedOperationTest {
       }
     }
     var pass = false
-    assertFalse(op(false).safeTryCompleteAndElse {
+    assertFalse(op(false).safeTryCompleteOrElse {
       pass = true
     })
     assertTrue(pass)
-    assertTrue(op(true).safeTryCompleteAndElse {
+    assertTrue(op(true).safeTryCompleteOrElse {
       fail("this method should NOT be executed")
     })
   }

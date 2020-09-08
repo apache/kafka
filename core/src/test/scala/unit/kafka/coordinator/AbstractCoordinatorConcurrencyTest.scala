@@ -201,8 +201,8 @@ object AbstractCoordinatorConcurrencyTest {
         }
       }
       val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
-      producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
       watchKeys ++= producerRequestKeys
+      producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
     }
     override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
       Some(RecordBatch.MAGIC_VALUE_V2)

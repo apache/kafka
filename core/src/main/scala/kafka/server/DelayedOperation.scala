@@ -106,7 +106,7 @@ abstract class DelayedOperation(override val delayMs: Long,
    * @param f else function to be executed after first tryComplete returns false
    * @return result of tryComplete
    */
-  private[server] def safeTryCompleteAndElse(f: => Unit): Boolean = inLock(lock) {
+  private[server] def safeTryCompleteOrElse(f: => Unit): Boolean = inLock(lock) {
     if (tryComplete()) true
     else {
       f
@@ -205,23 +205,17 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
     // The cost of tryComplete() is typically proportional to the number of keys. Calling
     // tryComplete() for each key is going to be expensive if there are many keys. Instead,
-    // we do the check in the following way. Call tryComplete(). If the operation is not completed,
-    // we just add the operation to all keys. Then we call tryComplete() again. At this time, if
-    // the operation is still not completed, we are guaranteed that it won't miss any future triggering
-    // event since the operation is already on the watcher list for all keys. This does mean that
-    // if the operation is completed (by another thread) between the two tryComplete() calls, the
-    // operation is unnecessarily added for watch. However, this is a less severe issue since the
-    // expire reaper will clean it up periodically.
+    // we do the check in the following way through safeTryCompleteOrElse().
     //
     // ==============[story about lock]==============
-    // There is a potential deadlock between the callers to tryCompleteElseWatch() and checkAndComplete() in practice
-    // if we don't hold the lock while adding the operation to watch
-    // list and do the final tryComplete() check. For example,
+    // We hold the operation's lock while adding the operation to watch list and doing the tryComplete() check. This is
+    // to avoid a potential deadlock between the callers to tryCompleteElseWatch() and checkAndComplete(). For example,
+    // the following deadlock can happen if the lock is only held for the final tryComplete() check,
     // 1) thread_a holds readlock of stateLock from TransactionStateManager
     // 2) thread_a is executing tryCompleteElseWatch
     // 3) thread_a adds op to watch list
     // 4) thread_b requires writelock of stateLock from TransactionStateManager (blocked by thread_a)
-    // 5) thread_c calls checkAndComplete () and holds lock of op
+    // 5) thread_c calls checkAndComplete() and holds lock of op
     // 6) thread_c is waiting readlock of stateLock to complete op (blocked by thread_b)
     // 7) thread_a is waiting lock of op to call safeTryComplete (blocked by thread_c)
     //
@@ -233,9 +227,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     // 5) thread_b sees op from watch list
     // 6) thread_b needs lock of op
     // To avoid the above scenario, we recommend DelayedOperationPurgatory.checkAndComplete() be called without holding
-    // any lock. Since DelayedOperationPurgatory.checkAndComplete() completes delayed operations asynchronously,
-    // holding a lock to make the call is often unnecessary.
-    if (operation.safeTryCompleteAndElse {
+    // any exclusive lock. Since DelayedOperationPurgatory.checkAndComplete() completes delayed operations asynchronously,
+    // holding a exclusive lock to make the call is often unnecessary.
+    if (operation.safeTryCompleteOrElse {
       watchKeys.foreach(key => watchForOperation(key, operation))
       if (watchKeys.nonEmpty) estimatedTotalOperations.incrementAndGet()
     }) return true
