@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -274,7 +275,7 @@ public class MetadataRequestDriverTest {
     private final class TestMetadataRequestDriver extends MetadataRequestDriver<String> {
 
         public TestMetadataRequestDriver(Collection<TopicPartition> futures) {
-            super(futures, deadlineMs, retryBackoffMs);
+            super(futures, deadlineMs, retryBackoffMs, new LogContext());
         }
 
         @Override

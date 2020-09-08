@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests.ListTransactionsRequest;
 import org.apache.kafka.common.requests.ListTransactionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
 
@@ -56,6 +57,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class ListTransactionsRequestDriverTest {
+    private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
     private final long retryBackoffMs = 100;
@@ -63,7 +65,8 @@ public class ListTransactionsRequestDriverTest {
     @Test
     public void testFailedMetadataRequest() {
         ListTransactionsOptions options = new ListTransactionsOptions();
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
+        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+            options, deadlineMs, retryBackoffMs, logContext);
 
         KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> lookupFuture =
             driver.lookupFuture();
@@ -76,7 +79,8 @@ public class ListTransactionsRequestDriverTest {
     @Test
     public void testMultiBrokerListTransactions() throws Exception {
         ListTransactionsOptions options = new ListTransactionsOptions();
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
+        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+            options, deadlineMs, retryBackoffMs, logContext);
 
         Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures =
             assertMetadataLookup(driver, mkSet(0, 1));
@@ -109,7 +113,8 @@ public class ListTransactionsRequestDriverTest {
     @Test
     public void testRetryListTransactionsAfterCoordinatorLoading() throws Exception {
         ListTransactionsOptions options = new ListTransactionsOptions();
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
+        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+            options, deadlineMs, retryBackoffMs, logContext);
 
         int brokerId = 0;
         Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures =
@@ -134,7 +139,8 @@ public class ListTransactionsRequestDriverTest {
     @Test
     public void testFatalListTransactionsError() throws Exception {
         ListTransactionsOptions options = new ListTransactionsOptions();
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
+        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+            options, deadlineMs, retryBackoffMs, logContext);
 
         int brokerId = 0;
         Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures =

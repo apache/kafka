@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,16 +41,22 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DescribeTransactionsRequestDriver extends CoordinatorRequestDriver<TransactionDescription> {
-    private static final Logger log = LoggerFactory.getLogger(DescribeTransactionsRequestDriver.class);
+    private final Logger log;
 
     public DescribeTransactionsRequestDriver(
         Collection<String> transactionalIds,
         long deadlineMs,
-        long retryBackoffMs
+        long retryBackoffMs,
+        LogContext logContext
     ) {
-        super(transactionalIds.stream()
+        super(buildKeySet(transactionalIds), deadlineMs, retryBackoffMs, logContext);
+        this.log = logContext.logger(DescribeTransactionsRequestDriver.class);
+    }
+
+    private static Set<CoordinatorKey> buildKeySet(Collection<String> transactionalIds) {
+        return transactionalIds.stream()
             .map(DescribeTransactionsRequestDriver::asCoordinatorKey)
-            .collect(Collectors.toSet()), deadlineMs, retryBackoffMs);
+            .collect(Collectors.toSet());
     }
 
     @Override

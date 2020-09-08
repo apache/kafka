@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
 
@@ -194,7 +195,7 @@ public class CoordinatorRequestDriverTest {
     private final class TestCoordinatorRequestDriver extends CoordinatorRequestDriver<String> {
 
         public TestCoordinatorRequestDriver(Set<CoordinatorKey> groupIds) {
-            super(groupIds, deadlineMs, retryBackoffMs);
+            super(groupIds, deadlineMs, retryBackoffMs, new LogContext());
         }
 
         @Override

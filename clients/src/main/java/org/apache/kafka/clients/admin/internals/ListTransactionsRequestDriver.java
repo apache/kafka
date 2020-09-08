@@ -26,8 +26,8 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ListTransactionsRequest;
 import org.apache.kafka.common.requests.ListTransactionsResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,18 +35,18 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class ListTransactionsRequestDriver extends AllBrokerRequestDriver<Collection<TransactionListing>> {
-    // TODO: Use `LogContext`
-    private static final Logger log = LoggerFactory.getLogger(ListTransactionsRequestDriver.class);
-
+    private final Logger log;
     private final ListTransactionsOptions options;
 
     public ListTransactionsRequestDriver(
         ListTransactionsOptions options,
         long deadlineMs,
-        long retryBackoffMs
+        long retryBackoffMs,
+        LogContext logContext
     ) {
-        super(deadlineMs, retryBackoffMs);
+        super(deadlineMs, retryBackoffMs, logContext);
         this.options = options;
+        this.log = logContext.logger(ListTransactionsRequestDriver.class);
     }
 
     @Override

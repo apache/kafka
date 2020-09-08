@@ -29,6 +29,7 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.DescribeProducersRequest;
 import org.apache.kafka.common.requests.DescribeProducersResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,18 +42,19 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 public class DescribeProducersRequestDriver extends MetadataRequestDriver<PartitionProducerState> {
-    private static final Logger log = LoggerFactory.getLogger(DescribeProducersRequestDriver.class);
-
+    private final Logger log;
     private final DescribeProducersOptions options;
 
     public DescribeProducersRequestDriver(
         Collection<TopicPartition> topicPartitions,
         DescribeProducersOptions options,
         long deadlineMs,
-        long retryBackoffMs
+        long retryBackoffMs,
+        LogContext logContext
     ) {
-        super(topicPartitions, deadlineMs, retryBackoffMs);
+        super(topicPartitions, deadlineMs, retryBackoffMs, logContext);
         this.options = options;
+        this.log = logContext.logger(DescribeProducersRequestDriver.class);
 
         // If the request options indicate a specific target broker, then we directly
         // map the topic partitions to avoid the unneeded `Metadata` lookup.

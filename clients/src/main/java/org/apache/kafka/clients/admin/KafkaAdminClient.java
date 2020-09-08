@@ -4290,7 +4290,7 @@ public class KafkaAdminClient extends AdminClient {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            partitions, options, deadlineMs, retryBackoffMs);
+            partitions, options, deadlineMs, retryBackoffMs, logContext);
         maybeSendRequests(driver, currentTimeMs);
         return new DescribeProducersResult(driver.futures());
     }
@@ -4303,7 +4303,7 @@ public class KafkaAdminClient extends AdminClient {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
         DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
-            transactionalIds, deadlineMs, retryBackoffMs);
+            transactionalIds, deadlineMs, retryBackoffMs, logContext);
         maybeSendRequests(driver, currentTimeMs);
         return new DescribeTransactionsResult(driver.futures());
     }
@@ -4312,7 +4312,8 @@ public class KafkaAdminClient extends AdminClient {
     public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
+        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+            options, deadlineMs, retryBackoffMs, logContext);
         maybeSendRequests(driver, currentTimeMs);
         return new ListTransactionsResult(driver.lookupFuture());
     }
@@ -4321,8 +4322,8 @@ public class KafkaAdminClient extends AdminClient {
     public AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options) {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
-        AbortTransactionRequestDriver driver = new AbortTransactionRequestDriver(spec, deadlineMs,
-            retryBackoffMs, logContext);
+        AbortTransactionRequestDriver driver = new AbortTransactionRequestDriver(
+            spec, deadlineMs, retryBackoffMs, logContext);
         maybeSendRequests(driver, currentTimeMs);
         return new AbortTransactionResult(driver.futures());
     }

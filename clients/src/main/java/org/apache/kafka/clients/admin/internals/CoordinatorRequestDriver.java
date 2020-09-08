@@ -23,22 +23,24 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
 
 public abstract class CoordinatorRequestDriver<V> extends RequestDriver<CoordinatorKey, V> {
-    private static final Logger log = LoggerFactory.getLogger(CoordinatorRequestDriver.class);
+    private final Logger log;
 
     public CoordinatorRequestDriver(
         Collection<CoordinatorKey> keys,
         long deadlineMs,
-        long retryBackoffMs
+        long retryBackoffMs,
+        LogContext logContext
     ) {
-        super(keys, deadlineMs, retryBackoffMs);
+        super(keys, deadlineMs, retryBackoffMs, logContext);
+        this.log = logContext.logger(CoordinatorRequestDriver.class);
     }
 
     @Override

@@ -28,6 +28,7 @@ import org.apache.kafka.common.requests.DescribeTransactionsRequest;
 import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
 
@@ -49,6 +50,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class DescribeTransactionsRequestDriverTest {
+    private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
     private final long retryBackoffMs = 100;
@@ -60,10 +62,7 @@ public class DescribeTransactionsRequestDriverTest {
         Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2);
 
         DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
-            transactionalIds,
-            deadlineMs,
-            retryBackoffMs
-        );
+            transactionalIds, deadlineMs, retryBackoffMs, logContext);
 
         // Send `FindCoordinator` requests
         List<RequestSpec<CoordinatorKey>> lookupRequests = driver.poll();
@@ -134,10 +133,7 @@ public class DescribeTransactionsRequestDriverTest {
         Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2);
 
         DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
-            transactionalIds,
-            deadlineMs,
-            retryBackoffMs
-        );
+            transactionalIds, deadlineMs, retryBackoffMs, logContext);
 
         // Send `FindCoordinator` requests
         List<RequestSpec<CoordinatorKey>> lookupRequests = driver.poll();
@@ -200,10 +196,7 @@ public class DescribeTransactionsRequestDriverTest {
         String transactionalId = "foo";
 
         DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
-            singleton(transactionalId),
-            deadlineMs,
-            retryBackoffMs
-        );
+            singleton(transactionalId), deadlineMs, retryBackoffMs, logContext);
 
         // Send first `FindCoordinator` request
         List<RequestSpec<CoordinatorKey>> lookupRequests = driver.poll();
@@ -245,10 +238,7 @@ public class DescribeTransactionsRequestDriverTest {
         String transactionalId = "foo";
 
         DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
-            singleton(transactionalId),
-            deadlineMs,
-            retryBackoffMs
-        );
+            singleton(transactionalId), deadlineMs, retryBackoffMs, logContext);
 
         // Send first `FindCoordinator` request
         List<RequestSpec<CoordinatorKey>> lookupRequests1 = driver.poll();
@@ -288,10 +278,7 @@ public class DescribeTransactionsRequestDriverTest {
         String transactionalId = "foo";
 
         DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
-            singleton(transactionalId),
-            deadlineMs,
-            retryBackoffMs
-        );
+            singleton(transactionalId), deadlineMs, retryBackoffMs, logContext);
 
         // Send first `FindCoordinator` request
         List<RequestSpec<CoordinatorKey>> lookupRequests1 = driver.poll();

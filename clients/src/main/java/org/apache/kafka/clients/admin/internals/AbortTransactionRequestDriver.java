@@ -47,7 +47,7 @@ public class AbortTransactionRequestDriver extends MetadataRequestDriver<Void> {
         long retryBackoffMs,
         LogContext logContext
     ) {
-        super(singleton(abortSpec.topicPartition()), deadlineMs, retryBackoffMs);
+        super(singleton(abortSpec.topicPartition()), deadlineMs, retryBackoffMs, logContext);
         this.abortSpec = abortSpec;
         this.topicPartition = abortSpec.topicPartition();
         this.log = logContext.logger(AbortTransactionRequestDriver.class);

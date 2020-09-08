@@ -23,9 +23,9 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,18 +40,23 @@ import java.util.Set;
  * @param <V>
  */
 public abstract class AllBrokerRequestDriver<V> extends RequestDriver<AllBrokerRequestDriver.BrokerKey, V> {
-    private static final Logger log = LoggerFactory.getLogger(AllBrokerRequestDriver.class);
-
     private static final BrokerKey ALL_BROKERS = new BrokerKey(OptionalInt.empty());
     private static final RequestScope SINGLE_REQUEST_SCOPE = new RequestScope() {
     };
 
+    private final Logger log;
     private final KafkaFutureImpl<Map<Integer, KafkaFutureImpl<V>>> lookupFuture;
 
-    public AllBrokerRequestDriver(long deadlineMs, long retryBackoffMs) {
-        super(Utils.mkSet(ALL_BROKERS), deadlineMs, retryBackoffMs);
+    public AllBrokerRequestDriver(
+        long deadlineMs,
+        long retryBackoffMs,
+        LogContext logContext
+    ) {
+        super(Utils.mkSet(ALL_BROKERS), deadlineMs, retryBackoffMs, logContext);
 
         this.lookupFuture = new KafkaFutureImpl<>();
+        this.log = logContext.logger(AllBrokerRequestDriver.class);
+
         super.futures().get(ALL_BROKERS).whenComplete((nil, exception) -> {
             if (exception != null) {
                 this.lookupFuture.completeExceptionally(exception);

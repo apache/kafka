@@ -23,8 +23,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,16 +35,19 @@ import java.util.Set;
 import java.util.function.Function;
 
 public abstract class MetadataRequestDriver<V> extends RequestDriver<TopicPartition, V> {
-    private static final Logger log = LoggerFactory.getLogger(MetadataRequestDriver.class);
     private static final RequestScope SINGLE_REQUEST_SCOPE = new RequestScope() {
     };
+
+    private final Logger log;
 
     public MetadataRequestDriver(
         Collection<TopicPartition> futures,
         long deadlineMs,
-        long retryBackoffMs
+        long retryBackoffMs,
+        LogContext logContext
     ) {
-        super(futures, deadlineMs, retryBackoffMs);
+        super(futures, deadlineMs, retryBackoffMs, logContext);
+        this.log = logContext.logger(MetadataRequestDriver.class);
     }
 
     @Override

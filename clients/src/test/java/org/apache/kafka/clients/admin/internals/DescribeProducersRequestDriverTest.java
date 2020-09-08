@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.DescribeProducersResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
 
@@ -56,6 +57,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class DescribeProducersRequestDriverTest {
+    private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
     private final long retryBackoffMs = 100;
@@ -67,11 +69,7 @@ public class DescribeProducersRequestDriverTest {
         DescribeProducersOptions options = new DescribeProducersOptions();
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(topicPartition),
-            options,
-            deadlineMs,
-            retryBackoffMs
-        );
+            singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         assertMetadataLookup(driver, topicPartition, leaderId, 0);
 
@@ -92,11 +90,7 @@ public class DescribeProducersRequestDriverTest {
         DescribeProducersOptions options = new DescribeProducersOptions();
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(topicPartition),
-            options,
-            deadlineMs,
-            retryBackoffMs
-        );
+            singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         assertMetadataLookup(driver, topicPartition, initialLeaderId, 0);
 
@@ -121,11 +115,7 @@ public class DescribeProducersRequestDriverTest {
         DescribeProducersOptions options = new DescribeProducersOptions().setBrokerId(brokerId);
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(topicPartition),
-            options,
-            deadlineMs,
-            retryBackoffMs
-        );
+            singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
@@ -152,11 +142,7 @@ public class DescribeProducersRequestDriverTest {
         DescribeProducersOptions options = new DescribeProducersOptions().setBrokerId(brokerId);
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(topicPartition),
-            options,
-            deadlineMs,
-            retryBackoffMs
-        );
+            singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
@@ -183,11 +169,7 @@ public class DescribeProducersRequestDriverTest {
         DescribeProducersOptions options = new DescribeProducersOptions();
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(topicPartition),
-            options,
-            deadlineMs,
-            retryBackoffMs
-        );
+            singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         assertMetadataLookup(driver, topicPartition, leaderId, 0);
 

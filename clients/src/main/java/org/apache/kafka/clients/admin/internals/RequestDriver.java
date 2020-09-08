@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,8 +76,8 @@ import java.util.function.BiFunction;
  *            when the key type is a consumer `GroupId`)
  */
 public abstract class RequestDriver<K, V> {
-    private static final Logger log = LoggerFactory.getLogger(RequestDriver.class);
 
+    private final Logger log;
     private final long retryBackoffMs;
     private final long deadlineMs;
     private final Map<K, KafkaFutureImpl<V>> futures;
@@ -88,11 +89,13 @@ public abstract class RequestDriver<K, V> {
     public RequestDriver(
         Collection<K> keys,
         long deadlineMs,
-        long retryBackoffMs
+        long retryBackoffMs,
+        LogContext logContext
     ) {
         this.futures = Utils.initializeMap(keys, KafkaFutureImpl::new);
         this.deadlineMs = deadlineMs;
         this.retryBackoffMs = retryBackoffMs;
+        this.log = logContext.logger(RequestDriver.class);
         initializeLookupKeys();
     }
 
