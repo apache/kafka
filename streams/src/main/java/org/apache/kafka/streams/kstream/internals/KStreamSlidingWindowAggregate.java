@@ -121,7 +121,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             observedStreamTime = Math.max(observedStreamTime, inputRecordTimestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
-            if (inputRecordTimestamp + 1 + windows.timeDifferenceMs() <= closeTime) {
+            if (inputRecordTimestamp + 1L + windows.timeDifferenceMs() <= closeTime) {
                 log.warn(
                     "Skipping record for expired window. " +
                         "key=[{}] " +
@@ -197,6 +197,10 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     } else if (startTime == inputRecordTimestamp + 1) {
                         rightWinAlreadyCreated = true;
                     } else {
+                        log.warn(
+                            "Unexpected window with start {} found when processing record at {} in `KStreamSlidingWindowAggregate`.",
+                            startTime, inputRecordTimestamp
+                        );
                         throw new IllegalStateException("Unexpected window found when processing sliding windows");
                     }
                 }
@@ -236,7 +240,11 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
          */
         private void processEarly(final K key, final V value, final long inputRecordTimestamp, final long closeTime) {
             if (inputRecordTimestamp < 0 || inputRecordTimestamp >= windows.timeDifferenceMs()) {
-                throw new IllegalArgumentException("Early record for sliding windows must fall between 0 < inputRecordTimestamp < timeDifferenceMs");
+                log.warn(
+                    "Early record for sliding windows must fall between fall between 0 <= inputRecordTimestamp. Timestamp {} does not fall between 0 <= {}",
+                    inputRecordTimestamp, windows.timeDifferenceMs()
+                );
+                throw new IllegalArgumentException("Early record for sliding windows must fall between fall between 0 <= inputRecordTimestamp");
             }
 
             // A window from [0, timeDifferenceMs] that holds all early records
@@ -263,7 +271,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
 
                     if (startTime == 0) {
                         combinedWindow = windowBeingProcessed;
-                        //We don't need to store previousRecordTimestamp if maxRecordTimestamp > timestamp
+                        // We don't need to store previousRecordTimestamp if maxRecordTimestamp >= timestamp
                         // because the previous record's right window (if there is a previous record)
                         // would have already been created by maxRecordTimestamp
                         if (windowMaxRecordTimestamp < inputRecordTimestamp) {
@@ -292,7 +300,6 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 rightWinAgg = combinedWindow.value;
             }
 
-            //create right window for new record if needed
             if (!rightWinAlreadyCreated && rightWindowIsNotEmpty(rightWinAgg, inputRecordTimestamp)) {
                 createCurrentRecordRightWindow(inputRecordTimestamp, rightWinAgg, key);
             }
