@@ -99,7 +99,7 @@ public class MeteredKeyValueStore<K, V>
         rangeSensor = StateStoreMetrics.rangeSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         deleteSensor = StateStoreMetrics.deleteSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
-        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
@@ -229,7 +229,7 @@ public class MeteredKeyValueStore<K, V>
         try {
             wrapped().close();
         } finally {
-            streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, name());
         }
     }
 

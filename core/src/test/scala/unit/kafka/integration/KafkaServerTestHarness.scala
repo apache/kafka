@@ -32,6 +32,7 @@ import java.util.Properties
 
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
 
 /**
@@ -159,4 +160,12 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
       alive(i) = true
     }
   }
+
+  def waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal: String, mechanismName: String): Unit = {
+    servers.foreach { server =>
+      val cache = server.credentialProvider.credentialCache.cache(mechanismName, classOf[ScramCredential])
+      TestUtils.waitUntilTrue(() => cache.get(clientPrincipal) != null, s"SCRAM credentials not created for $clientPrincipal")
+    }
+  }
+
 }

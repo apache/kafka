@@ -303,7 +303,6 @@ public class TaskMetricsTest {
         mockStatic(StateStoreMetrics.class);
         if (builtInMetricsVersion == Version.FROM_0100_TO_24) {
             expect(StateStoreMetrics.expiredWindowRecordDropSensor(
-                THREAD_ID,
                 TASK_ID,
                 storeType,
                 storeName,

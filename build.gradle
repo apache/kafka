@@ -116,6 +116,7 @@ ext {
   defaultJvmArgs = ["-Xss4m", "-XX:+UseParallelGC"]
 
   userMaxForks = project.hasProperty('maxParallelForks') ? maxParallelForks.toInteger() : null
+  userIgnoreFailures = project.hasProperty('ignoreFailures') ? ignoreFailures : false
 
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
@@ -313,6 +314,7 @@ subprojects {
 
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -336,6 +338,7 @@ subprojects {
 
   task integrationTest(type: Test, dependsOn: compileJava) {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -364,6 +367,7 @@ subprojects {
 
   task unitTest(type: Test, dependsOn: compileJava) {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    ignoreFailures = userIgnoreFailures
 
     maxHeapSize = defaultMaxHeapSize
     jvmArgs = defaultJvmArgs
@@ -974,6 +978,7 @@ project(':examples') {
 
 project(':generator') {
   dependencies {
+    compile libs.argparse4j
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
     compile libs.jacksonJaxrsJsonProvider
@@ -1050,10 +1055,12 @@ project(':clients') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "org.apache.kafka.common.message",
-             "src/generated/java/org/apache/kafka/common/message",
-             "src/main/resources/common/message",
-             "ApiMessageTypeGenerator" ]
+    args = [ "-p", "org.apache.kafka.common.message",
+             "-o", "src/generated/java/org/apache/kafka/common/message",
+             "-i", "src/main/resources/common/message",
+             "-t", "ApiMessageTypeGenerator",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+           ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
@@ -1061,10 +1068,11 @@ project(':clients') {
   task processTestMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "org.apache.kafka.common.message",
-             "src/generated-test/java/org/apache/kafka/common/message",
-             "src/test/resources/common/message",
-             "none" ]
+    args = [ "-p", "org.apache.kafka.common.message",
+             "-o", "src/generated-test/java/org/apache/kafka/common/message",
+             "-i", "src/test/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
+           ]
     inputs.dir("src/test/resources/common/message")
     outputs.dir("src/generated-test/java/org/apache/kafka/common/message")
   }
@@ -1199,10 +1207,11 @@ project(':streams') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "org.apache.kafka.streams.internals.generated",
-             "src/generated/java/org/apache/kafka/streams/internals/generated",
-             "src/main/resources/common/message",
-             "none" ]
+    args = [ "-p", "org.apache.kafka.streams.internals.generated",
+             "-o", "src/generated/java/org/apache/kafka/streams/internals/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator"
+           ]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/streams/internals/generated")
   }
