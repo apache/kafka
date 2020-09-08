@@ -34,20 +34,23 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 
-public abstract class MetadataRequestDriver<V> extends RequestDriver<TopicPartition, V> {
+/**
+ * Base driver implementation for APIs which target partition leaders.
+ */
+public abstract class PartitionLeaderApiDriver<V> extends ApiDriver<TopicPartition, V> {
     private static final RequestScope SINGLE_REQUEST_SCOPE = new RequestScope() {
     };
 
     private final Logger log;
 
-    public MetadataRequestDriver(
+    public PartitionLeaderApiDriver(
         Collection<TopicPartition> futures,
         long deadlineMs,
         long retryBackoffMs,
         LogContext logContext
     ) {
         super(futures, deadlineMs, retryBackoffMs, logContext);
-        this.log = logContext.logger(MetadataRequestDriver.class);
+        this.log = logContext.logger(PartitionLeaderApiDriver.class);
     }
 
     @Override

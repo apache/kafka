@@ -32,15 +32,15 @@ import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec.TimestampSpec;
+import org.apache.kafka.clients.admin.internals.AbortTransactionDriver;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
+import org.apache.kafka.clients.admin.internals.ApiDriver;
+import org.apache.kafka.clients.admin.internals.ApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.ConsumerGroupOperationContext;
-import org.apache.kafka.clients.admin.internals.DescribeProducersRequestDriver;
-import org.apache.kafka.clients.admin.internals.DescribeTransactionsRequestDriver;
-import org.apache.kafka.clients.admin.internals.ListTransactionsRequestDriver;
+import org.apache.kafka.clients.admin.internals.DescribeProducersDriver;
+import org.apache.kafka.clients.admin.internals.DescribeTransactionsDriver;
+import org.apache.kafka.clients.admin.internals.ListTransactionsDriver;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
-import org.apache.kafka.clients.admin.internals.RequestDriver;
-import org.apache.kafka.clients.admin.internals.AbortTransactionRequestDriver;
-import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -4289,7 +4289,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
-        DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
+        DescribeProducersDriver driver = new DescribeProducersDriver(
             partitions, options, deadlineMs, retryBackoffMs, logContext);
         maybeSendRequests(driver, currentTimeMs);
         return new DescribeProducersResult(driver.futures());
@@ -4302,7 +4302,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
-        DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
+        DescribeTransactionsDriver driver = new DescribeTransactionsDriver(
             transactionalIds, deadlineMs, retryBackoffMs, logContext);
         maybeSendRequests(driver, currentTimeMs);
         return new DescribeTransactionsResult(driver.futures());
@@ -4312,7 +4312,7 @@ public class KafkaAdminClient extends AdminClient {
     public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+        ListTransactionsDriver driver = new ListTransactionsDriver(
             options, deadlineMs, retryBackoffMs, logContext);
         maybeSendRequests(driver, currentTimeMs);
         return new ListTransactionsResult(driver.lookupFuture());
@@ -4322,7 +4322,7 @@ public class KafkaAdminClient extends AdminClient {
     public AbortTransactionResult abortTransaction(AbortTransactionSpec spec, AbortTransactionOptions options) {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = calcDeadlineMs(currentTimeMs, options.timeoutMs);
-        AbortTransactionRequestDriver driver = new AbortTransactionRequestDriver(
+        AbortTransactionDriver driver = new AbortTransactionDriver(
             spec, deadlineMs, retryBackoffMs, logContext);
         maybeSendRequests(driver, currentTimeMs);
         return new AbortTransactionResult(driver.futures());
@@ -4340,19 +4340,18 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private <K, V> void maybeSendRequests(RequestDriver<K, V> driver, long currentTimeMs) {
+    private <K, V> void maybeSendRequests(ApiDriver<K, V> driver, long currentTimeMs) {
         for (RequestSpec<K> spec : driver.poll()) {
             runnable.call(newCall(driver, spec), currentTimeMs);
         }
     }
 
-    private <K, V> Call newCall(RequestDriver<K, V> driver, RequestSpec<K> spec) {
+    private <K, V> Call newCall(ApiDriver<K, V> driver, RequestSpec<K> spec) {
         NodeProvider nodeProvider = spec.scope.destinationBrokerId().isPresent() ?
             new ConstantNodeIdProvider(spec.scope.destinationBrokerId().getAsInt()) :
             new LeastLoadedNodeProvider();
 
-        // FIXME: Add name to RequestSpec
-        return new Call("", spec.nextAllowedTryMs, spec.tries, spec.deadlineMs, nodeProvider) {
+        return new Call(spec.name, spec.nextAllowedTryMs, spec.tries, spec.deadlineMs, nodeProvider) {
             @Override
             AbstractRequest.Builder<?> createRequest(int timeoutMs) {
                 return spec.request;

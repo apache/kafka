@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
+import org.apache.kafka.clients.admin.internals.ApiDriver.RequestSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -51,7 +51,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class MetadataRequestDriverTest {
+public class PartitionLeaderApiDriverTest {
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
     private final long retryBackoffMs = 100;
@@ -63,7 +63,7 @@ public class MetadataRequestDriverTest {
             new TopicPartition("foo", 2),
             new TopicPartition("bar", 1));
 
-        TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
+        TestPartitionLeaderApiDriver driver = new TestPartitionLeaderApiDriver(topicPartitions);
         List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
 
@@ -88,7 +88,7 @@ public class MetadataRequestDriverTest {
         // Request includes 2 of 3 partitions for the topic
         Set<TopicPartition> topicPartitions = mkSet(tp0, tp2);
 
-        TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
+        TestPartitionLeaderApiDriver driver = new TestPartitionLeaderApiDriver(topicPartitions);
         List<RequestSpec<TopicPartition>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
 
@@ -136,7 +136,7 @@ public class MetadataRequestDriverTest {
         // Request includes 2 of 3 partitions for the topic
         Set<TopicPartition> topicPartitions = mkSet(tp0, tp2);
 
-        TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
+        TestPartitionLeaderApiDriver driver = new TestPartitionLeaderApiDriver(topicPartitions);
         List<RequestSpec<TopicPartition>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
 
@@ -181,7 +181,7 @@ public class MetadataRequestDriverTest {
         TopicPartition tp2 = new TopicPartition("bar", 0);
         Set<TopicPartition> topicPartitions = mkSet(tp0, tp2);
 
-        TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
+        TestPartitionLeaderApiDriver driver = new TestPartitionLeaderApiDriver(topicPartitions);
         List<RequestSpec<TopicPartition>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
 
@@ -225,7 +225,7 @@ public class MetadataRequestDriverTest {
         // Request includes 2 of 3 partitions for the topic
         Set<TopicPartition> topicPartitions = mkSet(tp0, tp2);
 
-        TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
+        TestPartitionLeaderApiDriver driver = new TestPartitionLeaderApiDriver(topicPartitions);
         List<RequestSpec<TopicPartition>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
 
@@ -272,10 +272,15 @@ public class MetadataRequestDriverTest {
         return foundRequestOpt.get();
     }
 
-    private final class TestMetadataRequestDriver extends MetadataRequestDriver<String> {
+    private final class TestPartitionLeaderApiDriver extends PartitionLeaderApiDriver<String> {
 
-        public TestMetadataRequestDriver(Collection<TopicPartition> futures) {
+        public TestPartitionLeaderApiDriver(Collection<TopicPartition> futures) {
             super(futures, deadlineMs, retryBackoffMs, new LogContext());
+        }
+
+        @Override
+        String apiName() {
+            return "testPartitionLeaderApi";
         }
 
         @Override

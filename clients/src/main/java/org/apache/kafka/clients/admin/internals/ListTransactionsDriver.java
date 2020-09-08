@@ -34,11 +34,11 @@ import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class ListTransactionsRequestDriver extends AllBrokerRequestDriver<Collection<TransactionListing>> {
+public class ListTransactionsDriver extends AllBrokerApiDriver<Collection<TransactionListing>> {
     private final Logger log;
     private final ListTransactionsOptions options;
 
-    public ListTransactionsRequestDriver(
+    public ListTransactionsDriver(
         ListTransactionsOptions options,
         long deadlineMs,
         long retryBackoffMs,
@@ -46,7 +46,12 @@ public class ListTransactionsRequestDriver extends AllBrokerRequestDriver<Collec
     ) {
         super(deadlineMs, retryBackoffMs, logContext);
         this.options = options;
-        this.log = logContext.logger(ListTransactionsRequestDriver.class);
+        this.log = logContext.logger(ListTransactionsDriver.class);
+    }
+
+    @Override
+    String apiName() {
+        return "listTransactions";
     }
 
     @Override

@@ -19,8 +19,8 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
-import org.apache.kafka.clients.admin.internals.AllBrokerRequestDriver.BrokerKey;
-import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
+import org.apache.kafka.clients.admin.internals.AllBrokerApiDriver.BrokerKey;
+import org.apache.kafka.clients.admin.internals.ApiDriver.RequestSpec;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -56,7 +56,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-public class ListTransactionsRequestDriverTest {
+public class ListTransactionsDriverTest {
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
@@ -65,7 +65,7 @@ public class ListTransactionsRequestDriverTest {
     @Test
     public void testFailedMetadataRequest() {
         ListTransactionsOptions options = new ListTransactionsOptions();
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+        ListTransactionsDriver driver = new ListTransactionsDriver(
             options, deadlineMs, retryBackoffMs, logContext);
 
         KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> lookupFuture =
@@ -79,7 +79,7 @@ public class ListTransactionsRequestDriverTest {
     @Test
     public void testMultiBrokerListTransactions() throws Exception {
         ListTransactionsOptions options = new ListTransactionsOptions();
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+        ListTransactionsDriver driver = new ListTransactionsDriver(
             options, deadlineMs, retryBackoffMs, logContext);
 
         Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures =
@@ -113,7 +113,7 @@ public class ListTransactionsRequestDriverTest {
     @Test
     public void testRetryListTransactionsAfterCoordinatorLoading() throws Exception {
         ListTransactionsOptions options = new ListTransactionsOptions();
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+        ListTransactionsDriver driver = new ListTransactionsDriver(
             options, deadlineMs, retryBackoffMs, logContext);
 
         int brokerId = 0;
@@ -139,7 +139,7 @@ public class ListTransactionsRequestDriverTest {
     @Test
     public void testFatalListTransactionsError() throws Exception {
         ListTransactionsOptions options = new ListTransactionsOptions();
-        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(
+        ListTransactionsDriver driver = new ListTransactionsDriver(
             options, deadlineMs, retryBackoffMs, logContext);
 
         int brokerId = 0;
@@ -156,7 +156,7 @@ public class ListTransactionsRequestDriverTest {
     }
 
     private void assertListTransactions(
-        ListTransactionsRequestDriver driver,
+        ListTransactionsDriver driver,
         ListTransactionsOptions options,
         ListTransactionsResponse response,
         int brokerId
@@ -169,7 +169,7 @@ public class ListTransactionsRequestDriverTest {
     }
 
     private Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> assertMetadataLookup(
-        ListTransactionsRequestDriver driver,
+        ListTransactionsDriver driver,
         Set<Integer> brokers
     ) throws Exception {
         KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> lookupFuture =
@@ -280,7 +280,7 @@ public class ListTransactionsRequestDriverTest {
     }
 
     private RequestSpec<BrokerKey> assertLookupRequest(
-        ListTransactionsRequestDriver driver
+        ListTransactionsDriver driver
     ) {
         List<RequestSpec<BrokerKey>> requests = driver.poll();
         assertEquals(1, requests.size());

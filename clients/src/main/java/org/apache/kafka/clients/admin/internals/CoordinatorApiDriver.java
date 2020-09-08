@@ -30,17 +30,17 @@ import java.util.Collection;
 import java.util.Objects;
 import java.util.Set;
 
-public abstract class CoordinatorRequestDriver<V> extends RequestDriver<CoordinatorKey, V> {
+public abstract class CoordinatorApiDriver<V> extends ApiDriver<CoordinatorKey, V> {
     private final Logger log;
 
-    public CoordinatorRequestDriver(
+    public CoordinatorApiDriver(
         Collection<CoordinatorKey> keys,
         long deadlineMs,
         long retryBackoffMs,
         LogContext logContext
     ) {
         super(keys, deadlineMs, retryBackoffMs, logContext);
-        this.log = logContext.logger(CoordinatorRequestDriver.class);
+        this.log = logContext.logger(CoordinatorApiDriver.class);
     }
 
     @Override

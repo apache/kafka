@@ -31,7 +31,6 @@ import org.apache.kafka.common.requests.DescribeProducersResponse;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -41,11 +40,11 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class DescribeProducersRequestDriver extends MetadataRequestDriver<PartitionProducerState> {
+public class DescribeProducersDriver extends PartitionLeaderApiDriver<PartitionProducerState> {
     private final Logger log;
     private final DescribeProducersOptions options;
 
-    public DescribeProducersRequestDriver(
+    public DescribeProducersDriver(
         Collection<TopicPartition> topicPartitions,
         DescribeProducersOptions options,
         long deadlineMs,
@@ -54,7 +53,7 @@ public class DescribeProducersRequestDriver extends MetadataRequestDriver<Partit
     ) {
         super(topicPartitions, deadlineMs, retryBackoffMs, logContext);
         this.options = options;
-        this.log = logContext.logger(DescribeProducersRequestDriver.class);
+        this.log = logContext.logger(DescribeProducersDriver.class);
 
         // If the request options indicate a specific target broker, then we directly
         // map the topic partitions to avoid the unneeded `Metadata` lookup.
@@ -64,6 +63,11 @@ public class DescribeProducersRequestDriver extends MetadataRequestDriver<Partit
                 super.map(topicPartition, destinationBrokerId);
             }
         }
+    }
+
+    @Override
+    String apiName() {
+        return "describeProducers";
     }
 
     @Override

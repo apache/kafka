@@ -36,12 +36,12 @@ import java.util.Set;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 
-public class AbortTransactionRequestDriver extends MetadataRequestDriver<Void> {
+public class AbortTransactionDriver extends PartitionLeaderApiDriver<Void> {
     private final Logger log;
     private final AbortTransactionSpec abortSpec;
     private final TopicPartition topicPartition;
 
-    public AbortTransactionRequestDriver(
+    public AbortTransactionDriver(
         AbortTransactionSpec abortSpec,
         long deadlineMs,
         long retryBackoffMs,
@@ -50,7 +50,12 @@ public class AbortTransactionRequestDriver extends MetadataRequestDriver<Void> {
         super(singleton(abortSpec.topicPartition()), deadlineMs, retryBackoffMs, logContext);
         this.abortSpec = abortSpec;
         this.topicPartition = abortSpec.topicPartition();
-        this.log = logContext.logger(AbortTransactionRequestDriver.class);
+        this.log = logContext.logger(AbortTransactionDriver.class);
+    }
+
+    @Override
+    String apiName() {
+        return "abortTransaction";
     }
 
     @Override

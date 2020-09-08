@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
+import org.apache.kafka.clients.admin.internals.ApiDriver.RequestSpec;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
@@ -44,7 +44,7 @@ import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class CoordinatorRequestDriverTest {
+public class CoordinatorApiDriverTest {
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
     private final long retryBackoffMs = 100;
@@ -55,7 +55,7 @@ public class CoordinatorRequestDriverTest {
         CoordinatorKey group2 = new CoordinatorKey("bar", CoordinatorType.GROUP);
         Set<CoordinatorKey> groupIds = mkSet(group1, group2);
 
-        TestCoordinatorRequestDriver driver = new TestCoordinatorRequestDriver(groupIds);
+        TestCoordinatorDriver driver = new TestCoordinatorDriver(groupIds);
         List<RequestSpec<CoordinatorKey>> requests = driver.poll();
         assertEquals(2, requests.size());
 
@@ -91,7 +91,7 @@ public class CoordinatorRequestDriverTest {
         CoordinatorKey group2 = new CoordinatorKey("bar", CoordinatorType.GROUP);
         Set<CoordinatorKey> groupIds = mkSet(group1, group2);
 
-        TestCoordinatorRequestDriver driver = new TestCoordinatorRequestDriver(groupIds);
+        TestCoordinatorDriver driver = new TestCoordinatorDriver(groupIds);
         List<RequestSpec<CoordinatorKey>> lookupRequests = driver.poll();
         assertEquals(2, lookupRequests.size());
 
@@ -141,7 +141,7 @@ public class CoordinatorRequestDriverTest {
         CoordinatorKey group1 = new CoordinatorKey("foo", CoordinatorType.GROUP);
         Set<CoordinatorKey> groupIds = mkSet(group1);
 
-        TestCoordinatorRequestDriver driver = new TestCoordinatorRequestDriver(groupIds);
+        TestCoordinatorDriver driver = new TestCoordinatorDriver(groupIds);
         List<RequestSpec<CoordinatorKey>> lookupRequests1 = driver.poll();
         assertEquals(1, lookupRequests1.size());
 
@@ -166,7 +166,7 @@ public class CoordinatorRequestDriverTest {
         CoordinatorKey group1 = new CoordinatorKey("foo", CoordinatorType.GROUP);
         Set<CoordinatorKey> groupIds = mkSet(group1);
 
-        TestCoordinatorRequestDriver driver = new TestCoordinatorRequestDriver(groupIds);
+        TestCoordinatorDriver driver = new TestCoordinatorDriver(groupIds);
         List<RequestSpec<CoordinatorKey>> lookupRequests1 = driver.poll();
         assertEquals(1, lookupRequests1.size());
 
@@ -192,10 +192,15 @@ public class CoordinatorRequestDriverTest {
         return foundRequestOpt.get();
     }
 
-    private final class TestCoordinatorRequestDriver extends CoordinatorRequestDriver<String> {
+    private final class TestCoordinatorDriver extends CoordinatorApiDriver<String> {
 
-        public TestCoordinatorRequestDriver(Set<CoordinatorKey> groupIds) {
+        public TestCoordinatorDriver(Set<CoordinatorKey> groupIds) {
             super(groupIds, deadlineMs, retryBackoffMs, new LogContext());
+        }
+
+        @Override
+        String apiName() {
+            return "testCoordinatorApi";
         }
 
         @Override

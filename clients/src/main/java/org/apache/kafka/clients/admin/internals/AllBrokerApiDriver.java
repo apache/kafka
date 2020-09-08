@@ -36,10 +36,8 @@ import java.util.Set;
 /**
  * This class is used for use cases which require requests to be sent to all
  * brokers in the cluster.
- *
- * @param <V>
  */
-public abstract class AllBrokerRequestDriver<V> extends RequestDriver<AllBrokerRequestDriver.BrokerKey, V> {
+public abstract class AllBrokerApiDriver<V> extends ApiDriver<AllBrokerApiDriver.BrokerKey, V> {
     private static final BrokerKey ALL_BROKERS = new BrokerKey(OptionalInt.empty());
     private static final RequestScope SINGLE_REQUEST_SCOPE = new RequestScope() {
     };
@@ -47,7 +45,7 @@ public abstract class AllBrokerRequestDriver<V> extends RequestDriver<AllBrokerR
     private final Logger log;
     private final KafkaFutureImpl<Map<Integer, KafkaFutureImpl<V>>> lookupFuture;
 
-    public AllBrokerRequestDriver(
+    public AllBrokerApiDriver(
         long deadlineMs,
         long retryBackoffMs,
         LogContext logContext
@@ -55,7 +53,7 @@ public abstract class AllBrokerRequestDriver<V> extends RequestDriver<AllBrokerR
         super(Utils.mkSet(ALL_BROKERS), deadlineMs, retryBackoffMs, logContext);
 
         this.lookupFuture = new KafkaFutureImpl<>();
-        this.log = logContext.logger(AllBrokerRequestDriver.class);
+        this.log = logContext.logger(AllBrokerApiDriver.class);
 
         super.futures().get(ALL_BROKERS).whenComplete((nil, exception) -> {
             if (exception != null) {

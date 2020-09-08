@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.TransactionDescription;
-import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
+import org.apache.kafka.clients.admin.internals.ApiDriver.RequestSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -49,7 +49,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class DescribeTransactionsRequestDriverTest {
+public class DescribeTransactionsDriverTest {
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
@@ -61,7 +61,7 @@ public class DescribeTransactionsRequestDriverTest {
         String transactionalId2 = "bar";
         Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2);
 
-        DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
+        DescribeTransactionsDriver driver = new DescribeTransactionsDriver(
             transactionalIds, deadlineMs, retryBackoffMs, logContext);
 
         // Send `FindCoordinator` requests
@@ -116,9 +116,9 @@ public class DescribeTransactionsRequestDriverTest {
         assertEquals(Collections.emptyList(), driver.poll());
 
         KafkaFutureImpl<TransactionDescription> future1 = driver.futures()
-            .get(DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId1));
+            .get(DescribeTransactionsDriver.asCoordinatorKey(transactionalId1));
         KafkaFutureImpl<TransactionDescription> future2 = driver.futures()
-            .get(DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId2));
+            .get(DescribeTransactionsDriver.asCoordinatorKey(transactionalId2));
 
         assertTrue(future1.isDone());
         assertMatchingTransactionState(coordinator1, transactionState1, future1.get());
@@ -132,7 +132,7 @@ public class DescribeTransactionsRequestDriverTest {
         String transactionalId2 = "bar";
         Set<String> transactionalIds = mkSet(transactionalId1, transactionalId2);
 
-        DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
+        DescribeTransactionsDriver driver = new DescribeTransactionsDriver(
             transactionalIds, deadlineMs, retryBackoffMs, logContext);
 
         // Send `FindCoordinator` requests
@@ -181,9 +181,9 @@ public class DescribeTransactionsRequestDriverTest {
         assertEquals(Collections.emptyList(), driver.poll());
 
         KafkaFutureImpl<TransactionDescription> future1 = driver.futures()
-            .get(DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId1));
+            .get(DescribeTransactionsDriver.asCoordinatorKey(transactionalId1));
         KafkaFutureImpl<TransactionDescription> future2 = driver.futures()
-            .get(DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId2));
+            .get(DescribeTransactionsDriver.asCoordinatorKey(transactionalId2));
 
         assertTrue(future1.isDone());
         assertMatchingTransactionState(coordinator, transactionState1, future1.get());
@@ -195,7 +195,7 @@ public class DescribeTransactionsRequestDriverTest {
     public void testShouldRetryDescribeTransactionsIfCoordinatorLoadingInProgress() {
         String transactionalId = "foo";
 
-        DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
+        DescribeTransactionsDriver driver = new DescribeTransactionsDriver(
             singleton(transactionalId), deadlineMs, retryBackoffMs, logContext);
 
         // Send first `FindCoordinator` request
@@ -237,7 +237,7 @@ public class DescribeTransactionsRequestDriverTest {
     public void testShouldRetryFindCoordinatorAfterNotCoordinatorError() {
         String transactionalId = "foo";
 
-        DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
+        DescribeTransactionsDriver driver = new DescribeTransactionsDriver(
             singleton(transactionalId), deadlineMs, retryBackoffMs, logContext);
 
         // Send first `FindCoordinator` request
@@ -277,7 +277,7 @@ public class DescribeTransactionsRequestDriverTest {
     public void testShouldFailTransactionalIdAfterFatalErrorInDescribeTransactions() {
         String transactionalId = "foo";
 
-        DescribeTransactionsRequestDriver driver = new DescribeTransactionsRequestDriver(
+        DescribeTransactionsDriver driver = new DescribeTransactionsDriver(
             singleton(transactionalId), deadlineMs, retryBackoffMs, logContext);
 
         // Send first `FindCoordinator` request
@@ -310,10 +310,10 @@ public class DescribeTransactionsRequestDriverTest {
     }
 
     private KafkaFutureImpl<TransactionDescription> futureFor(
-        DescribeTransactionsRequestDriver driver,
+        DescribeTransactionsDriver driver,
         String transactionalId
     ) {
-        CoordinatorKey key = DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId);
+        CoordinatorKey key = DescribeTransactionsDriver.asCoordinatorKey(transactionalId);
         return driver.futures().get(key);
     }
 
@@ -321,7 +321,7 @@ public class DescribeTransactionsRequestDriverTest {
         String transactionalId,
         List<RequestSpec<CoordinatorKey>> requests
     ) {
-        CoordinatorKey key = DescribeTransactionsRequestDriver.asCoordinatorKey(transactionalId);
+        CoordinatorKey key = DescribeTransactionsDriver.asCoordinatorKey(transactionalId);
 
         Optional<RequestSpec<CoordinatorKey>> firstMatch = requests.stream()
             .filter(spec -> spec.keys.contains(key))
@@ -338,7 +338,7 @@ public class DescribeTransactionsRequestDriverTest {
         RequestSpec<CoordinatorKey> spec
     ) {
         Set<CoordinatorKey> keys = expectedTransactionalIds.stream()
-            .map(DescribeTransactionsRequestDriver::asCoordinatorKey)
+            .map(DescribeTransactionsDriver::asCoordinatorKey)
             .collect(Collectors.toSet());
         assertEquals(keys, spec.keys);
         assertEquals(OptionalInt.of(expectedCoordinatorId), spec.scope.destinationBrokerId());
@@ -352,7 +352,7 @@ public class DescribeTransactionsRequestDriverTest {
         String expectedTransactionalId,
         RequestSpec<CoordinatorKey> spec
     ) {
-        CoordinatorKey key = DescribeTransactionsRequestDriver.asCoordinatorKey(expectedTransactionalId);
+        CoordinatorKey key = DescribeTransactionsDriver.asCoordinatorKey(expectedTransactionalId);
         assertEquals(singleton(key), spec.keys);
         assertEquals(OptionalInt.empty(), spec.scope.destinationBrokerId());
 

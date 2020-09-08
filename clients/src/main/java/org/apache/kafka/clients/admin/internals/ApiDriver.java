@@ -23,7 +23,6 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -75,7 +74,7 @@ import java.util.function.BiFunction;
  * @param <V> The fulfillment type for each key (e.g. this could be consumer group state
  *            when the key type is a consumer `GroupId`)
  */
-public abstract class RequestDriver<K, V> {
+public abstract class ApiDriver<K, V> {
 
     private final Logger log;
     private final long retryBackoffMs;
@@ -86,7 +85,7 @@ public abstract class RequestDriver<K, V> {
     private final BiMultimap<BrokerScope, K> fulfillmentMap = new BiMultimap<>();
     private final Map<RequestScope, RequestState> requestStates = new HashMap<>();
 
-    public RequestDriver(
+    public ApiDriver(
         Collection<K> keys,
         long deadlineMs,
         long retryBackoffMs,
@@ -95,7 +94,7 @@ public abstract class RequestDriver<K, V> {
         this.futures = Utils.initializeMap(keys, KafkaFutureImpl::new);
         this.deadlineMs = deadlineMs;
         this.retryBackoffMs = retryBackoffMs;
-        this.log = logContext.logger(RequestDriver.class);
+        this.log = logContext.logger(ApiDriver.class);
         initializeLookupKeys();
     }
 
@@ -203,7 +202,7 @@ public abstract class RequestDriver<K, V> {
         AbstractResponse response
     ) {
         clearInflightRequest(currentTimeMs, spec);
-        if (spec.scope instanceof RequestDriver.BrokerScope) {
+        if (spec.scope instanceof ApiDriver.BrokerScope) {
             int brokerId = ((BrokerScope) spec.scope).destinationBrokerId;
             handleFulfillmentResponse(brokerId, spec.keys, response);
         } else {
@@ -224,11 +223,16 @@ public abstract class RequestDriver<K, V> {
     }
 
     /**
+     * Get a user-friendly name for the API this class is implementing.
+     */
+    abstract String apiName();
+
+    /**
      * The Lookup stage is complicated by the need to accommodate different batching mechanics.
      * Specifically, a `Metadata` request supports arbitrary batching of topic partitions, but
      * a `FindCoordinator` request only supports lookup of a single key. See the implementations
-     * in {@link MetadataRequestDriver#lookupScope(TopicPartition)} and
-     * {@link CoordinatorRequestDriver#lookupScope(CoordinatorKey)}.
+     * in {@link PartitionLeaderApiDriver#lookupScope(TopicPartition)} and
+     * {@link CoordinatorApiDriver#lookupScope(CoordinatorKey)}.
      */
     abstract RequestScope lookupScope(K key);
 
@@ -286,6 +290,7 @@ public abstract class RequestDriver<K, V> {
 
             AbstractRequest.Builder<?> request = buildRequest.apply(keys, scope);
             RequestSpec<K> spec = new RequestSpec<>(
+                this.apiName() + "(api=" + request.apiKey() + ")",
                 scope,
                 new HashSet<>(keys), // copy to avoid exposing mutable state
                 request,
@@ -321,6 +326,7 @@ public abstract class RequestDriver<K, V> {
      * {@link org.apache.kafka.clients.admin.KafkaAdminClient}.
      */
     public static class RequestSpec<K> {
+        public final String name;
         public final RequestScope scope;
         public final Set<K> keys;
         public final AbstractRequest.Builder<?> request;
@@ -329,6 +335,7 @@ public abstract class RequestDriver<K, V> {
         public final int tries;
 
         public RequestSpec(
+            String name,
             RequestScope scope,
             Set<K> keys,
             AbstractRequest.Builder<?> request,
@@ -336,6 +343,7 @@ public abstract class RequestDriver<K, V> {
             long deadlineMs,
             int tries
         ) {
+            this.name = name;
             this.scope = scope;
             this.keys = keys;
             this.request = request;

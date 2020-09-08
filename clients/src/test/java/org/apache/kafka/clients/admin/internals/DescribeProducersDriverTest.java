@@ -18,7 +18,7 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
-import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
+import org.apache.kafka.clients.admin.internals.ApiDriver.RequestSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -56,7 +56,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-public class DescribeProducersRequestDriverTest {
+public class DescribeProducersDriverTest {
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
@@ -68,7 +68,7 @@ public class DescribeProducersRequestDriverTest {
         int leaderId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions();
 
-        DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
+        DescribeProducersDriver driver = new DescribeProducersDriver(
             singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         assertMetadataLookup(driver, topicPartition, leaderId, 0);
@@ -89,7 +89,7 @@ public class DescribeProducersRequestDriverTest {
         int initialLeaderId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions();
 
-        DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
+        DescribeProducersDriver driver = new DescribeProducersDriver(
             singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         assertMetadataLookup(driver, topicPartition, initialLeaderId, 0);
@@ -114,7 +114,7 @@ public class DescribeProducersRequestDriverTest {
         int brokerId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions().setBrokerId(brokerId);
 
-        DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
+        DescribeProducersDriver driver = new DescribeProducersDriver(
             singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         List<RequestSpec<TopicPartition>> requests = driver.poll();
@@ -141,7 +141,7 @@ public class DescribeProducersRequestDriverTest {
         int brokerId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions().setBrokerId(brokerId);
 
-        DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
+        DescribeProducersDriver driver = new DescribeProducersDriver(
             singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         List<RequestSpec<TopicPartition>> requests = driver.poll();
@@ -168,7 +168,7 @@ public class DescribeProducersRequestDriverTest {
         int leaderId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions();
 
-        DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
+        DescribeProducersDriver driver = new DescribeProducersDriver(
             singleton(topicPartition), options, deadlineMs, retryBackoffMs, logContext);
 
         assertMetadataLookup(driver, topicPartition, leaderId, 0);
@@ -187,7 +187,7 @@ public class DescribeProducersRequestDriverTest {
     }
 
     private void assertSuccessfulFulfillment(
-        DescribeProducersRequestDriver driver,
+        DescribeProducersDriver driver,
         TopicPartition topicPartition,
         RequestSpec<TopicPartition> describeProducerSpec
     ) throws Exception {
@@ -207,7 +207,7 @@ public class DescribeProducersRequestDriverTest {
     }
 
     private void assertMetadataLookup(
-        DescribeProducersRequestDriver driver,
+        DescribeProducersDriver driver,
         TopicPartition topicPartition,
         int leaderId,
         int expectedTries

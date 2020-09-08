@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.AbortTransactionSpec;
-import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
+import org.apache.kafka.clients.admin.internals.ApiDriver.RequestSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.MetadataResponseData;
@@ -44,7 +44,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class AbortTransactionRequestDriverTest {
+public class AbortTransactionDriverTest {
     private final LogContext logContext = new LogContext();
     private final MockTime time = new MockTime();
     private final long deadlineMs = time.milliseconds() + 10000;
@@ -55,7 +55,7 @@ public class AbortTransactionRequestDriverTest {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         AbortTransactionSpec abortTransactionSpec = new AbortTransactionSpec(
             topicPartition, 12345L, 15, 4321);
-        AbortTransactionRequestDriver driver = new AbortTransactionRequestDriver(abortTransactionSpec,
+        AbortTransactionDriver driver = new AbortTransactionDriver(abortTransactionSpec,
             deadlineMs, retryBackoffMs, logContext);
         int expectedLeaderId = 5;
         assertMetadataLookup(driver, abortTransactionSpec, expectedLeaderId, 0);
@@ -68,7 +68,7 @@ public class AbortTransactionRequestDriverTest {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         AbortTransactionSpec abortTransactionSpec = new AbortTransactionSpec(
             topicPartition, 12345L, 15, 4321);
-        AbortTransactionRequestDriver driver = new AbortTransactionRequestDriver(abortTransactionSpec,
+        AbortTransactionDriver driver = new AbortTransactionDriver(abortTransactionSpec,
             deadlineMs, retryBackoffMs, logContext);
         int expectedLeaderId = 5;
         assertMetadataLookup(driver, abortTransactionSpec, expectedLeaderId, 0);
@@ -81,7 +81,7 @@ public class AbortTransactionRequestDriverTest {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         AbortTransactionSpec abortTransactionSpec = new AbortTransactionSpec(
             topicPartition, 12345L, 15, 4321);
-        AbortTransactionRequestDriver driver = new AbortTransactionRequestDriver(abortTransactionSpec,
+        AbortTransactionDriver driver = new AbortTransactionDriver(abortTransactionSpec,
             deadlineMs, retryBackoffMs, logContext);
         int expectedLeaderId = 5;
         assertMetadataLookup(driver, abortTransactionSpec, expectedLeaderId, 0);
@@ -94,7 +94,7 @@ public class AbortTransactionRequestDriverTest {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         AbortTransactionSpec abortTransactionSpec = new AbortTransactionSpec(
             topicPartition, 12345L, 15, 4321);
-        AbortTransactionRequestDriver driver = new AbortTransactionRequestDriver(abortTransactionSpec,
+        AbortTransactionDriver driver = new AbortTransactionDriver(abortTransactionSpec,
             deadlineMs, retryBackoffMs, logContext);
 
         int initialLeaderId = 5;
@@ -108,7 +108,7 @@ public class AbortTransactionRequestDriverTest {
     }
 
     private void assertMetadataLookup(
-        AbortTransactionRequestDriver driver,
+        AbortTransactionDriver driver,
         AbortTransactionSpec abortTransactionSpec,
         int expectedLeaderId,
         int expectedTries
@@ -127,7 +127,7 @@ public class AbortTransactionRequestDriverTest {
     }
 
     private void assertWriteTxnMarkers(
-        AbortTransactionRequestDriver driver,
+        AbortTransactionDriver driver,
         AbortTransactionSpec abortTransactionSpec,
         Errors error,
         int expectedLeaderId,
@@ -140,7 +140,7 @@ public class AbortTransactionRequestDriverTest {
     }
 
     private void assertCompletedFuture(
-        AbortTransactionRequestDriver driver,
+        AbortTransactionDriver driver,
         AbortTransactionSpec abortTransactionSpec,
         Errors error
     ) throws Exception {
@@ -163,7 +163,7 @@ public class AbortTransactionRequestDriverTest {
     }
 
     private RequestSpec<TopicPartition> assertWriteTxnMarkersRequest(
-        AbortTransactionRequestDriver driver,
+        AbortTransactionDriver driver,
         AbortTransactionSpec abortSpec,
         int expectedLeaderId,
         int expectedTries
@@ -194,7 +194,7 @@ public class AbortTransactionRequestDriverTest {
     }
 
     private RequestSpec<TopicPartition> assertMetadataRequest(
-        AbortTransactionRequestDriver driver,
+        AbortTransactionDriver driver,
         TopicPartition topicPartition,
         int expectedTries
     ) {

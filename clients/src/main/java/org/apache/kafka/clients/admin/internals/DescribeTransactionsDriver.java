@@ -31,7 +31,6 @@ import org.apache.kafka.common.requests.DescribeTransactionsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -40,23 +39,28 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class DescribeTransactionsRequestDriver extends CoordinatorRequestDriver<TransactionDescription> {
+public class DescribeTransactionsDriver extends CoordinatorApiDriver<TransactionDescription> {
     private final Logger log;
 
-    public DescribeTransactionsRequestDriver(
+    public DescribeTransactionsDriver(
         Collection<String> transactionalIds,
         long deadlineMs,
         long retryBackoffMs,
         LogContext logContext
     ) {
         super(buildKeySet(transactionalIds), deadlineMs, retryBackoffMs, logContext);
-        this.log = logContext.logger(DescribeTransactionsRequestDriver.class);
+        this.log = logContext.logger(DescribeTransactionsDriver.class);
     }
 
     private static Set<CoordinatorKey> buildKeySet(Collection<String> transactionalIds) {
         return transactionalIds.stream()
-            .map(DescribeTransactionsRequestDriver::asCoordinatorKey)
+            .map(DescribeTransactionsDriver::asCoordinatorKey)
             .collect(Collectors.toSet());
+    }
+
+    @Override
+    String apiName() {
+        return "describeTransactions";
     }
 
     @Override
