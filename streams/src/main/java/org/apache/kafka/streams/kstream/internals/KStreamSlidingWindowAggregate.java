@@ -197,7 +197,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     } else if (startTime == inputRecordTimestamp + 1) {
                         rightWinAlreadyCreated = true;
                     } else {
-                        log.warn(
+                        log.error(
                             "Unexpected window with start {} found when processing record at {} in `KStreamSlidingWindowAggregate`.",
                             startTime, inputRecordTimestamp
                         );
@@ -240,7 +240,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
          */
         private void processEarly(final K key, final V value, final long inputRecordTimestamp, final long closeTime) {
             if (inputRecordTimestamp < 0 || inputRecordTimestamp >= windows.timeDifferenceMs()) {
-                log.warn(
+                log.error(
                     "Early record for sliding windows must fall between fall between 0 <= inputRecordTimestamp. Timestamp {} does not fall between 0 <= {}",
                     inputRecordTimestamp, windows.timeDifferenceMs()
                 );
@@ -284,6 +284,10 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     } else if (startTime == inputRecordTimestamp + 1) {
                         rightWinAlreadyCreated = true;
                     } else {
+                        log.error(
+                            "Unexpected window with start {} found when processing record at {} in `KStreamSlidingWindowAggregate`.",
+                            startTime, inputRecordTimestamp
+                        );
                         throw new IllegalStateException("Unexpected window found when processing sliding windows");
                     }
                 }
