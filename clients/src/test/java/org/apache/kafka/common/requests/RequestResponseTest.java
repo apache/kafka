@@ -2424,7 +2424,7 @@ public class RequestResponseTest {
                     .setProducerId(1234L)
                     .setProducerEpoch(15)
                     .setLastTimestamp(13490218304L)
-                    .setCurrentTxnStartTimestamp(13490218304L),
+                    .setCurrentTxnStartOffset(5000),
                 new DescribeProducersResponseData.ProducerState()
                     .setProducerId(9876L)
                     .setProducerEpoch(32)
@@ -2444,13 +2444,13 @@ public class RequestResponseTest {
     private DescribeTransactionsResponse createDescribeTransactionsResponse() {
         DescribeTransactionsResponseData data = new DescribeTransactionsResponseData();
         data.setTransactionStates(asList(
-           new DescribeTransactionsResponseData.TransactionState()
-               .setErrorCode(Errors.NONE.code())
-               .setTransactionalId("t1")
-               .setProducerId(12345L)
-               .setProducerEpoch(15)
-               .setTransactionStartTimeMs(13490218304L)
-               .setTransactionState("Empty"),
+            new DescribeTransactionsResponseData.TransactionState()
+                .setErrorCode(Errors.NONE.code())
+                .setTransactionalId("t1")
+                .setProducerId(12345L)
+                .setProducerEpoch(15)
+                .setTransactionStartTimeMs(13490218304L)
+                .setTransactionState("Empty"),
             new DescribeTransactionsResponseData.TransactionState()
                 .setErrorCode(Errors.NONE.code())
                 .setTransactionalId("t2")

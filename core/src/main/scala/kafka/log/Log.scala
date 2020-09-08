@@ -951,7 +951,7 @@ class Log(@volatile private var _dir: File,
           .setProducerEpoch(state.producerEpoch)
           .setLastSequence(state.lastSeq)
           .setLastTimestamp(state.lastTimestamp)
-          .setCurrentTxnStartTimestamp(state.currentTxnFirstOffset.getOrElse(-1L))
+          .setCurrentTxnStartOffset(state.currentTxnFirstOffset.getOrElse(-1L))
       }
     }.toSeq
   }

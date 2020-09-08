@@ -100,4 +100,9 @@ public class DescribeProducersRequest extends AbstractRequest {
         return new DescribeProducersRequest(ApiKeys.DESCRIBE_PRODUCERS.parseRequest(version, buffer), version);
     }
 
+    @Override
+    public String toString(boolean verbose) {
+        return data.toString();
+    }
+
 }

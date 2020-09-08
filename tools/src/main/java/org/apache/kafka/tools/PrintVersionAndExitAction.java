@@ -20,6 +20,7 @@ import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.ArgumentAction;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.common.utils.Exit;
 
 import java.util.Map;
 
@@ -36,7 +37,7 @@ class PrintVersionAndExitAction implements ArgumentAction {
         String version = AppInfoParser.getVersion();
         String commitId = AppInfoParser.getCommitId();
         System.out.println(version + " (Commit:" + commitId + ")");
-        System.exit(0);
+        Exit.exit(0);
     }
 
     @Override

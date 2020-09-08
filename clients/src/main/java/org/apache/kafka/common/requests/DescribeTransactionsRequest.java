@@ -86,4 +86,9 @@ public class DescribeTransactionsRequest extends AbstractRequest {
         return new DescribeTransactionsRequest(ApiKeys.DESCRIBE_TRANSACTIONS.parseRequest(version, buffer), version);
     }
 
+    @Override
+    public String toString(boolean verbose) {
+        return data.toString();
+    }
+
 }

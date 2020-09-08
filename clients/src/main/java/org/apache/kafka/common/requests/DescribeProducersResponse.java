@@ -63,4 +63,9 @@ public class DescribeProducersResponse extends AbstractResponse {
             ApiKeys.DESCRIBE_PRODUCERS.responseSchema(version).read(buffer), version);
     }
 
+    @Override
+    public String toString() {
+        return data.toString();
+    }
+
 }

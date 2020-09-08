@@ -132,9 +132,9 @@ public class DescribeProducersRequestDriver extends MetadataRequestDriver<Partit
                 List<ProducerState> activeProducers = partitionResponse.activeProducers().stream()
                     .map(activeProducer -> {
                         OptionalLong currentTransactionFirstOffset =
-                            activeProducer.currentTxnStartTimestamp() < 0 ?
+                            activeProducer.currentTxnStartOffset() < 0 ?
                                 OptionalLong.empty() :
-                                OptionalLong.of(activeProducer.currentTxnStartTimestamp());
+                                OptionalLong.of(activeProducer.currentTxnStartOffset());
                         OptionalInt coordinatorEpoch =
                             activeProducer.coordinatorEpoch() < 0 ?
                                 OptionalInt.empty() :

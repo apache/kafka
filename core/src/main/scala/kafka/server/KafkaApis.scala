@@ -3069,7 +3069,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     describeProducersRequest.data.topics.forEach { topicRequest =>
       val topicResponse = new DescribeProducersResponseData.TopicResponse()
         .setName(topicRequest.name)
-      val topicError = if (!authorize(request.context, DESCRIBE, TOPIC, topicRequest.name))
+      val topicError = if (!authorize(request.context, READ, TOPIC, topicRequest.name))
         Some(Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicRequest.name))
         Some(Errors.UNKNOWN_TOPIC_OR_PARTITION)

@@ -4752,7 +4752,7 @@ public class KafkaAdminClientTest {
                     .setCoordinatorEpoch(producerState.coordinatorEpoch().orElse(-1))
                     .setLastSequence(producerState.lastSequence())
                     .setLastTimestamp(producerState.lastTimestamp())
-                    .setCurrentTxnStartTimestamp(producerState.currentTransactionStartOffset().orElse(-1L))
+                    .setCurrentTxnStartOffset(producerState.currentTransactionStartOffset().orElse(-1L))
             ).collect(Collectors.toList()));
 
             env.kafkaClient().prepareResponseFrom(

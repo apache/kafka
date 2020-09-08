@@ -38,7 +38,7 @@
           { "name": "LastSequence", "type": "int32", "versions": "0+", "default":  "-1" },
           { "name": "LastTimestamp", "type": "int64", "versions": "0+", "default": "-1" },
           { "name": "CoordinatorEpoch", "type":  "int32", "versions":  "0+" },
-          { "name": "CurrentTxnStartTimestamp", "type": "int64", "versions": "0+", "default": "-1" }
+          { "name": "CurrentTxnStartOffset", "type": "int64", "versions": "0+", "default": "-1" }
         ]}
       ]}
     ]}

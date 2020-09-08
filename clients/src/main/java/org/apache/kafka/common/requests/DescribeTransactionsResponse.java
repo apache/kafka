@@ -61,4 +61,9 @@ public class DescribeTransactionsResponse extends AbstractResponse {
             ApiKeys.DESCRIBE_TRANSACTIONS.responseSchema(version).read(buffer), version);
     }
 
+    @Override
+    public String toString() {
+        return data.toString();
+    }
+
 }

@@ -2349,4 +2349,176 @@ class KafkaApisTest {
       Errors.LOG_DIR_NOT_FOUND -> 1,
       Errors.INVALID_TOPIC_EXCEPTION -> 1).asJava, response.errorCounts)
   }
+
+  @Test
+  def testListTransactionsAuthorization(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val data = new ListTransactionsRequestData()
+    val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
+    val request = buildRequest(listTransactionsRequest)
+    val capturedResponse = expectNoThrottling()
+
+    EasyMock.expect(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
+        .andReturn(Right(List(
+          new ListTransactionsResponseData.TransactionState()
+            .setTransactionalId("foo")
+            .setProducerId(12345L)
+            .setTransactionState("Ongoing"),
+          new ListTransactionsResponseData.TransactionState()
+            .setTransactionalId("bar")
+            .setProducerId(98765)
+            .setTransactionState("PrepareAbort")
+        )))
+
+    def buildExpectedActions(transactionalId: String): util.List[Action] = {
+      val pattern = new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL)
+      val action = new Action(AclOperation.DESCRIBE, pattern, 1, true, true)
+      Collections.singletonList(action)
+    }
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("foo"))))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("bar"))))
+      .andReturn(Seq(AuthorizationResult.DENIED).asJava)
+      .once()
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, authorizer)
+    createKafkaApis(authorizer = Some(authorizer)).handleListTransactionsRequest(request)
+
+    val response = readResponse(ApiKeys.LIST_TRANSACTIONS, listTransactionsRequest, capturedResponse)
+      .asInstanceOf[ListTransactionsResponse]
+    assertEquals(1, response.data.transactionStates.size())
+    val transactionState = response.data.transactionStates.get(0)
+    assertEquals("foo", transactionState.transactionalId)
+    assertEquals(12345L, transactionState.producerId)
+    assertEquals("Ongoing", transactionState.transactionState)
+  }
+
+  @Test
+  def testDescribeTransactionsAuthorization(): Unit = {
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val data = new DescribeTransactionsRequestData()
+      .setTransactionalIds(List("foo", "bar").asJava)
+    val describeTransactionsRequest = new DescribeTransactionsRequest.Builder(data).build()
+    val request = buildRequest(describeTransactionsRequest)
+    val capturedResponse = expectNoThrottling()
+
+    def buildExpectedActions(transactionalId: String): util.List[Action] = {
+      val pattern = new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL)
+      val action = new Action(AclOperation.DESCRIBE, pattern, 1, true, true)
+      Collections.singletonList(action)
+    }
+
+    EasyMock.expect(txnCoordinator.handleDescribeTransactions("foo"))
+        .andReturn(new DescribeTransactionsResponseData.TransactionState()
+            .setErrorCode(Errors.NONE.code)
+            .setTransactionalId("foo")
+            .setProducerId(12345L)
+            .setProducerEpoch(15)
+            .setTransactionStartTimeMs(time.milliseconds())
+            .setTransactionState("Ongoing")
+            .setTopicPartitions(List.empty.asJava)
+            .setTransactionTimeoutMs(10000))
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("foo"))))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions("bar"))))
+      .andReturn(Seq(AuthorizationResult.DENIED).asJava)
+      .once()
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, authorizer)
+    createKafkaApis(authorizer = Some(authorizer)).handleDescribeTransactionsRequest(request)
+
+    val response = readResponse(ApiKeys.DESCRIBE_TRANSACTIONS, describeTransactionsRequest, capturedResponse)
+      .asInstanceOf[DescribeTransactionsResponse]
+    assertEquals(2, response.data.transactionStates.size())
+
+    val fooState = response.data.transactionStates.asScala.find(_.transactionalId == "foo").get
+    assertEquals(Errors.NONE.code, fooState.errorCode)
+    assertEquals(12345L, fooState.producerId)
+    assertEquals(15, fooState.producerEpoch)
+    assertEquals(time.milliseconds(), fooState.transactionStartTimeMs)
+    assertEquals("Ongoing", fooState.transactionState)
+    assertEquals(10000, fooState.transactionTimeoutMs)
+    assertEquals(List.empty.asJava, fooState.topicPartitions)
+
+    val barState = response.data.transactionStates.asScala.find(_.transactionalId == "bar").get
+    assertEquals(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code, barState.errorCode)
+  }
+
+  @Test
+  def testDescribeProducersAuthorization(): Unit = {
+    val tp1 = new TopicPartition("foo", 0)
+    val tp2 = new TopicPartition("bar", 3)
+
+    setupBasicMetadataCache(tp1.topic, 4) // We will only access the first topic
+    val authorizer: Authorizer = EasyMock.niceMock(classOf[Authorizer])
+    val data = new DescribeProducersRequestData().setTopics(List(
+      new DescribeProducersRequestData.TopicRequest()
+        .setName(tp1.topic)
+        .setPartitionIndexes(List(Int.box(tp1.partition)).asJava),
+      new DescribeProducersRequestData.TopicRequest()
+        .setName(tp2.topic)
+        .setPartitionIndexes(List(Int.box(tp2.partition)).asJava)
+    ).asJava)
+    val describeProducersRequest = new DescribeProducersRequest.Builder(data).build()
+    val request = buildRequest(describeProducersRequest)
+    val capturedResponse = expectNoThrottling()
+
+    def buildExpectedActions(topic: String): util.List[Action] = {
+      val pattern = new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
+      val action = new Action(AclOperation.READ, pattern, 1, true, true)
+      Collections.singletonList(action)
+    }
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions(tp1.topic))))
+      .andReturn(Seq(AuthorizationResult.ALLOWED).asJava)
+      .once()
+
+    EasyMock.expect(authorizer.authorize(anyObject[RequestContext], EasyMock.eq(buildExpectedActions(tp2.topic))))
+      .andReturn(Seq(AuthorizationResult.DENIED).asJava)
+      .once()
+
+    EasyMock.expect(replicaManager.activeProducerState(tp1))
+      .andReturn(new DescribeProducersResponseData.PartitionResponse()
+          .setErrorCode(Errors.NONE.code)
+          .setPartitionIndex(tp1.partition)
+        .setActiveProducers(List(
+          new DescribeProducersResponseData.ProducerState()
+            .setProducerId(12345L)
+            .setProducerEpoch(15)
+            .setLastSequence(100)
+            .setLastTimestamp(time.milliseconds())
+            .setCurrentTxnStartOffset(-1)
+            .setCoordinatorEpoch(200)
+        ).asJava))
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, authorizer)
+    createKafkaApis(authorizer = Some(authorizer)).handleDescribeProducersRequest(request)
+
+    val response = readResponse(ApiKeys.DESCRIBE_PRODUCERS, describeProducersRequest, capturedResponse)
+      .asInstanceOf[DescribeProducersResponse]
+    assertEquals(2, response.data.topics.size())
+
+    val fooTopic = response.data.topics.asScala.find(_.name == tp1.topic).get
+    val fooPartition = fooTopic.partitions.asScala.find(_.partitionIndex == tp1.partition).get
+    assertEquals(Errors.NONE.code, fooPartition.errorCode)
+    assertEquals(1, fooPartition.activeProducers.size)
+    val fooProducer = fooPartition.activeProducers.get(0)
+    assertEquals(12345L, fooProducer.producerId)
+    assertEquals(15, fooProducer.producerEpoch)
+    assertEquals(100, fooProducer.lastSequence)
+    assertEquals(time.milliseconds(), fooProducer.lastTimestamp)
+    assertEquals(-1, fooProducer.currentTxnStartOffset)
+    assertEquals(200, fooProducer.coordinatorEpoch)
+
+    val barTopic = response.data.topics.asScala.find(_.name == tp2.topic).get
+    val barPartition = barTopic.partitions.asScala.find(_.partitionIndex == tp2.partition).get
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, barPartition.errorCode)
+  }
+
 }

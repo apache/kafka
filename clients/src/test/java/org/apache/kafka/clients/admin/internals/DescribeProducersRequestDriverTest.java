@@ -272,13 +272,13 @@ public class DescribeProducersRequestDriverTest {
                 .setProducerEpoch(15)
                 .setLastSequence(75)
                 .setLastTimestamp(time.milliseconds())
-                .setCurrentTxnStartTimestamp(-1L),
+                .setCurrentTxnStartOffset(-1L),
             new ProducerState()
                 .setProducerId(98765L)
                 .setProducerEpoch(30)
                 .setLastSequence(150)
                 .setLastTimestamp(time.milliseconds())
-                .setCurrentTxnStartTimestamp(time.milliseconds())
+                .setCurrentTxnStartOffset(5000)
         );
     }
 
@@ -299,7 +299,7 @@ public class DescribeProducersRequestDriverTest {
             assertEquals(expectedProducerState.producerEpoch(), actualProducerState.producerEpoch());
             assertEquals(expectedProducerState.lastSequence(), actualProducerState.lastSequence());
             assertEquals(expectedProducerState.lastTimestamp(), actualProducerState.lastTimestamp());
-            assertEquals(expectedProducerState.currentTxnStartTimestamp(),
+            assertEquals(expectedProducerState.currentTxnStartOffset(),
                 actualProducerState.currentTransactionStartOffset().orElse(-1L));
         }
     }

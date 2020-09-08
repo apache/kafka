@@ -180,7 +180,7 @@ public abstract class TransactionsCommand {
             AbortTransactionSpec abortSpec
         ) throws Exception {
             try {
-                 admin.abortTransaction(abortSpec).all().get();
+                admin.abortTransaction(abortSpec).all().get();
             } catch (ExecutionException e) {
                 TransactionsCommand.printErrorAndExit("Failed to abort transaction " + abortSpec, e.getCause());
             }
@@ -424,7 +424,7 @@ public abstract class TransactionsCommand {
         }
 
         @Override
-        public void execute(Admin admin, Namespace ns, PrintStream out) throws Exception{
+        public void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
             final Map<Integer, Collection<TransactionListing>> result;
 
             try {

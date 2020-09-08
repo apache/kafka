@@ -80,4 +80,9 @@ public class ListTransactionsRequest extends AbstractRequest {
         return new ListTransactionsRequest(ApiKeys.LIST_TRANSACTIONS.parseRequest(version, buffer), version);
     }
 
+    @Override
+    public String toString(boolean verbose) {
+        return data.toString();
+    }
+
 }

@@ -57,4 +57,9 @@ public class ListTransactionsResponse extends AbstractResponse {
             ApiKeys.LIST_TRANSACTIONS.responseSchema(version).read(buffer), version);
     }
 
+    @Override
+    public String toString() {
+        return data.toString();
+    }
+
 }
