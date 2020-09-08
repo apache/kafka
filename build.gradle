@@ -179,7 +179,7 @@ subprojects {
   // eg: ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
   task allDepInsight(type: DependencyInsightReportTask) doLast {}
 
-  apply plugin: 'java'
+  apply plugin: 'java-library'
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
   if (!project.name.equals('connect')) {
     apply plugin: 'eclipse'
@@ -720,26 +720,26 @@ project(':core') {
   archivesBaseName = "kafka_${versions.baseScala}"
 
   dependencies {
-    implementation project(':clients')
-    implementation libs.jacksonDatabind
-    implementation libs.jacksonModuleScala
-    implementation libs.jacksonDataformatCsv
-    implementation libs.jacksonJDK8Datatypes
-    implementation libs.joptSimple
-    implementation libs.metrics
-    implementation libs.scalaCollectionCompat
-    implementation libs.scalaJava8Compat
-    implementation libs.scalaLibrary
+    api project(':clients')
+    api libs.jacksonDatabind
+    api libs.jacksonModuleScala
+    api libs.jacksonDataformatCsv
+    api libs.jacksonJDK8Datatypes
+    api libs.joptSimple
+    api libs.metrics
+    api libs.scalaCollectionCompat
+    api libs.scalaJava8Compat
+    api libs.scalaLibrary
     // only needed transitively, but set it explicitly to ensure it has the same version as scala-library
-    implementation libs.scalaReflect
-    implementation libs.scalaLogging
-    implementation libs.slf4jApi
-    implementation(libs.zookeeper) {
+    api libs.scalaReflect
+    api libs.scalaLogging
+    api libs.slf4jApi
+    api(libs.zookeeper) {
       exclude module: 'slf4j-log4j12'
       exclude module: 'log4j'
     }
     // ZooKeeperMain depends on commons-cli but declares the dependency as `provided`
-    implementation libs.commonsCli
+    api libs.commonsCli
 
     compileOnly libs.log4j
 
@@ -778,12 +778,12 @@ project(':core') {
 
   configurations {
     // manually excludes some unnecessary dependencies
-    implementation.exclude module: 'javax'
-    implementation.exclude module: 'jline'
-    implementation.exclude module: 'jms'
-    implementation.exclude module: 'jmxri'
-    implementation.exclude module: 'jmxtools'
-    implementation.exclude module: 'mail'
+    api.exclude module: 'javax'
+    api.exclude module: 'jline'
+    api.exclude module: 'jms'
+    api.exclude module: 'jmxri'
+    api.exclude module: 'jmxtools'
+    api.exclude module: 'mail'
     // To prevent a UniqueResourceException due the same resource existing in both
     // org.apache.directory.api/api-all and org.apache.directory.api/api-ldap-schema-data
     testImplementation.exclude module: 'api-ldap-schema-data'
@@ -964,9 +964,7 @@ project(':examples') {
   archivesBaseName = "kafka-examples"
 
   dependencies {
-    implementation project(':core')
-    implementation libs.scalaLibrary
-    implementation project(':clients')
+    api project(':core')
   }
 
   javadoc {
@@ -980,10 +978,10 @@ project(':examples') {
 
 project(':generator') {
   dependencies {
-    implementation libs.argparse4j
-    implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
-    implementation libs.jacksonJaxrsJsonProvider
+    api libs.argparse4j
+    api libs.jacksonDatabind
+    api libs.jacksonJDK8Datatypes
+    api libs.jacksonJaxrsJsonProvider
     testImplementation libs.junit
   }
 
@@ -1007,10 +1005,10 @@ project(':clients') {
   conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
 
   dependencies {
-    implementation libs.zstd
-    implementation libs.lz4
-    implementation libs.snappy
-    implementation libs.slf4jApi
+    api libs.zstd
+    api libs.lz4
+    api libs.snappy
+    api libs.slf4jApi
 
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
@@ -1126,22 +1124,21 @@ project(':tools') {
   archivesBaseName = "kafka-tools"
 
   dependencies {
-    implementation project(':clients')
-    implementation project(':log4j-appender')
-    implementation libs.argparse4j
-    implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
-    implementation libs.slf4jApi
-    implementation libs.log4j
+    api project(':clients')
+    api project(':log4j-appender')
+    api libs.argparse4j
+    api libs.jacksonDatabind
+    api libs.jacksonJDK8Datatypes
+    api libs.slf4jApi
 
-    implementation libs.jacksonJaxrsJsonProvider
-    implementation libs.jerseyContainerServlet
-    implementation libs.jerseyHk2
-    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
+    api libs.jacksonJaxrsJsonProvider
+    api libs.jerseyContainerServlet
+    api libs.jerseyHk2
+    api libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    api libs.activation // Jersey dependency that was available in the JDK before Java 9
+    api libs.jettyServer
+    api libs.jettyServlet
+    api libs.jettyServlets
 
     testImplementation project(':clients')
     testImplementation libs.junit
@@ -1179,16 +1176,16 @@ project(':streams') {
   ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   dependencies {
-    implementation project(':clients')
+    api project(':clients')
 
     // this dependency should be removed after we unify data API
-    implementation(project(':connect:json')) {
+    api(project(':connect:json')) {
       // this transitive dependency is not used in Streams, and it breaks SBT builds
       exclude module: 'javax.ws.rs-api'
     }
 
-    implementation libs.slf4jApi
-    implementation libs.rocksDBJni
+    api libs.slf4jApi
+    api libs.rocksDBJni
 
     // testCompileOnly prevents streams from exporting a dependency on test-utils, which would cause a dependency cycle
     testCompileOnly project(':streams:test-utils')
@@ -1317,12 +1314,10 @@ project(':streams:streams-scala') {
   archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
 
   dependencies {
+    api project(':streams')
 
-    implementation project(':clients')
-    implementation project(':streams')
-
-    implementation libs.scalaLibrary
-    implementation libs.scalaCollectionCompat
+    api libs.scalaLibrary
+    api libs.scalaCollectionCompat
 
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
@@ -1361,9 +1356,8 @@ project(':streams:test-utils') {
   archivesBaseName = "kafka-streams-test-utils"
 
   dependencies {
-    implementation project(':streams')
-    implementation project(':clients')
-    implementation libs.slf4jApi
+    api project(':streams')
+    api project(':clients')
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junit
@@ -1396,11 +1390,9 @@ project(':streams:examples') {
   archivesBaseName = "kafka-streams-examples"
 
   dependencies {
-    implementation project(':streams')
-    implementation project(':clients')
-    implementation project(':connect:json')  // this dependency should be removed after we unify data API
-    implementation libs.jacksonDatabind
-    implementation libs.slf4jlog4j
+    api project(':streams')
+    api project(':connect:json')  // this dependency should be removed after we unify data API
+    api libs.slf4jlog4j
 
     testImplementation project(':streams:test-utils')
     testImplementation project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
@@ -1591,20 +1583,17 @@ project(':jmh-benchmarks') {
   }
 
   dependencies {
-    implementation project(':core')
-    implementation project(':clients')
-    implementation project(':streams')
-    implementation project(':core')
-    implementation libs.metrics
-    implementation libs.scalaLibrary
-    implementation libs.scalaJava8Compat
-    implementation project(':clients').sourceSets.test.output
-    implementation project(':core').sourceSets.test.output
-    implementation libs.jmhCore
+    api project(':core')
+    api project(':clients')
+    api project(':streams')
+    api project(':core')
+    api project(':clients').sourceSets.test.output
+    api project(':core').sourceSets.test.output
+    api libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
-    implementation libs.jmhCoreBenchmarks
-    implementation libs.mockitoCore
-    implementation libs.slf4jlog4j
+    api libs.jmhCoreBenchmarks
+    api libs.mockitoCore
+    api libs.slf4jlog4j
   }
 
   jar {
@@ -1638,8 +1627,8 @@ project(':log4j-appender') {
   archivesBaseName = "kafka-log4j-appender"
 
   dependencies {
-    implementation project(':clients')
-    implementation libs.slf4jlog4j
+    api project(':clients')
+    api libs.slf4jlog4j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junit
@@ -1656,9 +1645,9 @@ project(':connect:api') {
   archivesBaseName = "connect-api"
 
   dependencies {
-    implementation project(':clients')
-    implementation libs.slf4jApi
-    implementation libs.jaxrsApi
+    api project(':clients')
+    api libs.slf4jApi
+    api libs.jaxrsApi
 
     testImplementation libs.junit
 
@@ -1697,9 +1686,8 @@ project(':connect:transforms') {
   archivesBaseName = "connect-transforms"
 
   dependencies {
-    implementation project(':connect:api')
-    implementation project(':clients')
-    implementation libs.slf4jApi
+    api project(':connect:api')
+    api libs.slf4jApi
 
     testImplementation libs.easymock
     testImplementation libs.junit
@@ -1736,12 +1724,10 @@ project(':connect:json') {
   archivesBaseName = "connect-json"
 
   dependencies {
-    implementation project(':connect:api')
-    implementation project(':clients')
-
-    implementation libs.jacksonDatabind
-    implementation libs.jacksonJDK8Datatypes
-    implementation libs.slf4jApi
+    api project(':connect:api')
+    api libs.jacksonDatabind
+    api libs.jacksonJDK8Datatypes
+    api libs.slf4jApi
 
     testImplementation libs.easymock
     testImplementation libs.junit
@@ -1779,25 +1765,24 @@ project(':connect:runtime') {
 
   dependencies {
 
-    implementation project(':connect:api')
-    implementation project(':clients')
-    implementation project(':tools')
-    implementation project(':connect:json')
-    implementation project(':connect:transforms')
+    api project(':connect:api')
+    api project(':clients')
+    api project(':tools')
+    api project(':connect:json')
+    api project(':connect:transforms')
 
-    implementation libs.slf4jApi
-    implementation libs.slf4jlog4j
-    implementation libs.jacksonJaxrsJsonProvider
-    implementation libs.jerseyContainerServlet
-    implementation libs.jerseyHk2
-    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
-    implementation libs.jettyClient
-    implementation(libs.reflections)
-    implementation(libs.mavenArtifact)
+    api libs.slf4jApi
+    api libs.jacksonJaxrsJsonProvider
+    api libs.jerseyContainerServlet
+    api libs.jerseyHk2
+    api libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    api libs.activation // Jersey dependency that was available in the JDK before Java 9
+    api libs.jettyServer
+    api libs.jettyServlet
+    api libs.jettyServlets
+    api libs.jettyClient
+    api(libs.reflections)
+    api(libs.mavenArtifact)
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.easymock
@@ -1810,7 +1795,6 @@ project(':connect:runtime') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
-    testImplementation libs.scalaLibrary
 
     testRuntimeOnly libs.slf4jlog4j
   }
@@ -1884,9 +1868,8 @@ project(':connect:file') {
   archivesBaseName = "connect-file"
 
   dependencies {
-    implementation project(':connect:api')
-    implementation project(':clients')
-    implementation libs.slf4jApi
+    api project(':connect:api')
+    api libs.slf4jApi
 
     testImplementation libs.easymock
     testImplementation libs.junit
@@ -1923,10 +1906,8 @@ project(':connect:basic-auth-extension') {
   archivesBaseName = "connect-basic-auth-extension"
 
   dependencies {
-    implementation project(':connect:api')
-    implementation project(':clients')
-    implementation libs.slf4jApi
-    implementation libs.jaxrsApi
+    api project(':connect:api')
+    api libs.slf4jApi
 
     testImplementation libs.bcpkix
     testImplementation libs.easymock
@@ -1965,13 +1946,12 @@ project(':connect:mirror') {
   archivesBaseName = "connect-mirror"
 
   dependencies {
-    implementation project(':connect:api')
-    implementation project(':connect:runtime')
-    implementation project(':connect:mirror-client')
-    implementation project(':clients')
-    implementation libs.argparse4j
-    implementation libs.slf4jApi
-    implementation libs.jacksonDatabind
+    api project(':connect:api')
+    api project(':connect:runtime')
+    api project(':connect:mirror-client')
+    api project(':clients')
+    api libs.argparse4j
+    api libs.slf4jApi
 
     testImplementation libs.junit
     testImplementation libs.mockitoCore
@@ -2010,8 +1990,8 @@ project(':connect:mirror-client') {
   archivesBaseName = "connect-mirror-client"
 
   dependencies {
-    implementation project(':clients')
-    implementation libs.slf4jApi
+    api project(':clients')
+    api libs.slf4jApi
 
     testImplementation libs.junit
     testImplementation project(':clients').sourceSets.test.output
