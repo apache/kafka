@@ -87,9 +87,10 @@ object Log4jController {
 class Log4jController extends Log4jControllerMBean {
 
   def getLoggers: util.List[String] = {
-    Log4jController.loggers.map {
+    // Create a copy to avoid CCE on deserialization.
+    new util.ArrayList(Log4jController.loggers.map {
       case (logger, level) => s"$logger=$level"
-    }.toList.asJava
+    }.toList.asJava)
   }
 
 
