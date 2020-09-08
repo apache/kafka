@@ -561,6 +561,19 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
           new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
 
+        case ApiKeys.DESCRIBE_PRODUCERS =>
+          new DescribeProducersRequest.Builder(new DescribeProducersRequestData()
+              .setTopics(List(new DescribeProducersRequestData.TopicRequest()
+                  .setName("test-topic")
+                  .setPartitionIndexes(List(1, 2, 3).map(Int.box).asJava)).asJava))
+
+        case ApiKeys.LIST_TRANSACTIONS =>
+          new ListTransactionsRequest.Builder(new ListTransactionsRequestData())
+
+        case ApiKeys.DESCRIBE_TRANSACTIONS =>
+          new DescribeTransactionsRequest.Builder(new DescribeTransactionsRequestData()
+              .setTransactionalIds(List("test-transactional-id").asJava))
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

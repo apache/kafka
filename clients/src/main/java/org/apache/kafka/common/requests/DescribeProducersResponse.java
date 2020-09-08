@@ -68,4 +68,9 @@ public class DescribeProducersResponse extends AbstractResponse {
         return data.toString();
     }
 
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
+    }
+
 }
