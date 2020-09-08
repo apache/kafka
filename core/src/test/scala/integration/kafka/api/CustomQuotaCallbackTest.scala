@@ -33,7 +33,6 @@ import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
-import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.server.quota._
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -204,14 +203,19 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     }
   }
 
-  private def addUser(user: String, leader: Int): GroupedUser = {
-    val password = s"$user:secret"
-    createScramCredentials(zkConnect, user, password)
-    servers.foreach { server =>
-      val cache = server.credentialProvider.credentialCache.cache(kafkaClientSaslMechanism, classOf[ScramCredential])
-      TestUtils.waitUntilTrue(() => cache.get(user) != null, "SCRAM credentials not created")
-    }
+  private def passwordForUser(user: String) = {
+    s"$user:secret"
+  }
 
+  private def addUser(user: String, leader: Int): GroupedUser = {
+    val adminClient = createAdminClient()
+    createScramCredentials(adminClient, user, passwordForUser(user))
+    waitForUserScramCredentialToAppearOnAllBrokers(user, kafkaClientSaslMechanism)
+    groupedUser(adminClient, user, leader)
+  }
+
+  private def groupedUser(adminClient: Admin, user: String, leader: Int): GroupedUser = {
+    val password = passwordForUser(user)
     val userGroup = group(user)
     val topic = s"${userGroup}_topic"
     val producerClientId = s"$user:producer-client-id"
@@ -226,7 +230,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, ScramLoginModule(user, password).toString)
 
     GroupedUser(user, userGroup, topic, servers(leader), producerClientId, consumerClientId,
-      createProducer(), createConsumer(), createAdminClient())
+      createProducer(), createConsumer(), adminClient)
   }
 
   case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: KafkaServer,

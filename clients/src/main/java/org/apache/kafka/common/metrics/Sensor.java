@@ -63,7 +63,7 @@ public final class Sensor {
     }
 
     public enum RecordingLevel {
-        INFO(0, "INFO"), DEBUG(1, "DEBUG");
+        INFO(0, "INFO"), DEBUG(1, "DEBUG"), TRACE(2, "TRACE");
 
         private static final RecordingLevel[] ID_TO_TYPE;
         private static final int MIN_RECORDING_LEVEL_KEY = 0;
@@ -106,7 +106,15 @@ public final class Sensor {
         }
 
         public boolean shouldRecord(final int configId) {
-            return configId == DEBUG.id || configId == this.id;
+            if (configId == INFO.id) {
+                return this.id == INFO.id;
+            } else if (configId == DEBUG.id) {
+                return this.id == INFO.id || this.id == DEBUG.id;
+            } else if (configId == TRACE.id) {
+                return true;
+            } else {
+                throw new IllegalStateException("Did not recognize recording level " + configId);
+            }
         }
     }
 
