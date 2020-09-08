@@ -27,6 +27,12 @@ import org.junit.Assert.{assertEquals, assertTrue}
 class LoggingTest extends Logging {
 
   @Test
+  def testTypeOfGetLoggers(): Unit = {
+    val log4jController = new Log4jController
+    assertEquals(classOf[java.util.ArrayList[String]], log4jController.getLoggers.getClass)
+  }
+
+  @Test
   def testLog4jControllerIsRegistered(): Unit = {
     val mbs = ManagementFactory.getPlatformMBeanServer()
     val log4jControllerName = ObjectName.getInstance("kafka:type=kafka.Log4jController")
