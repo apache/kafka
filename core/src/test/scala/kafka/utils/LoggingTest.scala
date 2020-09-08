@@ -29,6 +29,8 @@ class LoggingTest extends Logging {
   @Test
   def testTypeOfGetLoggers(): Unit = {
     val log4jController = new Log4jController
+    // the return object of getLoggers must be a collection instance from java standard library.
+    // That enables mbean client to deserialize it without extra libraries.
     assertEquals(classOf[java.util.ArrayList[String]], log4jController.getLoggers.getClass)
   }
 
