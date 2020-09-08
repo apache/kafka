@@ -49,11 +49,15 @@ abstract class RemoteStorageThreadPool(name: String, threadNamePrefix: String, n
     with Logging
     with KafkaMetricsGroup {
   newGauge(metricNamePrefix.concat("TaskQueueSize"), new Gauge[Int] {
-    def value = getQueue().size()
+    def value() = {
+      getQueue().size()
+    }
   })
 
-  newGauge(metricNamePrefix.concat("AvgIdle"), new Gauge[Double] {
-    def value = 1 - getActiveCount.asInstanceOf[Double] / getCorePoolSize.asInstanceOf[Double]
+  newGauge(metricNamePrefix.concat("AvgIdlePercent"), new Gauge[Double] {
+    def value() = {
+      1 - getActiveCount.asInstanceOf[Double] / getCorePoolSize.asInstanceOf[Double]
+    }
   })
 
   this.logIdent = s"[${name}] "

@@ -17,10 +17,9 @@
 
 package kafka.server
 
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.CompletableFuture
 
 import kafka.log.remote.{RemoteLogManager, RemoteLogReadResult}
-import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 
@@ -84,9 +83,6 @@ class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
   }
 
   override def onExpiration():Unit = {
-    DelayedFetchMetrics.consumerExpiredRequestMeter.mark()
-    DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
-
     // cancel the remote storage read task, if it has not been executed yet
     remoteFetchTask.cancel(false)
   }
@@ -115,8 +111,4 @@ class DelayedRemoteFetch(remoteFetchTask: RemoteLogManager#AsyncReadTask,
 
     responseCallback(fetchPartitionData)
   }
-}
-
-object DelayedRemoteFetchMetrics extends KafkaMetricsGroup {
-  val expiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }

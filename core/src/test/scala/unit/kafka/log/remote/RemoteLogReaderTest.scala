@@ -24,7 +24,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.concurrent.{CompletableFuture, RejectedExecutionException}
 
 import kafka.log.remote.RemoteLogManager.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX
-import kafka.server.{Defaults, FetchDataInfo, FetchTxnCommitted, LogOffsetMetadata, RemoteStorageFetchInfo}
+import kafka.server.{BrokerTopicStats, Defaults, FetchDataInfo, FetchTxnCommitted, LogOffsetMetadata, RemoteStorageFetchInfo}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
@@ -124,7 +124,7 @@ class RemoteLogReaderTest {
 }
 
 class MockRemoteLogManager(threads: Int, taskQueueSize: Int)
-  extends RemoteLogManager((tp) => None, (tp, segment) => {}, MockRemoteLogManager.rlmConfig(threads, taskQueueSize), new SystemTime, 1, "mock-cluster", Files.createTempDirectory("kafka-test-").toString) {
+  extends RemoteLogManager((tp) => None, (tp, segment) => {}, MockRemoteLogManager.rlmConfig(threads, taskQueueSize), new SystemTime, 1, "mock-cluster", Files.createTempDirectory("kafka-test-").toString, new BrokerTopicStats) {
   private val lock = new ReentrantReadWriteLock
 
   override def read(remoteStorageFetchInfo: RemoteStorageFetchInfo): FetchDataInfo = {

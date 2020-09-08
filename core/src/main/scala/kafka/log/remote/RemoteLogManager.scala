@@ -25,12 +25,14 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.{BiConsumer, Consumer, Function}
 import java.util.{Collections, Optional}
 
+import com.yammer.metrics.core.Gauge
 import kafka.cluster.Partition
 import kafka.common.KafkaException
 import kafka.log.Log
 import kafka.log.remote.RemoteLogManager.CLUSTER_ID
+import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
-import kafka.server.{Defaults, FetchDataInfo, FetchTxnCommitted, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
+import kafka.server.{BrokerTopicStats, Defaults, FetchDataInfo, FetchTxnCommitted, KafkaConfig, LogOffsetMetadata, RemoteStorageFetchInfo}
 import kafka.utils.Logging
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.TopicPartition
@@ -72,6 +74,10 @@ class RLMScheduledThreadPool(poolSize: Int) extends Logging {
 
   def poolSize(): Int = scheduledThreadPool.getMaximumPoolSize
 
+  def getIdlePercent(): Double = {
+    1 - scheduledThreadPool.getActiveCount().asInstanceOf[Double] / scheduledThreadPool.getCorePoolSize.asInstanceOf[Double]
+  }
+
   def scheduleWithFixedDelay(runnable: Runnable, initialDelay: Long, delay: Long,
                              timeUnit: TimeUnit): ScheduledFuture[_] = {
     info(s"Scheduling runnable $runnable with initial dalay: $initialDelay , fixed delay: $delay")
@@ -109,7 +115,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                        rlmConfig: RemoteLogManagerConfig,
                        time: Time = Time.SYSTEM,
                        brokerId: Int,
-                       clusterId: String = "", logDir: String) extends Logging with Closeable {
+                       clusterId: String = "",
+                       logDir: String,
+                       brokerTopicStats: BrokerTopicStats) extends Logging with Closeable with KafkaMetricsGroup  {
   private val leaderOrFollowerTasks: ConcurrentHashMap[TopicPartition, RLMTaskWithFuture] =
     new ConcurrentHashMap[TopicPartition, RLMTaskWithFuture]()
   private val remoteStorageFetcherThreadPool = new RemoteStorageReaderThreadPool(rlmConfig.remoteLogReaderThreads,
@@ -119,6 +127,12 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
   private val poolSize = rlmConfig.remoteLogManagerThreadPoolSize
   private val rlmScheduledThreadPool = new RLMScheduledThreadPool(poolSize)
   @volatile private var closed = false
+
+  newGauge("RemoteLogManagerTasksAvgIdlePercent", new Gauge[Double] {
+    def value() = {
+      rlmScheduledThreadPool.getIdlePercent()
+    }
+  })
 
   private def createRemoteStorageManager(): ClassLoaderAwareRemoteStorageManager = {
     val classPath = rlmConfig.remoteLogStorageManagerClassPath
@@ -394,6 +408,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
                   State.COPY_FINISHED, Collections.emptyMap())
 
                 remoteLogMetadataManager.putRemoteLogSegmentData(rlsmAfterCreate)
+                brokerTopicStats.topicStats(tp.topic()).remoteBytesOutRate.mark(rlsmAfterCreate.segmentSizeInBytes())
                 readOffset = endOffset
                 log.updateRemoteIndexHighestOffset(readOffset)
               }
@@ -404,7 +419,9 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
         }
         }
       } catch {
-        case ex: Exception => error(s"Error occurred while copying log segments of partition: $tp", ex)
+        case ex: Exception =>
+          brokerTopicStats.topicStats(tp.topic()).failedRemoteWriteRequestRate.mark()
+          error(s"Error occurred while copying log segments of partition: $tp", ex)
       }
     }
 
@@ -658,7 +675,7 @@ class RemoteLogManager(fetchLog: TopicPartition => Option[Log],
    * @throws RejectedExecutionException if the task cannot be accepted for execution (task queue is full)
    */
   def asyncRead(fetchInfo: RemoteStorageFetchInfo, callback: (RemoteLogReadResult) => Unit): AsyncReadTask = {
-    AsyncReadTask(remoteStorageFetcherThreadPool.submit(new RemoteLogReader(fetchInfo, this, callback)))
+    AsyncReadTask(remoteStorageFetcherThreadPool.submit(new RemoteLogReader(fetchInfo, this, brokerTopicStats, callback)))
   }
 
   /**

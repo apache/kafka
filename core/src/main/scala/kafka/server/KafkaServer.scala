@@ -434,7 +434,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         })
       }
 
-      Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time, config.brokerId, clusterId, config.logDirs.head))
+      Some(new RemoteLogManager(fetchLog, updateRemoteLogStartOffset, remoteLogManagerConfig, time, config.brokerId, clusterId, config.logDirs.head, brokerTopicStats))
     } else {
       None
     }

@@ -120,7 +120,7 @@ class RemoteLogManagerTest {
 
     // this should initialize RSM
     val logsDirTmp = Files.createTempDirectory("kafka-").toString
-    val remoteLogManager = new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time, 1, "", logsDirTmp)
+    val remoteLogManager = new RemoteLogManager(logFetcher, lsoUpdater, rlmConfig, time, 1, "", logsDirTmp, new BrokerTopicStats)
     remoteLogManager.onEndpointCreated("localhost:9092")
 
     assertTrue(rsmConfig.count { case (k, v) => MockRemoteStorageManager.configs.get(k) == v } == rsmConfig.size)
