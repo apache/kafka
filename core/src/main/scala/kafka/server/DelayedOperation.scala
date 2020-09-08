@@ -214,12 +214,12 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     // the tryComplete() check. This is to avoid a potential deadlock between the callers to tryCompleteElseWatch() and
     // checkAndComplete(). For example, the following deadlock can happen if the lock is only held for the final tryComplete()
     // 1) thread_a holds readlock of stateLock from TransactionStateManager
-    // 2) thread_a is executing tryCompleteElseWatch
+    // 2) thread_a is executing tryCompleteElseWatch()
     // 3) thread_a adds op to watch list
     // 4) thread_b requires writelock of stateLock from TransactionStateManager (blocked by thread_a)
     // 5) thread_c calls checkAndComplete() and holds lock of op
     // 6) thread_c is waiting readlock of stateLock to complete op (blocked by thread_b)
-    // 7) thread_a is waiting lock of op to call safeTryComplete (blocked by thread_c)
+    // 7) thread_a is waiting lock of op to call the final tryComplete() (blocked by thread_c)
     //
     // Note that even with the current approach, deadlocks could still be introduced. For example,
     // 1) thread_a calls tryCompleteElseWatch() and gets lock of op

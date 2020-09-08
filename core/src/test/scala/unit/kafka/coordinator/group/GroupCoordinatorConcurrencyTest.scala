@@ -125,7 +125,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   def testConcurrentRandomSequence(): Unit = {
     /**
      * handleTxnCommitOffsets does not complete delayed requests now so it causes error if handleTxnCompletion is executed
-     * before completing delayed request. In random mode, we use this global lock to prevent such error.
+     * before completing delayed request. In random mode, we use this global lock to prevent such an error.
      */
     val lock = new ReentrantLock()
     verifyConcurrentRandomSequences(createGroupMembers, Seq(
