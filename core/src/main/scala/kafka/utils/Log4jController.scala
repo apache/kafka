@@ -34,7 +34,7 @@ object Log4jController {
     var level = logger.getLevel
     while (level == null) {
       val index = name.lastIndexOf(".")
-      if (index != -1) {
+      if (index > 0) {
         name = name.substring(0, index)
         val ancestor = existingLogger(name)
         if (ancestor != null) {
