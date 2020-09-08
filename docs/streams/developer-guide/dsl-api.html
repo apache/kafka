@@ -1358,7 +1358,7 @@
 
 <span class="c1">// Aggregating with time-based windowing (here: with 5-minute sliding windows and 30-minute grace)</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">timeWindowedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span>
-  <span class="n">SlidingWindows</span><span class="o">.</span><span class="na">withTimeDifferenceAndGrace</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">),</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">30</span><span class="o">))</span> <span class="cm">/* time-based window */</span><span class="o">)</span>
+  <span class="n">SlidingWindows</span><span class="o">.</span><span class="na">withTimeDifferenceAndGrace</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">),</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">30</span><span class="o">)))</span> <span class="cm">/* time-based window */</span><span class="o">)</span>
   <span class="o">.</span><span class="na">reduce</span><span class="o">(</span>
     <span class="o">(</span><span class="n">aggValue</span><span class="o">,</span> <span class="n">newValue</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">aggValue</span> <span class="o">+</span> <span class="n">newValue</span> <span class="cm">/* adder */</span>
   <span class="o">);</span>
@@ -3307,12 +3307,12 @@ become t=300,000).</span></p>
                         <span id="windowing-sliding"></span><h5><a class="toc-backref" href="#id22">Sliding time windows</a><a class="headerlink" href="#sliding-time-windows" title="Permalink to this headline"></a></h5>
                         <p>Sliding windows are actually quite different from hopping and tumbling windows.  In Kafka Streams, sliding windows
                             are used for <a class="reference internal" href="#streams-developer-guide-dsl-joins"><span class="std std-ref">join operations</span></a>, specified by using the
-                            <code class="docutils literal"><span class="pre">JoinWindows</span></code> class, and windowed aggregations, specified by using the ``SlidingWindows`` class.</p>
+                            <code class="docutils literal"><span class="pre">JoinWindows</span></code> class, and windowed aggregations, specified by using the code class="docutils literal"><span class="pre">SlidingWindows</span></code> class.</p>
                         <p>A sliding window models a fixed-size window that slides continuously over the time axis. In this model, two data records are
                             said to be included in the same window if (in the case of symmetric windows) the difference of their timestamps is
                             within the window size. As a sliding window moves along the time axis, records may fall into multiple snapshots of
                             the sliding window, but each unique combination of records appears only in one sliding window snapshot.</p>
-                        <p>The following code defines a tumbling window with a time difference of 10 minutes and a grace period of 30 minutes:</p>
+                        <p>The following code defines a sliding window with a time difference of 10 minutes and a grace period of 30 minutes:</p>
                         <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.SlidingWindows</span><span class="o">;</span>
 
 <span class="c1">// A sliding time window with a time difference of 10 minutes and grace period of 30 minutes</span>
