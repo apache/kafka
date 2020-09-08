@@ -227,7 +227,7 @@ public class KStreamGlobalKTableLeftJoinTest {
     }
 
     @Test
-    public void shouldJoinOnNullKeyMapperValues() {
+    public void shouldNotJoinOnNullKeyMapperValues() {
 
         // push all items to the globalTable. this should not produce any item
 
@@ -235,13 +235,10 @@ public class KStreamGlobalKTableLeftJoinTest {
         processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream with no foreign key, resulting in null keyMapper values.
-        // this should produce four items.
+        // this should not produce any item.
 
         pushToStream(4, "XXX", false, false);
-        processor.checkAndClearProcessResult(new KeyValueTimestamp<>(0, "XXX0+null", 0),
-                new KeyValueTimestamp<>(1, "XXX1+null", 1),
-                new KeyValueTimestamp<>(2, "XXX2+null", 2),
-                new KeyValueTimestamp<>(3, "XXX3+null", 3));
+        processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
