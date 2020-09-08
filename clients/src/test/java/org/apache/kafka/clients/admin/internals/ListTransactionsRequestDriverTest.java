@@ -243,7 +243,7 @@ public class ListTransactionsRequestDriverTest {
     ) {
         assertEquals(expected.transactionalId(), actual.transactionalId());
         assertEquals(expected.producerId(), actual.producerId());
-        assertEquals(expected.transactionState(), actual.transactionState().toString());
+        assertEquals(expected.transactionState(), actual.state().toString());
     }
 
     private void assertListTransactionsRequest(

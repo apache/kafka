@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
+import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.common.TopicPartition;
@@ -152,7 +153,7 @@ public abstract class TransactionsCommand {
                 return null;
             }
 
-            Optional<DescribeProducersResult.ProducerState> foundProducerState = result.activeProducers().stream()
+            Optional<ProducerState> foundProducerState = result.activeProducers().stream()
                 .filter(producerState -> {
                     OptionalLong txnStartOffsetOpt = producerState.currentTransactionStartOffset();
                     return txnStartOffsetOpt.isPresent() && txnStartOffsetOpt.getAsLong() == startOffset;
@@ -165,7 +166,7 @@ public abstract class TransactionsCommand {
                 return null;
             }
 
-            DescribeProducersResult.ProducerState producerState = foundProducerState.get();
+            ProducerState producerState = foundProducerState.get();
             return new AbortTransactionSpec(
                 topicPartition,
                 producerState.producerId(),
@@ -452,7 +453,7 @@ public abstract class TransactionsCommand {
                         listing.transactionalId(),
                         coordinatorIdString,
                         String.valueOf(listing.producerId()),
-                        listing.transactionState().toString()
+                        listing.state().toString()
                     });
                 }
             }

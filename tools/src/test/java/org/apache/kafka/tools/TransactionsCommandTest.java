@@ -22,7 +22,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
-import org.apache.kafka.clients.admin.DescribeProducersResult.ProducerState;
+import org.apache.kafka.clients.admin.ProducerState;
 import org.apache.kafka.clients.admin.DescribeTransactionsResult;
 import org.apache.kafka.clients.admin.ListTransactionsResult;
 import org.apache.kafka.clients.admin.TransactionDescription;

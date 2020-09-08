@@ -164,8 +164,8 @@ public class MetadataRequestDriverTest {
         RequestSpec<TopicPartition> spec0 = lookupRequest(requests2, tp0);
         assertEquals(mkSet(tp0), spec0.keys);
         assertEquals(OptionalInt.empty(), spec0.scope.destinationBrokerId());
-        assertTrue(spec0.request instanceof MetadataRequest.Builder);
         assertExpectedBackoffAndDeadline(spec0, 1);
+        assertTrue(spec0.request instanceof MetadataRequest.Builder);
         MetadataRequest.Builder retryMetadataRequest = (MetadataRequest.Builder) spec0.request;
         assertEquals(mkSet("foo"), new HashSet<>(retryMetadataRequest.topics()));
 

@@ -25,9 +25,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.OptionalInt;
-import java.util.OptionalLong;
 import java.util.concurrent.ExecutionException;
 
 @InterfaceStability.Evolving
@@ -73,86 +70,6 @@ public class DescribeProducersResult {
 
         public List<ProducerState> activeProducers() {
             return activeProducers;
-        }
-    }
-
-    public static class ProducerState {
-        private final long producerId;
-        private final int producerEpoch;
-        private final int lastSequence;
-        private final long lastTimestamp;
-        private final OptionalInt coordinatorEpoch;
-        private final OptionalLong currentTransactionStartOffset;
-
-        public ProducerState(
-            long producerId,
-            int producerEpoch,
-            int lastSequence,
-            long lastTimestamp,
-            OptionalInt coordinatorEpoch,
-            OptionalLong currentTransactionStartOffset
-        ) {
-            this.producerId = producerId;
-            this.producerEpoch = producerEpoch;
-            this.lastSequence = lastSequence;
-            this.lastTimestamp = lastTimestamp;
-            this.coordinatorEpoch = coordinatorEpoch;
-            this.currentTransactionStartOffset = currentTransactionStartOffset;
-        }
-
-        public long producerId() {
-            return producerId;
-        }
-
-        public int producerEpoch() {
-            return producerEpoch;
-        }
-
-        public int lastSequence() {
-            return lastSequence;
-        }
-
-        public long lastTimestamp() {
-            return lastTimestamp;
-        }
-
-        public OptionalLong currentTransactionStartOffset() {
-            return currentTransactionStartOffset;
-        }
-
-        public OptionalInt coordinatorEpoch() {
-            return coordinatorEpoch;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            ProducerState that = (ProducerState) o;
-            return producerId == that.producerId &&
-                producerEpoch == that.producerEpoch &&
-                lastSequence == that.lastSequence &&
-                lastTimestamp == that.lastTimestamp &&
-                Objects.equals(coordinatorEpoch, that.coordinatorEpoch) &&
-                Objects.equals(currentTransactionStartOffset, that.currentTransactionStartOffset);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(producerId, producerEpoch, lastSequence, lastTimestamp,
-                coordinatorEpoch, currentTransactionStartOffset);
-        }
-
-        @Override
-        public String toString() {
-            return "ProducerState(" +
-                "producerId=" + producerId +
-                ", producerEpoch=" + producerEpoch +
-                ", lastSequence=" + lastSequence +
-                ", lastTimestamp=" + lastTimestamp +
-                ", coordinatorEpoch=" + coordinatorEpoch +
-                ", currentTransactionStartOffset=" + currentTransactionStartOffset +
-                ')';
         }
     }
 

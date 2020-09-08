@@ -53,12 +53,12 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
-import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -70,10 +70,13 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
+<<<<<<< HEAD
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+=======
+import org.apache.kafka.common.message.CreateAclsResponseData;
+>>>>>>> Add base `KafkaAdminClient` test cases
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
-import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResultCollection;
@@ -91,10 +94,16 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
+<<<<<<< HEAD
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
+=======
+import org.apache.kafka.common.message.DescribeProducersResponseData;
+import org.apache.kafka.common.message.DescribeTransactionsResponseData;
+>>>>>>> Add base `KafkaAdminClient` test cases
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
@@ -102,8 +111,10 @@ import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
+import org.apache.kafka.common.message.ListTransactionsResponseData;
+import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
@@ -135,8 +146,16 @@ import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+<<<<<<< HEAD
 import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
+=======
+import org.apache.kafka.common.requests.DescribeProducersRequest;
+import org.apache.kafka.common.requests.DescribeProducersResponse;
+import org.apache.kafka.common.requests.DescribeTransactionsRequest;
+import org.apache.kafka.common.requests.DescribeTransactionsResponse;
+>>>>>>> Add base `KafkaAdminClient` test cases
 import org.apache.kafka.common.requests.ElectLeadersResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -146,11 +165,15 @@ import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.ListOffsetResponse.PartitionData;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
+import org.apache.kafka.common.requests.ListTransactionsRequest;
+import org.apache.kafka.common.requests.ListTransactionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetDeleteResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
+import org.apache.kafka.common.requests.WriteTxnMarkersResponse;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -177,6 +200,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -189,7 +213,9 @@ import java.util.stream.Stream;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
@@ -4455,12 +4481,12 @@ public class KafkaAdminClientTest {
 
             DescribeUserScramCredentialsResponseData responseData = new DescribeUserScramCredentialsResponseData();
             responseData.setResults(Arrays.asList(
-                    new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
-                            .setUser(user0Name)
-                            .setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1)),
-                    new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
-                            .setUser(user1Name)
-                            .setCredentialInfos(Arrays.asList(user1CredentialInfo))));
+                new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+                    .setUser(user0Name)
+                    .setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1)),
+                new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+                    .setUser(user1Name)
+                    .setCredentialInfos(Arrays.asList(user1CredentialInfo))));
 
             env.kafkaClient().prepareResponse(new DescribeUserScramCredentialsResponse(responseData));
 
@@ -4509,14 +4535,14 @@ public class KafkaAdminClientTest {
 
             AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
             responseData.setResults(Arrays.asList(
-                    new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult().setUser(user2Name)));
+                new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult().setUser(user2Name)));
 
             env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
 
             AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(Arrays.asList(
-                    new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
-                    new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password"),
-                    new UserScramCredentialUpsertion(user2Name, new ScramCredentialInfo(user2ScramMechanism0, 4096), "password")));
+                new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
+                new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password"),
+                new UserScramCredentialUpsertion(user2Name, new ScramCredentialInfo(user2ScramMechanism0, 4096), "password")));
             Map<String, KafkaFuture<Void>> resultData = result.values();
             assertEquals(3, resultData.size());
             Arrays.asList(user0Name, user1Name).stream().forEach(u -> {
@@ -4574,6 +4600,205 @@ public class KafkaAdminClientTest {
                 assertFalse(resultData.get(u).isCompletedExceptionally());
             });
         }
+    }
+
+    @Test
+    public void testListTransactions() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            MetadataResponseData.MetadataResponseBrokerCollection brokers =
+                new MetadataResponseData.MetadataResponseBrokerCollection();
+
+            env.cluster().nodes().forEach(node -> {
+                brokers.add(new MetadataResponseData.MetadataResponseBroker()
+                    .setHost(node.host())
+                    .setNodeId(node.id())
+                    .setPort(node.port())
+                    .setRack(node.rack())
+                );
+            });
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof MetadataRequest,
+                new MetadataResponse(new MetadataResponseData().setBrokers(brokers))
+            );
+
+            List<TransactionListing> expected = Arrays.asList(
+                new TransactionListing("foo", 12345L, TransactionState.ONGOING),
+                new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT),
+                new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
+            );
+            assertEquals(Utils.mkSet(0, 1, 2), env.cluster().nodes().stream().map(Node::id)
+                .collect(Collectors.toSet()));
+
+            env.cluster().nodes().forEach(node -> {
+                ListTransactionsResponseData response = new ListTransactionsResponseData()
+                    .setErrorCode(Errors.NONE.code());
+
+                TransactionListing listing = expected.get(node.id());
+                response.transactionStates().add(new ListTransactionsResponseData.TransactionState()
+                    .setTransactionalId(listing.transactionalId())
+                    .setProducerId(listing.producerId())
+                    .setTransactionState(listing.state().toString())
+                );
+
+                env.kafkaClient().prepareResponseFrom(
+                    request -> request instanceof ListTransactionsRequest,
+                    new ListTransactionsResponse(response),
+                    node
+                );
+            });
+
+            ListTransactionsResult result = env.adminClient().listTransactions();
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
+        }
+    }
+
+    @Test
+    public void testDescribeTransactions() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            String transactionalId = "foo";
+            Node coordinator = env.cluster().nodes().iterator().next();
+            TransactionDescription expected = new TransactionDescription(
+                coordinator.id(), TransactionState.COMPLETE_COMMIT, 12345L,
+                15, 10000L, OptionalLong.empty(), emptySet());
+
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof FindCoordinatorRequest,
+                new FindCoordinatorResponse(new FindCoordinatorResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setNodeId(coordinator.id())
+                    .setHost(coordinator.host())
+                    .setPort(coordinator.port()))
+            );
+
+            env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof DescribeTransactionsRequest,
+                new DescribeTransactionsResponse(new DescribeTransactionsResponseData().setTransactionStates(
+                    singletonList(new DescribeTransactionsResponseData.TransactionState()
+                        .setErrorCode(Errors.NONE.code())
+                        .setProducerEpoch(expected.producerEpoch())
+                        .setProducerId(expected.producerId())
+                        .setTransactionalId(transactionalId)
+                        .setTransactionTimeoutMs(10000)
+                        .setTransactionStartTimeMs(-1)
+                        .setTransactionState(expected.state().toString())
+                    )
+                )),
+                coordinator
+            );
+
+            DescribeTransactionsResult result = env.adminClient().describeTransactions(singleton(transactionalId));
+            KafkaFuture<TransactionDescription> future = result.transactionalIdResult(transactionalId);
+            assertEquals(expected, future.get());
+        }
+    }
+
+    @Test
+    public void testAbortTransaction() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            TopicPartition topicPartition = new TopicPartition("foo", 0);
+            AbortTransactionSpec abortSpec = new AbortTransactionSpec(
+                topicPartition, 12345L, 15, 200);
+            Node leader = env.cluster().nodes().iterator().next();
+
+            expectMetadataRequest(env, topicPartition, leader);
+
+            env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof WriteTxnMarkersRequest,
+                new WriteTxnMarkersResponse(singletonMap(abortSpec.producerId(), singletonMap(topicPartition, Errors.NONE))),
+                leader
+            );
+
+            AbortTransactionResult result = env.adminClient().abortTransaction(abortSpec);
+            assertNull(result.all().get());
+        }
+    }
+
+    @Test
+    public void testDescribeProducers() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            TopicPartition topicPartition = new TopicPartition("foo", 0);
+            AbortTransactionSpec abortSpec = new AbortTransactionSpec(
+                topicPartition, 12345L, 15, 200);
+            Node leader = env.cluster().nodes().iterator().next();
+
+            expectMetadataRequest(env, topicPartition, leader);
+
+            DescribeProducersResponseData response = new DescribeProducersResponseData();
+
+            DescribeProducersResponseData.TopicResponse topicResponse =
+                new DescribeProducersResponseData.TopicResponse()
+                    .setName(topicPartition.topic());
+            response.topics().add(topicResponse);
+
+            DescribeProducersResponseData.PartitionResponse partitionResponse =
+                new DescribeProducersResponseData.PartitionResponse()
+                    .setPartitionIndex(topicPartition.partition())
+                    .setErrorCode(Errors.NONE.code());
+            topicResponse.partitions().add(partitionResponse);
+
+            List<ProducerState> expected = Arrays.asList(
+                new ProducerState(12345L, 15, 30, env.time().milliseconds(),
+                    OptionalInt.of(99), OptionalLong.empty()),
+                new ProducerState(12345L, 15, 30, env.time().milliseconds(),
+                    OptionalInt.empty(), OptionalLong.of(23423L))
+            );
+
+            partitionResponse.setActiveProducers(expected.stream().map(producerState ->
+                new DescribeProducersResponseData.ProducerState()
+                    .setProducerId(producerState.producerId())
+                    .setProducerEpoch(producerState.producerEpoch())
+                    .setCoordinatorEpoch(producerState.coordinatorEpoch().orElse(-1))
+                    .setLastSequence(producerState.lastSequence())
+                    .setLastTimestamp(producerState.lastTimestamp())
+                    .setCurrentTxnStartTimestamp(producerState.currentTransactionStartOffset().orElse(-1L))
+            ).collect(Collectors.toList()));
+
+            env.kafkaClient().prepareResponseFrom(
+                request -> request instanceof DescribeProducersRequest,
+                new DescribeProducersResponse(response),
+                leader
+            );
+
+            DescribeProducersResult result = env.adminClient().describeProducers(singleton(topicPartition));
+            KafkaFuture<DescribeProducersResult.PartitionProducerState> partitionFuture =
+                result.partitionResult(topicPartition);
+            assertEquals(new HashSet<>(expected), new HashSet<>(partitionFuture.get().activeProducers()));
+        }
+    }
+
+    private void expectMetadataRequest(
+        AdminClientUnitTestEnv env,
+        TopicPartition topicPartition,
+        Node leader
+    ) {
+        MetadataResponseData.MetadataResponseTopicCollection responseTopics =
+            new MetadataResponseData.MetadataResponseTopicCollection();
+
+        MetadataResponseTopic responseTopic = new MetadataResponseTopic()
+            .setName(topicPartition.topic())
+            .setErrorCode(Errors.NONE.code());
+        responseTopics.add(responseTopic);
+
+        MetadataResponsePartition responsePartition = new MetadataResponsePartition()
+            .setErrorCode(Errors.NONE.code())
+            .setPartitionIndex(topicPartition.partition())
+            .setLeaderId(leader.id())
+            .setReplicaNodes(singletonList(leader.id()))
+            .setIsrNodes(singletonList(leader.id()));
+        responseTopic.partitions().add(responsePartition);
+
+        env.kafkaClient().prepareResponse(
+            request -> {
+                if (!(request instanceof MetadataRequest)) {
+                    return false;
+                }
+                MetadataRequest metadataRequest = (MetadataRequest) request;
+                return metadataRequest.topics().equals(singletonList(topicPartition.topic()));
+            },
+            new MetadataResponse(new MetadataResponseData().setTopics(responseTopics))
+        );
     }
 
     private void createAlterLogDirsResponse(AdminClientUnitTestEnv env, Node node, Errors error, int... partitions) {

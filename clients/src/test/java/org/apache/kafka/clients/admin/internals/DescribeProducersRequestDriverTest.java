@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
-import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
 import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
 import org.apache.kafka.common.TopicPartition;
@@ -285,7 +284,7 @@ public class DescribeProducersRequestDriverTest {
 
     private void assertMatchingProducers(
         List<ProducerState> expected,
-        List<DescribeProducersResult.ProducerState> actual
+        List<org.apache.kafka.clients.admin.ProducerState> actual
     ) {
         assertEquals(expected.size(), actual.size());
 
@@ -294,7 +293,7 @@ public class DescribeProducersRequestDriverTest {
             Function.identity()
         ));
 
-        for (DescribeProducersResult.ProducerState actualProducerState : actual) {
+        for (org.apache.kafka.clients.admin.ProducerState actualProducerState : actual) {
             ProducerState expectedProducerState = expectedByProducerId.get(actualProducerState.producerId());
             assertNotNull(expectedProducerState);
             assertEquals(expectedProducerState.producerEpoch(), actualProducerState.producerEpoch());

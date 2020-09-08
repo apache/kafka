@@ -41,7 +41,7 @@ public class TransactionListing {
         return producerId;
     }
 
-    public TransactionState transactionState() {
+    public TransactionState state() {
         return transactionState;
     }
 
