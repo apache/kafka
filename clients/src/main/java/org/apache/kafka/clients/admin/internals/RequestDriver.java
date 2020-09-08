@@ -103,10 +103,10 @@ public abstract class RequestDriver<K, V> {
     }
 
     /**
-     * Check whether the . This is useful when a response contains more partitions
-     * than are strictly needed. For example, a `Metadata` response always includes
-     * all partitions for each requested topic, even if we are only interested in
-     * a subset of them.
+     * Check whether a particular key has been requested. This is useful when a response
+     * contains more partitions than are strictly needed. For example, a `Metadata`
+     * response always includes all partitions for each requested topic, even if we are
+     * only interested in a subset of them.
      */
     boolean contains(K key) {
         return futures.containsKey(key);
