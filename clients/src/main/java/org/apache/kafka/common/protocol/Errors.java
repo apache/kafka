@@ -333,7 +333,7 @@ public enum Errors {
     RESOURCE_NOT_FOUND(91, "A request illegally referred to a resource that does not exist.", ResourceNotFoundException::new),
     DUPLICATE_RESOURCE(92, "A request illegally referred to the same resource twice.", DuplicateResourceException::new),
     UNACCEPTABLE_CREDENTIAL(93, "Requested credential would not meet criteria for acceptability.", UnacceptableCredentialException::new),
-    TRANSACTIONAL_ID_NOT_FOUND(91, "The transactionalId could not be found", TransactionalIdNotFoundException::new);
+    TRANSACTIONAL_ID_NOT_FOUND(94, "The transactionalId could not be found", TransactionalIdNotFoundException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
