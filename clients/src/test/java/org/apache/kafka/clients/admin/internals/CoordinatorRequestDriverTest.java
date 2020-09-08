@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
@@ -31,6 +32,7 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -53,17 +55,13 @@ public class CoordinatorRequestDriverTest {
         Set<CoordinatorKey> groupIds = mkSet(group1, group2);
 
         TestCoordinatorRequestDriver driver = new TestCoordinatorRequestDriver(groupIds);
-        List<RequestDriver<CoordinatorKey, String>.RequestSpec> requests = driver.poll();
+        List<RequestSpec<CoordinatorKey>> requests = driver.poll();
         assertEquals(2, requests.size());
 
         // While the FindCoordinator requests are inflight, we will not send any more
         assertEquals(0, driver.poll().size());
 
-        RequestDriver<CoordinatorKey, String>.RequestSpec spec1 = requests.stream()
-            .filter(spec -> spec.keys.contains(group1))
-            .findFirst()
-            .get();
-
+        RequestSpec<CoordinatorKey> spec1 = lookupRequest(requests, group1);
         assertEquals(mkSet(group1), spec1.keys);
         assertEquals(OptionalInt.empty(), spec1.scope.destinationBrokerId());
         assertEquals(deadlineMs, spec1.deadlineMs);
@@ -74,11 +72,7 @@ public class CoordinatorRequestDriverTest {
         assertEquals(group1.idValue, findCoordinatorRequest1.data().key());
         assertEquals(group1.type.id(), findCoordinatorRequest1.data().keyType());
 
-        RequestDriver<CoordinatorKey, String>.RequestSpec spec2 = requests.stream()
-            .filter(spec -> spec.keys.contains(group2))
-            .findFirst()
-            .get();
-
+        RequestSpec<CoordinatorKey> spec2 = lookupRequest(requests, group2);
         assertEquals(mkSet(group2), spec2.keys);
         assertEquals(OptionalInt.empty(), spec2.scope.destinationBrokerId());
         assertEquals(deadlineMs, spec2.deadlineMs);
@@ -97,14 +91,10 @@ public class CoordinatorRequestDriverTest {
         Set<CoordinatorKey> groupIds = mkSet(group1, group2);
 
         TestCoordinatorRequestDriver driver = new TestCoordinatorRequestDriver(groupIds);
-        List<RequestDriver<CoordinatorKey, String>.RequestSpec> lookupRequests = driver.poll();
+        List<RequestSpec<CoordinatorKey>> lookupRequests = driver.poll();
         assertEquals(2, lookupRequests.size());
 
-        RequestDriver<CoordinatorKey, String>.RequestSpec lookupSpec1 = lookupRequests.stream()
-            .filter(spec -> spec.keys.contains(group1))
-            .findFirst()
-            .get();
-
+        RequestSpec<CoordinatorKey> lookupSpec1 = lookupRequest(lookupRequests, group1);
         driver.onResponse(time.milliseconds(), lookupSpec1, new FindCoordinatorResponse(new FindCoordinatorResponseData()
             .setErrorCode(Errors.NONE.code())
             .setHost("localhost")
@@ -112,9 +102,9 @@ public class CoordinatorRequestDriverTest {
             .setNodeId(1)
         ));
 
-        List<RequestDriver<CoordinatorKey, String>.RequestSpec> requests1 = driver.poll();
+        List<RequestSpec<CoordinatorKey>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
-        RequestDriver<CoordinatorKey, String>.RequestSpec requestSpec1 = requests1.get(0);
+        RequestSpec<CoordinatorKey> requestSpec1 = requests1.get(0);
         assertEquals(mkSet(group1), requestSpec1.keys);
         assertEquals(OptionalInt.of(1), requestSpec1.scope.destinationBrokerId());
         assertEquals(0, requestSpec1.tries);
@@ -124,11 +114,7 @@ public class CoordinatorRequestDriverTest {
         DescribeGroupsRequest.Builder request = (DescribeGroupsRequest.Builder) requestSpec1.request;
         assertEquals(singletonList(group1.idValue), request.data.groups());
 
-        RequestDriver<CoordinatorKey, String>.RequestSpec lookupSpec2 = lookupRequests.stream()
-            .filter(spec -> spec.keys.contains(group2))
-            .findFirst()
-            .get();
-
+        RequestSpec<CoordinatorKey> lookupSpec2 = lookupRequest(lookupRequests, group2);
         driver.onResponse(time.milliseconds(), lookupSpec2, new FindCoordinatorResponse(new FindCoordinatorResponseData()
             .setErrorCode(Errors.NONE.code())
             .setHost("localhost")
@@ -136,9 +122,9 @@ public class CoordinatorRequestDriverTest {
             .setNodeId(2)
         ));
 
-        List<RequestDriver<CoordinatorKey, String>.RequestSpec> requests2 = driver.poll();
+        List<RequestSpec<CoordinatorKey>> requests2 = driver.poll();
         assertEquals(1, requests2.size());
-        RequestDriver<CoordinatorKey, String>.RequestSpec requestSpec2 = requests2.get(0);
+        RequestSpec<CoordinatorKey> requestSpec2 = requests2.get(0);
         assertEquals(mkSet(group2), requestSpec2.keys);
         assertEquals(OptionalInt.of(2), requestSpec2.scope.destinationBrokerId());
         assertEquals(0, requestSpec2.tries);
@@ -155,18 +141,18 @@ public class CoordinatorRequestDriverTest {
         Set<CoordinatorKey> groupIds = mkSet(group1);
 
         TestCoordinatorRequestDriver driver = new TestCoordinatorRequestDriver(groupIds);
-        List<RequestDriver<CoordinatorKey, String>.RequestSpec> lookupRequests1 = driver.poll();
+        List<RequestSpec<CoordinatorKey>> lookupRequests1 = driver.poll();
         assertEquals(1, lookupRequests1.size());
 
-        RequestDriver<CoordinatorKey, String>.RequestSpec lookupSpec = lookupRequests1.get(0);
+        RequestSpec<CoordinatorKey> lookupSpec = lookupRequests1.get(0);
         driver.onResponse(time.milliseconds(), lookupSpec, new FindCoordinatorResponse(new FindCoordinatorResponseData()
             .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
         ));
 
-        List<RequestDriver<CoordinatorKey, String>.RequestSpec> lookupRequests2 = driver.poll();
+        List<RequestSpec<CoordinatorKey>> lookupRequests2 = driver.poll();
         assertEquals(1, lookupRequests1.size());
 
-        RequestDriver<CoordinatorKey, String>.RequestSpec retryLookupSpec = lookupRequests2.get(0);
+        RequestSpec<CoordinatorKey> retryLookupSpec = lookupRequests2.get(0);
         assertEquals(1, retryLookupSpec.tries);
         assertEquals(time.milliseconds() + retryBackoffMs, retryLookupSpec.nextAllowedTryMs);
         assertEquals(deadlineMs, retryLookupSpec.deadlineMs);
@@ -180,10 +166,10 @@ public class CoordinatorRequestDriverTest {
         Set<CoordinatorKey> groupIds = mkSet(group1);
 
         TestCoordinatorRequestDriver driver = new TestCoordinatorRequestDriver(groupIds);
-        List<RequestDriver<CoordinatorKey, String>.RequestSpec> lookupRequests1 = driver.poll();
+        List<RequestSpec<CoordinatorKey>> lookupRequests1 = driver.poll();
         assertEquals(1, lookupRequests1.size());
 
-        RequestDriver<CoordinatorKey, String>.RequestSpec lookupSpec = lookupRequests1.get(0);
+        RequestSpec<CoordinatorKey> lookupSpec = lookupRequests1.get(0);
         driver.onResponse(time.milliseconds(), lookupSpec, new FindCoordinatorResponse(new FindCoordinatorResponseData()
             .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
         ));
@@ -192,6 +178,17 @@ public class CoordinatorRequestDriverTest {
         GroupAuthorizationException groupAuthorizationException = assertFutureThrows(
             driver.futures().get(group1), GroupAuthorizationException.class);
         assertEquals(group1.idValue, groupAuthorizationException.groupId());
+    }
+
+    private RequestSpec<CoordinatorKey> lookupRequest(
+        List<RequestSpec<CoordinatorKey>> requests,
+        CoordinatorKey key
+    ) {
+        Optional<RequestSpec<CoordinatorKey>> foundRequestOpt = requests.stream()
+            .filter(spec -> spec.keys.contains(key))
+            .findFirst();
+        assertTrue(foundRequestOpt.isPresent());
+        return foundRequestOpt.get();
     }
 
     private final class TestCoordinatorRequestDriver extends CoordinatorRequestDriver<String> {

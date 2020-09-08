@@ -20,6 +20,8 @@ import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.TransactionListing;
 import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.clients.admin.internals.AllBrokerRequestDriver.BrokerKey;
+import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.ListTransactionsResponseData;
@@ -44,6 +46,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
@@ -58,38 +61,35 @@ public class ListTransactionsRequestDriverTest {
     private final long retryBackoffMs = 100;
 
     @Test
-    public void testSuccessfulListTransactions() throws Exception {
+    public void testFailedMetadataRequest() {
         ListTransactionsOptions options = new ListTransactionsOptions();
         ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
 
         KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> lookupFuture =
             driver.lookupFuture();
 
-        // Send `Metadata` request to find brokerIds
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec lookupRequestSpec =
-            assertLookupRequest(driver);
+        RequestSpec<BrokerKey> lookupRequestSpec = assertLookupRequest(driver);
+        driver.onFailure(time.milliseconds(), lookupRequestSpec, new TimeoutException());
+        assertFutureThrows(lookupFuture, TimeoutException.class);
+    }
 
-        // Receive `Metadata` response
-        driver.onResponse(time.milliseconds(), lookupRequestSpec, metadataResponse(asList(
-            brokerMetadata(0),
-            brokerMetadata(1)
-        )));
+    @Test
+    public void testMultiBrokerListTransactions() throws Exception {
+        ListTransactionsOptions options = new ListTransactionsOptions();
+        ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
 
-        assertTrue(lookupFuture.isDone());
-
-        Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures = lookupFuture.get();
+        Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures =
+            assertMetadataLookup(driver, mkSet(0, 1));
         assertEquals(mkSet(0, 1), brokerFutures.keySet());
         assertTrue(brokerFutures.values().stream().noneMatch(KafkaFutureImpl::isDone));
 
         // Send `ListTransactions` requests
-        List<RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec> requestSpecs = driver.poll();
+        List<RequestSpec<BrokerKey>> requestSpecs = driver.poll();
         assertEquals(2, requestSpecs.size());
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec requestBroker0 =
-            findBrokerRequest(requestSpecs, 0);
+        RequestSpec<BrokerKey> requestBroker0 = findBrokerRequest(requestSpecs, 0);
         assertListTransactionsRequest(options, requestBroker0);
 
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec requestBroker1 =
-            findBrokerRequest(requestSpecs, 1);
+        RequestSpec<BrokerKey> requestBroker1 = findBrokerRequest(requestSpecs, 1);
         assertListTransactionsRequest(options, requestBroker1);
 
         // Receive `ListTransactions` responses
@@ -111,47 +111,24 @@ public class ListTransactionsRequestDriverTest {
         ListTransactionsOptions options = new ListTransactionsOptions();
         ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
 
-        KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> lookupFuture =
-            driver.lookupFuture();
-
-        // Send `Metadata` request to find brokerIds
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec lookupRequestSpec =
-            assertLookupRequest(driver);
-
-        // Receive `Metadata` response
-        driver.onResponse(time.milliseconds(), lookupRequestSpec, metadataResponse(singletonList(
-            brokerMetadata(0)
-        )));
-
-        assertTrue(lookupFuture.isDone());
-
-        Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures = lookupFuture.get();
-        assertEquals(mkSet(0), brokerFutures.keySet());
-        KafkaFutureImpl<Collection<TransactionListing>> brokerFuture = brokerFutures.get(0);
+        int brokerId = 0;
+        Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures =
+            assertMetadataLookup(driver, singleton(brokerId));
+        assertEquals(singleton(brokerId), brokerFutures.keySet());
+        KafkaFutureImpl<Collection<TransactionListing>> brokerFuture = brokerFutures.get(brokerId);
         assertFalse(brokerFuture.isDone());
 
-        // Send `ListTransactions` requests
-        List<RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec> requestSpecs = driver.poll();
-        assertEquals(1, requestSpecs.size());
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec request =
-            findBrokerRequest(requestSpecs, 0);
-        assertListTransactionsRequest(options, request);
-
-        // Receive `ListTransactions` responses
-        ListTransactionsResponse broker0Response = new ListTransactionsResponse(
-            new ListTransactionsResponseData().setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()));
-        driver.onResponse(time.milliseconds(), request, broker0Response);
+        // Send `ListTransactions` once and receive loading error
+        ListTransactionsResponse errorResponse = listTransactionsResponseWithError(
+            Errors.COORDINATOR_LOAD_IN_PROGRESS);
+        assertListTransactions(driver, options, errorResponse, brokerId);
         assertFalse(brokerFuture.isDone());
 
         // Now we expect `ListTransactions` to be retried
-        List<RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec> retrySpecs = driver.poll();
-        assertEquals(1, retrySpecs.size());
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec retryRequest =
-            findBrokerRequest(requestSpecs, 0);
-        assertListTransactionsRequest(options, retryRequest);
-
-        driver.onResponse(time.milliseconds(), retryRequest, sampleListTransactionsResponse1());
+        ListTransactionsResponse response = sampleListTransactionsResponse1();
+        assertListTransactions(driver, options, response, brokerId);
         assertTrue(brokerFuture.isDone());
+        assertExpectedTransactions(response.data().transactionStates(), brokerFuture.get());
     }
 
     @Test
@@ -159,62 +136,84 @@ public class ListTransactionsRequestDriverTest {
         ListTransactionsOptions options = new ListTransactionsOptions();
         ListTransactionsRequestDriver driver = new ListTransactionsRequestDriver(options, deadlineMs, retryBackoffMs);
 
-        KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> lookupFuture =
-            driver.lookupFuture();
-
-        // Send `Metadata` request to find brokerIds
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec lookupRequestSpec =
-            assertLookupRequest(driver);
-
-        // Receive `Metadata` response
-        driver.onResponse(time.milliseconds(), lookupRequestSpec, metadataResponse(singletonList(
-            brokerMetadata(0)
-        )));
-
-        assertTrue(lookupFuture.isDone());
-
-        Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures = lookupFuture.get();
-        assertEquals(mkSet(0), brokerFutures.keySet());
-        KafkaFutureImpl<Collection<TransactionListing>> brokerFuture = brokerFutures.get(0);
+        int brokerId = 0;
+        Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> brokerFutures =
+            assertMetadataLookup(driver, singleton(brokerId));
+        assertEquals(singleton(brokerId), brokerFutures.keySet());
+        KafkaFutureImpl<Collection<TransactionListing>> brokerFuture = brokerFutures.get(brokerId);
         assertFalse(brokerFuture.isDone());
 
-        // Send `ListTransactions` requests
-        List<RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec> requestSpecs = driver.poll();
-        assertEquals(1, requestSpecs.size());
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec request =
-            findBrokerRequest(requestSpecs, 0);
-        assertListTransactionsRequest(options, request);
-
-        // Receive `ListTransactions` responses with an unexpected error
-        ListTransactionsResponse broker0Response = new ListTransactionsResponse(
-            new ListTransactionsResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()));
-        driver.onResponse(time.milliseconds(), request, broker0Response);
+        ListTransactionsResponse errorResponse = listTransactionsResponseWithError(Errors.UNKNOWN_SERVER_ERROR);
+        assertListTransactions(driver, options, errorResponse, brokerId);
         assertTrue(brokerFuture.isDone());
         assertFutureThrows(brokerFuture, UnknownServerException.class);
     }
 
+    private void assertListTransactions(
+        ListTransactionsRequestDriver driver,
+        ListTransactionsOptions options,
+        ListTransactionsResponse response,
+        int brokerId
+    ) {
+        List<RequestSpec<BrokerKey>> requestSpecs = driver.poll();
+        assertEquals(1, requestSpecs.size());
+        RequestSpec<BrokerKey> request = findBrokerRequest(requestSpecs, brokerId);
+        assertListTransactionsRequest(options, request);
+        driver.onResponse(time.milliseconds(), request, response);
+    }
+
+    private Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>> assertMetadataLookup(
+        ListTransactionsRequestDriver driver,
+        Set<Integer> brokers
+    ) throws Exception {
+        KafkaFutureImpl<Map<Integer, KafkaFutureImpl<Collection<TransactionListing>>>> lookupFuture =
+            driver.lookupFuture();
+
+        // Send `Metadata` request to find brokerIds
+        RequestSpec<BrokerKey> lookupRequestSpec = assertLookupRequest(driver);
+
+        // Receive `Metadata` response
+        MetadataResponse metadataResponse = metadataResponse(brokers.stream()
+            .map(this::brokerMetadata)
+            .collect(Collectors.toList())
+        );
+
+        driver.onResponse(time.milliseconds(), lookupRequestSpec, metadataResponse);
+        assertTrue(lookupFuture.isDone());
+
+        return lookupFuture.get();
+    }
+
+    private ListTransactionsResponse listTransactionsResponseWithError(Errors error) {
+        return new ListTransactionsResponse(new ListTransactionsResponseData().setErrorCode(error.code()));
+    }
+
     private ListTransactionsResponse sampleListTransactionsResponse1() {
         return new ListTransactionsResponse(
-            new ListTransactionsResponseData().setTransactionStates(asList(
-                new ListTransactionsResponseData.TransactionState()
-                    .setTransactionalId("foo")
-                    .setProducerId(12345L)
-                    .setTransactionState("Ongoing"),
-                new ListTransactionsResponseData.TransactionState()
-                    .setTransactionalId("bar")
-                    .setProducerId(98765L)
-                    .setTransactionState("PrepareAbort")
+            new ListTransactionsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setTransactionStates(asList(
+                    new ListTransactionsResponseData.TransactionState()
+                        .setTransactionalId("foo")
+                        .setProducerId(12345L)
+                        .setTransactionState("Ongoing"),
+                    new ListTransactionsResponseData.TransactionState()
+                        .setTransactionalId("bar")
+                        .setProducerId(98765L)
+                        .setTransactionState("PrepareAbort")
             ))
         );
     }
 
     private ListTransactionsResponse sampleListTransactionsResponse2() {
         return new ListTransactionsResponse(
-            new ListTransactionsResponseData().setTransactionStates(singletonList(
-                new ListTransactionsResponseData.TransactionState()
-                    .setTransactionalId("baz")
-                    .setProducerId(13579L)
-                    .setTransactionState("CompleteCommit")
+            new ListTransactionsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setTransactionStates(singletonList(
+                    new ListTransactionsResponseData.TransactionState()
+                        .setTransactionalId("baz")
+                        .setProducerId(13579L)
+                        .setTransactionState("CompleteCommit")
             ))
         );
     }
@@ -249,7 +248,7 @@ public class ListTransactionsRequestDriverTest {
 
     private void assertListTransactionsRequest(
         ListTransactionsOptions options,
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec spec
+        RequestSpec<BrokerKey> spec
     ) {
         assertTrue(spec.request instanceof ListTransactionsRequest.Builder);
         ListTransactionsRequest.Builder request = (ListTransactionsRequest.Builder) spec.request;
@@ -262,11 +261,11 @@ public class ListTransactionsRequestDriverTest {
         assertEquals(expectedFilteredStates, new HashSet<>(request.data.statesFilter()));
     }
 
-    private RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec findBrokerRequest(
-        List<RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec> requests,
+    private RequestSpec<BrokerKey> findBrokerRequest(
+        List<RequestSpec<BrokerKey>> requests,
         Integer brokerId
     ) {
-        Optional<RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec> requestOpt = requests.stream()
+        Optional<RequestSpec<BrokerKey>> requestOpt = requests.stream()
             .filter(spec -> spec.scope.destinationBrokerId().isPresent()
                 && spec.scope.destinationBrokerId().getAsInt() == brokerId)
             .findFirst();
@@ -274,13 +273,13 @@ public class ListTransactionsRequestDriverTest {
         return requestOpt.get();
     }
 
-    private RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec assertLookupRequest(
+    private RequestSpec<BrokerKey> assertLookupRequest(
         ListTransactionsRequestDriver driver
     ) {
-        List<RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec> requests = driver.poll();
+        List<RequestSpec<BrokerKey>> requests = driver.poll();
         assertEquals(1, requests.size());
 
-        RequestDriver<BrokerKey, Collection<TransactionListing>>.RequestSpec lookupRequestSpec = requests.get(0);
+        RequestSpec<BrokerKey> lookupRequestSpec = requests.get(0);
         assertEquals(OptionalInt.empty(), lookupRequestSpec.scope.destinationBrokerId());
         assertTrue(lookupRequestSpec.request instanceof MetadataRequest.Builder);
 

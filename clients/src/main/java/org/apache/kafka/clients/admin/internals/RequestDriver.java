@@ -177,8 +177,8 @@ public abstract class RequestDriver<K, V> {
      *
      * @return A list of requests that need to be sent
      */
-    public List<RequestSpec> poll() {
-        List<RequestSpec> requests = new ArrayList<>();
+    public List<RequestSpec<K>> poll() {
+        List<RequestSpec<K>> requests = new ArrayList<>();
         collectLookupRequests(requests);
         collectFulfillmentRequests(requests);
         return requests;
@@ -196,7 +196,7 @@ public abstract class RequestDriver<K, V> {
      */
     public void onResponse(
         long currentTimeMs,
-        RequestSpec spec,
+        RequestSpec<K> spec,
         AbstractResponse response
     ) {
         clearInflightRequest(currentTimeMs, spec);
@@ -213,7 +213,7 @@ public abstract class RequestDriver<K, V> {
      */
     public void onFailure(
         long currentTimeMs,
-        RequestSpec spec,
+        RequestSpec<K> spec,
         Throwable t
     ) {
         clearInflightRequest(currentTimeMs, spec);
@@ -256,7 +256,7 @@ public abstract class RequestDriver<K, V> {
      */
     abstract void handleFulfillmentResponse(Integer brokerId, Set<K> keys, AbstractResponse response);
 
-    private void clearInflightRequest(long currentTimeMs, RequestSpec spec) {
+    private void clearInflightRequest(long currentTimeMs, RequestSpec<K> spec) {
         RequestState requestState = requestStates.get(spec.scope);
         if (requestState != null) {
             requestState.clearInflight(currentTimeMs);
@@ -264,7 +264,7 @@ public abstract class RequestDriver<K, V> {
     }
 
     private <T extends RequestScope> void collectRequests(
-        List<RequestSpec> requests,
+        List<RequestSpec<K>> requests,
         BiMultimap<T, K> multimap,
         BiFunction<Set<K>, T, AbstractRequest.Builder<?>> buildRequest
     ) {
@@ -282,7 +282,7 @@ public abstract class RequestDriver<K, V> {
             }
 
             AbstractRequest.Builder<?> request = buildRequest.apply(keys, scope);
-            RequestSpec spec = new RequestSpec(
+            RequestSpec<K> spec = new RequestSpec<>(
                 scope,
                 new HashSet<>(keys), // copy to avoid exposing mutable state
                 request,
@@ -296,7 +296,7 @@ public abstract class RequestDriver<K, V> {
         }
     }
 
-    private void collectLookupRequests(List<RequestSpec> requests) {
+    private void collectLookupRequests(List<RequestSpec<K>> requests) {
         collectRequests(
             requests,
             lookupMap,
@@ -304,7 +304,7 @@ public abstract class RequestDriver<K, V> {
         );
     }
 
-    private void collectFulfillmentRequests(List<RequestSpec> requests) {
+    private void collectFulfillmentRequests(List<RequestSpec<K>> requests) {
         collectRequests(
             requests,
             fulfillmentMap,
@@ -317,7 +317,7 @@ public abstract class RequestDriver<K, V> {
      * the to the internal `Call` implementation that is used internally in
      * {@link org.apache.kafka.clients.admin.KafkaAdminClient}.
      */
-    public class RequestSpec {
+    public static class RequestSpec<K> {
         public final RequestScope scope;
         public final Set<K> keys;
         public final AbstractRequest.Builder<?> request;
@@ -348,7 +348,7 @@ public abstract class RequestDriver<K, V> {
      * of backoff/retry state.
      */
     private class RequestState {
-        private Optional<RequestSpec> inflightRequest = Optional.empty();
+        private Optional<RequestSpec<K>> inflightRequest = Optional.empty();
         private int tries = 0;
         private long nextAllowedRetryMs = 0;
 
@@ -361,7 +361,7 @@ public abstract class RequestDriver<K, V> {
             this.nextAllowedRetryMs = currentTimeMs + retryBackoffMs;
         }
 
-        public void setInflight(RequestSpec spec) {
+        public void setInflight(RequestSpec<K> spec) {
             this.inflightRequest = Optional.of(spec);
             this.tries++;
         }
@@ -419,10 +419,6 @@ public abstract class RequestDriver<K, V> {
     private static class BiMultimap<K, V> {
         private final Map<V, K> reverseMap = new HashMap<>();
         private final Map<K, Set<V>> map = new HashMap<>();
-
-        Set<V> get(K key) {
-            return map.get(key);
-        }
 
         void put(K key, V value) {
             remove(value);

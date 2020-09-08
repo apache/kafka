@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.clients.admin.AbortTransactionSpec;
+import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.MetadataResponseData;
@@ -113,7 +114,7 @@ public class AbortTransactionRequestDriverTest {
         int expectedTries
     ) {
         TopicPartition topicPartition = abortTransactionSpec.topicPartition();
-        RequestDriver<TopicPartition, Void>.RequestSpec lookupSpec = assertMetadataRequest(
+        RequestSpec<TopicPartition> lookupSpec = assertMetadataRequest(
             driver, topicPartition, expectedTries);
         driver.onResponse(time.milliseconds(), lookupSpec, new MetadataResponse(
             AdminRequestUtil.metadataResponse(singletonMap(topicPartition,
@@ -132,7 +133,7 @@ public class AbortTransactionRequestDriverTest {
         int expectedLeaderId,
         int expectedTries
     ) {
-        RequestDriver<TopicPartition, Void>.RequestSpec requestSpec = assertWriteTxnMarkersRequest(
+        RequestSpec<TopicPartition> requestSpec = assertWriteTxnMarkersRequest(
             driver, abortTransactionSpec, expectedLeaderId, expectedTries);
         driver.onResponse(time.milliseconds(), requestSpec,
             writeTxnMarkersResponse(abortTransactionSpec, error));
@@ -161,16 +162,16 @@ public class AbortTransactionRequestDriverTest {
         return new WriteTxnMarkersResponse(singletonMap(abortSpec.producerId(), partitionErrors));
     }
 
-    private RequestDriver<TopicPartition, Void>.RequestSpec assertWriteTxnMarkersRequest(
+    private RequestSpec<TopicPartition> assertWriteTxnMarkersRequest(
         AbortTransactionRequestDriver driver,
         AbortTransactionSpec abortSpec,
         int expectedLeaderId,
         int expectedTries
     ) {
-        List<RequestDriver<TopicPartition, Void>.RequestSpec> requestSpecs = driver.poll();
+        List<RequestSpec<TopicPartition>> requestSpecs = driver.poll();
         assertEquals(1, requestSpecs.size());
 
-        RequestDriver<TopicPartition, Void>.RequestSpec requestSpec = requestSpecs.get(0);
+        RequestSpec<TopicPartition> requestSpec = requestSpecs.get(0);
         assertExpectedBackoffAndDeadline(requestSpec, expectedTries);
         assertEquals(OptionalInt.of(expectedLeaderId), requestSpec.scope.destinationBrokerId());
 
@@ -192,15 +193,15 @@ public class AbortTransactionRequestDriverTest {
         return requestSpec;
     }
 
-    private RequestDriver<TopicPartition, Void>.RequestSpec assertMetadataRequest(
+    private RequestSpec<TopicPartition> assertMetadataRequest(
         AbortTransactionRequestDriver driver,
         TopicPartition topicPartition,
         int expectedTries
     ) {
-        List<RequestDriver<TopicPartition, Void>.RequestSpec> lookupRequests = driver.poll();
+        List<RequestSpec<TopicPartition>> lookupRequests = driver.poll();
         assertEquals(1, lookupRequests.size());
 
-        RequestDriver<TopicPartition, Void>.RequestSpec lookupSpec = lookupRequests.get(0);
+        RequestSpec<TopicPartition> lookupSpec = lookupRequests.get(0);
         assertExpectedBackoffAndDeadline(lookupSpec, expectedTries);
         assertEquals(OptionalInt.empty(), lookupSpec.scope.destinationBrokerId());
 
@@ -211,7 +212,7 @@ public class AbortTransactionRequestDriverTest {
     }
 
     private void assertExpectedBackoffAndDeadline(
-        RequestDriver<TopicPartition, Void>.RequestSpec requestSpec,
+        RequestSpec<TopicPartition> requestSpec,
         int expectedTries
     ) {
         assertEquals(expectedTries, requestSpec.tries);

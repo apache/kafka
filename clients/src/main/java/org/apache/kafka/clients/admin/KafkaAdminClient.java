@@ -40,6 +40,7 @@ import org.apache.kafka.clients.admin.internals.ListTransactionsRequestDriver;
 import org.apache.kafka.clients.admin.internals.MetadataOperationContext;
 import org.apache.kafka.clients.admin.internals.RequestDriver;
 import org.apache.kafka.clients.admin.internals.AbortTransactionRequestDriver;
+import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -4339,12 +4340,12 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private <K, V> void maybeSendRequests(RequestDriver<K, V> driver, long currentTimeMs) {
-        for (RequestDriver<K, V>.RequestSpec spec : driver.poll()) {
+        for (RequestSpec<K> spec : driver.poll()) {
             runnable.call(newCall(driver, spec), currentTimeMs);
         }
     }
 
-    private <K, V> Call newCall(RequestDriver<K, V> driver, RequestDriver<K, V>.RequestSpec spec) {
+    private <K, V> Call newCall(RequestDriver<K, V> driver, RequestSpec<K> spec) {
         NodeProvider nodeProvider = spec.scope.destinationBrokerId().isPresent() ?
             new ConstantNodeIdProvider(spec.scope.destinationBrokerId().getAsInt()) :
             new LeastLoadedNodeProvider();

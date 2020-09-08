@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.DescribeProducersOptions;
 import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
+import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -62,219 +63,152 @@ public class DescribeProducersRequestDriverTest {
 
     @Test
     public void testSuccessfulResponseWithoutProvidedBrokerId() throws Exception {
-        TopicPartition tp = new TopicPartition("foo", 5);
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
         int leaderId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions();
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(tp),
+            singleton(topicPartition),
             options,
             deadlineMs,
             retryBackoffMs
         );
 
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> lookupRequests = driver.poll();
-        assertEquals(1, lookupRequests.size());
+        assertMetadataLookup(driver, topicPartition, leaderId, 0);
 
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec lookupSpec = lookupRequests.get(0);
-        assertEquals(OptionalInt.empty(), lookupSpec.scope.destinationBrokerId());
-        assertEquals(0, lookupSpec.tries);
-        assertEquals(0, lookupSpec.nextAllowedTryMs);
-        assertEquals(deadlineMs, lookupSpec.deadlineMs);
-        assertEquals(singleton(tp), lookupSpec.keys);
-
-        assertTrue(lookupSpec.request instanceof MetadataRequest.Builder);
-        MetadataRequest.Builder lookupRequest = (MetadataRequest.Builder) lookupSpec.request;
-        assertEquals(singletonList(tp.topic()), lookupRequest.topics());
-
-        driver.onResponse(time.milliseconds(), lookupSpec, new MetadataResponse(metadataResponse(
-            singletonMap(tp, new MetadataResponseData.MetadataResponsePartition()
-                .setErrorCode(Errors.NONE.code())
-                .setLeaderId(leaderId)
-                .setLeaderEpoch(15)
-                .setReplicaNodes(asList(1, 2, 3))
-                .setIsrNodes(asList(1, 2, 3)))
-        )));
-
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> requests = driver.poll();
+        List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
 
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec spec = requests.get(0);
+        RequestSpec<TopicPartition> spec = requests.get(0);
         assertEquals(OptionalInt.of(leaderId), spec.scope.destinationBrokerId());
-        assertEquals(singleton(tp), spec.keys);
-        assertEquals(0, spec.tries);
-        assertEquals(0, spec.nextAllowedTryMs);
-        assertEquals(deadlineMs, spec.deadlineMs);
-        assertSuccessfulFulfillment(driver, tp, spec);
+        assertEquals(singleton(topicPartition), spec.keys);
+        assertExpectedBackoffAndDeadline(spec, 0);
+        assertSuccessfulFulfillment(driver, topicPartition, spec);
     }
 
     @Test
     public void testRetryLookupAfterNotLeaderErrorWithoutProvidedBrokerId() {
-        TopicPartition tp = new TopicPartition("foo", 5);
-        int leaderId = 1;
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
+        int initialLeaderId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions();
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(tp),
+            singleton(topicPartition),
             options,
             deadlineMs,
             retryBackoffMs
         );
 
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> lookupRequests1 = driver.poll();
-        assertEquals(1, lookupRequests1.size());
+        assertMetadataLookup(driver, topicPartition, initialLeaderId, 0);
 
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec lookupSpec1 = lookupRequests1.get(0);
-        assertEquals(singleton(tp), lookupSpec1.keys);
-        assertTrue(lookupSpec1.request instanceof MetadataRequest.Builder);
-        MetadataRequest.Builder lookupRequest1 = (MetadataRequest.Builder) lookupSpec1.request;
-        assertEquals(singletonList(tp.topic()), lookupRequest1.topics());
-
-        driver.onResponse(time.milliseconds(), lookupSpec1, new MetadataResponse(metadataResponse(
-            singletonMap(tp, new MetadataResponseData.MetadataResponsePartition()
-                .setErrorCode(Errors.NONE.code())
-                .setLeaderId(leaderId)
-                .setLeaderEpoch(15)
-                .setReplicaNodes(asList(1, 2, 3))
-                .setIsrNodes(asList(1, 2, 3)))
-        )));
-
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> requests = driver.poll();
+        List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
 
         // A `NOT_LEADER_OR_FOLLOWER` error should cause a retry of the `Metadata` request
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec spec = requests.get(0);
+        RequestSpec<TopicPartition> spec = requests.get(0);
         driver.onResponse(time.milliseconds(), spec, describeProducersResponse(
-            singletonMap(tp, new PartitionResponse()
+            singletonMap(topicPartition, new PartitionResponse()
                 .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code()))
         ));
 
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> lookupRequests2 = driver.poll();
-        assertEquals(1, lookupRequests2.size());
-
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec lookupSpec2 = lookupRequests2.get(0);
-        assertEquals(OptionalInt.empty(), lookupSpec2.scope.destinationBrokerId());
-        assertEquals(singleton(tp), lookupSpec2.keys);
-        assertEquals(1, lookupSpec2.tries);
-        assertEquals(time.milliseconds() + retryBackoffMs, lookupSpec2.nextAllowedTryMs);
-        assertEquals(deadlineMs, lookupSpec2.deadlineMs);
-
-        assertTrue(lookupSpec2.request instanceof MetadataRequest.Builder);
-        MetadataRequest.Builder lookupRequest2 = (MetadataRequest.Builder) lookupSpec2.request;
-        assertEquals(singletonList(tp.topic()), lookupRequest2.topics());
+        int updatedLeaderId = 2;
+        assertMetadataLookup(driver, topicPartition, updatedLeaderId, 1);
     }
 
     @Test
     public void testSuccessfulResponseWithProvidedBrokerId() throws Exception {
-        TopicPartition tp = new TopicPartition("foo", 5);
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
         int brokerId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions().setBrokerId(brokerId);
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(tp),
+            singleton(topicPartition),
             options,
             deadlineMs,
             retryBackoffMs
         );
 
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> requests = driver.poll();
+        List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
 
         // Note there should be no `Metadata` lookup since we specified the target brokerId directly
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec spec = requests.get(0);
-        assertEquals(singleton(tp), spec.keys);
+        RequestSpec<TopicPartition> spec = requests.get(0);
+        assertEquals(singleton(topicPartition), spec.keys);
         assertEquals(OptionalInt.of(brokerId), spec.scope.destinationBrokerId());
-        assertEquals(0, spec.tries);
-        assertEquals(0, spec.nextAllowedTryMs);
-        assertEquals(deadlineMs, spec.deadlineMs);
+        assertExpectedBackoffAndDeadline(spec, 0);
 
         assertTrue(spec.request instanceof DescribeProducersRequest.Builder);
         DescribeProducersRequest.Builder request = (DescribeProducersRequest.Builder) spec.request;
         assertEquals(1, request.data.topics().size());
         TopicRequest topicRequest = request.data.topics().get(0);
-        assertEquals(tp.topic(), topicRequest.name());
-        assertEquals(singletonList(tp.partition()), topicRequest.partitionIndexes());
-        assertSuccessfulFulfillment(driver, tp, spec);
+        assertEquals(topicPartition.topic(), topicRequest.name());
+        assertEquals(singletonList(topicPartition.partition()), topicRequest.partitionIndexes());
+        assertSuccessfulFulfillment(driver, topicPartition, spec);
     }
 
     @Test
     public void testNotLeaderErrorWithProvidedBrokerId() {
-        TopicPartition tp = new TopicPartition("foo", 0);
+        TopicPartition topicPartition = new TopicPartition("foo", 0);
         int brokerId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions().setBrokerId(brokerId);
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(tp),
+            singleton(topicPartition),
             options,
             deadlineMs,
             retryBackoffMs
         );
 
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> requests = driver.poll();
+        List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
 
         // Note there should be no `Metadata` lookup since we specified the target brokerId directly
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec spec = requests.get(0);
-        assertEquals(singleton(tp), spec.keys);
+        RequestSpec<TopicPartition> spec = requests.get(0);
+        assertEquals(singleton(topicPartition), spec.keys);
         assertEquals(OptionalInt.of(brokerId), spec.scope.destinationBrokerId());
+        assertExpectedBackoffAndDeadline(spec, 0);
         assertTrue(spec.request instanceof DescribeProducersRequest.Builder);
 
-        driver.onResponse(time.milliseconds(), spec, describeProducersResponse(singletonMap(tp,
+        driver.onResponse(time.milliseconds(), spec, describeProducersResponse(singletonMap(topicPartition,
             new PartitionResponse().setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())
         )));
 
         assertEquals(Collections.emptyList(), driver.poll());
-        assertFutureThrows(driver.futures().get(tp), NotLeaderOrFollowerException.class);
+        assertFutureThrows(driver.futures().get(topicPartition), NotLeaderOrFollowerException.class);
     }
 
     @Test
     public void testFatalErrorWithoutProvidedBrokerId() {
-        TopicPartition tp = new TopicPartition("foo", 5);
+        TopicPartition topicPartition = new TopicPartition("foo", 5);
         int leaderId = 1;
         DescribeProducersOptions options = new DescribeProducersOptions();
 
         DescribeProducersRequestDriver driver = new DescribeProducersRequestDriver(
-            singleton(tp),
+            singleton(topicPartition),
             options,
             deadlineMs,
             retryBackoffMs
         );
 
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> lookupRequests1 = driver.poll();
-        assertEquals(1, lookupRequests1.size());
+        assertMetadataLookup(driver, topicPartition, leaderId, 0);
 
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec lookupSpec1 = lookupRequests1.get(0);
-        assertEquals(singleton(tp), lookupSpec1.keys);
-        assertTrue(lookupSpec1.request instanceof MetadataRequest.Builder);
-        MetadataRequest.Builder lookupRequest1 = (MetadataRequest.Builder) lookupSpec1.request;
-        assertEquals(singletonList(tp.topic()), lookupRequest1.topics());
-
-        driver.onResponse(time.milliseconds(), lookupSpec1, new MetadataResponse(metadataResponse(
-            singletonMap(tp, new MetadataResponseData.MetadataResponsePartition()
-                .setErrorCode(Errors.NONE.code())
-                .setLeaderId(leaderId)
-                .setLeaderEpoch(15)
-                .setReplicaNodes(asList(1, 2, 3))
-                .setIsrNodes(asList(1, 2, 3)))
-        )));
-
-        List<RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec> requests = driver.poll();
+        List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
 
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec spec = requests.get(0);
+        RequestSpec<TopicPartition> spec = requests.get(0);
         driver.onResponse(time.milliseconds(), spec, describeProducersResponse(
-            singletonMap(tp, new PartitionResponse()
+            singletonMap(topicPartition, new PartitionResponse()
                 .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code()))
         ));
 
         assertEquals(Collections.emptyList(), driver.poll());
-        assertFutureThrows(driver.futures().get(tp), UnknownServerException.class);
+        assertFutureThrows(driver.futures().get(topicPartition), UnknownServerException.class);
     }
 
     private void assertSuccessfulFulfillment(
         DescribeProducersRequestDriver driver,
         TopicPartition topicPartition,
-        RequestDriver<TopicPartition, PartitionProducerState>.RequestSpec describeProducerSpec
+        RequestSpec<TopicPartition> describeProducerSpec
     ) throws Exception {
         List<ProducerState> activeProducers = sampleProducerState();
         driver.onResponse(time.milliseconds(), describeProducerSpec, describeProducersResponse(
@@ -289,6 +223,47 @@ public class DescribeProducersRequestDriverTest {
         PartitionProducerState partitionProducerState = future.get();
         assertEquals(2, partitionProducerState.activeProducers().size());
         assertMatchingProducers(activeProducers, partitionProducerState.activeProducers());
+    }
+
+    private void assertMetadataLookup(
+        DescribeProducersRequestDriver driver,
+        TopicPartition topicPartition,
+        int leaderId,
+        int expectedTries
+    ) {
+        List<RequestSpec<TopicPartition>> lookupRequests = driver.poll();
+        assertEquals(1, lookupRequests.size());
+
+        RequestSpec<TopicPartition> lookupSpec = lookupRequests.get(0);
+        assertEquals(OptionalInt.empty(), lookupSpec.scope.destinationBrokerId());
+        assertEquals(singleton(topicPartition), lookupSpec.keys);
+        assertExpectedBackoffAndDeadline(lookupSpec, expectedTries);
+
+        assertTrue(lookupSpec.request instanceof MetadataRequest.Builder);
+        MetadataRequest.Builder lookupRequest = (MetadataRequest.Builder) lookupSpec.request;
+        assertEquals(singletonList(topicPartition.topic()), lookupRequest.topics());
+
+        driver.onResponse(time.milliseconds(), lookupSpec, new MetadataResponse(metadataResponse(
+            singletonMap(topicPartition, new MetadataResponseData.MetadataResponsePartition()
+                .setErrorCode(Errors.NONE.code())
+                .setLeaderId(leaderId)
+                .setLeaderEpoch(15)
+                .setReplicaNodes(singletonList(leaderId))
+                .setIsrNodes(singletonList(leaderId)))
+        )));
+    }
+
+    private void assertExpectedBackoffAndDeadline(
+        RequestSpec<TopicPartition> requestSpec,
+        int expectedTries
+    ) {
+        assertEquals(expectedTries, requestSpec.tries);
+        assertEquals(deadlineMs, requestSpec.deadlineMs);
+        if (expectedTries == 0) {
+            assertEquals(0, requestSpec.nextAllowedTryMs);
+        } else {
+            assertEquals(time.milliseconds() + (expectedTries * retryBackoffMs), requestSpec.nextAllowedTryMs);
+        }
     }
 
     private List<ProducerState> sampleProducerState() {

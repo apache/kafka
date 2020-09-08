@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.admin.internals.RequestDriver.RequestSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -38,6 +39,7 @@ import org.junit.Test;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 
@@ -61,17 +63,15 @@ public class MetadataRequestDriverTest {
             new TopicPartition("bar", 1));
 
         TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests = driver.poll();
+        List<RequestSpec<TopicPartition>> requests = driver.poll();
         assertEquals(1, requests.size());
 
         // While a Metadata request is inflight, we will not send another
         assertEquals(0, driver.poll().size());
 
-        RequestDriver<TopicPartition, String>.RequestSpec spec = requests.get(0);
+        RequestSpec<TopicPartition> spec = requests.get(0);
         assertEquals(topicPartitions, spec.keys);
-        assertEquals(0, spec.tries);
-        assertEquals(deadlineMs, spec.deadlineMs);
-        assertEquals(0, spec.nextAllowedTryMs);
+        assertExpectedBackoffAndDeadline(spec, 0);
         assertTrue(spec.request instanceof MetadataRequest.Builder);
 
         MetadataRequest.Builder metadataRequest = (MetadataRequest.Builder) spec.request;
@@ -88,10 +88,10 @@ public class MetadataRequestDriverTest {
         Set<TopicPartition> topicPartitions = mkSet(tp0, tp2);
 
         TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests1 = driver.poll();
+        List<RequestSpec<TopicPartition>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
 
-        RequestDriver<TopicPartition, String>.RequestSpec metadataSpec = requests1.iterator().next();
+        RequestSpec<TopicPartition> metadataSpec = requests1.iterator().next();
         driver.onResponse(time.milliseconds(), metadataSpec, new MetadataResponse(metadataResponse(Utils.mkMap(
             mkEntry(tp0, new MetadataResponsePartition()
                .setErrorCode(Errors.NONE.code())
@@ -114,20 +114,14 @@ public class MetadataRequestDriverTest {
         ))));
 
         // We should have two fulfillment requests now sent to the leaders of partitions 0 and 2
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests2 = driver.poll();
+        List<RequestSpec<TopicPartition>> requests2 = driver.poll();
         assertEquals(2, requests2.size());
 
-        RequestDriver<TopicPartition, String>.RequestSpec spec0 = requests2.stream()
-            .filter(spec -> spec.keys.contains(tp0))
-            .findFirst()
-            .get();
+        RequestSpec<TopicPartition> spec0 = lookupRequest(requests2, tp0);
         assertEquals(mkSet(tp0), spec0.keys);
         assertEquals(OptionalInt.of(1), spec0.scope.destinationBrokerId());
 
-        RequestDriver<TopicPartition, String>.RequestSpec spec1 = requests2.stream()
-            .filter(spec -> spec.keys.contains(tp2))
-            .findFirst()
-            .get();
+        RequestSpec<TopicPartition> spec1 = lookupRequest(requests2, tp2);
         assertEquals(mkSet(tp2), spec1.keys);
         assertEquals(OptionalInt.of(3), spec1.scope.destinationBrokerId());
     }
@@ -142,10 +136,10 @@ public class MetadataRequestDriverTest {
         Set<TopicPartition> topicPartitions = mkSet(tp0, tp2);
 
         TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests1 = driver.poll();
+        List<RequestSpec<TopicPartition>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
 
-        RequestDriver<TopicPartition, String>.RequestSpec metadataSpec = requests1.iterator().next();
+        RequestSpec<TopicPartition> metadataSpec = requests1.iterator().next();
         driver.onResponse(time.milliseconds(), metadataSpec, new MetadataResponse(metadataResponse(Utils.mkMap(
             mkEntry(tp0, new MetadataResponsePartition()
                 .setErrorCode(Errors.NOT_LEADER_OR_FOLLOWER.code())),
@@ -163,26 +157,19 @@ public class MetadataRequestDriverTest {
                 .setReplicaNodes(asList(1, 2, 3)))
         ))));
 
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests2 = driver.poll();
+        List<RequestSpec<TopicPartition>> requests2 = driver.poll();
         assertEquals(2, requests2.size());
 
         // We should retry the Metadata request with only one of the two topics
-        RequestDriver<TopicPartition, String>.RequestSpec spec0 = requests2.stream()
-            .filter(spec -> spec.keys.contains(tp0))
-            .findFirst()
-            .get();
+        RequestSpec<TopicPartition> spec0 = lookupRequest(requests2, tp0);
         assertEquals(mkSet(tp0), spec0.keys);
         assertEquals(OptionalInt.empty(), spec0.scope.destinationBrokerId());
         assertTrue(spec0.request instanceof MetadataRequest.Builder);
-        assertEquals(1, spec0.tries);
-        assertEquals(time.milliseconds() + retryBackoffMs, spec0.nextAllowedTryMs);
+        assertExpectedBackoffAndDeadline(spec0, 1);
         MetadataRequest.Builder retryMetadataRequest = (MetadataRequest.Builder) spec0.request;
         assertEquals(mkSet("foo"), new HashSet<>(retryMetadataRequest.topics()));
 
-        RequestDriver<TopicPartition, String>.RequestSpec spec1 = requests2.stream()
-            .filter(spec -> spec.keys.contains(tp2))
-            .findFirst()
-            .get();
+        RequestSpec<TopicPartition> spec1 = lookupRequest(requests2, tp2);
         assertEquals(mkSet(tp2), spec1.keys);
         assertEquals(OptionalInt.of(3), spec1.scope.destinationBrokerId());
     }
@@ -194,10 +181,10 @@ public class MetadataRequestDriverTest {
         Set<TopicPartition> topicPartitions = mkSet(tp0, tp2);
 
         TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests1 = driver.poll();
+        List<RequestSpec<TopicPartition>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
 
-        RequestDriver<TopicPartition, String>.RequestSpec metadataSpec = requests1.iterator().next();
+        RequestSpec<TopicPartition> metadataSpec = requests1.iterator().next();
         MetadataResponseData metadataResponseData = metadataResponse(Utils.mkMap(
             mkEntry(tp2, new MetadataResponsePartition()
                 .setErrorCode(Errors.NONE.code())
@@ -214,7 +201,7 @@ public class MetadataRequestDriverTest {
 
         driver.onResponse(time.milliseconds(), metadataSpec, new MetadataResponse(metadataResponseData));
 
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests2 = driver.poll();
+        List<RequestSpec<TopicPartition>> requests2 = driver.poll();
         assertEquals(1, requests2.size());
 
         // The lookup for "foo" should fail and not be retried
@@ -223,7 +210,7 @@ public class MetadataRequestDriverTest {
         assertEquals(mkSet("foo"), topicAuthorizationException.unauthorizedTopics());
 
         // However, the lookup for the other other topic should proceed
-        RequestDriver<TopicPartition, String>.RequestSpec spec = requests2.get(0);
+        RequestSpec<TopicPartition> spec = requests2.get(0);
         assertEquals(mkSet(tp2), spec.keys);
         assertEquals(OptionalInt.of(3), spec.scope.destinationBrokerId());
     }
@@ -238,10 +225,10 @@ public class MetadataRequestDriverTest {
         Set<TopicPartition> topicPartitions = mkSet(tp0, tp2);
 
         TestMetadataRequestDriver driver = new TestMetadataRequestDriver(topicPartitions);
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests1 = driver.poll();
+        List<RequestSpec<TopicPartition>> requests1 = driver.poll();
         assertEquals(1, requests1.size());
 
-        RequestDriver<TopicPartition, String>.RequestSpec metadataSpec = requests1.iterator().next();
+        RequestSpec<TopicPartition> metadataSpec = requests1.iterator().next();
 
         // Any unexpected partition error will cause the partition to fail
         driver.onResponse(time.milliseconds(), metadataSpec, new MetadataResponse(metadataResponse(Utils.mkMap(
@@ -261,16 +248,27 @@ public class MetadataRequestDriverTest {
                 .setReplicaNodes(asList(1, 2, 3)))
         ))));
 
-        List<RequestDriver<TopicPartition, String>.RequestSpec> requests2 = driver.poll();
+        List<RequestSpec<TopicPartition>> requests2 = driver.poll();
         assertEquals(1, requests2.size());
 
         // The lookup for "foo-0" should fail and not be retried
         TestUtils.assertFutureThrows(driver.futures().get(tp0), UnknownServerException.class);
 
         // However, the lookup for the other other partition should proceed
-        RequestDriver<TopicPartition, String>.RequestSpec spec = requests2.get(0);
+        RequestSpec<TopicPartition> spec = requests2.get(0);
         assertEquals(mkSet(tp2), spec.keys);
         assertEquals(OptionalInt.of(3), spec.scope.destinationBrokerId());
+    }
+
+    private RequestSpec<TopicPartition> lookupRequest(
+        List<RequestSpec<TopicPartition>> requests,
+        TopicPartition key
+    ) {
+        Optional<RequestSpec<TopicPartition>> foundRequestOpt = requests.stream()
+            .filter(spec -> spec.keys.contains(key))
+            .findFirst();
+        assertTrue(foundRequestOpt.isPresent());
+        return foundRequestOpt.get();
     }
 
     private final class TestMetadataRequestDriver extends MetadataRequestDriver<String> {
@@ -299,4 +297,16 @@ public class MetadataRequestDriverTest {
         }
     }
 
+    private void assertExpectedBackoffAndDeadline(
+        RequestSpec<TopicPartition> requestSpec,
+        int expectedTries
+    ) {
+        assertEquals(expectedTries, requestSpec.tries);
+        assertEquals(deadlineMs, requestSpec.deadlineMs);
+        if (expectedTries == 0) {
+            assertEquals(0, requestSpec.nextAllowedTryMs);
+        } else {
+            assertEquals(time.milliseconds() + (expectedTries * retryBackoffMs), requestSpec.nextAllowedTryMs);
+        }
+    }
 }
