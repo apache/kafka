@@ -35,6 +35,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
@@ -1237,7 +1238,7 @@ public class TaskManager {
     }
 
     public void flagForShutdownRequest(){
-        this.shutdownRequested.set(2);
+        this.shutdownRequested.set(AssignorError.SHUTDOWN_REQUESTED.code());
     }
 
     public AtomicInteger isShutdownRequested(){

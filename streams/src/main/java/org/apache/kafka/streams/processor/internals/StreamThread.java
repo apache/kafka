@@ -583,7 +583,6 @@ public class StreamThread extends Thread {
         subscribeConsumer();
     }
 
-
     private void handleTaskMigrated(final TaskMigratedException e) {
         log.warn("Detected that the thread is being fenced. " +
                      "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
