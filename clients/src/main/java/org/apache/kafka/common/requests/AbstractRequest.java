@@ -245,6 +245,10 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new DescribeClientQuotasRequest(struct, apiVersion);
             case ALTER_CLIENT_QUOTAS:
                 return new AlterClientQuotasRequest(struct, apiVersion);
+            case DESCRIBE_USER_SCRAM_CREDENTIALS:
+                return new DescribeUserScramCredentialsRequest(struct, apiVersion);
+            case ALTER_USER_SCRAM_CREDENTIALS:
+                return new AlterUserScramCredentialsRequest(struct, apiVersion);
             case ALTER_ISR:
                 return new AlterIsrRequest(new AlterIsrRequestData(struct, apiVersion), apiVersion);
             default:

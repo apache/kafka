@@ -30,6 +30,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Properties;
@@ -101,16 +103,25 @@ public final class WordCountProcessorDemo {
         }
     }
 
-    public static void main(final String[] args) {
+    public static void main(final String[] args) throws IOException {
         final Properties props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-processor");
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        if (args != null && args.length > 0) {
+            try (final FileInputStream fis = new FileInputStream(args[0])) {
+                props.load(fis);
+            }
+            if (args.length > 1) {
+                System.out.println("Warning: Some command line arguments were ignored. This demo only accepts an optional configuration file.");
+            }
+        }
+
+        props.putIfAbsent(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-processor");
+        props.putIfAbsent(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        props.putIfAbsent(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        props.putIfAbsent(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.putIfAbsent(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         final Topology builder = new Topology();
 

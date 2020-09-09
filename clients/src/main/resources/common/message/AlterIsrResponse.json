@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 50,
+  "apiKey": 52,
   "type": "response",
   "name": "AlterIsrResponse",
   "validVersions": "0",

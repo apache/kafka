@@ -173,7 +173,7 @@ public class KGroupedTableImplTest {
 
         final MockProcessorSupplier<String, Integer> supplier = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey, topic, driver);
+            assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             assertEquals(reduced.queryableStoreName(), "reduced");
         }
     }
@@ -195,7 +195,7 @@ public class KGroupedTableImplTest {
 
         final MockProcessorSupplier<String, Integer> supplier = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey, topic, driver);
+            assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             assertNull(reduced.queryableStoreName());
         }
     }
@@ -220,7 +220,7 @@ public class KGroupedTableImplTest {
 
         final MockProcessorSupplier<String, Integer> supplier = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey, topic, driver);
+            assertReduced(supplier.theCapturedProcessor().lastValueAndTimestampPerKey(), topic, driver);
             {
                 final KeyValueStore<String, Integer> reduce = driver.getKeyValueStore("reduce");
                 assertThat(reduce.get("A"), equalTo(5));
