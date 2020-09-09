@@ -51,7 +51,6 @@ class KafkaVersion(LooseVersion):
 
     def supports_named_listeners(self):
         return self >= V_0_10_2_0
-        return self >= V_0_10_2_02_1_0
 
     def acl_command_supports_bootstrap_server(self):
         return self >= V_2_1_0
