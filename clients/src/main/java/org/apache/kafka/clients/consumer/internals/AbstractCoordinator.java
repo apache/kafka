@@ -461,7 +461,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
             } else {
                 final RuntimeException exception = future.exception();
-                log.info("Rebalance failed with {}", exception.toString());
+                log.info("Rebalance failed.", exception);
                 resetJoinGroupFuture();
                 if (exception instanceof UnknownMemberIdException ||
                     exception instanceof RebalanceInProgressException ||
