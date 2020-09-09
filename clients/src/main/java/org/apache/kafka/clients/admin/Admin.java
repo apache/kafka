@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -1213,6 +1214,97 @@ public interface Admin extends AutoCloseable {
      * @return the AlterClientQuotasResult containing the result
      */
     AlterClientQuotasResult alterClientQuotas(Collection<ClientQuotaAlteration> entries, AlterClientQuotasOptions options);
+
+    /**
+     * Describe all SASL/SCRAM credentials.
+     *
+     * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
+     *
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    default DescribeUserScramCredentialsResult describeUserScramCredentials() {
+        return describeUserScramCredentials(null, new DescribeUserScramCredentialsOptions());
+    }
+
+    /**
+     * Describe SASL/SCRAM credentials for the given users.
+     *
+     * <p>This is a convenience method for {@link #describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
+     *
+     * @param users the users for which credentials are to be described; all users' credentials are described if null
+     *              or empty.
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    default DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users) {
+        return describeUserScramCredentials(users, new DescribeUserScramCredentialsOptions());
+    }
+
+    /**
+     * Describe SASL/SCRAM credentials.
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} on the futures from the
+     * returned {@link DescribeUserScramCredentialsResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have describe access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.ResourceNotFoundException}
+     *   If the user did not exist/had no SCRAM credentials.</li>
+     *   <li>{@link org.apache.kafka.common.errors.DuplicateResourceException}
+     *   If the user was requested to be described more than once in the original request.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe operation could finish.</li>
+     * </ul>
+     * <p>
+     * This operation is supported by brokers with version 2.7.0 or higher.
+     *
+     * @param users the users for which credentials are to be described; all users' credentials are described if null
+     *              or empty.
+     * @param options The options to use when describing the credentials
+     * @return The DescribeUserScramCredentialsResult.
+     */
+    DescribeUserScramCredentialsResult describeUserScramCredentials(List<String> users, DescribeUserScramCredentialsOptions options);
+
+    /**
+     * Alter SASL/SCRAM credentials for the given users.
+     *
+     * <p>This is a convenience method for {@link #alterUserScramCredentials(List, AlterUserScramCredentialsOptions)}
+     *
+     * @param alterations the alterations to be applied
+     * @return The AlterUserScramCredentialsResult.
+     */
+    default AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations) {
+        return alterUserScramCredentials(alterations, new AlterUserScramCredentialsOptions());
+    }
+
+    /**
+     * Alter SASL/SCRAM credentials.
+     *
+     * <p>
+     * The following exceptions can be anticipated when calling {@code get()} any of the futures from the
+     * returned {@link AlterUserScramCredentialsResult}:
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     *   If the request is not sent to the Controller broker.</li>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *   If the user authenticated with a delegation token.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedSaslMechanismException}
+     *   If the requested SCRAM mechanism is unrecognized or otherwise unsupported.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnacceptableCredentialException}
+     *   If the username is empty or the requested number of iterations is too small or too large.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   If the request timed out before the describe could finish.</li>
+     * </ul>
+     * <p>
+     * This operation is supported by brokers with version 2.7.0 or higher.
+     *
+     * @param alterations the alterations to be applied
+     * @param options The options to use when altering the credentials
+     * @return The AlterUserScramCredentialsResult.
+     */
+    AlterUserScramCredentialsResult alterUserScramCredentials(List<UserScramCredentialAlteration> alterations,
+                                                              AlterUserScramCredentialsOptions options);
 
     /**
      * Get the metrics kept by the adminClient

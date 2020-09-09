@@ -372,7 +372,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.mkdirs(KafkaService.PERSISTENT_ROOT)
 
         self.security_config.setup_node(node)
-        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=True)
+        self.security_config.maybe_setup_broker_scram_credentials(node, self.path, "--zookeeper %s %s" % (self.zk_connect_setting(), self.zk.zkTlsConfigFileOption()))
 
         prop_file = self.prop_file(node)
         self.logger.info("kafka.properties:")
@@ -391,7 +391,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # Credentials for inter-broker communication are created before starting Kafka.
         # Client credentials are created after starting Kafka so that both loading of
         # existing credentials from ZK and dynamic update of credentials in Kafka are tested.
-        self.security_config.setup_credentials(node, self.path, self.zk_connect_setting(), broker=False)
+        # We use the admin client and connect as the broker user when creating the client (non-broker) credentials
+        # if Kafka supports KIP-554, otherwise we use ZooKeeper.
+        self.security_config.maybe_setup_client_scram_credentials(node, self.path, self._connect_setting_kafka_configs_scram(node))
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
@@ -575,10 +577,21 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.ssh(cmd)
 
     def _connect_setting_kafka_configs(self, node):
+        # Use this for everything related to kafka-configs except User SCRAM Credentials
         if node.version.kafka_configs_command_uses_bootstrap_server():
-            return "--bootstrap-server %s " % self.bootstrap_servers(self.security_protocol)
+            return "--bootstrap-server %s --command-config <(echo '%s')" % (self.bootstrap_servers(self.security_protocol),
+                                                                            self.security_config.client_config())
         else:
-            return "--zookeeper %s %s" % self.zk_connect_setting(), self.zk.zkTlsConfigFileOption()
+            return "--zookeeper %s %s" % (self.zk_connect_setting(), self.zk.zkTlsConfigFileOption())
+
+    def _connect_setting_kafka_configs_scram(self, node):
+        # Use this for kafka-configs when operating on User SCRAM Credentials
+        if node.version.kafka_configs_command_uses_bootstrap_server_scram():
+            return "--bootstrap-server %s --command-config <(echo '%s')" %\
+                   (self.bootstrap_servers(self.security_protocol),
+                    self.security_config.client_config(use_inter_broker_mechanism_for_client = True))
+        else:
+            return "--zookeeper %s %s" % (self.zk_connect_setting(), self.zk.zkTlsConfigFileOption())
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
