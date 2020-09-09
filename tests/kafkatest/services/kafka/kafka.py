@@ -559,143 +559,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()
 
-    def _acl_command_connect_setting(self, node, force_use_zk_connection):
-        """
-        Checks if --bootstrap-server config is supported, if yes then returns a string with
-        bootstrap server, otherwise returns authorizer properties for zookeeper connection.
-        """
-        if not force_use_zk_connection and node.version.acl_command_supports_bootstrap_server():
-            connection_setting = "--bootstrap-server %s" % (self.bootstrap_servers(self.security_protocol))
-        else:
-            connection_setting = "--authorizer-properties zookeeper.connect=%s" % (self.zk_connect_setting())
-
-        return connection_setting
-
-    def _kafka_acls_cmd(self, node, force_use_zk_connection):
-        """
-        Returns kafka-acls.sh command path with jaas configuration and krb5 environment variable
-        set. If Admin client is not going to be used, don't set the environment variable.
-        """
-        kafka_acl_script = self.path.script("kafka-acls.sh", node)
-        skip_security_settings = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
-        return kafka_acl_script if skip_security_settings else \
-            "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_acl_script)
-
-    def _kafka_acls_cmd_config(self, node, force_use_zk_connection):
-        """
-        Return --command-config parameter to the kafka-acls.sh command. The config parameter specifies
-        the security settings that AdminClient uses to connect to a secure kafka server.
-        """
-        skip_command_config = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
-        return "" if skip_command_config else " --command-config <(echo '%s')" % (self.security_config.client_config())
-
-    def _acl_cmd_prefix(self, node, force_use_zk_connection):
-        """
-        :param node: Node to use when determining connection settings
-        :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available
-        :return command prefix for running kafka-acls
-        """
-        cmd = fix_opts_for_new_jvm(node)
-        cmd += "%s %s %s" % (
-            self._kafka_acls_cmd(node, force_use_zk_connection),
-            self._acl_command_connect_setting(node, force_use_zk_connection),
-            self._kafka_acls_cmd_config(node, force_use_zk_connection))
-        return cmd
-
-    def _run_acl_command(self, node, cmd):
-        output = ""
-        self.logger.debug(cmd)
-        for line in node.account.ssh_capture(cmd):
-            if not line.startswith("SLF4J"):
-                output += line
-        self.logger.debug(output)
-
-    def _add_acl_on_topic(self, principal, topic, operation_flag, node, force_use_zk_connection):
-        """
-        :param principal: principal for which ACL is created
-        :param topic: topic for which ACL is created
-        :param operation_flag: type of ACL created (e.g. --producer, --consumer, --operation=Read)
-        :param node: Node to use when determining connection settings
-        :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available
-        """
-        cmd = "%(cmd_prefix)s --add --topic=%(topic)s %(operation_flag)s --allow-principal=%(principal)s" % {
-            'cmd_prefix': self._acl_cmd_prefix(node, force_use_zk_connection),
-            'topic': topic,
-            'operation_flag': operation_flag,
-            'principal': principal
-        }
-        self._run_acl_command(node, cmd)
-
-    def add_cluster_acl(self, principal, node=None, force_use_zk_connection=False):
-        """
-        :param principal: principal for which ClusterAction ACL is created
-        :param node: Node to use when determining connection settings
-        :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available.
-               This is necessary for the case where we are bootstrapping ACLs before Kafka is started or before authorizer is enabled
-        """
-        if node is None:
-            node = self.nodes[0]
-
-        force_use_zk_connection = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
-
-        cmd = "%(cmd_prefix)s --add --cluster --operation=ClusterAction --allow-principal=%(principal)s" % {
-            'cmd_prefix': self._acl_cmd_prefix(node, force_use_zk_connection),
-            'principal': principal
-        }
-        self._run_acl_command(node, cmd)
-
-    def add_read_acl(self, principal, topic, node=None, force_use_zk_connection=False):
-        """
-        :param principal: principal for which Read ACL is created
-        :param topic: topic for which Read ACL is created
-        :param node: Node to use when determining connection settings
-        :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available.
-               This is necessary for the case where we are bootstrapping ACLs before Kafka is started or before authorizer is enabled
-        """
-        if node is None:
-            node = self.nodes[0]
-
-        force_use_zk_connection = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
-
-        self._add_acl_on_topic(principal, topic, "--operation=Read", node, force_use_zk_connection)
-
-    def add_produce_acl(self, principal, topic, node=None, force_use_zk_connection=False):
-        """
-        :param principal: principal for which Producer ACL is created
-        :param topic: topic for which Producer ACL is created
-        :param node: Node to use when determining connection settings
-        :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available.
-               This is necessary for the case where we are bootstrapping ACLs before Kafka is started or before authorizer is enabled
-        """
-        if node is None:
-            node = self.nodes[0]
-
-        force_use_zk_connection = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
-
-        self._add_acl_on_topic(principal, topic, "--producer", node, force_use_zk_connection)
-
-    def add_consume_acl(self, principal, topic, group, node=None, force_use_zk_connection=False):
-        """
-        :param principal: principal for which Consumer ACL is created
-        :param topic: topic for which Consumer ACL is created
-        :param group: consumewr group for which Consumer ACL is created
-        :param node: Node to use when determining connection settings
-        :param force_use_zk_connection: forces the use of ZooKeeper when true, otherwise AdminClient is used when available.
-               This is necessary for the case where we are bootstrapping ACLs before Kafka is started or before authorizer is enabled
-        """
-        if node is None:
-            node = self.nodes[0]
-
-        force_use_zk_connection = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
-
-        cmd = "%(cmd_prefix)s --add --topic=%(topic)s --group=%(group)s --consumer --allow-principal=%(principal)s" % {
-            'cmd_prefix': self._acl_cmd_prefix(node, force_use_zk_connection),
-            'topic': topic,
-            'group': group,
-            'principal': principal
-        }
-        self._run_acl_command(node, cmd)
-
     def alter_message_format(self, topic, msg_format_version, node=None):
         if node is None:
             node = self.nodes[0]
@@ -737,6 +600,25 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                     self.security_config.client_config(use_inter_broker_mechanism_for_client = True))
         else:
             return "--zookeeper %s %s" % (self.zk_connect_setting(), self.zk.zkTlsConfigFileOption())
+
+    def kafka_acls_cmd(self, node, force_use_zk_connection):
+        """
+        Returns kafka-acls.sh command path with jaas configuration and krb5 environment variable
+        set. If Admin client is not going to be used, don't set the environment variable.
+        """
+        kafka_acls_script = self.path.script("kafka-acls.sh", node)
+        skip_security_settings = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
+        return kafka_acls_script if skip_security_settings else \
+            "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_acls_script)
+
+    def run_cli_tool(self, node, cmd):
+        output = ""
+        self.logger.debug(cmd)
+        for line in node.account.ssh_capture(cmd):
+            if not line.startswith("SLF4J"):
+                output += line
+        self.logger.debug(output)
+        return output
 
     def parse_describe_topic(self, topic_description):
         """Parse output of kafka-topics.sh --describe (or describe_topic() method above), which is a string of form
@@ -1028,13 +910,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
               (consumer_group_script,
                self.bootstrap_servers(self.security_protocol),
                command_config)
-        output = ""
-        self.logger.debug(cmd)
-        for line in node.account.ssh_capture(cmd):
-            if not line.startswith("SLF4J"):
-                output += line
-        self.logger.debug(output)
-        return output
+        return self.run_cli_tool(node, cmd)
 
     def describe_consumer_group(self, group, node=None, command_config=None):
         """ Describe a consumer group.
