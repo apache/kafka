@@ -644,7 +644,7 @@ public class StreamThread extends Thread {
              *  6. Otherwise, increment N.
              */
             do {
-                log.debug("Invoking TaskManager#process with {} iterations.", numIterations);
+                log.debug("Processing tasks with {} iterations.", numIterations);
                 final int processed = taskManager.process(numIterations, time);
                 final long processLatency = advanceNowAndComputeLatency();
                 totalProcessLatency += processLatency;
@@ -662,7 +662,9 @@ public class StreamThread extends Thread {
                     totalProcessed += processed;
                 }
 
-                log.debug("TaskManager#process handled {} records; invoking TaskManager#punctuate", processed);
+                log.debug("Processed {} records with {} iterations; invoking punctuators if necessary",
+                          processed,
+                          numIterations);
 
                 final int punctuated = taskManager.punctuate();
                 final long punctuateLatency = advanceNowAndComputeLatency();
@@ -671,7 +673,7 @@ public class StreamThread extends Thread {
                     punctuateSensor.record(punctuateLatency / (double) punctuated, now);
                 }
 
-                log.debug("TaskManager#punctuate executed: {}", punctuated);
+                log.debug("{} punctuators ran.", punctuated);
 
                 final int committed = maybeCommit();
                 final long commitLatency = advanceNowAndComputeLatency();
@@ -713,39 +715,40 @@ public class StreamThread extends Thread {
     }
 
     private void initializeAndRestorePhase() {
-        {
-            // only try to initialize the assigned tasks
-            // if the state is still in PARTITION_ASSIGNED after the poll call
-            final State stateSnapshot = state;
-            if (stateSnapshot == State.PARTITIONS_ASSIGNED
-                || stateSnapshot == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
+        // only try to initialize the assigned tasks
+        // if the state is still in PARTITION_ASSIGNED after the poll call
+        final State stateSnapshot = state;
+        if (stateSnapshot == State.PARTITIONS_ASSIGNED
+            || stateSnapshot == State.RUNNING && taskManager.needsInitializationOrRestoration()) {
 
-                log.debug("State is {}; initializing and restoring", stateSnapshot);
+            log.debug("State is {}; initializing tasks if necessary", stateSnapshot);
 
-                // transit to restore active is idempotent so we can call it multiple times
-                changelogReader.enforceRestoreActive();
+            // transit to restore active is idempotent so we can call it multiple times
+            changelogReader.enforceRestoreActive();
 
-                if (taskManager.tryToCompleteRestoration()) {
-                    changelogReader.transitToUpdateStandby();
+            if (taskManager.tryToCompleteRestoration()) {
+                changelogReader.transitToUpdateStandby();
 
-                    setState(State.RUNNING);
-                }
+                setState(State.RUNNING);
+            }
 
-                if (log.isDebugEnabled()) {
-                    log.debug("Initialization and restore call done. State is {}", state);
-                }
+            if (log.isDebugEnabled()) {
+                log.debug("Initialization call done. State is {}", state);
             }
         }
 
-        log.debug("Invoking ChangeLogReader#restore");
+        if (log.isDebugEnabled()) {
+            log.debug("Idempotently invoking restoration logic in state {}", state);
+        }
         // we can always let changelog reader try restoring in order to initialize the changelogs;
         // if there's no active restoring or standby updating it would not try to fetch any data
         changelogReader.restore();
+        log.debug("Idempotent restore call done. Thread state has not changed.");
     }
 
     private long pollPhase() {
         final ConsumerRecords<byte[], byte[]> records;
-        log.debug("Invoking Consumer#poll");
+        log.debug("Invoking poll on main Consumer");
 
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
@@ -772,7 +775,7 @@ public class StreamThread extends Thread {
         final long pollLatency = advanceNowAndComputeLatency();
 
         if (log.isDebugEnabled()) {
-            log.debug("Consumer#poll completed in {} ms and fetched {} records", pollLatency, records.count());
+            log.debug("Main Consumer poll completed in {} ms and fetched {} records", pollLatency, records.count());
         }
         pollSensor.record(pollLatency, now);
 
