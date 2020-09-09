@@ -18,6 +18,7 @@
 package kafka.tools
 
 import kafka.network.RequestChannel
+import kafka.network.RequestConvertToJson
 import kafka.raft.KafkaNetworkChannel
 import kafka.server.ApiRequestHandler
 import kafka.utils.Logging
@@ -39,7 +40,7 @@ class TestRaftRequestHandler(
 
   override def handle(request: RequestChannel.Request): Unit = {
     try {
-      trace(s"Handling request:${request.requestDesc(true)} from connection ${request.context.connectionId};" +
+      trace(s"Handling request:${RequestConvertToJson.requestDesc(request.header, request.loggableRequest, true)} from connection ${request.context.connectionId};" +
         s"securityProtocol:${request.context.securityProtocol},principal:${request.context.principal}")
       request.header.apiKey match {
         case ApiKeys.VOTE
@@ -94,10 +95,9 @@ class TestRaftRequestHandler(
       case Some(response) =>
         val responseSend = request.context.buildResponseSend(response)
         val responseString =
-          if (RequestChannel.isRequestLoggingEnabled) Some(response.toString)
+          if (RequestChannel.isRequestLoggingEnabled) Some(RequestConvertToJson.requestHeaderNode(request.header))
           else None
         new RequestChannel.SendResponse(request, responseSend, responseString, None)
-      case None =>
         new RequestChannel.NoOpResponse(request)
     }
     sendResponse(response)

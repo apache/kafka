@@ -25,6 +25,11 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
 import java.util.{Properties, Random}
+<<<<<<< HEAD
+=======
+
+import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
+>>>>>>> 1d0de0692c... KAFKA-10525: Emit JSONs with new auto-generated schema
 import com.yammer.metrics.core.{Gauge, Meter}
 
 import javax.net.ssl._
@@ -140,7 +145,8 @@ class SocketServerTest {
   def processRequest(channel: RequestChannel, request: RequestChannel.Request): Unit = {
     val byteBuffer = RequestTestUtils.serializeRequestWithHeader(request.header, request.body[AbstractRequest])
     val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(byteBuffer))
-    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(request.header.toString), None))
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
+    channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
   }
 
   def processRequestNoOpResponse(channel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -676,9 +682,10 @@ class SocketServerTest {
       server.dataPlaneRequestChannel.sendResponse(response)
     }
     val throttledChannel = new ThrottledChannel(request, new MockTime(), 100, channelThrottlingCallback)
+    val headerLog = RequestConvertToJson.requestHeaderNode(request.header)
     val response =
       if (!noOpResponse)
-        new RequestChannel.SendResponse(request, send, Some(request.header.toString), None)
+        new RequestChannel.SendResponse(request, send, Some(headerLog), None)
       else
         new RequestChannel.NoOpResponse(request)
     server.dataPlaneRequestChannel.sendResponse(response)
@@ -1092,8 +1099,10 @@ class SocketServerTest {
 
       val requestMetrics = channel.metrics(request.header.apiKey.name)
       def totalTimeHistCount(): Long = requestMetrics.totalTimeHist.count
-      val send = new NetworkSend(request.context.connectionId, ByteBufferSend.sizePrefixed(ByteBuffer.allocate(responseBufferSize)))
-      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some("someResponse"), None))
+      val send = new NetworkSend(request.context.connectionId, ByteBuffer.allocate(responseBufferSize))
+      val headerLog = new ObjectNode(JsonNodeFactory.instance)
+      headerLog.set("response", new TextNode("someResponse"))
+      channel.sendResponse(new RequestChannel.SendResponse(request, send, Some(headerLog), None))
 
       val expectedTotalTimeCount = totalTimeHistCount() + 1
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
