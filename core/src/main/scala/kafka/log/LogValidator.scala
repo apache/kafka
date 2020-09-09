@@ -77,7 +77,7 @@ private[log] object LogValidator extends Logging {
    * Returns a ValidationAndOffsetAssignResult containing the validated message set, maximum timestamp, the offset
    * of the shallow message with the max timestamp and a boolean indicating whether the message sizes may have changed.
    */
-  def validateMessagesAndAssignOffsets(records: MemoryRecords,
+  private[log] def validateMessagesAndAssignOffsets(records: MemoryRecords,
                                                     topicPartition: TopicPartition,
                                                     offsetCounter: LongRef,
                                                     time: Time,
@@ -262,7 +262,7 @@ private[log] object LogValidator extends Logging {
       recordConversionStats = recordConversionStats)
   }
 
-  private def assignOffsetsNonCompressed(records: MemoryRecords,
+  def assignOffsetsNonCompressed(records: MemoryRecords,
                                          topicPartition: TopicPartition,
                                          offsetCounter: LongRef,
                                          now: Long,
@@ -339,7 +339,7 @@ private[log] object LogValidator extends Logging {
    * 2. When the target magic is not equal to batches' magic, meaning format conversion is needed.
    * 3. When the target magic is equal to V0, meaning absolute offsets need to be re-assigned.
    */
-  private def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
+  def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
                                                  topicPartition: TopicPartition,
                                                  offsetCounter: LongRef,
                                                  time: Time,
