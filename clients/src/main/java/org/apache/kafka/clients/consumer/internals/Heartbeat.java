@@ -74,7 +74,9 @@ public final class Heartbeat {
         update(now);
         heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
 
-        log.trace("Sending heartbeat request with {}ms remaining on timer", heartbeatTimer.remainingMs());
+        if (log.isTraceEnabled()) {
+            log.trace("Sending heartbeat request with {}ms remaining on timer", heartbeatTimer.remainingMs());
+        }
     }
 
     void failHeartbeat() {
