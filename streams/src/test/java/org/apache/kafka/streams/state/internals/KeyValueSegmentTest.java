@@ -46,7 +46,7 @@ import static org.junit.Assert.assertTrue;
 public class KeyValueSegmentTest {
 
     private final RocksDBMetricsRecorder metricsRecorder =
-        new RocksDBMetricsRecorder("metrics-scope", "thread-id", "store-name");
+        new RocksDBMetricsRecorder("metrics-scope", "store-name");
 
     @Before
     public void setUp() {

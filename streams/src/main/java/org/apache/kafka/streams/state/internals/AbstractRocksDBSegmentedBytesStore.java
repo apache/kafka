@@ -40,14 +40,17 @@ import java.util.Map;
 
 public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
+
     private final String name;
     private final AbstractSegments<S> segments;
     private final String metricScope;
     private final KeySchema keySchema;
+
     private ProcessorContext context;
-    private volatile boolean open;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+
+    private volatile boolean open;
 
     AbstractRocksDBSegmentedBytesStore(final String name,
                                        final String metricScope,
@@ -63,7 +66,21 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
                                                  final long from,
                                                  final long to) {
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        return fetch(key, from, to, true);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes key,
+                                                         final long from,
+                                                         final long to) {
+        return fetch(key, from, to, false);
+    }
+
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes key,
+                                          final long from,
+                                          final long to,
+                                          final boolean forward) {
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, forward);
 
         final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
         final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
@@ -72,7 +89,8 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             searchSpace.iterator(),
             keySchema.hasNextCondition(key, key, from, to),
             binaryFrom,
-            binaryTo);
+            binaryTo,
+            forward);
     }
 
     @Override
@@ -80,6 +98,22 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                                                  final Bytes keyTo,
                                                  final long from,
                                                  final long to) {
+        return fetch(keyFrom, keyTo, from, to, true);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> backwardFetch(final Bytes keyFrom,
+                                                         final Bytes keyTo,
+                                                         final long from,
+                                                         final long to) {
+        return fetch(keyFrom, keyTo, from, to, false);
+    }
+
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom,
+                                          final Bytes keyTo,
+                                          final long from,
+                                          final long to,
+                                          final boolean forward) {
         if (keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. " +
                 "This may be due to range arguments set in the wrong order, " +
@@ -88,7 +122,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             return KeyValueIterators.emptyIterator();
         }
 
-        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        final List<S> searchSpace = keySchema.segmentsToSearch(segments, from, to, forward);
 
         final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
         final Bytes binaryTo = keySchema.upperRange(keyTo, to);
@@ -97,30 +131,58 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             searchSpace.iterator(),
             keySchema.hasNextCondition(keyFrom, keyTo, from, to),
             binaryFrom,
-            binaryTo);
+            binaryTo,
+            forward);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        final List<S> searchSpace = segments.allSegments();
+        final List<S> searchSpace = segments.allSegments(true);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),
             keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
             null,
-            null);
+            null,
+            true);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> backwardAll() {
+        final List<S> searchSpace = segments.allSegments(false);
+
+        return new SegmentIterator<>(
+            searchSpace.iterator(),
+            keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+            null,
+            null,
+            false);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom,
                                                     final long timeTo) {
-        final List<S> searchSpace = segments.segments(timeFrom, timeTo);
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, true);
 
         return new SegmentIterator<>(
             searchSpace.iterator(),
             keySchema.hasNextCondition(null, null, timeFrom, timeTo),
             null,
-            null);
+            null,
+            true);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> backwardFetchAll(final long timeFrom,
+                                                            final long timeTo) {
+        final List<S> searchSpace = segments.segments(timeFrom, timeTo, false);
+
+        return new SegmentIterator<>(
+            searchSpace.iterator(),
+            keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+            null,
+            null,
+            false);
     }
 
     @Override
@@ -211,7 +273,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     // Visible for testing
     List<S> getSegments() {
-        return segments.allSegments();
+        return segments.allSegments(false);
     }
 
     // Visible for testing

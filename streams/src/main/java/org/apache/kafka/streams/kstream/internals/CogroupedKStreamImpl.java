@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.SessionWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
@@ -99,6 +100,19 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
         Objects.requireNonNull(windows, "windows can't be null");
         return new TimeWindowedCogroupedKStreamImpl<>(
             windows,
+            builder,
+            subTopologySourceNodes,
+            name,
+            aggregateBuilder,
+            streamsGraphNode,
+            groupPatterns);
+    }
+
+    @Override
+    public TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows slidingWindows) {
+        Objects.requireNonNull(slidingWindows, "slidingWindows can't be null");
+        return new SlidingWindowedCogroupedKStreamImpl<>(
+            slidingWindows,
             builder,
             subTopologySourceNodes,
             name,

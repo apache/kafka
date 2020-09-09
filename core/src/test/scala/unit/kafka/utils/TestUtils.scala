@@ -45,7 +45,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+import org.apache.kafka.common.errors.{KafkaStorageException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -53,7 +53,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, IntegerSerializer, Serializer}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
@@ -95,6 +95,10 @@ object TestUtils extends Logging {
   private val transactionStatusKey = "transactionStatus"
   private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
   private val abortedValue : Array[Byte] = "aborted".getBytes(StandardCharsets.UTF_8)
+
+  sealed trait LogDirFailureType
+  case object Roll extends LogDirFailureType
+  case object Checkpoint extends LogDirFailureType
 
   /**
    * Create a temporary directory
@@ -1138,6 +1142,31 @@ object TestUtils extends Logging {
         }
       }
     ), "Failed to hard-delete the delete directory")
+  }
+
+
+  def causeLogDirFailure(failureType: LogDirFailureType, leaderServer: KafkaServer, partition: TopicPartition): Unit = {
+    // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
+    val localLog = leaderServer.replicaManager.localLogOrException(partition)
+    val logDir = localLog.dir.getParentFile
+    CoreUtils.swallow(Utils.delete(logDir), this)
+    logDir.createNewFile()
+    assertTrue(logDir.isFile)
+
+    if (failureType == Roll) {
+      try {
+        leaderServer.replicaManager.getLog(partition).get.roll()
+        fail("Log rolling should fail with KafkaStorageException")
+      } catch {
+        case e: KafkaStorageException => // This is expected
+      }
+    } else if (failureType == Checkpoint) {
+      leaderServer.replicaManager.checkpointHighWatermarks()
+    }
+
+    // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
+    TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
+    assertTrue(leaderServer.replicaManager.localLog(partition).isEmpty)
   }
 
   /**
