@@ -20,56 +20,13 @@ class ACLs(KafkaPathResolverMixin):
     def __init__(self, context):
         self.context = context
 
-    def set_acls(self, protocol, kafka, topic, group):
-        node = kafka.nodes[0]
-        setting = kafka.zk_connect_setting()
-
+    def set_acls(self, protocol, kafka, topic, group, force_use_zk_connection=False):
         # Set server ACLs
         kafka_principal = "User:CN=systemtest" if protocol == "SSL" else "User:kafka"
-        self.acls_command(node, ACLs.add_cluster_acl(setting, kafka_principal))
-        self.acls_command(node, ACLs.broker_read_acl(setting, "*", kafka_principal))
+        kafka.add_cluster_acl(kafka_principal, force_use_zk_connection=force_use_zk_connection)
+        kafka.add_read_acl(kafka_principal, "*", force_use_zk_connection=force_use_zk_connection)
 
         # Set client ACLs
         client_principal = "User:CN=systemtest" if protocol == "SSL" else "User:client"
-        self.acls_command(node, ACLs.produce_acl(setting, topic, client_principal))
-        self.acls_command(node, ACLs.consume_acl(setting, topic, group, client_principal))
-
-    def acls_command(self, node, properties):
-        cmd = "%s %s" % (self.path.script("kafka-acls.sh", node), properties)
-        node.account.ssh(cmd)
-
-    @staticmethod
-    def add_cluster_acl(zk_connect, principal="User:kafka"):
-        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --cluster " \
-               "--operation=ClusterAction --allow-principal=%(principal)s " % {
-            'zk_connect': zk_connect,
-            'principal': principal
-        }
-
-    @staticmethod
-    def broker_read_acl(zk_connect, topic, principal="User:kafka"):
-        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s " \
-               "--operation=Read --allow-principal=%(principal)s " % {
-            'zk_connect': zk_connect,
-            'topic': topic,
-            'principal': principal
-        }
-
-    @staticmethod
-    def produce_acl(zk_connect, topic, principal="User:client"):
-        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s " \
-               "--producer --allow-principal=%(principal)s " % {
-            'zk_connect': zk_connect,
-            'topic': topic,
-            'principal': principal
-        }
-
-    @staticmethod
-    def consume_acl(zk_connect, topic, group, principal="User:client"):
-        return "--authorizer-properties zookeeper.connect=%(zk_connect)s --add --topic=%(topic)s " \
-               "--group=%(group)s --consumer --allow-principal=%(principal)s " % {
-            'zk_connect': zk_connect,
-            'topic': topic,
-            'group': group,
-            'principal': principal
-        }
+        kafka.add_produce_acl(client_principal, topic, force_use_zk_connection=force_use_zk_connection)
+        kafka.add_consume_acl(client_principal, topic, group, force_use_zk_connection=force_use_zk_connection)
