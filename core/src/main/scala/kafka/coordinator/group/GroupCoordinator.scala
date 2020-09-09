@@ -1040,21 +1040,36 @@ class GroupCoordinator(val brokerId: Int,
 
     group.currentState match {
       case Stable =>
-        info(s"Static member joins during Stable stage will not trigger rebalance.")
-        group.maybeInvokeJoinCallback(member, JoinGroupResult(
-          members = List.empty,
-          memberId = newMemberId,
-          generationId = group.generationId,
-          protocolType = group.protocolType,
-          protocolName = group.protocolName,
-          // We want to avoid current leader performing trivial assignment while the group
-          // is in stable stage, because the new assignment in leader's next sync call
-          // won't be broadcast by a stable group. This could be guaranteed by
-          // always returning the old leader id so that the current leader won't assume itself
-          // as a leader based on the returned message, since the new member.id won't match
-          // returned leader id, therefore no assignment will be performed.
-          leaderId = currentLeader,
-          error = Errors.NONE))
+        // check if group's selectedProtocol of next generation will change, if not, simply store group to persist the
+        // updated static member, if yes, rebalance should be triggered to let the group's assignment and selectProtocol consistent
+        val selectedProtocolOfNextGeneration = group.selectProtocol
+        if (group.protocolName.contains(selectedProtocolOfNextGeneration)) {
+          info(s"Static member which joins during Stable stage and doesn't affect selectProtocol will not trigger rebalance.")
+          val groupAssignment: Map[String, Array[Byte]] = group.allMemberMetadata.map(member => member.memberId -> member.assignment).toMap
+          groupManager.storeGroup(group, groupAssignment, error => {
+            group.inLock {
+              if (error != Errors.NONE) {
+                warn(s"Failed to persist metadata for group ${group.groupId}: ${error.message}")
+              }
+            }
+          })
+          group.maybeInvokeJoinCallback(member, JoinGroupResult(
+            members = List.empty,
+            memberId = newMemberId,
+            generationId = group.generationId,
+            protocolType = group.protocolType,
+            protocolName = group.protocolName,
+            // We want to avoid current leader performing trivial assignment while the group
+            // is in stable stage, because the new assignment in leader's next sync call
+            // won't be broadcast by a stable group. This could be guaranteed by
+            // always returning the old leader id so that the current leader won't assume itself
+            // as a leader based on the returned message, since the new member.id won't match
+            // returned leader id, therefore no assignment will be performed.
+            leaderId = currentLeader,
+            error = Errors.NONE))
+        } else {
+          maybePrepareRebalance(group, s"Group's selectedProtocol will change because static member ${member.memberId} with instance id $groupInstanceId joined with change of protocol")
+        }
       case CompletingRebalance =>
         // if the group is in after-sync stage, upon getting a new join-group of a known static member
         // we should still trigger a new rebalance, since the old member may already be sent to the leader
