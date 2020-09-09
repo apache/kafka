@@ -129,7 +129,7 @@ class ShutdownProcessor extends AbstractProcessor<Object, Object> {
     @Override
     public void process(final Object key, final Object value) {
         valueList.add(new KeyValue<>(key, value));
-//        throw new ShutdownRequestedException("integration test");
+        throw new ShutdownRequestedException("integration test");
     }
 
 

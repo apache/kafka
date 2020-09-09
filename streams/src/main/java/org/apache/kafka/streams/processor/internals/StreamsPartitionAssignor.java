@@ -302,7 +302,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Subscription subscription = entry.getValue();
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
-            if(info.shutdownRequested() == AssignorError.SHUTDOWN_REQUESTED.code()){
+            if (info.shutdownRequested() == AssignorError.SHUTDOWN_REQUESTED.code()) {
                 shutdownRequested = true;
             }
 
@@ -346,7 +346,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // the maximum of the depending sub-topologies source topics' number of partitions
         final Map<Integer, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
 
-        if(shutdownRequested){
+        if (shutdownRequested) {
             return new GroupAssignment(
                     errorAssignment(clientMetadataMap,
                             AssignorError.SHUTDOWN_REQUESTED.code())

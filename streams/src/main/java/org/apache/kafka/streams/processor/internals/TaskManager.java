@@ -1237,11 +1237,11 @@ public class TaskManager {
         this.resetter = resetter;
     }
 
-    public void flagForShutdownRequest(){
+    public void flagForShutdownRequest() {
         this.shutdownRequested.set(AssignorError.SHUTDOWN_REQUESTED.code());
     }
 
-    public AtomicInteger isShutdownRequested(){
+    public AtomicInteger isShutdownRequested() {
         return this.shutdownRequested;
     }
 

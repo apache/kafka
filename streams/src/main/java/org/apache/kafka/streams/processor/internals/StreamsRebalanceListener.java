@@ -54,7 +54,7 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
             log.error("Received error code {}", assignmentErrorCode.get());
             throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
-        }else if(assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()){
+        } else if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
             //throw new ShutdownRequestedException("onPartition assigned"); //TODO: receive request and call requestClose()
             //requestClose();
         }

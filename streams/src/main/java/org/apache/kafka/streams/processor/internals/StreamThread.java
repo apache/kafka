@@ -567,7 +567,7 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
-            } catch (final ShutdownRequestedException e){
+            } catch (final ShutdownRequestedException e) {
                 handleShutdownRequest(e);
             }
         }
