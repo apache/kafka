@@ -29,7 +29,7 @@ public class UnoptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V
 
     private UnoptimizableRepartitionNode(final String nodeName,
                                          final String sourceName,
-                                         final ProcessorParameters<K, V> processorParameters,
+                                         final ProcessorParameters<K, V, ?, ?> processorParameters,
                                          final Serde<K> keySerde,
                                          final Serde<V> valueSerde,
                                          final String sinkName,

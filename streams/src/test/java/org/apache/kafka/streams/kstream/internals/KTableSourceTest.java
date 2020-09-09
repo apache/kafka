@@ -25,6 +25,7 @@ import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
+import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
@@ -36,9 +37,8 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.TestRecord;
-import org.apache.kafka.streams.TestOutputTopic;
-
-import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.MockApiProcessor;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -272,7 +272,7 @@ public class KTableSourceTest {
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
@@ -284,7 +284,7 @@ public class KTableSourceTest {
                     Instant.ofEpochMilli(0L),
                     Duration.ZERO
                 );
-            final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
+            final MockApiProcessor<String, Integer, Void, Void> proc1 = supplier.theCapturedProcessor();
 
             inputTopic1.pipeInput("A", "01", 10L);
             inputTopic1.pipeInput("B", "01", 20L);
@@ -327,7 +327,7 @@ public class KTableSourceTest {
         table1.enableSendingOldValues();
         assertTrue(table1.sendingOldValueEnabled());
 
-        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockApiProcessorSupplier<String, Integer, Void, Void> supplier = new MockApiProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
@@ -339,7 +339,7 @@ public class KTableSourceTest {
                     Instant.ofEpochMilli(0L),
                     Duration.ZERO
                 );
-            final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
+            final MockApiProcessor<String, Integer, Void, Void> proc1 = supplier.theCapturedProcessor();
 
             inputTopic1.pipeInput("A", "01", 10L);
             inputTopic1.pipeInput("B", "01", 20L);

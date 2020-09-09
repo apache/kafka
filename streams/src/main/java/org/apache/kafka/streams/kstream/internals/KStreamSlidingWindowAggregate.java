@@ -316,7 +316,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 final KeyValueIterator<Windowed<K>, ValueAndTimestamp<Agg>> iterator = windowStore.fetch(
                     key,
                     key,
-                    Math.max(0, inputRecordTimestamp - 2 * windows.timeDifferenceMs()),
+                    0,
                     // to catch the current record's right window, if it exists, without more calls to the store
                     inputRecordTimestamp + 1)
             ) {
@@ -445,13 +445,14 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
             return previousRecordTimestamp != null && inputRecordTimestamp - windows.timeDifferenceMs() <= previousRecordTimestamp;
         }
 
-        // previous record's right window does not already exist and current record falls within previous record's right window
+        // checks if the previous record's right window does not already exist and the current record falls within previous record's right window
         private boolean previousRecordRightWindowDoesNotExistAndIsNotEmpty(final Set<Long> windowStartTimes,
                                                                            final long previousRightWindowStart,
                                                                            final long inputRecordTimestamp) {
             return !windowStartTimes.contains(previousRightWindowStart) && previousRightWindowStart + windows.timeDifferenceMs() >= inputRecordTimestamp;
         }
 
+        // checks if the aggregate we found has records that fall into the current record's right window; if yes, the right window is not empty
         private boolean rightWindowIsNotEmpty(final ValueAndTimestamp<Agg> rightWinAgg, final long inputRecordTimestamp) {
             return rightWinAgg != null && rightWinAgg.timestamp() > inputRecordTimestamp;
         }

@@ -648,7 +648,6 @@ public class KStreamSlidingWindowAggregateTest {
                 new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(14, 24)), "0+9", 15)),
             actual
         );
-
     }
 
     @Test
