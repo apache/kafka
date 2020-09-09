@@ -124,12 +124,12 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private final Logger log;
-    private final GroupCoordinatorMetrics sensors;
     private final Heartbeat heartbeat;
+    private final GroupCoordinatorMetrics sensors;
     private final GroupRebalanceConfig rebalanceConfig;
-    protected final ConsumerNetworkClient client;
+
     protected final Time time;
-    protected MemberState state = MemberState.UNJOINED;
+    protected final ConsumerNetworkClient client;
 
     private Node coordinator = null;
     private boolean rejoinNeeded = true;
@@ -141,6 +141,8 @@ public abstract class AbstractCoordinator implements Closeable {
     private Generation generation = Generation.NO_GENERATION;
     private long lastRebalanceStartMs = -1L;
     private long lastRebalanceEndMs = -1L;
+
+    protected MemberState state = MemberState.UNJOINED;
 
 
     /**
@@ -431,16 +433,18 @@ public abstract class AbstractCoordinator implements Closeable {
 
             if (future.succeeded()) {
                 Generation generationSnapshot;
+                MemberState stateSnapshot;
 
                 // Generation data maybe concurrently cleared by Heartbeat thread.
                 // Can't use synchronized for {@code onJoinComplete}, because it can be long enough
-                // and  shouldn't block heartbeat thread.
+                // and shouldn't block heartbeat thread.
                 // See {@link PlaintextConsumerTest#testMaxPollIntervalMsDelayInAssignment}
                 synchronized (AbstractCoordinator.this) {
                     generationSnapshot = this.generation;
+                    stateSnapshot = this.state;
                 }
 
-                if (generationSnapshot != Generation.NO_GENERATION && state == MemberState.STABLE) {
+                if (generationSnapshot != Generation.NO_GENERATION && stateSnapshot == MemberState.STABLE) {
                     // Duplicate the buffer in case `onJoinComplete` does not complete and needs to be retried.
                     ByteBuffer memberAssignment = future.value().duplicate();
 
@@ -455,7 +459,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else {
                     log.info("Generation data was cleared by heartbeat thread to {} and state is now {} before " +
                          "the rebalance callback is triggered, marking this rebalance as failed and retry",
-                         generation, state);
+                         generationSnapshot, stateSnapshot);
                     resetStateAndRejoin();
                     resetJoinGroupFuture();
                 }
@@ -480,11 +484,6 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private synchronized void resetJoinGroupFuture() {
         this.joinFuture = null;
-    }
-
-    private synchronized void resetStateAndRejoin() {
-        rejoinNeeded = true;
-        state = MemberState.UNJOINED;
     }
 
     private synchronized RequestFuture<ByteBuffer> initiateJoinGroup() {
@@ -930,25 +929,26 @@ public abstract class AbstractCoordinator implements Closeable {
         return generation.memberId;
     }
 
-    private synchronized void resetGeneration() {
-        rejoinNeeded = true;
+    private synchronized void resetState() {
+        state = MemberState.UNJOINED;
         generation = Generation.NO_GENERATION;
+    }
+
+    private synchronized void resetStateAndRejoin() {
+        resetState();
+        rejoinNeeded = true;
     }
 
     synchronized void resetGenerationOnResponseError(ApiKeys api, Errors error) {
         log.debug("Resetting generation after encountering {} from {} response and requesting re-join", error, api);
 
-        state = MemberState.UNJOINED;
-
-        resetGeneration();
+        resetState();
     }
 
     synchronized void resetGenerationOnLeaveGroup() {
         log.debug("Resetting generation due to consumer pro-actively leaving the group");
 
-        state = MemberState.UNJOINED;
-
-        resetGeneration();
+        resetStateAndRejoin();
     }
 
     public synchronized void requestRejoin() {
