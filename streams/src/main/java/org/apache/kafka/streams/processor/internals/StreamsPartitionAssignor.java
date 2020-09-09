@@ -156,6 +156,147 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    private static class NumOfRepartitionsCalculator {
+        /**
+         * A TopicNode is a node that contains topic information and upstream/downstream TopicsInfo. Graph built of TopicNode and TopicsInfoNode is useful
+         * when in certain cases traverse is needed. For example, {@link #setRepartitionTopicMetadataNumberOfPartitions(Map, Map, Cluster)}
+         * internally do a DFS search along with the graph.
+         *
+             TopicNode("t1")      TopicNode("t2")                                    TopicNode("t6")             TopicNode("t7")
+                    \           /                                                            \                           /
+                 TopicsInfoNode(source = (t1,t2), sink = (t3,t4))                           TopicsInfoNode(source = (t6,t7), sink = (t4))
+                                    /           \                                                                        /
+                                 /                 \                                                          /
+                            /                        \                                           /
+                        /                                \                           /
+                    /                                       \            /
+         TopicNode("t3")                                     TopicNode("t4")
+                \
+         TopicsInfoNode(source = (t3), sink = ())
+
+         t3 = max(t1,t2)
+         t4 = max(max(t1,t2), max(t6,t7))
+         */
+        private static class TopicNode {
+            public final String topicName;
+            public final Set<TopicsInfoNode> upStreams; // upStream TopicsInfo's sinkTopics contains this
+            public Optional<Integer> numOfRepartitions;
+            TopicNode(final String topicName) {
+                this.topicName = topicName;
+                this.upStreams = new HashSet<>();
+                this.numOfRepartitions = Optional.empty();
+            }
+
+            public void addUpStreamTopicsInfo(final TopicsInfo topicsInfo) {
+                this.upStreams.add(new TopicsInfoNode(topicsInfo));
+            }
+        }
+
+        // Node wrapper for TopicsInfo, which can be used together with TopicNode to build a graph to calculate partition
+        // number of repartition topics, and numOfRepartitions of underlying TopicsInfo is used for memoization.
+        private static class TopicsInfoNode {
+            public TopicsInfo topicsInfo;
+            private Optional<Integer> numOfRepartitions;
+            TopicsInfoNode(final TopicsInfo topicsInfo) {
+                this.topicsInfo = topicsInfo;
+                this.numOfRepartitions = Optional.empty();
+            }
+
+            public void setNumOfRepartitions(final int numOfRepartitions) {
+                if (numOfRepartitions < 0) throw new IllegalArgumentException("numOfRepartitions of a TopicsInfoNode should be non-negative");
+                this.numOfRepartitions = Optional.of(numOfRepartitions);
+            }
+
+            public Optional<Integer> numOfRepartitions() {
+                return this.numOfRepartitions;
+            }
+
+            public Set<String> sourceTopics() {
+                return this.topicsInfo.sourceTopics;
+            }
+        }
+
+        public static void setRepartitionTopicMetadataNumberOfPartitions(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+                                                                         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups,
+                                                                         final Cluster metadata) {
+            final Set<String> allRepartitionSourceTopics = new HashSet<>();
+            final Map<String, TopicNode> builtTopicNodes = new HashMap<>();
+            // 1. Build a graph containing the TopicsInfoNode and TopicsNode
+            for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
+                allRepartitionSourceTopics.addAll(topicsInfo.repartitionSourceTopics.keySet());
+                for (final String sourceTopic : topicsInfo.sourceTopics) {
+                    builtTopicNodes.computeIfAbsent(sourceTopic, topic -> new TopicNode(topic));
+                }
+
+                for (final String sinkTopic : topicsInfo.sinkTopics) {
+                    builtTopicNodes.computeIfAbsent(sinkTopic, topic -> new TopicNode(topic));
+                    builtTopicNodes.get(sinkTopic).addUpStreamTopicsInfo(topicsInfo);
+                }
+            }
+
+            // 2. Use DFS along with memoization to calculate repartition number of all repartitionSourceTopics
+            for (final String topic : allRepartitionSourceTopics) {
+                calcNumOfRepartitionsForTopicNode(topic, repartitionTopicMetadata, metadata, builtTopicNodes);
+            }
+        }
+
+        private static int calcNumOfRepartitionsForTopicNode(final String topic,
+                                                             final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+                                                             final Cluster metadata,
+                                                             final Map<String, TopicNode> builtTopicNodes) {
+            final TopicNode topicNode = builtTopicNodes.get(topic);
+            if (topicNode.numOfRepartitions.isPresent()) {
+                return topicNode.numOfRepartitions.get();
+            }
+            Integer numOfRepartitionsCandidate = null;
+            if (repartitionTopicMetadata.containsKey(topic)) {
+                final Optional<Integer> maybeNumberPartitions = repartitionTopicMetadata.get(topic).numberOfPartitions();
+                // if numberOfPartitions already calculated, return directly
+                if (maybeNumberPartitions.isPresent()) {
+                    numOfRepartitionsCandidate = maybeNumberPartitions.get();
+                } else {
+                    // calculate the max numOfRepartitions of its upStream TopicsInfoNodes and set the repartitionTopicMetadata for memoization before return
+                    for (final TopicsInfoNode upstream : topicNode.upStreams) {
+                        final Integer upStreamRepartitionNum = calcNumOfRepartitionsForTopicInfoNode(upstream, repartitionTopicMetadata, metadata, builtTopicNodes);
+                        numOfRepartitionsCandidate = numOfRepartitionsCandidate == null ? upStreamRepartitionNum :
+                                (upStreamRepartitionNum > numOfRepartitionsCandidate ? upStreamRepartitionNum : numOfRepartitionsCandidate);
+                    }
+                    repartitionTopicMetadata.get(topic).setNumberOfPartitions(numOfRepartitionsCandidate);
+                }
+            } else {
+                final Integer count = metadata.partitionCountForTopic(topic);
+                if (count == null) {
+                    throw new IllegalStateException(
+                            "No partition count found for source topic "
+                                    + topic
+                                    + ", but it should have been."
+                    );
+                }
+                numOfRepartitionsCandidate = count;
+            }
+            topicNode.numOfRepartitions = Optional.of(numOfRepartitionsCandidate);
+            return numOfRepartitionsCandidate;
+        }
+
+        private static int calcNumOfRepartitionsForTopicInfoNode(final TopicsInfoNode topicsInfoNode,
+                                                                 final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+                                                                 final Cluster metadata,
+                                                                 final Map<String, TopicNode> builtTopicNode) {
+            Integer numOfRepartitionsCandidate = null;
+            if (topicsInfoNode.numOfRepartitions().isPresent()) {
+                return topicsInfoNode.numOfRepartitions().get();
+            } else {
+                for (final String sourceTopic : topicsInfoNode.sourceTopics()) {
+                    final Integer sourceTopicNumPartitions = calcNumOfRepartitionsForTopicNode(sourceTopic, repartitionTopicMetadata, metadata, builtTopicNode);
+                    numOfRepartitionsCandidate = numOfRepartitionsCandidate == null ? sourceTopicNumPartitions :
+                            (sourceTopicNumPartitions > numOfRepartitionsCandidate ? sourceTopicNumPartitions : numOfRepartitionsCandidate);
+                }
+                topicsInfoNode.setNumOfRepartitions(numOfRepartitionsCandidate);
+                return numOfRepartitionsCandidate;
+            }
+        }
+    }
+
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
     private static final UUID FUTURE_ID = randomUUID();
 
@@ -517,68 +658,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     /**
      * Computes the number of partitions and sets it for each repartition topic in repartitionTopicMetadata
      */
-    private void setRepartitionTopicMetadataNumberOfPartitions(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
+    // visible for testing
+    void setRepartitionTopicMetadataNumberOfPartitions(final Map<String, InternalTopicConfig> repartitionTopicMetadata,
                                                                final Map<Integer, TopicsInfo> topicGroups,
                                                                final Cluster metadata) {
-        boolean numPartitionsNeeded;
-        do {
-            numPartitionsNeeded = false;
-
-            for (final TopicsInfo topicsInfo : topicGroups.values()) {
-                for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
-                    final Optional<Integer> maybeNumPartitions = repartitionTopicMetadata.get(topicName)
-                                                                     .numberOfPartitions();
-                    Integer numPartitions = null;
-
-                    if (!maybeNumPartitions.isPresent()) {
-                        // try set the number of partitions for this repartition topic if it is not set yet
-                        for (final TopicsInfo otherTopicsInfo : topicGroups.values()) {
-                            final Set<String> otherSinkTopics = otherTopicsInfo.sinkTopics;
-
-                            if (otherSinkTopics.contains(topicName)) {
-                                // if this topic is one of the sink topics of this topology,
-                                // use the maximum of all its source topic partitions as the number of partitions
-                                for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
-                                    Integer numPartitionsCandidate = null;
-                                    // It is possible the sourceTopic is another internal topic, i.e,
-                                    // map().join().join(map())
-                                    if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
-                                        if (repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().isPresent()) {
-                                            numPartitionsCandidate =
-                                                repartitionTopicMetadata.get(sourceTopicName).numberOfPartitions().get();
-                                        }
-                                    } else {
-                                        final Integer count = metadata.partitionCountForTopic(sourceTopicName);
-                                        if (count == null) {
-                                            throw new IllegalStateException(
-                                                "No partition count found for source topic "
-                                                    + sourceTopicName
-                                                    + ", but it should have been."
-                                            );
-                                        }
-                                        numPartitionsCandidate = count;
-                                    }
-
-                                    if (numPartitionsCandidate != null) {
-                                        if (numPartitions == null || numPartitionsCandidate > numPartitions) {
-                                            numPartitions = numPartitionsCandidate;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        // if we still have not found the right number of partitions,
-                        // another iteration is needed
-                        if (numPartitions == null) {
-                            numPartitionsNeeded = true;
-                        } else {
-                            repartitionTopicMetadata.get(topicName).setNumberOfPartitions(numPartitions);
-                        }
-                    }
-                }
-            }
-        } while (numPartitionsNeeded);
+        NumOfRepartitionsCalculator.setRepartitionTopicMetadataNumberOfPartitions(repartitionTopicMetadata, topicGroups, metadata);
     }
 
     /**
