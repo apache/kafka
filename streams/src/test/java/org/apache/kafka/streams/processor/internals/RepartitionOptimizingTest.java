@@ -33,6 +33,7 @@ import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TestOutputTopic;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.errors.ShutdownRequestedException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -274,7 +275,8 @@ public class RepartitionOptimizingTest {
 
         @Override
         public void process(final String key, final String value) {
-            valueList.add(value);
+            throw new ShutdownRequestedException("testin"); //test to see if TopologyTestDriver uses the StreamThread -- it does not
+//            valueList.add(value);
         }
     }
 

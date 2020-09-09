@@ -37,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
@@ -82,6 +83,15 @@ public class SubscriptionInfo {
                             final UUID processId,
                             final String userEndPoint,
                             final Map<TaskId, Long> taskOffsetSums) {
+        this(version, latestSupportedVersion, processId, userEndPoint, taskOffsetSums, new AtomicInteger(0));
+    }
+
+    public SubscriptionInfo(final int version,
+                            final int latestSupportedVersion,
+                            final UUID processId,
+                            final String userEndPoint,
+                            final Map<TaskId, Long> taskOffsetSums,
+                            final AtomicInteger shutdownRequested) {
         validateVersions(version, latestSupportedVersion);
         final SubscriptionInfoData data = new SubscriptionInfoData();
         data.setVersion(version);
@@ -94,6 +104,10 @@ public class SubscriptionInfo {
         }
         if (version >= 3) {
             data.setLatestSupportedVersion(latestSupportedVersion);
+        }
+
+        if( version >= 8) {
+            data.setShutdownRequested(shutdownRequested.get());
         }
 
         this.data = data;
@@ -152,6 +166,10 @@ public class SubscriptionInfo {
             taskId.setPartition(t.partition);
             return taskId;
         }).collect(Collectors.toList()));
+    }
+
+    public int shutdownRequested(){
+        return data.shutdownRequested();
     }
 
     public int version() {

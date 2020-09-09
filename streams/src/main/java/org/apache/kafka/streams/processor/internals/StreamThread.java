@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ShutdownRequestedException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -566,9 +567,22 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
+            } catch (final ShutdownRequestedException e){
+                handleShutdownRequest(e);
             }
         }
     }
+
+    private void handleShutdownRequest(final ShutdownRequestedException e) {
+        log.warn("Detected that shutdown was requested. " +
+                "The all clients in this app will now begin to shutdown", e);
+
+        //set error code
+        taskManager.flagForShutdownRequest();
+        mainConsumer.unsubscribe();
+        subscribeConsumer();
+    }
+
 
     private void handleTaskMigrated(final TaskMigratedException e) {
         log.warn("Detected that the thread is being fenced. " +

@@ -186,6 +186,15 @@ public class AssignmentInfo {
                     out.writeInt(errCode);
                     out.writeLong(nextRebalanceMs);
                     break;
+                case 8:
+                    out.writeInt(usedVersion);
+                    out.writeInt(commonlySupportedVersion);
+                    encodeActiveAndStandbyTaskAssignment(out);
+                    encodeActiveAndStandbyHostPartitions(out);
+                    out.writeInt(errCode);
+                    out.writeLong(nextRebalanceMs);
+                    out.writeInt(0);
+                    break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
                             + "; latest commonly supported version: " + commonlySupportedVersion);
@@ -359,6 +368,16 @@ public class AssignmentInfo {
                     decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
                     assignmentInfo.errCode = in.readInt();
                     assignmentInfo.nextRebalanceMs = in.readLong();
+                    break;
+                case 8:
+                    commonlySupportedVersion = in.readInt();
+                    assignmentInfo = new AssignmentInfo(usedVersion, commonlySupportedVersion);
+                    decodeActiveTasks(assignmentInfo, in);
+                    decodeStandbyTasks(assignmentInfo, in);
+                    decodeActiveAndStandbyHostPartitions(assignmentInfo, in);
+                    assignmentInfo.errCode = in.readInt();
+                    assignmentInfo.nextRebalanceMs = in.readLong();
+                    in.readInt();
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +

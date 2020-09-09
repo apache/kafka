@@ -18,7 +18,9 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 public enum AssignorError {
     NONE(0),
-    INCOMPLETE_SOURCE_TOPIC_METADATA(1);
+    INCOMPLETE_SOURCE_TOPIC_METADATA(1),
+    SHUTDOWN_REQUESTED(2);
+
     private final int code;
 
     AssignorError(final int code) {

@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.ShutdownRequestedException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -242,7 +243,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             LATEST_SUPPORTED_VERSION,
             taskManager.processId(),
             userEndPoint,
-            taskManager.getTaskOffsetSums())
+            taskManager.getTaskOffsetSums(),
+            taskManager.isShutdownRequested())
                 .encode();
     }
 
@@ -294,13 +296,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         int minReceivedMetadataVersion = LATEST_SUPPORTED_VERSION;
         int minSupportedMetadataVersion = LATEST_SUPPORTED_VERSION;
-
+        boolean shutdownRequested = false;
         int futureMetadataVersion = UNKNOWN;
         for (final Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             final String consumerId = entry.getKey();
             final Subscription subscription = entry.getValue();
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
+            if(info.shutdownRequested() == AssignorError.SHUTDOWN_REQUESTED.code()){
+                shutdownRequested = true;
+            }
 
             minReceivedMetadataVersion = updateMinReceivedVersion(usedVersion, minReceivedMetadataVersion);
             minSupportedMetadataVersion = updateMinSupportedVersion(info.latestSupportedVersion(), minSupportedMetadataVersion);
@@ -341,6 +346,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         // making sure they are created with the number of partitions as
         // the maximum of the depending sub-topologies source topics' number of partitions
         final Map<Integer, TopicsInfo> topicGroups = taskManager.builder().topicGroups();
+
+        if(shutdownRequested){
+            return new GroupAssignment(
+                    errorAssignment(clientMetadataMap,
+                            AssignorError.SHUTDOWN_REQUESTED.code())
+            );
+        }
 
         final Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions;
         try {
@@ -1368,7 +1380,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         if (info.errCode() != AssignorError.NONE.code()) {
-            // set flag to shutdown streams app
             assignmentErrorCode.set(info.errCode());
             return;
         }
@@ -1434,6 +1445,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = info.nextRebalanceMs();
+                break;
+            case 8:
+                validateActiveTaskEncoding(partitions, info, logPrefix);
+
+                activeTasks = getActiveTasks(partitions, info);
+                partitionsByHost = info.partitionsByHost();
+                standbyPartitionsByHost = info.standbyPartitionByHost();
+                topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
+                encodedNextScheduledRebalanceMs = info.nextRebalanceMs();
+                //recive the shutdown then call the request close
                 break;
             default:
                 throw new IllegalStateException(

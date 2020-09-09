@@ -15,7 +15,7 @@
 
 {
   "name": "SubscriptionInfoData",
-  "validVersions": "1-7",
+  "validVersions": "1-8",
   "fields": [
     {
       "name": "version",
@@ -47,6 +47,11 @@
       "name": "userEndPoint",
       "versions": "2+",
       "type": "bytes"
+    },
+    {
+      "name": "shutdownRequested",
+      "versions": "8+",
+      "type": "int32"
     },
     {
       "name": "taskOffsetSums",
