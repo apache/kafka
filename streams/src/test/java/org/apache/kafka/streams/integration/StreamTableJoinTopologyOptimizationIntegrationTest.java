@@ -163,7 +163,6 @@ public class StreamTableJoinTopologyOptimizationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(1);
         final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
 
-
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (KafkaStreams.State.REBALANCING == oldState && KafkaStreams.State.RUNNING == newState) {
                 latch.countDown();
