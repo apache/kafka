@@ -56,10 +56,6 @@ import java.util.stream.Collectors;
 
 public class InternalTopologyBuilder {
 
-    public InternalTopologyBuilder() {
-        this.applicationId = applicationId;
-    }
-
     private static final Logger log = LoggerFactory.getLogger(InternalTopologyBuilder.class);
     private static final Pattern EMPTY_ZERO_LENGTH_PATTERN = Pattern.compile("");
     private static final String[] NO_PREDECESSORS = {};
@@ -683,31 +679,6 @@ public class InternalTopologyBuilder {
                 }
             }
         }
-    }
-
-    private Set<String> yolo(Set<String> sourceGroup) {
-        final Set<String> set = new HashSet<>();
-
-        for (String sg : sourceGroup) {
-            final List<String> strings = nodeToSourceTopics.getOrDefault(sg, Collections.emptyList());
-
-            for (String string : strings) {
-                set.add(string);
-            }
-        }
-
-        return set;
-
-//        return sourceGroup
-//            .stream()
-//            .flatMap(sourceNodeName -> {
-//                final Stream<String> stream = nodeToSourceTopics.getOrDefault(sourceNodeName,
-//                                                                              Collections.emptyList()).stream();
-//
-//                final Set<String> collect = stream.collect(Collectors.toSet());
-//                return stream;
-//            })
-//            .collect(Collectors.toSet());
     }
 
     private void validateGlobalStoreArguments(final String sourceName,
