@@ -336,9 +336,39 @@ public class SensorTest {
         Mockito.verify(stat1).record(stat1Config, 10, 1);
         Mockito.verify(stat2).record(stat2Config, 10, 1);
 
-        Mockito.when(stat1.measure(stat1Config, 2)).thenReturn(2.0);
-        Mockito.when(stat2.measure(stat2Config, 2)).thenReturn(2.0);
         sensor.checkQuotas(2);
+        Mockito.verify(stat1).measure(stat1Config, 2);
+        Mockito.verify(stat2).measure(stat2Config, 2);
+
+        metrics.close();
+    }
+
+    @Test
+    public void testUpdatingMetricConfigIsReflectedInTheSensor() {
+        final Time time = new MockTime(0, System.currentTimeMillis(), 0);
+        final Metrics metrics = new Metrics(time);
+        final Sensor sensor = metrics.sensor("sensor");
+
+        final MeasurableStat stat = Mockito.mock(MeasurableStat.class);
+        final MetricName statName = metrics.metricName("stat", "test-group");
+        final MetricConfig statConfig = new MetricConfig().quota(Quota.upperBound(5));
+        sensor.add(statName, stat, statConfig);
+
+        sensor.record(10, 1);
+        Mockito.verify(stat).record(statConfig, 10, 1);
+
+        sensor.checkQuotas(2);
+        Mockito.verify(stat).measure(statConfig, 2);
+
+        // Update the config of the KafkaMetric
+        final MetricConfig newConfig = new MetricConfig().quota(Quota.upperBound(10));
+        metrics.metric(statName).config(newConfig);
+
+        sensor.record(10, 3);
+        Mockito.verify(stat).record(newConfig, 10, 3);
+
+        sensor.checkQuotas(4);
+        Mockito.verify(stat).measure(newConfig, 4);
 
         metrics.close();
     }
