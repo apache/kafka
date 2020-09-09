@@ -28,7 +28,7 @@ import kafka.metrics.KafkaYammerMetrics
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
-import org.apache.kafka.common.errors.{ApiException, NotLeaderOrFollowerException, OffsetNotAvailableException}
+import org.apache.kafka.common.errors.{ApiException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -47,6 +47,67 @@ import unit.kafka.cluster.AbstractPartitionTest
 import scala.jdk.CollectionConverters._
 
 class PartitionTest extends AbstractPartitionTest {
+
+  @Test
+  def testLastFetchedOffsetValidation(): Unit = {
+    val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
+    def append(leaderEpoch: Int, count: Int): Unit = {
+      val recordArray = (1 to count).map { i =>
+        new SimpleRecord(s"$i".getBytes)
+      }
+      val records = MemoryRecords.withRecords(0L, CompressionType.NONE, leaderEpoch,
+        recordArray: _*)
+      log.appendAsLeader(records, leaderEpoch = leaderEpoch)
+    }
+
+    append(leaderEpoch = 0, count = 2) // 0
+    append(leaderEpoch = 3, count = 3) // 2
+    append(leaderEpoch = 3, count = 3) // 5
+    append(leaderEpoch = 4, count = 5) // 8
+    append(leaderEpoch = 7, count = 1) // 13
+    append(leaderEpoch = 9, count = 3) // 14
+    assertEquals(17L, log.logEndOffset)
+
+    val leaderEpoch = 10
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
+
+    def read(lastFetchedEpoch: Int, fetchOffset: Long): LogReadInfo = {
+      partition.readRecords(
+        Optional.of(lastFetchedEpoch),
+        fetchOffset,
+        currentLeaderEpoch = Optional.of(leaderEpoch),
+        maxBytes = Int.MaxValue,
+        fetchIsolation = FetchLogEnd,
+        fetchOnlyFromLeader = true,
+        minOneMessage = true
+      )
+    }
+
+    assertEquals(Some(2), read(lastFetchedEpoch = 2, fetchOffset = 5).truncationOffset)
+    assertEquals(None, read(lastFetchedEpoch = 0, fetchOffset = 2).truncationOffset)
+    assertEquals(Some(2), read(lastFetchedEpoch = 0, fetchOffset = 4).truncationOffset)
+    assertEquals(Some(13), read(lastFetchedEpoch = 6, fetchOffset = 6).truncationOffset)
+    assertEquals(None, read(lastFetchedEpoch = 7, fetchOffset = 14).truncationOffset)
+    assertEquals(None, read(lastFetchedEpoch = 9, fetchOffset = 17).truncationOffset)
+    assertEquals(None, read(lastFetchedEpoch = 10, fetchOffset = 17).truncationOffset)
+    assertEquals(Some(17), read(lastFetchedEpoch = 10, fetchOffset = 18).truncationOffset)
+
+    // Reads from epochs larger than we know about should cause an out of range error
+    assertThrows[OffsetOutOfRangeException] {
+      read(lastFetchedEpoch = 11, fetchOffset = 5)
+    }
+
+    // Move log start offset to the middle of epoch 3
+    log.updateHighWatermark(log.logEndOffset)
+    log.maybeIncrementLogStartOffset(newLogStartOffset = 5L, ClientRecordDeletion)
+
+    assertEquals(None, read(lastFetchedEpoch = 0, fetchOffset = 5).truncationOffset)
+    assertEquals(Some(5), read(lastFetchedEpoch = 2, fetchOffset = 8).truncationOffset)
+    assertEquals(None, read(lastFetchedEpoch = 3, fetchOffset = 5).truncationOffset)
+    assertThrows[OffsetOutOfRangeException] {
+      read(lastFetchedEpoch = 0, fetchOffset = 0)
+    }
+  }
 
   @Test
   def testMakeLeaderUpdatesEpochCache(): Unit = {
@@ -324,7 +385,10 @@ class PartitionTest extends AbstractPartitionTest {
     def assertReadRecordsError(error: Errors,
                                currentLeaderEpochOpt: Optional[Integer]): Unit = {
       try {
-        partition.readRecords(0L, currentLeaderEpochOpt,
+        partition.readRecords(
+          lastFetchedEpoch = Optional.empty(),
+          fetchOffset = 0L,
+          currentLeaderEpoch = currentLeaderEpochOpt,
           maxBytes = 1024,
           fetchIsolation = FetchLogEnd,
           fetchOnlyFromLeader = true,
@@ -349,10 +413,13 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = setupPartitionWithMocks(leaderEpoch, isLeader = false)
 
     def assertReadRecordsError(error: Errors,
-                                       currentLeaderEpochOpt: Optional[Integer],
-                                       fetchOnlyLeader: Boolean): Unit = {
+                               currentLeaderEpochOpt: Optional[Integer],
+                               fetchOnlyLeader: Boolean): Unit = {
       try {
-        partition.readRecords(0L, currentLeaderEpochOpt,
+        partition.readRecords(
+          lastFetchedEpoch = Optional.empty(),
+          fetchOffset = 0L,
+          currentLeaderEpoch = currentLeaderEpochOpt,
           maxBytes = 1024,
           fetchIsolation = FetchLogEnd,
           fetchOnlyFromLeader = fetchOnlyLeader,
