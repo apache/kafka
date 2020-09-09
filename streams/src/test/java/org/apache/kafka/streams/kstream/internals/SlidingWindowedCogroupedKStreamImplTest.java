@@ -176,7 +176,29 @@ public class SlidingWindowedCogroupedKStreamImplTest {
                     realRecord.getKey().key(), realRecord.getValue(), null, realRecord.timestamp());
                 results.add(nonWindowedRecord);
             }
-            assertOutputKeyValueNotOrdered(results);
+            final Set<TestRecord<String, String>> expected = new HashSet<>();
+            expected.add(new TestRecord<>("k1", "0+A", null, 500L));
+            expected.add(new TestRecord<>("k2", "0+A", null, 500L));
+            expected.add(new TestRecord<>("k2", "0+A", null, 501L));
+            expected.add(new TestRecord<>("k2", "0+A+A", null, 501L));
+            expected.add(new TestRecord<>("k1", "0+A", null, 502L));
+            expected.add(new TestRecord<>("k1", "0+A+A", null, 502L));
+            expected.add(new TestRecord<>("k1", "0+A+B", null, 503L));
+            expected.add(new TestRecord<>("k1", "0+B", null, 503L));
+            expected.add(new TestRecord<>("k1", "0+A+A+B", null, 503L));
+            expected.add(new TestRecord<>("k2", "0+A+B", null, 503L));
+            expected.add(new TestRecord<>("k2", "0+B", null, 503L));
+            expected.add(new TestRecord<>("k2", "0+A+A+B", null, 503L));
+            expected.add(new TestRecord<>("k2", "0+A+B+B", null, 504L));
+            expected.add(new TestRecord<>("k2", "0+B+B", null, 504L));
+            expected.add(new TestRecord<>("k2", "0+B", null, 504L));
+            expected.add(new TestRecord<>("k2", "0+A+A+B+B", null, 504L));
+            expected.add(new TestRecord<>("k1", "0+A+B+B", null, 504L));
+            expected.add(new TestRecord<>("k1", "0+B+B", null, 504L));
+            expected.add(new TestRecord<>("k1", "0+B", null, 504L));
+            expected.add(new TestRecord<>("k1", "0+A+A+B+B", null, 504L));
+
+            assertEquals(expected, results);
         }
     }
 
@@ -237,32 +259,5 @@ public class SlidingWindowedCogroupedKStreamImplTest {
                 realRecord.getKey().key(), realRecord.getValue(), null, realRecord.timestamp());
         final TestRecord<String, String> testRecord = new TestRecord<>(expectedKey, expectedValue, null, expectedTimestamp);
         assertThat(nonWindowedRecord, equalTo(testRecord));
-    }
-
-    private void assertOutputKeyValueNotOrdered(final Set<TestRecord<String, String>> results) {
-        final Set<TestRecord<String, String>> expected = new HashSet<>();
-        expected.add(new TestRecord<>("k1", "0+A", null, 500L));
-        expected.add(new TestRecord<>("k2", "0+A", null, 500L));
-        expected.add(new TestRecord<>("k2", "0+A", null, 501L));
-        expected.add(new TestRecord<>("k2", "0+A+A", null, 501L));
-        expected.add(new TestRecord<>("k1", "0+A", null, 502L));
-        expected.add(new TestRecord<>("k1", "0+A+A", null, 502L));
-        expected.add(new TestRecord<>("k1", "0+A+B", null, 503L));
-        expected.add(new TestRecord<>("k1", "0+B", null, 503L));
-        expected.add(new TestRecord<>("k1", "0+A+A+B", null, 503L));
-        expected.add(new TestRecord<>("k2", "0+A+B", null, 503L));
-        expected.add(new TestRecord<>("k2", "0+B", null, 503L));
-        expected.add(new TestRecord<>("k2", "0+A+A+B", null, 503L));
-        expected.add(new TestRecord<>("k2", "0+A+B+B", null, 504L));
-        expected.add(new TestRecord<>("k2", "0+B+B", null, 504L));
-        expected.add(new TestRecord<>("k2", "0+B", null, 504L));
-        expected.add(new TestRecord<>("k2", "0+A+A+B+B", null, 504L));
-        expected.add(new TestRecord<>("k1", "0+A+B+B", null, 504L));
-        expected.add(new TestRecord<>("k1", "0+B+B", null, 504L));
-        expected.add(new TestRecord<>("k1", "0+B", null, 504L));
-        expected.add(new TestRecord<>("k1", "0+A+A+B+B", null, 504L));
-
-        assertEquals(expected, results);
-
     }
 }
