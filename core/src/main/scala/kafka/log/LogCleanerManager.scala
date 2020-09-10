@@ -355,22 +355,28 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 
   /**
-   * Update checkpoint file, or removing topics and partitions that no longer exist
+   * Update checkpoint file, or remove topics and partitions that no longer exist
    *
    * @param dataDir                       The File object to be updated
    * @param update                        The [TopicPartition, Long] map data to be updated. pass "none" if doing remove, not add
    * @param topicPartitionToBeRemoved     The TopicPartition to be removed
    */
-  def updateCheckpoints(dataDir: File, update: Option[(TopicPartition, Long)], topicPartitionToBeRemoved: TopicPartition = null): Unit = {
+  def updateCheckpoints(dataDir: File, update: Option[(TopicPartition, Long)], topicPartitionToBeRemoved: Option[TopicPartition] = None): Unit = {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
       if (checkpoint != null) {
         try {
           val existing = update match {
             case Some(updatedOffset) =>
-              checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) }.toMap ++ update
+              checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) }.toMap + updatedOffset
             case None =>
-              checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) }.toMap - topicPartitionToBeRemoved
+              topicPartitionToBeRemoved match {
+                case Some(topicPartion) =>
+                  checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) }.toMap - topicPartion
+                case None =>
+                  info(s"Nothing added or removed for ${dataDir.getAbsoluteFile} directory in updateCheckpoints.")
+                  checkpoint.read().filter { case (tp, _) => logs.keys.contains(tp) }.toMap
+              }
           }
           checkpoint.write(existing)
         } catch {
@@ -390,9 +396,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
           case Some(offset) =>
             debug(s"Removing the partition offset data in checkpoint file for '${topicPartition}' " +
-              s"from ${sourceLogDir.getAbsoluteFile} direcotory.")
+              s"from ${sourceLogDir.getAbsoluteFile} directory.")
             // Remove this partition data from the checkpoint file in the source log directory
-            updateCheckpoints(sourceLogDir, None, topicPartitionToBeRemoved = topicPartition)
+            updateCheckpoints(sourceLogDir, None, topicPartitionToBeRemoved = Some(topicPartition))
 
             debug(s"Adding the partition offset data in checkpoint file for '${topicPartition}' " +
               s"to ${destLogDir.getAbsoluteFile} directory.")
@@ -414,7 +420,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 
   /**
-   * Stop the cleaning logs in the provided directory
+   * Stop cleaning logs in the provided directory
    *
    * @param dir     the absolute path of the log dir
    */

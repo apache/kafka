@@ -60,7 +60,7 @@ class LogCleanerManagerTest extends Logging {
     }
 
     override def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)],
-                                   topicPartitionToBeRemoved: TopicPartition = null): Unit = {
+                                   topicPartitionToBeRemoved: Option[TopicPartition] = None): Unit = {
       val (tp, offset) = update.getOrElse(throw new IllegalArgumentException("update=None argument not yet handled"))
       cleanerCheckpoints.put(tp, offset)
     }
@@ -391,7 +391,7 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(offset, cleanerManager.allCleanerCheckpoints.get(topicPartition).get)
 
     // updateCheckpoints should remove the topicPartition data in the logDir
-    cleanerManager.updateCheckpoints(logDir, None, topicPartitionToBeRemoved = topicPartition)
+    cleanerManager.updateCheckpoints(logDir, None, topicPartitionToBeRemoved = Some(topicPartition))
     assertTrue(cleanerManager.allCleanerCheckpoints.get(topicPartition).isEmpty)
   }
 

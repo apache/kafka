@@ -75,17 +75,6 @@ class CheckpointReadBuffer[T](location: String,
   }
 }
 
-/**
- * This class interacts with the checkpoint file to read or write [TopicPartition, Offset] entries
- *
- * The format in the checkpoint file is like this:
- *  -----checkpoint file content------
- *  0                <- OffsetCheckpointFile.currentVersion
- *  2                <- following entries size
- *  tp1  par1  1     <- the format is: TOPIC  PARTITION  OFFSET
- *  tp1  par2  2
- *  -----checkpoint file end----------
- */
 class CheckpointFile[T](val file: File,
                         version: Int,
                         formatter: CheckpointFileFormatter[T],

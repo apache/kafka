@@ -205,7 +205,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   /**
    * Update checkpoint file to remove topics and partitions that no longer exist
    */
-  def updateCheckpoints(dataDir: File, topicPartitionToBeRemoved: TopicPartition = null): Unit = {
+  def updateCheckpoints(dataDir: File, topicPartitionToBeRemoved: Option[TopicPartition] = None): Unit = {
     cleanerManager.updateCheckpoints(dataDir, update=None, topicPartitionToBeRemoved)
   }
 
@@ -217,7 +217,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   * Stop the cleaning logs in the provided directory
+   * Stop cleaning logs in the provided directory
    *
    * @param dir     the absolute path of the log dir
    */

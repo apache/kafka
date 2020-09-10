@@ -185,7 +185,7 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
-   * The log diretory failure handler. It'll remove all the checkpoint files located in the directory
+   * The log directory failure handler. It'll remove all the checkpoint files located in the directory
    *
    * @param dir        the absolute path of the log directory
    */
@@ -967,7 +967,7 @@ class LogManager(logDirs: Seq[File],
         if (cleaner != null && !isFuture) {
           cleaner.abortCleaning(topicPartition)
           if (checkpoint) {
-            cleaner.updateCheckpoints(removedLog.parentDirFile, topicPartitionToBeRemoved = topicPartition)
+            cleaner.updateCheckpoints(removedLog.parentDirFile, topicPartitionToBeRemoved = Some(topicPartition))
           }
         }
         removedLog.renameDir(Log.logDeleteDirName(topicPartition))
