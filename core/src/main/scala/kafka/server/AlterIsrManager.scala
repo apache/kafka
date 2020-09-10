@@ -26,7 +26,6 @@ import kafka.utils.{Logging, Scheduler}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.message.AlterIsrRequestData.{AlterIsrRequestPartitions, AlterIsrRequestTopics}
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterIsrRequest, AlterIsrResponse}
@@ -45,13 +44,14 @@ trait AlterIsrManager {
   def clearPending(topicPartition: TopicPartition): Unit
 }
 
-case class AlterIsrItem(topicPartition: TopicPartition, leaderAndIsr: LeaderAndIsr, callback: Errors => Unit)
+case class AlterIsrItem(topicPartition: TopicPartition, leaderAndIsr: LeaderAndIsr, callback: Either[Errors, LeaderAndIsr] => Unit)
 
 class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChannelManager,
                           val zkClient: KafkaZkClient,
                           val scheduler: Scheduler,
                           val time: Time,
-                          val brokerId: Int) extends AlterIsrManager with Logging with KafkaMetricsGroup {
+                          val brokerId: Int,
+                          val brokerEpochSupplier: () => Long) extends AlterIsrManager with Logging with KafkaMetricsGroup {
 
   private val unsentIsrUpdates: mutable.Map[TopicPartition, AlterIsrItem] = new mutable.HashMap[TopicPartition, AlterIsrItem]()
   private val lastIsrChangeMs = new AtomicLong(0)
@@ -80,66 +80,81 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
   private def propagateIsrChanges(): Unit = {
     val now = time.milliseconds()
-    unsentIsrUpdates synchronized {
-      if (unsentIsrUpdates.nonEmpty) {
-        val brokerEpoch: Long = zkClient.getBrokerEpoch(brokerId) match {
-          case Some(brokerEpoch) => brokerEpoch
-          case None => throw new RuntimeException("Cannot send AlterIsr because we cannot determine broker epoch")
-        }
 
-        val message = new AlterIsrRequestData()
-          .setBrokerId(brokerId)
-          .setBrokerEpoch(brokerEpoch)
-          .setTopics(new util.ArrayList())
+    // Minimize time in this lock since it's also held during fetch hot path
+    val copy = unsentIsrUpdates synchronized {
+      val copy = unsentIsrUpdates.to(Map)
+      unsentIsrUpdates.clear()
+      lastIsrPropagationMs.set(now)
+      copy
+    }
 
-        val callbacks = new mutable.HashMap[TopicPartition, Errors => Unit]()
-        unsentIsrUpdates.values.groupBy(_.topicPartition.topic).foreachEntry((topic, items) => {
-          val topicPart = new AlterIsrRequestTopics()
-            .setName(topic)
-            .setPartitions(new util.ArrayList())
-          message.topics().add(topicPart)
-          items.foreach(item => {
-            topicPart.partitions().add(new AlterIsrRequestPartitions()
-              .setPartitionIndex(item.topicPartition.partition)
-              .setLeaderId(item.leaderAndIsr.leader)
-              .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
-              .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
-              .setCurrentIsrVersion(item.leaderAndIsr.zkVersion)
-            )
-            callbacks(item.topicPartition) = item.callback
-          })
+    // Send the request and clear the optional. We rely on BrokerToControllerChannelManager for one limiting to one
+    // in-flight request at a time
+    buildAndSendRequest(copy)
+    scheduledRequest = None
+  }
+
+  def buildAndSendRequest(isrUpdates: Map[TopicPartition, AlterIsrItem]): Unit = {
+    if (isrUpdates.nonEmpty) {
+      val message = new AlterIsrRequestData()
+        .setBrokerId(brokerId)
+        .setBrokerEpoch(brokerEpochSupplier.apply())
+        .setTopics(new util.ArrayList())
+
+      // N.B., these callbacks are run inside the leaderIsrUpdateLock write lock
+      val callbacks = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr] => Unit]()
+      isrUpdates.values.groupBy(_.topicPartition.topic).foreachEntry((topic, items) => {
+        val topicPart = new AlterIsrRequestData.TopicData()
+          .setName(topic)
+          .setPartitions(new util.ArrayList())
+        message.topics().add(topicPart)
+        items.foreach(item => {
+          topicPart.partitions().add(new AlterIsrRequestData.PartitionData()
+            .setPartitionIndex(item.topicPartition.partition)
+            .setLeaderId(item.leaderAndIsr.leader)
+            .setLeaderEpoch(item.leaderAndIsr.leaderEpoch)
+            .setNewIsr(item.leaderAndIsr.isr.map(Integer.valueOf).asJava)
+            .setCurrentIsrVersion(item.leaderAndIsr.zkVersion)
+          )
+          callbacks(item.topicPartition) = item.callback
         })
+      })
 
-        def responseHandler(response: ClientResponse): Unit = {
-          val body: AlterIsrResponse = response.responseBody().asInstanceOf[AlterIsrResponse]
-          val data: AlterIsrResponseData = body.data
-          Errors.forCode(data.errorCode) match {
-            case Errors.NONE =>
-              info(s"Controller handled AlterIsr request")
-              data.topics.forEach(topic => {
-                topic.partitions().forEach(partition => {
-                  callbacks(new TopicPartition(topic.name, partition.partitionIndex))(
-                    Errors.forCode(partition.errorCode))
-                })
+      def responseHandler(response: ClientResponse): Unit = {
+        val body: AlterIsrResponse = response.responseBody().asInstanceOf[AlterIsrResponse]
+        val data: AlterIsrResponseData = body.data
+        Errors.forCode(data.errorCode) match {
+          case Errors.NONE =>
+            debug(s"Controller handled AlterIsr request")
+            data.topics.forEach(topic => {
+              topic.partitions().forEach(partition => {
+                if (partition.errorCode() == Errors.NONE.code()) {
+                  val newLeaderAndIsr = new LeaderAndIsr(partition.leader(), partition.leaderEpoch(),
+                    partition.isr().asScala.toList.map(_.toInt), partition.currentIsrVersion)
+                  callbacks(new TopicPartition(topic.name, partition.partitionIndex))(Right(newLeaderAndIsr))
+                } else {
+                  callbacks(new TopicPartition(topic.name, partition.partitionIndex))(Left(Errors.forCode(partition.errorCode())))
+                }
               })
-            case e: Errors =>
-              // Need to propagate top-level errors back to all partitions so they can react accordingly
-              warn(s"Controller returned a top-level error when handling AlterIsr request: $e")
-              data.topics.forEach(topic => {
-                topic.partitions().forEach(partition => {
-                  callbacks(new TopicPartition(topic.name, partition.partitionIndex))(e)
-                })
+            })
+          case Errors.STALE_BROKER_EPOCH =>
+            warn(s"Broker had a stale broker epoch, retrying.")
+            data.topics.forEach(topic => {
+              // Bubble this up to the partition so we can re-create the request
+              topic.partitions().forEach(partition => {
+                callbacks(new TopicPartition(topic.name, partition.partitionIndex))(Left(Errors.STALE_BROKER_EPOCH))
               })
-          }
+            })
+          case Errors.CLUSTER_AUTHORIZATION_FAILED =>
+            warn(s"Broker is not authorized to send AlterIsr to controller")
+          case e: Errors =>
+            warn(s"Controller returned an unexpected top-level error when handling AlterIsr request: $e")
         }
-
-        debug(s"Sending AlterIsr to controller $message")
-        controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message), responseHandler)
-
-        unsentIsrUpdates.clear()
-        lastIsrPropagationMs.set(now)
       }
-      scheduledRequest = None
+
+      debug(s"Sending AlterIsr to controller $message")
+      controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message), responseHandler)
     }
   }
 }

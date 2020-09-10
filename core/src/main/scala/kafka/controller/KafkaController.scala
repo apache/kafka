@@ -33,7 +33,6 @@ import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
-import org.apache.kafka.common.message.AlterIsrResponseData.{AlterIsrResponsePartitions, AlterIsrResponseTopics}
 import org.apache.kafka.common.message.{AlterIsrRequestData, AlterIsrResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -59,7 +58,7 @@ object KafkaController extends Logging {
   type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
-  type AlterIsrCallback = Either[Map[TopicPartition, Errors], Errors] => Unit
+  type AlterIsrCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -1778,23 +1777,32 @@ class KafkaController(val config: KafkaConfig,
       isrsToAlter.put(tp, new LeaderAndIsr(partitionReq.leaderId, partitionReq.leaderEpoch, newIsr, partitionReq.currentIsrVersion))
     }))
 
-    def responseCallback(results: Either[Map[TopicPartition, Errors], Errors]): Unit = {
+    def responseCallback(results: Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors]): Unit = {
       val resp = new AlterIsrResponseData()
       results match {
         case Right(error) =>
           resp.setErrorCode(error.code)
-        case Left(partitions: Map[TopicPartition, Errors]) =>
+        case Left(partitionResults) =>
           resp.setTopics(new util.ArrayList())
-          partitions.groupBy(_._1.topic).foreachEntry((topic, partitionMap) => {
-            val topicResp = new AlterIsrResponseTopics()
+          partitionResults.groupBy(_._1.topic).foreachEntry((topic, partitionMap) => {
+            val topicResp = new AlterIsrResponseData.TopicData()
               .setName(topic)
               .setPartitions(new util.ArrayList())
             resp.topics.add(topicResp)
-            partitionMap.foreachEntry((partition, error) => {
-              topicResp.partitions.add(
-                new AlterIsrResponsePartitions()
-                  .setPartitionIndex(partition.partition)
-                  .setErrorCode(error.code))
+            partitionMap.foreachEntry((partition, errorOrResult) => {
+              errorOrResult match {
+                case Left(error) => topicResp.partitions.add(
+                  new AlterIsrResponseData.PartitionData()
+                    .setPartitionIndex(partition.partition)
+                    .setErrorCode(error.code))
+                case Right(leaderAndIsr) => topicResp.partitions.add(
+                  new AlterIsrResponseData.PartitionData()
+                    .setPartitionIndex(partition.partition)
+                    .setLeader(leaderAndIsr.leader)
+                    .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+                    .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                    .setCurrentIsrVersion(leaderAndIsr.zkVersion))
+              }
             })
           })
       }
@@ -1824,7 +1832,8 @@ class KafkaController(val config: KafkaConfig,
       return
     }
 
-    val partitionResponses: mutable.Map[TopicPartition, Errors] = mutable.HashMap[TopicPartition, Errors]()
+    val partitionResponses: mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] =
+      mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
 
     // Determine which partitions we will accept the new ISR for
     val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = isrsToAlter.flatMap {
@@ -1832,30 +1841,17 @@ class KafkaController(val config: KafkaConfig,
         val partitionError: Errors = controllerContext.partitionLeadershipInfo(tp) match {
           case Some(leaderIsrAndControllerEpoch) =>
             val currentLeaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-            if (newLeaderAndIsr.leader != currentLeaderAndIsr.leader) {
-              Errors.NOT_LEADER_OR_FOLLOWER
-            } else if (newLeaderAndIsr.leaderEpoch < currentLeaderAndIsr.leaderEpoch) {
+            if (newLeaderAndIsr.leaderEpoch < currentLeaderAndIsr.leaderEpoch) {
               Errors.FENCED_LEADER_EPOCH
             } else {
-              val currentAssignment = controllerContext.partitionReplicaAssignment(tp)
-              if (!newLeaderAndIsr.isr.forall(replicaId => currentAssignment.contains(replicaId))) {
-                warn(s"Some of the proposed ISR are not in the assignment for partition $tp. Proposed ISR=$newLeaderAndIsr.isr assignment=$currentAssignment")
-                Errors.INVALID_REPLICA_ASSIGNMENT
-              } else if (!newLeaderAndIsr.isr.forall(replicaId => controllerContext.isReplicaOnline(replicaId, tp))) {
-                warn(s"Some of the proposed ISR are offline for partition $tp. Proposed ISR=$newLeaderAndIsr.isr")
-                Errors.REPLICA_NOT_AVAILABLE
-              } else {
-                Errors.NONE
-              }
+              Errors.NONE
             }
           case None => Errors.UNKNOWN_TOPIC_OR_PARTITION
         }
         if (partitionError == Errors.NONE) {
-          partitionResponses(tp) = Errors.NONE
-          // Bump the leaderEpoch for partitions that we're going to write
-          Some(tp -> newLeaderAndIsr.newEpochAndZkVersion) // TODO only bump this for latest IBP
+          Some(tp -> newLeaderAndIsr)
         } else {
-          partitionResponses(tp) = partitionError
+          partitionResponses(tp) = Left(partitionError)
           None
         }
     }
@@ -1870,37 +1866,29 @@ class KafkaController(val config: KafkaConfig,
       isrOrError match {
         case Right(updatedIsr) =>
           info("ISR for partition %s updated to [%s] and zkVersion updated to [%d]".format(partition, updatedIsr.isr.mkString(","), updatedIsr.zkVersion))
+          partitionResponses(partition) = Right(updatedIsr)
           Some(partition -> updatedIsr)
         case Left(error) =>
           warn(s"Failed to update ISR for partition $partition", error)
-          partitionResponses.put(partition, Errors.forException(error))
+          partitionResponses(partition) = Left(Errors.forException(error))
           None
       }
     }
 
     badVersionUpdates.foreach(partition => {
       warn(s"Failed to update ISR for partition $partition, bad ZK version")
-      partitionResponses.put(partition, Errors.INVALID_UPDATE_VERSION)
+      partitionResponses(partition) = Left(Errors.INVALID_UPDATE_VERSION)
     })
 
-    // Update our cache
+    def processUpdateNotifications(partitions: Seq[TopicPartition]): Unit = {
+      val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
+      debug(s"Sending MetadataRequest to Brokers: $liveBrokers for TopicPartitions: $partitions")
+      sendUpdateMetadataRequest(liveBrokers, partitions.toSet)
+    }
+
+    // Update our cache and send out metadata updates
     updateLeaderAndIsrCache(successfulUpdates.keys.toSeq)
-
-    // Send out LeaderAndIsr for all requested updates regardless of success
-    debug(s"Sending LeaderAndIsr for ${isrsToAlter.keys}")
-    brokerRequestBatch.newBatch()
-
-    // Send LeaderAndIsr for all requested partitions
-    isrsToAlter.keys.foreach(partition => {
-      controllerContext.partitionLeadershipInfo(partition) match {
-        case Some(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch) =>
-          val replicaAssignment = controllerContext.partitionFullReplicaAssignment(partition)
-          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicaAssignment.replicas, partition,
-            leaderIsrAndControllerEpoch, replicaAssignment, isNew = false)
-        case None => warn(s"No leadership info for $partition, not including in LeaderAndIsr request")
-      }
-    })
-    brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
+    processUpdateNotifications(isrsToAlter.keys.toSeq)
 
     // Send back AlterIsr response
     callback.apply(Left(partitionResponses))

@@ -1259,7 +1259,7 @@ class Partition(val topicPartition: TopicPartition,
       val newIsr = inSyncReplicaIds + newInSyncReplica
       pendingInSyncReplicaIds = Some(newIsr)
       debug(s"Adding new in-sync replica $newInSyncReplica. Pending ISR updated to [${newIsr.mkString(",")}] for $topicPartition")
-      alterIsr(newIsr)
+      sendAlterIsrRequest(newIsr)
     } else {
       debug(s"ISR update in-flight, not adding new in-sync replica $newInSyncReplica for $topicPartition")
     }
@@ -1290,7 +1290,7 @@ class Partition(val topicPartition: TopicPartition,
       pendingInSyncReplicaIds = Some(inSyncReplicaIds)
       val newIsr = inSyncReplicaIds -- outOfSyncReplicas
       debug(s"Removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
-      alterIsr(newIsr)
+      sendAlterIsrRequest(newIsr)
     } else {
       debug(s"ISR update in-flight, not removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
     }
@@ -1314,32 +1314,33 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def alterIsr(newIsr: Set[Int]): Unit = {
+  private def sendAlterIsrRequest(newIsr: Set[Int]): Unit = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, {
+    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, result => {
       inWriteLock(leaderIsrUpdateLock) {
-        case Errors.NONE =>
-          debug(s"Controller accepted proposed ISR $newIsr for $topicPartition.")
-        case Errors.REPLICA_NOT_AVAILABLE | Errors.INVALID_REPLICA_ASSIGNMENT =>
-          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition. Some replicas were not online or " +
-            s"in the partition assignment. Clearing pending ISR to allow leader to retry.")
-          pendingInSyncReplicaIds = None
-        case Errors.FENCED_LEADER_EPOCH =>
-          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we have an old leader epoch. Not retrying.")
-        case Errors.NOT_LEADER_OR_FOLLOWER =>
-          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since we are not the leader. Not retrying.")
-        case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
-          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition since this partition is unknown. Not retrying.")
-        case Errors.INVALID_UPDATE_VERSION =>
-          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition due to invalid ZK version. Not retrying.")
-        // Top-level errors that have been pushed down to partition level by AlterIsrManager
-        case Errors.STALE_BROKER_EPOCH =>
-          warn(s"Controller rejected proposed ISR $newIsr for $topicPartition due to a stale broker epoch. " +
-            s"Clearing pending ISR to allow leader to retry.")
-          pendingInSyncReplicaIds = None
-        case e: Errors =>
-          warn(s"Controller had an unexpected error ($e) when handling proposed ISR $newIsr for $topicPartition. State is unknown.")
-          pendingInSyncReplicaIds = None
+        result match {
+          case Left(error: Errors) => error match {
+            case Errors.UNKNOWN_TOPIC_OR_PARTITION =>
+              debug(s"Controller failed to update ISR for $topicPartition since it doesn't know about this partition. Giving up.")
+            case Errors.FENCED_LEADER_EPOCH =>
+              debug(s"Controller failed to update ISR for $topicPartition since we sent an old leader epoch. Giving up.")
+            case _ =>
+              pendingInSyncReplicaIds = None
+              debug(s"Controller failed to update ISR for $topicPartition due to $error. Retrying.")
+          }
+          case Right(leaderAndIsr: LeaderAndIsr) =>
+            // Success from controller, still need to check a few things
+            if (leaderAndIsr.leaderEpoch != leaderEpoch) {
+              debug(s"Ignoring ISR with ${leaderAndIsr} since we have a stale leader epoch.")
+            } else if (leaderAndIsr.zkVersion <= zkVersion) {
+              debug(s"Ignoring ISR with ${leaderAndIsr} since we have a new one.")
+            } else {
+              inSyncReplicaIds = leaderAndIsr.isr.toSet
+              zkVersion = leaderAndIsr.zkVersion
+              pendingInSyncReplicaIds = None
+              info("ISR updated to [%s] and version updated to [%d]".format(leaderAndIsr.isr.mkString(","), zkVersion))
+            }
+        }
       }
     }))
   }

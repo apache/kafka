@@ -18,20 +18,28 @@
   "type": "response",
   "name": "AlterIsrResponse",
   "validVersions": "0",
-  "flexibleVersions": "none",
+  "flexibleVersions": "0+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top level response error code" },
-    { "name": "Topics", "type": "[]AlterIsrResponseTopics", "versions": "0+", "fields": [
+    { "name": "Topics", "type": "[]TopicData", "versions": "0+", "fields": [
       { "name":  "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The name of the topic" },
-      { "name": "Partitions", "type": "[]AlterIsrResponsePartitions", "versions": "0+", "fields": [
+      { "name": "Partitions", "type": "[]PartitionData", "versions": "0+", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+",
           "about": "The partition index" },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
-          "about": "The partition level error code" }
+          "about": "The partition level error code" },
+        { "name": "Leader", "type": "int32", "versions": "0+", "entityType": "brokerId",
+          "about": "The broker ID of the leader." },
+        { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+          "about": "The leader epoch." },
+        { "name": "Isr", "type": "[]int32", "versions": "0+",
+          "about": "The in-sync replica IDs." },
+        { "name": "CurrentIsrVersion", "type": "int32", "versions": "0+",
+          "about": "The current ISR version." }
       ]}
     ]}
   ]

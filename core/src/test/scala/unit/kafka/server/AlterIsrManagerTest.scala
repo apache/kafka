@@ -54,7 +54,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 1), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
     time.sleep(50)
     scheduler.tick()
@@ -69,7 +69,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
     // Only send one ISR update for a given topic+partition
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 1), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 1), new LeaderAndIsr(1, 1, List(1,2), 10), _ => {}))
@@ -91,7 +91,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
 
     for (i <- 0 to 9) {
       alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, i), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
@@ -118,7 +118,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(kafkaZkClient)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 1), new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
     time.sleep(50) // throws
     scheduler.tick()
