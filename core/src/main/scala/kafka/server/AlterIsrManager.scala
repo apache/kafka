@@ -83,7 +83,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
     // Minimize time in this lock since it's also held during fetch hot path
     val copy = unsentIsrUpdates synchronized {
-      val copy = Map.from(unsentIsrUpdates)
+      val copy = unsentIsrUpdates.clone()
       unsentIsrUpdates.clear()
       lastIsrPropagationMs.set(now)
       copy
@@ -95,7 +95,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
     scheduledRequest = None
   }
 
-  def buildAndSendRequest(isrUpdates: Map[TopicPartition, AlterIsrItem]): Unit = {
+  def buildAndSendRequest(isrUpdates: mutable.Map[TopicPartition, AlterIsrItem]): Unit = {
     if (isrUpdates.nonEmpty) {
       val message = new AlterIsrRequestData()
         .setBrokerId(brokerId)

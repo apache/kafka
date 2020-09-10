@@ -1069,7 +1069,7 @@ object TestUtils extends Logging {
     val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
 
     override def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Unit = {
-      isrUpdates.addOne(alterIsrItem)
+      isrUpdates += alterIsrItem
     }
 
     override def clearPending(topicPartition: TopicPartition): Unit = {

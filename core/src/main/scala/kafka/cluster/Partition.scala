@@ -133,7 +133,6 @@ object Partition extends KafkaMetricsGroup {
       replicaManager.delayedFetchPurgatory,
       replicaManager.delayedDeleteRecordsPurgatory)
 
-
     new Partition(topicPartition,
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
@@ -226,6 +225,7 @@ class Partition(val topicPartition: TopicPartition,
 
   // This optional set has a dual purpose. When it is None, we know there is not an AlterIsr request in-flight. When
   // not None, there is an AlterIsr request in flight and values of the Set include a "maximal" or "effective" ISR.
+  // Updates to set should always be protected by the leaderIsrUpdateLock lock
   @volatile var pendingInSyncReplicaIds: Option[Set[Int]] = None
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
@@ -265,12 +265,31 @@ class Partition(val topicPartition: TopicPartition,
 
   def isAddingReplica(replicaId: Int): Boolean = assignmentState.isAddingReplica(replicaId)
 
-  def inSyncReplicaIds(includeUncommittedReplicas: Boolean = false): Set[Int] = {
-    // Only check for an "effective" ISR if we are using AlterIsr
-    if (useAlterIsr && includeUncommittedReplicas) {
+  /**
+   * This set may include un-committed ISR members following an expansion. This "effective" ISR is used for advancing
+   * the high watermark as well as determining which replicas are required for acks=all produce requests.
+   *
+   * Only applicable as of IBP 2.7-IV1, for older versions this simply returns the committed ISR
+   *
+   * @return the set of replica IDs which are in-sync
+   */
+  def effectiveIsr: Set[Int] = {
+    if (useAlterIsr) {
       pendingInSyncReplicaIds.getOrElse(inSyncReplicaIds)
     } else {
       inSyncReplicaIds
+    }
+  }
+
+  /**
+   * Check if we have an in-flight AlterIsr
+   */
+  def checkInFlightAlterIsr: Boolean = {
+    if (pendingInSyncReplicaIds.isDefined) {
+      trace(s"ISR update in-flight for $topicPartition, skipping update")
+      true
+    } else {
+      false
     }
   }
 
@@ -514,7 +533,6 @@ class Partition(val topicPartition: TopicPartition,
       val isr = partitionState.isr.asScala.map(_.toInt).toSet
       val addingReplicas = partitionState.addingReplicas.asScala.map(_.toInt)
       val removingReplicas = partitionState.removingReplicas.asScala.map(_.toInt)
-      info(s"Leader setting ISR to $isr for $topicPartition with leader epoch ${partitionState.leaderEpoch}")
 
       updateAssignmentAndIsr(
         assignment = partitionState.replicas.asScala.map(_.toInt),
@@ -665,7 +683,7 @@ class Partition(val topicPartition: TopicPartition,
 
         // Check if this in-sync replica needs to be added to the ISR. We look at the "maximal" ISR here so we don't
         // send an additional Alter ISR request for the same replica
-        if (!inSyncReplicaIds(true).contains(followerId))
+        if (!effectiveIsr.contains(followerId))
           maybeExpandIsr(followerReplica, followerFetchTimeMs)
 
         // check if the HW of the partition can now be incremented
@@ -755,7 +773,7 @@ class Partition(val topicPartition: TopicPartition,
   private def needsExpandIsr(followerReplica: Replica): Boolean = {
     leaderLogIfLocal.exists { leaderLog =>
       val leaderHighwatermark = leaderLog.highWatermark
-      !inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)
+      !inSyncReplicaIds.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark) && !checkInFlightAlterIsr
     }
   }
 
@@ -776,7 +794,7 @@ class Partition(val topicPartition: TopicPartition,
     leaderLogIfLocal match {
       case Some(leaderLog) =>
         // keep the current immutable replica list reference
-        val curInSyncReplicaIds = inSyncReplicaIds(true)
+        val curInSyncReplicaIds = effectiveIsr
 
         if (isTraceEnabled) {
           def logEndOffsetString: ((Int, Long)) => String = {
@@ -841,7 +859,7 @@ class Partition(val topicPartition: TopicPartition,
       remoteReplicasMap.values.foreach { replica =>
         // Note here we are using the "maximal", see explanation above
         if (replica.logEndOffsetMetadata.messageOffset < newHighWatermark.messageOffset &&
-          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicaIds(true).contains(replica.brokerId))) {
+          (curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || effectiveIsr.contains(replica.brokerId))) {
           newHighWatermark = replica.logEndOffsetMetadata
         }
       }
@@ -940,7 +958,7 @@ class Partition(val topicPartition: TopicPartition,
   private def needsShrinkIsr(): Boolean = {
     if (isLeader) {
       val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-      outOfSyncReplicaIds.nonEmpty
+      outOfSyncReplicaIds.nonEmpty && !checkInFlightAlterIsr
     } else {
       false
     }
@@ -968,7 +986,7 @@ class Partition(val topicPartition: TopicPartition,
      * is violated, that replica is considered to be out of sync
      *
      **/
-    val candidateReplicaIds = inSyncReplicaIds(true) - localBrokerId
+    val candidateReplicaIds = effectiveIsr - localBrokerId
     val currentTimeMs = time.milliseconds()
     val leaderEndOffset = localLogOrException.logEndOffset
     candidateReplicaIds.filter(replicaId => isFollowerOutOfSync(replicaId, leaderEndOffset, currentTimeMs, maxLagMs))
@@ -1251,6 +1269,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  // This is called from maybeExpandIsr which holds the ISR write lock
   private def expandIsrWithAlterIsr(newInSyncReplica: Int): Unit = {
     // This is called from maybeExpandIsr which holds the ISR write lock
     if (pendingInSyncReplicaIds.isEmpty) {
@@ -1261,7 +1280,7 @@ class Partition(val topicPartition: TopicPartition,
       debug(s"Adding new in-sync replica $newInSyncReplica. Pending ISR updated to [${newIsr.mkString(",")}] for $topicPartition")
       sendAlterIsrRequest(newIsr)
     } else {
-      debug(s"ISR update in-flight, not adding new in-sync replica $newInSyncReplica for $topicPartition")
+      trace(s"ISR update in-flight, not adding new in-sync replica $newInSyncReplica for $topicPartition")
     }
   }
 
@@ -1281,6 +1300,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  // This is called from maybeShrinkIsr which holds the ISR write lock
   private def shrinkIsrWithAlterIsr(outOfSyncReplicas: Set[Int]): Unit = {
     // This is called from maybeShrinkIsr which holds the ISR write lock
     if (pendingInSyncReplicaIds.isEmpty) {
@@ -1292,7 +1312,7 @@ class Partition(val topicPartition: TopicPartition,
       debug(s"Removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
       sendAlterIsrRequest(newIsr)
     } else {
-      debug(s"ISR update in-flight, not removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
+      trace(s"ISR update in-flight, not removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
     }
   }
 

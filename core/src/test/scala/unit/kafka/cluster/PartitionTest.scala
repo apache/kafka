@@ -921,7 +921,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // Expansion does not affect the ISR
     assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
-    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.inSyncReplicaIds(true))
+    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.effectiveIsr)
     assertEquals("AlterIsr", alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr.toSet,
       Set(leader, follower1, follower2))
   }
@@ -1184,7 +1184,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(alterIsrManager.isrUpdates.size, 1)
     assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId, remoteBrokerId))
     assertEquals(Set(brokerId), partition.inSyncReplicaIds)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds(true))
+    assertEquals(Set(brokerId, remoteBrokerId), partition.effectiveIsr)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
   }
@@ -1282,7 +1282,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertEquals(alterIsrManager.isrUpdates.size, 1)
     assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId))
     assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds(true))
+    assertEquals(Set(brokerId, remoteBrokerId), partition.effectiveIsr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
   }
 
@@ -1488,7 +1488,7 @@ class PartitionTest extends AbstractPartitionTest {
     // Expand ISR
     partition.expandIsr(follower3)
     assertEquals(Set(brokerId, follower1, follower2), partition.inSyncReplicaIds)
-    assertEquals(Set(brokerId, follower1, follower2, follower3), partition.inSyncReplicaIds(true))
+    assertEquals(Set(brokerId, follower1, follower2, follower3), partition.effectiveIsr)
 
     // One AlterIsr request in-flight
     assertEquals(alterIsrManager.isrUpdates.size, 1)

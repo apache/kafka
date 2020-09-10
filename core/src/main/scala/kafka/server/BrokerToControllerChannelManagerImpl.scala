@@ -125,7 +125,7 @@ class BrokerToControllerChannelManagerImpl(metadataCache: kafka.server.MetadataC
   }
 
   override def sendRequest(request: AbstractRequest.Builder[_ <: AbstractRequest],
-                  callback: RequestCompletionHandler): Unit = {
+                           callback: RequestCompletionHandler): Unit = {
     requestQueue.put(BrokerToControllerQueueItem(request, callback))
     requestThread.wakeup()
   }
