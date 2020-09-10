@@ -97,6 +97,7 @@ public class SubscriptionInfo {
         data.setVersion(version);
         data.setProcessId(processId);
 
+
         if (version >= 2) {
             data.setUserEndPoint(userEndPoint == null
                                      ? new byte[0]
@@ -107,7 +108,11 @@ public class SubscriptionInfo {
         }
 
         if (version >= 8) {
-            data.setShutdownRequested(shutdownRequested.get());
+            if (shutdownRequested == null) { //check is required for testing because the mock sets it to null
+                data.setShutdownRequested(0);
+            } else {
+                data.setShutdownRequested(shutdownRequested.get());
+            }
         }
 
         this.data = data;
