@@ -26,7 +26,6 @@ import static org.junit.Assert.assertThrows;
 import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
-
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;

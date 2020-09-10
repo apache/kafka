@@ -298,7 +298,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                 throw new IllegalArgumentException("Early record for sliding windows must fall between fall between 0 <= inputRecordTimestamp");
             }
 
-            // A window from [0,timeDifferenceMs] that holds all early records
+            // A window from [0, timeDifferenceMs] that holds all early records
             KeyValue<Windowed<K>, ValueAndTimestamp<Agg>> combinedWindow = null;
             ValueAndTimestamp<Agg> rightWinAgg = null;
             boolean rightWinAlreadyCreated = false;
