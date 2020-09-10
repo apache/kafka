@@ -212,7 +212,7 @@ public class KafkaStreamsTest {
             anyObject(StreamsMetricsImpl.class),
             anyObject(Time.class),
             anyObject(StreamsMetadataState.class),
-            anyLong(),
+            anyObject(MemoryBudget.class),
             anyObject(StateDirectory.class),
             anyObject(StateRestoreListener.class),
             anyInt()

@@ -23,6 +23,7 @@ import java.util.TreeSet;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.NamedCacheMetrics;
 import org.slf4j.Logger;
@@ -46,6 +47,7 @@ class NamedCache {
     private LRUNode head;
     private long currentSizeBytes;
 
+    private final MemoryBudget memoryBudget;
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor hitRatioSensor;
 
@@ -55,8 +57,9 @@ class NamedCache {
     private long numOverwrites = 0;
     private long numFlushes = 0;
 
-    NamedCache(final String name, final StreamsMetricsImpl streamsMetrics) {
+    NamedCache(final String name, final MemoryBudget memoryBudget, final StreamsMetricsImpl streamsMetrics) {
         this.name = name;
+        this.memoryBudget = memoryBudget;
         this.streamsMetrics = streamsMetrics;
         storeName = ThreadCache.underlyingStoreNamefromCacheName(name);
         taskName = ThreadCache.taskIDfromCacheName(name);
@@ -163,11 +166,12 @@ class NamedCache {
                 )
             );
         }
+        long sizeDelta = 0;
         LRUNode node = cache.get(key);
         if (node != null) {
             numOverwrites++;
 
-            currentSizeBytes -= node.size();
+            sizeDelta -= node.size();
             node.update(value);
             updateLRU(node);
         } else {
@@ -181,7 +185,10 @@ class NamedCache {
             dirtyKeys.remove(key);
             dirtyKeys.add(key);
         }
-        currentSizeBytes += node.size();
+        sizeDelta += node.size();
+
+        memoryBudget.softTransact(sizeDelta);
+        currentSizeBytes += sizeDelta;
     }
 
     synchronized long sizeInBytes() {
@@ -237,6 +244,7 @@ class NamedCache {
             return;
         }
         final LRUNode eldest = tail;
+        memoryBudget.softFree(eldest.size());
         currentSizeBytes -= eldest.size();
         remove(eldest);
         cache.remove(eldest.key);
@@ -268,6 +276,7 @@ class NamedCache {
 
         remove(node);
         dirtyKeys.remove(key);
+        memoryBudget.softFree(node.size());
         currentSizeBytes -= node.size();
         return node.entry();
     }
@@ -329,6 +338,7 @@ class NamedCache {
     synchronized void close() {
         head = tail = null;
         listener = null;
+        memoryBudget.softFree(currentSizeBytes);
         currentSizeBytes = 0;
         dirtyKeys.clear();
         cache.clear();

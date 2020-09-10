@@ -26,30 +26,39 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
 
     private final long maxRecords;
     private final long maxBytes;
+    private final boolean useRecordCacheBytes;
     private final Map<String, String> logConfig;
 
     public EagerBufferConfigImpl(final long maxRecords, final long maxBytes) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
+        this.useRecordCacheBytes = false;
         this.logConfig = Collections.emptyMap();
     }
 
-    private EagerBufferConfigImpl(final long maxRecords,
+    public EagerBufferConfigImpl(final long maxRecords,
                                   final long maxBytes,
+                                  final boolean useRecordCacheBytes,
                                   final Map<String, String> logConfig) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
+        this.useRecordCacheBytes = useRecordCacheBytes;
         this.logConfig = logConfig;
     }
 
     @Override
     public Suppressed.EagerBufferConfig withMaxRecords(final long recordLimit) {
-        return new EagerBufferConfigImpl(recordLimit, maxBytes, logConfig);
+        return new EagerBufferConfigImpl(recordLimit, maxBytes, useRecordCacheBytes, logConfig);
     }
 
     @Override
     public Suppressed.EagerBufferConfig withMaxBytes(final long byteLimit) {
-        return new EagerBufferConfigImpl(maxRecords, byteLimit, logConfig);
+        return new EagerBufferConfigImpl(maxRecords, byteLimit, useRecordCacheBytes, logConfig);
+    }
+
+    @Override
+    public Suppressed.EagerBufferConfig usingCacheBytes() {
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, true, logConfig);
     }
 
     @Override
@@ -63,18 +72,23 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
     }
 
     @Override
+    public boolean useRecordCacheBytes() {
+        return useRecordCacheBytes;
+    }
+
+    @Override
     public BufferFullStrategy bufferFullStrategy() {
         return BufferFullStrategy.EMIT;
     }
 
     @Override
     public Suppressed.EagerBufferConfig withLoggingDisabled() {
-        return new EagerBufferConfigImpl(maxRecords, maxBytes, null);
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, useRecordCacheBytes, null);
     }
 
     @Override
     public Suppressed.EagerBufferConfig withLoggingEnabled(final Map<String, String> config) {
-        return new EagerBufferConfigImpl(maxRecords, maxBytes, config);
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, useRecordCacheBytes, config);
     }
 
     @Override

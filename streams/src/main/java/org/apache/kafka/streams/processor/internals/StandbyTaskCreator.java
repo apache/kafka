@@ -61,7 +61,6 @@ class StandbyTaskCreator {
 
         dummyCache = new ThreadCache(
             new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName())),
-            0,
             streamsMetrics
         );
     }

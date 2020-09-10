@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
@@ -34,6 +35,8 @@ import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+
+import java.util.concurrent.atomic.AtomicLong;
 
 import static java.util.Objects.requireNonNull;
 
@@ -114,6 +117,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
     private static final class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         private final long maxRecords;
         private final long maxBytes;
+        private final boolean useRecordCacheBytes;
         private final long suppressDurationMillis;
         private final TimeDefinition<K> bufferTimeDefinition;
         private final BufferFullStrategy bufferFullStrategy;
@@ -124,12 +128,14 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         private InternalProcessorContext internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+        private MemoryBudget memoryBudget;
 
         private KTableSuppressProcessor(final SuppressedInternal<K> suppress, final String storeName) {
             this.storeName = storeName;
             requireNonNull(suppress);
             maxRecords = suppress.bufferConfig().maxRecords();
             maxBytes = suppress.bufferConfig().maxBytes();
+            useRecordCacheBytes = suppress.bufferConfig().useRecordCacheBytes();
             suppressDurationMillis = suppress.timeToWaitForMoreEvents().toMillis();
             bufferTimeDefinition = suppress.timeDefinition();
             bufferFullStrategy = suppress.bufferConfig().bufferFullStrategy();
@@ -149,6 +155,16 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
             buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
             buffer.setSerdesIfNull((Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());
+
+            if (useRecordCacheBytes) {
+                memoryBudget = internalProcessorContext.getMemoryBudget();
+            } else {
+                memoryBudget = new MemoryBudget(new AtomicLong(maxBytes));
+            }
+            buffer.setMemoryBudget(
+                memoryBudget,
+                bufferFullStrategy == BufferFullStrategy.SHUT_DOWN ? MemoryBudget.AllocationType.HARD : MemoryBudget.AllocationType.SOFT
+            );
         }
 
         @Override
@@ -170,29 +186,30 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
             buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);
 
-            if (overCapacity()) {
-                switch (bufferFullStrategy) {
-                    case EMIT:
-                        buffer.evictWhile(this::overCapacity, this::emit);
-                        return;
-                    case SHUT_DOWN:
+            switch (bufferFullStrategy) {
+                case EMIT:
+                    final long targetSoftReservation = memoryBudget.targetSoftReservation();
+                    buffer.evictWhile(
+                        () -> buffer.numRecords() > maxRecords || buffer.nonEmpty() && memoryBudget.softReservation() > targetSoftReservation,
+                        this::emit
+                    );
+                    return;
+                case SHUT_DOWN:
+                    if (buffer.numRecords() > maxRecords || memoryBudget.overHardBudget()) {
                         throw new StreamsException(String.format(
-                            "%s buffer exceeded its max capacity. Currently [%d/%d] records and [%d/%d] bytes.",
+                            "%s buffer exceeded its max capacity. Currently [%d/%d] records and memory: %s.",
                             internalProcessorContext.currentNode().name(),
                             buffer.numRecords(), maxRecords,
-                            buffer.bufferSize(), maxBytes
+                            memoryBudget
                         ));
-                    default:
-                        throw new UnsupportedOperationException(
-                            "The bufferFullStrategy [" + bufferFullStrategy +
-                                "] is not implemented. This is a bug in Kafka Streams."
-                        );
-                }
+                    }
+                    break;
+                default:
+                    throw new UnsupportedOperationException(
+                        "The bufferFullStrategy [" + bufferFullStrategy +
+                            "] is not implemented. This is a bug in Kafka Streams."
+                    );
             }
-        }
-
-        private boolean overCapacity() {
-            return buffer.numRecords() > maxRecords || buffer.bufferSize() > maxBytes;
         }
 
         private void emit(final TimeOrderedKeyValueBuffer.Eviction<K, V> toEmit) {

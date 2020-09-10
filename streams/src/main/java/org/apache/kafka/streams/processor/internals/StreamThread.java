@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -65,6 +66,8 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestor
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
 public class StreamThread extends Thread {
+
+    private final ThreadCache cache;
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -294,6 +297,36 @@ public class StreamThread extends Thread {
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
                                       final int threadIdx) {
+        return create(
+            builder,
+            config,
+            clientSupplier,
+            adminClient,
+            processId,
+            clientId,
+            streamsMetrics,
+            time,
+            streamsMetadataState,
+            new MemoryBudget(new AtomicLong(cacheSizeBytes)),
+            stateDirectory,
+            userStateRestoreListener,
+            threadIdx
+        );
+    }
+
+    public static StreamThread create(final InternalTopologyBuilder builder,
+                                      final StreamsConfig config,
+                                      final KafkaClientSupplier clientSupplier,
+                                      final Admin adminClient,
+                                      final UUID processId,
+                                      final String clientId,
+                                      final StreamsMetricsImpl streamsMetrics,
+                                      final Time time,
+                                      final StreamsMetadataState streamsMetadataState,
+                                      final MemoryBudget memoryBudget,
+                                      final StateDirectory stateDirectory,
+                                      final StateRestoreListener userStateRestoreListener,
+                                      final int threadIdx) {
         final String threadId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
@@ -313,9 +346,11 @@ public class StreamThread extends Thread {
             userStateRestoreListener
         );
 
-        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        // TODO optimize the "disabled" case by not even allocating a cache
+        final ThreadCache cache = new ThreadCache(logContext, memoryBudget, streamsMetrics);
 
-        final ActiveTaskCreator activeTaskCreator = new ActiveTaskCreator(
+        final ActiveTaskCreator activeTaskCreator =
+            new ActiveTaskCreator(
             builder,
             config,
             streamsMetrics,
@@ -385,7 +420,8 @@ public class StreamThread extends Thread {
             threadId,
             logContext,
             assignmentErrorCode,
-            nextScheduledRebalanceMs
+            nextScheduledRebalanceMs,
+            cache
         );
 
         taskManager.setPartitionResetter(partitions -> streamThread.resetOffsets(partitions, null));
@@ -436,8 +472,10 @@ public class StreamThread extends Thread {
                         final String threadId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
-                        final AtomicLong nextProbingRebalanceMs) {
+                        final AtomicLong nextProbingRebalanceMs,
+                        final ThreadCache cache) {
         super(threadId);
+        this.cache = cache;
         this.stateLock = new Object();
 
         this.adminClient = adminClient;
@@ -712,6 +750,8 @@ public class StreamThread extends Thread {
                 if (punctuated > 0) {
                     punctuateSensor.record(punctuateLatency / (double) punctuated, now);
                 }
+
+                cache.maybeEvict();
 
                 final int committed = maybeCommit();
                 final long commitLatency = advanceNowAndComputeLatency();

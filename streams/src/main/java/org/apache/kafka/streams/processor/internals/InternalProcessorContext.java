@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -120,4 +121,6 @@ public interface InternalProcessorContext extends ProcessorContext {
                    final long timestamp);
 
     String changelogFor(final String storeName);
+
+    MemoryBudget getMemoryBudget();
 }

@@ -28,15 +28,18 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
 
     private final long maxRecords;
     private final long maxBytes;
+    private final boolean useRecordCacheBytes;
     private final BufferFullStrategy bufferFullStrategy;
     private final Map<String, String> logConfig;
 
     public StrictBufferConfigImpl(final long maxRecords,
                                   final long maxBytes,
+                                  final boolean useRecordCacheBytes,
                                   final BufferFullStrategy bufferFullStrategy,
                                   final Map<String, String> logConfig) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
+        this.useRecordCacheBytes = useRecordCacheBytes;
         this.bufferFullStrategy = bufferFullStrategy;
         this.logConfig = logConfig;
     }
@@ -46,6 +49,7 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
                                   final BufferFullStrategy bufferFullStrategy) {
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
+        this.useRecordCacheBytes = false;
         this.bufferFullStrategy = bufferFullStrategy;
         this.logConfig = Collections.emptyMap();
     }
@@ -53,6 +57,7 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     public StrictBufferConfigImpl() {
         this.maxRecords = Long.MAX_VALUE;
         this.maxBytes = Long.MAX_VALUE;
+        this.useRecordCacheBytes = false;
         this.bufferFullStrategy = SHUT_DOWN;
         this.logConfig = Collections.emptyMap();
     }
@@ -68,6 +73,11 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     }
 
     @Override
+    public Suppressed.StrictBufferConfig usingCacheBytes() {
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, true, bufferFullStrategy, logConfig);
+    }
+
+    @Override
     public long maxRecords() {
         return maxRecords;
     }
@@ -78,18 +88,23 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     }
 
     @Override
+    public boolean useRecordCacheBytes() {
+        return useRecordCacheBytes;
+    }
+
+    @Override
     public BufferFullStrategy bufferFullStrategy() {
         return bufferFullStrategy;
     }
 
     @Override
     public Suppressed.StrictBufferConfig withLoggingDisabled() {
-        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, null);
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, useRecordCacheBytes, bufferFullStrategy, null);
     }
 
     @Override
     public Suppressed.StrictBufferConfig withLoggingEnabled(final Map<String, String> config) {
-        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, config);
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, useRecordCacheBytes, bufferFullStrategy, config);
     }
 
     @Override

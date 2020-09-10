@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -41,6 +42,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
@@ -62,6 +64,7 @@ public class GlobalStreamThread extends Thread {
     private final ThreadCache cache;
     private final StreamsMetricsImpl streamsMetrics;
     private final ProcessorTopology topology;
+    private final MemoryBudget memoryBudget;
     private volatile StreamsException startupException;
 
     /**
@@ -200,6 +203,28 @@ public class GlobalStreamThread extends Thread {
                               final Time time,
                               final String threadClientId,
                               final StateRestoreListener stateRestoreListener) {
+        this(
+            topology,
+            config,
+            globalConsumer,
+            stateDirectory,
+            new MemoryBudget(new AtomicLong(cacheSizeBytes)),
+            streamsMetrics,
+            time,
+            threadClientId,
+            stateRestoreListener
+        );
+    }
+
+    public GlobalStreamThread(final ProcessorTopology topology,
+                              final StreamsConfig config,
+                              final Consumer<byte[], byte[]> globalConsumer,
+                              final StateDirectory stateDirectory,
+                              final MemoryBudget memoryBudget,
+                              final StreamsMetricsImpl streamsMetrics,
+                              final Time time,
+                              final String threadClientId,
+                              final StateRestoreListener stateRestoreListener) {
         super(threadClientId);
         this.time = time;
         this.config = config;
@@ -210,7 +235,8 @@ public class GlobalStreamThread extends Thread {
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
-        this.cache = new ThreadCache(logContext, cacheSizeBytes, this.streamsMetrics);
+        this.cache = new ThreadCache(logContext, memoryBudget, this.streamsMetrics);
+        this.memoryBudget = memoryBudget;
         this.stateRestoreListener = stateRestoreListener;
     }
 
@@ -349,8 +375,7 @@ public class GlobalStreamThread extends Thread {
                 config,
                 stateMgr,
                 streamsMetrics,
-                cache
-            );
+                cache);
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 
             final StateConsumer stateConsumer = new StateConsumer(

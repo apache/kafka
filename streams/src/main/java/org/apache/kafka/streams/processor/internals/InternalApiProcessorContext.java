@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -116,4 +117,6 @@ public interface InternalApiProcessorContext<KForward, VForward> extends Process
                    final long timestamp);
 
     String changelogFor(final String storeName);
+
+    MemoryBudget getMemoryBudget();
 }

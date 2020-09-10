@@ -24,6 +24,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -55,6 +56,7 @@ class ActiveTaskCreator {
     private final StateDirectory stateDirectory;
     private final ChangelogReader storeChangelogReader;
     private final ThreadCache cache;
+    private final MemoryBudget memoryBudget;
     private final Time time;
     private final KafkaClientSupplier clientSupplier;
     private final String threadId;
@@ -81,6 +83,7 @@ class ActiveTaskCreator {
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
         this.cache = cache;
+        this.memoryBudget = cache.memoryBudget();
         this.time = time;
         this.clientSupplier = clientSupplier;
         this.threadId = threadId;

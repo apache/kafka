@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -161,6 +162,11 @@ public final class ProcessorContextAdapter<KForward, VForward>
     @Override
     public String changelogFor(final String storeName) {
         return delegate.changelogFor(storeName);
+    }
+
+    @Override
+    public MemoryBudget getMemoryBudget() {
+        return delegate.getMemoryBudget();
     }
 
     @Override

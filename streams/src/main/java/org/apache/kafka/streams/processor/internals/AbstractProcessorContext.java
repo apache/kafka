@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -40,11 +41,12 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final StreamsMetricsImpl metrics;
     private final Serde<?> keySerde;
     private final Serde<?> valueSerde;
+    private final MemoryBudget memoryBudget;
+
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode<?, ?, ?, ?> currentNode;
     private long currentSystemTimeMs;
-
     protected ThreadCache cache;
 
     public AbstractProcessorContext(final TaskId taskId,
@@ -58,6 +60,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         valueSerde = config.defaultValueSerde();
         keySerde = config.defaultKeySerde();
         this.cache = cache;
+        this.memoryBudget = cache == null ? null : cache.memoryBudget();
     }
 
     protected abstract StateManager stateManager();
@@ -228,5 +231,10 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public String changelogFor(final String storeName) {
         return stateManager().changelogFor(storeName);
+    }
+
+    @Override
+    public MemoryBudget getMemoryBudget() {
+        return memoryBudget;
     }
 }

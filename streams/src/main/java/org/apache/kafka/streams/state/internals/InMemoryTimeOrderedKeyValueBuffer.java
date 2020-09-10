@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -82,6 +83,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private FullChangeSerde<V> valueSerde;
 
     private long memBufferSize = 0L;
+    private MemoryBudget memoryBudget;
+    private MemoryBudget.AllocationType memoryBudgetAllocationType;
     private long minTimestamp = Long.MAX_VALUE;
     private InternalProcessorContext context;
     private String changelogTopic;
@@ -220,6 +223,13 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         updateBufferMetrics();
         open = true;
         partition = context.taskId().partition;
+        this.memoryBudget = this.context.getMemoryBudget();
+    }
+
+    @Override
+    public void setMemoryBudget(final MemoryBudget memoryBudget, final MemoryBudget.AllocationType allocationType) {
+        this.memoryBudget = memoryBudget;
+        this.memoryBudgetAllocationType = allocationType;
     }
 
     @Override
@@ -233,6 +243,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         index.clear();
         sortedMap.clear();
         dirtyKeys.clear();
+        memoryBudget.free(memoryBudgetAllocationType, memBufferSize);
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
@@ -309,7 +320,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                 if (bufferKey != null) {
                     final BufferValue removed = sortedMap.remove(bufferKey);
                     if (removed != null) {
-                        memBufferSize -= computeRecordSize(bufferKey.key(), removed);
+                        final long recordSize = computeRecordSize(bufferKey.key(), removed);
+                        memoryBudget.free(memoryBudgetAllocationType, recordSize);
+                        memBufferSize -= recordSize;
                     }
                     if (bufferKey.time() == minTimestamp) {
                         minTimestamp = sortedMap.isEmpty() ? Long.MAX_VALUE : sortedMap.firstKey().time();
@@ -405,7 +418,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
                 dirtyKeys.add(next.getKey().key());
 
-                memBufferSize -= computeRecordSize(next.getKey().key(), bufferValue);
+                final long recordSize = computeRecordSize(next.getKey().key(), bufferValue);
+                memoryBudget.free(memoryBudgetAllocationType, recordSize);
+                memBufferSize -= recordSize;
 
                 // peek at the next record so we can update the minTimestamp
                 if (delegate.hasNext()) {
@@ -493,24 +508,31 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         // then insert the new record in the same place in the priority queue
 
         final BufferKey previousKey = index.get(key);
+        long recordSizeDelta = 0;
         if (previousKey == null) {
             final BufferKey nextKey = new BufferKey(time, key);
             index.put(key, nextKey);
             sortedMap.put(nextKey, value);
             minTimestamp = Math.min(minTimestamp, time);
-            memBufferSize += computeRecordSize(key, value);
+            recordSizeDelta = computeRecordSize(key, value);
         } else {
             final BufferValue removedValue = sortedMap.put(previousKey, value);
-            memBufferSize =
-                memBufferSize
-                    + computeRecordSize(key, value)
+            recordSizeDelta =
+                    computeRecordSize(key, value)
                     - (removedValue == null ? 0 : computeRecordSize(key, removedValue));
         }
+        memBufferSize += recordSizeDelta;
+        memoryBudget.transact(memoryBudgetAllocationType, recordSizeDelta);
     }
 
     @Override
     public int numRecords() {
         return index.size();
+    }
+
+    @Override
+    public boolean nonEmpty() {
+        return !index.isEmpty();
     }
 
     @Override

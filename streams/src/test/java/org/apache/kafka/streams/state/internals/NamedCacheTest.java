@@ -23,6 +23,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Before;
@@ -31,6 +32,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -51,7 +53,7 @@ public class NamedCacheTest {
     public void setUp() {
         innerMetrics = new Metrics();
         metrics = new MockStreamsMetrics(innerMetrics);
-        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, metrics);
+        cache = new NamedCache(taskIDString + "-" + underlyingStoreName, new MemoryBudget(new AtomicLong(Long.MAX_VALUE)), metrics);
     }
 
     @Test

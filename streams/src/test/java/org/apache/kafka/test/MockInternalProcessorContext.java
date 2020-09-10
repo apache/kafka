@@ -17,6 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.MemoryBudget;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -29,12 +30,13 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
 
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
-import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
 
@@ -149,5 +151,10 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public String changelogFor(final String storeName) {
         return "mock-changelog";
+    }
+
+    @Override
+    public MemoryBudget getMemoryBudget() {
+        return new MemoryBudget(new AtomicLong(Long.MAX_VALUE));
     }
 }
