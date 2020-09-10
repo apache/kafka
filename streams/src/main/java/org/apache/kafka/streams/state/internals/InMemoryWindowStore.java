@@ -68,7 +68,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private volatile boolean open = false;
 
-    InMemoryWindowStore(final String name,
+    public InMemoryWindowStore(final String name,
                         final long retentionPeriod,
                         final long windowSize,
                         final boolean retainDuplicates,
