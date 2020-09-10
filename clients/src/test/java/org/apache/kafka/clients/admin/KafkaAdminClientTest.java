@@ -965,6 +965,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testMetadataRetries() throws Exception {
         // We should continue retrying on metadata update failures in spite of retry configuration
@@ -976,8 +977,7 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, bootstrapCluster,
                 newStrMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
                         AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "10000000",
-                        AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100",
-                        AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100"))) {
+                        AdminClientConfig.RETRIES_CONFIG, "0"))) {
 
             // The first request fails with a disconnect
             env.kafkaClient().prepareResponse(null, true);
@@ -4391,15 +4391,13 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testAlterReplicaLogDirsPartialFailure() throws Exception {
-        try (AdminClientUnitTestEnv env = mockClientEnv(
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100",
-                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100")) {
-            // As we won't retry, this calls fails immediately with a DisconnectException
-            env.kafkaClient().prepareResponseFrom(
-                prepareAlterLogDirsResponse(Errors.NONE, "topic", 1),
-                env.cluster().nodeById(0),
-                true);
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
 
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+
+            // Provide only one prepared response from node 1
             env.kafkaClient().prepareResponseFrom(
                 prepareAlterLogDirsResponse(Errors.NONE, "topic", 2),
                 env.cluster().nodeById(1));
@@ -4412,6 +4410,17 @@ public class KafkaAdminClientTest {
             logDirs.put(tpr2, "/data1");
 
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
+
+            // Wait until the prepared attempt has been consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting requests");
+
+            // Wait until the request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
 
             TestUtils.assertFutureThrows(result.values().get(tpr1), ApiException.class);
             assertNull(result.values().get(tpr2).get());
@@ -4585,20 +4594,28 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDescribeLogDirsPartialFailure() throws Exception {
-        try (AdminClientUnitTestEnv env = mockClientEnv(
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100",
-                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100")) {
-            // As we won't retry, this calls fails immediately with a DisconnectException
-            env.kafkaClient().prepareResponseFrom(
-                prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
-                env.cluster().nodeById(0),
-                true);
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
 
             env.kafkaClient().prepareResponseFrom(
                 prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
                 env.cluster().nodeById(1));
 
             DescribeLogDirsResult result = env.adminClient().describeLogDirs(Arrays.asList(0, 1));
+
+            // Wait until the prepared attempt has been consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting requests");
+
+            // Wait until the request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
 
             TestUtils.assertFutureThrows(result.descriptions().get(0), ApiException.class);
             assertNotNull(result.descriptions().get(1).get());
