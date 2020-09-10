@@ -83,7 +83,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
     // Minimize time in this lock since it's also held during fetch hot path
     val copy = unsentIsrUpdates synchronized {
-      val copy = unsentIsrUpdates.to(Map)
+      val copy = Map.from(unsentIsrUpdates)
       unsentIsrUpdates.clear()
       lastIsrPropagationMs.set(now)
       copy
@@ -104,12 +104,12 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
       // N.B., these callbacks are run inside the leaderIsrUpdateLock write lock
       val callbacks = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr] => Unit]()
-      isrUpdates.values.groupBy(_.topicPartition.topic).foreachEntry((topic, items) => {
+      isrUpdates.values.groupBy(_.topicPartition.topic).foreach(entry => {
         val topicPart = new AlterIsrRequestData.TopicData()
-          .setName(topic)
+          .setName(entry._1)
           .setPartitions(new util.ArrayList())
         message.topics().add(topicPart)
-        items.foreach(item => {
+        entry._2.foreach(item => {
           topicPart.partitions().add(new AlterIsrRequestData.PartitionData()
             .setPartitionIndex(item.topicPartition.partition)
             .setLeaderId(item.leaderAndIsr.leader)

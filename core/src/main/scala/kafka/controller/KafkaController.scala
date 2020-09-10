@@ -1784,12 +1784,12 @@ class KafkaController(val config: KafkaConfig,
           resp.setErrorCode(error.code)
         case Left(partitionResults) =>
           resp.setTopics(new util.ArrayList())
-          partitionResults.groupBy(_._1.topic).foreachEntry((topic, partitionMap) => {
+          partitionResults.groupBy(_._1.topic).foreach(entry => {
             val topicResp = new AlterIsrResponseData.TopicData()
-              .setName(topic)
+              .setName(entry._1)
               .setPartitions(new util.ArrayList())
             resp.topics.add(topicResp)
-            partitionMap.foreachEntry((partition, errorOrResult) => {
+            entry._2.foreachEntry((partition, errorOrResult) => {
               errorOrResult match {
                 case Left(error) => topicResp.partitions.add(
                   new AlterIsrResponseData.PartitionData()
