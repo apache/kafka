@@ -42,7 +42,6 @@ import org.mockito.ArgumentMatchers
 import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.scalatest.Assertions.assertThrows
-import unit.kafka.cluster.AbstractPartitionTest
 
 import scala.jdk.CollectionConverters._
 
