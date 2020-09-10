@@ -1231,5 +1231,4 @@ public class TaskManager {
     public void setPartitionResetter(final java.util.function.Consumer<Set<TopicPartition>> resetter) {
         this.resetter = resetter;
     }
-
 }
