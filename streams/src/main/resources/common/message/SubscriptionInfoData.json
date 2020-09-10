@@ -51,7 +51,7 @@
     {
       "name": "shutdownRequested",
       "versions": "8+",
-      "type": "int32"
+      "type": "int16"
     },
     {
       "name": "taskOffsetSums",

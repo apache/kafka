@@ -35,7 +35,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.slf4j.Logger;
 
@@ -56,7 +55,6 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -89,8 +87,6 @@ public class TaskManager {
 
     private DeleteRecordsResult deleteRecordsResult;
 
-    private AtomicInteger shutdownRequested;
-
     private boolean rebalanceInProgress = false;  // if we are in the middle of a rebalance, it is not safe to commit
 
     // includes assigned & initialized tasks and unassigned tasks we locked temporarily during rebalance
@@ -115,7 +111,6 @@ public class TaskManager {
         this.adminClient = adminClient;
         this.stateDirectory = stateDirectory;
         this.processingMode = processingMode;
-        this.shutdownRequested = new AtomicInteger(0);
 
         final LogContext logContext = new LogContext(logPrefix);
         log = logContext.logger(getClass());
@@ -1235,14 +1230,6 @@ public class TaskManager {
 
     public void setPartitionResetter(final java.util.function.Consumer<Set<TopicPartition>> resetter) {
         this.resetter = resetter;
-    }
-
-    public void flagForShutdownRequest() {
-        this.shutdownRequested.set(AssignorError.SHUTDOWN_REQUESTED.code());
-    }
-
-    public AtomicInteger isShutdownRequested() {
-        return this.shutdownRequested;
     }
 
 }

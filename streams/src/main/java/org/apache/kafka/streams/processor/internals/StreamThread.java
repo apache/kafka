@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
@@ -282,6 +283,8 @@ public class StreamThread extends Thread {
     private final Admin adminClient;
     private final InternalTopologyBuilder builder;
 
+    private final AtomicInteger assignmentErrorCode;
+
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -455,6 +458,7 @@ public class StreamThread extends Thread {
         this.punctuateRatioSensor = ThreadMetrics.punctuateRatioSensor(threadId, streamsMetrics);
         this.commitRatioSensor = ThreadMetrics.commitRatioSensor(threadId, streamsMetrics);
 
+
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
         // its metrics initialised. Otherwise, those sensors would have been created during processing, which could
@@ -478,6 +482,7 @@ public class StreamThread extends Thread {
         this.changelogReader = changelogReader;
         this.originalReset = originalReset;
         this.nextProbingRebalanceMs = nextProbingRebalanceMs;
+        this.assignmentErrorCode = assignmentErrorCode;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final int dummyThreadIdx = 1;
@@ -578,7 +583,7 @@ public class StreamThread extends Thread {
                 "The all clients in this app will now begin to shutdown", e);
 
         //set error code
-        taskManager.flagForShutdownRequest();
+        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
         mainConsumer.unsubscribe();
         subscribeConsumer();
     }

@@ -243,7 +243,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             taskManager.processId(),
             userEndPoint,
             taskManager.getTaskOffsetSums(),
-            taskManager.isShutdownRequested())
+            assignmentErrorCode)
                 .encode();
     }
 
@@ -302,7 +302,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final Subscription subscription = entry.getValue();
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
-            if (info.shutdownRequested() == AssignorError.SHUTDOWN_REQUESTED.code()) {
+            if (info.shutdownRequested() == 2) {
                 shutdownRequested = true;
             }
 
@@ -1437,14 +1437,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
             case 7:
-                validateActiveTaskEncoding(partitions, info, logPrefix);
-
-                activeTasks = getActiveTasks(partitions, info);
-                partitionsByHost = info.partitionsByHost();
-                standbyPartitionsByHost = info.standbyPartitionByHost();
-                topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
-                encodedNextScheduledRebalanceMs = info.nextRebalanceMs();
-                break;
             case 8:
                 validateActiveTaskEncoding(partitions, info, logPrefix);
 
@@ -1453,7 +1445,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 standbyPartitionsByHost = info.standbyPartitionByHost();
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = info.nextRebalanceMs();
-                //recive the shutdown then call the request close
                 break;
             default:
                 throw new IllegalStateException(
