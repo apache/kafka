@@ -1,0 +1,16 @@
+{
+  "apiKey": 15,
+  "type": "response",
+  "name": "SomeMessage",
+  "validVersions": "0-2",
+  "flexibleVersions": "2+",
+  "fields": [
+    { "name": "Outer", "type": "[]DifferentName", "versions": "0+",// type name is different, but the structure is the same
+      "about": "Each described group.", "fields": [
+      { "name": "Foo", "type": "int16", "versions": "0+",
+        "about": "" },
+      { "name": "Bar", "type": "string", "versions": "0+",
+        "about": "" }
+    ]}
+  ]
+}
