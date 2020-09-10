@@ -106,7 +106,7 @@ public class SubscriptionInfo {
             data.setLatestSupportedVersion(latestSupportedVersion);
         }
 
-        if ( version >= 8) {
+        if (version >= 8) {
             data.setShutdownRequested(shutdownRequested.get());
         }
 
