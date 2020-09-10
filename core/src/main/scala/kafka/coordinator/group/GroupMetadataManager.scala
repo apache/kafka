@@ -1139,6 +1139,7 @@ object GroupMetadataManager {
 
   private val CURRENT_OFFSET_KEY_SCHEMA = schemaForKey(CURRENT_OFFSET_KEY_SCHEMA_VERSION)
   private val CURRENT_GROUP_KEY_SCHEMA = schemaForKey(CURRENT_GROUP_KEY_SCHEMA_VERSION)
+  private val CURRENT_GROUP_METADATA_VALUE_SCHEMA_VERSION = GROUP_VALUE_SCHEMAS.size - 1
 
   private def schemaForKey(version: Int) = {
     val schemaOpt = MESSAGE_TYPE_SCHEMAS.get(version)
@@ -1401,9 +1402,8 @@ object GroupMetadataManager {
       val version = buffer.getShort
       val valueSchema = schemaForGroupValue(version)
       val value = valueSchema.read(buffer)
-      val maxVersion = GROUP_VALUE_SCHEMAS.size - 1
 
-      if (version >= 0 && version <= maxVersion) {
+      if (version >= 0 && version <= CURRENT_GROUP_METADATA_VALUE_SCHEMA_VERSION) {
         val generationId = value.get(GENERATION_KEY).asInstanceOf[Int]
         val protocolType = value.get(PROTOCOL_TYPE_KEY).asInstanceOf[String]
         val protocol = value.get(PROTOCOL_KEY).asInstanceOf[String]
