@@ -108,11 +108,7 @@ public class SubscriptionInfo {
         }
 
         if (version >= 8) {
-            if (shutdownRequested == null) { //check is required for testing because the mock sets it to null
-                data.setShutdownRequested((short) 0);
-            } else {
-                data.setShutdownRequested((short) shutdownRequested.get());
-            }
+            data.setShutdownRequested((short) shutdownRequested.get());
         }
 
         this.data = data;
