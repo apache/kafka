@@ -99,10 +99,6 @@ class DelayedOperations(topicPartition: TopicPartition,
     deleteRecords.checkAndComplete(requestKey)
   }
 
-  def checkAndCompleteFetch(): Unit = {
-    fetch.checkAndComplete(TopicPartitionOperationKey(topicPartition))
-  }
-
   def numDelayedDelete: Int = deleteRecords.numDelayed
 }
 
