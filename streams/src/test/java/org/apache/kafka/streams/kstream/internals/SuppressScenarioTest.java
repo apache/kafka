@@ -36,6 +36,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -455,6 +456,89 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("[k1@2/4]", 2L, 3L),
                     new KeyValueTimestamp<>("[k1@4/6]", 1L, 4L)
                 )
+            );
+        }
+    }
+
+    @Test
+    public void shouldSupportFinalResultsForSlidingWindows() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Windowed<String>, Long> valueCounts = builder
+                .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
+                .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
+                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(5L), ofMillis(15L)))
+                .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withKeySerde(STRING_SERDE));
+        valueCounts
+                .suppress(untilWindowCloses(unbounded()))
+                .toStream()
+                .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+                .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
+        valueCounts
+                .toStream()
+                .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+                .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
+        final Topology topology = builder.build();
+        System.out.println(topology.describe());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+            inputTopic.pipeInput("k1", "v1", 10L);
+            inputTopic.pipeInput("k1", "v1", 11L);
+            inputTopic.pipeInput("k1", "v1", 10L);
+            inputTopic.pipeInput("k1", "v1", 13L);
+            inputTopic.pipeInput("k1", "v1", 10L);
+            inputTopic.pipeInput("k1", "v1", 24L);
+            // this update should get dropped, since the previous event advanced the stream time and closed the window.
+            inputTopic.pipeInput("k1", "v1", 5L);
+            inputTopic.pipeInput("k1", "v1", 7L);
+            // final record to advance stream time and flush windows
+            inputTopic.pipeInput("k1", "v1", 90L);
+            verify(
+                    drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                    asList(
+                            // left window for k1@10 created when k1@10 is processed
+                            new KeyValueTimestamp<>("[k1@5/10]", 1L, 10L),
+                            // right window for k1@10 created when k1@11 is processed
+                            new KeyValueTimestamp<>("[k1@11/16]", 1L, 11L),
+                            // left window for k1@11 created when k1@11 is processed
+                            new KeyValueTimestamp<>("[k1@6/11]", 2L, 11L),
+                            // left window for k1@10 updated when k1@10 is processed
+                            new KeyValueTimestamp<>("[k1@5/10]", 2L, 10L),
+                            // left window for k1@11 updated when k1@10 is processed
+                            new KeyValueTimestamp<>("[k1@6/11]", 3L, 11L),
+                            // right window for k1@10 updated when k1@13 is processed
+                            new KeyValueTimestamp<>("[k1@11/16]", 2L, 13L),
+                            // right window for k1@11 created when k1@13 is processed
+                            new KeyValueTimestamp<>("[k1@12/17]", 1L, 13L),
+                            // left window for k1@13 created when k1@13 is processed
+                            new KeyValueTimestamp<>("[k1@8/13]", 4L, 13L),
+                            // left window for k1@10 updated when k1@10 is processed
+                            new KeyValueTimestamp<>("[k1@5/10]", 3L, 10L),
+                            // left window for k1@11 updated when k1@10 is processed
+                            new KeyValueTimestamp<>("[k1@6/11]", 4L, 11L),
+                            // left window for k1@13 updated when k1@10 is processed
+                            new KeyValueTimestamp<>("[k1@8/13]", 5L, 13L),
+                            // left window for k1@24 created when k1@24 is processed
+                            new KeyValueTimestamp<>("[k1@19/24]", 1L, 24L),
+                            // left window for k1@10 updated when k1@5 is processed
+                            new KeyValueTimestamp<>("[k1@5/10]", 4L, 10L),
+                            // left window for k1@10 updated when k1@7 is processed
+                            new KeyValueTimestamp<>("[k1@5/10]", 5L, 10L),
+                            // left window for k1@11 updated when k1@7 is processed
+                            new KeyValueTimestamp<>("[k1@6/11]", 5L, 11L),
+                            new KeyValueTimestamp<>("[k1@85/90]", 1L, 90L)
+                            )
+            );
+            verify(
+                    drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                    asList(
+                            new KeyValueTimestamp<>("[k1@5/10]", 5L, 10L),
+                            new KeyValueTimestamp<>("[k1@6/11]", 5L, 11L),
+                            new KeyValueTimestamp<>("[k1@8/13]", 5L, 13L),
+                            new KeyValueTimestamp<>("[k1@11/16]", 2L, 13L),
+                            new KeyValueTimestamp<>("[k1@12/17]", 1L, 13L),
+                            new KeyValueTimestamp<>("[k1@19/24]", 1L, 24L)
+                            )
             );
         }
     }

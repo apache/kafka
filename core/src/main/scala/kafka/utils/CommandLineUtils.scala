@@ -84,11 +84,12 @@ object CommandLineUtils extends Logging {
   /**
     * Check that none of the listed options are present with the combination of used options
     */
-  def checkInvalidArgsSet(parser: OptionParser, options: OptionSet, usedOptions: Set[OptionSpec[_]], invalidOptions: Set[OptionSpec[_]]): Unit = {
+  def checkInvalidArgsSet(parser: OptionParser, options: OptionSet, usedOptions: Set[OptionSpec[_]], invalidOptions: Set[OptionSpec[_]],
+                         trailingAdditionalMessage: Option[String] = None): Unit = {
     if (usedOptions.count(options.has) == usedOptions.size) {
       for (arg <- invalidOptions) {
         if (options.has(arg))
-          printUsageAndDie(parser, "Option combination \"" + usedOptions.mkString(",") + "\" can't be used with option \"" + arg + "\"")
+          printUsageAndDie(parser, "Option combination \"" + usedOptions.mkString(",") + "\" can't be used with option \"" + arg + "\"" + trailingAdditionalMessage.getOrElse(""))
       }
     }
   }
