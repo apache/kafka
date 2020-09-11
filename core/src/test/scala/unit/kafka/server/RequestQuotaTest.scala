@@ -560,6 +560,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
           new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
 
+        case ApiKeys.ALTER_ISR =>
+          new AlterIsrRequest.Builder(new AlterIsrRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

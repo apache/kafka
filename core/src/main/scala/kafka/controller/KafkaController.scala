@@ -1816,25 +1816,27 @@ class KafkaController(val config: KafkaConfig,
 
   private def processAlterIsr(brokerId: Int, brokerEpoch: Long, isrsToAlter: Map[TopicPartition, LeaderAndIsr],
                               callback: AlterIsrCallback): Unit = {
+
+    // Handle a few short-circuits
+    if (!isActive) {
+      callback.apply(Right(Errors.NOT_CONTROLLER))
+      return
+    }
+
+    val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
+    if (brokerEpochOpt.isEmpty) {
+      info(s"Ignoring AlterIsr due to unknown broker $brokerId")
+      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
+      return
+    }
+
+    if (!brokerEpochOpt.contains(brokerEpoch)) {
+      info(s"Ignoring AlterIsr due to stale broker epoch $brokerEpoch for broker $brokerId")
+      callback.apply(Right(Errors.STALE_BROKER_EPOCH))
+      return
+    }
+
     val response = try {
-      if (!isActive) {
-        Right(Errors.NOT_CONTROLLER)
-        return
-      }
-
-      val brokerEpochOpt = controllerContext.liveBrokerIdAndEpochs.get(brokerId)
-      if (brokerEpochOpt.isEmpty) {
-        info(s"Ignoring AlterIsr due to unknown broker $brokerId")
-        Right(Errors.STALE_BROKER_EPOCH)
-        return
-      }
-
-      if (!brokerEpochOpt.contains(brokerEpoch)) {
-        info(s"Ignoring AlterIsr due to stale broker epoch $brokerEpoch for broker $brokerId")
-        Right(Errors.STALE_BROKER_EPOCH)
-        return
-      }
-
       val partitionResponses: mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] =
         mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
 

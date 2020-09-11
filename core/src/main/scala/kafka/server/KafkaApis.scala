@@ -3044,17 +3044,18 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAlterIsrRequest(request: RequestChannel.Request): Unit = {
     val alterIsrRequest = request.body[AlterIsrRequest]
 
-    authorizeClusterOperation(request, CLUSTER_ACTION);
-
     if (!controller.isActive) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         alterIsrRequest.getErrorResponse(requestThrottleMs, Errors.NOT_CONTROLLER.exception()))
-    } else {
+    } else if (authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME)) {
       controller.alterIsrs(alterIsrRequest.data,
         alterIsrResp => sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AlterIsrResponse(alterIsrResp.setThrottleTimeMs(requestThrottleMs))
         )
       )
+    } else {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        alterIsrRequest.getErrorResponse(requestThrottleMs, Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
   }
 

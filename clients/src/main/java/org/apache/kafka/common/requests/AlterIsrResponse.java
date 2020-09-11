@@ -50,4 +50,9 @@ public class AlterIsrResponse extends AbstractResponse {
     protected Struct toStruct(short version) {
         return data.toStruct(version);
     }
+
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
+    }
 }
