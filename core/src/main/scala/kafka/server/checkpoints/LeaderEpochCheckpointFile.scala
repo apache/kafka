@@ -58,7 +58,7 @@ object LeaderEpochCheckpointFile {
  * -----checkpoint file begin------
  * 0                <- LeaderEpochCheckpointFile.currentVersion
  * 2                <- following entries size
- * 0  1     <- the format is: leader_epoch(int32) end_offset(int64)
+ * 0  1     <- the format is: leader_epoch(int32) start_offset(int64)
  * 1  2
  * -----checkpoint file end----------
  */

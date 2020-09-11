@@ -203,10 +203,10 @@ class LogCleaner(initialConfig: CleanerConfig,
   }
 
   /**
-   * Update checkpoint file to remove topics and partitions that no longer exist
+   * Update checkpoint file to remove partitions if necessary.
    */
-  def updateCheckpoints(dataDir: File, topicPartitionToBeRemoved: Option[TopicPartition] = None): Unit = {
-    cleanerManager.updateCheckpoints(dataDir, update=None, topicPartitionToBeRemoved)
+  def updateCheckpoints(dataDir: File, partitionToRemove: Option[TopicPartition] = None): Unit = {
+    cleanerManager.updateCheckpoints(dataDir, partitionToRemove = partitionToRemove)
   }
 
   /**
