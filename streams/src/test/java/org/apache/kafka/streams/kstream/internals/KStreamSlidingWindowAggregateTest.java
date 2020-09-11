@@ -241,17 +241,20 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic1.pipeInput("A", "2", 20L);
             inputTopic1.pipeInput("A", "3", 22L);
             inputTopic1.pipeInput("A", "4", 15L);
+
             inputTopic1.pipeInput("B", "1", 12L);
             inputTopic1.pipeInput("B", "2", 13L);
             inputTopic1.pipeInput("B", "3", 18L);
             inputTopic1.pipeInput("B", "4", 19L);
             inputTopic1.pipeInput("B", "5", 25L);
             inputTopic1.pipeInput("B", "6", 14L);
+
             inputTopic1.pipeInput("C", "1", 11L);
             inputTopic1.pipeInput("C", "2", 15L);
             inputTopic1.pipeInput("C", "3", 16L);
             inputTopic1.pipeInput("C", "4", 21);
             inputTopic1.pipeInput("C", "5", 23L);
+            
             inputTopic1.pipeInput("D", "4", 11L);
             inputTopic1.pipeInput("D", "2", 12L);
             inputTopic1.pipeInput("D", "3", 29L);
