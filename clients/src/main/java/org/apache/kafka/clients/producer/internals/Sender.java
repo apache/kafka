@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -418,10 +419,14 @@ public class Sender implements Runnable {
 
         if (transactionManager.hasAbortableError() || transactionManager.isAborting()) {
             if (accumulator.hasIncomplete()) {
+                // Attempt to get the last error that caused this abort.
                 RuntimeException exception = transactionManager.lastError();
+                // If there was no error, but we are still aborting,
+                // then this is most likely a case where there was no fatal error.
                 if (exception == null) {
-                    exception = new KafkaException("Failing batch since transaction was aborted");
+                    exception = new TransactionAbortedException();
                 }
+                // Since the transaction is aborted / being aborted, abort all the undrained batches.
                 accumulator.abortUndrainedBatches(exception);
             }
         }
