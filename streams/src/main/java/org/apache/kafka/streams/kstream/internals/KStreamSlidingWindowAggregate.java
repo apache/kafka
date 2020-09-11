@@ -188,7 +188,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     key,
                     key,
                     Math.max(0, inputRecordTimestamp - 2 * windows.timeDifferenceMs()),
-                    // to catch the current record's right window, if it exists, without more calls to the store
+                    // add 1 to upper bound to catch the current record's right window, if it exists, without more calls to the store
                     inputRecordTimestamp + 1)
             ) {
                 while (iterator.hasNext()) {
@@ -243,7 +243,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     key,
                     key,
                     Math.max(0, inputRecordTimestamp - 2 * windows.timeDifferenceMs()),
-                    // to catch the current record's right window, if it exists, without more calls to the store
+                    // add 1 to upper bound to catch the current record's right window, if it exists, without more calls to the store
                     inputRecordTimestamp + 1)
             ) {
                 while (iterator.hasNext()) {
@@ -253,7 +253,6 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     final long endTime = startTime + windows.timeDifferenceMs();
                     final long windowMaxRecordTimestamp = windowBeingProcessed.value.timestamp();
                     if (startTime == inputRecordTimestamp + 1) {
-                        //determine if current record's right window exists, will only be true at most once, on the first pass
                         rightWinAlreadyCreated = true;
                     } else if (endTime > inputRecordTimestamp) {
                         if (rightWinAgg == null) {
@@ -311,7 +310,7 @@ public class KStreamSlidingWindowAggregate<K, V, Agg> implements KStreamAggProce
                     key,
                     key,
                     0,
-                    // to catch the current record's right window, if it exists, without more calls to the store
+                    // add 1 to upper bound to catch the current record's right window, if it exists, without more calls to the store
                     inputRecordTimestamp + 1)
             ) {
                 while (iterator.hasNext()) {

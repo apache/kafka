@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -33,10 +32,13 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SlidingWindows;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -54,6 +56,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -100,28 +103,17 @@ public class KStreamSlidingWindowAggregateTest {
     public void testAggregateSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
-        final KTable<Windowed<String>, String> table;
-        if (inOrderIterator) {
-            table = builder
-                .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
-                .aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.TOSTRING_ADDER,
-                    Materialized.as(new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false))
-                );
-        } else {
-            table = builder
-                .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
-                .aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.TOSTRING_ADDER,
-                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
-                );
-        }
+        final WindowBytesStoreSupplier storeSupplier = inOrderIterator ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false) : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final KTable<Windowed<String>, String> table = builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                Materialized.as(storeSupplier)
+            );
+
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -165,27 +157,17 @@ public class KStreamSlidingWindowAggregateTest {
     public void testReduceSmallInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
+        final WindowBytesStoreSupplier storeSupplier = inOrderIterator ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false) : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
 
-        final KTable<Windowed<String>, String> table;
-        if (inOrderIterator) {
-            table = builder
-                .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
-                .reduce(
-                    MockReducer.STRING_ADDER,
-                    Materialized.as(new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false))
-                );
-        } else {
-            table = builder
-                .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
-                .reduce(
-                    MockReducer.STRING_ADDER,
-                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
-                );
-        }
+        final KTable<Windowed<String>, String> table = builder
+            .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .reduce(
+                MockReducer.STRING_ADDER,
+                Materialized.as(storeSupplier)
+            );
+
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table.toStream().process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -229,28 +211,16 @@ public class KStreamSlidingWindowAggregateTest {
     public void testAggregateLargeInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
-        final KTable<Windowed<String>, String> table2;
-        if (inOrderIterator) {
-            table2 = builder
-                .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
-                .aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.TOSTRING_ADDER,
-                    Materialized.as(new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false))
-                );
-        } else {
-            table2 = builder
-                .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
-                .aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.TOSTRING_ADDER,
-                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())
-                );
-        }
+        final WindowBytesStoreSupplier storeSupplier = inOrderIterator ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false) : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final KTable<Windowed<String>, String> table2 = builder
+            .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                Materialized.as(storeSupplier)
+            );
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
@@ -262,20 +232,17 @@ public class KStreamSlidingWindowAggregateTest {
             inputTopic1.pipeInput("A", "2", 20L);
             inputTopic1.pipeInput("A", "3", 22L);
             inputTopic1.pipeInput("A", "4", 15L);
-
             inputTopic1.pipeInput("B", "1", 12L);
             inputTopic1.pipeInput("B", "2", 13L);
             inputTopic1.pipeInput("B", "3", 18L);
             inputTopic1.pipeInput("B", "4", 19L);
             inputTopic1.pipeInput("B", "5", 25L);
             inputTopic1.pipeInput("B", "6", 14L);
-
             inputTopic1.pipeInput("C", "1", 11L);
             inputTopic1.pipeInput("C", "2", 15L);
             inputTopic1.pipeInput("C", "3", 16L);
             inputTopic1.pipeInput("C", "4", 21);
             inputTopic1.pipeInput("C", "5", 23L);
-
             inputTopic1.pipeInput("D", "4", 11L);
             inputTopic1.pipeInput("D", "2", 12L);
             inputTopic1.pipeInput("D", "3", 29L);
@@ -396,51 +363,27 @@ public class KStreamSlidingWindowAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
+        final WindowBytesStoreSupplier storeSupplier1 = inOrderIterator ? new InOrderMemoryWindowStoreSupplier("InOrder1", 50000L, 10L, false) : Stores.inMemoryWindowStore("Reverse1", Duration.ofMillis(50000), Duration.ofMillis(10), false);
+        final WindowBytesStoreSupplier storeSupplier2 = inOrderIterator ? new InOrderMemoryWindowStoreSupplier("InOrder2", 50000L, 10L, false) : Stores.inMemoryWindowStore("Reverse2", Duration.ofMillis(50000), Duration.ofMillis(10), false);
 
-        final KTable<Windowed<String>, String> table1;
-        final KTable<Windowed<String>, String> table2;
-
-        if (inOrderIterator) {
-            table1 = builder
-                .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
-                .aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.TOSTRING_ADDER,
-                    Materialized.as(new InOrderMemoryWindowStoreSupplier("InOrder1", 50000L, 10L, false))
-                );
-
-            table2 = builder
+        final KTable<Windowed<String>, String> table1 = builder
+            .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                Materialized.as(storeSupplier1)
+            );
+        final KTable<Windowed<String>, String> table2 = builder
                 .stream(topic2, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
                 .aggregate(
                     MockInitializer.STRING_INIT,
                     MockAggregator.TOSTRING_ADDER,
-                    Materialized.as(new InOrderMemoryWindowStoreSupplier("InOrder2", 50000L, 10L, false))
+                    Materialized.as(storeSupplier2)
                 );
-        } else {
-            table1 = builder
-                .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
-                .aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.TOSTRING_ADDER,
-                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())
-                );
-
-            table2 = builder
-                .stream(topic2, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
-                .aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.TOSTRING_ADDER,
-                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic2-Canonized").withValueSerde(Serdes.String())
-                );
-        }
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
@@ -630,29 +573,17 @@ public class KStreamSlidingWindowAggregateTest {
     public void testEarlyRecordsLargeInput() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
+        final WindowBytesStoreSupplier storeSupplier = inOrderIterator ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false) : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
 
-        final KTable<Windowed<String>, String> table2;
-        if (inOrderIterator) {
-            table2 = builder
+        final KTable<Windowed<String>, String> table2 = builder
                 .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
                 .aggregate(
                     MockInitializer.STRING_INIT,
                     MockAggregator.TOSTRING_ADDER,
-                    Materialized.as(new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false))
+                    Materialized.as(storeSupplier)
                 );
-        } else {
-            table2 = builder
-                .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(50)))
-                .aggregate(
-                    MockInitializer.STRING_INIT,
-                    MockAggregator.TOSTRING_ADDER,
-                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic-Canonized").withValueSerde(Serdes.String())
-                );
-        }
 
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
@@ -756,7 +687,10 @@ public class KStreamSlidingWindowAggregateTest {
                 .stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(100)))
-                .aggregate(MockInitializer.STRING_INIT, MockAggregator.toStringInstance("+"), Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()));
+                .aggregate(
+                    MockInitializer.STRING_INIT,
+                    MockAggregator.toStringInstance("+"),
+                    Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()));
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
 
@@ -774,17 +708,17 @@ public class KStreamSlidingWindowAggregateTest {
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
+        final WindowBytesStoreSupplier storeSupplier = inOrderIterator ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false) : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
         stream1.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(90L)))
+                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(10), ofMillis(90)))
                 .aggregate(
-                        () -> "",
-                        MockAggregator.toStringInstance("+"),
-                        Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonicalized").withValueSerde(Serdes.String()).withCachingDisabled().withLoggingDisabled()
+                        MockInitializer.STRING_INIT,
+                        MockAggregator.TOSTRING_ADDER,
+                        Materialized.as(storeSupplier)
                 )
                 .toStream()
-                .map((key, value) -> new KeyValue<>(key.toString(), value))
                 .to("output");
 
         props.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, builtInMetricsVersion);
@@ -821,9 +755,9 @@ public class KStreamSlidingWindowAggregateTest {
                     // left window for k@15
                     "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[15] window=[5,15] expiration=[110] streamTime=[200]"
             ));
-            final TestOutputTopic<String, String> outputTopic =
-                    driver.createOutputTopic("output", new StringDeserializer(), new StringDeserializer());
-            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>("[k@190/200]", "+100", null, 200L)));
+            final TestOutputTopic<Windowed<String>, String> outputTopic =
+                    driver.createOutputTopic("output", new TimeWindowedDeserializer<>(new StringDeserializer(), 10L), new StringDeserializer());
+            assertThat(outputTopic.readRecord(), equalTo(new TestRecord<>(new Windowed<>("k", new TimeWindow(190, 200)), "0+100", null, 200L)));
             assertTrue(outputTopic.isEmpty());
         }
     }
@@ -834,6 +768,7 @@ public class KStreamSlidingWindowAggregateTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
+        final WindowBytesStoreSupplier storeSupplier = inOrderIterator ? new InOrderMemoryWindowStoreSupplier("InOrder", 50000L, 10L, false) : Stores.inMemoryWindowStore("Reverse", Duration.ofMillis(50000), Duration.ofMillis(10), false);
 
         final KTable<Windowed<String>, String> table = builder
             .stream(topic1, Consumed.with(Serdes.String(), Serdes.String()))
@@ -850,7 +785,7 @@ public class KStreamSlidingWindowAggregateTest {
                     aggregate = String.valueOf(ch);
                     return aggregate;
                 },
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>as("topic1-Canonized").withValueSerde(Serdes.String())
+                Materialized.as(storeSupplier)
             );
         final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         table.toStream().process(supplier);
