@@ -114,7 +114,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            //doTest()
+            doTest()
             stash includes: '**/build/reports/checkstyle/*', name: 'jdk8-checkstyle'
             stash includes: '**/build/reports/spotbugs/*', name: 'jdk8-spotbugs'
             tryStreamsArchetype()
@@ -172,8 +172,8 @@ pipeline {
             includes: '**/build/reports/checkstyle/*',
             keepAll: false,
             reportDir: '',
-            reportFiles: '**/main.html',
-            reportName: 'Checkstyle Report',
+            reportFiles: '**/*.html',
+            reportName: 'Checkstyle Reports',
             reportTitles: ''])
 
           unstash 'jdk8-spotbugs'
@@ -183,8 +183,8 @@ pipeline {
             includes: '**/build/reports/spotbugs/*',
             keepAll: false,
             reportDir: '',
-            reportFiles: '**/main.html',
-            reportName: 'Spotbugs Report',
+            reportFiles: '**/*.html',
+            reportName: 'Spotbugs Reports',
             reportTitles: ''])
         }
       }
