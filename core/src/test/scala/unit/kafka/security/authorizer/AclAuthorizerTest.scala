@@ -350,6 +350,64 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testSubnetCIDRNotationACL(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val cidrBlock = "192.168.1.0/24"
+    val host1 = InetAddress.getByName("192.168.1.1")
+    val host2 = InetAddress.getByName("192.168.1.2")
+    val host3 = InetAddress.getByName("192.168.2.1")
+
+    val acl = new AccessControlEntry(user1.toString, cidrBlock, READ, ALLOW)
+
+    changeAclAndVerify(Set.empty, Set(acl), Set.empty)
+
+    val host1Context = newRequestContext(user1, host1)
+    assertTrue("User1 should have READ access from host1", authorize(aclAuthorizer, host1Context, READ, resource))
+
+    val host2Context = newRequestContext(user1, host2)
+    assertTrue("User1 should have READ access from host2", authorize(aclAuthorizer, host2Context, READ, resource))
+
+    val host3Context = newRequestContext(user1, host3)
+    assertFalse("User1 should not have READ access from host3", authorize(aclAuthorizer, host3Context, READ, resource))
+  }
+
+  @Test
+  def testRangeNotationACL(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val range = "10.0.0.10-10.0.0.100"
+    val host1 = InetAddress.getByName("10.0.0.11")
+    val host2 = InetAddress.getByName("10.0.0.12")
+    val host3 = InetAddress.getByName("10.0.0.5")
+
+    val acl = new AccessControlEntry(user1.toString, range, READ, ALLOW)
+
+    changeAclAndVerify(Set.empty, Set(acl), Set.empty)
+
+    val host1Context = newRequestContext(user1, host1)
+    assertTrue("User1 should have READ access from host1", authorize(aclAuthorizer, host1Context, READ, resource))
+
+    val host2Context = newRequestContext(user1, host2)
+    assertTrue("User1 should have READ access from host2", authorize(aclAuthorizer, host2Context, READ, resource))
+
+    val host3Context = newRequestContext(user1, host3)
+    assertFalse("User1 should not have READ access from host3", authorize(aclAuthorizer, host3Context, READ, resource))
+  }
+
+  @Test
+  def testInvalidIPFormat(): Unit = {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val range = "123.123.123.1234"
+    val host1 = InetAddress.getByName("10.0.0.11")
+
+    val acl = new AccessControlEntry(user1.toString, range, READ, ALLOW)
+
+    changeAclAndVerify(Set.empty, Set(acl), Set.empty)
+
+    val host1Context = newRequestContext(user1, host1)
+    assertFalse("User1 should not have READ access from host1", authorize(aclAuthorizer, host1Context, READ, resource))
+  }
+
+  @Test
   def testLoadCache(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val acl1 = new AccessControlEntry(user1.toString, "host-1", READ, ALLOW)

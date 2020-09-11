@@ -20,6 +20,7 @@ import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import com.typesafe.scalalogging.Logger
+import com.github.jgonian.ipmath.{Ipv4, Ipv4Range}
 import kafka.api.KAFKA_2_0_IV1
 import kafka.security.authorizer.AclAuthorizer.{AclSeqs, ResourceOrdering, VersionedAcls}
 import kafka.security.authorizer.AclEntry.ResourceSeparator
@@ -404,13 +405,29 @@ class AclAuthorizer extends Authorizer with Logging {
       acl.permissionType == permissionType &&
         (acl.kafkaPrincipal == principal || acl.kafkaPrincipal == AclEntry.WildcardPrincipal) &&
         (operation == acl.operation || acl.operation == AclOperation.ALL) &&
-        (acl.host == host || acl.host == AclEntry.WildcardHost)
+        aclHostMatch(acl, host)
     }.exists { acl =>
       authorizerLogger.debug(s"operation = $operation on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
     }
   }
 
+  private def aclHostMatch(acl: AclEntry, host: String): Boolean = {
+    if (acl.host == host || acl.host == AclEntry.WildcardHost) return true
+
+    try {
+      val ipv4Range = Ipv4Range.parse(acl.host())
+      val parsedHost = Ipv4.of(host)
+
+      if (ipv4Range.contains(parsedHost)) {
+        return true
+      }
+
+    } catch {
+      case e: IllegalArgumentException => return false
+    }
+    false
+  }
   private def loadCache(): Unit = {
     lock synchronized  {
       ZkAclStore.stores.foreach(store => {
