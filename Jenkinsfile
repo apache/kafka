@@ -59,7 +59,8 @@ def doStreamsArchetype() {
     '''
 
     dir('test-streams-archetype') {
-      sh """ // Note the double quotes for variable interpolation
+      // Note the double quotes for variable interpolation
+      sh """ 
         echo "Y" | mvn archetype:generate \
             -DarchetypeCatalog=local \
             -DarchetypeGroupId=org.apache.kafka \
