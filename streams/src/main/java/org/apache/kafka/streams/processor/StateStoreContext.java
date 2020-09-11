@@ -24,7 +24,7 @@ import java.io.File;
 import java.util.Map;
 
 /**
- * Processor context interface.
+ * State store context interface.
  */
 public interface StateStoreContext {
 
@@ -86,7 +86,7 @@ public interface StateStoreContext {
      * Returns all the application config properties as key/value pairs.
      *
      * <p> The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
-     * object and associated to the ProcessorContext.
+     * object and associated to the StateStoreContext.
      *
      * <p> The type of the values is dependent on the {@link org.apache.kafka.common.config.ConfigDef.Type type} of the property
      * (e.g. the value of {@link org.apache.kafka.streams.StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG DEFAULT_KEY_SERDE_CLASS_CONFIG}
@@ -102,7 +102,7 @@ public interface StateStoreContext {
      * stripping the prefix.
      *
      * <p> The config properties are defined in the {@link org.apache.kafka.streams.StreamsConfig}
-     * object and associated to the ProcessorContext.
+     * object and associated to the StateStoreContext.
      *
      * @param prefix the properties prefix
      * @return the key/values matching the given prefix from the StreamsConfig properties.
