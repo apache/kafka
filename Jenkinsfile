@@ -50,10 +50,7 @@ def doStreamsArchetype() {
          || { echo 'Could not install kafka-streams.jar (and dependencies) locally`'; exit 1; }
   '''
 
-  sh '''
-    version=`grep "^version=" gradle.properties | cut -d= -f 2` \
-        || { echo 'Could not get version from `gradle.properties`'; exit 1; }
-  '''
+  VERSION = sh(script: 'grep "^version=" gradle.properties | cut -d= -f 2')
 
   dir('streams/quickstart') {
     sh '''
@@ -61,14 +58,13 @@ def doStreamsArchetype() {
           || { echo 'Could not `mvn install` streams quickstart archetype'; exit 1; }
     '''
 
-/*
     dir('test-streams-archetype') {
       sh '''
         echo "Y" | mvn archetype:generate \
             -DarchetypeCatalog=local \
             -DarchetypeGroupId=org.apache.kafka \
             -DarchetypeArtifactId=streams-quickstart-java \
-            -DarchetypeVersion=$version \
+            -DarchetypeVersion=${VERSION} \
             -DgroupId=streams.examples \
             -DartifactId=streams.examples \
             -Dversion=0.1 \
@@ -82,7 +78,6 @@ def doStreamsArchetype() {
               || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
         '''
       }
-*/
     }
   }
 }
@@ -118,7 +113,7 @@ pipeline {
           steps {
             setupGradle()
             doValidation()
-            doTest()
+            //doTest()
             stash includes: '**/build/reports/checkstyle/*', name: 'jdk8-checkstyle'
             stash includes: '**/build/reports/spotbugs/*', name: 'jdk8-spotbugs'
             tryStreamsArchetype()
