@@ -37,7 +37,7 @@ class ACLs(KafkaPathResolverMixin):
         Checks if --bootstrap-server config is supported, if yes then returns a string with
         bootstrap server, otherwise returns authorizer properties for zookeeper connection.
         """
-        if not force_use_zk_connection and node.version.acl_command_supports_bootstrap_server():
+        if not force_use_zk_connection and kafka.all_nodes_acl_command_supports_bootstrap_server():
             connection_setting = "--bootstrap-server %s" % (kafka.bootstrap_servers(kafka.security_protocol))
         else:
             connection_setting = "--authorizer-properties zookeeper.connect=%s" % (kafka.zk_connect_setting())
@@ -49,7 +49,7 @@ class ACLs(KafkaPathResolverMixin):
         Return --command-config parameter to the kafka-acls.sh command. The config parameter specifies
         the security settings that AdminClient uses to connect to a secure kafka server.
         """
-        skip_command_config = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
+        skip_command_config = force_use_zk_connection or not kafka.all_nodes_acl_command_supports_bootstrap_server()
         return "" if skip_command_config else " --command-config <(echo '%s')" % (kafka.security_config.client_config())
 
     def _acl_cmd_prefix(self, kafka, node, force_use_zk_connection):
@@ -91,7 +91,7 @@ class ACLs(KafkaPathResolverMixin):
         """
         node = kafka.nodes[0]
 
-        force_use_zk_connection = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
+        force_use_zk_connection = force_use_zk_connection or not kafka.all_nodes_acl_command_supports_bootstrap_server()
 
         cmd = "%(cmd_prefix)s --add --cluster --operation=ClusterAction --allow-principal=%(principal)s" % {
             'cmd_prefix': self._acl_cmd_prefix(kafka, node, force_use_zk_connection),
@@ -110,7 +110,7 @@ class ACLs(KafkaPathResolverMixin):
         """
         node = kafka.nodes[0]
 
-        force_use_zk_connection = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
+        force_use_zk_connection = force_use_zk_connection or not kafka.all_nodes_acl_command_supports_bootstrap_server()
 
         self._add_acl_on_topic(kafka, principal, topic, "--operation=Read", node, force_use_zk_connection)
 
@@ -125,7 +125,7 @@ class ACLs(KafkaPathResolverMixin):
         """
         node = kafka.nodes[0]
 
-        force_use_zk_connection = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
+        force_use_zk_connection = force_use_zk_connection or not kafka.all_nodes_acl_command_supports_bootstrap_server()
 
         self._add_acl_on_topic(kafka, principal, topic, "--producer", node, force_use_zk_connection)
 
@@ -141,7 +141,7 @@ class ACLs(KafkaPathResolverMixin):
         """
         node = kafka.nodes[0]
 
-        force_use_zk_connection = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
+        force_use_zk_connection = force_use_zk_connection or not kafka.all_nodes_acl_command_supports_bootstrap_server()
 
         cmd = "%(cmd_prefix)s --add --topic=%(topic)s --group=%(group)s --consumer --allow-principal=%(principal)s" % {
             'cmd_prefix': self._acl_cmd_prefix(kafka, node, force_use_zk_connection),

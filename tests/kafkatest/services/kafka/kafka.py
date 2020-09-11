@@ -451,7 +451,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         set. If Admin client is not going to be used, don't set the environment variable.
         """
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
-        skip_security_settings = force_use_zk_connection or not node.version.topic_command_supports_bootstrap_server()
+        skip_security_settings = force_use_zk_connection or not self.all_nodes_topic_command_supports_bootstrap_server()
         return kafka_topic_script if skip_security_settings else \
             "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_topic_script)
 
@@ -460,8 +460,44 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         Return --command-config parameter to the kafka-topics.sh command. The config parameter specifies
         the security settings that AdminClient uses to connect to a secure kafka server.
         """
-        skip_command_config = force_use_zk_connection or not node.version.topic_command_supports_bootstrap_server()
+        skip_command_config = force_use_zk_connection or not self.all_nodes_topic_command_supports_bootstrap_server()
         return "" if skip_command_config else " --command-config <(echo '%s')" % (self.security_config.client_config())
+
+    def all_nodes_topic_command_supports_bootstrap_server(self):
+        for node in self.nodes:
+            if not node.version.topic_command_supports_bootstrap_server():
+                return False
+        return True
+
+    def all_nodes_topic_command_supports_if_not_exists_with_bootstrap_server(self):
+        for node in self.nodes:
+            if not node.version.topic_command_supports_if_not_exists_with_bootstrap_server():
+                return False
+        return True
+
+    def all_nodes_configs_command_uses_bootstrap_server(self):
+        for node in self.nodes:
+            if not node.version.kafka_configs_command_uses_bootstrap_server():
+                return False
+        return True
+
+    def all_nodes_configs_command_uses_bootstrap_server_scram(self):
+        for node in self.nodes:
+            if not node.version.kafka_configs_command_uses_bootstrap_server_scram():
+                return False
+        return True
+
+    def all_nodes_acl_command_supports_bootstrap_server(self):
+        for node in self.nodes:
+            if not node.version.acl_command_supports_bootstrap_server():
+                return False
+        return True
+
+    def all_nodes_reassign_partitions_command_supports_bootstrap_server(self):
+        for node in self.nodes:
+            if not node.version.reassign_partitions_command_supports_bootstrap_server():
+                return False
+        return True
 
     def create_topic(self, topic_cfg, node=None):
         """Run the admin tool create topic command.
@@ -475,8 +511,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Creating topic %s with settings %s",
                          topic_cfg["topic"], topic_cfg)
 
-        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server() or\
-                            (topic_cfg.get('if-not-exists', False) and not node.version.topic_command_supports_if_not_exists_with_bootstrap_server())
+        force_use_zk_connection = not self.all_nodes_topic_command_supports_bootstrap_server() or\
+                            (topic_cfg.get('if-not-exists', False) and not self.all_nodes_topic_command_supports_if_not_exists_with_bootstrap_server())
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%(kafka_topics_cmd)s %(connection_string)s --create --topic %(topic)s " % {
@@ -517,7 +553,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node = self.nodes[0]
         self.logger.info("Deleting topic %s" % topic)
 
-        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server()
+        force_use_zk_connection = not self.all_nodes_topic_command_supports_bootstrap_server()
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s %s --topic %s --delete %s" % \
@@ -531,7 +567,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
 
-        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server()
+        force_use_zk_connection = not self.all_nodes_topic_command_supports_bootstrap_server()
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s %s --topic %s --describe %s" % \
@@ -549,7 +585,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         if node is None:
             node = self.nodes[0]
 
-        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server()
+        force_use_zk_connection = not self.all_nodes_topic_command_supports_bootstrap_server()
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s %s --list %s" % (self._kafka_topics_cmd(node, force_use_zk_connection),
@@ -586,7 +622,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def _connect_setting_kafka_configs(self, node):
         # Use this for everything related to kafka-configs except User SCRAM Credentials
-        if node.version.kafka_configs_command_uses_bootstrap_server():
+        if self.all_nodes_configs_command_uses_bootstrap_server():
             return "--bootstrap-server %s --command-config <(echo '%s')" % (self.bootstrap_servers(self.security_protocol),
                                                                             self.security_config.client_config())
         else:
@@ -594,7 +630,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def _connect_setting_kafka_configs_scram(self, node):
         # Use this for kafka-configs when operating on User SCRAM Credentials
-        if node.version.kafka_configs_command_uses_bootstrap_server_scram():
+        if self.all_nodes_configs_command_uses_bootstrap_server_scram():
             return "--bootstrap-server %s --command-config <(echo '%s')" %\
                    (self.bootstrap_servers(self.security_protocol),
                     self.security_config.client_config(use_inter_broker_mechanism_for_client = True))
@@ -607,7 +643,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         set. If Admin client is not going to be used, don't set the environment variable.
         """
         kafka_acls_script = self.path.script("kafka-acls.sh", node)
-        skip_security_settings = force_use_zk_connection or not node.version.acl_command_supports_bootstrap_server()
+        skip_security_settings = force_use_zk_connection or not self.all_nodes_acl_command_supports_bootstrap_server()
         return kafka_acls_script if skip_security_settings else \
             "KAFKA_OPTS='-D%s -D%s' %s" % (KafkaService.JAAS_CONF_PROPERTY, KafkaService.KRB5_CONF, kafka_acls_script)
 
@@ -651,7 +687,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
 
     def _connect_setting_reassign_partitions(self, node):
-        if node.version.reassign_partitions_command_supports_bootstrap_server():
+        if self.all_nodes_reassign_partitions_command_supports_bootstrap_server():
             return "--bootstrap-server %s " % self.bootstrap_servers(self.security_protocol)
         else:
             return "--zookeeper %s " % self.zk_connect_setting()
@@ -785,7 +821,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """ Get in-sync replica list the given topic and partition.
         """
         node = self.nodes[0]
-        if not node.version.topic_command_supports_bootstrap_server():
+        if not self.all_nodes_topic_command_supports_bootstrap_server():
             self.logger.debug("Querying zookeeper to find in-sync replicas for topic %s and partition %d" % (topic, partition))
             zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
             partition_state = self.zk.query(zk_path, chroot=self.zk_chroot)
@@ -815,7 +851,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """ Get the assigned replicas for the given topic and partition.
         """
         node = self.nodes[0]
-        if not node.version.topic_command_supports_bootstrap_server():
+        if not self.all_nodes_topic_command_supports_bootstrap_server():
             self.logger.debug("Querying zookeeper to find assigned replicas for topic %s and partition %d" % (topic, partition))
             zk_path = "/brokers/topics/%s" % (topic)
             assignment = self.zk.query(zk_path, chroot=self.zk_chroot)
@@ -845,7 +881,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """ Get the leader replica for the given topic and partition.
         """
         node = self.nodes[0]
-        if not node.version.topic_command_supports_bootstrap_server():
+        if not self.all_nodes_topic_command_supports_bootstrap_server():
             self.logger.debug("Querying zookeeper to find leader replica for topic %s and partition %d" % (topic, partition))
             zk_path = "/brokers/topics/%s/partitions/%d/state" % (topic, partition)
             partition_state = self.zk.query(zk_path, chroot=self.zk_chroot)
@@ -946,7 +982,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         Checks if --bootstrap-server config is supported, if yes then returns a string with
         bootstrap server, otherwise returns zookeeper connection string.
         """
-        if node.version.topic_command_supports_bootstrap_server() and not force_use_zk_connection:
+        if not force_use_zk_connection and self.all_nodes_topic_command_supports_bootstrap_server():
             connection_setting = "--bootstrap-server %s" % (self.bootstrap_servers(self.security_protocol))
         else:
             connection_setting = "--zookeeper %s" % (self.zk_connect_setting())
