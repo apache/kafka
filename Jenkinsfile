@@ -59,7 +59,7 @@ def doStreamsArchetype() {
     '''
 
     dir('test-streams-archetype') {
-      sh '''
+      sh """ // Note the double quotes for variable interpolation
         echo "Y" | mvn archetype:generate \
             -DarchetypeCatalog=local \
             -DarchetypeGroupId=org.apache.kafka \
@@ -70,7 +70,7 @@ def doStreamsArchetype() {
             -Dversion=0.1 \
             -Dpackage=myapps \
             || { echo 'Could not create new project using streams quickstart archetype'; exit 1; }
-      '''
+      """
 
       dir('streams.examples') {
         sh '''
