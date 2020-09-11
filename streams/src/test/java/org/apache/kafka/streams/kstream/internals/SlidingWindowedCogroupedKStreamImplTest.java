@@ -20,9 +20,12 @@ package org.apache.kafka.streams.kstream.internals;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
+import java.util.HashSet;
 import java.util.Properties;
+import java.util.Set;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -145,7 +148,7 @@ public class SlidingWindowedCogroupedKStreamImplTest {
     }
 
     @Test
-    public void slidingWindowAggregateTestStreamsTest() {
+    public void slidingWindowAggregateStreamsTest() {
         final KTable<Windowed<String>, String> customers = windowedCogroupedStream.aggregate(
                 MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
@@ -165,26 +168,36 @@ public class SlidingWindowedCogroupedKStreamImplTest {
             testInputTopic.pipeInput("k2", "B", 504);
             testInputTopic.pipeInput("k1", "B", 504);
 
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 500);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A", 501);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A", 501);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A", 502);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A", 502);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+B", 503);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B", 503);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A+B", 503);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+B", 503);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B", 503);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A+B", 503);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+B+B", 504);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B+B", 504);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+B", 504);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k2", "0+A+A+B+B", 504);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+B+B", 504);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B+B", 504);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+B", 504);
-            assertOutputKeyValueTimestamp(testOutputTopic, "k1", "0+A+A+B+B", 504);
+            final Set<TestRecord<String, String>> results = new HashSet<>();
+            while (!testOutputTopic.isEmpty()) {
+                final TestRecord<Windowed<String>, String> realRecord = testOutputTopic.readRecord();
+                final TestRecord<String, String> nonWindowedRecord = new TestRecord<>(
+                    realRecord.getKey().key(), realRecord.getValue(), null, realRecord.timestamp());
+                results.add(nonWindowedRecord);
+            }
+            final Set<TestRecord<String, String>> expected = new HashSet<>();
+            expected.add(new TestRecord<>("k1", "0+A", null, 500L));
+            expected.add(new TestRecord<>("k2", "0+A", null, 500L));
+            expected.add(new TestRecord<>("k2", "0+A", null, 501L));
+            expected.add(new TestRecord<>("k2", "0+A+A", null, 501L));
+            expected.add(new TestRecord<>("k1", "0+A", null, 502L));
+            expected.add(new TestRecord<>("k1", "0+A+A", null, 502L));
+            expected.add(new TestRecord<>("k1", "0+A+B", null, 503L));
+            expected.add(new TestRecord<>("k1", "0+B", null, 503L));
+            expected.add(new TestRecord<>("k1", "0+A+A+B", null, 503L));
+            expected.add(new TestRecord<>("k2", "0+A+B", null, 503L));
+            expected.add(new TestRecord<>("k2", "0+B", null, 503L));
+            expected.add(new TestRecord<>("k2", "0+A+A+B", null, 503L));
+            expected.add(new TestRecord<>("k2", "0+A+B+B", null, 504L));
+            expected.add(new TestRecord<>("k2", "0+B+B", null, 504L));
+            expected.add(new TestRecord<>("k2", "0+B", null, 504L));
+            expected.add(new TestRecord<>("k2", "0+A+A+B+B", null, 504L));
+            expected.add(new TestRecord<>("k1", "0+A+B+B", null, 504L));
+            expected.add(new TestRecord<>("k1", "0+B+B", null, 504L));
+            expected.add(new TestRecord<>("k1", "0+B", null, 504L));
+            expected.add(new TestRecord<>("k1", "0+A+A+B+B", null, 504L));
+
+            assertEquals(expected, results);
         }
     }
 
