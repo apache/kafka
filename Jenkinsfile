@@ -50,7 +50,7 @@ def doStreamsArchetype() {
          || { echo 'Could not install kafka-streams.jar (and dependencies) locally`'; exit 1; }
   '''
 
-  VERSION = sh(script: 'grep "^version=" gradle.properties | cut -d= -f 2')
+  VERSION = sh(script: 'grep "^version=" gradle.properties | cut -d= -f 2', returnStdout: true).trim()
 
   dir('streams/quickstart') {
     sh '''
