@@ -53,7 +53,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
                           val brokerId: Int,
                           val brokerEpochSupplier: () => Long) extends AlterIsrManager with Logging with KafkaMetricsGroup {
 
-  private val unsentIsrUpdates: mutable.Map[TopicPartition, AlterIsrItem] = new mutable.HashMap[TopicPartition, AlterIsrItem]()
+  private val unsentIsrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
   private val lastIsrChangeMs = new AtomicLong(0)
   private val lastIsrPropagationMs = new AtomicLong(0)
 
@@ -61,7 +61,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
   override def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Unit = {
     unsentIsrUpdates synchronized {
-      unsentIsrUpdates(alterIsrItem.topicPartition) = alterIsrItem
+      unsentIsrUpdates.enqueue(alterIsrItem)
       lastIsrChangeMs.set(time.milliseconds)
       // Rather than sending right away, we'll delay at most 50ms to allow for batching of ISR changes happening
       // in fast succession
@@ -73,8 +73,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
   override def clearPending(topicPartition: TopicPartition): Unit = {
     unsentIsrUpdates synchronized {
-      // when we get a new LeaderAndIsr, we clear out any pending requests
-      unsentIsrUpdates.remove(topicPartition)
+      unsentIsrUpdates.dequeueAll(_.topicPartition == topicPartition)
     }
   }
 
@@ -82,11 +81,9 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
     val now = time.milliseconds()
 
     // Minimize time in this lock since it's also held during fetch hot path
-    val copy = unsentIsrUpdates synchronized {
-      val copy = unsentIsrUpdates.clone()
-      unsentIsrUpdates.clear()
+    val copy: Seq[AlterIsrItem] = unsentIsrUpdates synchronized {
       lastIsrPropagationMs.set(now)
-      copy
+      unsentIsrUpdates.dequeueAll(_ => true)
     }
 
     // Send the request and clear the optional. We rely on BrokerToControllerChannelManager for one limiting to one
@@ -95,7 +92,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
     scheduledRequest = None
   }
 
-  def buildAndSendRequest(isrUpdates: mutable.Map[TopicPartition, AlterIsrItem]): Unit = {
+  def buildAndSendRequest(isrUpdates: Seq[AlterIsrItem]): Unit = {
     if (isrUpdates.nonEmpty) {
       val message = new AlterIsrRequestData()
         .setBrokerId(brokerId)
@@ -104,7 +101,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
 
       // N.B., these callbacks are run inside the leaderIsrUpdateLock write lock
       val callbacks = new mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr] => Unit]()
-      isrUpdates.values.groupBy(_.topicPartition.topic).foreach(entry => {
+      isrUpdates.groupBy(_.topicPartition.topic).foreach(entry => {
         val topicPart = new AlterIsrRequestData.TopicData()
           .setName(entry._1)
           .setPartitions(new util.ArrayList())
@@ -126,7 +123,7 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
         val data: AlterIsrResponseData = body.data
         Errors.forCode(data.errorCode) match {
           case Errors.NONE =>
-            debug(s"Controller handled AlterIsr request")
+            debug(s"Controller successfully handled AlterIsr request")
             data.topics.forEach(topic => {
               topic.partitions().forEach(partition => {
                 if (partition.errorCode() == Errors.NONE.code()) {
