@@ -486,7 +486,9 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
   }
 
   @Test
-  def shouldNotAlterNonQuotaClientConfigUsingBootstrapServer(): Unit = {
+  def shouldNotAlterNonQuotaNonScramUserOrClientConfigUsingBootstrapServer(): Unit = {
+    // when using --bootstrap-server, it should be illegal to alter anything that is not a quota and not a SCRAM credential
+    // for both user and client entities
     val node = new Node(1, "localhost", 9092)
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
 
@@ -501,9 +503,126 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     }
 
     verifyCommand("users", "--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000,some_config=10")
+    verifyCommand("users", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret],some_config=10")
     verifyCommand("clients", "--add-config", "some_config=10")
-    verifyCommand("users", "--delete-config", "consumer_byte_rate=20000,some_config=10")
-    verifyCommand("clients", "--delete-config", "some_config=10")
+    verifyCommand("users", "--delete-config", "consumer_byte_rate,some_config")
+    verifyCommand("users", "--delete-config", "SCRAM-SHA-256,some_config")
+    verifyCommand("clients", "--delete-config", "some_config")
+  }
+
+  @Test
+  def shouldNotAlterScramClientConfigUsingBootstrapServer(): Unit = {
+    // when using --bootstrap-server, it should be illegal to alter SCRAM credentials for client entities
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
+
+    def verifyCommand(entityType: String, alterOpts: String*): Unit = {
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+        "--entity-type", entityType, "--entity-name", "admin",
+        "--alter") ++ alterOpts)
+      val e = intercept[IllegalArgumentException] {
+        ConfigCommand.alterConfig(mockAdminClient, opts)
+      }
+      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("SCRAM-SHA-256"))
+    }
+
+    verifyCommand("clients", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand("clients", "--delete-config", "SCRAM-SHA-256")
+  }
+
+  @Test
+  def shouldNotCreateUserScramCredentialConfigWithUnderMinimumIterationsUsingBootstrapServer(): Unit = {
+    // when using --bootstrap-server, it should be illegal to create a SCRAM credential for a user
+    // with an iterations value less than the minimum
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
+
+    def verifyCommand(entityType: String, alterOpts: String*): Unit = {
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+        "--entity-type", entityType, "--entity-name", "admin",
+        "--alter") ++ alterOpts)
+      val e = intercept[IllegalArgumentException] {
+        ConfigCommand.alterConfig(mockAdminClient, opts)
+      }
+      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("SCRAM-SHA-256"))
+    }
+
+    verifyCommand("users", "--add-config", "SCRAM-SHA-256=[iterations=100,password=foo-secret]")
+  }
+
+  @Test
+  def shouldNotAlterUserScramCredentialAndClientQuotaConfigsSimultaneouslyUsingBootstrapServer(): Unit = {
+    // when using --bootstrap-server, it should be illegal to alter both SCRAM credentials and quotas for user entities
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node)
+
+    def verifyCommand(alterOpts: String*): Unit = {
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092", "--alter") ++ alterOpts)
+      val e = intercept[IllegalArgumentException] {
+        ConfigCommand.alterConfig(mockAdminClient, opts)
+      }
+      assertTrue(s"Unexpected exception: $e", e.getMessage.contains("SCRAM-SHA-256"))
+    }
+
+    verifyCommand("--entity-type", "users", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]",
+      "--entity-type", "users", "--entity-name", "admin", "--delete-config", "consumer_byte_rate")
+    verifyCommand("--entity-type", "users", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]",
+      "--entity-type", "users", "--entity-name", "admin1", "--delete-config", "consumer_byte_rate")
+    verifyCommand("--entity-type", "users", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256",
+      "--entity-type", "users", "--entity-name", "admin", "--add-config", "consumer_byte_rate=20000")
+    verifyCommand("--entity-type", "users", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256",
+      "--entity-type", "users", "--entity-name", "admin1", "--add-config", "consumer_byte_rate=20000")
+
+    verifyCommand("--entity-type", "clients", "--entity-name", "admin", "--delete-config", "consumer_byte_rate",
+      "--entity-type", "users", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand( "--entity-type", "clients", "--entity-name", "admin1", "--delete-config", "consumer_byte_rate",
+      "--entity-type", "users", "--entity-name", "admin", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand("--entity-type", "clients", "--entity-name", "admin", "--add-config", "consumer_byte_rate=20000",
+      "--entity-type", "users", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256")
+    verifyCommand("--entity-type", "users", "--entity-name", "admin1", "--add-config", "consumer_byte_rate=20000",
+      "--entity-type", "users", "--entity-name", "admin", "--delete-config", "SCRAM-SHA-256")
+  }
+
+  @Test
+  def shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer(): Unit = {
+    // User SCRAM credentials should not be described when specifying
+    // --describe --entity-type users --entity-default (or --user-defaults) with --bootstrap-server
+    val describeFuture = new KafkaFutureImpl[util.Map[ClientQuotaEntity, util.Map[String, java.lang.Double]]]
+    describeFuture.complete(Map((new ClientQuotaEntity(Map("" -> "").asJava) -> Map(("request_percentage" -> Double.box(50.0))).asJava)).asJava)
+    val describeClientQuotasResult: DescribeClientQuotasResult = EasyMock.createNiceMock(classOf[DescribeClientQuotasResult])
+    EasyMock.expect(describeClientQuotasResult.entities()).andReturn(describeFuture).times(2)
+    EasyMock.replay(describeClientQuotasResult)
+
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeClientQuotas(filter: ClientQuotaFilter, options: DescribeClientQuotasOptions):  DescribeClientQuotasResult = {
+        describeClientQuotasResult
+      }
+      override def describeUserScramCredentials(users: util.List[String], options: DescribeUserScramCredentialsOptions): DescribeUserScramCredentialsResult = {
+        throw new IllegalStateException("Incorrectly described SCRAM credentials when specifying --entity-default with --bootstrap-server")
+      }
+    }
+
+    def verifyCommand(expectedMessage: String, alterOrDescribeOpt: String, requestOpts: String*): Unit = {
+      val opts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+        alterOrDescribeOpt) ++ requestOpts)
+      if (alterOrDescribeOpt.equals("--describe"))
+        ConfigCommand.describeConfig(mockAdminClient, opts) // fails if describeUserScramCredentials() is invoked
+      else {
+        val e = intercept[IllegalArgumentException] {
+          ConfigCommand.alterConfig(mockAdminClient, opts)
+        }
+        assertTrue(s"Unexpected exception: $e", e.getMessage.contains(expectedMessage))
+      }
+    }
+
+    val expectedMsg = "The use of --entity-default or --user-defaults is not allowed with User SCRAM Credentials using --bootstrap-server."
+    verifyCommand(expectedMsg, "--alter", "--entity-type", "users", "--entity-default", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand(expectedMsg, "--alter", "--entity-type", "users", "--entity-default", "--delete-config", "SCRAM-SHA-256")
+    verifyCommand(expectedMsg, "--describe", "--entity-type", "users", "--entity-default")
+    verifyCommand(expectedMsg, "--alter", "--user-defaults", "--add-config", "SCRAM-SHA-256=[iterations=8192,password=foo-secret]")
+    verifyCommand(expectedMsg, "--alter", "--user-defaults", "--delete-config", "SCRAM-SHA-256")
+    verifyCommand(expectedMsg, "--describe", "--user-defaults")
   }
 
   @Test

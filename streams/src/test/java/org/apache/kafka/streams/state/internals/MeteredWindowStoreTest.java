@@ -127,7 +127,8 @@ public class MeteredWindowStoreTest {
 
     @Before
     public void setUp() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion);
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test", builtInMetricsVersion, new MockTime());
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -358,7 +359,8 @@ public class MeteredWindowStoreTest {
         assertNull(store.fetch("a", 0));
     }
 
-    private interface CachedWindowStore extends WindowStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
+    private interface CachedWindowStore extends WindowStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
+    }
 
     @SuppressWarnings("unchecked")
     @Test
@@ -426,9 +428,9 @@ public class MeteredWindowStoreTest {
 
     private List<MetricName> storeMetrics() {
         return metrics.metrics()
-                      .keySet()
-                      .stream()
-                      .filter(name -> name.group().equals(storeLevelGroup) && name.tags().equals(tags))
-                      .collect(Collectors.toList());
+            .keySet()
+            .stream()
+            .filter(name -> name.group().equals(storeLevelGroup) && name.tags().equals(tags))
+            .collect(Collectors.toList());
     }
 }

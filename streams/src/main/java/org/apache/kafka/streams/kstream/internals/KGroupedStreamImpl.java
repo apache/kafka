@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
@@ -199,6 +200,21 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             valueSerde,
             aggregateBuilder,
             streamsGraphNode
+        );
+    }
+
+    @Override
+    public TimeWindowedKStream<K, V> windowedBy(final SlidingWindows windows) {
+
+        return new SlidingWindowedKStreamImpl<>(
+                windows,
+                builder,
+                subTopologySourceNodes,
+                name,
+                keySerde,
+                valueSerde,
+                aggregateBuilder,
+                streamsGraphNode
         );
     }
 
