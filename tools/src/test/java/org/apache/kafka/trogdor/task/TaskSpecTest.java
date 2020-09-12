@@ -19,26 +19,22 @@ package org.apache.kafka.trogdor.task;
 
 import com.fasterxml.jackson.databind.exc.InvalidTypeIdException;
 import org.apache.kafka.trogdor.common.JsonUtil;
-import org.junit.Rule;
-import org.junit.rules.Timeout;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@Timeout(value = 120000, unit = MILLISECONDS)
 public class TaskSpecTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testTaskSpecSerialization() throws Exception {
-        try {
+        assertThrows(InvalidTypeIdException.class, () ->
             JsonUtil.JSON_SERDE.readValue(
                 "{\"startMs\":123,\"durationMs\":456,\"exitMs\":1000,\"error\":\"foo\"}",
-                SampleTaskSpec.class);
-            fail("Expected InvalidTypeIdException because type id is missing.");
-        } catch (InvalidTypeIdException e) {
-        }
+                SampleTaskSpec.class), "Missing type id should cause exception to be thrown");
         String inputJson = "{\"class\":\"org.apache.kafka.trogdor.task.SampleTaskSpec\"," +
             "\"startMs\":123,\"durationMs\":456,\"nodeToExitMs\":{\"node01\":1000},\"error\":\"foo\"}";
         SampleTaskSpec spec = JsonUtil.JSON_SERDE.readValue(inputJson, SampleTaskSpec.class);

@@ -102,7 +102,7 @@ public class StreamsBuilderTest {
                 @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext<Void, Void> context) {
-                    store = (KeyValueStore<String, String>) context.getStateStore("store");
+                    store = context.getStateStore("store");
                 }
 
                 @Override

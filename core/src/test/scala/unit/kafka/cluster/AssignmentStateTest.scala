@@ -14,9 +14,8 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-package unit.kafka.cluster
+package kafka.cluster
 
-import kafka.cluster.SimpleAssignmentState
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.Test

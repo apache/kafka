@@ -56,7 +56,7 @@ import scala.jdk.CollectionConverters._
 class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
-                           replicaManager: ReplicaManager,
+                           val replicaManager: ReplicaManager,
                            zkClient: KafkaZkClient,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {

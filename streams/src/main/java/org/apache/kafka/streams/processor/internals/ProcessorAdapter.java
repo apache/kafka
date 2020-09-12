@@ -31,6 +31,15 @@ public final class ProcessorAdapter<KIn, VIn, KOut, VOut> implements Processor<K
         }
     }
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    public static <KIn, VIn, KOut, VOut> Processor<KIn, VIn, KOut, VOut> adaptRaw(final org.apache.kafka.streams.processor.Processor delegate) {
+        if (delegate == null) {
+            return null;
+        } else {
+            return new ProcessorAdapter<>(delegate);
+        }
+    }
+
     private ProcessorAdapter(final org.apache.kafka.streams.processor.Processor<KIn, VIn> delegate) {
         this.delegate = delegate;
     }

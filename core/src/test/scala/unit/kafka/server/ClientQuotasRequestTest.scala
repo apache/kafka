@@ -17,15 +17,15 @@
 
 package kafka.server
 
+import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
 import org.junit.Assert._
 import org.junit.Test
+import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
-
-import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 
 import scala.jdk.CollectionConverters._
 
@@ -166,14 +166,11 @@ class ClientQuotasRequestTest extends BaseRequestTest {
 
   @Test
   def testClientQuotasForScramUsers(): Unit = {
-    val entityType = ConfigType.User
     val userName = "user"
 
-    val mechanism = ScramMechanism.SCRAM_SHA_256
-    val credential = new ScramFormatter(mechanism).generateCredential("password", 4096)
-    val configs = adminZkClient.fetchEntityConfig(entityType, userName)
-    configs.setProperty(mechanism.mechanismName, ScramCredentialUtils.credentialToString(credential))
-    adminZkClient.changeConfigs(entityType, userName, configs)
+    val results = createAdminClient().alterUserScramCredentials(util.Arrays.asList(
+      new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(ScramMechanism.SCRAM_SHA_256, 4096), "password")))
+    results.all.get
 
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.USER -> userName).asJava)
 

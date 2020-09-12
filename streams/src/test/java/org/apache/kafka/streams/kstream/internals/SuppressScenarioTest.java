@@ -47,6 +47,7 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -493,52 +494,59 @@ public class SuppressScenarioTest {
             inputTopic.pipeInput("k1", "v1", 7L);
             // final record to advance stream time and flush windows
             inputTopic.pipeInput("k1", "v1", 90L);
+            final Comparator<TestRecord<String, Long>> comparator =
+                Comparator.comparing((TestRecord<String, Long> o) -> o.getKey())
+                    .thenComparing((TestRecord<String, Long> o) -> o.timestamp());
+
+            final List<TestRecord<String, Long>> actual = drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER);
+            actual.sort(comparator);
             verify(
-                    drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                    asList(
-                            // left window for k1@10 created when k1@10 is processed
-                            new KeyValueTimestamp<>("[k1@5/10]", 1L, 10L),
-                            // right window for k1@10 created when k1@11 is processed
-                            new KeyValueTimestamp<>("[k1@11/16]", 1L, 11L),
-                            // left window for k1@11 created when k1@11 is processed
-                            new KeyValueTimestamp<>("[k1@6/11]", 2L, 11L),
-                            // left window for k1@10 updated when k1@10 is processed
-                            new KeyValueTimestamp<>("[k1@5/10]", 2L, 10L),
-                            // left window for k1@11 updated when k1@10 is processed
-                            new KeyValueTimestamp<>("[k1@6/11]", 3L, 11L),
-                            // right window for k1@10 updated when k1@13 is processed
-                            new KeyValueTimestamp<>("[k1@11/16]", 2L, 13L),
-                            // right window for k1@11 created when k1@13 is processed
-                            new KeyValueTimestamp<>("[k1@12/17]", 1L, 13L),
-                            // left window for k1@13 created when k1@13 is processed
-                            new KeyValueTimestamp<>("[k1@8/13]", 4L, 13L),
-                            // left window for k1@10 updated when k1@10 is processed
-                            new KeyValueTimestamp<>("[k1@5/10]", 3L, 10L),
-                            // left window for k1@11 updated when k1@10 is processed
-                            new KeyValueTimestamp<>("[k1@6/11]", 4L, 11L),
-                            // left window for k1@13 updated when k1@10 is processed
-                            new KeyValueTimestamp<>("[k1@8/13]", 5L, 13L),
-                            // left window for k1@24 created when k1@24 is processed
-                            new KeyValueTimestamp<>("[k1@19/24]", 1L, 24L),
-                            // left window for k1@10 updated when k1@5 is processed
-                            new KeyValueTimestamp<>("[k1@5/10]", 4L, 10L),
-                            // left window for k1@10 updated when k1@7 is processed
-                            new KeyValueTimestamp<>("[k1@5/10]", 5L, 10L),
-                            // left window for k1@11 updated when k1@7 is processed
-                            new KeyValueTimestamp<>("[k1@6/11]", 5L, 11L),
-                            new KeyValueTimestamp<>("[k1@85/90]", 1L, 90L)
-                            )
+                actual,
+                asList(
+                    // right window for k1@10 created when k1@11 is processed
+                    new KeyValueTimestamp<>("[k1@11/16]", 1L, 11L),
+                    // right window for k1@10 updated when k1@13 is processed
+                    new KeyValueTimestamp<>("[k1@11/16]", 2L, 13L),
+                    // right window for k1@11 created when k1@13 is processed
+                    new KeyValueTimestamp<>("[k1@12/17]", 1L, 13L),
+                    // left window for k1@24 created when k1@24 is processed
+                    new KeyValueTimestamp<>("[k1@19/24]", 1L, 24L),
+                    // left window for k1@10 created when k1@10 is processed
+                    new KeyValueTimestamp<>("[k1@5/10]", 1L, 10L),
+                    // left window for k1@10 updated when k1@10 is processed
+                    new KeyValueTimestamp<>("[k1@5/10]", 2L, 10L),
+                    // left window for k1@10 updated when k1@10 is processed
+                    new KeyValueTimestamp<>("[k1@5/10]", 3L, 10L),
+                    // left window for k1@10 updated when k1@5 is processed
+                    new KeyValueTimestamp<>("[k1@5/10]", 4L, 10L),
+                    // left window for k1@10 updated when k1@7 is processed
+                    new KeyValueTimestamp<>("[k1@5/10]", 5L, 10L),
+                    // left window for k1@11 created when k1@11 is processed
+                    new KeyValueTimestamp<>("[k1@6/11]", 2L, 11L),
+                    // left window for k1@11 updated when k1@10 is processed
+                    new KeyValueTimestamp<>("[k1@6/11]", 3L, 11L),
+                    // left window for k1@11 updated when k1@10 is processed
+                    new KeyValueTimestamp<>("[k1@6/11]", 4L, 11L),
+                    // left window for k1@11 updated when k1@7 is processed
+                    new KeyValueTimestamp<>("[k1@6/11]", 5L, 11L),
+                    // left window for k1@13 created when k1@13 is processed
+                    new KeyValueTimestamp<>("[k1@8/13]", 4L, 13L),
+                    // left window for k1@13 updated when k1@10 is processed
+                    new KeyValueTimestamp<>("[k1@8/13]", 5L, 13L),
+                    // right window for k1@90 created when k1@90 is processed
+                    new KeyValueTimestamp<>("[k1@85/90]", 1L, 90L)
+                )
             );
             verify(
-                    drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
-                    asList(
-                            new KeyValueTimestamp<>("[k1@5/10]", 5L, 10L),
-                            new KeyValueTimestamp<>("[k1@6/11]", 5L, 11L),
-                            new KeyValueTimestamp<>("[k1@8/13]", 5L, 13L),
-                            new KeyValueTimestamp<>("[k1@11/16]", 2L, 13L),
-                            new KeyValueTimestamp<>("[k1@12/17]", 1L, 13L),
-                            new KeyValueTimestamp<>("[k1@19/24]", 1L, 24L)
-                            )
+                drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                asList(
+                    new KeyValueTimestamp<>("[k1@5/10]", 5L, 10L),
+                    new KeyValueTimestamp<>("[k1@6/11]", 5L, 11L),
+                    new KeyValueTimestamp<>("[k1@8/13]", 5L, 13L),
+                    new KeyValueTimestamp<>("[k1@11/16]", 2L, 13L),
+                    new KeyValueTimestamp<>("[k1@12/17]", 1L, 13L),
+                    new KeyValueTimestamp<>("[k1@19/24]", 1L, 24L)
+                )
             );
         }
     }
