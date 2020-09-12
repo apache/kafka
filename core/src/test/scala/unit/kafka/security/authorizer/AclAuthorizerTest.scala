@@ -396,7 +396,7 @@ class AclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testInvalidIPFormat(): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
-    val range = "123.123.123.1234"
+    val range = "192.168.1.1-192.168.1.256"
     val host1 = InetAddress.getByName("10.0.0.11")
 
     val acl = new AccessControlEntry(user1.toString, range, READ, ALLOW)
