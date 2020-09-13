@@ -79,6 +79,9 @@ public class TaskManager {
     private final StreamThread.ProcessingMode processingMode;
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
+
+    private final LinkedList<Task> removedTasks = new LinkedList<>();
+
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
 
@@ -361,8 +364,7 @@ public class TaskManager {
         for (final Task task : tasksToCloseClean) {
             try {
                 completeTaskCloseClean(task);
-                cleanUpTaskProducer(task, taskCloseExceptions);
-                tasks.remove(task.id());
+                removeTask(task, taskCloseExceptions);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
                         "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
@@ -380,12 +382,11 @@ public class TaskManager {
                 if (task.isActive()) {
                     final Set<TopicPartition> partitions = standbyTasksToCreate.remove(task.id());
                     newTask = standbyTaskCreator.createStandbyTaskFromActive((StreamTask) task, partitions);
-                    cleanUpTaskProducer(task, taskCloseExceptions);
                 } else {
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(task.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) task, partitions, mainConsumer);
                 }
-                tasks.remove(task.id());
+                removeTask(task, taskCloseExceptions);
                 addNewTask(newTask);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
@@ -398,21 +399,7 @@ public class TaskManager {
         // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
-            cleanUpTaskProducer(task, taskCloseExceptions);
-            tasks.remove(task.id());
-        }
-    }
-
-    private void cleanUpTaskProducer(final Task task,
-                                     final Map<TaskId, RuntimeException> taskCloseExceptions) {
-        if (task.isActive()) {
-            try {
-                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
-            } catch (final RuntimeException e) {
-                final String uncleanMessage = String.format("Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
-                log.error(uncleanMessage, e);
-                taskCloseExceptions.putIfAbsent(task.id(), e);
-            }
+            removeTask(task, taskCloseExceptions);
         }
     }
 
@@ -440,6 +427,23 @@ public class TaskManager {
         for (final TopicPartition topicPartition : task.inputPartitions()) {
             partitionToTask.put(topicPartition, task);
         }
+    }
+
+    private void removeTask(final Task task, final Map<TaskId, RuntimeException> taskCloseExceptions) {
+        // first clean up the task producer if it is an active task
+        if (task.isActive()) {
+            try {
+                activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
+            } catch (final RuntimeException e) {
+                final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
+                        "Attempting to close remaining tasks before re-throwing:", task.id());
+                log.error(uncleanMessage, e);
+                taskCloseExceptions.putIfAbsent(task.id(), e);
+            }
+        }
+
+        tasks.remove(task.id());
+        removedTasks.add(task);
     }
 
     /**
@@ -623,6 +627,7 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
+                removedTasks.add(task);
 
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
