@@ -519,16 +519,6 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    /**
-     * Alternative to {@link #close()} that just resets the changelogs without closing any of the underlying state
-     * or unregistering the stores themselves
-     */
-    void recycle() {
-        log.debug("Recycling state for {} task {}.", taskType, taskId);
-
-        final Collection<TopicPartition> allChangelogs = changelogPartitions();
-    }
-
     void transitionTaskType(final TaskType newType, final LogContext logContext) {
         if (taskType.equals(newType)) {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");

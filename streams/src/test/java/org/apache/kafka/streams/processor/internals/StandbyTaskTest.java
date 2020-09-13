@@ -518,7 +518,6 @@ public class StandbyTaskTest {
     @Test
     public void shouldRecycleTask() {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
-        stateManager.recycle();
         EasyMock.replay(stateManager);
 
         task = createStandbyTask();

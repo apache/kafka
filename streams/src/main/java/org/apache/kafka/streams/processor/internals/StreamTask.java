@@ -506,7 +506,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         removeAllSensors();
         switch (state()) {
             case SUSPENDED:
-                stateMgr.recycle();
                 recordCollector.closeClean();
 
                 break;
