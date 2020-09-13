@@ -80,10 +80,10 @@ public class TaskManager {
 
     private final Map<TaskId, Task> tasks = new TreeMap<>();
 
-    private final LinkedList<Task> removedTasks = new LinkedList<>();
-
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
+
+    private LinkedList<AbstractTask> removedTasks = new LinkedList<>();
 
     private Consumer<byte[], byte[]> mainConsumer;
 
@@ -418,6 +418,21 @@ public class TaskManager {
         task.resume();
     }
 
+    boolean anyTasksNeedInitialization() {
+        return tasks().values().stream().anyMatch(task -> task.state() == Task.State.CREATED);
+    }
+
+    boolean anyTasksUnderRestoration() {
+        return tasks().values().stream().anyMatch(task -> task.state() == Task.State.RESTORING);
+    }
+
+    boolean allTasksRunning() {
+        return !tasks().values().stream().anyMatch(task ->
+                task.state() == Task.State.RESTORING ||
+                task.state() == Task.State.CREATED ||
+                task.state() == Task.State.SUSPENDED);
+    }
+
     private void addNewTask(final Task task) {
         final Task previous = tasks.put(task.id(), task);
         if (previous != null) {
@@ -443,7 +458,7 @@ public class TaskManager {
         }
 
         tasks.remove(task.id());
-        removedTasks.add(task);
+        removedTasks.add((AbstractTask) task);
     }
 
     /**
@@ -467,8 +482,15 @@ public class TaskManager {
         return initializedTasks;
     }
 
+    public List<AbstractTask> drainRemovedTasks() {
+        final List<AbstractTask> drainedList = removedTasks;
+        removedTasks = new LinkedList<>();
+
+        return drainedList;
+    }
+
     /**
-     * Tries to initialize any new or still-uninitialized tasks, then checks if they can/have completed restoration.
+     * Checks if any restoring tasks have completed restoration.
      *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
@@ -627,7 +649,7 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
-                removedTasks.add(task);
+                removedTasks.add((AbstractTask) task);
 
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
@@ -811,8 +833,9 @@ public class TaskManager {
             e -> log.warn("Ignoring an exception while closing thread producer.", e)
         );
 
+        // when shutting down the task manager we do not need to update the removed tasks in order to
+        // communicate with the restore thread any more since we are going to shutdown the thread as well
         tasks.clear();
-
 
         // this should be called after closing all tasks, to make sure we unlock the task dir for tasks that may
         // have still been in CREATED at the time of shutdown, since Task#close will not do so
@@ -1225,10 +1248,6 @@ public class TaskManager {
         executeAndMaybeSwallow(clean, runnable, e -> {
             throw e; },
             e -> log.debug("Ignoring error in unclean {}", name));
-    }
-
-    boolean needsInitializationOrRestoration() {
-        return tasks().values().stream().anyMatch(Task::needsInitializationOrRestoration);
     }
 
     public void setPartitionResetter(final java.util.function.Consumer<Set<TopicPartition>> resetter) {

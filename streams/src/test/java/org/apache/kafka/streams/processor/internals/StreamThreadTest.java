@@ -144,7 +144,6 @@ public class StreamThreadTest {
     private final MockClientSupplier clientSupplier = new MockClientSupplier();
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
-    private final ChangelogReader changelogReader = new MockChangelogReader();
     private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
 
@@ -466,7 +465,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -694,7 +694,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -731,7 +732,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -921,7 +923,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -979,7 +982,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -1015,7 +1019,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -1044,7 +1049,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -1193,15 +1199,11 @@ public class StreamThreadTest {
         final AtomicBoolean processed = new AtomicBoolean(false);
         internalTopologyBuilder.addProcessor(
             "proc",
-            () -> new Processor<Object, Object, Object, Object>() {
-
-                @Override
-                public void process(final Object key, final Object value) {
-                    if (shouldThrow.get()) {
-                        throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
-                    } else {
-                        processed.set(true);
-                    }
+            () -> (Processor<Object, Object, Object, Object>) (key, value) -> {
+                if (shouldThrow.get()) {
+                    throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
+                } else {
+                    processed.set(true);
                 }
             },
             "name");
@@ -1510,7 +1512,6 @@ public class StreamThreadTest {
         standbyTasks.put(task3, Collections.singleton(t2p1));
 
         thread.taskManager().handleAssignment(emptyMap(), standbyTasks);
-        thread.taskManager().tryToCompleteRestoration();
 
         thread.rebalanceListener().onPartitionsAssigned(Collections.emptyList());
 
@@ -1946,7 +1947,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -1989,7 +1991,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -2038,7 +2041,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -2095,7 +2099,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -2153,7 +2158,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -2318,7 +2324,8 @@ public class StreamThreadTest {
             null,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,
@@ -2351,7 +2358,8 @@ public class StreamThreadTest {
             adminClient,
             consumer,
             consumer,
-                null,
+            null,
+            null,
             taskManager,
             streamsMetrics,
             internalTopologyBuilder,

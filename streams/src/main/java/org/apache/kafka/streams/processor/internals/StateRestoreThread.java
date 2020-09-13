@@ -187,7 +187,7 @@ public class StateRestoreThread extends Thread {
         return corruptedExceptions.poll();
     }
 
-    public boolean shutdown(final long timeoutMs) throws InterruptedException {
+    public void shutdown(final long timeoutMs) throws InterruptedException {
         log.info("Shutting down");
 
         isRunning.set(false);
@@ -200,8 +200,6 @@ public class StateRestoreThread extends Thread {
         } else {
             log.warn("Shutdown timed out after {}", timeoutMs);
         }
-
-        return ret;
     }
 
     private enum ItemType {

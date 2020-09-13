@@ -613,18 +613,30 @@ public class StreamThread extends Thread {
             return;
         }
 
-        // only try to initialize the assigned tasks
-        // if the state is still in PARTITION_ASSIGNED after the poll call
-        if (state == State.PARTITIONS_ASSIGNED) {
-            log.debug("State is {}; initializing tasks if necessary", State.PARTITIONS_ASSIGNED);
+        // we need to first add closed tasks and then created tasks to work with those revived / recycled tasks
+        restoreThread.addClosedTasks(taskManager.drainRemovedTasks());
 
-            restoreThread.addInitializedTasks(taskManager.tryInitializeNewTasks());
-
-            if (taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs())) {
-                setState(State.RUNNING);
-
-                log.debug("Initialization call done. State is {}", State.RUNNING);
+        // try to initialize created tasks that are either newly assigned or re-created from corrupted tasks
+        final List<AbstractTask> initializedTasks;
+        if (taskManager.anyTasksNeedInitialization() && !(initializedTasks = taskManager.tryInitializeNewTasks()).isEmpty()) {
+            if (log.isDebugEnabled()) {
+                log.debug("Initializing newly created tasks {} under state {}",
+                        initializedTasks.stream().map(AbstractTask::id).collect(Collectors.toList()), state);
             }
+
+            restoreThread.addInitializedTasks(initializedTasks);
+        }
+
+        // try complete restoration if there are any restoring tasks
+        if (taskManager.anyTasksUnderRestoration() && taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs())) {
+            setState(State.RUNNING);
+
+            log.debug("Completed restoring all tasks now and transited State to {}", State.RUNNING);
+        } else if (taskManager.allTasksRunning()) {
+            // it is possible that we have no assigned tasks in which case we would still transit state
+            setState(State.RUNNING);
+
+            log.debug("All tasks are now running and transited State to {}", State.RUNNING);
         }
 
         // check if restore thread has encountered TaskCorrupted exception; if yes
@@ -638,6 +650,9 @@ public class StreamThread extends Thread {
         long totalCommitLatency = 0L;
         long totalProcessLatency = 0L;
         long totalPunctuateLatency = 0L;
+
+        // TODO: we should allow active tasks processing even if we are not yet in RUNNING
+        //       after restoration is moved to the other thread
         if (state == State.RUNNING) {
             /*
              * Within an iteration, after processing up to N (N initialized as 1 upon start up) records for each applicable tasks, check the current time:
