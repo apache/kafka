@@ -25,7 +25,7 @@ import java.util.regex.Pattern
 import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
-import org.apache.kafka.streams.scala.serialization.Serdes
+import org.apache.kafka.streams.scala.serialization.{Serdes => NewSerdes}
 import org.apache.kafka.streams.{KafkaStreams, KeyValue, StreamsConfig}
 import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
@@ -144,8 +144,8 @@ class WordCountTest extends WordCountTestData {
     import scala.jdk.CollectionConverters._
 
     val streamsConfiguration = getStreamsConfiguration()
-    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.stringSerde.getClass.getName)
-    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.stringSerde.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, NewSerdes.stringSerde.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, NewSerdes.stringSerde.getClass.getName)
 
     val streamBuilder = new StreamsBuilderJ
     val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopicJ)
@@ -162,7 +162,7 @@ class WordCountTest extends WordCountTestData {
 
     val wordCounts: KTableJ[String, java.lang.Long] = grouped.count()
 
-    wordCounts.toStream.to(outputTopicJ, Produced.`with`(Serdes.stringSerde, Serdes.javaLongSerde))
+    wordCounts.toStream.to(outputTopicJ, Produced.`with`(NewSerdes.stringSerde, NewSerdes.javaLongSerde))
 
     val streams: KafkaStreamsJ = new KafkaStreamsJ(streamBuilder.build(), streamsConfiguration)
     streams.start()

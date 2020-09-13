@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 
-package unit.kafka.utils
+package kafka.utils
 
-import kafka.utils.Throttler
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Test
 import org.junit.Assert.{assertTrue, assertEquals}

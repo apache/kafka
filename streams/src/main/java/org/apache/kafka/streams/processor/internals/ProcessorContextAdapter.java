@@ -168,9 +168,10 @@ public final class ProcessorContextAdapter<KForward, VForward>
         delegate.register(store, stateRestoreCallback);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public StateStore getStateStore(final String name) {
-        return delegate.getStateStore(name);
+    public <S extends StateStore> S getStateStore(final String name) {
+        return (S) delegate.getStateStore(name);
     }
 
     @Override

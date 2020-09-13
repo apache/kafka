@@ -45,6 +45,7 @@ import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -339,9 +340,9 @@ public abstract class AbstractKeyValueStoreTest {
         assertFalse(driver.flushedEntryRemoved(4));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
-        store.put(null, "anyValue");
+        assertThrows(NullPointerException.class, () -> store.put(null, "anyValue"));
     }
 
     @Test
@@ -349,9 +350,9 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(1, null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnPutIfAbsentNullKey() {
-        store.putIfAbsent(null, "anyValue");
+        assertThrows(NullPointerException.class, () -> store.putIfAbsent(null, "anyValue"));
     }
 
     @Test
@@ -359,9 +360,9 @@ public abstract class AbstractKeyValueStoreTest {
         store.putIfAbsent(1, null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnPutAllNullKey() {
-        store.putAll(Collections.singletonList(new KeyValue<>(null, "anyValue")));
+        assertThrows(NullPointerException.class, () -> store.putAll(Collections.singletonList(new KeyValue<>(null, "anyValue"))));
     }
 
     @Test
@@ -369,24 +370,24 @@ public abstract class AbstractKeyValueStoreTest {
         store.putAll(Collections.singletonList(new KeyValue<>(1, null)));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnDeleteNullKey() {
-        store.delete(null);
+        assertThrows(NullPointerException.class, () -> store.delete(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnGetNullKey() {
-        store.get(null);
+        assertThrows(NullPointerException.class, () -> store.get(null));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
-        store.range(null, 2);
+        assertThrows(NullPointerException.class, () -> store.range(null, 2));
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
-        store.range(2, null);
+        assertThrows(NullPointerException.class, () -> store.range(2, null));
     }
 
     @Test

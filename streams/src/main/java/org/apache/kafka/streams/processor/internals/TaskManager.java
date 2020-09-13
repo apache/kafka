@@ -199,7 +199,7 @@ public class TaskManager {
 
             // For active tasks pause their input partitions so we won't poll any more records
             // for this task until it has been re-initialized;
-            // Note, closeDirty already clears the partitiongroup for the task.
+            // Note, closeDirty already clears the partition-group for the task.
             if (task.isActive()) {
                 final Set<TopicPartition> currentAssignment = mainConsumer().assignment();
                 final Set<TopicPartition> taskInputPartitions = task.inputPartitions();

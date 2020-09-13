@@ -50,8 +50,7 @@ public class StateRestoreThread extends Thread {
     private final ChangelogReader changelogReader;
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
-    private final LinkedBlockingDeque<AbstractTask> initializedTasks;
-    private final LinkedBlockingDeque<AbstractTask> closedTasks;
+    private final LinkedBlockingDeque<TaskItem> taskItemQueue;
     private final AtomicReference<Set<TopicPartition>> completedChangelogs;
     private final LinkedBlockingDeque<TaskCorruptedException> corruptedExceptions;
 
@@ -73,8 +72,7 @@ public class StateRestoreThread extends Thread {
 
         this.time = time;
         this.log = logContext.logger(getClass());
-        this.closedTasks = new LinkedBlockingDeque<>();
-        this.initializedTasks = new LinkedBlockingDeque<>();
+        this.taskItemQueue = new LinkedBlockingDeque<>();
         this.corruptedExceptions = new LinkedBlockingDeque<>();
         this.completedChangelogs = new AtomicReference<>(Collections.emptySet());
 
@@ -88,7 +86,7 @@ public class StateRestoreThread extends Thread {
             log.debug("All changelogs {} have completed restoration so far, will wait " +
                     "until new changelogs are registered", allChangelogs);
 
-            while (initializedTasks.isEmpty()) {
+            while (taskItemQueue.isEmpty()) {
                 try {
                     wait();
                 } catch (final InterruptedException e) {
@@ -100,14 +98,18 @@ public class StateRestoreThread extends Thread {
 
     public synchronized void addInitializedTasks(final List<AbstractTask> tasks) {
         if (!tasks.isEmpty()) {
-            initializedTasks.addAll(tasks);
+            for (final AbstractTask task: tasks) {
+                taskItemQueue.add(new TaskItem(task, ItemType.CREATE));
+            }
             notifyAll();
         }
     }
 
     public synchronized void addClosedTasks(final List<AbstractTask> tasks) {
         if (!tasks.isEmpty()) {
-            closedTasks.addAll(tasks);
+            for (final AbstractTask task: tasks) {
+                taskItemQueue.add(new TaskItem(task, ItemType.CLOSE));
+            }
             notifyAll();
         }
     }
@@ -124,27 +126,23 @@ public class StateRestoreThread extends Thread {
 
                 // a task being recycled maybe in both closed and initialized tasks,
                 // and hence we should process the closed ones first and then initialized ones
-                final List<AbstractTask> tasks = new ArrayList<>();
-                closedTasks.drainTo(tasks);
+                final List<TaskItem> items = new ArrayList<>();
+                taskItemQueue.drainTo(items);
 
-                if (!tasks.isEmpty()) {
-                    for (final AbstractTask task : tasks) {
+                if (!items.isEmpty()) {
+                    for (final TaskItem item : items) {
                         // TODO: we should consider also call the listener if the
                         //       changelog is not yet completed
-                        changelogReader.unregister(task.changelogPartitions());
-                    }
-                }
-
-                tasks.clear();
-                initializedTasks.drainTo(tasks);
-
-                if (!tasks.isEmpty()) {
-                    for (final AbstractTask task : tasks) {
-                        for (final TopicPartition partition : task.changelogPartitions()) {
-                            changelogReader.register(partition, task.stateMgr);
+                        if (item.type == ItemType.CLOSE) {
+                            changelogReader.unregister(item.task.changelogPartitions());
+                        } else if (item.type == ItemType.CREATE) {
+                            for (final TopicPartition partition : item.task.changelogPartitions()) {
+                                changelogReader.register(partition, item.task.stateMgr);
+                            }
                         }
                     }
                 }
+                items.clear();
 
                 // try to restore some changelogs
                 final long startMs = time.milliseconds();
@@ -204,5 +202,21 @@ public class StateRestoreThread extends Thread {
         }
 
         return ret;
+    }
+
+    private enum ItemType {
+        CREATE,
+        CLOSE,
+        REVIVE
+    }
+
+    private static class TaskItem {
+        private final AbstractTask task;
+        private final ItemType type;
+
+        private TaskItem(final AbstractTask task, final ItemType type) {
+            this.task = task;
+            this.type = type;
+        }
     }
 }

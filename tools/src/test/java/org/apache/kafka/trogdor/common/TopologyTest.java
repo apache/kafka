@@ -17,29 +17,28 @@
 
 package org.apache.kafka.trogdor.common;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import org.apache.kafka.trogdor.agent.Agent;
 import org.apache.kafka.trogdor.basic.BasicNode;
 import org.apache.kafka.trogdor.basic.BasicTopology;
 
 import org.apache.kafka.trogdor.coordinator.Coordinator;
-import org.junit.Rule;
-import org.junit.rules.Timeout;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.TreeMap;
+import org.junit.jupiter.api.Timeout;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
+@Timeout(value = 120000, unit = MILLISECONDS)
 public class TopologyTest {
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
-    public void testAgentNodeNames() throws Exception {
+    public void testAgentNodeNames() {
         TreeMap<String, Node> nodes = new TreeMap<>();
         final int numNodes = 5;
         for (int i = 0; i < numNodes; i++) {
@@ -52,7 +51,7 @@ public class TopologyTest {
             BasicNode node = new BasicNode(String.format("node%02d", i),
                 String.format("node%d.example.com", i),
                 conf,
-                new HashSet<String>());
+                new HashSet<>());
             nodes.put(node.name(), node);
         }
         Topology topology = new BasicTopology(nodes);
@@ -62,4 +61,4 @@ public class TopologyTest {
             assertTrue(names.contains(String.format("node%02d", i)));
         }
     }
-};
+}
