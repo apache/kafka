@@ -133,14 +133,13 @@ class SocketServer(val config: KafkaConfig,
         Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
       }.sum / dataPlaneProcessors.size
     })
-    newGauge(s"${ControlPlaneMetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
-      val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
-        metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
-      }
-      ioWaitRatioMetricName.map { metricName =>
-        Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-      }.getOrElse(Double.NaN)
-    })
+    controlPlaneProcessorOpt.foreach {
+      controlPlaneProcessor =>
+        newGauge(s"${ControlPlaneMetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+          val ioWaitRatioMetricName = metrics.metricName("io-wait-ratio", "socket-server-metrics", controlPlaneProcessor.metricTags)
+          Option(metrics.metric(ioWaitRatioMetricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
+        })
+    }
     newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
     newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
     newGauge(s"${DataPlaneMetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
@@ -151,14 +150,13 @@ class SocketServer(val config: KafkaConfig,
         Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
       }.sum
     })
-    newGauge(s"${ControlPlaneMetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
-      val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
-        metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
-      }
-      expiredConnectionsKilledCountMetricNames.map { metricName =>
-        Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
-      }.getOrElse(0.0)
-    })
+    controlPlaneProcessorOpt.foreach {
+      controlPlaneProcessor =>
+        newGauge(s"${ControlPlaneMetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+          val expiredConnectionsKilledCountMetricNames = metrics.metricName("expired-connections-killed-count", "socket-server-metrics", controlPlaneProcessor.metricTags)
+          Option(metrics.metric(expiredConnectionsKilledCountMetricNames)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
+        })
+    }
   }
 
   /**
