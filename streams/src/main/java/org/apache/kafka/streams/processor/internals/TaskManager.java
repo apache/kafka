@@ -501,7 +501,11 @@ public class TaskManager {
         for (final Task task : activeTaskIterable()) {
             if (restoredChangelogs.containsAll(task.changelogPartitions())) {
                 try {
-                    task.completeRestoration();
+                    if(!task.completeRestorationIfPossible()) {
+                        log.debug("Could not complete restoration for {} since it was not restoring", task.id());
+
+                        allActiveTasksRestored = false;
+                    }
                 } catch (final TimeoutException e) {
                     log.debug("Could not complete restoration for {} due to {}; will retry", task.id(), e);
 
@@ -513,7 +517,6 @@ public class TaskManager {
                 log.debug("Task {} has not completed restoration, will check next time", task.id());
 
                 allActiveTasksRestored = false;
-                break;
             }
         }
 

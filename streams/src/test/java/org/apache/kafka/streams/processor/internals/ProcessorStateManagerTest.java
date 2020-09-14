@@ -379,7 +379,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext,
             stateDirectory,
-                emptyMap(),
+            emptyMap(),
             emptySet());
 
         try {

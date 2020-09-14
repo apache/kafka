@@ -118,7 +118,7 @@ public interface Task {
     /**
      * @throws StreamsException fatal error, should close the thread
      */
-    void completeRestoration();
+    boolean completeRestorationIfPossible();
 
     void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records);
 

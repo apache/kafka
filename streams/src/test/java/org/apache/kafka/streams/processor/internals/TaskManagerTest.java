@@ -485,6 +485,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+        taskManager.tryInitializeNewTasks();
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -538,6 +539,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -674,6 +676,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, topologyBuilder, consumer, changeLogReader);
         taskManager.setPartitionResetter(tp -> assertThat(tp, is(empty())));
         taskManager.handleAssignment(assignment, emptyMap());
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         assertThat(nonCorruptedTask.state(), is(Task.State.RUNNING));
@@ -750,6 +753,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, topologyBuilder, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId01Assignment, taskId00Assignment);
+        taskManager.tryInitializeNewTasks();
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         // make sure this will be committed and throw
@@ -797,11 +801,13 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size() + taskId01Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(0));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -821,6 +827,7 @@ public class TaskManagerTest {
 
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -892,6 +899,7 @@ public class TaskManagerTest {
         assertThat(task00.state(), is(Task.State.CREATED));
         assertThat(task01.state(), is(Task.State.CREATED));
 
+        taskManager.tryInitializeNewTasks();
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(false));
 
         assertThat(task00.state(), is(Task.State.CREATED));
@@ -911,7 +919,7 @@ public class TaskManagerTest {
         );
         final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true) {
             @Override
-            public void completeRestoration() {
+            public boolean completeRestorationIfPossible() {
                 throw new TimeoutException("timeout!");
             }
         };
@@ -1013,6 +1021,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(assignmentActive.size() + assignmentStandby.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -1138,6 +1147,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(assignmentActive, assignmentStandby);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(assignmentActive.size() + assignmentStandby.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
         assertThat(task00.state(), is(Task.State.RUNNING));
         assertThat(task10.state(), is(Task.State.RUNNING));
@@ -1271,6 +1281,7 @@ public class TaskManagerTest {
         assertThat(task02.state(), is(Task.State.CREATED));
         assertThat(task03.state(), is(Task.State.CREATED));
 
+        taskManager.tryInitializeNewTasks();
         taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs());
 
         assertThat(task00.state(), is(Task.State.RESTORING));
@@ -1340,7 +1351,8 @@ public class TaskManagerTest {
 
         assertThat(task00.state(), is(Task.State.CREATED));
 
-        taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs());
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(assignment.size()));
+        assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(false));
 
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(
@@ -1528,7 +1540,8 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.CREATED));
         assertThat(task02.state(), is(Task.State.CREATED));
 
-        taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs());
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(assignment.size()));
+        assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(false));
 
         assertThat(task00.state(), is(Task.State.RESTORING));
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -1623,6 +1636,7 @@ public class TaskManagerTest {
         replay(standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(emptyMap(), taskId01Assignment);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId01Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         assertThat(task01.state(), is(Task.State.RUNNING));
@@ -1738,6 +1752,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -1764,6 +1779,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, stateDirectory, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, taskId01Assignment);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size() + taskId01Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -2175,6 +2191,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -2202,6 +2219,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -2253,6 +2271,7 @@ public class TaskManagerTest {
         replay(activeTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(taskId00Assignment, emptyMap());
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         assertThat(task00.state(), is(Task.State.RUNNING));
@@ -2299,6 +2318,7 @@ public class TaskManagerTest {
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(TaskManager.class)) {
             taskManager.handleAssignment(taskId00Assignment, emptyMap());
+            assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(taskId00Assignment.size()));
             assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
             assertThat(task00.state(), is(Task.State.RUNNING));
 
@@ -2454,9 +2474,11 @@ public class TaskManagerTest {
         replay(activeTaskCreator, standbyTaskCreator, consumer, changeLogReader);
 
         taskManager.handleAssignment(runningActiveAssignment, standbyAssignment);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(runningActiveAssignment.size() + standbyAssignment.size()));
         assertThat(taskManager.tryToCompleteRestoration(changeLogReader.completedChangelogs()), is(true));
 
         taskManager.handleAssignment(allActiveTasksAssignment, standbyAssignment);
+        assertThat(taskManager.tryInitializeNewTasks().size(), equalTo(restoringActiveAssignment.size()));
 
         final Map<TaskId, StateMachineTask> allTasks = new HashMap<>();
 
@@ -2704,11 +2726,13 @@ public class TaskManagerTest {
         }
 
         @Override
-        public void completeRestoration() {
-            if (state() == State.RUNNING) {
-                return;
+        public boolean completeRestorationIfPossible() {
+            if (state() == State.RESTORING) {
+                transitionTo(State.RUNNING);
+                return true;
             }
-            transitionTo(State.RUNNING);
+
+            return false;
         }
 
         public void setCommitNeeded() {

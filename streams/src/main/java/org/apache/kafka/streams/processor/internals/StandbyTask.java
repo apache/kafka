@@ -114,7 +114,7 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
-    public void completeRestoration() {
+    public boolean completeRestorationIfPossible() {
         throw new IllegalStateException("Standby task " + id + " should never be completing restoration");
     }
 

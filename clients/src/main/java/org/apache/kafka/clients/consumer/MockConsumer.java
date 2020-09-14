@@ -146,6 +146,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         committed.clear();
         this.subscriptions.assignFromUser(new HashSet<>(partitions));
+        this.paused.retainAll(partitions);
     }
 
     @Override

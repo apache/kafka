@@ -226,12 +226,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws TimeoutException if fetching committed offsets timed out
      */
     @Override
-    public void completeRestoration() {
+    public boolean completeRestorationIfPossible() {
         switch (state()) {
             case CREATED:
             case SUSPENDED:
             case RUNNING:
-                return;
+                return false;
 
             case RESTORING:
                 initializeMetadata();
@@ -243,7 +243,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 log.info("Restored and ready to run");
 
-                break;
+                return true;
 
             case CLOSED:
                 throw new IllegalStateException("Illegal state " + state() + " while completing restoration for active task " + id);

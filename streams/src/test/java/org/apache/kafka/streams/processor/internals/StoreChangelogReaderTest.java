@@ -213,9 +213,9 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             changelogReader.completedChangelogs()
         );
         assertEquals(10L, consumer.position(tp));
-        assertEquals(Collections.singleton(tp), consumer.paused());
 
         if (type == ACTIVE) {
+            assertEquals(Collections.singleton(tp), consumer.paused());
             assertEquals(tp, listener.restoreTopicPartition);
             assertEquals(storeName, listener.storeNameCalledStates.get(RESTORE_START));
             assertEquals(storeName, listener.storeNameCalledStates.get(RESTORE_END));
@@ -238,12 +238,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         changelogReader.register(tp, stateManager);
 
         assertEquals(0, changelogReader.restore());
-
-        if (type == ACTIVE) {
-            assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
-        } else {
-            assertEquals(Duration.ZERO, consumer.lastPollTimeout());
-        }
+        assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
     }
 
     @Test
@@ -286,11 +281,8 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         // beyond end records should be skipped even when there's gap at the end offset
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 11L, "key".getBytes(), "value".getBytes()));
 
-        assertEquals(4, changelogReader.restore());
-
-        assertEquals(12L, consumer.position(tp));
-
         if (type == ACTIVE) {
+            assertEquals(3, changelogReader.restore());
             assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
             assertEquals(3L, changelogReader.changelogMetadata(tp).totalRestored());
             assertEquals(1, changelogReader.changelogMetadata(tp).bufferedRecords().size());
@@ -300,12 +292,15 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             assertEquals(storeName, listener.storeNameCalledStates.get(RESTORE_BATCH));
             assertEquals(storeName, listener.storeNameCalledStates.get(RESTORE_END));
         } else {
+            assertEquals(4, changelogReader.restore());
             assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
             assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
             assertEquals(0, changelogReader.changelogMetadata(tp).bufferedRecords().size());
             assertEquals(Collections.emptySet(), changelogReader.completedChangelogs());
             assertEquals(Collections.emptySet(), consumer.paused());
         }
+
+        assertEquals(12L, consumer.position(tp));
     }
 
     @Test
@@ -624,41 +619,6 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldOnlyRestoreStandbyChangelogInUpdateStandbyState() {
-        EasyMock.replay(standbyStateManager, storeMetadata, store);
-
-        consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
-        changelogReader.register(tp, standbyStateManager);
-        assertEquals(0, changelogReader.restore());
-
-        assertNull(listener.restoreTopicPartition);
-        assertNull(listener.storeNameCalledStates.get(RESTORE_START));
-        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertNull(changelogReader.changelogMetadata(tp).endOffset());
-        assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
-
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 6L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 7L, "key".getBytes(), "value".getBytes()));
-        // null key should be ignored
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 8L, null, "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 9L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 10L, "key".getBytes(), "value".getBytes()));
-        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 11L, "key".getBytes(), "value".getBytes()));
-
-        assertEquals(5, changelogReader.restore());
-        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertEquals(0L, changelogReader.changelogMetadata(tp).totalRestored());
-        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().isEmpty());
-
-        assertEquals(Collections.singleton(tp), consumer.paused());
-
-        assertEquals(0, changelogReader.restore());
-        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertEquals(5L, changelogReader.changelogMetadata(tp).totalRestored());
-        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().isEmpty());
-    }
-
-    @Test
     public void shouldNotUpdateLimitForNonSourceStandbyChangelog() {
         EasyMock.expect(standbyStateManager.changelogAsSource(tp)).andReturn(false).anyTimes();
         EasyMock.replay(standbyStateManager, storeMetadata, store);
@@ -753,7 +713,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 10L, "key".getBytes(), "value".getBytes()));
         consumer.addRecord(new ConsumerRecord<>(topicName, 0, 11L, "key".getBytes(), "value".getBytes()));
 
-        assertEquals(6, changelogReader.restore());
+        assertEquals(2, changelogReader.restore());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(7L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(2L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -795,14 +755,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(2, changelogReader.changelogMetadata(tp).bufferedRecords().size());
         assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
 
-        // once we are in update active mode, we should not try to update limit offset
         time.setCurrentTimeMs(now + 202L);
-        assertEquals(0, changelogReader.restore());
-        assertEquals(10L, (long) changelogReader.changelogMetadata(tp).endOffset());
-        assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
-        assertEquals(2, changelogReader.changelogMetadata(tp).bufferedRecords().size());
-        assertEquals(0, changelogReader.changelogMetadata(tp).bufferedLimitIndex());
-
         assertEquals(0, changelogReader.restore());
         assertEquals(15L, (long) changelogReader.changelogMetadata(tp).endOffset());
         assertEquals(4L, changelogReader.changelogMetadata(tp).totalRestored());
@@ -873,7 +826,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldTransitState() {
+    public void shouldOnlyRestoreStandbyWhenTransitState() {
         EasyMock.expect(storeMetadataOne.changelogPartition()).andReturn(tp1).anyTimes();
         EasyMock.expect(storeMetadataOne.store()).andReturn(store).anyTimes();
         EasyMock.expect(storeMetadataTwo.changelogPartition()).andReturn(tp2).anyTimes();
@@ -883,7 +836,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         EasyMock.expect(storeMetadataTwo.offset()).andReturn(5L).anyTimes();
         EasyMock.expect(standbyStateManager.storeMetadata(tp1)).andReturn(storeMetadataOne).anyTimes();
         EasyMock.expect(standbyStateManager.storeMetadata(tp2)).andReturn(storeMetadataTwo).anyTimes();
-        EasyMock.expect(activeStateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L));
+        EasyMock.expect(activeStateManager.changelogOffsets()).andReturn(singletonMap(tp, 5L)).anyTimes();
         EasyMock.replay(activeStateManager, standbyStateManager, storeMetadata, store, storeMetadataOne, storeMetadataTwo);
 
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
@@ -902,8 +855,11 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
         assertEquals(Collections.emptySet(), consumer.assignment());
 
-        changelogReader.restore();
+        // should not restore any standby records when in ACTIVE_RESTORING state
+        assertEquals(0, changelogReader.restore());
 
+        assertEquals(0L, changelogReader.changelogMetadata(tp1).totalRestored());
+        assertTrue(changelogReader.changelogMetadata(tp1).bufferedRecords().isEmpty());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
@@ -911,28 +867,51 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         assertEquals(mkSet(tp1, tp2), consumer.paused());
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
-        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        consumer.addRecord(new ConsumerRecord<>("one", 0, 6L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>("one", 0, 7L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>("one", 0, 9L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>("one", 0, 10L, "key".getBytes(), "value".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>("one", 0, 11L, "key".getBytes(), "value".getBytes()));
+
+        assertEquals(0, changelogReader.restore());
+        assertEquals(0L, changelogReader.changelogMetadata(tp1).totalRestored());
+        assertTrue(changelogReader.changelogMetadata(tp1).bufferedRecords().isEmpty());
+
+        // let the active task reach its end offset to be completed
+        consumer.addRecord(new ConsumerRecord<>(topicName, 0, 9L, "key".getBytes(), "value".getBytes()));
+        assertEquals(1, changelogReader.restore());
+        assertEquals(0L, changelogReader.changelogMetadata(tp1).totalRestored());
+        assertTrue(changelogReader.changelogMetadata(tp1).bufferedRecords().isEmpty());
+        assertEquals(1L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().isEmpty());
+        assertEquals(ACTIVE_RESTORING, changelogReader.state());
+
+        assertEquals(5, changelogReader.restore());
+        assertEquals(5L, changelogReader.changelogMetadata(tp1).totalRestored());
+        assertTrue(changelogReader.changelogMetadata(tp1).bufferedRecords().isEmpty());
+        assertEquals(1L, changelogReader.changelogMetadata(tp).totalRestored());
+        assertTrue(changelogReader.changelogMetadata(tp).bufferedRecords().isEmpty());
+        assertEquals(StoreChangelogReader.ChangelogState.COMPLETED, changelogReader.changelogMetadata(tp).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
         assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
         assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
-        assertEquals(Collections.emptySet(), consumer.paused());
-
-        changelogReader.unregister(Collections.singletonList(tp));
-        changelogReader.register(tp, activeStateManager);
+        assertEquals(mkSet(tp), consumer.paused());
+        assertEquals(STANDBY_UPDATING, changelogReader.state());
 
         // if a new active is registered, we should immediately transit to standby updating
-        assertThrows(IllegalStateException.class, changelogReader::restore);
-
-        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
-        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
-        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
-        assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
+        changelogReader.unregister(Collections.singletonList(tp));
+        assertEquals(mkSet(tp1, tp2), consumer.assignment());
         assertEquals(Collections.emptySet(), consumer.paused());
         assertEquals(STANDBY_UPDATING, changelogReader.state());
 
-        assertEquals(ACTIVE_RESTORING, changelogReader.state());
+        changelogReader.register(tp, activeStateManager);
+        assertEquals(0, changelogReader.restore());
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp).state());
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp1).state());
+        assertEquals(StoreChangelogReader.ChangelogState.RESTORING, changelogReader.changelogMetadata(tp2).state());
         assertEquals(mkSet(tp, tp1, tp2), consumer.assignment());
         assertEquals(mkSet(tp1, tp2), consumer.paused());
+        assertEquals(ACTIVE_RESTORING, changelogReader.state());
     }
 
     @Test
