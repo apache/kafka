@@ -895,13 +895,6 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
   }
 
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-
-    def immutableListenerConfigs(kafkaConfig: KafkaConfig, prefix: String): Map[String, AnyRef] = {
-      newConfig.originals.asScala.filter { case (key, _) =>
-        key.startsWith(prefix) && !DynamicSecurityConfigs.contains(key)
-      }
-    }
-
     val oldConfig = server.config
     val newListeners = listenersToMap(newConfig.listeners)
     val newAdvertisedListeners = listenersToMap(newConfig.advertisedListeners)
@@ -911,6 +904,11 @@ class DynamicListenerConfig(server: KafkaServer) extends BrokerReconfigurable wi
     if (!newListeners.keySet.subsetOf(newConfig.listenerSecurityProtocolMap.keySet))
       throw new ConfigException(s"Listeners '$newListeners' must be subset of listener map '${newConfig.listenerSecurityProtocolMap}'")
     newListeners.keySet.intersect(oldListeners.keySet).foreach { listenerName =>
+      def immutableListenerConfigs(kafkaConfig: KafkaConfig, prefix: String): Map[String, AnyRef] = {
+        kafkaConfig.originals.asScala.filter { case (key, _) =>
+          key.startsWith(prefix) && !DynamicSecurityConfigs.contains(key)
+        }
+      }
       val prefix = listenerName.configPrefix
       val newListenerProps = immutableListenerConfigs(newConfig, prefix)
       val oldListenerProps = immutableListenerConfigs(oldConfig, prefix)
