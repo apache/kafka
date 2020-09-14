@@ -139,7 +139,7 @@ public class StreamsAssignmentScaleTest {
                                          final int numClients,
                                          final int numThreadsPerClient,
                                          final int numStandbys,
-                                         final Class< ? extends TaskAssignor> taskAssignor) {
+                                         final Class<? extends TaskAssignor> taskAssignor) {
         final List<String> topic = singletonList("topic");
 
         final Map<TopicPartition, Long> changelogEndOffsets = new HashMap<>();
