@@ -200,6 +200,8 @@ public class TaskManager {
             }
             task.closeDirty();
 
+            ((AbstractTask) task).stateMgr.clear();
+
             // For active tasks pause their input partitions so we won't poll any more records
             // for this task until it has been re-initialized;
             // Note, closeDirty already clears the partition-group for the task.
@@ -364,7 +366,7 @@ public class TaskManager {
         for (final Task task : tasksToCloseClean) {
             try {
                 completeTaskCloseClean(task);
-                removeTask(task, taskCloseExceptions);
+                removeTask(task, true, taskCloseExceptions);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format(
                         "Failed to close task %s cleanly. Attempting to close remaining tasks before re-throwing:",
@@ -386,7 +388,7 @@ public class TaskManager {
                     final Set<TopicPartition> partitions = activeTasksToCreate.remove(task.id());
                     newTask = activeTaskCreator.createActiveTaskFromStandby((StandbyTask) task, partitions, mainConsumer);
                 }
-                removeTask(task, taskCloseExceptions);
+                removeTask(task, false, taskCloseExceptions);
                 addNewTask(newTask);
             } catch (final RuntimeException e) {
                 final String uncleanMessage = String.format("Failed to recycle task %s cleanly. Attempting to close remaining tasks before re-throwing:", task.id());
@@ -399,7 +401,7 @@ public class TaskManager {
         // for tasks that cannot be cleanly closed or recycled, close them dirty
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task);
-            removeTask(task, taskCloseExceptions);
+            removeTask(task, true, taskCloseExceptions);
         }
     }
 
@@ -444,7 +446,9 @@ public class TaskManager {
         }
     }
 
-    private void removeTask(final Task task, final Map<TaskId, RuntimeException> taskCloseExceptions) {
+    private void removeTask(final Task task,
+                            final boolean clearStateManager,
+                            final Map<TaskId, RuntimeException> taskCloseExceptions) {
         // first clean up the task producer if it is an active task
         if (task.isActive()) {
             try {
@@ -459,6 +463,10 @@ public class TaskManager {
 
         tasks.remove(task.id());
         removedTasks.put((AbstractTask) task, ((AbstractTask) task).stateMgr.changelogPartitions());
+
+        if (clearStateManager) {
+            ((AbstractTask) task).stateMgr.clear();
+        }
     }
 
     /**
