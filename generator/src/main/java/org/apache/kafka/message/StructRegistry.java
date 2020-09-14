@@ -44,15 +44,9 @@ final class StructRegistry {
          */
         private final Versions parentVersions;
 
-        /**
-         * Flag indicating whether this Struct is a reference to a common Struct.
-         */
-        public final boolean isCommonStructReference;
-
-        StructInfo(StructSpec spec, Versions parentVersions, boolean isCommonStructReference) {
+        StructInfo(StructSpec spec, Versions parentVersions) {
             this.spec = spec;
             this.parentVersions = parentVersions;
-            this.isCommonStructReference = isCommonStructReference;
         }
 
         public StructSpec spec() {
@@ -82,7 +76,7 @@ final class StructRegistry {
             if (structs.containsKey(struct.name())) {
                 throw new RuntimeException("Common struct " + struct.name() + " was specified twice.");
             }
-            structs.put(struct.name(), new StructInfo(struct, struct.versions(), false));
+            structs.put(struct.name(), new StructInfo(struct, struct.versions()));
             commonStructNames.add(struct.name());
         }
         // Register inline structures.
@@ -92,19 +86,16 @@ final class StructRegistry {
     @SuppressWarnings("unchecked")
     private void addStructSpecs(Versions parentVersions, List<FieldSpec> fields) {
         for (FieldSpec field : fields) {
-            String elementName = null;
             String typeName = null;
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                elementName = arrayType.elementName();
                 typeName = arrayType.elementName();
             } else if (field.type().isStruct()) {
-                elementName = field.name();
-                typeName = field.typeString();
+                FieldType.StructType structType = (FieldType.StructType) field.type();
+                typeName = structType.typeName();
             }
-            if (elementName != null) {
-                boolean isCommonStructRef = commonStructNames.contains(typeName);
-                if (isCommonStructRef) {
+            if (typeName != null) {
+                if (commonStructNames.contains(typeName)) {
                     // If we're using a common structure, we can't specify its fields.
                     // The fields should be specified in the commonStructs area.
                     if (!field.fields().isEmpty()) {
@@ -115,13 +106,14 @@ final class StructRegistry {
                     // Inline structures should only appear once.
                     throw new RuntimeException("Struct " + typeName +
                         " was specified twice.");
-                }
-
-                // Synthesize a StructSpec object out of the fields.
-                StructSpec spec = new StructSpec(typeName,
+                } else {
+                    // Synthesize a StructSpec object out of the fields.
+                    StructSpec spec = new StructSpec(typeName,
                         field.versions().toString(),
                         field.fields());
-                structs.put(elementName, new StructInfo(spec, parentVersions, isCommonStructRef));
+                    structs.put(typeName, new StructInfo(spec, parentVersions));
+                }
+
                 addStructSpecs(parentVersions.intersect(field.versions()), field.fields());
             }
         }
@@ -137,7 +129,8 @@ final class StructRegistry {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
             structFieldName = arrayType.elementName();
         } else if (field.type().isStruct()) {
-            structFieldName = field.name();
+            FieldType.StructType structType = (FieldType.StructType) field.type();
+            structFieldName = structType.typeName();
         } else {
             throw new RuntimeException("Field " + field.name() +
                     " cannot be treated as a structure.");

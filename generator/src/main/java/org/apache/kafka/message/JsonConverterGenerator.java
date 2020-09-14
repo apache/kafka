@@ -53,32 +53,23 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         buffer.incrementIndent();
         generateConverters(message.dataClassName(), message.struct(),
             message.validVersions());
-
         for (Iterator<StructRegistry.StructInfo> iter = structRegistry.structs();
                 iter.hasNext(); ) {
             StructRegistry.StructInfo info = iter.next();
-            if (!info.isCommonStructReference) {
-                generateStructClass(info.spec(), info.parentVersions());
-            }
+            buffer.printf("%n");
+            buffer.printf("public static class %s {%n",
+                MessageGenerator.capitalizeFirst(info.spec().name() + SUFFIX));
+            buffer.incrementIndent();
+            generateConverters(MessageGenerator.capitalizeFirst(info.spec().name()),
+                info.spec(), info.parentVersions());
+            buffer.decrementIndent();
+            buffer.printf("}%n");
         }
         buffer.decrementIndent();
         buffer.printf("}%n");
         headerGenerator.generate();
         headerGenerator.buffer().write(writer);
         buffer.write(writer);
-    }
-
-    private void generateStructClass(
-        StructSpec spec,
-        Versions versions
-    ) {
-        buffer.printf("%n");
-        buffer.printf("public static class %s {%n",
-            MessageGenerator.capitalizeFirst(spec.name() + SUFFIX));
-        buffer.incrementIndent();
-        generateConverters(MessageGenerator.capitalizeFirst(spec.name()), spec, versions);
-        buffer.decrementIndent();
-        buffer.printf("}%n");
     }
 
     private void generateConverters(String name,
