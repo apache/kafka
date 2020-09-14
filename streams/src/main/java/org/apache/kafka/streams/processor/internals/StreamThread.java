@@ -573,12 +573,12 @@ public class StreamThread extends Thread {
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
             } catch (final ShutdownRequestedException e) {
-                handleShutdownRequest(e);
+                sendShutdownRequest(e);
             }
         }
     }
 
-    private void handleShutdownRequest(final ShutdownRequestedException e) {
+    public void sendShutdownRequest(final ShutdownRequestedException e) {
         log.warn("Detected that shutdown was requested. " +
                 "The all clients in this app will now begin to shutdown", e);
 

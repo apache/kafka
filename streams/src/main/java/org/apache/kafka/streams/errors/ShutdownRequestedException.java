@@ -17,7 +17,12 @@
 
 package org.apache.kafka.streams.errors;
 
+/**
+ * Should be thrown in reaction to an event that necessitates the closure of the entire Streams application.
+ *
+ */
 public class ShutdownRequestedException extends StreamsException {
+
     public ShutdownRequestedException(final String message) {
         super(message);
     }
