@@ -851,7 +851,7 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldNotThrowTaskCorruptedExceptionAfterCheckpointing() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+        ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
@@ -869,6 +869,7 @@ public class ProcessorStateManagerTest {
 
             // reset the state and offsets, for example as in a corrupted task
             stateMgr.close();
+            stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
             assertNull(stateMgr.storeMetadata(nonPersistentStorePartition));
             assertNull(stateMgr.storeMetadata(persistentStorePartition));
 

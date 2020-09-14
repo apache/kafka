@@ -948,7 +948,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
             assertThat(
                 appender.getMessages(),
-                hasItem("test-reader Changelog partition unknown-0 could not be found," +
+                hasItem("store-changelog-reader [test] Changelog partition unknown-0 could not be found," +
                     " it could be already cleaned up during the handling of task corruption and never restore again")
             );
         }

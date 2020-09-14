@@ -109,7 +109,7 @@ class StandbyTaskCreator {
         final ProcessorStateManager stateManager = streamTask.stateMgr;
 
         streamTask.closeCleanAndRecycleState();
-        stateManager.transitionTaskType(TaskType.STANDBY, getLogContext(streamTask.id()));
+        stateManager.prepareNewTaskType(TaskType.STANDBY, getLogContext(streamTask.id()));
 
         return createStandbyTask(
             streamTask.id(),

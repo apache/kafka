@@ -168,6 +168,9 @@ public class StateRestoreThread extends Thread {
                             item.task.changelogPartitions(),
                             item.task.id());
                 } else if (item.type == ItemType.CREATE) {
+                    // we should only convert the state manager type before re-registering the changelog
+                    item.task.stateMgr.maybeConvertToNewTaskType();
+
                     for (final TopicPartition partition : item.task.changelogPartitions()) {
                         changelogReader.register(partition, item.task.stateMgr);
                     }

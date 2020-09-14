@@ -158,6 +158,7 @@ public class ProcessorStateManager implements StateManager {
     private final OffsetCheckpoint checkpointFile;
 
     private TaskType taskType;
+    private TaskType newType;
 
     public static String storeChangelogTopic(final String applicationId, final String storeName) {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
@@ -178,6 +179,7 @@ public class ProcessorStateManager implements StateManager {
         this.logPrefix = logContext.logPrefix();
         this.taskId = taskId;
         this.taskType = taskType;
+        this.newType = taskType;
         this.eosEnabled = eosEnabled;
         this.sourcePartitions = sourcePartitions;
 
@@ -519,17 +521,25 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    void transitionTaskType(final TaskType newType, final LogContext logContext) {
+    void prepareNewTaskType(final TaskType newType, final LogContext logContext) {
         if (taskType.equals(newType)) {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");
         }
 
-        final TaskType oldType = taskType;
-        taskType = newType;
-        log = logContext.logger(ProcessorStateManager.class);
-        logPrefix = logContext.logPrefix();
+        // we'd have to defer the actual conversion until the registration of changelogs have completed
+        this.newType = newType;
+        this.logPrefix = logContext.logPrefix();
+        this.log = logContext.logger(ProcessorStateManager.class);
 
-        log.debug("Transitioning state manager for {} task {} to {}", oldType, taskId, newType);
+        log.debug("Preparing to transit state manager for task {} from {} to {}", taskId, taskType, newType);
+    }
+
+    void maybeConvertToNewTaskType() {
+        if (!taskType.equals(newType)) {
+            taskType = newType;
+
+            log.debug("Transited state manager for task {} to {}", taskId, newType);
+        }
     }
 
     @Override

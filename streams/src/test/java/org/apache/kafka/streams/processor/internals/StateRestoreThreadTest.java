@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.StateMachineTask;
 import org.apache.kafka.test.TestUtils;
+import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -44,9 +45,11 @@ public class StateRestoreThreadTest {
 
     private final StateRestoreThread restoreThread = new StateRestoreThread(time, clientId, reader);
 
+    final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
+
     @Test
     public void shouldRegisterActiveTaskChangelogs() {
-        final StateMachineTask task = new StateMachineTask(taskId, Collections.singleton(tp), true);
+        final StateMachineTask task = new StateMachineTask(taskId, Collections.singleton(tp), true, stateManager);
         task.setChangelogOffsets(Collections.singletonMap(tp, 0L));
 
         restoreThread.addInitializedTasks(Collections.singletonList(task));
@@ -64,7 +67,7 @@ public class StateRestoreThreadTest {
 
     @Test
     public void shouldRegisterStandbyTaskChangelogs() {
-        final StateMachineTask task = new StateMachineTask(taskId, Collections.emptySet(), false);
+        final StateMachineTask task = new StateMachineTask(taskId, Collections.emptySet(), false, stateManager);
         task.setChangelogOffsets(Collections.singletonMap(tp, 0L));
 
         restoreThread.addInitializedTasks(Collections.singletonList(task));
@@ -82,7 +85,7 @@ public class StateRestoreThreadTest {
 
     @Test
     public void shouldClearChangelogsUponShutdown() throws InterruptedException {
-        final StateMachineTask task = new StateMachineTask(taskId, Collections.singleton(tp), true);
+        final StateMachineTask task = new StateMachineTask(taskId, Collections.singleton(tp), true, stateManager);
         task.setChangelogOffsets(Collections.singletonMap(tp, 0L));
 
         restoreThread.addInitializedTasks(Collections.singletonList(task));
