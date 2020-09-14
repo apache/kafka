@@ -97,6 +97,7 @@ public class SslFactory implements Reconfigurable {
             try {
                 SslEngineValidator.validate(builder, builder);
             } catch (Exception e) {
+                log.error("SSLFactory configure failed during validate", e);
                 throw new ConfigException("A client SSLEngine created with the provided settings " +
                         "can't connect to a server SSLEngine created with those settings.", e);
             }
