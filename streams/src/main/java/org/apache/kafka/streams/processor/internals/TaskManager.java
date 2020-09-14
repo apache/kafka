@@ -83,7 +83,7 @@ public class TaskManager {
     // materializing this relationship because the lookup is on the hot path
     private final Map<TopicPartition, Task> partitionToTask = new HashMap<>();
 
-    private LinkedList<AbstractTask> removedTasks = new LinkedList<>();
+    private Map<AbstractTask, Collection<TopicPartition>> removedTasks = new HashMap<>();
 
     private Consumer<byte[], byte[]> mainConsumer;
 
@@ -458,7 +458,7 @@ public class TaskManager {
         }
 
         tasks.remove(task.id());
-        removedTasks.add((AbstractTask) task);
+        removedTasks.put((AbstractTask) task, ((AbstractTask) task).stateMgr.changelogPartitions());
     }
 
     /**
@@ -652,7 +652,7 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
-                removedTasks.add((AbstractTask) task);
+                removedTasks.put((AbstractTask) task, ((AbstractTask) task).stateMgr.changelogPartitions());
 
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());

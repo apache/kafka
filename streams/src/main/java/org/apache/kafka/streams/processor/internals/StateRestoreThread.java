@@ -108,7 +108,9 @@ public class StateRestoreThread extends Thread {
     public synchronized void addInitializedTasks(final List<AbstractTask> tasks) {
         if (!tasks.isEmpty()) {
             for (final AbstractTask task: tasks) {
-                taskItemQueue.add(new TaskItem(task, ItemType.CREATE));
+                taskItemQueue.add(new TaskItem(task, ItemType.CREATE, task.changelogPartitions()));
+                // we need to clear the stores here since they may be reused in revive / recycle
+                task.stateMgr.clear();
             }
             notifyAll();
         }
@@ -240,12 +242,14 @@ public class StateRestoreThread extends Thread {
     }
 
     private static class TaskItem {
-        private final AbstractTask task;
         private final ItemType type;
+        private final AbstractTask task;
+        private final Collection<TopicPartition> changelogPartitions;
 
-        private TaskItem(final AbstractTask task, final ItemType type) {
+        private TaskItem(final AbstractTask task, final ItemType type, final Collection<TopicPartition> changelogPartitions) {
             this.task = task;
             this.type = type;
+            this.changelogPartitions = changelogPartitions;
         }
     }
 
