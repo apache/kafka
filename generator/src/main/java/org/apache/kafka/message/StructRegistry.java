@@ -44,9 +44,15 @@ final class StructRegistry {
          */
         private final Versions parentVersions;
 
-        StructInfo(StructSpec spec, Versions parentVersions) {
+        /**
+         * Flag indicating whether this Struct is a reference to a common Struct.
+         */
+        public final boolean isCommonStructReference;
+
+        StructInfo(StructSpec spec, Versions parentVersions, boolean isCommonStructReference) {
             this.spec = spec;
             this.parentVersions = parentVersions;
+            this.isCommonStructReference = isCommonStructReference;
         }
 
         public StructSpec spec() {
@@ -76,7 +82,7 @@ final class StructRegistry {
             if (structs.containsKey(struct.name())) {
                 throw new RuntimeException("Common struct " + struct.name() + " was specified twice.");
             }
-            structs.put(struct.name(), new StructInfo(struct, struct.versions()));
+            structs.put(struct.name(), new StructInfo(struct, struct.versions(), false));
             commonStructNames.add(struct.name());
         }
         // Register inline structures.
@@ -97,24 +103,25 @@ final class StructRegistry {
                 typeName = field.typeString();
             }
             if (elementName != null) {
-                if (commonStructNames.contains(elementName)) {
+                boolean isCommonStructRef = commonStructNames.contains(typeName);
+                if (isCommonStructRef) {
                     // If we're using a common structure, we can't specify its fields.
                     // The fields should be specified in the commonStructs area.
                     if (!field.fields().isEmpty()) {
                         throw new RuntimeException("Can't re-specify the common struct " +
-                                elementName + " as an inline struct.");
+                                typeName + " as an inline struct.");
                     }
-                } else if (structs.containsKey(elementName)) {
+                } else if (structs.containsKey(typeName)) {
                     // Inline structures should only appear once.
-                    throw new RuntimeException("Struct " + elementName +
+                    throw new RuntimeException("Struct " + typeName +
                         " was specified twice.");
-                } else {
-                    // Synthesize a StructSpec object out of the fields.
-                    StructSpec spec = new StructSpec(typeName,
-                            field.versions().toString(),
-                            field.fields());
-                    structs.put(elementName, new StructInfo(spec, parentVersions));
                 }
+
+                // Synthesize a StructSpec object out of the fields.
+                StructSpec spec = new StructSpec(typeName,
+                        field.versions().toString(),
+                        field.fields());
+                structs.put(elementName, new StructInfo(spec, parentVersions, isCommonStructRef));
                 addStructSpecs(parentVersions.intersect(field.versions()), field.fields());
             }
         }

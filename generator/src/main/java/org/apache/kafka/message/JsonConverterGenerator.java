@@ -54,14 +54,10 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
         generateConverters(message.dataClassName(), message.struct(),
             message.validVersions());
 
-        for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
-            generateStructClass(iter.next(), message.validVersions());
-        }
-
         for (Iterator<StructRegistry.StructInfo> iter = structRegistry.structs();
                 iter.hasNext(); ) {
             StructRegistry.StructInfo info = iter.next();
-            if (!structRegistry.commonStructNames().contains(info.spec().name())) {
+            if (!info.isCommonStructReference) {
                 generateStructClass(info.spec(), info.parentVersions());
             }
         }
