@@ -64,11 +64,11 @@ public class StateRestoreThread extends Thread {
                               final StreamsConfig config,
                               final String threadClientId,
                               final Admin adminClient,
-                              final Consumer<byte[], byte[]> mainConsumer,
+                              final String groupId,
                               final Consumer<byte[], byte[]> restoreConsumer,
                               final StateRestoreListener userStateRestoreListener) {
         this(time, threadClientId, new StoreChangelogReader(time, config, threadClientId,
-                adminClient, mainConsumer, restoreConsumer, userStateRestoreListener));
+                adminClient, groupId, restoreConsumer, userStateRestoreListener));
     }
 
     // for testing only
@@ -188,7 +188,7 @@ public class StateRestoreThread extends Thread {
         try {
             final int numRestored = changelogReader.restore();
             // TODO: we should record the restoration related metrics
-            log.info("Restored {} records in {} ms", numRestored, time.milliseconds() - startMs);
+            log.debug("Restored {} records in {} ms", numRestored, time.milliseconds() - startMs);
         } catch (final TaskCorruptedException e) {
             log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
                     "Will close the task as dirty and re-create and bootstrap from scratch.", e);

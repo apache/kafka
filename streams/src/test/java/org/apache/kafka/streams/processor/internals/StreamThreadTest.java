@@ -152,7 +152,6 @@ public class StreamThreadTest {
     }
 
     private final String topic1 = "topic1";
-    private final String topic2 = "topic2";
 
     private final TopicPartition t1p1 = new TopicPartition(topic1, 1);
     private final TopicPartition t1p2 = new TopicPartition(topic1, 2);

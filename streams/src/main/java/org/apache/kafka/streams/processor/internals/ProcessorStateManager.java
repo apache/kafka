@@ -521,6 +521,10 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
+    public void clear() {
+        stores.clear();
+    }
+
     void prepareNewTaskType(final TaskType newType, final LogContext logContext) {
         if (taskType.equals(newType)) {
             throw new IllegalStateException("Tried to recycle state for task type conversion but new type was the same.");

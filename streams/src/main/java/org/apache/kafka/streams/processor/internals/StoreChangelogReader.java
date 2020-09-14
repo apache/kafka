@@ -190,6 +190,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     private final Time time;
     private final Logger log;
+    private final String groupId;
     private final Duration pollTime;
     private final long updateOffsetIntervalMs;
     private long lastUpdateOffsetTime = 0L;
@@ -201,11 +202,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Consumer<byte[], byte[]> restoreConsumer;
     private final StateRestoreListener stateRestoreListener;
 
-    // the changelog reader only need the main consumer to get committed offsets for source changelog partitions
-    // to update offset limit for standby tasks;
-    private final Consumer<byte[], byte[]> mainConsumer;
-
-    // the changelog reader needs the admin client to list end offsets
+    // the changelog reader needs the admin client to list end offsets and the group's committed offsets
     private final Admin adminClient;
 
     // source of the truth of the current registered changelogs;
@@ -222,7 +219,7 @@ public class StoreChangelogReader implements ChangelogReader {
                                 final StreamsConfig config,
                                 final String threadClientId,
                                 final Admin adminClient,
-                                final Consumer<byte[], byte[]> mainConsumer,
+                                final String groupId,
                                 final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener stateRestoreListener) {
         this.time = time;
@@ -230,8 +227,8 @@ public class StoreChangelogReader implements ChangelogReader {
         final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(StoreChangelogReader.class);
         this.state = ChangelogReaderState.ACTIVE_RESTORING;
+        this.groupId = groupId;
         this.adminClient = adminClient;
-        this.mainConsumer = mainConsumer;
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
 
@@ -630,7 +627,7 @@ public class StoreChangelogReader implements ChangelogReader {
     private Map<TopicPartition, Long> committedOffsetForChangelogs(final Set<TopicPartition> partitions) {
         final Map<TopicPartition, Long> committedOffsets;
         try {
-            committedOffsets = fetchCommittedOffsets(partitions, mainConsumer);
+            committedOffsets = fetchCommittedOffsets(partitions, groupId, adminClient);
         } catch (final TimeoutException e) {
             // if it timed out we just retry next time
             return Collections.emptyMap();

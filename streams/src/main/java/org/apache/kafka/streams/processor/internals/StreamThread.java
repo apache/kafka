@@ -472,7 +472,7 @@ public class StreamThread extends Thread {
 
         this.numIterations = 1;
 
-        this.restoreThread = new StateRestoreThread(time, config, threadId, adminClient, mainConsumer, restoreConsumer, userStateRestoreListener);
+        this.restoreThread = new StateRestoreThread(time, config, threadId, adminClient, config.getString(StreamsConfig.APPLICATION_ID_CONFIG), restoreConsumer, userStateRestoreListener);
     }
 
     @SuppressWarnings("deprecation")

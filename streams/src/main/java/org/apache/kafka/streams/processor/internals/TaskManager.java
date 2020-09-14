@@ -209,11 +209,11 @@ public class TaskManager {
                 final Set<TopicPartition> assignedToPauseAndReset =
                     intersection(HashSet::new, currentAssignment, taskInputPartitions);
                 if (!assignedToPauseAndReset.equals(taskInputPartitions)) {
-                    log.warn(
-                        "Expected the current consumer assignment {} to contain the input partitions {}. " +
-                            "Will proceed to recover.",
+                    log.warn("Expected the current consumer assignment {} to contain the input partitions {} for task {}. " +
+                        "Will proceed to recover.",
                         currentAssignment,
-                        taskInputPartitions
+                        taskInputPartitions,
+                        task.id()
                     );
                 }
 
