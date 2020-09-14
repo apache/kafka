@@ -163,10 +163,18 @@ public class StateRestoreThread extends Thread {
                 //       changelog is not yet completed
                 if (item.type == ItemType.CLOSE) {
                     changelogReader.unregister(item.task.changelogPartitions());
+
+                    log.info("Unregistered changelogs {} for closing task {}",
+                            item.task.changelogPartitions(),
+                            item.task.id());
                 } else if (item.type == ItemType.CREATE) {
                     for (final TopicPartition partition : item.task.changelogPartitions()) {
                         changelogReader.register(partition, item.task.stateMgr);
                     }
+
+                    log.info("Registered changelogs {} for created task {}",
+                            item.task.changelogPartitions(),
+                            item.task.id());
                 }
             }
         }
@@ -192,7 +200,7 @@ public class StateRestoreThread extends Thread {
         } catch (final StreamsException e) {
             // if we are shutting down, the consumer could throw interrupt exception which can be ignored;
             // otherwise, we re-throw
-            if (e.getCause() instanceof InterruptException && isRunning.get()) {
+            if (!(e.getCause() instanceof InterruptException) || isRunning.get()) {
                 throw e;
             }
         } catch (final TimeoutException e) {

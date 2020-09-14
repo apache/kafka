@@ -511,7 +511,7 @@ public class ProcessorStateManager implements StateManager {
                 }
             }
 
-            stores.clear();
+            // do not clear the store map since they will still be used for changelog de-registeration later
         }
 
         if (firstException != null) {

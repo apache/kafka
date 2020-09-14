@@ -159,7 +159,7 @@ public class StoreChangelogReader implements ChangelogReader {
         @Override
         public String toString() {
             final Long currentOffset = storeMetadata.offset();
-            return changelogState + " " + stateManager.taskType() +
+            return storeMetadata.changelogPartition() + " (" + changelogState + " " + stateManager.taskType() + ") " +
                 " (currentOffset " + currentOffset + ", endOffset " + restoreEndOffset + ")";
         }
 
