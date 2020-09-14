@@ -69,13 +69,28 @@ class ChangeLoggingWindowBytesStore
         return wrapped().fetch(key, from, to);
     }
 
+    @Override
+    public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
+                                                     final long timeFrom,
+                                                     final long timeTo) {
+        return wrapped().backwardFetch(key, timeFrom, timeTo);
+    }
+
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
                                                            final Bytes keyTo,
-                                                           final long from,
+                                                           final long timeFrom,
                                                            final long to) {
-        return wrapped().fetch(keyFrom, keyTo, from, to);
+        return wrapped().fetch(keyFrom, keyTo, timeFrom, to);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetch(final Bytes keyFrom,
+                                                                   final Bytes keyTo,
+                                                                   final long timeFrom,
+                                                                   final long timeTo) {
+        return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
     }
 
     @Override
@@ -83,11 +98,23 @@ class ChangeLoggingWindowBytesStore
         return wrapped().all();
     }
 
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
+        return wrapped().backwardAll();
+    }
+
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {
         return wrapped().fetchAll(timeFrom, timeTo);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
+                                                                      final long timeTo) {
+        return wrapped().backwardFetchAll(timeFrom, timeTo);
     }
 
     @Deprecated

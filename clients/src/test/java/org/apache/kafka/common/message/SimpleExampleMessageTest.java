@@ -310,8 +310,8 @@ public class SimpleExampleMessageTest {
     @Test
     public void testMyTaggedStruct() {
         // Verify that we can set and retrieve a nullable struct object.
-        SimpleExampleMessageData.MyTaggedStruct myStruct =
-            new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc");
+        SimpleExampleMessageData.TaggedStruct myStruct =
+            new SimpleExampleMessageData.TaggedStruct().setStructId("abc");
         testRoundTrip(new SimpleExampleMessageData().setMyTaggedStruct(myStruct),
             message -> assertEquals(myStruct, message.myTaggedStruct()), (short) 2);
 

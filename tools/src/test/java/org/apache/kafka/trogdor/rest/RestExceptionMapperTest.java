@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.trogdor.rest;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JavaType;
@@ -27,7 +28,7 @@ import javax.ws.rs.core.Response;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SerializationException;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 public class RestExceptionMapperTest {
 
@@ -83,23 +84,26 @@ public class RestExceptionMapperTest {
         assertEquals(resp.getStatus(), Response.Status.INTERNAL_SERVER_ERROR.getStatusCode());
     }
 
-    @Test(expected = NotFoundException.class)
-    public void testToExceptionNotFoundException() throws Exception {
-        RestExceptionMapper.toException(Response.Status.NOT_FOUND.getStatusCode(), "Not Found");
+    @Test
+    public void testToExceptionNotFoundException() {
+        assertThrows(NotFoundException.class,
+            () -> RestExceptionMapper.toException(Response.Status.NOT_FOUND.getStatusCode(), "Not Found"));
     }
 
-    @Test(expected = ClassNotFoundException.class)
-    public void testToExceptionClassNotFoundException() throws Exception {
-        RestExceptionMapper.toException(Response.Status.NOT_IMPLEMENTED.getStatusCode(), "Not Implemented");
+    @Test
+    public void testToExceptionClassNotFoundException() {
+        assertThrows(ClassNotFoundException.class,
+            () -> RestExceptionMapper.toException(Response.Status.NOT_IMPLEMENTED.getStatusCode(), "Not Implemented"));
     }
 
-    @Test(expected = InvalidRequestException.class)
-    public void testToExceptionSerializationException() throws Exception {
-        RestExceptionMapper.toException(Response.Status.BAD_REQUEST.getStatusCode(), "Bad Request");
+    @Test
+    public void testToExceptionSerializationException() {
+        assertThrows(InvalidRequestException.class,
+            () -> RestExceptionMapper.toException(Response.Status.BAD_REQUEST.getStatusCode(), "Bad Request"));
     }
 
-    @Test(expected = RuntimeException.class)
-    public void testToExceptionRuntimeException() throws Exception {
-        RestExceptionMapper.toException(-1, "Unkown status code");
+    @Test
+    public void testToExceptionRuntimeException() {
+        assertThrows(RuntimeException.class, () -> RestExceptionMapper.toException(-1, "Unkown status code"));
     }
 }

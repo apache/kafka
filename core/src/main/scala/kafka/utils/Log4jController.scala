@@ -87,9 +87,10 @@ object Log4jController {
 class Log4jController extends Log4jControllerMBean {
 
   def getLoggers: util.List[String] = {
-    Log4jController.loggers.map {
+    // we replace scala collection by java collection so mbean client is able to deserialize it without scala library.
+    new util.ArrayList[String](Log4jController.loggers.map {
       case (logger, level) => s"$logger=$level"
-    }.toList.asJava
+    }.toSeq.asJava)
   }
 
 

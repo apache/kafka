@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.streams.kstream.internals.GroupedInternal
-import org.apache.kafka.streams.scala.Serdes
-import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.serialization.Serdes._
+import org.apache.kafka.streams.scala.serialization.Serdes
 import org.junit.runner.RunWith
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatestplus.junit.JUnitRunner
@@ -30,8 +30,8 @@ class GroupedTest extends FlatSpec with Matchers {
     val grouped: Grouped[String, Long] = Grouped.`with`[String, Long]
 
     val internalGrouped = new GroupedInternal[String, Long](grouped)
-    internalGrouped.keySerde.getClass shouldBe Serdes.String.getClass
-    internalGrouped.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalGrouped.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalGrouped.valueSerde.getClass shouldBe Serdes.longSerde.getClass
   }
 
   "Create a Grouped with repartition topic name" should "create a Grouped with Serdes, and repartition topic name" in {
@@ -39,8 +39,8 @@ class GroupedTest extends FlatSpec with Matchers {
     val grouped: Grouped[String, Long] = Grouped.`with`(repartitionTopicName)
 
     val internalGrouped = new GroupedInternal[String, Long](grouped)
-    internalGrouped.keySerde.getClass shouldBe Serdes.String.getClass
-    internalGrouped.valueSerde.getClass shouldBe Serdes.Long.getClass
+    internalGrouped.keySerde.getClass shouldBe Serdes.stringSerde.getClass
+    internalGrouped.valueSerde.getClass shouldBe Serdes.longSerde.getClass
     internalGrouped.name() shouldBe repartitionTopicName
   }
 

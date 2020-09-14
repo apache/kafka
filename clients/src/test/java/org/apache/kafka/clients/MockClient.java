@@ -312,6 +312,14 @@ public class MockClient implements KafkaClient {
         return this.requests;
     }
 
+    public Queue<ClientResponse> responses() {
+        return this.responses;
+    }
+
+    public Queue<FutureResponse> futureResponses() {
+        return this.futureResponses;
+    }
+
     public void respond(AbstractResponse response) {
         respond(response, false);
     }
