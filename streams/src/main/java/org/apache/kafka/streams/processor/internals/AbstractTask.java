@@ -47,11 +47,11 @@ public abstract class AbstractTask implements Task {
     protected final StateDirectory stateDirectory;
     protected final ProcessorStateManager stateMgr;
 
-    AbstractTask(final TaskId id,
-                 final ProcessorTopology topology,
-                 final StateDirectory stateDirectory,
-                 final ProcessorStateManager stateMgr,
-                 final Set<TopicPartition> inputPartitions) {
+    public AbstractTask(final TaskId id,
+                        final ProcessorTopology topology,
+                        final StateDirectory stateDirectory,
+                        final ProcessorStateManager stateMgr,
+                        final Set<TopicPartition> inputPartitions) {
         this.id = id;
         this.stateMgr = stateMgr;
         this.topology = topology;
@@ -120,7 +120,7 @@ public abstract class AbstractTask implements Task {
         }
     }
 
-    final void transitionTo(final Task.State newState) {
+    public final void transitionTo(final Task.State newState) {
         final State oldState = state();
 
         if (oldState.isValidTransition(newState)) {

@@ -203,7 +203,7 @@ public class StoreChangelogReader implements ChangelogReader {
 
     // the changelog reader only need the main consumer to get committed offsets for source changelog partitions
     // to update offset limit for standby tasks;
-    private Consumer<byte[], byte[]> mainConsumer;
+    private final Consumer<byte[], byte[]> mainConsumer;
 
     // the changelog reader needs the admin client to list end offsets
     private final Admin adminClient;
@@ -220,12 +220,14 @@ public class StoreChangelogReader implements ChangelogReader {
 
     public StoreChangelogReader(final Time time,
                                 final StreamsConfig config,
-                                final LogContext logContext,
+                                final String threadClientId,
                                 final Admin adminClient,
                                 final Consumer<byte[], byte[]> mainConsumer,
                                 final Consumer<byte[], byte[]> restoreConsumer,
                                 final StateRestoreListener stateRestoreListener) {
         this.time = time;
+        final String logPrefix = String.format("store-changelog-reader [%s] ", threadClientId);
+        final LogContext logContext = new LogContext(logPrefix);
         this.log = logContext.logger(StoreChangelogReader.class);
         this.state = ChangelogReaderState.ACTIVE_RESTORING;
         this.adminClient = adminClient;

@@ -19,10 +19,12 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.slf4j.Logger;
@@ -65,6 +67,14 @@ public class StateRestoreThread extends Thread {
                               final Consumer<byte[], byte[]> mainConsumer,
                               final Consumer<byte[], byte[]> restoreConsumer,
                               final StateRestoreListener userStateRestoreListener) {
+        this(time, threadClientId, new StoreChangelogReader(time, config, threadClientId,
+                adminClient, mainConsumer, restoreConsumer, userStateRestoreListener));
+    }
+
+    // for testing only
+    public StateRestoreThread(final Time time,
+                              final String threadClientId,
+                              final ChangelogReader changelogReader) {
         super(threadClientId);
 
         final String logPrefix = String.format("state-restore-thread [%s] ", threadClientId);
@@ -76,8 +86,7 @@ public class StateRestoreThread extends Thread {
         this.corruptedExceptions = new LinkedBlockingDeque<>();
         this.completedChangelogs = new AtomicReference<>(Collections.emptySet());
 
-        this.changelogReader = new StoreChangelogReader(
-            time, config, logContext, adminClient, mainConsumer, restoreConsumer, userStateRestoreListener);
+        this.changelogReader = changelogReader;
     }
 
     private synchronized void waitIfAllChangelogsCompleted() {
@@ -122,51 +131,7 @@ public class StateRestoreThread extends Thread {
     public void run() {
         try {
             while (isRunning()) {
-                waitIfAllChangelogsCompleted();
-
-                // a task being recycled maybe in both closed and initialized tasks,
-                // and hence we should process the closed ones first and then initialized ones
-                final List<TaskItem> items = new ArrayList<>();
-                taskItemQueue.drainTo(items);
-
-                if (!items.isEmpty()) {
-                    for (final TaskItem item : items) {
-                        // TODO: we should consider also call the listener if the
-                        //       changelog is not yet completed
-                        if (item.type == ItemType.CLOSE) {
-                            changelogReader.unregister(item.task.changelogPartitions());
-                        } else if (item.type == ItemType.CREATE) {
-                            for (final TopicPartition partition : item.task.changelogPartitions()) {
-                                changelogReader.register(partition, item.task.stateMgr);
-                            }
-                        }
-                    }
-                }
-                items.clear();
-
-                // try to restore some changelogs
-                final long startMs = time.milliseconds();
-                try {
-                    final int numRestored = changelogReader.restore();
-                    // TODO: we should record the restoration related metrics
-                    log.info("Restored {} records in {} ms", numRestored, time.milliseconds() - startMs);
-                } catch (final TaskCorruptedException e) {
-                    log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
-                            "Will close the task as dirty and re-create and bootstrap from scratch.", e);
-
-                    // remove corrupted partitions form the changelog reader and continue; we can still proceed
-                    // and restore other partitions until the main thread come to handle this exception
-                    changelogReader.unregister(e.corruptedTaskWithChangelogs().values().stream()
-                            .flatMap(Collection::stream)
-                            .collect(Collectors.toList()));
-
-                    corruptedExceptions.add(e);
-                } catch (final TimeoutException e) {
-                    log.info("Encountered timeout when restoring states, will retry in the next loop");
-                }
-
-                // finally update completed changelogs
-                completedChangelogs.set(changelogReader.completedChangelogs());
+                runOnce();
             }
         } catch (final Exception e) {
             log.error("Encountered the following exception while restoring states " +
@@ -181,6 +146,61 @@ public class StateRestoreThread extends Thread {
 
             shutdownLatch.countDown();
         }
+    }
+
+    // Visible for testing
+    void runOnce() {
+        waitIfAllChangelogsCompleted();
+
+        // a task being recycled maybe in both closed and initialized tasks,
+        // and hence we should process the closed ones first and then initialized ones
+        final List<TaskItem> items = new ArrayList<>();
+        taskItemQueue.drainTo(items);
+
+        if (!items.isEmpty()) {
+            for (final TaskItem item : items) {
+                // TODO: we should consider also call the listener if the
+                //       changelog is not yet completed
+                if (item.type == ItemType.CLOSE) {
+                    changelogReader.unregister(item.task.changelogPartitions());
+                } else if (item.type == ItemType.CREATE) {
+                    for (final TopicPartition partition : item.task.changelogPartitions()) {
+                        changelogReader.register(partition, item.task.stateMgr);
+                    }
+                }
+            }
+        }
+        items.clear();
+
+        // try to restore some changelogs
+        final long startMs = time.milliseconds();
+        try {
+            final int numRestored = changelogReader.restore();
+            // TODO: we should record the restoration related metrics
+            log.info("Restored {} records in {} ms", numRestored, time.milliseconds() - startMs);
+        } catch (final TaskCorruptedException e) {
+            log.warn("Detected the states of tasks " + e.corruptedTaskWithChangelogs() + " are corrupted. " +
+                    "Will close the task as dirty and re-create and bootstrap from scratch.", e);
+
+            // remove corrupted partitions form the changelog reader and continue; we can still proceed
+            // and restore other partitions until the main thread come to handle this exception
+            changelogReader.unregister(e.corruptedTaskWithChangelogs().values().stream()
+                    .flatMap(Collection::stream)
+                    .collect(Collectors.toList()));
+
+            corruptedExceptions.add(e);
+        } catch (final StreamsException e) {
+            // if we are shutting down, the consumer could throw interrupt exception which can be ignored;
+            // otherwise, we re-throw
+            if (e.getCause() instanceof InterruptException && isRunning.get()) {
+                throw e;
+            }
+        } catch (final TimeoutException e) {
+            log.info("Encountered timeout when restoring states, will retry in the next loop");
+        }
+
+        // finally update completed changelogs
+        completedChangelogs.set(changelogReader.completedChangelogs());
     }
 
     public TaskCorruptedException nextCorruptedException() {
@@ -216,5 +236,11 @@ public class StateRestoreThread extends Thread {
             this.task = task;
             this.type = type;
         }
+    }
+
+
+    // testing functions below
+    ChangelogReader changelogReader() {
+        return changelogReader;
     }
 }

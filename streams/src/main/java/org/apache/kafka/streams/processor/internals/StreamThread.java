@@ -629,10 +629,10 @@ public class StreamThread extends Thread {
 
         // try complete restoration if there are any restoring tasks
         if (taskManager.anyTasksUnderRestoration() && taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs())) {
-            setState(State.RUNNING);
+            log.debug("Completed restoring all tasks now");
+        }
 
-            log.debug("Completed restoring all tasks now and transited State to {}", State.RUNNING);
-        } else if (taskManager.allTasksRunning()) {
+        if (state == State.PARTITIONS_ASSIGNED && taskManager.allTasksRunning()) {
             // it is possible that we have no assigned tasks in which case we would still transit state
             setState(State.RUNNING);
 
@@ -1079,5 +1079,9 @@ public class StreamThread extends Thread {
 
     Admin adminClient() {
         return adminClient;
+    }
+
+    StateRestoreThread restoreThread() {
+        return restoreThread;
     }
 }

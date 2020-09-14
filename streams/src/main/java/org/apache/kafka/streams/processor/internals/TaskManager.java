@@ -427,7 +427,7 @@ public class TaskManager {
     }
 
     boolean allTasksRunning() {
-        return !tasks().values().stream().anyMatch(task ->
+        return tasks().values().stream().noneMatch(task ->
                 task.state() == Task.State.RESTORING ||
                 task.state() == Task.State.CREATED ||
                 task.state() == Task.State.SUSPENDED);
@@ -501,7 +501,7 @@ public class TaskManager {
         for (final Task task : activeTaskIterable()) {
             if (restoredChangelogs.containsAll(task.changelogPartitions())) {
                 try {
-                    if(!task.completeRestorationIfPossible()) {
+                    if (!task.completeRestorationIfPossible()) {
                         log.debug("Could not complete restoration for {} since it was not restoring", task.id());
 
                         allActiveTasksRestored = false;
@@ -1070,9 +1070,9 @@ public class TaskManager {
     }
 
     private void commitOffsetsOrTransaction(final Map<TaskId, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
-        log.info("Committing task offsets {}", offsetsPerTask);
-
         if (!offsetsPerTask.isEmpty()) {
+            log.info("Committing task offsets {}", offsetsPerTask);
+
             if (processingMode == EXACTLY_ONCE_ALPHA) {
                 for (final Map.Entry<TaskId, Map<TopicPartition, OffsetAndMetadata>> taskToCommit : offsetsPerTask.entrySet()) {
                     activeTaskCreator.streamsProducerForTask(taskToCommit.getKey())

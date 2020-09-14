@@ -210,7 +210,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
             TestUtils.waitForCondition(
                 assignmentStable::get,
-                120_000L,
+                5_000L,
                 "Assignment hasn't become stable: " + assignmentsCompleted.get() +
                     " Note, if this does fail, check and see if the new instance just failed to catch up within" +
                     " the probing rebalance interval. A full minute should be long enough to read ~500 records" +

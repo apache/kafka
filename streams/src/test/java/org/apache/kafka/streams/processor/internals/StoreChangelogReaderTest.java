@@ -28,7 +28,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -109,7 +108,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
 
     private final String storeName = "store";
     private final String topicName = "topic";
-    private final LogContext logContext = new LogContext("test-reader ");
+    private final String threadId = "test";
     private final TopicPartition tp = new TopicPartition(topicName, 0);
     private final TopicPartition tp1 = new TopicPartition("one", 0);
     private final TopicPartition tp2 = new TopicPartition("two", 0);
@@ -137,7 +136,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
     private final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
     private final MockAdminClient adminClient = new MockAdminClient();
     private final StoreChangelogReader changelogReader =
-        new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+        new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
     @Before
     public void setUp() {
@@ -195,7 +194,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, stateManager);
         assertEquals(0, changelogReader.restore());
@@ -233,7 +232,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
 
         final StoreChangelogReader changelogReader =
-                new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+                new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, stateManager);
 
@@ -250,7 +249,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, stateManager);
 
@@ -313,7 +312,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 11L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, stateManager);
 
@@ -379,7 +378,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 0L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, activeStateManager);
         changelogReader.restore();
@@ -417,7 +416,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, activeStateManager);
         changelogReader.restore();
@@ -450,7 +449,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, activeStateManager);
 
@@ -488,7 +487,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         };
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, activeStateManager);
         changelogReader.restore();
@@ -519,7 +518,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 0L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, activeStateManager);
 
@@ -552,7 +551,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 20L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, stateManager);
         changelogReader.restore();
@@ -593,7 +592,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         changelogReader.register(tp, stateManager);
 
@@ -612,7 +611,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
             }
         };
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         final StreamsException thrown = assertThrows(StreamsException.class, changelogReader::clear);
         assertEquals(kaboom, thrown.getCause());
@@ -634,7 +633,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
         final StoreChangelogReader changelogReader =
-                new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+                new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         changelogReader.register(tp, standbyStateManager);
@@ -689,7 +688,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
         final StoreChangelogReader changelogReader =
-                new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+                new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
 
         consumer.updateBeginningOffsets(Collections.singletonMap(tp, 5L));
         changelogReader.register(tp, standbyStateManager);
@@ -843,7 +842,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp1, 10L));
         adminClient.updateEndOffsets(Collections.singletonMap(tp2, 10L));
         final StoreChangelogReader changelogReader =
-                new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, listener);
+                new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, listener);
         assertEquals(ACTIVE_RESTORING, changelogReader.state());
 
         changelogReader.register(tp, activeStateManager);
@@ -922,7 +921,7 @@ public class StoreChangelogReaderTest extends EasyMockSupport {
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
         final StoreChangelogReader changelogReader =
-            new StoreChangelogReader(time, config, logContext, adminClient, consumer, consumer, exceptionCallback);
+            new StoreChangelogReader(time, config, threadId, adminClient, consumer, consumer, exceptionCallback);
 
         changelogReader.register(tp, activeStateManager);
 

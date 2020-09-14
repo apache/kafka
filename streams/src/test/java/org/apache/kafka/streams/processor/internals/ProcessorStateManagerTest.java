@@ -107,7 +107,6 @@ public class ProcessorStateManagerTest {
     private final byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
     private final ConsumerRecord<byte[], byte[]> consumerRecord =
         new ConsumerRecord<>(persistentStoreTopicName, 1, 100L, keyBytes, valueBytes);
-    private final MockChangelogReader changelogReader = new MockChangelogReader();
     private final LogContext logContext = new LogContext("process-state-manager-test ");
     private final StateRestoreCallback noopStateRestoreCallback = (k, v) -> { };
 
@@ -285,7 +284,7 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
-    public void shouldUnregisterChangelogsDuringClose() {
+    public void shouldRecycleStore() {
         final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
         reset(storeMetadata);
         final StateStore store = EasyMock.createMock(StateStore.class);
@@ -301,39 +300,6 @@ public class ProcessorStateManagerTest {
         verify(context, store);
 
         stateMgr.registerStore(store, noopStateRestoreCallback);
-        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
-
-        reset(store);
-        expect(store.name()).andStubReturn(persistentStoreName);
-        store.close();
-        replay(store);
-
-        stateMgr.close();
-        verify(store);
-
-        assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-    }
-
-    @Test
-    public void shouldRecycleStoreAndReregisterChangelog() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-        reset(storeMetadata);
-        final StateStore store = EasyMock.createMock(StateStore.class);
-        expect(storeMetadata.changelogPartition()).andStubReturn(persistentStorePartition);
-        expect(storeMetadata.store()).andStubReturn(store);
-        expect(store.name()).andStubReturn(persistentStoreName);
-
-        context.uninitialize();
-        store.init(context, store);
-        replay(storeMetadata, context, store);
-
-        stateMgr.registerStateStores(singletonList(store), context);
-        verify(context, store);
-
-        stateMgr.registerStore(store, noopStateRestoreCallback);
-        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
-
-        assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
         assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
 
         reset(context, store);
@@ -344,50 +310,6 @@ public class ProcessorStateManagerTest {
         stateMgr.registerStateStores(singletonList(store), context);
 
         verify(context, store);
-        assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
-    }
-
-    @Test
-    public void shouldRegisterPersistentStores() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-
-        try {
-            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-            assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
-        } finally {
-            stateMgr.close();
-        }
-    }
-
-    @Test
-    public void shouldRegisterNonPersistentStore() {
-        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE);
-
-        try {
-            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
-            assertTrue(changelogReader.isPartitionRegistered(nonPersistentStorePartition));
-        } finally {
-            stateMgr.close();
-        }
-    }
-
-    @Test
-    public void shouldNotRegisterNonLoggedStore() {
-        final ProcessorStateManager stateMgr = new ProcessorStateManager(
-            taskId,
-            Task.TaskType.STANDBY,
-            false,
-            logContext,
-            stateDirectory,
-            emptyMap(),
-            emptySet());
-
-        try {
-            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
-            assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
-        } finally {
-            stateMgr.close();
-        }
     }
 
     @Test

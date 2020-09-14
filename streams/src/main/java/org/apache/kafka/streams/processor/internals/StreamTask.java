@@ -230,8 +230,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         switch (state()) {
             case CREATED:
             case SUSPENDED:
-            case RUNNING:
                 return false;
+
+            case RUNNING:
+                return true;
 
             case RESTORING:
                 initializeMetadata();
