@@ -63,11 +63,11 @@ public final class Sensor {
         }
 
         public Stat stat() {
-            return this.stat;
+            return stat;
         }
 
         public MetricConfig config() {
-            return this.configSupplier.get();
+            return configSupplier.get();
         }
     }
 
