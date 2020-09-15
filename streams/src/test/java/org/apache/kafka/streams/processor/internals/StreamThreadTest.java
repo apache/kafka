@@ -1190,16 +1190,16 @@ public class StreamThreadTest {
         // Now, we can handle the corruption
         thread.taskManager().handleCorruption(taskCorruptedException.corruptedTaskWithChangelogs());
 
-        // again, complete the restoration
-        thread.runOnce();
-        // transit to running and unpause
-        thread.runOnce();
         // process the record
         addRecord(mockConsumer, 0L);
         shouldThrow.set(false);
-        assertThat(processed.get(), is(false));
-        thread.runOnce();
-        assertThat(processed.get(), is(true));
+
+        // wait until restoration completes again and normal processing starts
+        TestUtils.waitForCondition(() -> {
+            thread.runOnce();
+            return processed.get();
+        }, "Should transit to RUNNING in time");
+
     }
 
     @Test

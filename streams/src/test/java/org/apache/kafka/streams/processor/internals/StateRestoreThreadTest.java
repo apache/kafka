@@ -58,7 +58,7 @@ public class StateRestoreThreadTest {
 
         assertTrue(((MockChangelogReader) restoreThread.changelogReader()).isPartitionRegistered(tp));
 
-        restoreThread.addClosedTasks(Collections.singletonList(task));
+        restoreThread.addClosedTasks(Collections.singletonMap(task, Collections.singleton(tp)));
 
         restoreThread.runOnce();
 
@@ -76,7 +76,7 @@ public class StateRestoreThreadTest {
 
         assertTrue(((MockChangelogReader) restoreThread.changelogReader()).isPartitionRegistered(tp));
 
-        restoreThread.addClosedTasks(Collections.singletonList(task));
+        restoreThread.addClosedTasks(Collections.singletonMap(task, Collections.singleton(tp)));
 
         restoreThread.runOnce();
 
@@ -97,7 +97,7 @@ public class StateRestoreThreadTest {
 
         restoreThread.shutdown(1000);
 
-        TestUtils.waitForCondition(() -> ((MockChangelogReader) restoreThread.changelogReader()).isPartitionRegistered(tp),
+        TestUtils.waitForCondition(() -> !((MockChangelogReader) restoreThread.changelogReader()).isPartitionRegistered(tp),
                 "Should unregistered the changelog within timeout");
     }
 }

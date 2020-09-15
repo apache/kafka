@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -95,7 +96,7 @@ public class StateRestoreThread extends Thread {
             log.debug("All changelogs {} have completed restoration so far, will wait " +
                     "until new changelogs are registered", allChangelogs);
 
-            while (taskItemQueue.isEmpty()) {
+            while (isRunning.get() && taskItemQueue.isEmpty()) {
                 try {
                     wait();
                 } catch (final InterruptedException e) {
@@ -109,17 +110,15 @@ public class StateRestoreThread extends Thread {
         if (!tasks.isEmpty()) {
             for (final AbstractTask task: tasks) {
                 taskItemQueue.add(new TaskItem(task, ItemType.CREATE, task.changelogPartitions()));
-                // we need to clear the stores here since they may be reused in revive / recycle
-                task.stateMgr.clear();
             }
             notifyAll();
         }
     }
 
-    public synchronized void addClosedTasks(final List<AbstractTask> tasks) {
+    public synchronized void addClosedTasks(final Map<AbstractTask, Collection<TopicPartition>> tasks) {
         if (!tasks.isEmpty()) {
-            for (final AbstractTask task: tasks) {
-                taskItemQueue.add(new TaskItem(task, ItemType.CLOSE));
+            for (final Map.Entry<AbstractTask, Collection<TopicPartition>> entry : tasks.entrySet()) {
+                taskItemQueue.add(new TaskItem(entry.getKey(), ItemType.CLOSE, entry.getValue()));
             }
             notifyAll();
         }
@@ -154,6 +153,9 @@ public class StateRestoreThread extends Thread {
     void runOnce() {
         waitIfAllChangelogsCompleted();
 
+        if (!isRunning.get())
+            return;
+
         // a task being recycled maybe in both closed and initialized tasks,
         // and hence we should process the closed ones first and then initialized ones
         final List<TaskItem> items = new ArrayList<>();
@@ -164,16 +166,16 @@ public class StateRestoreThread extends Thread {
                 // TODO: we should consider also call the listener if the
                 //       changelog is not yet completed
                 if (item.type == ItemType.CLOSE) {
-                    changelogReader.unregister(item.task.changelogPartitions());
+                    changelogReader.unregister(item.changelogPartitions);
 
                     log.info("Unregistered changelogs {} for closing task {}",
                             item.task.changelogPartitions(),
                             item.task.id());
                 } else if (item.type == ItemType.CREATE) {
-                    // we should only convert the state manager type before re-registering the changelog
+                    // we should only convert the state manager type right StateRestoreThreadTest.javabefore re-registering the changelog
                     item.task.stateMgr.maybeConvertToNewTaskType();
 
-                    for (final TopicPartition partition : item.task.changelogPartitions()) {
+                    for (final TopicPartition partition : item.changelogPartitions) {
                         changelogReader.register(partition, item.task.stateMgr);
                     }
 

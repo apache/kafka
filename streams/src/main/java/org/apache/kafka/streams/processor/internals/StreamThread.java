@@ -618,7 +618,7 @@ public class StreamThread extends Thread {
 
         // try to initialize created tasks that are either newly assigned or re-created from corrupted tasks
         final List<AbstractTask> initializedTasks;
-        if (taskManager.anyTasksNeedInitialization() && !(initializedTasks = taskManager.tryInitializeNewTasks()).isEmpty()) {
+        if (!(initializedTasks = taskManager.tryInitializeNewTasks()).isEmpty()) {
             if (log.isDebugEnabled()) {
                 log.debug("Initializing newly created tasks {} under state {}",
                         initializedTasks.stream().map(AbstractTask::id).collect(Collectors.toList()), state);
@@ -628,7 +628,7 @@ public class StreamThread extends Thread {
         }
 
         // try complete restoration if there are any restoring tasks
-        if (taskManager.anyTasksUnderRestoration() && taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs())) {
+        if (taskManager.tryToCompleteRestoration(restoreThread.completedChangelogs())) {
             log.debug("Completed restoring all tasks now");
         }
 

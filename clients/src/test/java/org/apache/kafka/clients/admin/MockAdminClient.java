@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -51,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -60,12 +62,11 @@ public class MockAdminClient extends AdminClient {
 
     private final List<Node> brokers;
     private final Map<String, TopicMetadata> allTopics = new HashMap<>();
-    private final Map<TopicPartition, NewPartitionReassignment> reassignments =
-        new HashMap<>();
-    private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves =
-        new HashMap<>();
+    private final Map<TopicPartition, NewPartitionReassignment> reassignments = new HashMap<>();
+    private final Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaMoves = new HashMap<>();
     private final Map<TopicPartition, Long> beginningOffsets;
     private final Map<TopicPartition, Long> endOffsets;
+    private final Map<TopicPartition, Long> committedOffsets;
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
@@ -74,6 +75,8 @@ public class MockAdminClient extends AdminClient {
     private int timeoutNextRequests = 0;
     private final int defaultPartitions;
     private final int defaultReplicationFactor;
+
+    private KafkaException listConsumerGroupOffsetsException;
 
     private Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
@@ -174,6 +177,7 @@ public class MockAdminClient extends AdminClient {
         }
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
+        this.committedOffsets = new HashMap<>();
     }
 
     synchronized public void controller(Node controller) {
@@ -448,7 +452,23 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        // ignoring the groupId and assume one test would only work on one group only
+        final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
+
+        if (listConsumerGroupOffsetsException != null) {
+            future.completeExceptionally(listConsumerGroupOffsetsException);
+        } else {
+            if (options.topicPartitions().isEmpty()) {
+                future.complete(committedOffsets.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
+            } else {
+                future.complete(committedOffsets.entrySet().stream()
+                        .filter(entry -> options.topicPartitions().contains(entry.getKey()))
+                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
+            }
+        }
+
+        return new ListConsumerGroupOffsetsResult(future);
     }
 
     @Override
@@ -845,6 +865,14 @@ public class MockAdminClient extends AdminClient {
 
     public synchronized void updateEndOffsets(final Map<TopicPartition, Long> newOffsets) {
         endOffsets.putAll(newOffsets);
+    }
+
+    public synchronized void updateConsumerGroupOffsets(final Map<TopicPartition, Long> newOffsets) {
+        committedOffsets.putAll(newOffsets);
+    }
+
+    public synchronized void throwOnListConsumerGroupOffsets(final KafkaException exception) {
+        listConsumerGroupOffsetsException = exception;
     }
 
     private final static class TopicMetadata {

@@ -200,6 +200,7 @@ public class TaskManager {
             }
             task.closeDirty();
 
+            removedTasks.put((AbstractTask) task, task.changelogPartitions());
             ((AbstractTask) task).stateMgr.clear();
 
             // For active tasks pause their input partitions so we won't poll any more records
@@ -420,14 +421,6 @@ public class TaskManager {
         task.resume();
     }
 
-    boolean anyTasksNeedInitialization() {
-        return tasks().values().stream().anyMatch(task -> task.state() == Task.State.CREATED);
-    }
-
-    boolean anyTasksUnderRestoration() {
-        return tasks().values().stream().anyMatch(task -> task.state() == Task.State.RESTORING);
-    }
-
     boolean allTasksRunning() {
         return tasks().values().stream().noneMatch(task ->
                 task.state() == Task.State.RESTORING ||
@@ -462,7 +455,7 @@ public class TaskManager {
         }
 
         tasks.remove(task.id());
-        removedTasks.put((AbstractTask) task, ((AbstractTask) task).stateMgr.changelogPartitions());
+        removedTasks.put((AbstractTask) task, task.changelogPartitions());
 
         if (clearStateManager) {
             ((AbstractTask) task).stateMgr.clear();
@@ -490,9 +483,9 @@ public class TaskManager {
         return initializedTasks;
     }
 
-    public List<AbstractTask> drainRemovedTasks() {
-        final List<AbstractTask> drainedList = removedTasks;
-        removedTasks = new LinkedList<>();
+    public Map<AbstractTask, Collection<TopicPartition>> drainRemovedTasks() {
+        final Map<AbstractTask, Collection<TopicPartition>> drainedList = removedTasks;
+        removedTasks = new HashMap<>();
 
         return drainedList;
     }
@@ -507,6 +500,9 @@ public class TaskManager {
     boolean tryToCompleteRestoration(final Set<TopicPartition> restoredChangelogs) {
         boolean allActiveTasksRestored = true;
         for (final Task task : activeTaskIterable()) {
+            if (task.state() == Task.State.RUNNING)
+                continue;
+
             if (restoredChangelogs.containsAll(task.changelogPartitions())) {
                 try {
                     if (!task.completeRestorationIfPossible()) {
@@ -660,7 +656,8 @@ public class TaskManager {
             if (task.isActive()) {
                 closeTaskDirty(task);
                 iterator.remove();
-                removedTasks.put((AbstractTask) task, ((AbstractTask) task).stateMgr.changelogPartitions());
+                removedTasks.put((AbstractTask) task, task.changelogPartitions());
+                ((AbstractTask) task).stateMgr.clear();
 
                 try {
                     activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());

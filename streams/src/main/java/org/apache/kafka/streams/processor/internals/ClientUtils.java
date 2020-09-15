@@ -127,12 +127,18 @@ public class ClientUtils {
                     .partitionsToOffsetAndMetadata().get().entrySet()
                     .stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));
-        } catch (final TimeoutException e) {
-            LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", e);
-            throw e;
-        } catch (final KafkaException | InterruptedException | ExecutionException e) {
-            LOG.warn("The committed offsets request failed.", e);
+        } catch (final InterruptedException e) {
+            LOG.warn("The committed offsets request failed due to interruption", e);
             throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e);
+        } catch (final ExecutionException e) {
+            if (e.getCause() instanceof TimeoutException) {
+                final TimeoutException exception = (TimeoutException) e.getCause();
+                LOG.warn("The committed offsets request timed out, try increasing the consumer client's default.api.timeout.ms", exception);
+                throw exception;
+            } else {
+                LOG.warn("The committed offsets request failed", e.getCause());
+                throw new StreamsException(String.format("Failed to retrieve end offsets for %s", partitions), e.getCause());
+            }
         }
 
         return committedOffsets;
