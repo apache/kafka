@@ -101,7 +101,7 @@ public interface ProcessorContext<KForward, VForward> {
      * @param name The store name
      * @return The state store instance
      */
-    StateStore getStateStore(final String name);
+    <S extends StateStore> S getStateStore(final String name);
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
@@ -133,6 +133,7 @@ public interface ProcessorContext<KForward, VForward> {
      * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
      * @param callback a function consuming timestamps representing the current stream or system time
      * @return a handle allowing cancellation of the punctuation schedule established by this method
+     * @throws IllegalArgumentException if the interval is not representable in milliseconds
      */
     Cancellable schedule(final Duration interval,
                          final PunctuationType type,

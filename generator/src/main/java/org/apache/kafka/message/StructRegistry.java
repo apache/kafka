@@ -87,11 +87,14 @@ final class StructRegistry {
     private void addStructSpecs(Versions parentVersions, List<FieldSpec> fields) {
         for (FieldSpec field : fields) {
             String elementName = null;
+            String typeName = null;
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                 elementName = arrayType.elementName();
+                typeName = arrayType.elementName();
             } else if (field.type().isStruct()) {
                 elementName = field.name();
+                typeName = field.typeString();
             }
             if (elementName != null) {
                 if (commonStructNames.contains(elementName)) {
@@ -107,7 +110,7 @@ final class StructRegistry {
                         " was specified twice.");
                 } else {
                     // Synthesize a StructSpec object out of the fields.
-                    StructSpec spec = new StructSpec(elementName,
+                    StructSpec spec = new StructSpec(typeName,
                             field.versions().toString(),
                             field.fields());
                     structs.put(elementName, new StructInfo(spec, parentVersions));

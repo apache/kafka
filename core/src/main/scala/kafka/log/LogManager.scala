@@ -184,7 +184,11 @@ class LogManager(logDirs: Seq[File],
     numRecoveryThreadsPerDataDir = newSize
   }
 
-  // dir should be an absolute path
+  /**
+   * The log directory failure handler. It will stop log cleaning in that directory.
+   *
+   * @param dir        the absolute path of the log directory
+   */
   def handleLogDirFailure(dir: String): Unit = {
     warn(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
@@ -962,8 +966,9 @@ class LogManager(logDirs: Seq[File],
         // We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
         if (cleaner != null && !isFuture) {
           cleaner.abortCleaning(topicPartition)
-          if (checkpoint)
-            cleaner.updateCheckpoints(removedLog.parentDirFile)
+          if (checkpoint) {
+            cleaner.updateCheckpoints(removedLog.parentDirFile, partitionToRemove = Option(topicPartition))
+          }
         }
         removedLog.renameDir(Log.logDeleteDirName(topicPartition))
         if (checkpoint) {
