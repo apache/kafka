@@ -67,18 +67,28 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
       throw new IllegalArgumentException(s"Received invalid partition leader epoch entry $entry")
     }
 
-    // Check whether the append is needed before acquiring the write lock
-    // in order to avoid contention with readers in the common case
-    latestEntry.foreach { lastEntry =>
-      if (entry.epoch == lastEntry.epoch && entry.startOffset >= lastEntry.startOffset) {
-        return false
+    def isUpdateNeeded: Boolean = {
+      latestEntry match {
+        case Some(lastEntry) =>
+          entry.epoch != lastEntry.epoch || entry.startOffset < lastEntry.startOffset
+        case None =>
+          true
       }
     }
 
+    // Check whether the append is needed before acquiring the write lock
+    // in order to avoid contention with readers in the common case
+    if (!isUpdateNeeded)
+      return false
+
     inWriteLock(lock) {
-      maybeTruncateNonMonotonicEntries(entry)
-      epochs.put(entry.epoch, entry)
-      true
+      if (isUpdateNeeded) {
+        maybeTruncateNonMonotonicEntries(entry)
+        epochs.put(entry.epoch, entry)
+        true
+      } else {
+        false
+      }
     }
   }
 
