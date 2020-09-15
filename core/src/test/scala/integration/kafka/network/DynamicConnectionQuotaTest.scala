@@ -347,6 +347,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     // make sure the state is the same as before the method call
     TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
-      s"Connections not closed (initial = $initialConnectionCount current = $connectionCount)")
+      s"Connections not closed (initial = $initialConnectionCount current = $connectionCount)", waitTimeMs = runTimeMs)
   }
 }
