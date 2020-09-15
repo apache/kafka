@@ -275,7 +275,14 @@ class StreamsBrokerBounceTest(Test):
         Start a smoke test client, then kill a few brokers and ensure data is still received
         Record if records are delivered
         """
-        self.setup_system() 
+
+        # Set min.insync.replicas to 1 because in the last stage of the test there is only one broker left.
+        # Otherwise the last offset commit will never succeed and time out and potentially take longer as
+        # duration passed to the close method of the Kafka Streams client.
+        self.topics['__consumer_offsets'] = { 'partitions': 50, 'replication-factor': self.replication,
+                                              'configs': {"min.insync.replicas": 1} }
+
+        self.setup_system()
 
         # Sleep to allow test to run for a bit
         time.sleep(120)
