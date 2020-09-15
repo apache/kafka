@@ -276,10 +276,10 @@ public class FetchRequest extends AbstractRequest {
                 FetchRequestData.FetchPartition fetchPartition = new FetchRequestData.FetchPartition()
                     .setPartition(topicPartition.partition())
                     .setCurrentLeaderEpoch(partitionData.currentLeaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                    .setLastFetchedEpoch(partitionData.lastFetchedEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
                     .setFetchOffset(partitionData.fetchOffset)
                     .setLogStartOffset(partitionData.logStartOffset)
                     .setPartitionMaxBytes(partitionData.maxBytes);
-                partitionData.lastFetchedEpoch.ifPresent(fetchPartition::setLastFetchedEpoch);
 
                 fetchTopic.partitions().add(fetchPartition);
             }

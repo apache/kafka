@@ -24,7 +24,7 @@ import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
@@ -223,17 +223,18 @@ class FetchRequestTest extends BaseRequestTest {
     initProducer()
 
     // Write some data in epoch 0
-    produceData(Seq(topicPartition), 100)
+    val firstEpochResponses = produceData(Seq(topicPartition), 100)
+    val firstEpochEndOffset = firstEpochResponses.lastOption.get.offset + 1
     // Force a leader change
     killBroker(firstLeaderId)
-    // Write some more data
-    produceData(Seq(topicPartition), 100)
-
+    // Write some more data in epoch 1
     val secondLeaderId = TestUtils.awaitLeaderChange(servers, topicPartition, firstLeaderId)
     val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, servers)
+    val secondEpochResponses = produceData(Seq(topicPartition), 100)
+    val secondEpochEndOffset = secondEpochResponses.lastOption.get.offset + 1
 
-    // Build a fetch request at offset 150 with last fetched epoch 0
-    val fetchOffset = 150
+    // Build a fetch request in the middle of the second epoch, but with the first epoch
+    val fetchOffset = secondEpochEndOffset + (secondEpochEndOffset - firstEpochEndOffset) / 2
     val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     partitionMap.put(topicPartition, new FetchRequest.PartitionData(fetchOffset, 0L, 1024,
       Optional.of(secondLeaderEpoch), Optional.of(firstLeaderEpoch)))
@@ -245,9 +246,7 @@ class FetchRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE, partitionData.error)
     assertEquals(0L, partitionData.records.sizeInBytes())
     assertTrue(partitionData.truncationOffset.isPresent)
-
-    // Should be exactly 100, but use a fuzzy truncation estimate in case there were produce retries
-    assertTrue(partitionData.truncationOffset.get < 150)
+    assertEquals(firstEpochEndOffset, partitionData.truncationOffset.get)
   }
 
   @Test
@@ -706,7 +705,7 @@ class FetchRequestTest extends BaseRequestTest {
     }.toMap
   }
 
-  private def produceData(topicPartitions: Iterable[TopicPartition], numMessagesPerPartition: Int): Seq[ProducerRecord[String, String]] = {
+  private def produceData(topicPartitions: Iterable[TopicPartition], numMessagesPerPartition: Int): Seq[RecordMetadata] = {
     val records = for {
       tp <- topicPartitions.toSeq
       messageIndex <- 0 until numMessagesPerPartition
@@ -715,7 +714,6 @@ class FetchRequestTest extends BaseRequestTest {
       new ProducerRecord(tp.topic, tp.partition, s"key $suffix", s"value $suffix")
     }
     records.map(producer.send(_).get)
-    records
   }
 
 }
