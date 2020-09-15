@@ -20,16 +20,16 @@ package org.apache.kafka.common.acl;
 import java.util.Objects;
 
 /**
- * An internal, public class which contains the data stored in AccessControlEntry and
+ * An internal, private class which contains the data stored in AccessControlEntry and
  * AccessControlEntryFilter objects.
  */
-public class AccessControlEntryData {
-    protected final String principal;
-    protected final String host;
-    protected final AclOperation operation;
-    protected final AclPermissionType permissionType;
+class AccessControlEntryData {
+    private final String principal;
+    private final String host;
+    private final AclOperation operation;
+    private final AclPermissionType permissionType;
 
-    protected AccessControlEntryData(String principal, String host, AclOperation operation, AclPermissionType permissionType) {
+    AccessControlEntryData(String principal, String host, AclOperation operation, AclPermissionType permissionType) {
         this.principal = principal;
         this.host = host;
         this.operation = operation;

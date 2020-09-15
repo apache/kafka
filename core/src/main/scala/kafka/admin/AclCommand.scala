@@ -44,7 +44,7 @@ object AclCommand extends Logging {
 
   val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, PatternType.LITERAL)
 
-  val Newline = scala.util.Properties.lineSeparator
+  private val Newline = scala.util.Properties.lineSeparator
 
   def main(args: Array[String]): Unit = {
 
@@ -96,7 +96,7 @@ object AclCommand extends Logging {
 
   class AdminClientService(val opts: AclCommandOptions) extends AclCommandService with Logging {
 
-    protected def withAdminClient(opts: AclCommandOptions)(f: Admin => Unit): Unit = {
+    private def withAdminClient(opts: AclCommandOptions)(f: Admin => Unit): Unit = {
       val props = if (opts.options.has(opts.commandConfigOpt))
         Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
       else
@@ -142,77 +142,29 @@ object AclCommand extends Logging {
       }
     }
 
-    /*def listAcls(): Unit = {
-      withAdminClient(opts) { adminClient =>
-        val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
-        val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
-        val resourceToAcls = getAcls(adminClient, filters)
-        if (listPrincipals.isEmpty) {
-          for ((resource, acls) <- resourceToAcls)
-            println(s"Current ACLs for ressource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-        } else {
-          listPrincipals.foreach(principal => {
-            println(s"ACLs for principal `$principal`")
-            val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
-              acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
-
-            for ((resource, acls) <- filteredResourceToAcls)
-              println(s"Current ACLs for ressource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-          })
-        }
-      }
-    }*/
-    // (opts.options.has(opts.producerOpt)
-
     def listAcls(): Unit = {
       withAdminClient(opts) { adminClient =>
         val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
         val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
         val resourceToAcls = getAcls(adminClient, filters)
-        if (listPrincipals.isEmpty) {
-          if(opts.options.has(opts.outputAsJsonOpt)) {
-            println("Received Acl information from Kafka")
-            outputAsJson(resourceToAcls)
-            return
-          }
-          for ((resource, acls) <- resourceToAcls) {
-            println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-          }
-        }
-        else {
-          if(opts.options.has(opts.outputAsJsonOpt)) {
-            println("Received Acl information from Kafka")
-            val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
-              acls.filterNot(acl => listPrincipals.forall(
-                principal => !principal.toString.equals(acl.principal)))).filter(entry => entry._2.nonEmpty)
-            outputAsJson(filteredResourceToAcls)
-            return
-          }
-          listPrincipals.foreach(principal => {
-            println(s"ACLs for principal `$principal`")
-            val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
-              acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
-              for ((resource, acls) <- filteredResourceToAcls) {
-                println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-            }
-          })
-        }
+        printAcls(filters, listPrincipals, resourceToAcls)
       }
     }
 
-    def outputAsJson(filteredResourceToAcls: Map[ResourcePattern, Set[AccessControlEntry]]): Unit = {
-      val resourceList = mutable.Set[Any]()
-      for ((resource, acls) <- filteredResourceToAcls) {
-        resourceList.add(mutable.Map("acls" -> acls.map(x => mutable.Map("principal" -> x.principal(),
-          "host" -> x.host(),
-          "operation" ->x.operation().toString,
-          "permissionType" -> x.permissionType().toString).asJava).asJava,
-          "resourceType" -> resource.resourceType().toString,
-          "name" -> resource.name(), "patternType" -> resource.patternType().toString
-        ).asJava)
+    def printAcls(filters :Set[ResourcePatternFilter], listPrincipals :Set[KafkaPrincipal], resourceToAcls :Map[ResourcePattern, Set[AccessControlEntry]]): Unit = {
+      if (listPrincipals.isEmpty) {
+        for ((resource, acls) <- resourceToAcls)
+          println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+      } else {
+        listPrincipals.foreach(principal => {
+          println(s"ACLs for principal `$principal`")
+          val filteredResourceToAcls =  resourceToAcls.mapValues(acls =>
+            acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
+
+          for ((resource, acls) <- filteredResourceToAcls)
+            println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+        })
       }
-      val aclResponse = Json.encodeAsString(Map("resources" ->resourceList.asJava).asJava)
-      println(aclResponse)
     }
 
     private def removeAcls(adminClient: Admin, acls: Set[AccessControlEntry], filter: ResourcePatternFilter): Unit = {
@@ -224,7 +176,7 @@ object AclCommand extends Logging {
       }
     }
 
-    def getAcls(adminClient: Admin, filters: Set[ResourcePatternFilter]): Map[ResourcePattern, Set[AccessControlEntry]] = {
+    private def getAcls(adminClient: Admin, filters: Set[ResourcePatternFilter]): Map[ResourcePattern, Set[AccessControlEntry]] = {
       val aclBindings =
         if (filters.isEmpty) adminClient.describeAcls(AclBindingFilter.ANY).values().get().asScala.toList
         else {
@@ -292,7 +244,7 @@ object AclCommand extends Logging {
       }
     }
 
- /*   def listAcls(): Unit = {
+    def listAcls(): Unit = {
       withAuthorizer() { authorizer =>
         val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
         val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
@@ -300,74 +252,13 @@ object AclCommand extends Logging {
         if (listPrincipals.isEmpty) {
           val resourceToAcls =  getFilteredResourceToAcls(authorizer, filters)
           for ((resource, acls) <- resourceToAcls)
-            println(s"Current ACLs for reource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+            println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
         } else {
           listPrincipals.foreach(principal => {
             println(s"ACLs for principal `$principal`")
             val resourceToAcls =  getFilteredResourceToAcls(authorizer, filters, Some(principal))
             for ((resource, acls) <- resourceToAcls)
-              println(s"Current ACLs for reource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-          })
-        }
-      }
-    }
-*/
-/* def listAcls(): Unit = {
-   withAuthorizer() { authorizer =>
-     val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
-     val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
-  //   var states = mutable.Map[String, Set[Map[String,String]]]()
-     val states = mutable.Map[String,Any]()
-
-     if (listPrincipals.isEmpty) {
-       val resourceToAcls =  getFilteredResourceToAcls(authorizer, filters)
-       for ((resource, acls) <- resourceToAcls) {
-         //states(resource.toString()) = acls.map(x => x.toStringMap())
-         states(resource.toString()) = acls.map(x => x.toStringMap().asJava).asJava
-         println(s"Current ACLs for resource1 `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-       }
-       val aclResponse = Json.encodeAsString(states.asJava)
-       println(aclResponse)
-   /*    val states2:mutable.Map[String, Set[Map[String,String]]] = Json.parseStringAs[mutable.Map[String, Set[Map[String,String]]]](aclResponse).right.get
-       for ((k,v) <- states2)
-       {
-         println(k)
-         v.foreach(x => println(x.mkString(Newline)))
-       }
-   */
-     } else {
-       listPrincipals.foreach(principal => {
-         println(s"ACLs for principal `$principal`")
-         val resourceToAcls =  getFilteredResourceToAcls(authorizer, filters, Some(principal))
-         for ((resource, acls) <- resourceToAcls)
-           println(s"Current ACLs for reource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-       })
-     }
-   }
- }*/
-
-    def listAcls(): Unit = {
-      withAuthorizer() { authorizer =>
-        val filters = getResourceFilter(opts, dieIfNoResourceFound = false)
-        val listPrincipals = getPrincipals(opts, opts.listPrincipalsOpt)
-        //   var states = mutable.Map[String, Set[Map[String,String]]]()
-        val states = mutable.Map[String,Any]()
-
-        if (listPrincipals.isEmpty) {
-          val resourceToAcls =  getFilteredResourceToAcls(authorizer, filters)
-          for ((resource, acls) <- resourceToAcls) {
-            //states(resource.toString()) = acls.map(x => x.toStringMap())
-            states(resource.toString()) = acls.map(x => x.toStringMap().asJava).asJava
-            println(s"Current ACLs for resource1 `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
-          }
-          val aclResponse = Json.encodeAsString(states.asJava)
-          println(aclResponse)
-        } else {
-          listPrincipals.foreach(principal => {
-            println(s"ACLs for principal `$principal`")
-            val resourceToAcls =  getFilteredResourceToAcls(authorizer, filters, Some(principal))
-            for ((resource, acls) <- resourceToAcls)
-              println(s"Current ACLs for reource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+              println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           })
         }
       }
@@ -465,7 +356,7 @@ object AclCommand extends Logging {
 
         if (listPrincipals.isEmpty) {
           for ((resource, acls) <- resourceToAcls)
-            println(s"Current ACLs for resssource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+            println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
         } else {
           listPrincipals.foreach(principal => {
             println(s"ACLs for principal `$principal`")
@@ -473,7 +364,7 @@ object AclCommand extends Logging {
               acls.filter(acl => principal.toString.equals(acl.principal))).filter(entry => entry._2.nonEmpty)
 
             for ((resource, acls) <- filteredResourceToAcls)
-              println(s"Current ACLs for resssource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
+              println(s"Current ACLs for resource `$resource`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
           })
         }
       }
@@ -592,7 +483,7 @@ object AclCommand extends Logging {
     filters.map(_ -> acls).toMap
   }
 
-  private def getAcl(opts: AclCommandOptions, operations: Set[AclOperation]): Set[AccessControlEntry] = {
+  def getAcl(opts: AclCommandOptions, operations: Set[AclOperation]): Set[AccessControlEntry] = {
     val allowedPrincipals = getPrincipals(opts, opts.allowPrincipalsOpt)
 
     val deniedPrincipals = getPrincipals(opts, opts.denyPrincipalsOpt)
@@ -635,14 +526,14 @@ object AclCommand extends Logging {
       Set.empty[String]
   }
 
-  def getPrincipals(opts: AclCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[KafkaPrincipal] = {
+  private def getPrincipals(opts: AclCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[KafkaPrincipal] = {
     if (opts.options.has(principalOptionSpec))
       opts.options.valuesOf(principalOptionSpec).asScala.map(s => JSecurityUtils.parseKafkaPrincipal(s.trim)).toSet
     else
       Set.empty[KafkaPrincipal]
   }
 
-  def getResourceFilter(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[ResourcePatternFilter] = {
+  private def getResourceFilter(opts: AclCommandOptions, dieIfNoResourceFound: Boolean = true): Set[ResourcePatternFilter] = {
     val patternType: PatternType = opts.options.valueOf(opts.resourcePatternType)
 
     var resourceFilters = Set.empty[ResourcePatternFilter]
@@ -757,9 +648,6 @@ object AclCommand extends Logging {
       .withRequiredArg
       .ofType(classOf[String])
       .defaultsTo(All.name)
-
-    val outputAsJsonOpt = parser.accepts("json", "output ACL list as json")
-
 
     val allowPrincipalsOpt = parser.accepts("allow-principal", "principal is in principalType:name format." +
       " Note that principalType must be supported by the Authorizer being used." +
