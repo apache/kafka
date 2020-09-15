@@ -146,6 +146,7 @@ case class LogOffsetSnapshot(logStartOffset: Long,
  * Another container which is used for lower level reads using  [[kafka.cluster.Partition.readRecords()]].
  */
 case class LogReadInfo(fetchedData: FetchDataInfo,
+                       truncationOffset: Option[Long],
                        highWatermark: Long,
                        logStartOffset: Long,
                        logEndOffset: Long,

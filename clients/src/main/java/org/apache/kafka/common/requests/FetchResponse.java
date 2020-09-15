@@ -122,6 +122,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
         // Derived fields
         private final Optional<Integer> preferredReplica;
+        private final Optional<Long> truncationOffset;
         private final List<AbortedTransaction> abortedTransactions;
         private final Errors error;
 
@@ -141,6 +142,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     .collect(Collectors.toList());
             }
 
+            this.truncationOffset = partitionResponse.truncationOffset() < 0 ?
+                Optional.empty() :
+                Optional.of(partitionResponse.truncationOffset());
             this.error = Errors.forCode(partitionResponse.errorCode());
         }
 
@@ -150,10 +154,13 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              long logStartOffset,
                              Optional<Integer> preferredReadReplica,
                              List<AbortedTransaction> abortedTransactions,
+                             Optional<Long> truncationOffset,
                              T records) {
             this.preferredReplica = preferredReadReplica;
             this.abortedTransactions = abortedTransactions;
             this.error = error;
+            this.truncationOffset = truncationOffset;
+
             FetchResponseData.FetchablePartitionResponse partitionResponse =
                 new FetchResponseData.FetchablePartitionResponse();
             partitionResponse.setErrorCode(error.code())
@@ -171,8 +178,20 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             }
             partitionResponse.setPreferredReadReplica(preferredReadReplica.orElse(INVALID_PREFERRED_REPLICA_ID));
             partitionResponse.setRecordSet(records);
+            truncationOffset.ifPresent(partitionResponse::setTruncationOffset);
 
             this.partitionResponse = partitionResponse;
+        }
+
+        public PartitionData(Errors error,
+                             long highWatermark,
+                             long lastStableOffset,
+                             long logStartOffset,
+                             Optional<Integer> preferredReadReplica,
+                             List<AbortedTransaction> abortedTransactions,
+                             T records) {
+            this(error, highWatermark, lastStableOffset, logStartOffset, preferredReadReplica,
+                abortedTransactions, Optional.empty(), records);
         }
 
         public PartitionData(Errors error,
@@ -234,6 +253,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
         public List<AbortedTransaction> abortedTransactions() {
             return abortedTransactions;
+        }
+
+        public Optional<Long> truncationOffset() {
+            return truncationOffset;
         }
 
         @SuppressWarnings("unchecked")
