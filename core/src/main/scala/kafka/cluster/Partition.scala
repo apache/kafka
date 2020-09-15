@@ -1276,9 +1276,12 @@ class Partition(val topicPartition: TopicPartition,
       // When expanding the ISR, we can safely assume the new replica will make it into the ISR since this puts us in
       // a more constrained state for advancing the HW.
       val newIsr = inSyncReplicaIds + newInSyncReplica
-      pendingInSyncReplicaIds = Some(newIsr)
-      debug(s"Adding new in-sync replica $newInSyncReplica. Pending ISR updated to [${newIsr.mkString(",")}] for $topicPartition")
-      sendAlterIsrRequest(newIsr)
+      if (sendAlterIsrRequest(newIsr)) {
+        pendingInSyncReplicaIds = Some(newIsr)
+        debug(s"Adding new in-sync replica $newInSyncReplica. Pending ISR updated to [${newIsr.mkString(",")}] for $topicPartition")
+      } else {
+        throw new IllegalStateException("Failed to enqueue ISR expansion even though there was no apparent in-flight ISR changes")
+      }
     } else {
       trace(s"ISR update in-flight, not adding new in-sync replica $newInSyncReplica for $topicPartition")
     }
@@ -1309,8 +1312,12 @@ class Partition(val topicPartition: TopicPartition,
       // the next LeaderAndIsr
       pendingInSyncReplicaIds = Some(inSyncReplicaIds)
       val newIsr = inSyncReplicaIds -- outOfSyncReplicas
-      debug(s"Removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
-      sendAlterIsrRequest(newIsr)
+      if (sendAlterIsrRequest(newIsr)) {
+        debug(s"Removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
+      } else {
+        throw new IllegalStateException("Failed to enqueue ISR shrink even though there was no apparent in-flight ISR changes")
+      }
+
     } else {
       trace(s"ISR update in-flight, not removing out-of-sync replicas $outOfSyncReplicas for $topicPartition")
     }
@@ -1334,7 +1341,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def sendAlterIsrRequest(newIsr: Set[Int]): Unit = {
+  private def sendAlterIsrRequest(newIsr: Set[Int]): Boolean = {
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.toList, zkVersion)
     alterIsrManager.enqueueIsrUpdate(AlterIsrItem(topicPartition, newLeaderAndIsr, result => {
       inWriteLock(leaderIsrUpdateLock) {

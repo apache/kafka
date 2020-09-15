@@ -1068,13 +1068,18 @@ object TestUtils extends Logging {
   class TestAlterIsrManager extends AlterIsrManager {
     val isrUpdates: mutable.Queue[AlterIsrItem] = new mutable.Queue[AlterIsrItem]()
 
-    override def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Unit = {
+    override def enqueueIsrUpdate(alterIsrItem: AlterIsrItem): Boolean = {
       isrUpdates += alterIsrItem
+      true
     }
 
     override def clearPending(topicPartition: TopicPartition): Unit = {
       isrUpdates.clear()
     }
+
+    override def start(): Unit = ???
+
+    override def shutdown(): Unit = ???
   }
 
   def createAlterIsrManager(): TestAlterIsrManager = {
