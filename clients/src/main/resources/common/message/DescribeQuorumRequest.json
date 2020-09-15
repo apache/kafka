@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 53,
+  "apiKey": 55,
   "type": "request",
   "name": "DescribeQuorumRequest",
   "validVersions": "0",

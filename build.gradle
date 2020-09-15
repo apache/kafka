@@ -1150,7 +1150,8 @@ project(':raft') {
 
     testCompile project(':clients')
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
@@ -1175,10 +1176,10 @@ project(':raft') {
   task processMessages(type:JavaExec) {
     main = "org.apache.kafka.message.MessageGenerator"
     classpath = project(':generator').sourceSets.main.runtimeClasspath
-    args = [ "org.apache.kafka.raft.generated",
-             "src/generated/java/org/apache/kafka/raft/generated",
-             "src/main/resources/common/message",
-             "none"]
+    args = [ "-p", "org.apache.kafka.raft.generated",
+             "-o", "src/generated/java/org/apache/kafka/raft/generated",
+             "-i", "src/main/resources/common/message",
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"]
     inputs.dir("src/main/resources/common/message")
     outputs.dir("src/generated/java/org/apache/kafka/raft/generated")
   }

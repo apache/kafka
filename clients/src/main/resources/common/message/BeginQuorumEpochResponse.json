@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 51,
+  "apiKey": 53,
   "type": "response",
   "name": "BeginQuorumEpochResponse",
   "validVersions": "0",

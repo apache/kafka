@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ShortNode;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.raft.generated.QuorumStateData.Voter;
+import org.apache.kafka.raft.generated.QuorumStateDataJsonConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +53,6 @@ import java.util.stream.Collectors;
  *   "votedId":-1,
  *   "appliedOffset":0,
  *   "currentVoters":[],
- *   "targetVoters":[],
  *   "data_version":0}
  * </pre>
  * */
@@ -90,9 +90,7 @@ public class FileBasedStateStore implements QuorumStateStore {
             }
 
             final short dataVersion = dataVersionNode.shortValue();
-            QuorumStateData data = new QuorumStateData();
-            data.fromJson(dataObject, dataVersion);
-            return data;
+            return QuorumStateDataJsonConverter.read(dataObject, dataVersion);
         }
     }
 
@@ -142,7 +140,7 @@ public class FileBasedStateStore implements QuorumStateStore {
                  new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
             short version = state.highestSupportedVersion();
 
-            ObjectNode jsonState = (ObjectNode) state.toJson(version);
+            ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, version);
             jsonState.set(DATA_VERSION, new ShortNode(version));
             writer.write(jsonState.toString());
             writer.flush();

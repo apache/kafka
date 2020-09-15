@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 52,
+  "apiKey": 54,
   "type": "request",
   "name": "EndQuorumEpochRequest",
   "validVersions": "0",
