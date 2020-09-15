@@ -1077,7 +1077,7 @@ object TestUtils extends Logging {
       isrUpdates.clear()
     }
 
-    override def start(): Unit = ???
+    override def start(): Unit = { }
   }
 
   def createAlterIsrManager(): TestAlterIsrManager = {

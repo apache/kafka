@@ -125,9 +125,8 @@ class AlterIsrManagerImpl(val controllerChannelManager: BrokerToControllerChanne
     debug(s"Sending AlterIsr to controller $message")
     controllerChannelManager.sendRequest(new AlterIsrRequest.Builder(message), responseHandler)
   }
-
-  // Visible for testing
-  private[server] def handleAlterIsrResponse(alterIsrResponse: AlterIsrResponse, inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
+  
+  def handleAlterIsrResponse(alterIsrResponse: AlterIsrResponse, inflightAlterIsrItems: Seq[AlterIsrItem]): Unit = {
     val data: AlterIsrResponseData = alterIsrResponse.data
 
     Errors.forCode(data.errorCode) match {
