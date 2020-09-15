@@ -1078,8 +1078,6 @@ object TestUtils extends Logging {
     }
 
     override def start(): Unit = ???
-
-    override def shutdown(): Unit = ???
   }
 
   def createAlterIsrManager(): TestAlterIsrManager = {

@@ -319,6 +319,8 @@ class ReplicaManager(val config: KafkaConfig,
     // If using AlterIsr, we don't need the znode ISR propagation
     if (config.interBrokerProtocolVersion < KAFKA_2_7_IV1) {
       scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _, period = 2500L, unit = TimeUnit.MILLISECONDS)
+    } else {
+      alterIsrManager.start()
     }
     scheduler.schedule("shutdown-idle-replica-alter-log-dirs-thread", shutdownIdleReplicaAlterLogDirsThread _, period = 10000L, unit = TimeUnit.MILLISECONDS)
 
@@ -329,7 +331,7 @@ class ReplicaManager(val config: KafkaConfig,
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
 
-    alterIsrManager.start()
+
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
@@ -1758,8 +1760,6 @@ class ReplicaManager(val config: KafkaConfig,
   def shutdown(checkpointHW: Boolean = true): Unit = {
     info("Shutting down")
     removeMetrics()
-    if (alterIsrManager != null)
-      alterIsrManager.shutdown()
     if (logDirFailureHandler != null)
       logDirFailureHandler.shutdown()
     replicaFetcherManager.shutdown()

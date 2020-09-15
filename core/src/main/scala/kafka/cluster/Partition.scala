@@ -1365,7 +1365,7 @@ class Partition(val topicPartition: TopicPartition,
               inSyncReplicaIds = leaderAndIsr.isr.toSet
               zkVersion = leaderAndIsr.zkVersion
               pendingInSyncReplicaIds = None
-              info("ISR updated to [%s] and version updated to [%d]".format(leaderAndIsr.isr.mkString(","), zkVersion))
+              info("ISR updated to [%s] and version updated to [%d]".format(inSyncReplicaIds.mkString(","), zkVersion))
             }
         }
       }

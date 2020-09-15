@@ -22,7 +22,7 @@ import java.util.concurrent.{CountDownLatch, Executors, Semaphore, TimeUnit, Tim
 import java.util.concurrent.atomic.AtomicBoolean
 
 import com.yammer.metrics.core.Metric
-import kafka.api.{ApiVersion}
+import kafka.api.{ApiVersion, LeaderAndIsr}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.metrics.KafkaYammerMetrics
@@ -520,9 +520,9 @@ class PartitionTest extends AbstractPartitionTest {
       }
     }
 
-    //when(stateStore.expandIsr(controllerEpoch, new LeaderAndIsr(leader, leaderEpoch,
-    //  List(leader, follower2, follower1), 1)))
-    //  .thenReturn(Some(2))
+    when(stateStore.expandIsr(controllerEpoch, new LeaderAndIsr(leader, leaderEpoch,
+      List(leader, follower2, follower1), 1)))
+      .thenReturn(Some(2))
 
     updateFollowerFetchState(follower1, LogOffsetMetadata(0))
     updateFollowerFetchState(follower1, LogOffsetMetadata(2))
@@ -613,9 +613,9 @@ class PartitionTest extends AbstractPartitionTest {
       case Left(e: ApiException) => fail(s"Should have seen OffsetNotAvailableException, saw $e")
     }
 
-    //when(stateStore.expandIsr(controllerEpoch, new LeaderAndIsr(leader, leaderEpoch + 2,
-    //  List(leader, follower2, follower1), 5)))
-    //  .thenReturn(Some(2))
+    when(stateStore.expandIsr(controllerEpoch, new LeaderAndIsr(leader, leaderEpoch + 2,
+      List(leader, follower2, follower1), 5)))
+      .thenReturn(Some(2))
 
     // Next fetch from replicas, HW is moved up to 5 (ahead of the LEO)
     updateFollowerFetchState(follower1, LogOffsetMetadata(5))
