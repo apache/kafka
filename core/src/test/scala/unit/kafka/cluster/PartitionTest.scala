@@ -1352,7 +1352,7 @@ class PartitionTest extends AbstractPartitionTest {
     val replicas = List[Integer](brokerId, follower1, follower2, follower3).asJava
     val isr = List[Integer](brokerId, follower1, follower2).asJava
 
-    doNothing().when(delayedOperations).checkAndCompleteFetch()
+    doNothing().when(delayedOperations).checkAndCompleteAll()
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
