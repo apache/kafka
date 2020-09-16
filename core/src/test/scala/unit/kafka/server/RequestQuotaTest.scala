@@ -146,16 +146,22 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testUnthrottledClient(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClientActions)
-      submitTest(apiKey, () => checkUnthrottledClient(apiKey))
+    for (apiKey <- RequestQuotaTest.ClientActions) {
+      if (apiKey.isEnabled) {
+        submitTest(apiKey, () => checkUnthrottledClient(apiKey))
+      }
+    }
 
     waitAndCheckResults()
   }
 
   @Test
   def testExemptRequestTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClusterActions)
-      submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
+    for (apiKey <- RequestQuotaTest.ClusterActions) {
+      if (apiKey.isEnabled) {
+        submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
+      }
+    }
 
     waitAndCheckResults()
   }
@@ -165,13 +171,8 @@ class RequestQuotaTest extends BaseRequestTest {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
     for (apiKey <- ApiKeys.values) {
-      apiKey match {
-        case ApiKeys.VOTE
-             | ApiKeys.BEGIN_QUORUM_EPOCH
-             | ApiKeys.END_QUORUM_EPOCH =>
-          // FIXME: Those apis are not implemented yet
-        case _ =>
-          submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
+      if (apiKey.isEnabled) {
+        submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
       }
     }
 

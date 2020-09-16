@@ -18,13 +18,14 @@
 package kafka.tools
 
 import java.io.File
+import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.{Properties, Random}
 
 import joptsimple.OptionParser
 import kafka.log.{Log, LogConfig, LogManager}
-import kafka.network.SocketServer
+import kafka.network.{ConnectionQuotas, Processor, RequestChannel, SocketServer}
 import kafka.raft.{KafkaFuturePurgatory, KafkaMetadataLog, KafkaNetworkChannel}
 import kafka.security.CredentialProvider
 import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel, RaftRequestHandler}
@@ -33,9 +34,12 @@ import kafka.utils.{CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, 
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
@@ -66,6 +70,8 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
   var metadataLog: KafkaMetadataLog = _
 
   def startup(): Unit = {
+    val logContext = new LogContext(s"[Raft id=${config.brokerId}] ")
+
     metrics = new Metrics()
     scheduler = new KafkaScheduler(threads = 1)
 
@@ -74,14 +80,13 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
     credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-    socketServer = new SocketServer(config, metrics, time, credentialProvider)
+    socketServer = new RaftSocketServer(config, metrics, time, credentialProvider, logContext)
     socketServer.startup(startProcessingRequests = false)
 
     val logDirName = Log.logDirName(partition)
     val logDir = createLogDirectory(new File(config.logDirs.head), logDirName)
 
     val raftConfig = new RaftConfig(config.originals)
-    val logContext = new LogContext(s"[Raft id=${config.brokerId}] ")
     val metadataLog = buildMetadataLog(logDir)
     val networkChannel = buildNetworkChannel(raftConfig, logContext)
 
@@ -297,6 +302,50 @@ class TestRaftServer(val config: KafkaConfig) extends Logging {
   }
 
 }
+
+class RaftSocketServer(
+  config: KafkaConfig,
+  metrics: Metrics,
+  time: Time,
+  credentialProvider: CredentialProvider,
+  logContext: LogContext
+) extends SocketServer(config, metrics, time, credentialProvider) {
+  override def newProcessor(
+    id: Int,
+    requestChannel: RequestChannel,
+    connectionQuotas: ConnectionQuotas,
+    listenerName: ListenerName,
+    securityProtocol: SecurityProtocol,
+    memoryPool: MemoryPool,
+    isPrivilegedListener: Boolean
+  ): Processor = {
+    new Processor(id,
+      time,
+      config.socketRequestMaxBytes,
+      requestChannel,
+      connectionQuotas,
+      config.connectionsMaxIdleMs,
+      config.failedAuthenticationDelayMs,
+      listenerName,
+      securityProtocol,
+      config,
+      metrics,
+      credentialProvider,
+      memoryPool,
+      logContext,
+      isPrivilegedListener = isPrivilegedListener
+    ) {
+      // We extend this API to skip the check for only enabled APIs. This
+      // gets us access to Vote, BeginQuorumEpoch, etc. which are not usable
+      // from the Kafka broker yet.
+      override def parseRequestHeader(buffer: ByteBuffer): RequestHeader = {
+        RequestHeader.parse(buffer)
+      }
+    }
+  }
+
+}
+
 
 object TestRaftServer extends Logging {
   import kafka.utils.Implicits._

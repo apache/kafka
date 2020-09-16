@@ -67,10 +67,6 @@ public class RequestContext implements AuthorizableRequestContext {
             return new RequestAndSize(apiVersionsRequest, 0);
         } else {
             ApiKeys apiKey = header.apiKey();
-            if (!apiKey.isEnabled) {
-                throw new InvalidRequestException("Api key " + apiKey + " is not enabled");
-            }
-
             try {
                 short apiVersion = header.apiVersion();
                 Struct struct = apiKey.parseRequest(apiVersion, buffer);
