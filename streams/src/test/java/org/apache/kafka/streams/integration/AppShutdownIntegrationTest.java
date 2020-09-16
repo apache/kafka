@@ -44,7 +44,9 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.common.utils.Utils.*;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -57,7 +59,6 @@ public class AppShutdownIntegrationTest {
 
     @Rule
     public TestName testName = new TestName();
-
 
     @Test
     public void shouldSendShutDownSignal() throws Exception {
@@ -73,9 +74,7 @@ public class AppShutdownIntegrationTest {
 
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
-
         final StreamsBuilder builder = new StreamsBuilder();
-
 
         final List<KeyValue<Object, Object>> processorValueCollector = new ArrayList<>();
 
@@ -92,7 +91,6 @@ public class AppShutdownIntegrationTest {
                         mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000")
                 )
         );
-
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             final CountDownLatch latch = new CountDownLatch(1);
@@ -122,9 +120,7 @@ public class AppShutdownIntegrationTest {
 
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
 
-
         final StreamsBuilder builder = new StreamsBuilder();
-
 
         final List<KeyValue<Object, Object>> processorValueCollector = new ArrayList<>();
 
@@ -141,7 +137,6 @@ public class AppShutdownIntegrationTest {
                         mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000")
                 )
         );
-
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             final CountDownLatch latch = new CountDownLatch(1);

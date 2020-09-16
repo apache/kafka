@@ -581,19 +581,17 @@ public class StreamThread extends Thread {
         }
     }
 
-    public void initiateShutdown(){
+    public void initiateShutdown() {
         shutdownRequested.set(true);
     }
 
     private void sendShutdownRequest() {
         log.warn("Detected that shutdown was requested. " +
                 "The all clients in this app will now begin to shutdown");
-
         //set error code
         assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
         mainConsumer.unsubscribe();
         subscribeConsumer();
-
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
