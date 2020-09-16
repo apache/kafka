@@ -168,7 +168,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
 
   var kafkaController: KafkaController = null
 
-  var brokerToControllerChannelManager: BrokerToControllerChannelManagerImpl = null
+  var brokerToControllerChannelManager: BrokerToControllerChannelManager = null
 
   var kafkaScheduler: KafkaScheduler = null
 
@@ -298,15 +298,15 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         socketServer = new SocketServer(config, metrics, time, credentialProvider)
         socketServer.startup(startProcessingRequests = false)
 
+
+        /* start replica manager */
         brokerToControllerChannelManager = new BrokerToControllerChannelManagerImpl(metadataCache, time, metrics, config, threadNamePrefix)
+        replicaManager = createReplicaManager(isShuttingDown)
+        replicaManager.startup()
         brokerToControllerChannelManager.start()
 
         val brokerInfo = createBrokerInfo
         val brokerEpoch = zkClient.registerBroker(brokerInfo)
-
-        /* start replica manager */
-        replicaManager = createReplicaManager(isShuttingDown)
-        replicaManager.startup()
 
         // Now that the broker is successfully registered, checkpoint its metadata
         checkpointBrokerMetadata(BrokerMetadata(config.brokerId, Some(clusterId)))
