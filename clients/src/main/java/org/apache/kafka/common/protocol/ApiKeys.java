@@ -137,9 +137,7 @@ import org.apache.kafka.common.requests.ProduceResponse;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -412,7 +410,7 @@ public enum ApiKeys {
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKeys key : ApiKeys.enabledApis()) {
             b.append("<tr>\n");
             b.append("<td>");
             b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
@@ -444,10 +442,10 @@ public enum ApiKeys {
         return hasBuffer.get();
     }
 
-    public static Set<ApiKeys> enabledApis() {
+    public static List<ApiKeys> enabledApis() {
         return Arrays.stream(values())
             .filter(api -> api.isEnabled)
-            .collect(Collectors.toSet());
+            .collect(Collectors.toList());
     }
 
 }

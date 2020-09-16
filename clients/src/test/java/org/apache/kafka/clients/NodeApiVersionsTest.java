@@ -37,7 +37,7 @@ public class NodeApiVersionsTest {
         NodeApiVersions versions = new NodeApiVersions(new ApiVersionsResponseKeyCollection());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.values()) {
+        for (ApiKeys apiKey : ApiKeys.enabledApis()) {
             bld.append(prefix).append(apiKey.name).
                     append("(").append(apiKey.id).append("): UNSUPPORTED");
             prefix = ", ";

@@ -167,8 +167,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         final int finalizedFeaturesEpoch
     ) {
         ApiVersionsResponseKeyCollection apiKeys = new ApiVersionsResponseKeyCollection();
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey.isEnabled && apiKey.minRequiredInterBrokerMagic <= minMagic) {
+        for (ApiKeys apiKey : ApiKeys.enabledApis()) {
+            if (apiKey.minRequiredInterBrokerMagic <= minMagic) {
                 apiKeys.add(new ApiVersionsResponseKey()
                     .setApiKey(apiKey.id)
                     .setMinVersion(apiKey.oldestVersion())

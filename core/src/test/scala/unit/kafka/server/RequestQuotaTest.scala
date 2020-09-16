@@ -147,9 +147,7 @@ class RequestQuotaTest extends BaseRequestTest {
   @Test
   def testUnthrottledClient(): Unit = {
     for (apiKey <- RequestQuotaTest.ClientActions) {
-      if (apiKey.isEnabled) {
-        submitTest(apiKey, () => checkUnthrottledClient(apiKey))
-      }
+      submitTest(apiKey, () => checkUnthrottledClient(apiKey))
     }
 
     waitAndCheckResults()
@@ -158,9 +156,7 @@ class RequestQuotaTest extends BaseRequestTest {
   @Test
   def testExemptRequestTime(): Unit = {
     for (apiKey <- RequestQuotaTest.ClusterActions) {
-      if (apiKey.isEnabled) {
-        submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
-      }
+      submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
     }
 
     waitAndCheckResults()
@@ -170,10 +166,8 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.values) {
-      if (apiKey.isEnabled) {
-        submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
-      }
+    for (apiKey <- ApiKeys.enabledApis.asScala) {
+      submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
     }
 
     waitAndCheckResults()
@@ -700,9 +694,9 @@ class RequestQuotaTest extends BaseRequestTest {
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.values.toSet.filter(apiKey => apiKey.clusterAction)
+  val ClusterActions = ApiKeys.enabledApis.asScala.toSet.filter(apiKey => apiKey.clusterAction)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.values.toSet -- ClusterActions -- SaslActions
+  val ClientActions = ApiKeys.enabledApis.asScala.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

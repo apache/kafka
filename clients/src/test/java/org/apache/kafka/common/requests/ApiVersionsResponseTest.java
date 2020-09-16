@@ -55,7 +55,7 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
-        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), ApiKeys.enabledApis());
+        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), new HashSet<>(ApiKeys.enabledApis()));
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
         assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
@@ -67,7 +67,7 @@ public class ApiVersionsResponseTest {
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordBatch.CURRENT_MAGIC_VALUE,
             Features.emptySupportedFeatures());
-        assertEquals(ApiKeys.enabledApis(), apiKeysInResponse(response));
+        assertEquals(new HashSet<>(ApiKeys.enabledApis()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data.supportedFeatures().isEmpty());
         assertTrue(response.data.finalizedFeatures().isEmpty());
