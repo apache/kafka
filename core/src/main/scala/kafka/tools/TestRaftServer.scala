@@ -15,18 +15,19 @@
  * limitations under the License.
  */
 
-package kafka.server
+package kafka.tools
 
 import java.io.File
 import java.nio.file.Files
-import java.util.{Properties, Random}
 import java.util.concurrent.CountDownLatch
+import java.util.{Properties, Random}
 
 import joptsimple.OptionParser
 import kafka.log.{Log, LogConfig, LogManager}
 import kafka.network.SocketServer
 import kafka.raft.{KafkaFuturePurgatory, KafkaMetadataLog, KafkaNetworkChannel}
 import kafka.security.CredentialProvider
+import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaRequestHandlerPool, KafkaServer, LogDirFailureChannel, RaftRequestHandler}
 import kafka.utils.timer.SystemTimer
 import kafka.utils.{CommandLineUtils, CoreUtils, Exit, KafkaScheduler, Logging, ShutdownableThread}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient}
@@ -43,6 +44,11 @@ import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, QuorumState,
 
 import scala.jdk.CollectionConverters._
 
+/**
+ * This is an experimental Raft server which is intended for testing purposes only.
+ * It can really only be used for performance testing using the producer performance
+ * tool with the hard-coded `__cluster_metadata` topic.
+ */
 class TestRaftServer(val config: KafkaConfig) extends Logging {
 
   private val partition = new TopicPartition("__cluster_metadata", 0)

@@ -183,10 +183,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ALTER_CLIENT_QUOTAS => handleAlterClientQuotasRequest(request)
         case ApiKeys.DESCRIBE_USER_SCRAM_CREDENTIALS => handleDescribeUserScramCredentialsRequest(request)
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS => handleAlterUserScramCredentialsRequest(request)
-        case ApiKeys.VOTE => handleVote(request)
-        case ApiKeys.BEGIN_QUORUM_EPOCH => handleBeginEpoch(request)
-        case ApiKeys.END_QUORUM_EPOCH => handleEndEpoch(request)
-        case ApiKeys.DESCRIBE_QUORUM => handleDescribeQuorum(request)
+
+        // Until we are ready to integrate the Raft layer, these APIs are treated as
+        // unexpected and we just close the connection.
+        case ApiKeys.VOTE => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.BEGIN_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.END_QUORUM_EPOCH => closeConnection(request, util.Collections.emptyMap())
+        case ApiKeys.DESCRIBE_QUORUM => closeConnection(request, util.Collections.emptyMap())
       }
     } catch {
       case e: FatalExitError => throw e
@@ -2859,14 +2862,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
   }
-
-  def handleVote(request: RequestChannel.Request): Unit = ???
-
-  def handleBeginEpoch(request: RequestChannel.Request): Unit = ???
-
-  def handleEndEpoch(request: RequestChannel.Request): Unit = ???
-
-  def handleDescribeQuorum(request: RequestChannel.Request): Unit = ???
 
   def allowTokenRequests(request: RequestChannel.Request): Boolean = {
     val protocol = request.context.securityProtocol

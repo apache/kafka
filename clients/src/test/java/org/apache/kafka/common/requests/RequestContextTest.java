@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionsResponseKeyCollection;
 import org.apache.kafka.common.network.ClientInformation;
@@ -33,9 +34,21 @@ import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class RequestContextTest {
+
+    @Test
+    public void testDisabledApisAreNotParsed() throws Exception {
+        int correlationId = 23423;
+        RequestHeader header = new RequestHeader(ApiKeys.VOTE, (short) 0, "", correlationId);
+        RequestContext context = new RequestContext(header, "0", InetAddress.getLocalHost(),
+            KafkaPrincipal.ANONYMOUS, new ListenerName("ssl"), SecurityProtocol.SASL_SSL,
+            ClientInformation.EMPTY, false);
+        ByteBuffer requestBuffer = ByteBuffer.allocate(0);
+        assertThrows(InvalidRequestException.class, () -> context.parseRequest(requestBuffer));
+    }
 
     @Test
     public void testSerdeUnsupportedApiVersionRequest() throws Exception {

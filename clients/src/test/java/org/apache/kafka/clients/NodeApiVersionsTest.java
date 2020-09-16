@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class NodeApiVersionsTest {
@@ -136,7 +137,11 @@ public class NodeApiVersionsTest {
         versionList.add(new ApiVersion((short) 100, (short) 0, (short) 1));
         NodeApiVersions versions = new NodeApiVersions(versionList);
         for (ApiKeys apiKey: ApiKeys.values()) {
-            assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
+            if (apiKey.isEnabled) {
+                assertEquals(apiKey.latestVersion(), versions.latestUsableVersion(apiKey));
+            } else {
+                assertNull(versions.apiVersion(apiKey));
+            }
         }
     }
 

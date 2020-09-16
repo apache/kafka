@@ -136,7 +136,12 @@ import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.types.Type.BYTES;
 import static org.apache.kafka.common.protocol.types.Type.COMPACT_BYTES;
@@ -234,10 +239,14 @@ public enum ApiKeys {
             DescribeUserScramCredentialsResponseData.SCHEMAS),
     ALTER_USER_SCRAM_CREDENTIALS(51, "AlterUserScramCredentials", AlterUserScramCredentialsRequestData.SCHEMAS,
             AlterUserScramCredentialsResponseData.SCHEMAS),
-    VOTE(52, "Vote", true, VoteRequestData.SCHEMAS, VoteResponseData.SCHEMAS),
-    BEGIN_QUORUM_EPOCH(53, "BeginQuorumEpoch", true, BeginQuorumEpochRequestData.SCHEMAS, BeginQuorumEpochResponseData.SCHEMAS),
-    END_QUORUM_EPOCH(54, "EndQuorumEpoch", true, EndQuorumEpochRequestData.SCHEMAS, EndQuorumEpochResponseData.SCHEMAS),
-    DESCRIBE_QUORUM(55, "DescribeQuorum", true, DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS);
+    VOTE(52, "Vote", true, false,
+        VoteRequestData.SCHEMAS, VoteResponseData.SCHEMAS),
+    BEGIN_QUORUM_EPOCH(53, "BeginQuorumEpoch", true, false,
+        BeginQuorumEpochRequestData.SCHEMAS, BeginQuorumEpochResponseData.SCHEMAS),
+    END_QUORUM_EPOCH(54, "EndQuorumEpoch", true, false,
+        EndQuorumEpochRequestData.SCHEMAS, EndQuorumEpochResponseData.SCHEMAS),
+    DESCRIBE_QUORUM(55, "DescribeQuorum", true, false,
+        DescribeQuorumRequestData.SCHEMAS, DescribeQuorumResponseData.SCHEMAS);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
@@ -266,6 +275,9 @@ public enum ApiKeys {
     /** indicates the minimum required inter broker magic required to support the API */
     public final byte minRequiredInterBrokerMagic;
 
+    /** indicates whether the API is enabled and should be exposed in ApiVersions **/
+    public final boolean isEnabled;
+
     public final Schema[] requestSchemas;
     public final Schema[] responseSchemas;
     public final boolean requiresDelayedAllocation;
@@ -278,14 +290,31 @@ public enum ApiKeys {
         this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, requestSchemas, responseSchemas);
     }
 
+    ApiKeys(int id, String name, boolean clusterAction, boolean isEnabled, Schema[] requestSchemas, Schema[] responseSchemas) {
+        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0, isEnabled, requestSchemas, responseSchemas);
+    }
+
     ApiKeys(int id, String name, boolean clusterAction, byte minRequiredInterBrokerMagic,
             Schema[] requestSchemas, Schema[] responseSchemas) {
+        this(id, name, clusterAction, minRequiredInterBrokerMagic, true, requestSchemas, responseSchemas);
+    }
+
+    ApiKeys(
+        int id,
+        String name,
+        boolean clusterAction,
+        byte minRequiredInterBrokerMagic,
+        boolean isEnabled,
+        Schema[] requestSchemas,
+        Schema[] responseSchemas
+    ) {
         if (id < 0)
             throw new IllegalArgumentException("id must not be negative, id: " + id);
         this.id = (short) id;
         this.name = name;
         this.clusterAction = clusterAction;
         this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
+        this.isEnabled = isEnabled;
 
         if (requestSchemas.length != responseSchemas.length)
             throw new IllegalStateException(requestSchemas.length + " request versions for api " + name
@@ -413,6 +442,12 @@ public enum ApiKeys {
         };
         schema.walk(detector);
         return hasBuffer.get();
+    }
+
+    public static Set<ApiKeys> enabledApis() {
+        return Arrays.stream(values())
+            .filter(api -> api.isEnabled)
+            .collect(Collectors.toSet());
     }
 
 }
