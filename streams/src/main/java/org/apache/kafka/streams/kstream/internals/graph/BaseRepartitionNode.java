@@ -30,13 +30,13 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
     protected final String sinkName;
     protected final String sourceName;
     protected final String repartitionTopic;
-    protected final ProcessorParameters<K, V> processorParameters;
+    protected final ProcessorParameters<K, V, ?, ?> processorParameters;
     protected final StreamPartitioner<K, V> partitioner;
     protected final InternalTopicProperties internalTopicProperties;
 
     BaseRepartitionNode(final String nodeName,
                         final String sourceName,
-                        final ProcessorParameters<K, V> processorParameters,
+                        final ProcessorParameters<K, V, ?, ?> processorParameters,
                         final Serde<K> keySerde,
                         final Serde<V> valueSerde,
                         final String sinkName,
@@ -88,7 +88,7 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
 
     public abstract static class BaseRepartitionNodeBuilder<K, V, T extends BaseRepartitionNode<K, V>> {
         protected String nodeName;
-        protected ProcessorParameters<K, V> processorParameters;
+        protected ProcessorParameters<K, V, ?, ?> processorParameters;
         protected Serde<K> keySerde;
         protected Serde<V> valueSerde;
         protected String sinkName;
@@ -97,7 +97,7 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
         protected StreamPartitioner<K, V> partitioner;
         protected InternalTopicProperties internalTopicProperties = InternalTopicProperties.empty();
 
-        public BaseRepartitionNodeBuilder<K, V, T> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
+        public BaseRepartitionNodeBuilder<K, V, T> withProcessorParameters(final ProcessorParameters<K, V, ?, ?> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }

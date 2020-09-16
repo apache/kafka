@@ -37,7 +37,7 @@ class LeaderEpochFileCacheTest {
   private var logEndOffset = 0L
   private val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     private var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: Seq[EpochEntry]): Unit = this.epochs = epochs
+    override def write(epochs: Iterable[EpochEntry]): Unit = this.epochs = epochs.toSeq
     override def read(): Seq[EpochEntry] = this.epochs
   }
   private val cache = new LeaderEpochFileCache(tp, () => logEndOffset, checkpoint)

@@ -146,7 +146,7 @@
 <span class="n">streams</span><span class="o">.</span><span class="na">start</span><span class="o">();</span>
 </pre></div>
                 </div>
-                <p>After the application has started, you can get access to &#8220;CountsKeyValueStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java">ReadOnlyKeyValueStore</a> API:</p>
+                <p>After the application has started, you can get access to &#8220;CountsKeyValueStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyKeyValueStore.java">ReadOnlyKeyValueStore</a> API:</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Get the key-value store CountsKeyValueStore</span>
 <span class="n">ReadOnlyKeyValueStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">keyValueStore</span> <span class="o">=</span>
     <span class="n">streams</span><span class="o">.</span><span class="na">store</span><span class="o">(</span><span class="s">&quot;CountsKeyValueStore&quot;</span><span class="o">,</span> <span class="n">QueryableStoreTypes</span><span class="o">.</span><span class="na">keyValueStore</span><span class="o">());</span>
@@ -206,7 +206,7 @@
   <span class="o">.</span><span class="na">count</span><span class="o">(</span><span class="n">Materialized</span><span class="o">.&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">,</span> <span class="n">WindowStore</span><span class="o">&lt;</span><span class="n">Bytes</span><span class="o">,</span> <span class="kt">byte</span><span class="o">[]&gt;</span><span class="n">as</span><span class="o">(</span><span class="s">&quot;CountsWindowStore&quot;</span><span class="o">));</span>
 </pre></div>
                 </div>
-                <p>After the application has started, you can get access to &#8220;CountsWindowStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java">ReadOnlyWindowStore</a> API:</p>
+                <p>After the application has started, you can get access to &#8220;CountsWindowStore&#8221; and then query it via the <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/ReadOnlyWindowStore.java">ReadOnlyWindowStore</a> API:</p>
                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Get the window store named &quot;CountsWindowStore&quot;</span>
 <span class="n">ReadOnlyWindowStore</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">windowStore</span> <span class="o">=</span>
     <span class="n">streams</span><span class="o">.</span><span class="na">store</span><span class="o">(</span><span class="s">&quot;CountsWindowStore&quot;</span><span class="o">,</span> <span class="n">QueryableStoreTypes</span><span class="o">.</span><span class="na">windowStore</span><span class="o">());</span>
@@ -259,7 +259,7 @@
                 </div>
                 <p>To make this store queryable you must:</p>
                 <ul class="simple">
-                    <li>Provide an implementation of <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java">QueryableStoreType</a>.</li>
+                    <li>Provide an implementation of <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/QueryableStoreType.java">QueryableStoreType</a>.</li>
                     <li>Provide a wrapper class that has access to all of the underlying instances of the store and is used for querying.</li>
                 </ul>
                 <p>Here is how to implement <code class="docutils literal"><span class="pre">QueryableStoreType</span></code>:</p>
@@ -281,7 +281,7 @@
                     multiple local instances of a particular state store.  The wrapper class hides this complexity and lets you query a &#8220;logical&#8221;
                     state store by name without having to know about all of the underlying local instances of that state store.</p>
                 <p>When implementing your wrapper class you must use the
-                    <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java">StateStoreProvider</a>
+                    <a class="reference external" href="https://github.com/apache/kafka/blob/{{dotVersion}}/streams/src/main/java/org/apache/kafka/streams/state/internals/StateStoreProvider.java">StateStoreProvider</a>
                     interface to get access to the underlying instances of your store.
                     <code class="docutils literal"><span class="pre">StateStoreProvider#stores(String</span> <span class="pre">storeName,</span> <span class="pre">QueryableStoreType&lt;T&gt;</span> <span class="pre">queryableStoreType)</span></code> returns a <code class="docutils literal"><span class="pre">List</span></code> of state
                     stores with the given storeName and of the type as defined by <code class="docutils literal"><span class="pre">queryableStoreType</span></code>.</p>

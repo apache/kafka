@@ -37,10 +37,10 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
+import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
@@ -199,7 +199,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final long rebalanceInterval = 5 * 60 * 1000L;
 
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
+        builder.addProcessor("processor1", new MockApiProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
@@ -250,7 +250,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         final long rebalanceInterval = 5 * 60 * 1000L;
 
         builder.addSource(null, "source1", null, null, null, "topic1");
-        builder.addProcessor("processor1", new MockProcessorSupplier<>(), "source1");
+        builder.addProcessor("processor1", new MockApiProcessorSupplier<>(), "source1");
         builder.addStateStore(new MockKeyValueStoreBuilder("store1", false), "processor1");
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
 
