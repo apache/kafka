@@ -750,7 +750,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               partitionData.logStartOffset,
               partitionData.preferredReadReplica,
               partitionData.abortedTransactions,
-              partitionData.truncationOffset,
+              partitionData.divergingEpoch,
               unconvertedRecords)
         }
       }
@@ -773,7 +773,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           data.logStartOffset,
           data.preferredReadReplica.map(int2Integer).asJava,
           abortedTransactions,
-          data.truncationOffset.map(long2Long).asJava,
+          data.divergingEpoch.asJava,
           data.records))
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }

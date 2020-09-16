@@ -40,7 +40,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
-import org.apache.kafka.common.message.{DescribeLogDirsResponseData, LeaderAndIsrResponseData}
+import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
@@ -82,8 +82,8 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
 /**
  * Result metadata of a log read operation on the log
  * @param info @FetchDataInfo returned by the @Log read
- * @param truncationOffset Optional truncation offset in case the request included a last fetched epoch
- *                         and truncation was detected
+ * @param divergingEpoch Optional epoch and end offset which indicates the largest epoch such
+ *                       that subsequent records are known to diverge on the follower/consumer
  * @param highWatermark high watermark of the local replica
  * @param leaderLogStartOffset The log start offset of the leader at the time of the read
  * @param leaderLogEndOffset The log end offset of the leader at the time of the read
@@ -94,7 +94,7 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
  * @param exception Exception if error encountered while reading from the log
  */
 case class LogReadResult(info: FetchDataInfo,
-                         truncationOffset: Option[Long],
+                         divergingEpoch: Option[FetchResponseData.EpochEndOffset],
                          highWatermark: Long,
                          leaderLogStartOffset: Long,
                          leaderLogEndOffset: Long,
@@ -115,7 +115,7 @@ case class LogReadResult(info: FetchDataInfo,
   override def toString = {
     "LogReadResult(" +
       s"info=$info, " +
-      s"truncationOffset=$truncationOffset, " +
+      s"divergingEpoch=$divergingEpoch, " +
       s"highWatermark=$highWatermark, " +
       s"leaderLogStartOffset=$leaderLogStartOffset, " +
       s"leaderLogEndOffset=$leaderLogEndOffset, " +
@@ -133,7 +133,7 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               highWatermark: Long,
                               logStartOffset: Long,
                               records: Records,
-                              truncationOffset: Option[Long],
+                              divergingEpoch: Option[FetchResponseData.EpochEndOffset],
                               lastStableOffset: Option[Long],
                               abortedTransactions: Option[List[AbortedTransaction]],
                               preferredReadReplica: Option[Int],
@@ -1045,7 +1045,7 @@ class ReplicaManager(val config: KafkaConfig,
           result.highWatermark,
           result.leaderLogStartOffset,
           result.info.records,
-          result.truncationOffset,
+          result.divergingEpoch,
           result.lastStableOffset,
           result.info.abortedTransactions,
           result.preferredReadReplica,
@@ -1116,7 +1116,7 @@ class ReplicaManager(val config: KafkaConfig,
           // If a preferred read-replica is set, skip the read
           val offsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, fetchOnlyFromLeader = false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-            truncationOffset = None,
+            divergingEpoch = None,
             highWatermark = offsetSnapshot.highWatermark.messageOffset,
             leaderLogStartOffset = offsetSnapshot.logStartOffset,
             leaderLogEndOffset = offsetSnapshot.logEndOffset.messageOffset,
@@ -1148,7 +1148,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
 
           LogReadResult(info = fetchDataInfo,
-            truncationOffset = readInfo.truncationOffset,
+            divergingEpoch = readInfo.divergingEpoch,
             highWatermark = readInfo.highWatermark,
             leaderLogStartOffset = readInfo.logStartOffset,
             leaderLogEndOffset = readInfo.logEndOffset,
@@ -1169,7 +1169,7 @@ class ReplicaManager(val config: KafkaConfig,
                  _: KafkaStorageException |
                  _: OffsetOutOfRangeException) =>
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-            truncationOffset = None,
+            divergingEpoch = None,
             highWatermark = Log.UnknownOffset,
             leaderLogStartOffset = Log.UnknownOffset,
             leaderLogEndOffset = Log.UnknownOffset,
@@ -1186,7 +1186,7 @@ class ReplicaManager(val config: KafkaConfig,
             s"on partition $tp: $fetchInfo", e)
 
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-            truncationOffset = None,
+            divergingEpoch = None,
             highWatermark = Log.UnknownOffset,
             leaderLogStartOffset = Log.UnknownOffset,
             leaderLogEndOffset = Log.UnknownOffset,
