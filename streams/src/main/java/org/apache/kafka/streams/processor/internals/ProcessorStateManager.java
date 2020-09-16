@@ -663,7 +663,7 @@ public class ProcessorStateManager implements StateManager {
         return storeToChangelogTopic.get(storeName);
     }
 
-    public void deleteCheckPointFile() throws IOException {
+    public void deleteCheckPointFileIfEOSEnabled() throws IOException {
         if (eosEnabled) {
             checkpointFile.delete();
         }

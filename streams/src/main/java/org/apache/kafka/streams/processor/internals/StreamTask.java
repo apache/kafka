@@ -335,8 +335,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
                 // Deleting checkpoint file before transition to RESTORING state (KAFKA-10362)
                 try {
-                    stateMgr.deleteCheckPointFile();
-                    log.debug("Deleted check point file");
+                    stateMgr.deleteCheckPointFileIfEOSEnabled();
+                    log.debug("Deleted check point file upon resuming with EOS enabled");
                 } catch (final IOException ioe) {
                     log.error("Encountered error while deleting the checkpoint file due to this exception", ioe);
                 }
