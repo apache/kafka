@@ -90,7 +90,7 @@ public class RaftEventSimulationTest {
     }
 
     private void testInitialLeaderElection(QuorumConfig config) {
-        for (int seed = 0; seed < 200; seed++) {
+        for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -128,7 +128,7 @@ public class RaftEventSimulationTest {
     }
 
     private void testReplicationNoLeaderChange(QuorumConfig config) {
-        for (int seed = 0; seed < 200; seed++) {
+        for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -218,7 +218,7 @@ public class RaftEventSimulationTest {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
-        for (int seed = 0; seed < 200; seed++) {
+        for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -282,7 +282,7 @@ public class RaftEventSimulationTest {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
-        for (int seed = 0; seed < 200; seed++) {
+        for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -324,7 +324,7 @@ public class RaftEventSimulationTest {
         // We need at least three voters to run this tests
         assumeTrue(config.numVoters > 2);
 
-        for (int seed = 0; seed < 200; seed++) {
+        for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
@@ -378,7 +378,7 @@ public class RaftEventSimulationTest {
     }
 
     private void testBackToBackLeaderFailures(QuorumConfig config) {
-        for (int seed = 0; seed < 200; seed++) {
+        for (int seed = 0; seed < 100; seed++) {
             Cluster cluster = new Cluster(config, seed);
             MessageRouter router = new MessageRouter(cluster);
             EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
