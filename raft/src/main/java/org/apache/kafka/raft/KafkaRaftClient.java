@@ -723,7 +723,7 @@ public class KafkaRaftClient implements RaftClient {
     private FetchResponseData buildFetchResponse(
         Errors error,
         Records records,
-        Optional<FetchResponseData.OffsetAndEpoch> nextFetchOffsetAndEpoch,
+        Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
         Optional<LogOffsetMetadata> highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(log.topicPartition(), Errors.NONE, partitionData -> {
@@ -739,7 +739,7 @@ public class KafkaRaftClient implements RaftClient {
                 .setLeaderEpoch(quorum.epoch())
                 .setLeaderId(quorum.leaderIdOrNil());
 
-            nextFetchOffsetAndEpoch.ifPresent(partitionData::setNextOffsetAndEpoch);
+            divergingEpoch.ifPresent(partitionData::setDivergingEpoch);
         });
     }
 
@@ -888,15 +888,14 @@ public class KafkaRaftClient implements RaftClient {
         long fetchOffset = request.fetchOffset();
         int lastFetchedEpoch = request.lastFetchedEpoch();
         LeaderState state = quorum.leaderStateOrThrow();
-        Optional<OffsetAndEpoch> nextOffsetOpt = validateFetchOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
+        Optional<OffsetAndEpoch> divergingEpochOpt = validateFetchOffsetAndEpoch(fetchOffset, lastFetchedEpoch);
 
-        if (nextOffsetOpt.isPresent()) {
-            Optional<FetchResponseData.OffsetAndEpoch> nextOffsetAndEpoch =
-                nextOffsetOpt.map(offsetAndEpoch ->
-                    new FetchResponseData.OffsetAndEpoch()
-                        .setNextFetchOffset(offsetAndEpoch.offset)
-                        .setNextFetchOffsetEpoch(offsetAndEpoch.epoch));
-            return buildFetchResponse(Errors.NONE, MemoryRecords.EMPTY, nextOffsetAndEpoch, state.highWatermark());
+        if (divergingEpochOpt.isPresent()) {
+            Optional<FetchResponseData.EpochEndOffset> divergingEpoch =
+                divergingEpochOpt.map(offsetAndEpoch -> new FetchResponseData.EpochEndOffset()
+                    .setEpoch(offsetAndEpoch.epoch)
+                    .setEndOffset(offsetAndEpoch.offset));
+            return buildFetchResponse(Errors.NONE, MemoryRecords.EMPTY, divergingEpoch, state.highWatermark());
         } else {
             LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
             updateReplicaEndOffsetAndTimestamp(state, replicaId, info.startOffsetMetadata, currentTimeMs);
@@ -905,8 +904,8 @@ public class KafkaRaftClient implements RaftClient {
     }
 
     /**
-     * Check whether a fetch offset and epoch is valid. Return the offset and epoch to truncate
-     * to in case it is not.
+     * Check whether a fetch offset and epoch is valid. Return the diverging epoch, which
+     * is the largest epoch such that subsequent records are known to diverge.
      */
     private Optional<OffsetAndEpoch> validateFetchOffsetAndEpoch(long fetchOffset, int lastFetchedEpoch) {
         if (fetchOffset == 0 && lastFetchedEpoch == 0) {
@@ -958,21 +957,21 @@ public class KafkaRaftClient implements RaftClient {
 
         FollowerState state = quorum.followerStateOrThrow();
         if (error == Errors.NONE) {
-            FetchResponseData.OffsetAndEpoch nextOffsetAndEpoch = partitionResponse.nextOffsetAndEpoch();
-            if (nextOffsetAndEpoch.nextFetchOffset() > 0) {
+            FetchResponseData.EpochEndOffset divergingEpoch = partitionResponse.divergingEpoch();
+            if (divergingEpoch.epoch() >= 0) {
                 // The leader is asking us to truncate before continuing
-                OffsetAndEpoch nextFetchOffsetAndEpoch = new OffsetAndEpoch(
-                    nextOffsetAndEpoch.nextFetchOffset(), nextOffsetAndEpoch.nextFetchOffsetEpoch());
+                OffsetAndEpoch divergingOffsetAndEpoch = new OffsetAndEpoch(
+                    divergingEpoch.endOffset(), divergingEpoch.epoch());
 
                 state.highWatermark().ifPresent(highWatermark -> {
-                    if (nextFetchOffsetAndEpoch.offset < highWatermark.offset) {
+                    if (divergingOffsetAndEpoch.offset < highWatermark.offset) {
                         throw new KafkaException("The leader requested truncation to offset " +
-                            nextFetchOffsetAndEpoch.offset + ", which is below the current high watermark" +
+                            divergingOffsetAndEpoch.offset + ", which is below the current high watermark" +
                             " " + highWatermark);
                     }
                 });
 
-                log.truncateToEndOffset(nextFetchOffsetAndEpoch).ifPresent(truncationOffset -> {
+                log.truncateToEndOffset(divergingOffsetAndEpoch).ifPresent(truncationOffset -> {
                     logger.info("Truncated to offset {} from Fetch response from leader {}",
                         truncationOffset, quorum.leaderIdOrNil());
 

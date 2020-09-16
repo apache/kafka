@@ -2322,8 +2322,8 @@ public class KafkaRaftClientTest {
     private FetchResponseData outOfRangeFetchRecordsResponse(
         int epoch,
         int leaderId,
-        long nextFetchOffset,
-        int nextFetchEpoch,
+        long divergingEpochEndOffset,
+        int divergingEpoch,
         long highWatermark
     ) {
         return RaftUtil.singletonFetchResponse(METADATA_PARTITION, Errors.NONE, partitionData -> {
@@ -2335,9 +2335,9 @@ public class KafkaRaftClientTest {
                 .setLeaderEpoch(epoch)
                 .setLeaderId(leaderId);
 
-            partitionData.nextOffsetAndEpoch()
-                .setNextFetchOffset(nextFetchOffset)
-                .setNextFetchOffsetEpoch(nextFetchEpoch);
+            partitionData.divergingEpoch()
+                .setEpoch(divergingEpoch)
+                .setEndOffset(divergingEpochEndOffset);
         });
     }
 
