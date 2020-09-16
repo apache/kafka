@@ -1276,7 +1276,7 @@ public final class Utils {
     }
 
     /**
-     * Convert an ISO8601 based timestamp to an epoch value
+     * Convert timestamp to an epoch value
      * @param timestamp to be converted
      * @return epoch value of a given timestamp
      * @throws ParseException for timestamp that doesn't follow ISO8601 format

@@ -58,6 +58,7 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -801,19 +802,14 @@ public class UtilsTest {
     @Test
     public void shouldThrowOnInvalidDateFormat() {
         //check some invalid formats
-        try {
+        assertThat(assertThrows(ParseException.class, () -> {
             invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss"));
-            fail("Call to getDateTime should fail");
-        } catch (final Exception e) {
-            e.printStackTrace();
-        }
+        }).getMessage(), containsString("Unparseable date"));
 
-        try {
+        assertThat(assertThrows(ParseException.class, () -> {
             invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
-            fail("Call to getDateTime should fail");
-        } catch (final Exception e) {
-            e.printStackTrace();
-        }
+        }).getMessage(), containsString("Unparseable date"));
+
     }
 
     private void invokeGetDateTimeMethod(final SimpleDateFormat format) throws ParseException {
