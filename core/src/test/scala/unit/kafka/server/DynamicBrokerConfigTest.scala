@@ -217,7 +217,8 @@ class DynamicBrokerConfigTest {
 
     def updateConfig() = {
       if (perBrokerConfig)
-        config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
+        config.dynamicConfig.updateBrokerConfig(0,
+          config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
       else
         config.dynamicConfig.updateDefaultConfig(props)
     }
@@ -230,7 +231,7 @@ class DynamicBrokerConfigTest {
         config.dynamicConfig.validate(props, perBrokerConfig)
         fail("Invalid config did not fail validation")
       } catch {
-        case e: Exception => // expected exception
+        case _: Exception => // expected exception
       }
       updateConfig()
       assertEquals(oldValue, config.originals.get(name))
@@ -251,13 +252,13 @@ class DynamicBrokerConfigTest {
       config.dynamicConfig.validate(props, perBrokerConfig = true)
       fail("Invalid config did not fail validation")
     } catch {
-      case e: ConfigException => // expected exception
+      case _: ConfigException => // expected exception
     }
 
     // DynamicBrokerConfig#updateBrokerConfig is used to update configs from ZooKeeper during
     // startup and when configs are updated in ZK. Update should apply valid configs and ignore
     // invalid ones.
-    config.dynamicConfig.updateBrokerConfig(0, props)
+    config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.fromPersistentProps(props, true))
     validProps.foreach { case (name, value) => assertEquals(value, config.originals.get(name)) }
     invalidProps.keySet.foreach { name =>
       assertEquals(origProps.get(name), config.originals.get(name))
@@ -412,7 +413,7 @@ class DynamicBrokerConfigTest {
     props.put(listener.configPrefix +
       SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, "//path//to//trust//store//")
 
-    dynamicBrokerConfig.updateBrokerConfig(0, props)
+    dynamicBrokerConfig.updateBrokerConfig(0, props, fromPersisted = true)
 
     val expectedProps = new Properties()
     expectedProps.put(listener.configPrefix +

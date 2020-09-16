@@ -209,7 +209,7 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
         brokerConfig.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(persistentProps)
       }
 
-      brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, persistentProps)
+      brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, persistentProps, fromPersisted = true)
       quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp).toDouble))
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))
