@@ -36,7 +36,7 @@ import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.{mutable, _}
+import scala.collection._
 import scala.jdk.CollectionConverters._
 
 /**
@@ -320,7 +320,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * changes are processed. At the moment, only listener configs are considered for reloading.
    */
   private[server] def reloadUpdatedFilesWithoutConfigChange(newProps: Properties): Unit = CoreUtils.inWriteLock(lock) {
-    info(s"Doing updated file reload on broker ${kafkaConfig.brokerId}")
     reconfigurables
       .filter(reconfigurable => ReloadableFileConfigs.exists(reconfigurable.reconfigurableConfigs.contains))
       .foreach {
@@ -345,7 +344,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                 configProps.get(prefixedName).equals(previousConfigProps.getOrElse(prefixedName, ""))) {
                 val equivalentFileName = configProps.getProperty(prefixedName).replace("/", "//")
                 configProps.setProperty(prefixedName, equivalentFileName)
-                info(s"augment prefix name config $prefixedName to $equivalentFileName on broker ${kafkaConfig.brokerId}")
                 processedFiles.add(prefixedName)
               }
             })
@@ -370,7 +368,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
             }
 
             configProps.setProperty(prefixedName, equivalentFileName)
-            info(s"trim prefix name config $prefixedName to $equivalentFileName on broker ${kafkaConfig.brokerId}")
             processedFiles.add(prefixedName)
           }
         }
@@ -494,8 +491,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     newProps
   }
 
-  private[server] def validate(props: Properties,
-                               perBrokerConfig: Boolean): Unit = CoreUtils.inReadLock(lock) {
+  private[server] def validate(props: Properties, perBrokerConfig: Boolean): Unit = CoreUtils.inReadLock(lock) {
     val newProps = validatedKafkaProps(props, perBrokerConfig)
     processReconfiguration(newProps, validateOnly = true)
   }
@@ -629,10 +625,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     val updatedKeys = changeMap.keySet
     val configsChanged = needsReconfiguration(listenerReconfigurable.reconfigurableConfigs, updatedKeys, deletedKeys)
     // if `reloadOnly`, reconfigure if configs haven't changed. Otherwise reconfigure if configs have changed
-    if (reloadOnly != configsChanged) {
-      info(s"Doing a reload of config on broker ${kafkaConfig.brokerId}")
+    if (reloadOnly != configsChanged)
       processReconfigurable(listenerReconfigurable, updatedKeys, newValues, customConfigs, validateOnly)
-    }
   }
 
   private def processReconfigurable(reconfigurable: Reconfigurable,

@@ -440,7 +440,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     Files.copy(Paths.get(combinedStoreProps.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)),
       Paths.get(sslProperties1.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)),
       StandardCopyOption.REPLACE_EXISTING)
-
     TestUtils.incrementalAlterConfigs(servers, adminClients.head, oldTruststoreProps, perBrokerConfig = true).all.get()
     verifySslProduceConsume(sslProperties1, "alter-truststore-4")
     // Sleep a short time to wait for config changes propagation
