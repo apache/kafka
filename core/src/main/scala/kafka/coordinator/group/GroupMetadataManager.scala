@@ -572,6 +572,9 @@ class GroupMetadataManager(brokerId: Int,
         val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
+        var batchesRead = 0
+        var messagesRead = 0
+        var bytesRead = 0
 
         // buffer may not be needed if records are read from memory
         var buffer = ByteBuffer.allocate(0)
@@ -627,6 +630,8 @@ class GroupMetadataManager(brokerId: Int,
                     }
                 }
                 pendingOffsets.remove(batch.producerId)
+                messagesRead += 1
+                bytesRead += record.sizeInBytes()
               }
             } else {
               var batchBaseOffset: Option[Long] = None
@@ -670,12 +675,16 @@ class GroupMetadataManager(brokerId: Int,
                   case unknownKey =>
                     throw new IllegalStateException(s"Unexpected message key $unknownKey while loading offsets and group metadata")
                 }
+                messagesRead += 1
+                bytesRead += record.sizeInBytes()
               }
             }
+            batchesRead += 1
             currOffset = batch.nextOffset
           }
         }
 
+        info(s"Number of messages/bytes/batches read: $messagesRead/$bytesRead/$batchesRead for partition $topicPartition")
         val (groupOffsets, emptyGroupOffsets) = loadedOffsets
           .groupBy(_._1.group)
           .map { case (k, v) =>
