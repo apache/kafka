@@ -47,7 +47,7 @@ import scala.jdk.CollectionConverters._
 /**
  * This is an experimental Raft server which is intended for testing purposes only.
  * It can really only be used for performance testing using the producer performance
- * tool with the hard-coded `__cluster_metadata` topic.
+ * tool with a hard-coded `__cluster_metadata` topic.
  */
 class TestRaftServer(val config: KafkaConfig) extends Logging {
 

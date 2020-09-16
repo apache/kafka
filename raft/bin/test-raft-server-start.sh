@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,11 +14,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-broker.id=0
-listeners=PLAINTEXT://localhost:9092
-quorum.bootstrap.servers=localhost:9092
-quorum.bootstrap.voters=0
-log.dirs=/tmp/raft-logs
+if [ $# -lt 1 ];
+then
+	echo "USAGE: $0 [-daemon] server.properties [--override property=value]*"
+	exit 1
+fi
+base_dir=$(dirname $0)
 
-# Below is not used, but is currently required by `KafkaConfig`
-zookeeper.connect=localhost:2181
+if [ "x$KAFKA_LOG4J_OPTS" = "x" ]; then
+    export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/raft-log4j.properties"
+fi
+
+if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
+    export KAFKA_HEAP_OPTS="-Xmx1G -Xms1G"
+fi
+
+EXTRA_ARGS=${EXTRA_ARGS-'-name kafkaServer -loggc'}
+
+COMMAND=$1
+case $COMMAND in
+  -daemon)
+    EXTRA_ARGS="-daemon "$EXTRA_ARGS
+    shift
+    ;;
+  *)
+    ;;
+esac
+
+exec $base_dir/../../bin/kafka-run-class.sh $EXTRA_ARGS kafka.tools.TestRaftServer "$@"

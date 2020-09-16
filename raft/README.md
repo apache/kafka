@@ -4,8 +4,12 @@ Kafka Raft is a sub module of Apache Kafka which features a tailored version of
 [Raft Consensus Protocol](https://www.usenix.org/system/files/conference/atc14/atc14-paper-ongaro.pdf).
 <p>
 
+Eventually this module will be integrated into the Kafka server. For now,
+we have a standalone test server which can be used for performance testing.
+Below we describe the details to set this up.
+
 ### Run Single Quorum ###
-    bin/raft-server-start.sh config/raft.properties
+    bin/test-raft-server-start.sh config/raft.properties
 
 ### Run Multi Node Quorum ###
 Create 3 separate raft quorum properties as the following:
@@ -48,9 +52,9 @@ Create 3 separate raft quorum properties as the following:
  
 Open up 3 separate terminals, and run individual commands:
 
-    bin/raft-server-start.sh config/raft-quorum-1.properties
-    bin/raft-server-start.sh config/raft-quorum-2.properties
-    bin/raft-server-start.sh config/raft-quorum-3.properties
+    bin/test-raft-server-start.sh config/raft-quorum-1.properties
+    bin/test-raft-server-start.sh config/raft-quorum-2.properties
+    bin/test-raft-server-start.sh config/raft-quorum-3.properties
     
 This would setup a three node Raft quorum with node id 1,2,3 using different endpoints and log dirs. 
 

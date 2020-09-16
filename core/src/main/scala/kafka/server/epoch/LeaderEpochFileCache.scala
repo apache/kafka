@@ -158,11 +158,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
 
   def previousEpoch: Option[Int] = {
     inReadLock(lock) {
-      if (epochs.size >= 2) {
-        Some(epochs(epochs.size - 2).epoch)
-      } else {
-        None
-      }
+      latestEntry.flatMap(entry => Option(epochs.lowerEntry(entry.epoch))).map(_.getKey)
     }
   }
 
