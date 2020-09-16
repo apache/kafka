@@ -19,6 +19,7 @@ package org.apache.kafka.common.message;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.junit.Test;
@@ -309,8 +310,8 @@ public class SimpleExampleMessageTest {
     @Test
     public void testMyTaggedStruct() {
         // Verify that we can set and retrieve a nullable struct object.
-        SimpleExampleMessageData.MyTaggedStruct myStruct =
-            new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc");
+        SimpleExampleMessageData.TaggedStruct myStruct =
+            new SimpleExampleMessageData.TaggedStruct().setStructId("abc");
         testRoundTrip(new SimpleExampleMessageData().setMyTaggedStruct(myStruct),
             message -> assertEquals(myStruct, message.myTaggedStruct()), (short) 2);
 
@@ -319,6 +320,38 @@ public class SimpleExampleMessageTest {
             message -> assertEquals("abc", message.myString()), (short) 1);
         testRoundTrip(new SimpleExampleMessageData().setMyString("abc"),
             message -> assertEquals("abc", message.myString()), (short) 2);
+    }
+
+    private ByteBuffer serialize(SimpleExampleMessageData message, short version) {
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = message.size(cache, version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        message.write(new ByteBufferAccessor(buf), cache, version);
+        buf.flip();
+        assertEquals(size, buf.remaining());
+        return buf;
+    }
+
+    private SimpleExampleMessageData deserialize(ByteBuffer buf, short version) {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.read(new ByteBufferAccessor(buf.duplicate()), version);
+        return message;
+    }
+
+    private ByteBuffer serializeThroughStruct(SimpleExampleMessageData message, short version) {
+        Struct struct = message.toStruct(version);
+        int size = struct.sizeOf();
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        struct.writeTo(buf);
+        buf.flip();
+        assertEquals(size, buf.remaining());
+        return buf;
+    }
+
+    private SimpleExampleMessageData deserializeThroughStruct(ByteBuffer buf, short version) {
+        Schema schema = SimpleExampleMessageData.SCHEMAS[version];
+        Struct struct = schema.read(buf);
+        return new SimpleExampleMessageData(struct, version);
     }
 
     private void testRoundTrip(SimpleExampleMessageData message,
@@ -330,17 +363,18 @@ public class SimpleExampleMessageTest {
                                Consumer<SimpleExampleMessageData> validator,
                                short version) {
         validator.accept(message);
-        ObjectSerializationCache cache = new ObjectSerializationCache();
-        int size = message.size(cache, version);
-        ByteBuffer buf = ByteBuffer.allocate(size);
-        message.write(new ByteBufferAccessor(buf), cache, version);
-        buf.flip();
-        assertEquals(size, buf.remaining());
+        ByteBuffer buf = serialize(message, version);
 
-        SimpleExampleMessageData message2 = new SimpleExampleMessageData();
-        message2.read(new ByteBufferAccessor(buf.duplicate()), version);
+        SimpleExampleMessageData message2 = deserialize(buf.duplicate(), version);
         validator.accept(message2);
         assertEquals(message, message2);
         assertEquals(message.hashCode(), message2.hashCode());
+
+        // Check struct serialization as well
+        assertEquals(buf, serializeThroughStruct(message, version));
+        SimpleExampleMessageData messageFromStruct = deserializeThroughStruct(buf.duplicate(), version);
+        validator.accept(messageFromStruct);
+        assertEquals(message, messageFromStruct);
+        assertEquals(message.hashCode(), messageFromStruct.hashCode());
     }
 }

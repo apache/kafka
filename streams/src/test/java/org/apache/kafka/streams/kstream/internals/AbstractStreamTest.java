@@ -94,7 +94,7 @@ public class AbstractStreamTest {
             inputTopic.pipeInput(expectedKey, "V" + expectedKey);
         }
 
-        assertTrue(supplier.theCapturedProcessor().processed.size() <= expectedKeys.length);
+        assertTrue(supplier.theCapturedProcessor().processed().size() <= expectedKeys.length);
     }
 
     private static class ExtendedKStream<K, V> extends AbstractStream<K, V> {

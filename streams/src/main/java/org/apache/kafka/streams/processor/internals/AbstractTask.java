@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,12 +60,6 @@ public abstract class AbstractTask implements Task {
         this.stateDirectory = stateDirectory;
     }
 
-    protected void initializeCheckpoint() {
-        // we will delete the local checkpoint file after registering the state stores and loading them into the
-        // state manager, therefore we should initialize the snapshot as empty to indicate over-write checkpoint needed
-        offsetSnapshotSinceLastFlush = Collections.emptyMap();
-    }
-
     /**
      * The following exceptions maybe thrown from the state manager flushing call
      *
@@ -77,8 +70,7 @@ public abstract class AbstractTask implements Task {
     protected void maybeWriteCheckpoint(final boolean enforceCheckpoint) {
         final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
         if (StateManagerUtil.checkpointNeeded(enforceCheckpoint, offsetSnapshotSinceLastFlush, offsetSnapshot)) {
-            // since there's no written offsets we can checkpoint with empty map,
-            // and the state's current offset would be used to checkpoint
+            // the state's current offset would be used to checkpoint
             stateMgr.flush();
             stateMgr.checkpoint();
             offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);

@@ -255,19 +255,7 @@ public class TaskManagerTest {
         );
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, Task.LATEST_OFFSET));
 
-        expectLockObtainedFor(taskId00);
-        makeTaskFolders(taskId00.toString());
-        replay(stateDirectory);
-
-        taskManager.handleRebalanceStart(singleton("topic"));
-        final StateMachineTask runningTask = handleAssignment(
-            taskId00Assignment,
-            emptyMap(),
-            emptyMap()
-        ).get(taskId00);
-        runningTask.setChangelogOffsets(changelogOffsets);
-
-        assertThat(taskManager.getTaskOffsetSums(), is(expectedOffsetSums));
+        computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
     }
 
     @Test
@@ -278,6 +266,22 @@ public class TaskManagerTest {
         );
         final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 15L));
 
+        computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
+    }
+
+    @Test
+    public void shouldSkipUnknownOffsetsWhenComputingOffsetSum() throws Exception {
+        final Map<TopicPartition, Long> changelogOffsets = mkMap(
+            mkEntry(new TopicPartition("changelog", 0), OffsetCheckpoint.OFFSET_UNKNOWN),
+            mkEntry(new TopicPartition("changelog", 1), 10L)
+        );
+        final Map<TaskId, Long> expectedOffsetSums = mkMap(mkEntry(taskId00, 10L));
+
+        computeOffsetSumAndVerify(changelogOffsets, expectedOffsetSums);
+    }
+
+    private void computeOffsetSumAndVerify(final Map<TopicPartition, Long> changelogOffsets,
+                                           final Map<TaskId, Long> expectedOffsetSums) throws Exception {
         expectLockObtainedFor(taskId00);
         makeTaskFolders(taskId00.toString());
         replay(stateDirectory);
@@ -557,9 +561,19 @@ public class TaskManagerTest {
     public void shouldReviveCorruptTasks() {
         final ProcessorStateManager stateManager = EasyMock.createStrictMock(ProcessorStateManager.class);
         stateManager.markChangelogAsCorrupted(taskId00Partitions);
+        EasyMock.expectLastCall().once();
         replay(stateManager);
 
-        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+        final AtomicBoolean enforcedCheckpoint = new AtomicBoolean(false);
+        final Task task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager) {
+            @Override
+            public void postCommit(final boolean enforceCheckpoint) {
+                if (enforceCheckpoint) {
+                    enforcedCheckpoint.set(true);
+                }
+                super.postCommit(enforceCheckpoint);
+            }
+        };
 
         // `handleAssignment`
         expectRestoreToBeCompleted(consumer, changeLogReader);
@@ -582,6 +596,7 @@ public class TaskManagerTest {
 
         taskManager.handleCorruption(singletonMap(taskId00, taskId00Partitions));
         assertThat(task00.state(), is(Task.State.CREATED));
+        assertThat(enforcedCheckpoint.get(), is(true));
         assertThat(taskManager.activeTaskMap(), is(singletonMap(taskId00, task00)));
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
 
@@ -1287,6 +1302,8 @@ public class TaskManagerTest {
             () -> taskManager.shutdown(true)
         );
         assertThat(exception.getMessage(), equalTo("Unexpected exception while closing task"));
+        assertThat(exception.getCause().getMessage(), is("migrated; it means all tasks belonging to this thread should be migrated."));
+        assertThat(exception.getCause().getCause().getMessage(), is("cause"));
 
         assertThat(closedDirtyTask01.get(), is(true));
         assertThat(closedDirtyTask02.get(), is(true));
@@ -1295,8 +1312,6 @@ public class TaskManagerTest {
         assertThat(task01.state(), is(Task.State.CLOSED));
         assertThat(task02.state(), is(Task.State.CLOSED));
         assertThat(task03.state(), is(Task.State.CLOSED));
-        assertThat(exception.getMessage(), is("Unexpected exception while closing task"));
-        assertThat(exception.getCause().getMessage(), is("oops"));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
         assertThat(taskManager.standbyTaskMap(), Matchers.anEmptyMap());
         // the active task creator should also get closed (so that it closes the thread producer if applicable)

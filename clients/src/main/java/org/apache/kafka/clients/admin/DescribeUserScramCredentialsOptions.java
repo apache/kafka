@@ -14,20 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
+package org.apache.kafka.clients.admin;
 
-import java.util.Map;
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.List;
 
 /**
- * A {@link StreamsConfig} that does not log its configuration on construction.
+ * Options for {@link AdminClient#describeUserScramCredentials(List, DescribeUserScramCredentialsOptions)}
  *
- * This producer cleaner output for unit tests using the {@code test-utils},
- * since logging the config is not really valuable in this context.
+ * The API of this class is evolving. See {@link AdminClient} for details.
  */
-public class QuietStreamsConfig extends StreamsConfig {
-    public QuietStreamsConfig(final Map<?, ?> props) {
-        super(props, false);
-    }
+@InterfaceStability.Evolving
+public class DescribeUserScramCredentialsOptions extends AbstractOptions<DescribeUserScramCredentialsOptions> {
 }

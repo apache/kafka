@@ -46,7 +46,7 @@ public interface InternalProcessorContext extends ProcessorContext {
     void setSystemTimeMs(long timeMs);
 
     /**
-     * @retun the current wall-clock system timestamp in milliseconds
+     * @return the current wall-clock system timestamp in milliseconds
      */
     long currentSystemTimeMs();
 
@@ -64,12 +64,12 @@ public interface InternalProcessorContext extends ProcessorContext {
     /**
      * @param currentNode the current {@link ProcessorNode}
      */
-    void setCurrentNode(ProcessorNode<?, ?> currentNode);
+    void setCurrentNode(ProcessorNode<?, ?, ?, ?> currentNode);
 
     /**
      * Get the current {@link ProcessorNode}
      */
-    ProcessorNode<?, ?> currentNode();
+    ProcessorNode<?, ?, ?, ?> currentNode();
 
     /**
      * Get the thread-global cache

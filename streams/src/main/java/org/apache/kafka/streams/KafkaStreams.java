@@ -25,12 +25,11 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
@@ -69,7 +68,6 @@ import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
-import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.slf4j.Logger;
 
 import java.time.Duration;
@@ -159,8 +157,6 @@ public class KafkaStreams implements AutoCloseable {
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
     private StateRestoreListener globalStateRestoreListener;
-
-    private final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger;
 
     // container states
     /**
@@ -688,10 +684,12 @@ public class KafkaStreams implements AutoCloseable {
         final MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         metrics = new Metrics(metricConfig, reporters, time, metricsContext);
-        streamsMetrics =
-            new StreamsMetricsImpl(metrics, clientId, config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG));
-        rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
-        streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
+        streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            clientId,
+            config.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
+            time
+        );
         ClientMetrics.addVersionMetric(streamsMetrics);
         ClientMetrics.addCommitIdMetric(streamsMetrics);
         ClientMetrics.addApplicationIdMetric(streamsMetrics, config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
@@ -886,7 +884,7 @@ public class KafkaStreams implements AutoCloseable {
             final long recordingInterval = 1;
             if (rocksDBMetricsRecordingService != null) {
                 rocksDBMetricsRecordingService.scheduleAtFixedRate(
-                    rocksDBMetricsRecordingTrigger,
+                    streamsMetrics.rocksDBMetricsRecordingTrigger(),
                     recordingDelay,
                     recordingInterval,
                     TimeUnit.MINUTES
@@ -1249,11 +1247,7 @@ public class KafkaStreams implements AutoCloseable {
 
         log.debug("Current changelog positions: {}", allChangelogPositions);
         final Map<TopicPartition, ListOffsetsResultInfo> allEndOffsets;
-        try {
-            allEndOffsets = fetchEndOffsets(allPartitions, adminClient);
-        } catch (final TimeoutException e) {
-            throw new StreamsException("Timed out obtaining end offsets from kafka", e);
-        }
+        allEndOffsets = fetchEndOffsets(allPartitions, adminClient);
         log.debug("Current end offsets :{}", allEndOffsets);
 
         for (final Map.Entry<TopicPartition, ListOffsetsResultInfo> entry : allEndOffsets.entrySet()) {

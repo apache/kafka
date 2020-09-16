@@ -24,7 +24,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -37,6 +36,7 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.Version;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
@@ -151,15 +151,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         for (final String terminalNodeName : topology.terminalNodes()) {
             e2eLatencySensors.put(
                 terminalNodeName,
-                TaskMetrics.e2ELatencySensor(threadId, taskId, terminalNodeName, RecordingLevel.INFO, streamsMetrics)
+                ProcessorNodeMetrics.e2ELatencySensor(threadId, taskId, terminalNodeName, streamsMetrics)
             );
         }
 
-        for (final ProcessorNode<?, ?> sourceNode : topology.sources()) {
+        for (final ProcessorNode<?, ?, ?, ?> sourceNode : topology.sources()) {
             final String sourceNodeName = sourceNode.name();
             e2eLatencySensors.put(
                 sourceNodeName,
-                TaskMetrics.e2ELatencySensor(threadId, taskId, sourceNodeName, RecordingLevel.INFO, streamsMetrics)
+                ProcessorNodeMetrics.e2ELatencySensor(threadId, taskId, sourceNodeName, streamsMetrics)
             );
         }
 
@@ -207,7 +207,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             StateManagerUtil.registerStateStores(log, logPrefix, topology, stateMgr, stateDirectory, processorContext);
 
-            initializeCheckpoint();
+            // without EOS the checkpoint file would not be deleted after loading, and
+            // with EOS we would not checkpoint ever during running state anyways.
+            // therefore we can initialize the snapshot as empty so that we would checkpoint right after loading
+            offsetSnapshotSinceLastFlush = Collections.emptyMap();
 
             transitionTo(State.RESTORING);
 
@@ -295,7 +298,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
-        for (final ProcessorNode<?, ?> node : topology.processors()) {
+        for (final ProcessorNode<?, ?, ?, ?> node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
                 node.close();
@@ -441,15 +444,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             case RESTORING:
             case SUSPENDED:
                 maybeWriteCheckpoint(enforceCheckpoint);
-                log.debug("Finalized commit for {} task", state());
+                log.debug("Finalized commit for {} task with enforce checkpoint {}", state(), enforceCheckpoint);
 
                 break;
 
             case RUNNING:
-                if (!eosEnabled) {
+                if (enforceCheckpoint || !eosEnabled) {
                     maybeWriteCheckpoint(enforceCheckpoint);
                 }
-                log.debug("Finalized commit for {} task", state());
+                log.debug("Finalized commit for {} task with eos {} enforce checkpoint {}", state(), eosEnabled, enforceCheckpoint);
 
                 break;
 
@@ -475,14 +478,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void closeClean() {
         validateClean();
-        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
+        removeAllSensors();
         close(true);
         log.info("Closed clean");
     }
 
     @Override
     public void closeDirty() {
-        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
+        removeAllSensors();
         close(false);
         log.info("Closed dirty");
     }
@@ -496,7 +499,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     @Override
     public void closeCleanAndRecycleState() {
         validateClean();
-        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
+        removeAllSensors();
         switch (state()) {
             case SUSPENDED:
                 stateMgr.recycle();
@@ -545,6 +548,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.debug("Tried to close clean but there was pending uncommitted data, this means we failed to"
                           + " commit and should close as dirty instead");
             throw new TaskMigratedException("Tried to close dirty task as clean");
+        }
+    }
+
+    private void removeAllSensors() {
+        streamsMetrics.removeAllTaskLevelSensors(Thread.currentThread().getName(), id.toString());
+        for (final String nodeName : e2eLatencySensors.keySet()) {
+            streamsMetrics.removeAllNodeLevelSensors(Thread.currentThread().getName(), id.toString(), nodeName);
         }
     }
 
@@ -656,7 +666,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
         try {
             // process the record by passing to the source node of the topology
-            final ProcessorNode<Object, Object> currNode = (ProcessorNode<Object, Object>) recordInfo.node();
+            final ProcessorNode<Object, Object, Object, Object> currNode = (ProcessorNode<Object, Object, Object, Object>) recordInfo.node();
             final TopicPartition partition = recordInfo.partition();
 
             log.trace("Start processing one record [{}]", record);
@@ -725,7 +735,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     @Override
-    public void punctuate(final ProcessorNode<?, ?> node,
+    public void punctuate(final ProcessorNode<?, ?, ?, ?> node,
                           final long timestamp,
                           final PunctuationType type,
                           final Punctuator punctuator) {
@@ -750,7 +760,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
     }
 
-    private void updateProcessorContext(final StampedRecord record, final ProcessorNode<?, ?> currNode, final long wallClockTime) {
+    private void updateProcessorContext(final StampedRecord record, final ProcessorNode<?, ?, ?, ?> currNode, final long wallClockTime) {
         processorContext.setRecordContext(
             new ProcessorRecordContext(
                 record.timestamp,
@@ -771,6 +781,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             checkpointableOffsets.putIfAbsent(entry.getKey(), entry.getValue());
         }
+
+        log.debug("Checkpointable offsets {}", checkpointableOffsets);
+
         return checkpointableOffsets;
     }
 
@@ -830,7 +843,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private void initializeTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
-        for (final ProcessorNode<?, ?> node : topology.processors()) {
+        for (final ProcessorNode<?, ?, ?, ?> node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
                 node.init(processorContext);
@@ -1095,7 +1108,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
 
         public RecordQueue createQueue(final TopicPartition partition) {
-            final SourceNode<?, ?> source = topology.source(partition.topic());
+            final SourceNode<?, ?, ?, ?> source = topology.source(partition.topic());
             final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor();
             final TimestampExtractor timestampExtractor = sourceTimestampExtractor != null ? sourceTimestampExtractor : defaultTimestampExtractor;
             return new RecordQueue(

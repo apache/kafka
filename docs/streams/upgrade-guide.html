@@ -88,6 +88,14 @@
 
     <h3><a id="streams_api_changes_270" href="#streams_api_changes_270">Streams API changes in 2.7.0</a></h3>
     <p>
+        In <code>KeyQueryMetadata</code> we deprecated <code>getActiveHost()</code>, <code>getStandbyHosts()</code> as well as <code>getPartition()</code>
+        and replaced them with <code>activeHost()</code>, <code>standbyHosts()</code> and <code>partition()</code> respectively.
+        <code>KeyQueryMetadata</code> was introduced in Kafka Streams 2.5 release with getter methods having prefix <code>get</code>.
+        The intend of this change is to bring the method names to Kafka custom to not use the <code>get</code> prefix for getter methods.
+        The old methods are deprecated and is not effected.
+        (Cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-648%3A+Renaming+getter+method+for+Interactive+Queries">KIP-648</a>.)
+    </p>
+    <p>
         The <code>StreamsConfig</code> variable for configuration parameter <code>"topology.optimization"</code>
         is renamed from <code>TOPOLOGY_OPTIMIZATION</code> to <code>TOPOLOGY_OPTIMIZATION_CONFIG</code>.
         The old variable is deprecated. Note, that the parameter name itself is not affected.
@@ -95,11 +103,17 @@
     </p>
 
     <p>
-        The configuration parameter <code>retries</code> is deprecated in favor of a the new parameter <code>task.timeout.ms</code>.
-        Kafka Streams runtime ignores <code>retries</code> if set, however, if would still forward the parameter
-        to it's internal clients. Note though, that <code>retries</code> is deprecated for the producer and admin client, too.
-        Thus, instead of setting <code>retries</code>, you should configure the corresponding client timeouts.
-
+        The configuration parameter <code>retries</code> is deprecated in favor of the new parameter <code>task.timeout.ms</code>.
+        Kafka Streams' runtime ignores <code>retries</code> if set, however, it would still forward the parameter
+        to its internal clients. Note though, that <code>retries</code> is deprecated for the producer and admin client, too.
+        Thus, instead of setting <code>retries</code>, you should configure the corresponding client timeouts, namely
+        <code>delivery.timeout.ms</code> and <code>max.block.ms</code> for the producer and
+        <code>default.api.timeout.ms</code> for the admin client.
+    </p>
+    <p>
+        We added <code>SlidingWindows</code> as an option for <code>windowedBy()</code> windowed aggregations as described in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-450%3A+Sliding+Window+Aggregations+in+the+DSL">KIP-450</a>.
+        Sliding windows are fixed-time and data-aligned windows that allow for flexible and efficient windowed aggregations.
     </p>
 
     <h3><a id="streams_api_changes_260" href="#streams_api_changes_260">Streams API changes in 2.6.0</a></h3>
@@ -126,7 +140,7 @@
     </p>
 
     <p>
-        As of 2.6.0 Kafka Streams deprecates <code>KStream.through()<code> if favor of the new <code>KStream.repartition()</code> operator
+        As of 2.6.0 Kafka Streams deprecates <code>KStream.through()</code> in favor of the new <code>KStream.repartition()</code> operator
         (as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-221%3A+Enhance+DSL+with+Connecting+Topic+Creation+and+Repartition+Hint">KIP-221</a>).
         <code>KStream.repartition()</code> is similar to <code>KStream.through()</code>, however Kafka Streams will manage the topic for you.
         If you need to write into and read back from a topic that you mange, you can fall back to use <code>KStream.to()</code> in combination with <code>StreamsBuilder#stream()</code>.
@@ -146,7 +160,7 @@
 
     <h3><a id="streams_api_changes_250" href="#streams_api_changes_250">Streams API changes in 2.5.0</a></h3>
     <p>
-        We add a new <code>cogroup()</code> operator (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-150+-+Kafka-Streams+Cogroup">KIP-150</a>>)
+        We add a new <code>cogroup()</code> operator (via <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-150+-+Kafka-Streams+Cogroup">KIP-150</a>)
         that allows to aggregate multiple streams in a single operation.
         Cogrouped streams can also be windowed before they are aggregated.
         Please refer to the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html">developer guide</a> for more details.

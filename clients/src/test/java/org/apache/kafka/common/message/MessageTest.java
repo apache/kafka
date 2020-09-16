@@ -53,6 +53,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -692,7 +693,7 @@ public final class MessageTest {
         message.setMyStruct(new SimpleExampleMessageData.MyStruct().setStructId(25).setArrayInStruct(
             Collections.singletonList(new SimpleExampleMessageData.StructArray().setArrayFieldId(20))
         ));
-        message.setMyTaggedStruct(new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc"));
+        message.setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("abc"));
 
         message.setProcessId(UUID.randomUUID());
         message.setMyNullableString("notNull");
@@ -780,13 +781,27 @@ public final class MessageTest {
         assertEquals(expected.toString(), message2.toString());
     }
 
+    @SuppressWarnings("unchecked")
     private void testJsonRoundTrip(short version, Message message, Message expected) throws Exception {
-        JsonNode jsonNode = message.toJson(version);
-        Message message2 = message.getClass().newInstance();
-        message2.fromJson(jsonNode, version);
+        String jsonConverter = jsonConverterTypeName(message.getClass().getTypeName());
+        Class<?> converter = Class.forName(jsonConverter);
+        Method writeMethod = converter.getMethod("write", message.getClass(), short.class);
+        JsonNode jsonNode = (JsonNode) writeMethod.invoke(null, message, version);
+        Method readMethod = converter.getMethod("read", JsonNode.class, short.class);
+        Message message2 = (Message) readMethod.invoke(null, jsonNode, version);
         assertEquals(expected, message2);
         assertEquals(expected.hashCode(), message2.hashCode());
         assertEquals(expected.toString(), message2.toString());
+    }
+
+    private static String jsonConverterTypeName(String source) {
+        int outerClassIndex = source.lastIndexOf('$');
+        if (outerClassIndex == -1) {
+            return  source + "JsonConverter";
+        } else {
+            return source.substring(0, outerClassIndex) + "JsonConverter$" +
+                source.substring(outerClassIndex + 1) + "JsonConverter";
+        }
     }
 
     /**
@@ -951,8 +966,8 @@ public final class MessageTest {
         verifyWriteSucceeds((short) 0,
             new OffsetCommitRequestData().setRetentionTimeMs(123));
         verifyWriteRaisesUve((short) 5, "forgotten",
-            new FetchRequestData().setForgotten(singletonList(
-                new FetchRequestData.ForgottenTopic().setName("foo"))));
+            new FetchRequestData().setForgottenTopicsData(singletonList(
+                new FetchRequestData.ForgottenTopic().setTopic("foo"))));
     }
 
     @Test

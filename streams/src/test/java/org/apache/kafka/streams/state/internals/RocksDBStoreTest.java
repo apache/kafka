@@ -38,7 +38,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
-import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecordingTrigger;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -52,11 +51,14 @@ import org.rocksdb.Cache;
 import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
+import org.rocksdb.PlainTableConfig;
 import org.rocksdb.Statistics;
 
 import java.io.File;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,12 +66,14 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.isNull;
 import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.notNull;
 import static org.easymock.EasyMock.reset;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
@@ -99,12 +103,13 @@ public class RocksDBStoreTest {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
         dir = TestUtils.tempDirectory();
-        context = new InternalMockProcessorContext(dir,
+        context = new InternalMockProcessorContext(
+            dir,
             Serdes.String(),
             Serdes.String(),
-            new StreamsConfig(props));
+            new StreamsConfig(props)
+        );
         rocksDBStore = getRocksDBStore();
-        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(time));
     }
 
     @After
@@ -144,57 +149,41 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldAddStatisticsToInjectedMetricsRecorderWhenRecordingLevelIsDebug() {
-        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
-        context = getProcessorContext(RecordingLevel.DEBUG);
-        reset(metricsRecorder);
-        metricsRecorder.addStatistics(
-            eq(DB_NAME),
-            anyObject(Statistics.class)
-        );
-        replay(metricsRecorder);
-
-        rocksDBStore.openDB(context);
-
-        verify(metricsRecorder);
-        reset(metricsRecorder);
-    }
-
-    @Test
-    public void shouldNotAddStatisticsToInjectedMetricsRecorderWhenRecordingLevelIsInfo() {
+    public void shouldAddValueProvidersWithoutStatisticsToInjectedMetricsRecorderWhenRecordingLevelInfo() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.INFO);
         reset(metricsRecorder);
+        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
         replay(metricsRecorder);
 
         rocksDBStore.openDB(context);
 
         verify(metricsRecorder);
+        reset(metricsRecorder);
     }
 
     @Test
-    public void shouldRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsDebug() {
+    public void shouldAddValueProvidersWithStatisticsToInjectedMetricsRecorderWhenRecordingLevelDebug() {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(RecordingLevel.DEBUG);
+        reset(metricsRecorder);
+        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), notNull());
+        replay(metricsRecorder);
+
+        rocksDBStore.openDB(context);
+
+        verify(metricsRecorder);
+        reset(metricsRecorder);
+    }
+
+    @Test
+    public void shouldRemoveValueProvidersFromInjectedMetricsRecorderOnClose() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         try {
             context = getProcessorContext(RecordingLevel.DEBUG);
             rocksDBStore.openDB(context);
             reset(metricsRecorder);
-            metricsRecorder.removeStatistics(DB_NAME);
-            replay(metricsRecorder);
-        } finally {
-            rocksDBStore.close();
-        }
-
-        verify(metricsRecorder);
-    }
-
-    @Test
-    public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenRecordingLevelIsInfo() {
-        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
-        try {
-            context = getProcessorContext(RecordingLevel.INFO);
-            rocksDBStore.openDB(context);
-            reset(metricsRecorder);
+            metricsRecorder.removeValueProviders(DB_NAME);
             replay(metricsRecorder);
         } finally {
             rocksDBStore.close();
@@ -216,24 +205,71 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldNotAddStatisticsToInjectedMetricsRecorderWhenUserProvidesStatistics() {
+    public void shouldNotSetStatisticsInValueProvidersWhenUserProvidesStatistics() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
         context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
+        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), notNull(), isNull());
         replay(metricsRecorder);
 
         rocksDBStore.openDB(context);
         verify(metricsRecorder);
+        reset(metricsRecorder);
+    }
+
+    public static class RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig implements RocksDBConfigSetter {
+        public RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig(){}
+
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            options.setTableFormatConfig(new BlockBasedTableConfig());
+        }
+
+        public void close(final String storeName, final Options options) {
+            options.statistics().close();
+        }
     }
 
     @Test
-    public void shouldNotRemoveStatisticsFromInjectedMetricsRecorderOnCloseWhenUserProvidesStatistics() {
+    public void shouldThrowWhenUserProvidesNewBlockBasedTableFormatConfig() {
         rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
-        context = getProcessorContext(RecordingLevel.DEBUG, RocksDBConfigSetterWithUserProvidedStatistics.class);
-        rocksDBStore.openDB(context);
-        reset(metricsRecorder);
+        context = getProcessorContext(
+            RecordingLevel.DEBUG,
+            RocksDBConfigSetterWithUserProvidedNewBlockBasedTableFormatConfig.class
+        );
+        assertThrows(
+            "The used block-based table format configuration does not expose the " +
+                "block cache. Use the BlockBasedTableConfig instance provided by Options#tableFormatConfig() to configure " +
+                "the block-based table format of RocksDB. Do not provide a new instance of BlockBasedTableConfig to " +
+                "the RocksDB options.",
+            ProcessorStateException.class,
+            () -> rocksDBStore.openDB(context)
+        );
+    }
+
+    public static class RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig implements RocksDBConfigSetter {
+        public RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig(){}
+
+        public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
+            options.setTableFormatConfig(new PlainTableConfig());
+        }
+
+        public void close(final String storeName, final Options options) {
+            options.statistics().close();
+        }
+    }
+
+    @Test
+    public void shouldNotSetCacheInValueProvidersWhenUserProvidesPlainTableFormatConfig() {
+        rocksDBStore = getRocksDBStoreWithRocksDBMetricsRecorder();
+        context = getProcessorContext(
+            RecordingLevel.DEBUG,
+            RocksDBConfigSetterWithUserProvidedNewPlainTableFormatConfig.class
+        );
+        metricsRecorder.addValueProviders(eq(DB_NAME), notNull(), isNull(), notNull());
         replay(metricsRecorder);
 
+        rocksDBStore.openDB(context);
         verify(metricsRecorder);
+        reset(metricsRecorder);
     }
 
     @Test
@@ -367,7 +403,7 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldHandleDeletesAndPutbackOnRestoreAll() {
+    public void shouldHandleDeletesAndPutBackOnRestoreAll() {
         final List<KeyValue<byte[], byte[]>> entries = new ArrayList<>();
         entries.add(new KeyValue<>("1".getBytes(UTF_8), "a".getBytes(UTF_8)));
         entries.add(new KeyValue<>("2".getBytes(UTF_8), "b".getBytes(UTF_8)));
@@ -488,14 +524,14 @@ public class RocksDBStoreTest {
             () -> rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2"))));
     }
 
-    @Test(expected = ProcessorStateException.class)
+    @Test
     public void shouldThrowProcessorStateExceptionOnPutDeletedDir() throws IOException {
         rocksDBStore.init(context, rocksDBStore);
         Utils.delete(dir);
         rocksDBStore.put(
             new Bytes(stringSerializer.serialize(null, "anyKey")),
             stringSerializer.serialize(null, "anyValue"));
-        rocksDBStore.flush();
+        assertThrows(ProcessorStateException.class, () -> rocksDBStore.flush());
     }
 
     @Test
@@ -507,7 +543,6 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
-        context.metrics().setRocksDBMetricsRecordingTrigger(new RocksDBMetricsRecordingTrigger(time));
 
         enableBloomFilters = false;
         rocksDBStore.init(context, rocksDBStore);
@@ -546,14 +581,12 @@ public class RocksDBStoreTest {
     }
 
     @Test
-    public void shouldVerifyThatMetricsGetMeasurementsFromRocksDB() {
+    public void shouldVerifyThatMetricsRecordedFromStatisticsGetMeasurementsFromRocksDB() {
         final TaskId taskId = new TaskId(0, 0);
 
-        final RocksDBMetricsRecordingTrigger rocksDBMetricsRecordingTrigger = new RocksDBMetricsRecordingTrigger(time);
         final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.DEBUG));
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST);
-        streamsMetrics.setRocksDBMetricsRecordingTrigger(rocksDBMetricsRecordingTrigger);
+            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
 
         context = EasyMock.niceMock(InternalMockProcessorContext.class);
         EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
@@ -568,15 +601,100 @@ public class RocksDBStoreTest {
         final byte[] value = "world".getBytes();
         rocksDBStore.put(Bytes.wrap(key), value);
 
-        rocksDBMetricsRecordingTrigger.run();
+        streamsMetrics.rocksDBMetricsRecordingTrigger().run();
 
         final Metric bytesWrittenTotal = metrics.metric(new MetricName(
             "bytes-written-total",
             StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
             "description is not verified",
-            streamsMetrics.storeLevelTagMap(Thread.currentThread().getName(), taskId.toString(), METRICS_SCOPE, DB_NAME)
+            streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
         ));
         assertThat((double) bytesWrittenTotal.metricValue(), greaterThan(0d));
+    }
+
+    @Test
+    public void shouldVerifyThatMetricsRecordedFromPropertiesGetMeasurementsFromRocksDB() {
+        final TaskId taskId = new TaskId(0, 0);
+
+        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
+
+        context = EasyMock.niceMock(InternalMockProcessorContext.class);
+        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
+        EasyMock.expect(context.taskId()).andStubReturn(taskId);
+        EasyMock.expect(context.appConfigs())
+                .andStubReturn(new StreamsConfig(StreamsTestUtils.getStreamsConfig()).originals());
+        EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        EasyMock.replay(context);
+
+        rocksDBStore.init(context, rocksDBStore);
+        final byte[] key = "hello".getBytes();
+        final byte[] value = "world".getBytes();
+        rocksDBStore.put(Bytes.wrap(key), value);
+
+        final Metric numberOfEntriesActiveMemTable = metrics.metric(new MetricName(
+            "num-entries-active-mem-table",
+            StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
+            "description is not verified",
+            streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
+        ));
+        assertThat(numberOfEntriesActiveMemTable, notNullValue());
+        assertThat((BigInteger) numberOfEntriesActiveMemTable.metricValue(), greaterThan(BigInteger.valueOf(0)));
+    }
+
+    @Test
+    public void shouldVerifyThatPropertyBasedMetricsUseValidPropertyName() {
+        final TaskId taskId = new TaskId(0, 0);
+
+        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(RecordingLevel.INFO));
+        final StreamsMetricsImpl streamsMetrics =
+            new StreamsMetricsImpl(metrics, "test-application", StreamsConfig.METRICS_LATEST, time);
+
+        final Properties props = StreamsTestUtils.getStreamsConfig();
+        context = EasyMock.niceMock(InternalMockProcessorContext.class);
+        EasyMock.expect(context.metrics()).andStubReturn(streamsMetrics);
+        EasyMock.expect(context.taskId()).andStubReturn(taskId);
+        EasyMock.expect(context.appConfigs()).andStubReturn(new StreamsConfig(props).originals());
+        EasyMock.expect(context.stateDir()).andStubReturn(dir);
+        EasyMock.replay(context);
+
+        rocksDBStore.init(context, rocksDBStore);
+
+        final List<String> propertyNames = Arrays.asList(
+            "num-entries-active-mem-table",
+            "num-deletes-active-mem-table",
+            "num-entries-imm-mem-tables",
+            "num-deletes-imm-mem-tables",
+            "num-immutable-mem-table",
+            "cur-size-active-mem-table",
+            "cur-size-all-mem-tables",
+            "size-all-mem-tables",
+            "mem-table-flush-pending",
+            "num-running-flushes",
+            "compaction-pending",
+            "num-running-compactions",
+            "estimate-pending-compaction-bytes",
+            "total-sst-files-size",
+            "live-sst-files-size",
+            "num-live-versions",
+            "block-cache-capacity",
+            "block-cache-usage",
+            "block-cache-pinned-usage",
+            "estimate-num-keys",
+            "estimate-table-readers-mem",
+            "background-errors"
+        );
+        for (final String propertyname : propertyNames) {
+            final Metric metric = metrics.metric(new MetricName(
+                propertyname,
+                StreamsMetricsImpl.STATE_STORE_LEVEL_GROUP,
+                "description is not verified",
+                streamsMetrics.storeLevelTagMap(taskId.toString(), METRICS_SCOPE, DB_NAME)
+            ));
+            assertThat("Metric " + propertyname + " not found!", metric, notNullValue());
+            metric.metricValue();
+        }
     }
 
     public static class MockRocksDbConfigSetter implements RocksDBConfigSetter {
@@ -598,7 +716,7 @@ public class RocksDBStoreTest {
 
         @Override
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-            final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+            final BlockBasedTableConfig tableConfig = (BlockBasedTableConfig) options.tableFormatConfig();
             cache = new LRUCache(50 * 1024 * 1024L);
             tableConfig.setBlockCache(cache);
             tableConfig.setBlockSize(4096L);

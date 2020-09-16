@@ -92,7 +92,7 @@ public class StandbyTaskTest {
         mkMap(mkEntry(storeName1, storeChangelogTopicName1), mkEntry(storeName2, storeChangelogTopicName2))
     );
     private final StreamsMetricsImpl streamsMetrics =
-        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST);
+        new StreamsMetricsImpl(new Metrics(), threadName, StreamsConfig.METRICS_LATEST, new MockTime());
 
     private File baseDir;
     private StreamsConfig config;
@@ -206,7 +206,7 @@ public class StandbyTaskTest {
     public void shouldFlushAndCheckpointStateManagerOnCommit() {
         EasyMock.expect(stateManager.changelogOffsets()).andStubReturn(Collections.emptyMap());
         stateManager.flush();
-        EasyMock.expectLastCall().once();
+        EasyMock.expectLastCall();
         stateManager.checkpoint();
         EasyMock.expectLastCall().once();
         EasyMock.expect(stateManager.changelogOffsets())
@@ -219,7 +219,13 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
         task.prepareCommit();
-        task.postCommit(false);
+        task.postCommit(false);  // this should not checkpoint
+
+        task.prepareCommit();
+        task.postCommit(false);  // this should checkpoint
+
+        task.prepareCommit();
+        task.postCommit(false);  // this should not checkpoint
 
         EasyMock.verify(stateManager);
     }
@@ -283,10 +289,8 @@ public class StandbyTaskTest {
         stateManager.close();
         EasyMock.expectLastCall();
         stateManager.checkpoint();
-        EasyMock.expectLastCall();
+        EasyMock.expectLastCall().once();
         EasyMock.expect(stateManager.changelogOffsets())
-                .andReturn(Collections.singletonMap(partition, 50L))
-                .andReturn(Collections.singletonMap(partition, 60L))
                 .andReturn(Collections.singletonMap(partition, 60L));
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition)).anyTimes();
         EasyMock.replay(stateManager);
@@ -323,8 +327,7 @@ public class StandbyTaskTest {
         EasyMock.expect(stateManager.changelogPartitions()).andReturn(Collections.singleton(partition)).anyTimes();
         EasyMock.expect(stateManager.changelogOffsets())
             .andReturn(Collections.singletonMap(partition, 50L))
-            .andReturn(Collections.singletonMap(partition, 50L))
-            .andReturn(Collections.singletonMap(partition, 60L)).anyTimes();
+            .andReturn(Collections.singletonMap(partition, 10100L)).anyTimes();
         stateManager.flush();
         EasyMock.expectLastCall();
         stateManager.checkpoint();
@@ -334,10 +337,10 @@ public class StandbyTaskTest {
         task = createStandbyTask();
         task.initializeIfNeeded();
 
-        // do not need to commit if there's no update
+        // no need to commit if we've just initialized and offset not advanced much
         assertFalse(task.commitNeeded());
 
-        // could commit if the offset advanced
+        // could commit if the offset advanced beyond threshold
         assertTrue(task.commitNeeded());
 
         task.prepareCommit();
@@ -373,7 +376,6 @@ public class StandbyTaskTest {
     @Test
     public void shouldThrowOnCloseCleanCheckpointError() {
         EasyMock.expect(stateManager.changelogOffsets())
-            .andReturn(Collections.singletonMap(partition, 0L))
             .andReturn(Collections.singletonMap(partition, 50L));
         stateManager.checkpoint();
         EasyMock.expectLastCall().andThrow(new RuntimeException("KABOOM!")).anyTimes();

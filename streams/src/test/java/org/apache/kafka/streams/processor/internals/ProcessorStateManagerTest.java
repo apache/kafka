@@ -412,7 +412,7 @@ public class ProcessorStateManagerTest {
             stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             stateMgr.initializeStoreOffsetsFromCheckpoint(true);
 
-            assertFalse(checkpointFile.exists());
+            assertTrue(checkpointFile.exists());
             assertEquals(mkSet(
                 persistentStorePartition,
                 persistentStoreTwoPartition,
@@ -423,6 +423,47 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoPartition, 0L),
                 mkEntry(nonPersistentStorePartition, 0L)),
                 stateMgr.changelogOffsets()
+            );
+
+            assertNull(stateMgr.storeMetadata(irrelevantPartition));
+            assertNull(stateMgr.storeMetadata(persistentStoreTwoPartition).offset());
+            assertThat(stateMgr.storeMetadata(persistentStorePartition).offset(), equalTo(checkpointOffset));
+            assertNull(stateMgr.storeMetadata(nonPersistentStorePartition).offset());
+        } finally {
+            stateMgr.close();
+        }
+    }
+
+    @Test
+    public void shouldInitializeOffsetsFromCheckpointFileAndDeleteIfEOSEnabled() throws IOException {
+        final long checkpointOffset = 10L;
+
+        final Map<TopicPartition, Long> offsets = mkMap(
+                mkEntry(persistentStorePartition, checkpointOffset),
+                mkEntry(nonPersistentStorePartition, checkpointOffset),
+                mkEntry(irrelevantPartition, 999L)
+        );
+        checkpoint.write(offsets);
+
+        final ProcessorStateManager stateMgr = getStateManager(Task.TaskType.ACTIVE, true);
+
+        try {
+            stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.registerStore(persistentStoreTwo, persistentStoreTwo.stateRestoreCallback);
+            stateMgr.registerStore(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
+            stateMgr.initializeStoreOffsetsFromCheckpoint(true);
+
+            assertFalse(checkpointFile.exists());
+            assertEquals(mkSet(
+                    persistentStorePartition,
+                    persistentStoreTwoPartition,
+                    nonPersistentStorePartition),
+                    stateMgr.changelogPartitions());
+            assertEquals(mkMap(
+                    mkEntry(persistentStorePartition, checkpointOffset + 1L),
+                    mkEntry(persistentStoreTwoPartition, 0L),
+                    mkEntry(nonPersistentStorePartition, 0L)),
+                    stateMgr.changelogOffsets()
             );
 
             assertNull(stateMgr.storeMetadata(irrelevantPartition));

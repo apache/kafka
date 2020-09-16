@@ -23,23 +23,23 @@ import org.apache.kafka.streams.processor.internals.SourceNode;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MockSourceNode<K, V> extends SourceNode<K, V> {
+public class MockSourceNode<KIn, VIn, KOut, VOut> extends SourceNode<KIn, VIn, KOut, VOut> {
 
     private static final String NAME = "MOCK-SOURCE-";
     private static final AtomicInteger INDEX = new AtomicInteger(1);
 
     public int numReceived = 0;
-    public final ArrayList<K> keys = new ArrayList<>();
-    public final ArrayList<V> values = new ArrayList<>();
+    public final ArrayList<KIn> keys = new ArrayList<>();
+    public final ArrayList<VIn> values = new ArrayList<>();
     public boolean initialized;
     public boolean closed;
 
-    public MockSourceNode(final Deserializer<K> keyDeserializer, final Deserializer<V> valDeserializer) {
+    public MockSourceNode(final Deserializer<KIn> keyDeserializer, final Deserializer<VIn> valDeserializer) {
         super(NAME + INDEX.getAndIncrement(), keyDeserializer, valDeserializer);
     }
 
     @Override
-    public void process(final K key, final V value) {
+    public void process(final KIn key, final VIn value) {
         this.numReceived++;
         this.keys.add(key);
         this.values.add(value);

@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util
-import java.util.{Collections}
+import java.util.Collections
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.{mutable, Seq, Set}
@@ -37,7 +37,6 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
@@ -98,7 +97,7 @@ class MetadataCache(brokerId: Int) extends Logging {
 
         maybeLeader match {
           case None =>
-            val error = if (!snapshot.aliveBrokers.contains(brokerId)) { // we are already holding the read lock
+            val error = if (!snapshot.aliveBrokers.contains(leaderBrokerId)) { // we are already holding the read lock
               debug(s"Error while fetching metadata for $topicPartition: leader not available")
               Errors.LEADER_NOT_AVAILABLE
             } else {
