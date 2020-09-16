@@ -637,21 +637,28 @@ class FetchSessionCache(private val maxEntries: Int,
       evictionsMeter.mark()
       true
     } else {
+      def evictEntry(key: EvictableKey, map: util.TreeMap[EvictableKey, FetchSession]) = {
+        val evictableEntry = map.firstEntry
+        if (evictableEntry == null) {
+          trace("No evictable entries found.")
+          false
+        } else if (key.compareTo(evictableEntry.getKey) < 0) {
+          trace(s"Can't evict ${evictableEntry.getKey} with ${key.toString}")
+          false
+        } else {
+          trace(s"Evicting ${evictableEntry.getKey} with ${key.toString}.")
+          remove(evictableEntry.getValue)
+          evictionsMeter.mark()
+          true
+        }
+      }
+
       // If there are no stale entries, check the first evictable entry.
       // If it is less valuable than our proposed entry, evict it.
-      val map = if (privileged) evictableByPrivileged else evictableByAll
-      val evictableEntry = map.firstEntry
-      if (evictableEntry == null) {
-        trace("No evictable entries found.")
-        false
-      } else if (key.compareTo(evictableEntry.getKey) < 0) {
-        trace(s"Can't evict ${evictableEntry.getKey} with ${key.toString}")
-        false
+      if (privileged) {
+        evictEntry(key, evictableByAll) || evictEntry(key, evictableByPrivileged)
       } else {
-        trace(s"Evicting ${evictableEntry.getKey} with ${key.toString}.")
-        remove(evictableEntry.getValue)
-        evictionsMeter.mark()
-        true
+        evictEntry(key, evictableByAll)
       }
     }
   }
@@ -697,22 +704,21 @@ class FetchSessionCache(private val maxEntries: Int,
       session.lastUsedMs = now
       lastUsed.put(session.lastUsedKey, session)
 
-      val oldSize = session.cachedSize
-      if (oldSize != -1) {
-        val oldEvictableKey = session.evictableKey
-        evictableByPrivileged.remove(oldEvictableKey)
-        evictableByAll.remove(oldEvictableKey)
-        numPartitions = numPartitions - oldSize
-      }
+      val oldEvictableKey = session.evictableKey
       session.cachedSize = session.size
       val newEvictableKey = session.evictableKey
-      if ((!session.privileged) || (now - session.creationMs > evictionMs)) {
-        evictableByPrivileged.put(newEvictableKey, session)
+      if (oldEvictableKey != newEvictableKey) {
+        if (session.privileged) {
+          evictableByPrivileged.put(newEvictableKey, session)
+        } else {
+          evictableByAll.put(newEvictableKey, session)
+        }
+
+        if (oldEvictableKey.size == -1)
+          numPartitions = numPartitions + newEvictableKey.size
+        else
+          numPartitions = numPartitions - oldEvictableKey.size + newEvictableKey.size
       }
-      if (now - session.creationMs > evictionMs) {
-        evictableByAll.put(newEvictableKey, session)
-      }
-      numPartitions = numPartitions + session.cachedSize
     }
   }
 }
