@@ -106,7 +106,7 @@ public class MeteredKeyValueStoreTest {
     @Mock(type = MockType.NICE)
     private InternalProcessorContext context;
 
-    private MeteredKeyValueStore<String, String> metered;
+    private MeteredKeyValueStore<String, String, ?> metered;
     private final Metrics metrics = new Metrics();
     private String storeLevelGroup;
     private String threadIdTagKey;

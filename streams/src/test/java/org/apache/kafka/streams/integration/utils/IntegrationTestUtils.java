@@ -1190,32 +1190,7 @@ public class IntegrationTestUtils {
     public static <S> S getStore(final String storeName,
                                  final KafkaStreams streams,
                                  final QueryableStoreType<S> storeType) throws Exception {
-        return getStore(DEFAULT_TIMEOUT, storeName, streams, storeType);
-    }
-
-    public static <S> S getStore(final String storeName,
-                                 final KafkaStreams streams,
-                                 final boolean enableStaleQuery,
-                                 final QueryableStoreType<S> storeType) throws Exception {
-        return getStore(DEFAULT_TIMEOUT, storeName, streams, enableStaleQuery, storeType);
-    }
-
-    public static <S> S getStore(final long waitTime,
-                                 final String storeName,
-                                 final KafkaStreams streams,
-                                 final QueryableStoreType<S> storeType) throws Exception {
-        return getStore(waitTime, storeName, streams, false, storeType);
-    }
-
-    public static <S> S getStore(final long waitTime,
-                                 final String storeName,
-                                 final KafkaStreams streams,
-                                 final boolean enableStaleQuery,
-                                 final QueryableStoreType<S> storeType) throws Exception {
-        final StoreQueryParameters<S> param = enableStaleQuery ?
-            StoreQueryParameters.fromNameAndType(storeName, storeType).enableStaleStores() :
-            StoreQueryParameters.fromNameAndType(storeName, storeType);
-        return getStore(waitTime, streams, param);
+        return getStore(DEFAULT_TIMEOUT, streams, StoreQueryParameters.fromNameAndType(storeName, storeType));
     }
 
     public static <S> S getStore(final KafkaStreams streams,

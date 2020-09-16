@@ -36,6 +36,12 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         }
     }
 
+    public static boolean isCachingLayer(final StateStore stateStore) {
+        return stateStore instanceof CachingKeyValueStore
+            || stateStore instanceof CachingWindowStore
+            || stateStore instanceof CachingSessionStore;
+    }
+
     private final S wrapped;
 
     public WrappedStateStore(final S wrapped) {

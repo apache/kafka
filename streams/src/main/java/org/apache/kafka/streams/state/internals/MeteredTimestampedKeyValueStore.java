@@ -39,7 +39,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  * @param <V>
  */
 public class MeteredTimestampedKeyValueStore<K, V>
-    extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> 
+    extends MeteredKeyValueStore<K, ValueAndTimestamp<V>, MeteredTimestampedKeyValueStore<K, V>>
     implements TimestampedKeyValueStore<K, V> {
 
     MeteredTimestampedKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
@@ -48,6 +48,31 @@ public class MeteredTimestampedKeyValueStore<K, V>
                                     final Serde<K> keySerde,
                                     final Serde<ValueAndTimestamp<V>> valueSerde) {
         super(inner, metricScope, time, keySerde, valueSerde);
+    }
+
+    private MeteredTimestampedKeyValueStore(final KeyValueStore<Bytes, byte[]> inner,
+                                            final String metricsScope,
+                                            final String threadId,
+                                            final Time time,
+                                            final Serde<K> keySerde,
+                                            final Serde<ValueAndTimestamp<V>> valueSerde) {
+        super(inner, metricsScope, threadId, time, keySerde, valueSerde);
+    }
+
+    @Override
+    public MeteredTimestampedKeyValueStore<K, V> reWrap(final KeyValueStore<Bytes, byte[]> inner) {
+        final MeteredTimestampedKeyValueStore<K, V> reWrapped = new MeteredTimestampedKeyValueStore<>(
+            inner,
+            metricsScope,
+            threadId,
+            time,
+            keySerde,
+            valueSerde
+        );
+
+        copyInit(reWrapped);
+
+        return reWrapped;
     }
 
     @SuppressWarnings("unchecked")

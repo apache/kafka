@@ -31,6 +31,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -848,8 +849,11 @@ public class EosIntegrationTest {
 
     private void verifyStateStore(final KafkaStreams streams,
                                   final Set<KeyValue<Long, Long>> expectedStoreContent) throws Exception {
-        final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils
-            .getStore(300_000L, storeName, streams, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Long, Long> store = IntegrationTestUtils.getStore(
+            300_000L,
+            streams,
+            StoreQueryParameters.fromNameAndType(storeName, QueryableStoreTypes.keyValueStore())
+        );
         assertNotNull(store);
 
         final KeyValueIterator<Long, Long> it = store.all();

@@ -228,13 +228,15 @@ public class StoreQueryIntegrationTest {
 
         // Assert that both active and standby are able to query for a key
         TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils
-                .getStore(TABLE_NAME, kafkaStreams1, true, queryableStoreType);
+            final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> param =
+                StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores();
+            final ReadOnlyKeyValueStore<Integer, Integer> store1 = IntegrationTestUtils.getStore(IntegrationTestUtils.DEFAULT_TIMEOUT, kafkaStreams1, param);
             return store1.get(key) != null;
         }, "store1 cannot find results for key");
         TestUtils.waitForCondition(() -> {
-            final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils
-                .getStore(TABLE_NAME, kafkaStreams2, true, queryableStoreType);
+            final StoreQueryParameters<ReadOnlyKeyValueStore<Integer, Integer>> param =
+                StoreQueryParameters.fromNameAndType(TABLE_NAME, queryableStoreType).enableStaleStores();
+            final ReadOnlyKeyValueStore<Integer, Integer> store2 = IntegrationTestUtils.getStore(IntegrationTestUtils.DEFAULT_TIMEOUT, kafkaStreams2, param);
             return store2.get(key) != null;
         }, "store2 cannot find results for key");
     }
