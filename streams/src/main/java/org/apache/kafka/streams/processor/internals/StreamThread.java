@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.ShutdownRequestedException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -56,6 +55,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -284,6 +284,7 @@ public class StreamThread extends Thread {
     private final InternalTopologyBuilder builder;
 
     private final AtomicInteger assignmentErrorCode;
+    private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -555,6 +556,10 @@ public class StreamThread extends Thread {
         // if the thread is still in the middle of a rebalance, we should keep polling
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
+            if (shutdownRequested.get()) {
+                sendShutdownRequest();
+                break;
+            }
             try {
                 runOnce();
                 if (nextProbingRebalanceMs.get() < time.milliseconds()) {
@@ -572,20 +577,23 @@ public class StreamThread extends Thread {
                 }
             } catch (final TaskMigratedException e) {
                 handleTaskMigrated(e);
-            } catch (final ShutdownRequestedException e) {
-                sendShutdownRequest(e);
             }
         }
     }
 
-    public void sendShutdownRequest(final ShutdownRequestedException e) {
+    public void initiateShutdown(){
+        shutdownRequested.set(true);
+    }
+
+    private void sendShutdownRequest() {
         log.warn("Detected that shutdown was requested. " +
-                "The all clients in this app will now begin to shutdown", e);
+                "The all clients in this app will now begin to shutdown");
 
         //set error code
         assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
         mainConsumer.unsubscribe();
         subscribeConsumer();
+
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {

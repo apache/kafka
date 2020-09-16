@@ -38,7 +38,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
-import org.apache.kafka.streams.errors.ShutdownRequestedException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
@@ -943,7 +942,7 @@ public class KafkaStreams implements AutoCloseable {
     public boolean shutdownApplication() {
         for (final StreamThread streamThread : threads) {
             if (streamThread.isAlive()) {
-                streamThread.sendShutdownRequest(new ShutdownRequestedException("requested form KafkaStreams Client"));
+                streamThread.initiateShutdown();
                 return true;
             }
         }

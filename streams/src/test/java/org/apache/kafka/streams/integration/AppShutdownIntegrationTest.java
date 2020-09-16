@@ -23,7 +23,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.ShutdownRequestedException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Named;
@@ -44,9 +44,7 @@ import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
+import static org.apache.kafka.common.utils.Utils.*;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -100,15 +98,65 @@ public class AppShutdownIntegrationTest {
             final CountDownLatch latch = new CountDownLatch(1);
 
             kafkaStreams.start();
-            produceMessages(0L, inputTopic);
+            kafkaStreams.shutdownApplication();
 
+            produceMessages(0L, inputTopic);
+            latch.await(10, TimeUnit.SECONDS);
+
+            assertThat(processorValueCollector.size(), equalTo(0));
+        }
+    }
+
+
+    @Test
+    public void shouldSendShutDownSignalFromUncaughtExceptionHandlerWithNoThreadsAlive() throws Exception {
+        //
+        //
+        // Also note that this is an integration test because so many components have to come together to
+        // ensure these configurations wind up where they belong, and any number of future code changes
+        // could break this change.
+
+        final String testId = safeUniqueTestName(getClass(), testName);
+        final String appId = "appId_" + testId;
+        final String inputTopic = "input" + testId;
+
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);
+
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+
+        final List<KeyValue<Object, Object>> processorValueCollector = new ArrayList<>();
+
+        builder.stream(inputTopic).process(() -> new ShutdownProcessor(processorValueCollector), Named.as("process"));
+
+        final Properties properties = mkObjectProperties(
+                mkMap(
+                        mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
+                        mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
+                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+                        mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "5"),
+                        mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
+                        mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
+                        mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000")
+                )
+        );
+
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            final CountDownLatch latch = new CountDownLatch(1);
+
+            kafkaStreams.setUncaughtExceptionHandler((t, e) -> assertThat("fail", !kafkaStreams.shutdownApplication()));
+            kafkaStreams.start();
+
+            produceMessages(0L, inputTopic);
             latch.await(10, TimeUnit.SECONDS);
 
             assertThat(processorValueCollector.size(), equalTo(1));
         }
     }
 
-    private void produceMessages(final long timestamp, final String streamOneInput) throws ShutdownRequestedException {
+    private void produceMessages(final long timestamp, final String streamOneInput) {
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(
                 streamOneInput,
                 Arrays.asList(
@@ -142,7 +190,7 @@ class ShutdownProcessor extends AbstractProcessor<Object, Object> {
     @Override
     public void process(final Object key, final Object value) {
         valueList.add(new KeyValue<>(key, value));
-        throw new ShutdownRequestedException("integration test");
+        throw new StreamsException("what");
     }
 
 
