@@ -552,7 +552,11 @@ class AdminManager(val config: KafkaConfig,
     if (resource.name == null || resource.name.isEmpty)
       None
     else {
-      Some(resourceNameToBrokerId(resource.name))
+      val id = resourceNameToBrokerId(resource.name)
+      // Under redirection, it is possible to handle config changes targeting at brokers other than the controller.
+      if (!config.redirectionEnabled && id != this.config.brokerId)
+        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
+      Some(id)
     }
   }
 

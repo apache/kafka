@@ -40,7 +40,6 @@ import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.SecureRandom;
-import java.text.SimpleDateFormat;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
@@ -65,9 +64,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
     private SecureRandom secureRandomImplementation;
     private SSLContext sslContext;
     private SslClientAuth sslClientAuth;
-
-    private static final SimpleDateFormat dateFormat = new SimpleDateFormat("HH:mm:ss.SSS");
-
 
     @Override
     public SSLEngine createClientSslEngine(String peerHost, int peerPort, String endpointIdentification) {
@@ -139,15 +135,14 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
         this.kmfAlgorithm = (String) configs.get(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
         this.tmfAlgorithm = (String) configs.get(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
 
-        log.info("Starting key store ssl creation");
         this.keystore = createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
                 (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
+
         this.truststore = createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
                 (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
                 (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-        log.info("both stores ssl factory were successful");
 
         this.sslContext = createSSLContext();
     }
@@ -242,7 +237,7 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             tmf.init(ts);
 
             sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
-            log.info("Created SSL context with keystore {}, truststore {}, provider {}.",
+            log.debug("Created SSL context with keystore {}, truststore {}, provider {}.",
                     keystore, truststore, sslContext.getProvider().getName());
             return sslContext;
         } catch (Exception e) {
@@ -286,7 +281,6 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             this.password = password;
             this.keyPassword = keyPassword;
             fileLastModifiedMs = lastModifiedMs(path);
-            log.info("New modified time for path {} is {}", path, dateFormat.format(new Date(fileLastModifiedMs)));
             this.keyStore = load();
         }
 
@@ -326,15 +320,11 @@ public final class DefaultSslEngineFactory implements SslEngineFactory {
             return modifiedMs != null && !Objects.equals(modifiedMs, this.fileLastModifiedMs);
         }
 
-        String modifiedTime() {
-            return fileLastModifiedMs == null ? "undefined" : dateFormat.format(new Date(fileLastModifiedMs));
-        }
-
         @Override
         public String toString() {
             return "SecurityStore(" +
                     "path=" + path +
-                    ", modificationTime=" + (fileLastModifiedMs == null ? null : dateFormat.format(new Date(fileLastModifiedMs))) + ")";
+                    ", modificationTime=" + (fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs)) + ")";
         }
     }
 }

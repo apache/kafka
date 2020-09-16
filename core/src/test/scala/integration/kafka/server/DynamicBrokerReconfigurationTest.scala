@@ -24,7 +24,7 @@ import java.lang.management.ManagementFactory
 import java.security.KeyStore
 import java.time.Duration
 import java.util
-import java.util.{Collections, Date, Properties}
+import java.util.{Collections, Properties}
 import java.util.concurrent._
 
 import javax.management.ObjectName
@@ -408,8 +408,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     val newProps = new Properties
     newProps ++= existingDynamicProps
     newProps ++= securityProps(combinedStoreProps, TRUSTSTORE_PROPS, prefix)
-    info(s"start reconfigure servers first with trust store path ${newProps.getProperty(prefix + SSL_TRUSTSTORE_LOCATION_CONFIG)}")
-    info(s"The new store password is ${newProps.get(prefix + SSL_TRUSTSTORE_PASSWORD_CONFIG)}")
     reconfigureServers(newProps, perBrokerConfig = true,
       (s"$prefix$SSL_TRUSTSTORE_LOCATION_CONFIG", combinedStoreProps.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)))
 
@@ -442,28 +440,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     Files.copy(Paths.get(combinedStoreProps.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)),
       Paths.get(sslProperties1.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)),
       StandardCopyOption.REPLACE_EXISTING)
-    info(s"File update is done at ${new Date(System.currentTimeMillis())} as path ${sslProperties1.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)}")
 
-    //    val equivLocation = sslProperties1.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG).replaceAll("/", "//")
-//    oldTruststoreProps.setProperty(prefix + SSL_TRUSTSTORE_LOCATION_CONFIG, equivLocation)
-//    TestUtils.incrementalAlterConfigs(servers, adminClients.head, oldTruststoreProps, perBrokerConfig = true).all.get()
-
-//    info(s"Got prefixed config $prefix$SSL_TRUSTSTORE_LOCATION_CONFIG")
-//    reconfigureServers(oldTruststoreProps, perBrokerConfig = true,
-//      (s"$prefix$SSL_TRUSTSTORE_LOCATION_CONFIG", sslProperties1.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)))
-//    reconfigureServers(oldTruststoreProps, perBrokerConfig = true,
-//        (s"$prefix$SSL_TRUSTSTORE_LOCATION_CONFIG", oldTruststoreProps.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)))
-
-//    TestUtils.incrementalAlterConfigs(servers, adminClients.head, combinedStoreProps, perBrokerConfig = true).all.get()
-//    TestUtils.incrementalAlterConfigs(servers, adminClients.head, oldTruststoreProps, perBrokerConfig = true).all.get()
-    info(s"The old store password is ${oldTruststoreProps.getProperty(prefix + SSL_TRUSTSTORE_PASSWORD_CONFIG)}")
-
-    reconfigureServers(oldTruststoreProps, perBrokerConfig = true,
-      (s"$prefix$SSL_TRUSTSTORE_LOCATION_CONFIG", sslProperties1.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)))
-
-    info(s"incremental change done")
-
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, oldTruststoreProps, perBrokerConfig = true).all.get()
     verifySslProduceConsume(sslProperties1, "alter-truststore-4")
+    // Sleep a short time to wait for config changes propagation
     Thread.sleep(100)
     verifySslProduceConsume(sslProperties2, "alter-truststore-5")
 

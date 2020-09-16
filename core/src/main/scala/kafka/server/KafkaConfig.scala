@@ -1545,7 +1545,6 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   /** ********* Redirection configuration ***********/
   def redirectionEnabled = interBrokerProtocolVersion >= KAFKA_2_7_IV1
-//  && false
 
   /** ********* Group coordinator configuration ***********/
   val groupMinSessionTimeoutMs = getInt(KafkaConfig.GroupMinSessionTimeoutMsProp)

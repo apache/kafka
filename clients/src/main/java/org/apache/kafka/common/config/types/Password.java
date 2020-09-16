@@ -43,7 +43,6 @@ public class Password {
         if (!(obj instanceof Password))
             return false;
         Password other = (Password) obj;
-        System.out.println("Compare other value " + other.value + " with current value " + value);
         return value.equals(other.value);
     }
 
