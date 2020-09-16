@@ -65,8 +65,12 @@
           "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)" },
         { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
           "about": "The current log start offset." },
-        { "name": "TruncationOffset", "type": "int64", "versions": "12+", "default": "-1", "taggedVersions": "12+", "tag": 0,
-          "about": "If set and it is not -1, the follower must truncate all offsets that are greater than or equal to this value." },
+        { "name": "DivergingEpoch", "type": "EpochEndOffset", "versions": "12+", "taggedVersions": "12+", "tag": 0,
+          "about": "In case divergence is detected based on the `LastFetchedEpoch` and `FetchOffset` in the request, this field indicates the largest epoch and its end offset such that subsequent records are known to diverge",
+          "fields": [
+            { "name": "Epoch", "type": "int32", "versions": "12+", "default": "-1" },
+            { "name": "EndOffset", "type": "int64", "versions": "12+", "default": "-1" }
+        ]},
         { "name": "CurrentLeader", "type": "LeaderIdAndEpoch",
           "versions": "12+", "taggedVersions": "12+", "tag": 1, "fields": [
           { "name": "LeaderId", "type": "int32", "versions": "12+", "default": "-1",

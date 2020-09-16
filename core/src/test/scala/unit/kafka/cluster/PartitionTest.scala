@@ -29,6 +29,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpoints
 import kafka.utils._
 import org.apache.kafka.common.errors.{ApiException, NotLeaderOrFollowerException, OffsetNotAvailableException, OffsetOutOfRangeException}
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -70,6 +71,12 @@ class PartitionTest extends AbstractPartitionTest {
     val leaderEpoch = 10
     val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
 
+    def epochEndOffset(epoch: Int, endOffset: Long): FetchResponseData.EpochEndOffset = {
+      new FetchResponseData.EpochEndOffset()
+        .setEpoch(epoch)
+        .setEndOffset(endOffset)
+    }
+
     def read(lastFetchedEpoch: Int, fetchOffset: Long): LogReadInfo = {
       partition.readRecords(
         Optional.of(lastFetchedEpoch),
@@ -82,14 +89,27 @@ class PartitionTest extends AbstractPartitionTest {
       )
     }
 
-    assertEquals(Some(2), read(lastFetchedEpoch = 2, fetchOffset = 5).truncationOffset)
-    assertEquals(None, read(lastFetchedEpoch = 0, fetchOffset = 2).truncationOffset)
-    assertEquals(Some(2), read(lastFetchedEpoch = 0, fetchOffset = 4).truncationOffset)
-    assertEquals(Some(13), read(lastFetchedEpoch = 6, fetchOffset = 6).truncationOffset)
-    assertEquals(None, read(lastFetchedEpoch = 7, fetchOffset = 14).truncationOffset)
-    assertEquals(None, read(lastFetchedEpoch = 9, fetchOffset = 17).truncationOffset)
-    assertEquals(None, read(lastFetchedEpoch = 10, fetchOffset = 17).truncationOffset)
-    assertEquals(Some(17), read(lastFetchedEpoch = 10, fetchOffset = 18).truncationOffset)
+    def assertDivergence(
+      divergingEpoch: FetchResponseData.EpochEndOffset,
+      readInfo: LogReadInfo
+    ): Unit = {
+      assertEquals(Some(divergingEpoch), readInfo.divergingEpoch)
+      assertEquals(0, readInfo.fetchedData.records.sizeInBytes)
+    }
+
+    def assertNoDivergence(readInfo: LogReadInfo): Unit = {
+      assertEquals(None, readInfo.divergingEpoch)
+    }
+
+    assertDivergence(epochEndOffset(epoch = 0, endOffset = 2), read(lastFetchedEpoch = 2, fetchOffset = 5))
+    assertDivergence(epochEndOffset(epoch = 0, endOffset= 2), read(lastFetchedEpoch = 0, fetchOffset = 4))
+    assertDivergence(epochEndOffset(epoch = 4, endOffset = 13), read(lastFetchedEpoch = 6, fetchOffset = 6))
+    assertDivergence(epochEndOffset(epoch = 4, endOffset = 13), read(lastFetchedEpoch = 5, fetchOffset = 9))
+    assertDivergence(epochEndOffset(epoch = 10, endOffset = 17), read(lastFetchedEpoch = 10, fetchOffset = 18))
+    assertNoDivergence(read(lastFetchedEpoch = 0, fetchOffset = 2))
+    assertNoDivergence(read(lastFetchedEpoch = 7, fetchOffset = 14))
+    assertNoDivergence(read(lastFetchedEpoch = 9, fetchOffset = 17))
+    assertNoDivergence(read(lastFetchedEpoch = 10, fetchOffset = 17))
 
     // Reads from epochs larger than we know about should cause an out of range error
     assertThrows[OffsetOutOfRangeException] {
@@ -100,9 +120,10 @@ class PartitionTest extends AbstractPartitionTest {
     log.updateHighWatermark(log.logEndOffset)
     log.maybeIncrementLogStartOffset(newLogStartOffset = 5L, ClientRecordDeletion)
 
-    assertEquals(None, read(lastFetchedEpoch = 0, fetchOffset = 5).truncationOffset)
-    assertEquals(Some(5), read(lastFetchedEpoch = 2, fetchOffset = 8).truncationOffset)
-    assertEquals(None, read(lastFetchedEpoch = 3, fetchOffset = 5).truncationOffset)
+    assertDivergence(epochEndOffset(epoch = 2, endOffset = 5), read(lastFetchedEpoch = 2, fetchOffset = 8))
+    assertNoDivergence(read(lastFetchedEpoch = 0, fetchOffset = 5))
+    assertNoDivergence(read(lastFetchedEpoch = 3, fetchOffset = 5))
+
     assertThrows[OffsetOutOfRangeException] {
       read(lastFetchedEpoch = 0, fetchOffset = 0)
     }
