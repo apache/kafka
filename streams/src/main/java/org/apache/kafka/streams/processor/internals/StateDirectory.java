@@ -323,17 +323,20 @@ public class StateDirectory {
                         final long lastModifiedMs = taskDir.lastModified();
                         if (now > lastModifiedMs + cleanupDelayMs) {
                             log.info("{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
-                                    logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
+                                logPrefix(), dirName, id, now - lastModifiedMs, cleanupDelayMs);
                             Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
                         }
                     }
                 } catch (final OverlappingFileLockException | IOException e) {
-                    // do nothing
+                    log.warn("{} Swallowed the following exception during deletion of obsolete state directory {} for task {}: {}",
+                        logPrefix(), dirName, id, e);
                 } finally {
                     try {
                         unlock(id);
                     } catch (final IOException e) {
-                        // do nothing
+                        log.warn("{} Swallowed the following exception during unlocking after " +
+                                "deletion of obsolete state directory for task {}: {}",
+                            logPrefix(), dirName, e);
                     }
                 }
             }
