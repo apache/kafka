@@ -652,7 +652,6 @@ class TransactionsTest extends KafkaServerTestHarness {
 
       producer.beginTransaction()
       producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, null, "2", "2", willBeCommitted = false))
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "4", "4", willBeCommitted = false))
 
       killBroker(partitionLeader) // kill the partition leader to prevent the batch from being submitted
       val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(testTopic, 0, "3", "3", willBeCommitted = false))
