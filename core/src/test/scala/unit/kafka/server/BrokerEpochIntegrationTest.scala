@@ -17,6 +17,9 @@
 
 package kafka.server
 
+import java.util.Collections
+import java.util.UUID
+
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
@@ -153,7 +156,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         val requestBuilder = new LeaderAndIsrRequest.Builder(
           ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
           epochInRequest,
-          partitionStates.asJava, nodes.toSet.asJava)
+          partitionStates.asJava, Collections.singletonMap(tp.topic, UUID.randomUUID()), nodes.toSet.asJava)
 
         if (epochInRequestDiffFromCurrentEpoch < 0) {
           // stale broker epoch in LEADER_AND_ISR

@@ -187,6 +187,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
@@ -1478,7 +1479,13 @@ public class RequestResponseTest {
                 new Node(0, "test0", 1223),
                 new Node(1, "test1", 1223)
         );
-        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0, partitionStates, leaders).build();
+
+        HashMap<String, UUID> topicIds = new HashMap<>();
+        topicIds.put("topic5", UUID.randomUUID());
+        topicIds.put("topic20", UUID.randomUUID());
+
+        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0,
+                partitionStates, topicIds, leaders).build();
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {

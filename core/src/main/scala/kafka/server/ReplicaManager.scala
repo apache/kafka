@@ -45,7 +45,7 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPart
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{Errors, MessageUtil}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
@@ -1279,6 +1279,7 @@ class ReplicaManager(val config: KafkaConfig,
             s"correlation id $correlationId from controller $controllerId " +
             s"epoch ${leaderAndIsrRequest.controllerEpoch}")
         }
+      val topicIds = leaderAndIsrRequest.topicIds()
 
       val response = {
         if (leaderAndIsrRequest.controllerEpoch < controllerEpoch) {
@@ -1385,6 +1386,29 @@ class ReplicaManager(val config: KafkaConfig,
            */
             if (localLog(topicPartition).isEmpty)
               markPartitionOffline(topicPartition)
+            else {
+              // Write the partition metadata file if it is empty and we have a topic Id to write to it
+              val id = topicIds.get(topicPartition.topic())
+              if (id != null && id != MessageUtil.ZERO_UUID) {
+                val log = localLog(topicPartition).get
+                if (log.partitionMetadataFile.isEmpty || log.partitionMetadataFile.get.notExists()) {
+                  stateChangeLogger.warn(s"Partition metadata file for topic ${topicPartition.topic} +" +
+                    s"partition ${topicPartition.partition} is offline.")
+                } else {
+                  if (log.partitionMetadataFile.get.isEmpty()) {
+                    log.partitionMetadataFile.get.write(topicIds.get(topicPartition.topic))
+                  } else {
+                    // Check if the topic ID in the file matches the topic ID provided in the request.
+                    // Warn if they do not match.
+                    val partitionMetadata = log.partitionMetadataFile.get.read()
+                    if (partitionMetadata.topicId != topicIds.get(topicPartition.topic)) {
+                      stateChangeLogger.warn(s"Topic Id on file: ${partitionMetadata.topicId.toString} does not" +
+                        s" match the topic Id provided in the request: ${topicIds.get(topicPartition.topic)}.")
+                    }
+                  }
+                }
+              }
+            }
           }
 
           // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
@@ -1396,12 +1420,23 @@ class ReplicaManager(val config: KafkaConfig,
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
-          val responsePartitions = responseMap.iterator.map { case (tp, error) =>
-            new LeaderAndIsrPartitionError()
-              .setTopicName(tp.topic)
-              .setPartitionIndex(tp.partition)
-              .setErrorCode(error.code)
-          }.toBuffer
+          val version = leaderAndIsrRequest.version()
+          val responsePartitions =
+            if (version < 4) {
+              responseMap.iterator.map { case (tp, error) =>
+                new LeaderAndIsrPartitionError()
+                  .setTopicName(tp.topic)
+                  .setPartitionIndex(tp.partition)
+                  .setErrorCode(error.code)
+              }.toBuffer
+            } else {
+              responseMap.iterator.map { case (tp, error) =>
+                new LeaderAndIsrPartitionError()
+                  .setTopicID(topicIds.get(tp.topic))
+                  .setPartitionIndex(tp.partition)
+                  .setErrorCode(error.code)
+              }.toBuffer
+            }
           new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code)
             .setPartitionErrors(responsePartitions.asJava))

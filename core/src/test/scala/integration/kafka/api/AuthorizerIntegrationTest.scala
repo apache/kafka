@@ -16,7 +16,7 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Optional, Properties, UUID}
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.log.LogConfig
@@ -96,6 +96,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   val brokerId: Integer = 0
   val topic = "topic"
+  val topicId =  UUID.randomUUID()
   val topicPattern = "topic.*"
   val transactionalId = "transactional.id"
   val producerId = 83392L
@@ -443,6 +444,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setZkVersion(2)
         .setReplicas(Seq(brokerId).asJava)
         .setIsNew(false)).asJava,
+      Collections.singletonMap(tp.topic, topicId),
       Set(new Node(brokerId, "localhost", 0)).asJava).build()
   }
 

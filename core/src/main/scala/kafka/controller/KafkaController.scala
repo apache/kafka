@@ -26,6 +26,7 @@ import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
 import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
+import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.ElectionType
@@ -726,11 +727,15 @@ class KafkaController(val config: KafkaConfig,
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
     controllerContext.setAllTopics(zkClient.getAllTopicsInCluster(true))
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
-    zkClient.getFullReplicaAssignmentForTopics(controllerContext.allTopics.toSet).foreach {
-      case (topicPartition, replicaAssignment) =>
+    val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(controllerContext.allTopics.toSet)
+    processTopicIds(replicaAssignmentAndTopicIds)
+
+    replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(_, _, assignments) =>
+      assignments.foreach { case (topicPartition, replicaAssignment) =>
         controllerContext.updatePartitionFullReplicaAssignment(topicPartition, replicaAssignment)
         if (replicaAssignment.isBeingReassigned)
           controllerContext.partitionsBeingReassigned.add(topicPartition)
+      }
     }
     controllerContext.clearPartitionLeadershipInfo()
     controllerContext.shuttingDownBrokerIds.clear()
@@ -849,7 +854,9 @@ class KafkaController(val config: KafkaConfig,
       controllerContext.partitionFullReplicaAssignmentForTopic(topicPartition.topic) +=
       (topicPartition -> assignment)
 
-    val setDataResponse = zkClient.setTopicAssignmentRaw(topicPartition.topic, topicAssignment, controllerContext.epochZkVersion)
+    val setDataResponse = zkClient.setTopicAssignmentRaw(topicPartition.topic,
+                                                         controllerContext.topicIds.get(topicPartition.topic),
+                                                         topicAssignment, controllerContext.epochZkVersion)
     setDataResponse.resultCode match {
       case Code.OK =>
         info(s"Successfully updated assignment of partition $topicPartition to $assignment")
@@ -1190,7 +1197,8 @@ class KafkaController(val config: KafkaConfig,
     val onlineReplicas = new ArrayBuffer[TopicPartition]()
 
     leaderAndIsrResponse.partitions.forEach { partition =>
-      val tp = new TopicPartition(partition.topicName, partition.partitionIndex)
+      val topicName = if (partition.topicName != null)  partition.topicName else controllerContext.topicNames.get(partition.topicID).get
+      val tp = new TopicPartition(topicName, partition.partitionIndex)
       if (partition.errorCode == Errors.KAFKA_STORAGE_ERROR.code)
         offlineReplicas += tp
       else if (partition.errorCode == Errors.NONE.code)
@@ -1414,15 +1422,29 @@ class KafkaController(val config: KafkaConfig,
     controllerContext.setAllTopics(topics)
 
     registerPartitionModificationsHandlers(newTopics.toSeq)
-    val addedPartitionReplicaAssignment = zkClient.getFullReplicaAssignmentForTopics(newTopics)
+    val addedPartitionReplicaAssignment = zkClient.getReplicaAssignmentAndTopicIdForTopics(newTopics)
     deletedTopics.foreach(controllerContext.removeTopic)
-    addedPartitionReplicaAssignment.foreach {
-      case (topicAndPartition, newReplicaAssignment) => controllerContext.updatePartitionFullReplicaAssignment(topicAndPartition, newReplicaAssignment)
+    processTopicIds(addedPartitionReplicaAssignment)
+
+    addedPartitionReplicaAssignment.foreach { case TopicIdReplicaAssignment(_, _, newAssignments) =>
+      newAssignments.foreach { case (topicAndPartition, newReplicaAssignment) =>
+        controllerContext.updatePartitionFullReplicaAssignment(topicAndPartition, newReplicaAssignment)
+      }
     }
     info(s"New topics: [$newTopics], deleted topics: [$deletedTopics], new partition replica assignment " +
       s"[$addedPartitionReplicaAssignment]")
-    if (addedPartitionReplicaAssignment.nonEmpty)
-      onNewPartitionCreation(addedPartitionReplicaAssignment.keySet)
+    if (addedPartitionReplicaAssignment.nonEmpty) {
+      val partitionAssignments = addedPartitionReplicaAssignment
+        .map { case TopicIdReplicaAssignment(_, _, partitionsReplicas) => partitionsReplicas.keySet }
+        .reduce((s1, s2) => s1.union(s2))
+      onNewPartitionCreation(partitionAssignments)
+    }
+  }
+
+  private def processTopicIds(topicIdAssignments: Set[TopicIdReplicaAssignment]): Unit = {
+      val updated = zkClient.setTopicIds(topicIdAssignments.filter(_.topicId.isEmpty), controllerContext.epochZkVersion)
+      val allTopicIdAssignments = updated ++ topicIdAssignments.filter(_.topicId.isDefined)
+      allTopicIdAssignments.foreach(topicIdAssignment => controllerContext.addTopicId(topicIdAssignment.topic, topicIdAssignment.topicId.get))
   }
 
   private def processLogDirEventNotification(): Unit = {
@@ -1452,6 +1474,7 @@ class KafkaController(val config: KafkaConfig,
       }.toMap
 
       zkClient.setTopicAssignment(topic,
+        controllerContext.topicIds.get(topic),
         existingPartitionReplicaAssignment,
         controllerContext.epochZkVersion)
     }

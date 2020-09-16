@@ -21,7 +21,7 @@ import java.io.File
 import java.net.InetAddress
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-import java.util.{Optional, Properties}
+import java.util.{Collections, Optional, Properties, UUID}
 
 import kafka.api._
 import kafka.log.{AppendOrigin, Log, LogConfig, LogManager, ProducerStateManager}
@@ -168,6 +168,7 @@ class ReplicaManagerTest {
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
+      val topicIds = Collections.singletonMap(topic, UUID.randomUUID())
 
       val partition = rm.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -184,6 +185,7 @@ class ReplicaManagerTest {
           .setZkVersion(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
+        topicIds,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       rm.getPartitionOrException(new TopicPartition(topic, 0))
@@ -206,6 +208,7 @@ class ReplicaManagerTest {
           .setZkVersion(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
+        topicIds,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       rm.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
@@ -230,6 +233,7 @@ class ReplicaManagerTest {
       replicaManager.createPartition(topicPartition)
         .createLogIfNotExists(isNew = false, isFutureReplica = false,
           new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+      val topicIds = Collections.singletonMap(topic, UUID.randomUUID())
 
       def leaderAndIsrRequest(epoch: Int): LeaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
@@ -242,6 +246,7 @@ class ReplicaManagerTest {
           .setZkVersion(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
+        topicIds,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
 
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest(0), (_, _) => ())
@@ -301,6 +306,7 @@ class ReplicaManagerTest {
           .setZkVersion(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
+        Collections.singletonMap(topic, UUID.randomUUID()),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
@@ -361,6 +367,7 @@ class ReplicaManagerTest {
           .setZkVersion(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
+        Collections.singletonMap(topic, UUID.randomUUID()),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
@@ -467,6 +474,7 @@ class ReplicaManagerTest {
           .setZkVersion(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
+        Collections.singletonMap(topic, UUID.randomUUID()),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
@@ -543,6 +551,7 @@ class ReplicaManagerTest {
           .setZkVersion(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
+        Collections.singletonMap(topic, UUID.randomUUID()),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host2", 2)).asJava).build()
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       rm.getPartitionOrException(new TopicPartition(topic, 0))
@@ -599,6 +608,7 @@ class ReplicaManagerTest {
         .setIsNew(true)
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(leaderAndIsrPartitionState).asJava,
+        Collections.singletonMap(topic, UUID.randomUUID()),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse.error)
@@ -690,6 +700,7 @@ class ReplicaManagerTest {
       replicaManager.createPartition(tp1).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](0, 2).asJava
+      val topicIds = Map(tp0.topic -> UUID.randomUUID(), tp1.topic -> UUID.randomUUID())
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(
           new LeaderAndIsrPartitionState()
@@ -713,6 +724,7 @@ class ReplicaManagerTest {
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
+        topicIds.asJava,
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
 
@@ -812,6 +824,7 @@ class ReplicaManagerTest {
     val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
       controllerId, controllerEpoch, brokerEpoch,
       Seq(leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
+      Collections.singletonMap(topic, UUID.randomUUID()),
       Set(new Node(followerBrokerId, "host1", 0),
         new Node(leaderBrokerId, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
@@ -888,6 +901,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(brokerList)
         .setIsNew(false)).asJava,
+      Collections.singletonMap(topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
@@ -937,6 +951,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(brokerList)
         .setIsNew(false)).asJava,
+      Collections.singletonMap(topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
@@ -987,6 +1002,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(brokerList)
         .setIsNew(false)).asJava,
+      Collections.singletonMap(topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
@@ -1068,6 +1084,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      Collections.singletonMap(tp0.topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
 
@@ -1108,6 +1125,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      Collections.singletonMap(tp0.topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
@@ -1141,6 +1159,7 @@ class ReplicaManagerTest {
     val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
     replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     val partition0Replicas = Seq[Integer](0, 1).asJava
+    val topicIds = Collections.singletonMap(tp0.topic, UUID.randomUUID())
 
     val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
       Seq(new LeaderAndIsrPartitionState()
@@ -1153,6 +1172,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      topicIds,
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
@@ -1173,6 +1193,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      topicIds,
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
 
@@ -1189,6 +1210,7 @@ class ReplicaManagerTest {
     val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
     replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)
     val partition0Replicas = Seq[Integer](0, 1).asJava
+    val topicIds = Collections.singletonMap(tp0.topic, UUID.randomUUID())
 
     val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
       Seq(new LeaderAndIsrPartitionState()
@@ -1201,6 +1223,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      topicIds,
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
@@ -1222,6 +1245,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      topicIds,
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(0, becomeFollowerRequest, (_, _) => ())
 
@@ -1249,6 +1273,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      Collections.singletonMap(tp0.topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
@@ -1291,6 +1316,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      Collections.singletonMap(tp0.topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
@@ -1334,6 +1360,7 @@ class ReplicaManagerTest {
         .setZkVersion(0)
         .setReplicas(partition0Replicas)
         .setIsNew(true)).asJava,
+      Collections.singletonMap(tp0.topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, becomeLeaderRequest, (_, _) => ())
 
@@ -1706,6 +1733,7 @@ class ReplicaManagerTest {
       val tp1 = new TopicPartition(topic, 1)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](1, 0).asJava
+      val topicIds = Map(tp0.topic -> UUID.randomUUID(), tp1.topic -> UUID.randomUUID())
 
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
         controllerId, 0, brokerEpoch,
@@ -1731,6 +1759,7 @@ class ReplicaManagerTest {
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
+        topicIds.asJava,
         Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
 
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
@@ -1761,6 +1790,7 @@ class ReplicaManagerTest {
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
+        topicIds.asJava,
         Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
 
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
@@ -1795,6 +1825,7 @@ class ReplicaManagerTest {
       val tp1 = new TopicPartition(topic, 1)
       val partition0Replicas = Seq[Integer](1, 0).asJava
       val partition1Replicas = Seq[Integer](1, 0).asJava
+      val topicIds = Map(tp0.topic -> UUID.randomUUID(), tp1.topic -> UUID.randomUUID())
 
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
         controllerId, 0, brokerEpoch,
@@ -1820,6 +1851,7 @@ class ReplicaManagerTest {
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
+        topicIds.asJava,
         Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
 
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest1, (_, _) => ())
@@ -1850,6 +1882,7 @@ class ReplicaManagerTest {
             .setReplicas(partition1Replicas)
             .setIsNew(true)
         ).asJava,
+        topicIds.asJava,
         Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava).build()
 
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
@@ -1909,6 +1942,7 @@ class ReplicaManagerTest {
 
     val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 10, brokerEpoch,
       Seq(leaderAndIsrPartitionState(tp0, 1, 0, Seq(0, 1), true)).asJava,
+      Collections.singletonMap(topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava
     ).build()
 
@@ -1935,6 +1969,7 @@ class ReplicaManagerTest {
 
     val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
       Seq(leaderAndIsrPartitionState(tp0, 1, 0, Seq(0, 1), true)).asJava,
+      Collections.singletonMap(topic, UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava
     ).build()
 
@@ -2084,6 +2119,7 @@ class ReplicaManagerTest {
 
     val becomeLeaderRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
       Seq(leaderAndIsrPartitionState(tp0, 1, 0, Seq(0, 1), true)).asJava,
+      Collections.singletonMap(tp0.topic(), UUID.randomUUID()),
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava
     ).build()
 

@@ -21,7 +21,7 @@ import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
-import java.util.{Collections, Optional, Random}
+import java.util.{Collections, Optional, Random, UUID}
 import java.util.concurrent.TimeUnit
 
 import kafka.api.LeaderAndIsr
@@ -2014,6 +2014,7 @@ class KafkaApisTest {
       controllerEpoch,
       brokerEpochInRequest,
       partitionStates,
+      Collections.singletonMap("topicW", UUID.randomUUID()),
       asList(new Node(0, "host0", 9090), new Node(1, "host1", 9091))
     ).build()
     val request = buildRequest(leaderAndIsrRequest)

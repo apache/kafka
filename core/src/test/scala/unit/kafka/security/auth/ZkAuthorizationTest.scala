@@ -18,6 +18,7 @@
 package kafka.security.auth
 
 import java.nio.charset.StandardCharsets
+import java.util.UUID
 
 import kafka.admin.ZkSecurityMigrator
 import kafka.utils.{Logging, TestUtils}
@@ -110,6 +111,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
 
     // Test that creates persistent nodes
     val topic1 = "topic1"
+    val topicId = Some(UUID.randomUUID())
     val assignment = Map(
       new TopicPartition(topic1, 0) -> Seq(0, 1),
       new TopicPartition(topic1, 1) -> Seq(0, 1),
@@ -117,7 +119,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     )
 
     // create a topic assignment
-    zkClient.createTopicAssignment(topic1, assignment)
+    zkClient.createTopicAssignment(topic1, topicId, assignment)
     verify(TopicZNode.path(topic1))
 
     // Test that can create: createSequentialPersistentPath
@@ -131,7 +133,8 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
 
     // Test that can update persistent nodes
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
-    zkClient.setTopicAssignment(topic1, updatedAssignment.map { case (k, v) => k -> ReplicaAssignment(v, List(), List()) })
+    zkClient.setTopicAssignment(topic1, topicId,
+      updatedAssignment.map { case (k, v) => k -> ReplicaAssignment(v, List(), List()) })
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
   }
 

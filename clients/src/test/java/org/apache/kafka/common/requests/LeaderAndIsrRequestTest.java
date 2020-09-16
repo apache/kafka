@@ -26,15 +26,18 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrParti
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageTestUtil;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -51,7 +54,7 @@ public class LeaderAndIsrRequestTest {
     public void testUnsupportedVersion() {
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(
                 (short) (LEADER_AND_ISR.latestVersion() + 1), 0, 0, 0,
-                Collections.emptyList(), Collections.emptySet());
+                Collections.emptyList(), Collections.emptyMap(),  Collections.emptySet());
         assertThrows(UnsupportedVersionException.class, builder::build);
     }
 
@@ -59,7 +62,7 @@ public class LeaderAndIsrRequestTest {
     public void testGetErrorResponse() {
         for (short version = LEADER_AND_ISR.oldestVersion(); version < LEADER_AND_ISR.latestVersion(); version++) {
             LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder(version, 0, 0, 0,
-                    Collections.emptyList(), Collections.emptySet());
+                    Collections.emptyList(), Collections.emptyMap(), Collections.emptySet());
             LeaderAndIsrRequest request = builder.build();
             LeaderAndIsrResponse response = request.getErrorResponse(0,
                     new ClusterAuthorizationException("Not authorized"));
@@ -116,8 +119,14 @@ public class LeaderAndIsrRequestTest {
                 new Node(0, "host0", 9090),
                 new Node(1, "host1", 9091)
             );
+
+            HashMap<String, UUID> topicIds = new HashMap<>();
+
+            topicIds.put("topic0", UUID.randomUUID());
+            topicIds.put("topic1", UUID.randomUUID());
+
             LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(version, 1, 2, 3, partitionStates,
-                liveNodes).build();
+                topicIds, liveNodes).build();
 
             List<LeaderAndIsrLiveLeader> liveLeaders = liveNodes.stream().map(n -> new LeaderAndIsrLiveLeader()
                 .setBrokerId(n.id())
@@ -141,7 +150,21 @@ public class LeaderAndIsrRequestTest {
                     .setRemovingReplicas(emptyList());
             }
 
+            // Prior to version 2, there were no TopicStates, so a map of Topic Ids from a list of
+            // TopicStates is an empty map.
+            if (version < 2) {
+                topicIds = new HashMap<>();
+            }
+
+            //  In between versions 1 and 5 there are TopicStates, but no topicIds, so deserialized requests will have
+            //  Zero UUIDs in place.
+            if (version > 1 && version < 5) {
+                topicIds.put("topic0", MessageUtil.ZERO_UUID);
+                topicIds.put("topic1", MessageUtil.ZERO_UUID);
+            }
+
             assertEquals(new HashSet<>(partitionStates), iterableToSet(deserializedRequest.partitionStates()));
+            assertEquals(topicIds, deserializedRequest.topicIds());
             assertEquals(liveLeaders, deserializedRequest.liveLeaders());
             assertEquals(1, request.controllerId());
             assertEquals(2, request.controllerEpoch());
@@ -153,13 +176,15 @@ public class LeaderAndIsrRequestTest {
     public void testTopicPartitionGroupingSizeReduction() {
         Set<TopicPartition> tps = TestUtils.generateRandomTopicPartitions(10, 10);
         List<LeaderAndIsrPartitionState> partitionStates = new ArrayList<>();
+        HashMap<String, UUID> topicIds = new HashMap<>();
         for (TopicPartition tp : tps) {
             partitionStates.add(new LeaderAndIsrPartitionState()
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
+            topicIds.putIfAbsent(tp.topic(), UUID.randomUUID());
         }
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
-            partitionStates, Collections.emptySet());
+            partitionStates, topicIds, Collections.emptySet());
 
         LeaderAndIsrRequest v2 = builder.build((short) 2);
         LeaderAndIsrRequest v1 = builder.build((short) 1);

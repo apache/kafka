@@ -180,8 +180,8 @@ class LogManagerTest {
       s.lazyTimeIndex.get
     })
 
-    // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
-    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)
+    // there should be a log file, two indexes, one producer snapshot, partition metadata, and the leader epoch checkpoint
+    assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1 + 1, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
 
     try {
@@ -230,8 +230,9 @@ class LogManagerTest {
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
     // there should be a log file, two indexes (the txn index is created lazily),
+    // the partition metadata file,
     // the leader epoch checkpoint and two producer snapshot files (one for the active and previous segments)
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3, log.dir.list.length)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3 + 1, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, readLog(log, offset + 1).records.sizeInBytes)
     try {
       readLog(log, 0)

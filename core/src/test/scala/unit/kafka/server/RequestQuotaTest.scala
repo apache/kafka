@@ -16,7 +16,7 @@ package kafka.server
 
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Optional, Properties, UUID}
 
 import kafka.api.LeaderAndIsr
 import kafka.log.LogConfig
@@ -56,6 +56,7 @@ class RequestQuotaTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
   private val topic = "topic-1"
+  private val topicIds = Collections.singletonMap(topic, UUID.randomUUID())
   private val numPartitions = 1
   private val tp = new TopicPartition(topic, 0)
   private val logDir = "logDir"
@@ -234,6 +235,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setZkVersion(2)
               .setReplicas(Seq(brokerId).asJava)
               .setIsNew(true)).asJava,
+            topicIds,
             Set(new Node(brokerId, "localhost", 0)).asJava)
 
         case ApiKeys.STOP_REPLICA =>

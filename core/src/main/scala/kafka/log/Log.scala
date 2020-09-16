@@ -33,7 +33,7 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCod
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch, PartitionMetadataFile}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -289,11 +289,14 @@ class Log(@volatile private var _dir: File,
   // Visible for testing
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
+  var partitionMetadataFile : Option[PartitionMetadataFile] = None
+
   locally {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
 
     initializeLeaderEpochCache()
+    initializePartitionMetadata()
 
     val nextOffset = loadSegments()
 
@@ -509,6 +512,11 @@ class Log(@volatile private var _dir: File,
   def name  = dir.getName()
 
   def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
+
+  private def initializePartitionMetadata(): Unit = lock synchronized {
+    val partitionMetadata = PartitionMetadataFile.newFile(dir)
+    partitionMetadataFile = Some(new PartitionMetadataFile(partitionMetadata, logDirFailureChannel))
+  }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
@@ -1002,6 +1010,14 @@ class Log(@volatile private var _dir: File,
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
           // the checkpoint file in renamed log directory
           initializeLeaderEpochCache()
+          if (!partitionMetadataFile.isEmpty && !partitionMetadataFile.get.notExists() &&
+            partitionMetadataFile.get.isEmpty()) {
+            val partitionMetadata = partitionMetadataFile.get.read()
+            initializePartitionMetadata()
+            partitionMetadataFile.get.write(partitionMetadata.topicId)
+          } else {
+            initializePartitionMetadata()
+          }
         }
       }
     }

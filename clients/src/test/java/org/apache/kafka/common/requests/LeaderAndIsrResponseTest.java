@@ -25,8 +25,11 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -57,15 +60,18 @@ public class LeaderAndIsrResponseTest {
             .setZkVersion(20)
             .setReplicas(Collections.singletonList(10))
             .setIsNew(false));
+        HashMap<String, UUID> topicIds = new HashMap<>();
+        topicIds.put("foo", UUID.randomUUID());
+
         LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion(),
-                15, 20, 0, partitionStates, Collections.emptySet()).build();
+                15, 20, 0, partitionStates, topicIds, Collections.emptySet()).build();
         LeaderAndIsrResponse response = request.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
         assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 2), response.errorCounts());
     }
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
+        List<LeaderAndIsrPartitionError> partitions = createPartitions(UUID.randomUUID(),
             asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
@@ -75,7 +81,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
+        List<LeaderAndIsrPartitionError> partitions = createPartitions(UUID.randomUUID(),
             asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
@@ -88,7 +94,7 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testToString() {
-        List<LeaderAndIsrPartitionError> partitions = createPartitions("foo",
+        List<LeaderAndIsrPartitionError> partitions = createPartitions(UUID.randomUUID(),
             asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
@@ -99,12 +105,12 @@ public class LeaderAndIsrResponseTest {
         assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
     }
 
-    private List<LeaderAndIsrPartitionError> createPartitions(String topicName, List<Errors> errors) {
+    private List<LeaderAndIsrPartitionError> createPartitions(UUID topicID, List<Errors> errors) {
         List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
         int partitionIndex = 0;
         for (Errors error : errors) {
             partitions.add(new LeaderAndIsrPartitionError()
-                .setTopicName(topicName)
+                .setTopicID(topicID)
                 .setPartitionIndex(partitionIndex++)
                 .setErrorCode(error.code()));
         }
