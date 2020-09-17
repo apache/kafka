@@ -17,30 +17,26 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.junit.Rule;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.ZoneOffset;
 import java.util.Arrays;
 
-import static org.junit.Assert.assertEquals;
-
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
 import static org.apache.kafka.trogdor.common.StringFormatter.dateString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+@Timeout(value = 120000, unit = MILLISECONDS)
 public class StringFormatterTest {
     private static final Logger log = LoggerFactory.getLogger(StringFormatterTest.class);
 
-    @Rule
-    final public Timeout globalTimeout = Timeout.millis(120000);
-
     @Test
     public void testDateString() {
-        assertEquals("2019-01-08T20:59:29.85Z",
-            dateString(1546981169850L, ZoneOffset.UTC));
+        assertEquals("2019-01-08T20:59:29.85Z", dateString(1546981169850L, ZoneOffset.UTC));
     }
 
     @Test

@@ -52,8 +52,14 @@ class KafkaVersion(LooseVersion):
     def supports_named_listeners(self):
         return self >= V_0_10_2_0
 
+    def acl_command_supports_bootstrap_server(self):
+        return self >= V_2_1_0
+
     def topic_command_supports_bootstrap_server(self):
         return self >= V_2_3_0
+
+    def topic_command_supports_if_not_exists_with_bootstrap_server(self):
+        return self >= V_2_6_0
 
     def supports_tls_to_zookeeper(self):
         # indicate if KIP-515 is available

@@ -1726,7 +1726,7 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, assignedMemberId, 1)
-    assertEquals(Errors.REBALANCE_IN_PROGRESS, heartbeatResult)
+    assertEquals(Errors.NONE, heartbeatResult)
   }
 
   @Test

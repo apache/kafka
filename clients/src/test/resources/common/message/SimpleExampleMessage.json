@@ -45,7 +45,7 @@
             { "name": "arrayFieldId", "type": "int32", "versions": "2+"}
           ]}
     ]},
-    { "name": "myTaggedStruct", "type": "MyTaggedStruct", "versions": "2+", "about": "Test Tagged Struct field",
+    { "name": "myTaggedStruct", "type": "TaggedStruct", "versions": "2+", "about": "Test Tagged Struct field",
       "taggedVersions": "2+", "tag": 8,
       "fields": [
         { "name": "structId", "type": "string", "versions": "2+", "about": "String field in struct"}

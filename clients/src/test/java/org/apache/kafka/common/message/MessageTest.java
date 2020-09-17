@@ -693,7 +693,7 @@ public final class MessageTest {
         message.setMyStruct(new SimpleExampleMessageData.MyStruct().setStructId(25).setArrayInStruct(
             Collections.singletonList(new SimpleExampleMessageData.StructArray().setArrayFieldId(20))
         ));
-        message.setMyTaggedStruct(new SimpleExampleMessageData.MyTaggedStruct().setStructId("abc"));
+        message.setMyTaggedStruct(new SimpleExampleMessageData.TaggedStruct().setStructId("abc"));
 
         message.setProcessId(UUID.randomUUID());
         message.setMyNullableString("notNull");

@@ -24,6 +24,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.common.utils.Exit;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,10 +42,12 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -67,10 +70,12 @@ public class MirrorConnectorsIntegrationTest {
     private static final int RECORD_CONSUME_DURATION_MS = 20_000;
     private static final int OFFSET_SYNC_DURATION_MS = 30_000;
 
+    private final AtomicBoolean exited = new AtomicBoolean(false);
     private Map<String, String> mm2Props;
     private MirrorMakerConfig mm2Config; 
     private EmbeddedConnectCluster primary;
     private EmbeddedConnectCluster backup;
+
     @Before
     public void setup() throws InterruptedException {
         Properties brokerProps = new Properties();
@@ -145,6 +150,8 @@ public class MirrorConnectorsIntegrationTest {
         // now that the brokers are running, we can finish setting up the Connectors
         mm2Props.put("primary.bootstrap.servers", primary.kafka().bootstrapServers());
         mm2Props.put("backup.bootstrap.servers", backup.kafka().bootstrapServers());
+
+        Exit.setExitProcedure((status, errorCode) -> exited.set(true));
     }
 
 
@@ -185,9 +192,12 @@ public class MirrorConnectorsIntegrationTest {
         deleteAllTopics(backup.kafka());
         primary.stop();
         backup.stop();
+        try {
+            assertFalse(exited.get());
+        } finally {
+            Exit.resetExitProcedure();
+        }
     }
-
-
 
     @Test
     public void testReplication() throws InterruptedException {
