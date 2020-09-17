@@ -25,7 +25,6 @@ import kafka.server.{AlterIsrItem, AlterIsrManager, AlterIsrManagerImpl, BrokerT
 import kafka.utils.{MockScheduler, MockTime}
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.message.AlterIsrResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -122,10 +121,12 @@ class AlterIsrManagerTest {
     assertEquals(request.data().topics().get(0).partitions().size(), 10)
   }
 
-  @Test(expected = classOf[ClusterAuthorizationException])
+  @Test
   def testAuthorizationFailed(): Unit = {
     val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }))
-    testTopLevelError(isrs, Errors.CLUSTER_AUTHORIZATION_FAILED)
+    val manager = testTopLevelError(isrs, Errors.CLUSTER_AUTHORIZATION_FAILED)
+    // On authz error, we log the exception and keep retrying
+    assertFalse(manager.enqueue(AlterIsrItem(tp0, null, _ => { })))
   }
 
   @Test

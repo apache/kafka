@@ -1173,7 +1173,6 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotExpandedIfUpdateFails(): Unit = {
-    // TODO maybe remove this test now?
     val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
@@ -1388,7 +1387,6 @@ class PartitionTest extends AbstractPartitionTest {
 
   @Test
   def testIsrNotShrunkIfUpdateFails(): Unit = {
-    // TODO should we remove this test?
     val log = logManager.getOrCreateLog(topicPartition, () => logConfig)
     seedLogData(log, numRecords = 10, leaderEpoch = 4)
 
