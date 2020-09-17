@@ -311,23 +311,6 @@ public class KTableFilterTest {
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
 
-    // Todo: this _should_ enable sending old values as t2 is materialized
-    //   https://issues.apache.org/jira/browse/KAFKA-10494
-    @Test
-    public void doesNotEnableSendOldValuesOnMaterializationIfOptionallyRequested() {
-        final StreamsBuilder builder = new StreamsBuilder();
-        final String topic1 = "topic1";
-
-        final KTableImpl<String, Integer, Integer> table1 =
-            (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        final KTableImpl<String, Integer, Integer> table2 =
-            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
-
-        table2.enableSendingOldValues(false);
-
-        doTestNotSendingOldValue(builder, table1, table2, topic1);
-    }
-
     private void doTestSendingOldValue(final StreamsBuilder builder,
                                        final KTableImpl<String, Integer, Integer> table1,
                                        final KTableImpl<String, Integer, Integer> table2,
