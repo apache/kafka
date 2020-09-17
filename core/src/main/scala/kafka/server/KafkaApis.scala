@@ -100,7 +100,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
                 val controller: KafkaController,
-                val brokerToControllerChannelManager: BrokerToControllerChannelManager,
+                val redirectionManager: BrokerToControllerChannelManager,
                 val zkClient: KafkaZkClient,
                 val brokerId: Int,
                 val config: KafkaConfig,
@@ -190,7 +190,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
       } else if (!controller.isActive && config.redirectionEnabled &&
         authorizedResources.nonEmpty) {
-        brokerToControllerChannelManager.forwardRequest(
+        redirectionManager.forwardRequest(
           createRequestBuilder(authorizedResources, requestBody),
           sendResponseMaybeThrottle,
           request,

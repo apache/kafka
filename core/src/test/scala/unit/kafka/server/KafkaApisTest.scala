@@ -90,7 +90,7 @@ class KafkaApisTest {
   private val adminManager: AdminManager = EasyMock.createNiceMock(classOf[AdminManager])
   private val txnCoordinator: TransactionCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
   private val controller: KafkaController = EasyMock.createNiceMock(classOf[KafkaController])
-  private val brokerToControllerChannelManager: BrokerToControllerChannelManager = EasyMock.createNiceMock(classOf[BrokerToControllerChannelManager])
+  private val redirectionManager: BrokerToControllerChannelManager = EasyMock.createNiceMock(classOf[BrokerToControllerChannelManager])
   private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
@@ -125,7 +125,7 @@ class KafkaApisTest {
       groupCoordinator,
       txnCoordinator,
       controller,
-      brokerToControllerChannelManager,
+      redirectionManager,
       zkClient,
       brokerId,
       new KafkaConfig(properties),
@@ -377,7 +377,7 @@ class KafkaApisTest {
 
     val capturedCallback = EasyMock.newCapture[ClientResponse => AbstractResponse]()
 
-    EasyMock.expect(brokerToControllerChannelManager.forwardRequest(
+    EasyMock.expect(redirectionManager.forwardRequest(
       EasyMock.eq(redirectRequestBuilder),
       anyObject[(RequestChannel.Request, Int => AbstractResponse,
         Option[Send => Unit]) => Unit](),
@@ -393,13 +393,13 @@ class KafkaApisTest {
     EasyMock.expect(clientResponse.responseBody).andReturn(alterClientQuotasResponse)
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, brokerToControllerChannelManager, clientResponse)
+      authorizer, controller, redirectionManager, clientResponse)
 
     createKafkaApis(authorizer = Some(authorizer)).handleAlterClientQuotasRequest(request)
 
     assertEquals(alterClientQuotasResponse, capturedCallback.getValue.apply(clientResponse))
 
-    EasyMock.verify(controller, brokerToControllerChannelManager)
+    EasyMock.verify(controller, redirectionManager)
   }
 
   @Test
@@ -675,7 +675,7 @@ class KafkaApisTest {
 
     val capturedCallback = EasyMock.newCapture[ClientResponse => AbstractResponse]()
 
-    EasyMock.expect(brokerToControllerChannelManager.forwardRequest(
+    EasyMock.expect(redirectionManager.forwardRequest(
       EasyMock.eq(redirectRequestBuilder),
       anyObject[(RequestChannel.Request, Int => AbstractResponse,
         Option[Send => Unit]) => Unit](),
@@ -685,7 +685,7 @@ class KafkaApisTest {
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, clientControllerQuotaManager, requestChannel,
-      authorizer, controller, brokerToControllerChannelManager, clientResponse)
+      authorizer, controller, redirectionManager, clientResponse)
 
     createKafkaApis(authorizer = Some(authorizer)).handleCreateTopicsRequest(request)
 
@@ -701,7 +701,7 @@ class KafkaApisTest {
     assertEquals(expectedTopicCollection, capturedCallback.getValue.apply(
       clientResponse).asInstanceOf[CreateTopicsResponse].data.topics)
 
-    EasyMock.verify(controller, brokerToControllerChannelManager, clientControllerQuotaManager)
+    EasyMock.verify(controller, redirectionManager, clientControllerQuotaManager)
   }
 
   @Test
@@ -1016,7 +1016,7 @@ class KafkaApisTest {
 
     val capturedCallback = EasyMock.newCapture[ClientResponse => AbstractResponse]()
 
-    EasyMock.expect(brokerToControllerChannelManager.forwardRequest(
+    EasyMock.expect(redirectionManager.forwardRequest(
       EasyMock.eq(redirectRequestBuilder),
       anyObject[(RequestChannel.Request, Int => AbstractResponse,
         Option[Send => Unit]) => Unit](),
@@ -1026,7 +1026,7 @@ class KafkaApisTest {
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, brokerToControllerChannelManager, clientResponse)
+      authorizer, controller, redirectionManager, clientResponse)
 
     createKafkaApis(authorizer = Some(authorizer)).handleAlterConfigsRequest(request)
 
@@ -1041,7 +1041,7 @@ class KafkaApisTest {
     assertEquals(expectedAlterConfigsResponses, capturedCallback.getValue.apply(
         clientResponse).asInstanceOf[AlterConfigsResponse].data.responses)
 
-    EasyMock.verify(controller, brokerToControllerChannelManager)
+    EasyMock.verify(controller, redirectionManager)
   }
 
   @Test
@@ -1293,7 +1293,7 @@ class KafkaApisTest {
 
     val capturedCallback = EasyMock.newCapture[ClientResponse => AbstractResponse]()
 
-    EasyMock.expect(brokerToControllerChannelManager.forwardRequest(
+    EasyMock.expect(redirectionManager.forwardRequest(
       EasyMock.eq(redirectRequestBuilder),
       anyObject[(RequestChannel.Request, Int => AbstractResponse,
         Option[Send => Unit]) => Unit](),
@@ -1303,7 +1303,7 @@ class KafkaApisTest {
     )).once()
 
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel,
-      authorizer, controller, brokerToControllerChannelManager, clientResponse)
+      authorizer, controller, redirectionManager, clientResponse)
 
     createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
 
@@ -1318,7 +1318,7 @@ class KafkaApisTest {
     assertEquals(expectedIncrementalAlterConfigsResponses, capturedCallback.getValue.apply(
       clientResponse).asInstanceOf[IncrementalAlterConfigsResponse].data.responses)
 
-    EasyMock.verify(controller, brokerToControllerChannelManager)
+    EasyMock.verify(controller, redirectionManager)
   }
 
   @Test
