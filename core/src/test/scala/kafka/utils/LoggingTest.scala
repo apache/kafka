@@ -75,6 +75,8 @@ class LoggingTest extends Logging {
     val previousLevel = controller.getLogLevel("kafka")
     try {
       controller.setLogLevel("kafka", "TRACE")
+      // Do some logging so that the Logger is created within the hierarchy
+      // (until loggers are used only loggers in the config file exist)
       Logger(LoggerFactory.getLogger("kafka.utils.Log4jControllerTest")).trace("test")
       Assert.assertEquals("TRACE", controller.getLogLevel("kafka"))
       Assert.assertEquals("TRACE", controller.getLogLevel("kafka.utils.Log4jControllerTest"))
