@@ -852,7 +852,7 @@ object KafkaConfig {
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMsDoc = "The time in ms that the transaction coordinator will wait without receiving any transaction status updates " +
     "for the current transaction before expiring its transactional id. This setting also influences producer id expiration - producer ids are expired " +
-    "once this time has elapsed after the last write with WriteTxnMarkersRequestthe given producer id. Note that producer ids may expire sooner if the last write from the producer id is deleted due to the topic's retention settings."
+    "once this time has elapsed after the last write with the given producer id. Note that producer ids may expire sooner if the last write from the producer id is deleted due to the topic's retention settings."
   val TransactionsMaxTimeoutMsDoc = "The maximum allowed timeout for transactions. " +
     "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction."
   val TransactionsTopicMinISRDoc = "Overridden " + MinInSyncReplicasProp + " config for the transaction topic."

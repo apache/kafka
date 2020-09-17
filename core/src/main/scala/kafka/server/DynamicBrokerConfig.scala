@@ -213,7 +213,6 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     updateDefaultConfig(adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default))
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, kafkaConfig.brokerId.toString)
     val brokerConfig = maybeReEncodePasswords(props, adminZkClient)
-
     updateBrokerConfig(kafkaConfig.brokerId, brokerConfig)
   }
 
@@ -293,10 +292,10 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
                                          props: Properties,
                                          fromPersisted: Boolean = false): Unit = CoreUtils.inWriteLock(lock) {
     try {
-      val finalProps = if (fromPersisted) props else fromPersistentProps(props, perBrokerConfig = true)
-      trimSSLStorePaths(finalProps)
+      val newProps = if (fromPersisted) props else fromPersistentProps(props, perBrokerConfig = true)
+      trimSSLStorePaths(newProps)
       dynamicBrokerConfigs.clear()
-      dynamicBrokerConfigs ++= finalProps.asScala
+      dynamicBrokerConfigs ++= newProps.asScala
       updateCurrentConfig()
     } catch {
       case e: Exception => error(s"Per-broker configs of $brokerId could not be applied: $props", e)
