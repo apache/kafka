@@ -25,7 +25,7 @@ import kafka.server.epoch.EpochEntry
 import scala.collection._
 
 trait LeaderEpochCheckpoint {
-  def write(epochs: Seq[EpochEntry]): Unit
+  def write(epochs: Iterable[EpochEntry]): Unit
   def read(): Seq[EpochEntry]
 }
 
@@ -67,7 +67,7 @@ class LeaderEpochCheckpointFile(val file: File, logDirFailureChannel: LogDirFail
 
   val checkpoint = new CheckpointFile[EpochEntry](file, CurrentVersion, Formatter, logDirFailureChannel, file.getParentFile.getParent)
 
-  def write(epochs: Seq[EpochEntry]): Unit = checkpoint.write(epochs)
+  def write(epochs: Iterable[EpochEntry]): Unit = checkpoint.write(epochs)
 
   def read(): Seq[EpochEntry] = checkpoint.read()
 }

@@ -101,6 +101,8 @@ object ApiVersion {
     KAFKA_2_6_IV0,
     // Introduced feature versioning support (KIP-584)
     KAFKA_2_7_IV0,
+    // Bup Fetch protocol for Raft protocol (KIP-595)
+    KAFKA_2_7_IV1,
     // Introduced AlterIsr (KIP-497)
     KAFKA_2_7_IV2
   )
@@ -363,11 +365,18 @@ case object KAFKA_2_7_IV0 extends DefaultApiVersion {
   val id: Int = 28
 }
 
-case object KAFKA_2_7_IV2 extends DefaultApiVersion {
+case object KAFKA_2_7_IV1 extends DefaultApiVersion {
   val shortVersion: String = "2.7"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2
   val id: Int = 29
+}
+
+case object KAFKA_2_7_IV2 extends DefaultApiVersion {
+  val shortVersion: String = "2.7"
+  val subVersion = "IV2"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 30
 }
 
 object ApiVersionValidator extends Validator {
