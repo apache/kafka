@@ -1786,25 +1786,29 @@ class KafkaController(val config: KafkaConfig,
           resp.setErrorCode(error.code)
         case Left(partitionResults) =>
           resp.setTopics(new util.ArrayList())
-          partitionResults.groupBy(_._1.topic).foreach { entry =>
-            val topicResp = new AlterIsrResponseData.TopicData()
-              .setName(entry._1)
-              .setPartitions(new util.ArrayList())
-            resp.topics.add(topicResp)
-            entry._2.foreach { partitionEntry =>
-              partitionEntry._2 match {
-                case Left(error) => topicResp.partitions.add(
-                  new AlterIsrResponseData.PartitionData()
-                    .setPartitionIndex(partitionEntry._1.partition)
-                    .setErrorCode(error.code))
-                case Right(leaderAndIsr) => topicResp.partitions.add(
-                  new AlterIsrResponseData.PartitionData()
-                    .setPartitionIndex(partitionEntry._1.partition)
-                    .setLeaderId(leaderAndIsr.leader)
-                    .setLeaderEpoch(leaderAndIsr.leaderEpoch)
-                    .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
-                    .setCurrentIsrVersion(leaderAndIsr.zkVersion))
-              }
+          partitionResults
+            .groupBy { case (tp, _) => tp.topic }   // Group by topic
+            .foreach { case (topic, partitions) =>
+              // Add each topic part to the response
+              val topicResp = new AlterIsrResponseData.TopicData()
+                .setName(topic)
+                .setPartitions(new util.ArrayList())
+              resp.topics.add(topicResp)
+              partitions.foreach { case (tp, errorOrIsr) =>
+                // Add each partition part to the response (new ISR or error)
+                errorOrIsr match {
+                  case Left(error) => topicResp.partitions.add(
+                    new AlterIsrResponseData.PartitionData()
+                      .setPartitionIndex(tp.partition)
+                      .setErrorCode(error.code))
+                  case Right(leaderAndIsr) => topicResp.partitions.add(
+                    new AlterIsrResponseData.PartitionData()
+                      .setPartitionIndex(tp.partition)
+                      .setLeaderId(leaderAndIsr.leader)
+                      .setLeaderEpoch(leaderAndIsr.leaderEpoch)
+                      .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
+                      .setCurrentIsrVersion(leaderAndIsr.zkVersion))
+                }
             }
           }
       }
@@ -1837,8 +1841,7 @@ class KafkaController(val config: KafkaConfig,
     }
 
     val response = try {
-      val partitionResponses: mutable.Map[TopicPartition, Either[Errors, LeaderAndIsr]] =
-        mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
+      val partitionResponses = mutable.HashMap[TopicPartition, Either[Errors, LeaderAndIsr]]()
 
       // Determine which partitions we will accept the new ISR for
       val adjustedIsrs: Map[TopicPartition, LeaderAndIsr] = isrsToAlter.flatMap {
@@ -1870,7 +1873,7 @@ class KafkaController(val config: KafkaConfig,
         case (partition: TopicPartition, isrOrError: Either[Throwable, LeaderAndIsr]) =>
           isrOrError match {
             case Right(updatedIsr) =>
-              debug("ISR for partition %s updated to [%s] and zkVersion updated to [%d]".format(partition, updatedIsr.isr.mkString(","), updatedIsr.zkVersion))
+              debug(s"ISR for partition $partition updated to [${updatedIsr.isr.mkString(",")}] and zkVersion updated to [${updatedIsr.zkVersion}]")
               partitionResponses(partition) = Right(updatedIsr)
               Some(partition -> updatedIsr)
             case Left(error) =>
@@ -1881,13 +1884,12 @@ class KafkaController(val config: KafkaConfig,
       }
 
       badVersionUpdates.foreach(partition => {
-        warn(s"Failed to update ISR for partition $partition, bad ZK version")
+        debug(s"Failed to update ISR for partition $partition, bad ZK version")
         partitionResponses(partition) = Left(Errors.INVALID_UPDATE_VERSION)
       })
 
       def processUpdateNotifications(partitions: Seq[TopicPartition]): Unit = {
         val liveBrokers: Seq[Int] = controllerContext.liveOrShuttingDownBrokerIds.toSeq
-        debug(s"Sending MetadataRequest to Brokers: $liveBrokers for TopicPartitions: $partitions")
         sendUpdateMetadataRequest(liveBrokers, partitions.toSet)
       }
 
@@ -1898,7 +1900,7 @@ class KafkaController(val config: KafkaConfig,
       Left(partitionResponses)
     } catch {
       case e: Throwable =>
-        error(s"Error when processing AlterIsr request", e)
+        error(s"Error when processing AlterIsr for partitions: ${isrsToAlter.keys.toSeq}", e)
         Right(Errors.UNKNOWN_SERVER_ERROR)
     }
 

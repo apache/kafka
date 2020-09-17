@@ -1266,7 +1266,7 @@ class ReplicaManager(val config: KafkaConfig,
    *  the quota is exceeded and the replica is not in sync.
    */
   def shouldLeaderThrottle(quota: ReplicaQuota, partition: Partition, replicaId: Int): Boolean = {
-    val isReplicaInSync = partition.isrState.isr.contains(replicaId)
+    val isReplicaInSync = partition.inSyncReplicaIds.contains(replicaId)
     !isReplicaInSync && quota.isThrottled(partition.topicPartition) && quota.isQuotaExceeded
   }
 
@@ -1343,7 +1343,6 @@ class ReplicaManager(val config: KafkaConfig,
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              val requestZkVersion = partitionState.zkVersion
               if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
@@ -1366,8 +1365,7 @@ class ReplicaManager(val config: KafkaConfig,
                 stateChangeLogger.info(s"Ignoring LeaderAndIsr request from " +
                   s"controller $controllerId with correlation id $correlationId " +
                   s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-                  s"leader epoch $requestLeaderEpoch matches the current leader epoch " +
-                  s"and the zk version $requestZkVersion matches the current zk version")
+                  s"leader epoch $requestLeaderEpoch matches the current leader epoch")
                 responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
               }
             }

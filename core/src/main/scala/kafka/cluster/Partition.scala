@@ -178,22 +178,22 @@ sealed trait IsrState {
   /**
    * Indicates if we have an AlterIsr request inflight.
    */
-  def inflight: Boolean
+  def isInflight: Boolean
 }
 
 case class PendingExpandIsr(isr: Set[Int], newInSyncReplicaId: Int) extends IsrState {
   val maximalIsr = isr + newInSyncReplicaId
-  val inflight = true
+  val isInflight = true
 }
 
 case class PendingShrinkIsr(isr: Set[Int], outOfSyncReplicaIds: Set[Int]) extends IsrState  {
   val maximalIsr = isr
-  val inflight = true
+  val isInflight = true
 }
 
 case class CommittedIsr(isr: Set[Int]) extends IsrState {
   val maximalIsr = isr
-  val inflight = false
+  val isInflight = false
 }
 
 /**
@@ -241,7 +241,7 @@ class Partition(val topicPartition: TopicPartition,
   // defined when this broker is leader for partition
   @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
   @volatile var leaderReplicaIdOpt: Option[Int] = None
-  @volatile var isrState: IsrState = CommittedIsr(Set.empty)
+  @volatile private[cluster] var isrState: IsrState = CommittedIsr(Set.empty)
   @volatile var assignmentState: AssignmentState = SimpleAssignmentState(Seq.empty)
 
   private val useAlterIsr: Boolean = interBrokerProtocolVersion >= KAFKA_2_7_IV2
@@ -283,17 +283,7 @@ class Partition(val topicPartition: TopicPartition,
 
   def isAddingReplica(replicaId: Int): Boolean = assignmentState.isAddingReplica(replicaId)
 
-  /**
-   * Check if we have an in-flight AlterIsr
-   */
-  def hasInFlightAlterIsr: Boolean = {
-    if (isrState.inflight) {
-      trace(s"ISR update in-flight, skipping update")
-      true
-    } else {
-      false
-    }
-  }
+  def inSyncReplicaIds: Set[Int] = isrState.isr
 
   /**
     * Create the future replica if 1) the current replica is not in the given log directory and 2) the future replica
@@ -682,10 +672,8 @@ class Partition(val topicPartition: TopicPartition,
         // since the replica's logStartOffset may have incremented
         val leaderLWIncremented = newLeaderLW > oldLeaderLW
 
-        // Check if this in-sync replica needs to be added to the ISR. We look at the "maximal" ISR here so we don't
-        // send an additional Alter ISR request for the same replica
-        if (!isrState.maximalIsr.contains(followerId))
-          maybeExpandIsr(followerReplica, followerFetchTimeMs)
+        // Check if this in-sync replica needs to be added to the ISR.
+        maybeExpandIsr(followerReplica, followerFetchTimeMs)
 
         // check if the HW of the partition can now be incremented
         // since the replica may already be in the ISR and its LEO has just incremented
@@ -757,7 +745,7 @@ class Partition(val topicPartition: TopicPartition,
    * This function can be triggered when a replica's LEO has incremented.
    */
   private def maybeExpandIsr(followerReplica: Replica, followerFetchTimeMs: Long): Unit = {
-    val needsIsrUpdate = inReadLock(leaderIsrUpdateLock) {
+    val needsIsrUpdate = canAddReplicaToIsr(followerReplica.brokerId) && inReadLock(leaderIsrUpdateLock) {
       needsExpandIsr(followerReplica)
     }
     if (needsIsrUpdate) {
@@ -771,15 +759,19 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def needsExpandIsr(followerReplica: Replica): Boolean = {
-    !hasInFlightAlterIsr && leaderLogIfLocal.exists { leaderLog =>
-      val leaderHighwatermark = leaderLog.highWatermark
-       !isrState.isr.contains(followerReplica.brokerId) && isFollowerInSync(followerReplica, leaderHighwatermark)
-    }
+    canAddReplicaToIsr(followerReplica.brokerId) && isFollowerAtHighwatermark(followerReplica)
   }
 
-  private def isFollowerInSync(followerReplica: Replica, highWatermark: Long): Boolean = {
-    val followerEndOffset = followerReplica.logEndOffset
-    followerEndOffset >= highWatermark && leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)
+  private def canAddReplicaToIsr(followerReplicaId: Int): Boolean = {
+    val current = isrState
+    !current.isInflight && !current.isr.contains(followerReplicaId)
+  }
+
+  private def isFollowerAtHighwatermark(followerReplica: Replica): Boolean = {
+    leaderLogIfLocal.exists { leaderLog =>
+      val followerEndOffset = followerReplica.logEndOffset
+      followerEndOffset >= leaderLog.highWatermark && leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)
+    }
   }
 
   /*
@@ -917,36 +909,28 @@ class Partition(val topicPartition: TopicPartition,
   private def tryCompleteDelayedRequests(): Unit = delayedOperations.checkAndCompleteAll()
 
   def maybeShrinkIsr(): Unit = {
-    val needsIsrUpdate = inReadLock(leaderIsrUpdateLock) {
+    val needsIsrUpdate = !isrState.isInflight && inReadLock(leaderIsrUpdateLock) {
       needsShrinkIsr()
     }
     val leaderHWIncremented = needsIsrUpdate && inWriteLock(leaderIsrUpdateLock) {
-      leaderLogIfLocal match {
-        case Some(leaderLog) =>
-          val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-          if (outOfSyncReplicaIds.nonEmpty) {
-            val newInSyncReplicaIds = isrState.isr -- outOfSyncReplicaIds
-            assert(newInSyncReplicaIds.nonEmpty)
-            info("Shrinking ISR from %s to %s. Leader: (highWatermark: %d, endOffset: %d). Out of sync replicas: %s."
-              .format(isrState.isr.mkString(","),
-                newInSyncReplicaIds.mkString(","),
-                leaderLog.highWatermark,
-                leaderLog.logEndOffset,
-                outOfSyncReplicaIds.map { replicaId =>
-                  s"(brokerId: $replicaId, endOffset: ${getReplicaOrException(replicaId).logEndOffset})"
-                }.mkString(" ")
-              )
-            )
+      leaderLogIfLocal.exists { leaderLog =>
+        val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
+        if (outOfSyncReplicaIds.nonEmpty) {
+          val outOfSyncReplicaLog = outOfSyncReplicaIds.map { replicaId =>
+            s"(brokerId: $replicaId, endOffset: ${getReplicaOrException(replicaId).logEndOffset})"
+          }.mkString(" ")
+          val newIsrLog = (isrState.isr -- outOfSyncReplicaIds).mkString(",")
+          info(s"Shrinking ISR from ${isrState.isr.mkString(",")} to $newIsrLog. " +
+               s"Leader: (highWatermark: ${leaderLog.highWatermark}, endOffset: ${leaderLog.logEndOffset}). " +
+               s"Out of sync replicas: $outOfSyncReplicaLog.")
 
-            shrinkIsr(outOfSyncReplicaIds)
+          shrinkIsr(outOfSyncReplicaIds)
 
-            // we may need to increment high watermark since ISR could be down to 1
-            maybeIncrementLeaderHW(leaderLog)
-          } else {
-            false
-          }
-
-        case None => false // do nothing if no longer leader
+          // we may need to increment high watermark since ISR could be down to 1
+          maybeIncrementLeaderHW(leaderLog)
+        } else {
+          false
+        }
       }
     }
 
@@ -956,12 +940,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def needsShrinkIsr(): Boolean = {
-    if (isLeader && !hasInFlightAlterIsr) {
-      val outOfSyncReplicaIds = getOutOfSyncReplicas(replicaLagTimeMaxMs)
-      outOfSyncReplicaIds.nonEmpty
-    } else {
-      false
-    }
+    leaderLogIfLocal.exists { _ => getOutOfSyncReplicas(replicaLagTimeMaxMs).nonEmpty }
   }
 
   private def isFollowerOutOfSync(replicaId: Int,
@@ -973,23 +952,29 @@ class Partition(val topicPartition: TopicPartition,
       (currentTimeMs - followerReplica.lastCaughtUpTimeMs) > maxLagMs
   }
 
+  /**
+   * If the follower already has the same leo as the leader, it will not be considered as out-of-sync,
+   * otherwise there are two cases that will be handled here -
+   * 1. Stuck followers: If the leo of the replica hasn't been updated for maxLagMs ms,
+   *                     the follower is stuck and should be removed from the ISR
+   * 2. Slow followers: If the replica has not read up to the leo within the last maxLagMs ms,
+   *                    then the follower is lagging and should be removed from the ISR
+   * Both these cases are handled by checking the lastCaughtUpTimeMs which represents
+   * the last time when the replica was fully caught up. If either of the above conditions
+   * is violated, that replica is considered to be out of sync
+   *
+   * If an ISR update is in-flight, we will return an empty set here
+   **/
   def getOutOfSyncReplicas(maxLagMs: Long): Set[Int] = {
-    /**
-     * If the follower already has the same leo as the leader, it will not be considered as out-of-sync,
-     * otherwise there are two cases that will be handled here -
-     * 1. Stuck followers: If the leo of the replica hasn't been updated for maxLagMs ms,
-     *                     the follower is stuck and should be removed from the ISR
-     * 2. Slow followers: If the replica has not read up to the leo within the last maxLagMs ms,
-     *                    then the follower is lagging and should be removed from the ISR
-     * Both these cases are handled by checking the lastCaughtUpTimeMs which represents
-     * the last time when the replica was fully caught up. If either of the above conditions
-     * is violated, that replica is considered to be out of sync
-     *
-     **/
-    val candidateReplicaIds = isrState.maximalIsr - localBrokerId
-    val currentTimeMs = time.milliseconds()
-    val leaderEndOffset = localLogOrException.logEndOffset
-    candidateReplicaIds.filter(replicaId => isFollowerOutOfSync(replicaId, leaderEndOffset, currentTimeMs, maxLagMs))
+    val current = isrState
+    if (!current.isInflight) {
+      val candidateReplicaIds = current.isr - localBrokerId
+      val currentTimeMs = time.milliseconds()
+      val leaderEndOffset = localLogOrException.logEndOffset
+      candidateReplicaIds.filter(replicaId => isFollowerOutOfSync(replicaId, leaderEndOffset, currentTimeMs, maxLagMs))
+    } else {
+      Set.empty
+    }
   }
 
   private def doAppendRecordsToFollowerOrFutureReplica(records: MemoryRecords, isFuture: Boolean): Option[LogAppendInfo] = {
@@ -1298,13 +1283,14 @@ class Partition(val topicPartition: TopicPartition,
 
   private def expandIsrWithAlterIsr(newInSyncReplica: Int): Unit = {
     // This is called from maybeExpandIsr which holds the ISR write lock
-    if (!isrState.inflight) {
+    if (!isrState.isInflight) {
       // When expanding the ISR, we can safely assume the new replica will make it into the ISR since this puts us in
       // a more constrained state for advancing the HW.
-      if (sendAlterIsrRequest()) {
+      val proposedIsrState = PendingExpandIsr(isrState.isr, newInSyncReplica)
+      if (sendAlterIsrRequest(proposedIsrState)) {
         // Only update our ISR state of AlterIsrManager accepts our update
-        isrState = PendingExpandIsr(isrState.isr, newInSyncReplica)
         debug(s"Adding new in-sync replica $newInSyncReplica. Pending ISR updated to [${isrState.maximalIsr.mkString(",")}]")
+        isrState = proposedIsrState
       } else {
         throw new IllegalStateException("Failed to enqueue ISR expansion even though there was no apparent in-flight ISR changes")
       }
@@ -1331,13 +1317,14 @@ class Partition(val topicPartition: TopicPartition,
 
   private def shrinkIsrWithAlterIsr(outOfSyncReplicas: Set[Int]): Unit = {
     // This is called from maybeShrinkIsr which holds the ISR write lock
-    if (!isrState.inflight) {
+    if (!isrState.isInflight) {
       // When shrinking the ISR, we cannot assume that the update will succeed as this could erroneously advance the HW
       // We update pendingInSyncReplicaIds here simply to prevent any further ISR updates from occurring until we get
       // the next LeaderAndIsr
-      isrState = PendingShrinkIsr(isrState.isr, outOfSyncReplicas)
-      if (sendAlterIsrRequest()) {
+      val proposedIsrState = PendingShrinkIsr(isrState.isr, outOfSyncReplicas)
+      if (sendAlterIsrRequest(proposedIsrState)) {
         debug(s"Removing out-of-sync replicas $outOfSyncReplicas")
+        isrState = proposedIsrState
       } else {
         throw new IllegalStateException("Failed to enqueue ISR shrink even though there was no apparent in-flight ISR changes")
       }
@@ -1364,20 +1351,18 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  private def sendAlterIsrRequest(): Boolean = {
-    val isrToSend: Option[Set[Int]] = isrState match {
+  private def sendAlterIsrRequest(proposedIsrState: IsrState): Boolean = {
+    val isrToSendOpt: Option[Set[Int]] = proposedIsrState match {
       case PendingExpandIsr(isr, newInSyncReplicaId) => Some(isr + newInSyncReplicaId)
       case PendingShrinkIsr(isr, outOfSyncReplicaIds) => Some(isr -- outOfSyncReplicaIds)
       case CommittedIsr(_) =>
         error(s"Asked to send AlterIsr but there are no pending updates")
         None
     }
-    if (isrToSend.isDefined) {
-      val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.get.toList, zkVersion)
-      val callbackPartial = handleAlterIsrResponse(isrToSend.get, _ : Either[Errors, LeaderAndIsr])
+    isrToSendOpt.exists { isrToSend =>
+      val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, isrToSend.toList, zkVersion)
+      val callbackPartial = handleAlterIsrResponse(isrToSend, _ : Either[Errors, LeaderAndIsr])
       alterIsrManager.enqueue(AlterIsrItem(topicPartition, newLeaderAndIsr, callbackPartial))
-    } else {
-      false
     }
   }
 
@@ -1389,9 +1374,12 @@ class Partition(val topicPartition: TopicPartition,
             debug(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} since it doesn't know about this topic or partition. Giving up.")
           case Errors.FENCED_LEADER_EPOCH =>
             debug(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} since we sent an old leader epoch. Giving up.")
+          case Errors.INVALID_UPDATE_VERSION =>
+            debug(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} due to invalid zk version. Retrying.")
+            sendAlterIsrRequest(isrState)
           case _ =>
-            debug(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} due to $error. Retrying.")
-            sendAlterIsrRequest()
+            warn(s"Controller failed to update ISR to ${proposedIsr.mkString(",")} due to $error. Retrying.")
+            sendAlterIsrRequest(isrState)
         }
         case Right(leaderAndIsr: LeaderAndIsr) =>
           // Success from controller, still need to check a few things
