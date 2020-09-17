@@ -21,7 +21,7 @@ import java.lang.management.ManagementFactory
 
 import com.typesafe.scalalogging.Logger
 import javax.management.ObjectName
-import org.junit.{Assert, Test}
+import org.junit.Test
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.slf4j.LoggerFactory
 
@@ -78,10 +78,10 @@ class LoggingTest extends Logging {
       // Do some logging so that the Logger is created within the hierarchy
       // (until loggers are used only loggers in the config file exist)
       Logger(LoggerFactory.getLogger("kafka.utils.Log4jControllerTest")).trace("test")
-      Assert.assertEquals("TRACE", controller.getLogLevel("kafka"))
-      Assert.assertEquals("TRACE", controller.getLogLevel("kafka.utils.Log4jControllerTest"))
-      Assert.assertTrue(controller.getLoggers.contains("kafka=TRACE"))
-      Assert.assertTrue(controller.getLoggers.contains("kafka.utils.Log4jControllerTest=TRACE"))
+      assertEquals("TRACE", controller.getLogLevel("kafka"))
+      assertEquals("TRACE", controller.getLogLevel("kafka.utils.Log4jControllerTest"))
+      assertTrue(controller.getLoggers.contains("kafka=TRACE"))
+      assertTrue(controller.getLoggers.contains("kafka.utils.Log4jControllerTest=TRACE"))
     } finally {
       controller.setLogLevel("kafka", previousLevel)
     }
