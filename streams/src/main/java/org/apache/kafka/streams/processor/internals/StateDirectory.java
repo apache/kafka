@@ -292,7 +292,7 @@ public class StateDirectory {
             }
         } catch (final IOException e) {
             log.error("{} Failed to delete global state directory of {} due to an unexpected exception",
-                appId, logPrefix(), e);
+                logPrefix(), appId, e);
             throw new StreamsException(e);
         }
     }
@@ -348,30 +348,27 @@ public class StateDirectory {
             final String dirName = taskDir.getName();
             final TaskId id = TaskId.parse(dirName);
             if (!locks.containsKey(id)) {
-                Exception exception = null;
                 try {
                     if (lock(id)) {
                         log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
-                                logPrefix(), dirName, id);
+                            logPrefix(), dirName, id);
                         Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
                     }
-                } catch (final OverlappingFileLockException | IOException e) {
-                    exception = e;
+                } catch (final OverlappingFileLockException | IOException exception) {
+                    log.error("{} Failed to delete state directory {} for task {} with exception: {}",
+                        logPrefix(), dirName, id, exception);
+                    throw exception;
                 } finally {
                     try {
                         unlock(id);
-
                         // for manual user call, stream threads are not running so it is safe to delete
                         // the whole directory
                         Utils.delete(taskDir);
-                    } catch (final IOException e) {
-                        exception = e;
+                    } catch (final IOException exception) {
+                        log.error("{} Failed to release lock on state directory {} for task {} with exception: {}",
+                            logPrefix(), dirName, id, exception);
+                        throw exception;
                     }
-                }
-
-                if (exception != null) {
-                    log.error("{} Failed to release the state directory lock.", logPrefix());
-                    throw exception;
                 }
             }
         }
