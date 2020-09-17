@@ -241,6 +241,20 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   }
 
   @Test
+  def testAlterNotControllerAndNotAuthorized(): Unit = {
+    // make sure we get the authorization errors rather than the not-controller errors
+    val request = new AlterUserScramCredentialsRequest.Builder(
+      new AlterUserScramCredentialsRequestData()
+        .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))
+        .setUpsertions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_512.`type`)))).build()
+    val response = sendAlterUserScramCredentialsRequest(request, notControllerSocketServer)
+
+    val results = response.data.results
+    assertEquals(2, results.size)
+    checkAllErrorsAlteringCredentials(results, Errors.CLUSTER_AUTHORIZATION_FAILED, "when not authorized")
+  }
+
+  @Test
   def testAlterAndDescribe(): Unit = {
     // create a bunch of credentials
     val request1 = new AlterUserScramCredentialsRequest.Builder(

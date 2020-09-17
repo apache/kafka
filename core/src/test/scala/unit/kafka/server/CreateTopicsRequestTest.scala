@@ -17,18 +17,38 @@
 
 package kafka.server
 
+import java.util
+import java.util.Properties
+
+import kafka.security.authorizer.AclAuthorizer
 import kafka.utils._
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest
+import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal, KafkaPrincipalBuilder}
+import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.rules.TestName
+import org.junit.{Rule, Test}
 
 import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    super.brokerPropertyOverrides(properties)
+    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[CreateTopicsTest.TestAuthorizer].getName)
+    properties.put(KafkaConfig.PrincipalBuilderClassProp,
+      if (testName.getMethodName.endsWith("NotAuthorized")) {
+        classOf[CreateTopicsTest.TestPrincipalBuilderReturningUnauthorized].getName
+      } else {
+        classOf[CreateTopicsTest.TestPrincipalBuilderReturningAuthorized].getName
+      })
+  }
+
+  private val _testName = new TestName
+  @Rule def testName = _testName
 
   @Test
   def testValidCreateTopicsRequests(): Unit = {
@@ -141,6 +161,21 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @Test
+  def testNotAuthorized(): Unit = {
+    val req = topicsReq(Seq(topicReq("topic1")))
+    val response = sendCreateTopicRequest(req)
+    assertEquals(1, response.errorCounts().get(Errors.TOPIC_AUTHORIZATION_FAILED))
+  }
+
+  @Test
+  def testNotControllerAndNotAuthorized(): Unit = {
+    // make sure we get the authorization error rather than the not-controller error
+    val req = topicsReq(Seq(topicReq("topic1")))
+    val response = sendCreateTopicRequest(req, notControllerSocketServer)
+    assertEquals(1, response.errorCounts().get(Errors.TOPIC_AUTHORIZATION_FAILED))
+  }
+
+  @Test
   def testCreateTopicsRequestVersions(): Unit = {
     for (version <- ApiKeys.CREATE_TOPICS.oldestVersion to ApiKeys.CREATE_TOPICS.latestVersion) {
       val topic = s"topic_$version"
@@ -170,6 +205,34 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
         assertEquals(-1, topicResponse.replicationFactor)
         assertTrue(topicResponse.configs.isEmpty)
       }
+    }
+  }
+}
+
+object CreateTopicsTest {
+  val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
+  val AuthorizedPrincipal = KafkaPrincipal.ANONYMOUS
+
+  class TestAuthorizer extends AclAuthorizer {
+    override def authorize(requestContext: AuthorizableRequestContext, actions: util.List[Action]): util.List[AuthorizationResult] = {
+      actions.asScala.map { _ =>
+        if (requestContext.requestType == ApiKeys.CREATE_TOPICS.id && requestContext.principal == UnauthorizedPrincipal)
+          AuthorizationResult.DENIED
+        else
+          AuthorizationResult.ALLOWED
+      }.asJava
+    }
+  }
+
+  class TestPrincipalBuilderReturningAuthorized extends KafkaPrincipalBuilder {
+    override def build(context: AuthenticationContext): KafkaPrincipal = {
+      AuthorizedPrincipal
+    }
+  }
+
+  class TestPrincipalBuilderReturningUnauthorized extends KafkaPrincipalBuilder {
+    override def build(context: AuthenticationContext): KafkaPrincipal = {
+      UnauthorizedPrincipal
     }
   }
 }
