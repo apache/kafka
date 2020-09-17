@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Arrays;
 import java.util.Properties;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -169,7 +168,7 @@ public class ProcessorNodeTest {
 
         builder.<String, String>stream("streams-plaintext-input")
             .flatMapValues(value -> {
-                return Arrays.asList("");
+                return Collections.singletonList("");
             });
         final Topology topology = builder.build();
 

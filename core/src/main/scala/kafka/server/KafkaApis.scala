@@ -186,6 +186,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       case e: FatalExitError => throw e
       case e: Throwable => handleError(request, e)
     } finally {
+      // try to complete delayed action. In order to avoid conflicting locking, the actions to complete delayed requests
+      // are kept in a queue. We add the logic to check the ReplicaManager queue at the end of KafkaApis.handle() and the
+      // expiration thread for certain delayed operations (e.g. DelayedJoin)
+      replicaManager.tryCompleteActions()
       // The local completion time may be set while processing the request. Only record it if it's unset.
       if (request.apiLocalCompleteTimeNanos < 0)
         request.apiLocalCompleteTimeNanos = time.nanoseconds
@@ -738,13 +742,16 @@ class KafkaApis(val requestChannel: RequestChannel,
                   errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
               }
             }
-          case None => {
+          case None =>
             val error = maybeDownConvertStorageError(partitionData.error, versionId)
-            new FetchResponse.PartitionData[BaseRecords](error, partitionData.highWatermark,
-              partitionData.lastStableOffset, partitionData.logStartOffset,
-              partitionData.preferredReadReplica, partitionData.abortedTransactions,
+            new FetchResponse.PartitionData[BaseRecords](error,
+              partitionData.highWatermark,
+              partitionData.lastStableOffset,
+              partitionData.logStartOffset,
+              partitionData.preferredReadReplica,
+              partitionData.abortedTransactions,
+              partitionData.divergingEpoch,
               unconvertedRecords)
-          }
         }
       }
     }
@@ -759,9 +766,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (data.isReassignmentFetch)
           reassigningPartitions.add(tp)
         val error = maybeDownConvertStorageError(data.error, versionId)
-        partitions.put(tp, new FetchResponse.PartitionData(error, data.highWatermark, lastStableOffset,
-          data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
-          abortedTransactions, data.records))
+        partitions.put(tp, new FetchResponse.PartitionData(
+          error,
+          data.highWatermark,
+          lastStableOffset,
+          data.logStartOffset,
+          data.preferredReadReplica.map(int2Integer).asJava,
+          abortedTransactions,
+          data.divergingEpoch.asJava,
+          data.records))
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 

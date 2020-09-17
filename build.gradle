@@ -241,6 +241,7 @@ subprojects {
     }
   }
 
+  def shouldUseJUnit5 = it.project.name == 'tools'
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -330,6 +331,9 @@ subprojects {
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
 
+    if (shouldUseJUnit5)
+      useJUnitPlatform()
+
     retry {
       maxRetries = userMaxTestRetries
       maxFailures = userMaxTestRetryFailures
@@ -355,8 +359,14 @@ subprojects {
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
 
-    useJUnit {
-      includeCategories 'org.apache.kafka.test.IntegrationTest'
+    if (shouldUseJUnit5) {
+      useJUnitPlatform {
+        includeTags "integration"
+      }
+    } else {
+      useJUnit {
+        includeCategories 'org.apache.kafka.test.IntegrationTest'
+      }
     }
 
     retry {
@@ -383,9 +393,15 @@ subprojects {
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
 
-    if (it.project.name != 'generator') {
-      useJUnit {
-        excludeCategories 'org.apache.kafka.test.IntegrationTest'
+    if (shouldUseJUnit5) {
+      useJUnitPlatform {
+        excludeTags "integration"
+      }
+    } else {
+      if (it.project.name != 'generator') {
+        useJUnit {
+          excludeCategories 'org.apache.kafka.test.IntegrationTest'
+        }
       }
     }
 
@@ -761,7 +777,8 @@ project(':core') {
     testCompile libs.apachedsLdifPartition
     testCompile libs.apachedsMavibotPartition
     testCompile libs.apachedsJdbmPartition
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.scalatest
     testCompile libs.slf4jlog4j
     testCompile libs.jfreechart
@@ -982,7 +999,8 @@ project(':generator') {
     compile libs.jacksonDatabind
     compile libs.jacksonJDK8Datatypes
     compile libs.jacksonJaxrsJsonProvider
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
   }
 
   integrationTest {
@@ -1016,7 +1034,8 @@ project(':clients') {
     jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
@@ -1141,11 +1160,9 @@ project(':tools') {
     compile libs.jettyServlets
 
     testCompile project(':clients')
-    testCompile libs.junit
+    testCompile libs.junitJupiter
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.easymock
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.mockitoInline // supports mocking static methods, final classes, etc.
 
     testRuntime libs.slf4jlog4j
   }
@@ -1193,7 +1210,8 @@ project(':streams') {
     testCompile project(':core')
     testCompile project(':core').sourceSets.test.output
     testCompile libs.log4j
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.easymock
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
@@ -1324,7 +1342,8 @@ project(':streams:streams-scala') {
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':streams:test-utils')
 
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.scalatest
     testCompile libs.easymock
     testCompile libs.hamcrest
@@ -1359,7 +1378,8 @@ project(':streams:test-utils') {
     compile project(':clients')
 
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.easymock
     testCompile libs.hamcrest
 
@@ -1395,7 +1415,8 @@ project(':streams:examples') {
 
     testCompile project(':streams:test-utils')
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
   }
 
   javadoc {
@@ -1630,7 +1651,8 @@ project(':log4j-appender') {
     compile libs.slf4jlog4j
 
     testCompile project(':clients').sourceSets.test.output
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.easymock
   }
 
@@ -1648,7 +1670,8 @@ project(':connect:api') {
     compile libs.slf4jApi
     compile libs.jaxrsApi
 
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
 
     testRuntime libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output
@@ -1689,7 +1712,8 @@ project(':connect:transforms') {
     compile libs.slf4jApi
 
     testCompile libs.easymock
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
@@ -1729,7 +1753,8 @@ project(':connect:json') {
     compile libs.slf4jApi
 
     testCompile libs.easymock
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
@@ -1785,7 +1810,8 @@ project(':connect:runtime') {
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
     testCompile libs.mockitoCore
@@ -1871,7 +1897,8 @@ project(':connect:file') {
     compile libs.slf4jApi
 
     testCompile libs.easymock
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
 
@@ -1910,7 +1937,8 @@ project(':connect:basic-auth-extension') {
 
     testCompile libs.bcpkix
     testCompile libs.easymock
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
     testCompile project(':clients').sourceSets.test.output
@@ -1952,7 +1980,8 @@ project(':connect:mirror') {
     compile libs.argparse4j
     compile libs.slf4jApi
 
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile libs.mockitoCore
     testCompile project(':clients').sourceSets.test.output
     testCompile project(':connect:runtime').sourceSets.test.output
@@ -1992,7 +2021,8 @@ project(':connect:mirror-client') {
     compile project(':clients')
     compile libs.slf4jApi
 
-    testCompile libs.junit
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
