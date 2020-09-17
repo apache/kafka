@@ -41,7 +41,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public boolean enableSendingOldValues(final boolean onlyIfMaterialized) {
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
         // Reduce is always materialized:
         sendOldValues = true;
         return true;

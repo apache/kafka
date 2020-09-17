@@ -49,7 +49,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         this.storeName = storeName;
         this.parentKTable = parentKTable;
         // The suppress buffer requires seeing the old values, to support the prior value view.
-        parentKTable.enableSendingOldValues(false);
+        parentKTable.enableSendingOldValues(true);
     }
 
     @Override
@@ -107,8 +107,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
     }
 
     @Override
-    public boolean enableSendingOldValues(final boolean onlyIfMaterialized) {
-        return parentKTable.enableSendingOldValues(onlyIfMaterialized);
+    public boolean enableSendingOldValues(final boolean forceMaterialization) {
+        return parentKTable.enableSendingOldValues(forceMaterialization);
     }
 
     private static final class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {

@@ -24,11 +24,17 @@ public interface KTableProcessorSupplier<K, V, T> extends ProcessorSupplier<K, C
 
     /**
      * Potentially enables sending old values.
+     * <p>
+     * If {@code forceMaterialization} is {@code true}, the method will force the materialization of upstream nodes to
+     * enable sending old values.
+     * <p>
+     * If {@code forceMaterialization} is {@code false}, the method will only enable the sending of old values <i>if</i>
+     * an upstream node is already materialized.
      *
-     * @param onlyIfMaterialized if {@code true}, only enable sending old values if already materialized.
-     *                           If {@code false}, force materialization.
-     * @return {@code true} is sending old values is enabled, i.e. either because {@code onlyIfMaterialized} was
-     * {@code false} or some upstream node is materialized.
+     * @param forceMaterialization indicates if an upstream node should be forced to materialize to enable sending old
+     *                             values.
+     * @return {@code true} is sending old values is enabled, i.e. either because {@code forceMaterialization} was
+     * {@code true} or some upstream node is materialized.
      */
-    boolean enableSendingOldValues(boolean onlyIfMaterialized);
+    boolean enableSendingOldValues(boolean forceMaterialization);
 }

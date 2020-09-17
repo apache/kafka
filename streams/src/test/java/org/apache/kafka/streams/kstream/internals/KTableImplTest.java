@@ -115,30 +115,38 @@ public class KTableImplTest {
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
             new KeyValueTimestamp<>("C", "03", 0),
             new KeyValueTimestamp<>("D", "04", 0),
             new KeyValueTimestamp<>("A", "05", 10),
-            new KeyValueTimestamp<>("A", "06", 8)), processors.get(0).processed());
-        assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
+            new KeyValueTimestamp<>("A", "06", 8)),
+            processors.get(0).processed());
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", 1, 5),
             new KeyValueTimestamp<>("B", 2, 100),
             new KeyValueTimestamp<>("C", 3, 0),
             new KeyValueTimestamp<>("D", 4, 0),
             new KeyValueTimestamp<>("A", 5, 10),
-            new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed());
-        assertEquals(asList(new KeyValueTimestamp<>("A", null, 5),
+            new KeyValueTimestamp<>("A", 6, 8)),
+            processors.get(1).processed());
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", null, 5),
             new KeyValueTimestamp<>("B", 2, 100),
             new KeyValueTimestamp<>("C", null, 0),
             new KeyValueTimestamp<>("D", 4, 0),
             new KeyValueTimestamp<>("A", null, 10),
-            new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed());
-        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+            new KeyValueTimestamp<>("A", 6, 8)),
+            processors.get(2).processed());
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
             new KeyValueTimestamp<>("C", "03", 0),
             new KeyValueTimestamp<>("D", "04", 0),
             new KeyValueTimestamp<>("A", "05", 10),
-            new KeyValueTimestamp<>("A", "06", 8)), processors.get(3).processed());
+            new KeyValueTimestamp<>("A", "06", 8)),
+            processors.get(3).processed());
     }
 
     @Test
@@ -175,27 +183,35 @@ public class KTableImplTest {
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
             new KeyValueTimestamp<>("C", "03", 0),
             new KeyValueTimestamp<>("D", "04", 0),
             new KeyValueTimestamp<>("A", "05", 10),
-            new KeyValueTimestamp<>("A", "06", 8)), processors.get(0).processed());
-        assertEquals(asList(new KeyValueTimestamp<>("A", 1, 5),
+            new KeyValueTimestamp<>("A", "06", 8)),
+            processors.get(0).processed());
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", 1, 5),
             new KeyValueTimestamp<>("B", 2, 100),
             new KeyValueTimestamp<>("C", 3, 0),
             new KeyValueTimestamp<>("D", 4, 0),
             new KeyValueTimestamp<>("A", 5, 10),
-            new KeyValueTimestamp<>("A", 6, 8)), processors.get(1).processed());
-        assertEquals(asList(new KeyValueTimestamp<>("B", 2, 100),
+            new KeyValueTimestamp<>("A", 6, 8)),
+            processors.get(1).processed());
+        assertEquals(asList(
+            new KeyValueTimestamp<>("B", 2, 100),
             new KeyValueTimestamp<>("D", 4, 0),
-            new KeyValueTimestamp<>("A", 6, 8)), processors.get(2).processed());
-        assertEquals(asList(new KeyValueTimestamp<>("A", "01", 5),
+            new KeyValueTimestamp<>("A", 6, 8)),
+            processors.get(2).processed());
+        assertEquals(asList(
+            new KeyValueTimestamp<>("A", "01", 5),
             new KeyValueTimestamp<>("B", "02", 100),
             new KeyValueTimestamp<>("C", "03", 0),
             new KeyValueTimestamp<>("D", "04", 0),
             new KeyValueTimestamp<>("A", "05", 10),
-            new KeyValueTimestamp<>("A", "06", 8)), processors.get(3).processed());
+            new KeyValueTimestamp<>("A", "06", 8)),
+            processors.get(3).processed());
     }
 
     @Test
@@ -364,25 +380,25 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testSendingOldValuesNotSetIfNotMaterialized() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final KTableImpl<String, String, String> table =
-            (KTableImpl<String, String, String>) builder.table("topic1", consumed);
-
-        table.enableSendingOldValues(true);
-
-        assertThat(table.sendingOldValueEnabled(), is(false));
-    }
-
-    @Test
-    public void testSendingOldValuesSetIfMaterializedForced() {
+    public void shouldNotEnableSendingOldValuesIfNotMaterializedAlreadyAndNotForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTableImpl<String, String, String> table =
             (KTableImpl<String, String, String>) builder.table("topic1", consumed);
 
         table.enableSendingOldValues(false);
+
+        assertThat(table.sendingOldValueEnabled(), is(false));
+    }
+
+    @Test
+    public void shouldEnableSendingOldValuesIfNotMaterializedAlreadyButForcedToMaterialize() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KTableImpl<String, String, String> table =
+            (KTableImpl<String, String, String>) builder.table("topic1", consumed);
+
+        table.enableSendingOldValues(true);
 
         assertThat(table.sendingOldValueEnabled(), is(true));
     }

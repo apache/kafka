@@ -298,7 +298,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void shouldNotSendOldValuesWithoutMaterializationIfOptionallyRequested() {
+    public void shouldNotEnableSendingOldValuesIfNotAlreadyMaterializedAndNotForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -306,13 +306,15 @@ public class KTableFilterTest {
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
         final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
 
-        table2.enableSendingOldValues(true);
+        table2.enableSendingOldValues(false);
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
 
+    // Todo: this _should_ enable sending old values as t2 is materialized
+    //   https://issues.apache.org/jira/browse/KAFKA-10494
     @Test
-    public void shouldNotSendOldValuesOnMaterializationIfOptionallyRequested() {
+    public void doesNotEnableSendOldValuesOnMaterializationIfOptionallyRequested() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -321,7 +323,7 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table2 =
             (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
 
-        table2.enableSendingOldValues(true);
+        table2.enableSendingOldValues(false);
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
@@ -374,7 +376,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void shouldSendOldValuesWhenEnabledWithoutMaterialization() {
+    public void shouldEnableSendOldValuesWhenNotMaterializedAlreadyButForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -383,13 +385,13 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table2 =
             (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
 
-        table2.enableSendingOldValues(false);
+        table2.enableSendingOldValues(true);
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
 
     @Test
-    public void shouldSendOldValuesWhenEnabledOnMaterialization() {
+    public void shouldEnableSendOldValuesWhenMaterializedAlreadyAndForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
@@ -398,7 +400,7 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table2 =
             (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
 
-        table2.enableSendingOldValues(false);
+        table2.enableSendingOldValues(true);
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -413,7 +415,7 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table2 =
             (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
 
-        table2.enableSendingOldValues(true);
+        table2.enableSendingOldValues(false);
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }

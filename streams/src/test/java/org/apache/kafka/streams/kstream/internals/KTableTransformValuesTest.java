@@ -171,10 +171,10 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
-        expect(parent.enableSendingOldValues(false)).andReturn(true);
+        expect(parent.enableSendingOldValues(true)).andReturn(true);
         replay(parent);
 
-        transformValues.enableSendingOldValues(false);
+        transformValues.enableSendingOldValues(true);
         final Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
@@ -189,10 +189,10 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldSetSendOldValuesOnParent() {
-        expect(parent.enableSendingOldValues(false)).andReturn(true);
+        expect(parent.enableSendingOldValues(true)).andReturn(true);
         replay(parent);
 
-        new KTableTransformValues<>(parent, new SingletonNoOpValueTransformer<>(), QUERYABLE_NAME).enableSendingOldValues(false);
+        new KTableTransformValues<>(parent, new SingletonNoOpValueTransformer<>(), QUERYABLE_NAME).enableSendingOldValues(true);
 
         verify(parent);
     }

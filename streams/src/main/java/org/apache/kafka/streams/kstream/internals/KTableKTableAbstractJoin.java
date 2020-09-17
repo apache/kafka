@@ -39,14 +39,10 @@ abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessor
     }
 
     @Override
-    public final boolean enableSendingOldValues(final boolean onlyIfMaterialized) {
-        if (!table1.enableSendingOldValues(onlyIfMaterialized)) {
-            throw new IllegalStateException("Table-table joins should always be materialized");
-        }
-
-        if (!table2.enableSendingOldValues(onlyIfMaterialized)) {
-            throw new IllegalStateException("Table-table joins should always be materialized");
-        }
+    public final boolean enableSendingOldValues(final boolean forceMaterialization) {
+        // Table-table joins require upstream materialization:
+        table1.enableSendingOldValues(true);
+        table2.enableSendingOldValues(true);
         sendOldValues = true;
         return true;
     }
