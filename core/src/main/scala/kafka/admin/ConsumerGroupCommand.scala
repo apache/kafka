@@ -24,27 +24,23 @@ import java.util.Properties
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
+import joptsimple.{OptionException, OptionSpec}
 import kafka.utils._
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
-import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
-
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.ListBuffer
-import scala.collection.{Map, Seq, immutable, mutable}
-import scala.util.{Failure, Success, Try}
-import joptsimple.OptionSpec
 import org.apache.kafka.common.protocol.Errors
-
-import scala.collection.immutable.TreeMap
-import scala.reflect.ClassTag
 import org.apache.kafka.common.requests.ListOffsetResponse
-import org.apache.kafka.common.ConsumerGroupState
-import joptsimple.OptionException
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{ConsumerGroupState, KafkaException, Node, TopicPartition}
 
 import scala.annotation.nowarn
+import scala.collection.immutable.TreeMap
+import scala.collection.mutable.ListBuffer
+import scala.collection.{Map, Seq, immutable, mutable}
+import scala.jdk.CollectionConverters._
+import scala.reflect.ClassTag
+import scala.util.{Failure, Success, Try}
 
 object ConsumerGroupCommand extends Logging {
 
@@ -56,9 +52,9 @@ object ConsumerGroupCommand extends Logging {
       CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
       // should have exactly one action
-      val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
+      val actions = Seq(opts.listOpt, opts.describeOpt, opts.removeMembersOpts, opts.deleteOpt, opts.resetOffsetsOpt, opts.deleteOffsetsOpt).count(opts.options.has)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete, --reset-offsets, --delete-offsets")
+        CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --remove-members, --delete, --reset-offsets, --delete-offsets")
 
       run(opts)
     } catch {
@@ -86,6 +82,8 @@ object ConsumerGroupCommand extends Logging {
       }
       else if (opts.options.has(opts.deleteOffsetsOpt)) {
         consumerGroupService.deleteOffsets()
+      } else if (opts.options.has(opts.removeMembersOpts)) {
+        consumerGroupService.deleteMembersFromConsumerGroup()
       }
     } catch {
       case e: IllegalArgumentException =>
@@ -922,6 +920,28 @@ object ConsumerGroupCommand extends Logging {
       rows.mkString("")
     }
 
+    def deleteMembersFromConsumerGroup(): Boolean = {
+      val groupId = opts.options.valueOf(opts.groupOpt)
+      val result = if (opts.options.has(opts.allMembersOpts)) {
+        adminClient.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions)
+      } else {
+        val memberIds = opts.options.valuesOf(opts.memberOpt).asScala
+        adminClient.removeMembersFromConsumerGroup(groupId, memberIds.asJava)
+      }
+
+      try {
+        result.all.get
+        println("Deletion of requested member(s) of consumer group was successful.")
+        return true
+      } catch {
+        case e: Throwable => {
+          printError(s"Deletion of requested member(s) of consumer group failed due to ${e.getMessage}")
+          return false
+        }
+      }
+      false
+    }
+
     def deleteGroups(): Map[String, Throwable] = {
       val groupIds =
         if (opts.options.has(opts.allGroupsOpt)) listConsumerGroups()
@@ -970,6 +990,7 @@ object ConsumerGroupCommand extends Logging {
   class ConsumerGroupCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val BootstrapServerDoc = "REQUIRED: The server(s) to connect to."
     val GroupDoc = "The consumer group we wish to act on."
+    val MemberDoc = "Member of consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
       "In `reset-offsets` case, partitions can be specified using this format: `topic1:0,1,2`, where 0,1,2 are the partition to be included in the process. " +
       "Reset-offsets also supports multiple topic inputs."
@@ -977,6 +998,7 @@ object ConsumerGroupCommand extends Logging {
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val AllGroupsDoc = "Apply to all consumer groups."
+    val AllMembersDoc = "Apply to all members of groups."
     val nl = System.getProperty("line.separator")
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
       "over the entire consumer group. For instance --group g1 --group g2"
@@ -1014,6 +1036,7 @@ object ConsumerGroupCommand extends Logging {
       "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + nl +
       "This option may be used with '--describe', '--list' and '--bootstrap-server' options only."
     val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
+    val RemoveMembersDoc = "Remove members from the consumer group by given member identities"
 
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
@@ -1023,6 +1046,10 @@ object ConsumerGroupCommand extends Logging {
                          .withRequiredArg
                          .describedAs("consumer group")
                          .ofType(classOf[String])
+    val memberOpt = parser.accepts("member", MemberDoc)
+                          .withRequiredArg
+                          .describedAs("member of consumer group")
+                          .ofType(classOf[String])
     val topicOpt = parser.accepts("topic", TopicDoc)
                          .withRequiredArg
                          .describedAs("topic")
@@ -1031,6 +1058,7 @@ object ConsumerGroupCommand extends Logging {
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
     val allGroupsOpt = parser.accepts("all-groups", AllGroupsDoc)
+    val allMembersOpts = parser.accepts("all-members", AllMembersDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
     val timeoutMsOpt = parser.accepts("timeout", TimeoutMsDoc)
                              .withRequiredArg
@@ -1043,6 +1071,7 @@ object ConsumerGroupCommand extends Logging {
                                   .ofType(classOf[String])
     val resetOffsetsOpt = parser.accepts("reset-offsets", ResetOffsetsDoc)
     val deleteOffsetsOpt = parser.accepts("delete-offsets", DeleteOffsetsDoc)
+    val removeMembersOpts = parser.accepts("remove-members", RemoveMembersDoc)
     val dryRunOpt = parser.accepts("dry-run", DryRunDoc)
     val executeOpt = parser.accepts("execute", ExecuteDoc)
     val exportOpt = parser.accepts("export", ExportDoc)

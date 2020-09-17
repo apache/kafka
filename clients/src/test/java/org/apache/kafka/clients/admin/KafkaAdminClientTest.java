@@ -53,12 +53,12 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
-import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -71,9 +71,9 @@ import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
-import org.apache.kafka.common.message.CreateAclsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResultCollection;
@@ -102,8 +102,8 @@ import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
-import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
+import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartition;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
@@ -3350,6 +3350,105 @@ public class KafkaAdminClientTest {
                     new RemoveMembersFromConsumerGroupOptions()
             );
             assertNull(successResult.all().get());
+        }
+    }
+
+    @Test
+    public void testRemoveMembersFromGroupWithMemberIds() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            final String instanceOne = "instance-1";
+            final String instanceTwo = "instance-2";
+            final List<String> memberIds = new ArrayList<>();
+            memberIds.add(instanceOne);
+            memberIds.add(instanceTwo);
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Retriable FindCoordinatorResponse errors should be retried
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            // Retriable errors should be retried
+            env.kafkaClient().prepareResponse(null, true);
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())));
+
+            // Inject a top-level non-retriable error
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
+
+            String groupId = "groupId";
+            /*Collection<MemberToRemove> membersToRemove = Arrays.asList(new MemberToRemove(instanceOne),
+                    new MemberToRemove(instanceTwo));*/
+            final RemoveMembersFromConsumerGroupResult unknownErrorResult = env.adminClient().removeMembersFromConsumerGroup(
+                    groupId,
+                    memberIds
+            );
+
+            MemberToRemove memberOne = new MemberToRemove(instanceOne);
+            MemberToRemove memberTwo = new MemberToRemove(instanceTwo);
+
+            TestUtils.assertFutureError(unknownErrorResult.all(), UnknownServerException.class);
+            TestUtils.assertFutureError(unknownErrorResult.memberResult(memberOne), UnknownServerException.class);
+            TestUtils.assertFutureError(unknownErrorResult.memberResult(memberTwo), UnknownServerException.class);
+
+            MemberResponse responseOne = new MemberResponse()
+                    .setGroupInstanceId(instanceOne)
+                    .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
+
+            MemberResponse responseTwo = new MemberResponse()
+                    .setGroupInstanceId(instanceTwo)
+                    .setErrorCode(Errors.NONE.code());
+
+            // Inject one member level error.
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setMembers(Arrays.asList(responseOne, responseTwo))));
+
+            final RemoveMembersFromConsumerGroupResult memberLevelErrorResult = env.adminClient().removeMembersFromConsumerGroup(groupId, memberIds);
+
+            TestUtils.assertFutureError(memberLevelErrorResult.all(), UnknownMemberIdException.class);
+            TestUtils.assertFutureError(memberLevelErrorResult.memberResult(memberOne), UnknownMemberIdException.class);
+            assertNull(memberLevelErrorResult.memberResult(memberTwo).get());
+
+            // Return with missing member.
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setMembers(Collections.singletonList(responseTwo))));
+
+
+
+            final RemoveMembersFromConsumerGroupResult missingMemberResultWithIds = env.adminClient().removeMembersFromConsumerGroup(
+                    groupId,
+                    memberIds
+            );
+
+            TestUtils.assertFutureError(missingMemberResultWithIds.all(), IllegalArgumentException.class);
+            // The memberOne was not included in the response.
+            TestUtils.assertFutureError(missingMemberResultWithIds.memberResult(memberOne), IllegalArgumentException.class);
+            assertNull(missingMemberResultWithIds.memberResult(memberTwo).get());
+
+            // Return with success.
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(
+                    new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()).setMembers(
+                            Arrays.asList(responseTwo,
+                                    new MemberResponse().setGroupInstanceId(instanceOne).setErrorCode(Errors.NONE.code())
+                            ))
+            ));
+
+            final RemoveMembersFromConsumerGroupResult noErrorResult = env.adminClient().removeMembersFromConsumerGroup(
+                    groupId,
+                    memberIds
+            );
+            assertNull(noErrorResult.all().get());
+            assertNull(noErrorResult.memberResult(memberOne).get());
+            assertNull(noErrorResult.memberResult(memberTwo).get());
+
         }
     }
 

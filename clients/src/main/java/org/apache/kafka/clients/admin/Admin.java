@@ -1088,6 +1088,17 @@ public interface Admin extends AutoCloseable {
     RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options);
 
     /**
+     * Remove members from the consumer group by given member identities.
+     * <p>
+     * For possible error codes, refer to {@link LeaveGroupResponse}.
+     *
+     * @param groupId The ID of the group to remove member from.
+     * @param memberIds The groupInstanceIds of the members te be removed.
+     * @return The MembershipChangeResult.
+     */
+    RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, Collection<String> memberIds);
+
+    /**
      * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
      *
      * <p>This is a convenience method for {@link #alterConsumerGroupOffsets(String, Map, AlterConsumerGroupOffsetsOptions)} with default options.
