@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 object Log4jController {
   val ROOT_LOGGER = "root"
 
-  def resolveLevel(logger: Logger): String = {
+  private def resolveLevel(logger: Logger): String = {
     var name = logger.getName
     var level = logger.getLevel
     while (level == null) {
