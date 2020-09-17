@@ -467,7 +467,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @param timer Timer bounding how long this method can block
      * @param waitForJoinGroup Boolean flag indicating if we should wait until re-join group completes
      * @throws KafkaException if the rebalance callback throws an exception
-     * @return true iff the operation succeeded
+     * @return true if the operation succeeded
      */
     public boolean poll(Timer timer, boolean waitForJoinGroup) {
         maybeUpdateSubscriptionMetadata();
