@@ -317,7 +317,7 @@ class ReplicaManager(val config: KafkaConfig,
     // A follower can lag behind leader for up to config.replicaLagTimeMaxMs x 1.5 before it is removed from ISR
     scheduler.schedule("isr-expiration", maybeShrinkIsr _, period = config.replicaLagTimeMaxMs / 2, unit = TimeUnit.MILLISECONDS)
     // If using AlterIsr, we don't need the znode ISR propagation
-    if (config.interBrokerProtocolVersion < KAFKA_2_7_IV1) {
+    if (config.interBrokerProtocolVersion < KAFKA_2_7_IV2) {
       scheduler.schedule("isr-change-propagation", maybePropagateIsrChanges _, period = 2500L, unit = TimeUnit.MILLISECONDS)
     } else {
       alterIsrManager.start()
@@ -330,8 +330,6 @@ class ReplicaManager(val config: KafkaConfig,
     val haltBrokerOnFailure = config.interBrokerProtocolVersion < KAFKA_1_0_IV0
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
-
-
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
@@ -1249,7 +1247,7 @@ class ReplicaManager(val config: KafkaConfig,
    *  the quota is exceeded and the replica is not in sync.
    */
   def shouldLeaderThrottle(quota: ReplicaQuota, partition: Partition, replicaId: Int): Boolean = {
-    val isReplicaInSync = partition.inSyncReplicaIds.contains(replicaId)
+    val isReplicaInSync = partition.isrState.isr.contains(replicaId)
     !isReplicaInSync && quota.isThrottled(partition.topicPartition) && quota.isQuotaExceeded
   }
 
@@ -1326,9 +1324,8 @@ class ReplicaManager(val config: KafkaConfig,
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              val currentZkVersion = partition.getZkVersion
               val requestZkVersion = partitionState.zkVersion
-              if (requestLeaderEpoch > currentLeaderEpoch || requestZkVersion > currentZkVersion) {
+              if (requestLeaderEpoch > currentLeaderEpoch) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId))

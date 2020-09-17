@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import kafka.api.LeaderAndIsr
 import kafka.server.{AlterIsrItem, AlterIsrManager, AlterIsrManagerImpl, BrokerToControllerChannelManager}
 import kafka.utils.{MockScheduler, MockTime}
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException
@@ -43,7 +42,6 @@ class AlterIsrManagerTest {
   val metrics = new Metrics
   val brokerId = 1
 
-  var kafkaZkClient: KafkaZkClient = _
   var brokerToController: BrokerToControllerChannelManager = _
 
   val tp0 = new TopicPartition(topic, 0)
@@ -52,10 +50,6 @@ class AlterIsrManagerTest {
 
   @Before
   def setup(): Unit = {
-    kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
-    EasyMock.expect(kafkaZkClient.getBrokerEpoch(EasyMock.anyInt())).andReturn(Some(4)).anyTimes()
-    EasyMock.replay(kafkaZkClient)
-
     brokerToController = EasyMock.createMock(classOf[BrokerToControllerChannelManager])
   }
 
@@ -65,9 +59,9 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
+    alterIsrManager.enqueue(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
     time.sleep(50)
     scheduler.tick()
 
@@ -81,12 +75,12 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
     // Only send one ISR update for a given topic+partition
-    assertTrue(alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {})))
-    assertFalse(alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {})))
+    assertTrue(alterIsrManager.enqueue(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {})))
+    assertFalse(alterIsrManager.enqueue(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2), 10), _ => {})))
 
     time.sleep(50)
     scheduler.tick()
@@ -105,11 +99,11 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
     for (i <- 0 to 9) {
-      alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, i),
+      alterIsrManager.enqueue(AlterIsrItem(new TopicPartition(topic, i),
         new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
       time.sleep(1)
     }
@@ -118,7 +112,7 @@ class AlterIsrManagerTest {
     scheduler.tick()
 
     // This should not be included in the batch
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(new TopicPartition(topic, 10),
+    alterIsrManager.enqueue(AlterIsrItem(new TopicPartition(topic, 10),
       new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
 
     EasyMock.verify(brokerToController)
@@ -126,22 +120,6 @@ class AlterIsrManagerTest {
     val request = capture.getValue.build()
     assertEquals(request.data().topics().size(), 1)
     assertEquals(request.data().topics().get(0).partitions().size(), 10)
-  }
-
-  @Test(expected = classOf[RuntimeException])
-  def testNoBrokerEpoch(): Unit = {
-    EasyMock.reset(kafkaZkClient)
-    EasyMock.expect(kafkaZkClient.getBrokerEpoch(EasyMock.anyInt())).andReturn(None).anyTimes()
-    EasyMock.replay(kafkaZkClient)
-
-    val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
-    alterIsrManager.start()
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
-    time.sleep(50) // throws
-    scheduler.tick()
-
-    EasyMock.verify(brokerToController)
   }
 
   @Test(expected = classOf[ClusterAuthorizationException])
@@ -155,7 +133,7 @@ class AlterIsrManagerTest {
     val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }))
     val manager = testTopLevelError(isrs, Errors.STALE_BROKER_EPOCH)
     // On stale broker epoch, we want to retry, so we don't clear items from the pending map
-    assertFalse(manager.enqueueIsrUpdate(AlterIsrItem(tp0, null, _ => { })))
+    assertFalse(manager.enqueue(AlterIsrItem(tp0, null, _ => { })))
   }
 
   @Test
@@ -163,7 +141,7 @@ class AlterIsrManagerTest {
     val isrs = Seq(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => { }))
     val manager = testTopLevelError(isrs, Errors.UNKNOWN_SERVER_ERROR)
     // On other unexpected errors, we also want to retry
-    assertFalse(manager.enqueueIsrUpdate(AlterIsrItem(tp0, null, _ => { })))
+    assertFalse(manager.enqueue(AlterIsrItem(tp0, null, _ => { })))
   }
 
   def testTopLevelError(isrs: Seq[AlterIsrItem], error: Errors): AlterIsrManager = {
@@ -173,9 +151,9 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
-    isrs.foreach(alterIsrManager.enqueueIsrUpdate)
+    isrs.foreach(alterIsrManager.enqueue)
 
     time.sleep(100)
     scheduler.tick()
@@ -195,7 +173,7 @@ class AlterIsrManagerTest {
     errors.foreach(error => {
       val alterIsrManager = testPartitionError(tp0, error)
       // Any partition-level error should clear the item from the pending queue allowing for future updates
-      assertTrue(alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp0, null, _ => { })))
+      assertTrue(alterIsrManager.enqueue(AlterIsrItem(tp0, null, _ => { })))
     })
   }
 
@@ -206,7 +184,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
     var capturedError: Option[Errors] = None
@@ -217,7 +195,7 @@ class AlterIsrManagerTest {
       }
     }
 
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback))
+    alterIsrManager.enqueue(AlterIsrItem(tp, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback))
 
     time.sleep(100)
     scheduler.tick()
@@ -248,16 +226,16 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
+    alterIsrManager.enqueue(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
 
     time.sleep(100)
     scheduler.tick() // Triggers a request
 
     // Enqueue more updates
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
+    alterIsrManager.enqueue(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
+    alterIsrManager.enqueue(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), _ => {}))
 
     time.sleep(100)
     scheduler.tick() // Trigger the schedule again, but no request this time
@@ -287,7 +265,7 @@ class AlterIsrManagerTest {
     EasyMock.replay(brokerToController)
 
     val scheduler = new MockScheduler(time)
-    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, kafkaZkClient, scheduler, time, brokerId, () => 2)
+    val alterIsrManager = new AlterIsrManagerImpl(brokerToController, scheduler, time, brokerId, () => 2)
     alterIsrManager.start()
 
     val count = new AtomicInteger(0)
@@ -295,9 +273,9 @@ class AlterIsrManagerTest {
       count.incrementAndGet()
       return
     }
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback))
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback))
-    alterIsrManager.enqueueIsrUpdate(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback))
+    alterIsrManager.enqueue(AlterIsrItem(tp0, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback))
+    alterIsrManager.enqueue(AlterIsrItem(tp1, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback))
+    alterIsrManager.enqueue(AlterIsrItem(tp2, new LeaderAndIsr(1, 1, List(1,2,3), 10), callback))
 
 
     time.sleep(100)

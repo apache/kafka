@@ -287,7 +287,7 @@ class PartitionLockTest extends Logging {
       .thenReturn(Some(2))
     when(stateStore.expandIsr(ArgumentMatchers.anyInt, ArgumentMatchers.any[LeaderAndIsr]))
       .thenReturn(Some(2))
-    when(alterIsrManager.enqueueIsrUpdate(ArgumentMatchers.any[AlterIsrItem]))
+    when(alterIsrManager.enqueue(ArgumentMatchers.any[AlterIsrItem]))
       .thenReturn(true)
 
     partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints)

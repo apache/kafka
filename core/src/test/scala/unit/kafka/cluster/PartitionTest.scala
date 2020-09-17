@@ -485,7 +485,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue("Expected first makeLeader() to return 'leader changed'",
       partition.makeLeader(leaderState, offsetCheckpoints))
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
-    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.isrState.isr)
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
@@ -855,7 +855,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue("Expected first makeLeader() to return 'leader changed'",
                partition.makeLeader(leaderState, offsetCheckpoints))
     assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
-    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.isrState.isr)
 
     // after makeLeader(() call, partition should know about all the replicas
     // append records with initial leader epoch
@@ -908,15 +908,15 @@ class PartitionTest extends AbstractPartitionTest {
     // fetch from follower not in ISR from log start offset should not add this follower to ISR
     updateFollowerFetchState(follower1, LogOffsetMetadata(0))
     updateFollowerFetchState(follower1, LogOffsetMetadata(lastOffsetOfFirstBatch))
-    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.isrState.isr)
 
     // fetch from the follower not in ISR from start offset of the current leader epoch should
     // add this follower to ISR
     updateFollowerFetchState(follower1, LogOffsetMetadata(currentLeaderEpochStartOffset))
 
     // Expansion does not affect the ISR
-    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicaIds)
-    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.effectiveIsr)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.isrState.isr)
+    assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.isrState.maximalIsr)
     assertEquals("AlterIsr", alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr.toSet,
       Set(leader, follower1, follower2))
   }
@@ -1053,7 +1053,7 @@ class PartitionTest extends AbstractPartitionTest {
           .setIsNew(true),
         offsetCheckpoints)
     )
-    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId), partition.isrState.isr)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
@@ -1065,7 +1065,7 @@ class PartitionTest extends AbstractPartitionTest {
       followerFetchTimeMs = time.milliseconds(),
       leaderEndOffset = 6L)
 
-    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId), partition.isrState.isr)
     assertEquals(3L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
 
@@ -1077,8 +1077,8 @@ class PartitionTest extends AbstractPartitionTest {
 
     assertEquals(alterIsrManager.isrUpdates.size, 1)
     assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId, remoteBrokerId))
-    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.effectiveIsr)
+    assertEquals(Set(brokerId), partition.isrState.isr)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
   }
@@ -1107,7 +1107,7 @@ class PartitionTest extends AbstractPartitionTest {
           .setReplicas(replicas)
           .setIsNew(true),
         offsetCheckpoints))
-    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId), partition.isrState.isr)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
@@ -1120,7 +1120,7 @@ class PartitionTest extends AbstractPartitionTest {
       leaderEndOffset = 10L)
 
     // Follower state is updated, but the ISR has not expanded
-    assertEquals(Set(brokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId), partition.isrState.isr)
     assertEquals(alterIsrManager.isrUpdates.size, 1)
     assertEquals(10L, remoteReplica.logEndOffset)
     assertEquals(0L, remoteReplica.logStartOffset)
@@ -1152,7 +1152,7 @@ class PartitionTest extends AbstractPartitionTest {
           .setIsNew(true),
         offsetCheckpoints)
     )
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1162,7 +1162,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // On initialization, the replica is considered caught up and should not be removed
     partition.maybeShrinkIsr()
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
 
     // If enough time passes without a fetch update, the ISR should shrink
     time.sleep(partition.replicaLagTimeMaxMs + 1)
@@ -1171,8 +1171,8 @@ class PartitionTest extends AbstractPartitionTest {
     partition.maybeShrinkIsr()
     assertEquals(alterIsrManager.isrUpdates.size, 1)
     assertEquals(alterIsrManager.isrUpdates.dequeue().leaderAndIsr.isr, List(brokerId))
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
-    assertEquals(Set(brokerId, remoteBrokerId), partition.effectiveIsr)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.maximalIsr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
   }
 
@@ -1202,7 +1202,7 @@ class PartitionTest extends AbstractPartitionTest {
           .setIsNew(true),
         offsetCheckpoints)
     )
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1240,7 +1240,7 @@ class PartitionTest extends AbstractPartitionTest {
     // The ISR should not be shrunk because the follower has caught up with the leader at the
     // time of the first fetch.
     partition.maybeShrinkIsr()
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
     assertEquals(alterIsrManager.isrUpdates.size, 0)
   }
 
@@ -1270,7 +1270,7 @@ class PartitionTest extends AbstractPartitionTest {
           .setIsNew(true),
         offsetCheckpoints)
     )
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1294,7 +1294,7 @@ class PartitionTest extends AbstractPartitionTest {
 
     // The ISR should not be shrunk because the follower is caught up to the leader's log end
     partition.maybeShrinkIsr()
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
     assertEquals(alterIsrManager.isrUpdates.size, 0)
   }
 
@@ -1323,7 +1323,7 @@ class PartitionTest extends AbstractPartitionTest {
           .setReplicas(replicas)
           .setIsNew(true),
         offsetCheckpoints))
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
@@ -1334,7 +1334,7 @@ class PartitionTest extends AbstractPartitionTest {
     time.sleep(30001)
 
     partition.maybeShrinkIsr()
-    assertEquals(Set(brokerId, remoteBrokerId), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, remoteBrokerId), partition.isrState.isr)
     assertEquals(alterIsrManager.isrUpdates.size, 1) // This AlterIsr will fail, but we don't know that yet
     assertEquals(0L, partition.localLogOrException.highWatermark)
   }
@@ -1366,13 +1366,13 @@ class PartitionTest extends AbstractPartitionTest {
           .setReplicas(replicas)
           .setIsNew(true),
         offsetCheckpoints))
-    assertEquals(Set(brokerId, follower1, follower2), partition.inSyncReplicaIds)
+    assertEquals(Set(brokerId, follower1, follower2), partition.isrState.isr)
     assertEquals(0L, partition.localLogOrException.highWatermark)
 
     // Expand ISR
     partition.expandIsr(follower3)
-    assertEquals(Set(brokerId, follower1, follower2), partition.inSyncReplicaIds)
-    assertEquals(Set(brokerId, follower1, follower2, follower3), partition.effectiveIsr)
+    assertEquals(Set(brokerId, follower1, follower2), partition.isrState.isr)
+    assertEquals(Set(brokerId, follower1, follower2, follower3), partition.isrState.maximalIsr)
 
     // One AlterIsr request in-flight
     assertEquals(alterIsrManager.isrUpdates.size, 1)
@@ -1468,7 +1468,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue("The assignmentState is not OngoingReassignmentState",
       partition.assignmentState.isInstanceOf[OngoingReassignmentState])
     assertEquals(replicas, partition.assignmentState.replicas)
-    assertEquals(isr, partition.inSyncReplicaIds)
+    assertEquals(isr, partition.isrState.isr)
     assertEquals(adding, partition.assignmentState.asInstanceOf[OngoingReassignmentState].addingReplicas)
     assertEquals(removing, partition.assignmentState.asInstanceOf[OngoingReassignmentState].removingReplicas)
     assertEquals(Seq(1, 2, 3), partition.remoteReplicas.map(_.brokerId))
@@ -1481,7 +1481,7 @@ class PartitionTest extends AbstractPartitionTest {
     assertTrue("The assignmentState is not SimpleAssignmentState",
       partition.assignmentState.isInstanceOf[SimpleAssignmentState])
     assertEquals(replicas2, partition.assignmentState.replicas)
-    assertEquals(isr2, partition.inSyncReplicaIds)
+    assertEquals(isr2, partition.isrState.isr)
     assertEquals(Seq(3, 4, 5), partition.remoteReplicas.map(_.brokerId))
   }
 

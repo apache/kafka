@@ -1775,7 +1775,7 @@ class KafkaController(val config: KafkaConfig,
       topicReq.partitions.forEach { partitionReq =>
         val tp = new TopicPartition(topicReq.name, partitionReq.partitionIndex)
         val newIsr = partitionReq.newIsr().asScala.toList.map(_.toInt)
-        isrsToAlter.put(tp, new LeaderAndIsr(partitionReq.leaderId, partitionReq.leaderEpoch, newIsr, partitionReq.currentIsrVersion))
+        isrsToAlter.put(tp, new LeaderAndIsr(alterIsrRequest.brokerId, partitionReq.leaderEpoch, newIsr, partitionReq.currentIsrVersion))
       }
     }
 
@@ -1800,7 +1800,7 @@ class KafkaController(val config: KafkaConfig,
                 case Right(leaderAndIsr) => topicResp.partitions.add(
                   new AlterIsrResponseData.PartitionData()
                     .setPartitionIndex(partitionEntry._1.partition)
-                    .setLeader(leaderAndIsr.leader)
+                    .setLeaderId(leaderAndIsr.leader)
                     .setLeaderEpoch(leaderAndIsr.leaderEpoch)
                     .setIsr(leaderAndIsr.isr.map(Integer.valueOf).asJava)
                     .setCurrentIsrVersion(leaderAndIsr.zkVersion))

@@ -102,7 +102,7 @@ object ApiVersion {
     // Introduced feature versioning support (KIP-584)
     KAFKA_2_7_IV0,
     // Introduced AlterIsr (KIP-497)
-    KAFKA_2_7_IV1
+    KAFKA_2_7_IV2
   )
 
   // Map keys are the union of the short and full versions
@@ -363,7 +363,7 @@ case object KAFKA_2_7_IV0 extends DefaultApiVersion {
   val id: Int = 28
 }
 
-case object KAFKA_2_7_IV1 extends DefaultApiVersion {
+case object KAFKA_2_7_IV2 extends DefaultApiVersion {
   val shortVersion: String = "2.7"
   val subVersion = "IV1"
   val recordVersion = RecordVersion.V2

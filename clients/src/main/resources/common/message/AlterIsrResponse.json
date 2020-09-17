@@ -32,7 +32,7 @@
           "about": "The partition index" },
         { "name": "ErrorCode", "type": "int16", "versions": "0+",
           "about": "The partition level error code" },
-        { "name": "Leader", "type": "int32", "versions": "0+", "entityType": "brokerId",
+        { "name": "LeaderId", "type": "int32", "versions": "0+", "entityType": "brokerId",
           "about": "The broker ID of the leader." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
           "about": "The leader epoch." },
