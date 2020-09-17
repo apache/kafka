@@ -282,7 +282,6 @@ public class StateDirectory {
         try {
             cleanRemovedTasksCalledByUser();
         } catch (final Exception e) {
-            // this is already logged within cleanRemovedTasks
             throw new StreamsException(e);
         }
         // remove global dir
@@ -327,16 +326,16 @@ public class StateDirectory {
                             Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
                         }
                     }
-                } catch (final OverlappingFileLockException | IOException e) {
+                } catch (final OverlappingFileLockException | IOException exception) {
                     log.warn("{} Swallowed the following exception during deletion of obsolete state directory {} for task {}: {}",
-                        logPrefix(), dirName, id, e);
+                        logPrefix(), dirName, id, exception);
                 } finally {
                     try {
                         unlock(id);
-                    } catch (final IOException e) {
+                    } catch (final IOException exception) {
                         log.warn("{} Swallowed the following exception during unlocking after " +
                                 "deletion of obsolete state directory for task {}: {}",
-                            logPrefix(), dirName, e);
+                            logPrefix(), dirName, exception);
                     }
                 }
             }
