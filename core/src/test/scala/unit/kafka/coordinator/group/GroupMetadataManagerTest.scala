@@ -963,7 +963,7 @@ class GroupMetadataManagerTest {
       // GROUP_METADATA_VALUE_SCHEMA_V2 or higher should correctly set the currentStateTimestamp
       if (apiVersion >= KAFKA_2_1_IV0)
         assertEquals(s"the apiVersion $apiVersion doesn't set the currentStateTimestamp correctly.",
-          time.milliseconds(), deserializedGroupMetadata.currentStateTimestamp.getOrElse(-1))
+          Some(time.milliseconds()), deserializedGroupMetadata.currentStateTimestamp)
       else
         assertTrue(s"the apiVersion $apiVersion should not set the currentStateTimestamp.",
           deserializedGroupMetadata.currentStateTimestamp.isEmpty)
