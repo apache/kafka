@@ -21,7 +21,7 @@ import java.util
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
 
-import org.apache.kafka.clients.MockClient
+import org.apache.kafka.clients.{ApiVersion, MockClient, NodeApiVersions}
 import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, VoteResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.raft.{RaftRequest, RaftResponse, RaftUtil}
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 
 import scala.jdk.CollectionConverters._
 
@@ -45,6 +45,12 @@ class KafkaNetworkChannelTest {
   private val client = new MockClient(time, new StubMetadataUpdater)
   private val topicPartition = new TopicPartition("topic", 0)
   private val channel = new KafkaNetworkChannel(time, client, clientId, retryBackoffMs, requestTimeoutMs)
+
+  @Before
+  def setupSupportedApis(): Unit = {
+    val supportedApis = RaftApis.map(api => new ApiVersion(api))
+    client.setNodeApiVersions(NodeApiVersions.create(supportedApis.asJava))
+  }
 
   @Test
   def testSendToUnknownDestination(): Unit = {
