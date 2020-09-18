@@ -1160,7 +1160,8 @@ project(':tools') {
     compile libs.jettyServlets
 
     testCompile project(':clients')
-    testCompile libs.junitJupiter
+    testCompile libs.junitJupiterApi
+    testCompile libs.junitVintageEngine
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.mockitoInline // supports mocking static methods, final classes, etc.
 
