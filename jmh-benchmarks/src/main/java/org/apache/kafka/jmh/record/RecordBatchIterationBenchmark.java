@@ -38,7 +38,7 @@ import java.io.IOException;
 @Fork(value = 1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 15)
-public class RecordBatchIterationBenchmark extends RecordBatchBenchmarkSuite {
+public class RecordBatchIterationBenchmark extends BaseRecordBatchBenchmark {
 
     @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
     private CompressionType compressionType = CompressionType.NONE;

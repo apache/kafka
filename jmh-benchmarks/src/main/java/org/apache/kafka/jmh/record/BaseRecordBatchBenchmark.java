@@ -39,7 +39,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.common.record.RecordBatch.CURRENT_MAGIC_VALUE;
 
 @State(Scope.Benchmark)
-public abstract class RecordBatchBenchmarkSuite {
+public abstract class BaseRecordBatchBenchmark {
     private static final int MAX_HEADER_SIZE = 5;
     private static final int HEADER_KEY_SIZE = 30;
 

@@ -35,7 +35,7 @@ import org.openjdk.jmh.infra.Blackhole;
 @Fork(value = 1)
 @Warmup(iterations = 5)
 @Measurement(iterations = 15)
-public class UncompressedRecordBatchValidationBenchmark extends RecordBatchBenchmarkSuite {
+public class UncompressedRecordBatchValidationBenchmark extends BaseRecordBatchBenchmark {
 
     @Override
     CompressionType compressionType() {
