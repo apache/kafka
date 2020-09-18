@@ -73,7 +73,7 @@ public class StreamsAssignmentScaleTest {
 
     @Test(timeout = 120 * 1000)
     public void testHighAvailabilityTaskAssignorLargePartitionCount() {
-        completeLargeAssignment(6_000, 1, 1, 1, HighAvailabilityTaskAssignor.class);
+        completeLargeAssignment(6_000, 2, 1, 1, HighAvailabilityTaskAssignor.class);
     }
 
     @Test(timeout = 120 * 1000)
@@ -95,7 +95,7 @@ public class StreamsAssignmentScaleTest {
 
     @Test(timeout = 120 * 1000)
     public void testStickyTaskAssignorLargePartitionCount() {
-        completeLargeAssignment(2_000, 1, 1, 1, StickyTaskAssignor.class);
+        completeLargeAssignment(2_000, 2, 1, 1, StickyTaskAssignor.class);
     }
 
     @Test(timeout = 120 * 1000)
@@ -117,7 +117,7 @@ public class StreamsAssignmentScaleTest {
 
     @Test(timeout = 120 * 1000)
     public void testFallbackPriorTaskAssignorLargePartitionCount() {
-        completeLargeAssignment(2_000, 1, 1, 1, FallbackPriorTaskAssignor.class);
+        completeLargeAssignment(2_000, 2, 1, 1, FallbackPriorTaskAssignor.class);
     }
 
     @Test(timeout = 120 * 1000)
@@ -202,10 +202,9 @@ public class StreamsAssignmentScaleTest {
         final Map<String, Subscription> subscriptions = new HashMap<>();
         for (int client = 0; client < numClients; ++client) {
             for (int i = 0; i < numThreadsPerClient; ++i) {
-                subscriptions.put(getConsumerName(i, client),
-                                  new Subscription(
-                                      topic,
-                                      getInfo(uuidForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode())
+                subscriptions.put(
+                    getConsumerName(i, client),
+                    new Subscription(topic, getInfo(uuidForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode())
                 );
             }
         }
@@ -228,11 +227,12 @@ public class StreamsAssignmentScaleTest {
                 final Assignment assignment = firstAssignments.get(consumer);
                 final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
 
-                subscriptions.put(consumer,
-                                  new Subscription(
-                                      topic,
-                                      getInfo(uuidForInt(i), new HashSet<>(info.activeTasks()), info.standbyTasks().keySet()).encode(),
-                                      assignment.partitions())
+                subscriptions.put(
+                    consumer,
+                    new Subscription(
+                        topic,
+                        getInfo(uuidForInt(client), new HashSet<>(info.activeTasks()), info.standbyTasks().keySet()).encode(),
+                        assignment.partitions())
                 );
             }
         }
