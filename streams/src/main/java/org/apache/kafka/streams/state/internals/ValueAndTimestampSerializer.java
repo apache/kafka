@@ -45,9 +45,7 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
 
     private static long extractTimestamp(final byte[] bytes) {
         final byte[] timestampBytes = new byte[Long.BYTES];
-        for (int i = 0; i < Long.BYTES; i++) {
-            timestampBytes[i] = bytes[i];
-        }
+        System.arraycopy(bytes, 0, timestampBytes, 0, Long.BYTES);
         return ByteBuffer.wrap(timestampBytes).getLong();
     }
 

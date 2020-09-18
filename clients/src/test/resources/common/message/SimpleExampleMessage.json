@@ -45,10 +45,18 @@
             { "name": "arrayFieldId", "type": "int32", "versions": "2+"}
           ]}
     ]},
-    { "name": "myTaggedStruct", "type": "MyTaggedStruct", "versions": "2+", "about": "Test Tagged Struct field",
+    { "name": "myTaggedStruct", "type": "TaggedStruct", "versions": "2+", "about": "Test Tagged Struct field",
       "taggedVersions": "2+", "tag": 8,
       "fields": [
         { "name": "structId", "type": "string", "versions": "2+", "about": "String field in struct"}
+    ]},
+    { "name":  "myCommonStruct", "type": "TestCommonStruct", "versions": "0+"},
+    { "name":  "myOtherCommonStruct", "type": "TestCommonStruct", "versions": "0+"}
+  ],
+  "commonStructs": [
+    { "name": "TestCommonStruct", "versions": "0+", "fields": [
+      { "name": "foo", "type": "int32", "default": "123", "versions": "0+" },
+      { "name": "bar", "type": "int32", "default": "123", "versions": "0+" }
     ]}
   ]
 }

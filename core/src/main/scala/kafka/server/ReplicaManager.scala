@@ -40,7 +40,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
-import org.apache.kafka.common.message.{DescribeLogDirsResponseData, LeaderAndIsrResponseData}
+import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
@@ -82,6 +82,8 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
 /**
  * Result metadata of a log read operation on the log
  * @param info @FetchDataInfo returned by the @Log read
+ * @param divergingEpoch Optional epoch and end offset which indicates the largest epoch such
+ *                       that subsequent records are known to diverge on the follower/consumer
  * @param highWatermark high watermark of the local replica
  * @param leaderLogStartOffset The log start offset of the leader at the time of the read
  * @param leaderLogEndOffset The log end offset of the leader at the time of the read
@@ -92,6 +94,7 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
  * @param exception Exception if error encountered while reading from the log
  */
 case class LogReadResult(info: FetchDataInfo,
+                         divergingEpoch: Option[FetchResponseData.EpochEndOffset],
                          highWatermark: Long,
                          leaderLogStartOffset: Long,
                          leaderLogEndOffset: Long,
@@ -112,6 +115,7 @@ case class LogReadResult(info: FetchDataInfo,
   override def toString = {
     "LogReadResult(" +
       s"info=$info, " +
+      s"divergingEpoch=$divergingEpoch, " +
       s"highWatermark=$highWatermark, " +
       s"leaderLogStartOffset=$leaderLogStartOffset, " +
       s"leaderLogEndOffset=$leaderLogEndOffset, " +
@@ -129,6 +133,7 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               highWatermark: Long,
                               logStartOffset: Long,
                               records: Records,
+                              divergingEpoch: Option[FetchResponseData.EpochEndOffset],
                               lastStableOffset: Option[Long],
                               abortedTransactions: Option[List[AbortedTransaction]],
                               preferredReadReplica: Option[Int],
@@ -559,9 +564,20 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
+   * TODO: move this action queue to handle thread so we can simplify concurrency handling
+   */
+  private val actionQueue = new ActionQueue
+
+  def tryCompleteActions(): Unit = actionQueue.tryCompleteActions()
+
+  /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied;
    * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
+   *
+   * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecords()
+   * are expected to call ActionQueue.tryCompleteActions for all affected partitions, without holding any conflicting
+   * locks.
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -583,6 +599,26 @@ class ReplicaManager(val config: KafkaConfig,
                   result.info.lastOffset + 1, // required offset
                   new PartitionResponse(result.error, result.info.firstOffset.getOrElse(-1), result.info.logAppendTime,
                     result.info.logStartOffset, result.info.recordErrors.asJava, result.info.errorMessage)) // response status
+      }
+
+      actionQueue.add {
+        () =>
+          localProduceResults.foreach {
+            case (topicPartition, result) =>
+              val requestKey = TopicPartitionOperationKey(topicPartition)
+              result.info.leaderHwChange match {
+                case LeaderHwChange.Increased =>
+                  // some delayed operations may be unblocked after HW changed
+                  delayedProducePurgatory.checkAndComplete(requestKey)
+                  delayedFetchPurgatory.checkAndComplete(requestKey)
+                  delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+                case LeaderHwChange.Same =>
+                  // probably unblock some follower fetch requests since log end offset has been updated
+                  delayedFetchPurgatory.checkAndComplete(requestKey)
+                case LeaderHwChange.None =>
+                  // nothing
+              }
+          }
       }
 
       recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
@@ -1003,8 +1039,17 @@ class ReplicaManager(val config: KafkaConfig,
     //                        4) some error happens while reading data
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
-        tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica, isFromFollower && isAddingReplica(tp, replicaId))
+        val isReassignmentFetch = isFromFollower && isAddingReplica(tp, replicaId)
+        tp -> FetchPartitionData(
+          result.error,
+          result.highWatermark,
+          result.leaderLogStartOffset,
+          result.info.records,
+          result.divergingEpoch,
+          result.lastStableOffset,
+          result.info.abortedTransactions,
+          result.preferredReadReplica,
+          isReassignmentFetch)
       }
       responseCallback(fetchPartitionData)
     } else {
@@ -1071,6 +1116,7 @@ class ReplicaManager(val config: KafkaConfig,
           // If a preferred read-replica is set, skip the read
           val offsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, fetchOnlyFromLeader = false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+            divergingEpoch = None,
             highWatermark = offsetSnapshot.highWatermark.messageOffset,
             leaderLogStartOffset = offsetSnapshot.logStartOffset,
             leaderLogEndOffset = offsetSnapshot.logEndOffset.messageOffset,
@@ -1082,6 +1128,7 @@ class ReplicaManager(val config: KafkaConfig,
         } else {
           // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
           val readInfo: LogReadInfo = partition.readRecords(
+            lastFetchedEpoch = fetchInfo.lastFetchedEpoch,
             fetchOffset = fetchInfo.fetchOffset,
             currentLeaderEpoch = fetchInfo.currentLeaderEpoch,
             maxBytes = adjustedMaxBytes,
@@ -1101,6 +1148,7 @@ class ReplicaManager(val config: KafkaConfig,
           }
 
           LogReadResult(info = fetchDataInfo,
+            divergingEpoch = readInfo.divergingEpoch,
             highWatermark = readInfo.highWatermark,
             leaderLogStartOffset = readInfo.logStartOffset,
             leaderLogEndOffset = readInfo.logEndOffset,
@@ -1121,6 +1169,7 @@ class ReplicaManager(val config: KafkaConfig,
                  _: KafkaStorageException |
                  _: OffsetOutOfRangeException) =>
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+            divergingEpoch = None,
             highWatermark = Log.UnknownOffset,
             leaderLogStartOffset = Log.UnknownOffset,
             leaderLogEndOffset = Log.UnknownOffset,
@@ -1137,6 +1186,7 @@ class ReplicaManager(val config: KafkaConfig,
             s"on partition $tp: $fetchInfo", e)
 
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+            divergingEpoch = None,
             highWatermark = Log.UnknownOffset,
             leaderLogStartOffset = Log.UnknownOffset,
             leaderLogEndOffset = Log.UnknownOffset,
@@ -1698,8 +1748,12 @@ class ReplicaManager(val config: KafkaConfig,
     Partition.removeMetrics(tp)
   }
 
-  // logDir should be an absolute path
-  // sendZkNotification is needed for unit test
+  /**
+   * The log directory failure handler for the replica
+   *
+   * @param dir                     the absolute path of the log directory
+   * @param sendZkNotification      check if we need to send notification to zookeeper node (needed for unit test)
+   */
   def handleLogDirFailure(dir: String, sendZkNotification: Boolean = true): Unit = {
     if (!logManager.isLogDirOnline(dir))
       return
