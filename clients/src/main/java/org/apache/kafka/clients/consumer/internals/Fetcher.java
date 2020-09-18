@@ -128,6 +128,7 @@ import static java.util.Collections.emptyList;
  * </ul>
  */
 public class Fetcher<K, V> implements Closeable {
+    private static final long NEAREST_TIMESTAMP = -3L;
     private final Logger log;
     private final LogContext logContext;
     private final ConsumerNetworkClient client;
@@ -159,6 +160,7 @@ public class Fetcher<K, V> implements Closeable {
 
 
     private CompletedFetch nextInLineFetch = null;
+    private final boolean useNearestOffsetReset;
 
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
@@ -179,6 +181,7 @@ public class Fetcher<K, V> implements Closeable {
                    long retryBackoffMs,
                    long requestTimeoutMs,
                    IsolationLevel isolationLevel,
+                   boolean useNearestOffsetReset,
                    ApiVersions apiVersions) {
         this.log = logContext.logger(Fetcher.class);
         this.logContext = logContext;
@@ -204,6 +207,7 @@ public class Fetcher<K, V> implements Closeable {
         this.sessionHandlers = new HashMap<>();
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
         this.nodesWithPendingFetchRequests = new HashSet<>();
+        this.useNearestOffsetReset = useNearestOffsetReset;
     }
 
     /**
@@ -440,6 +444,8 @@ public class Fetcher<K, V> implements Closeable {
             return ListOffsetRequest.EARLIEST_TIMESTAMP;
         else if (strategy == OffsetResetStrategy.LATEST)
             return ListOffsetRequest.LATEST_TIMESTAMP;
+        else if (strategy == OffsetResetStrategy.NEAREST)
+            return NEAREST_TIMESTAMP;
         else
             return null;
     }
@@ -729,6 +735,20 @@ public class Fetcher<K, V> implements Closeable {
         subscriptions.maybeSeekUnvalidated(partition, position, requestedResetStrategy);
     }
 
+    private Map<TopicPartition, ListOffsetRequest.PartitionData> formatToValidResetTimestamp(Map<TopicPartition, ListOffsetRequest.PartitionData> original) {
+        Map<TopicPartition, ListOffsetRequest.PartitionData> newFormat = new HashMap<>();
+        original.forEach((tp, pd) -> {
+            // since NEAREST_TIMESTAMP is not implemented on the broker,
+            // we'll try get earliest timestamp first
+            if (pd.timestamp == NEAREST_TIMESTAMP) {
+                newFormat.put(tp, new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP, pd.currentLeaderEpoch));
+            } else {
+                newFormat.put(tp, pd);
+            }
+        });
+        return newFormat;
+    }
+
     private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
                 groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
@@ -737,7 +757,8 @@ public class Fetcher<K, V> implements Closeable {
             final Map<TopicPartition, ListOffsetRequest.PartitionData> resetTimestamps = entry.getValue();
             subscriptions.setNextAllowedRetry(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
 
-            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, resetTimestamps, false);
+            Map<TopicPartition, ListOffsetRequest.PartitionData> validResetTimestamps = formatToValidResetTimestamp(resetTimestamps);
+            RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, validResetTimestamps, false);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
@@ -746,11 +767,25 @@ public class Fetcher<K, V> implements Closeable {
                         metadata.requestUpdate();
                     }
 
+                    Map<TopicPartition, Long> needNewReset = new HashMap<>();
                     for (Map.Entry<TopicPartition, ListOffsetData> fetchedOffset : result.fetchedOffsets.entrySet()) {
                         TopicPartition partition = fetchedOffset.getKey();
                         ListOffsetData offsetData = fetchedOffset.getValue();
-                        ListOffsetRequest.PartitionData requestedReset = resetTimestamps.get(partition);
+                        ListOffsetRequest.PartitionData timestamp = resetTimestamps.get(partition);
+                        if (timestamp != null && timestamp.timestamp == NEAREST_TIMESTAMP) {
+                            // outOffRangeOffset is higher than earliest offset in kafka,
+                            // meaning that the outOffRangeOffset is also higher than logsize
+                            // so we will send a request again to reset to latest
+                            if (subscriptions.outOffRangeOffset(partition) > offsetData.offset) {
+                                needNewReset.put(partition, ListOffsetRequest.LATEST_TIMESTAMP);
+                                continue;
+                            }
+                        }
+                        ListOffsetRequest.PartitionData requestedReset = validResetTimestamps.get(partition);
                         resetOffsetIfNeeded(partition, timestampToOffsetResetStrategy(requestedReset.timestamp), offsetData);
+                    }
+                    if (needNewReset.size() > 0) {
+                        resetOffsetsAsync(needNewReset);
                     }
                 }
 
@@ -1351,8 +1386,13 @@ public class Fetcher<K, V> implements Closeable {
     private void handleOffsetOutOfRange(FetchPosition fetchPosition, TopicPartition topicPartition) {
         String errorMessage = "Fetch position " + fetchPosition + " is out of range for partition " + topicPartition;
         if (subscriptions.hasDefaultOffsetResetPolicy()) {
-            log.info("{}, resetting offset", errorMessage);
-            subscriptions.requestOffsetReset(topicPartition);
+            if (useNearestOffsetReset) {
+                log.info("{}, resetting offset with nearest offset", errorMessage);
+                subscriptions.requestOffsetReset(topicPartition, OffsetResetStrategy.NEAREST, fetchPosition.offset);
+            } else {
+                log.info("{}, resetting offset", errorMessage);
+                subscriptions.requestOffsetReset(topicPartition);
+            }
         } else {
             log.info("{}, raising error to the application since no reset policy is configured", errorMessage);
             throw new OffsetOutOfRangeException(errorMessage,

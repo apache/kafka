@@ -802,6 +802,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.retryBackoffMs,
                     this.requestTimeoutMs,
                     isolationLevel,
+                    config.getBoolean(ConsumerConfig.NEAREST_OFFSET_RESET),
                     apiVersions);
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, metricGrpPrefix);
