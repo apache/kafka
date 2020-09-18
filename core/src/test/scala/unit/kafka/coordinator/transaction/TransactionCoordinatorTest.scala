@@ -24,9 +24,10 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.easymock.{Capture, EasyMock}
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Before, Test}
 
 import scala.collection.mutable
+import scala.jdk.CollectionConverters._
 
 class TransactionCoordinatorTest {
 
@@ -61,6 +62,14 @@ class TransactionCoordinatorTest {
   var result: InitProducerIdResult = _
   var error: Errors = Errors.NONE
 
+  @Before
+  def setup(): Unit = {
+    EasyMock.expect(transactionMarkerChannelManager.start())
+    EasyMock.replay(transactionMarkerChannelManager)
+    coordinator.startup(enableTransactionalIdExpiration = false)
+    EasyMock.reset(transactionMarkerChannelManager)
+  }
+
   private def mockPidManager(): Unit = {
     EasyMock.expect(pidManager.generateProducerId()).andAnswer(() => {
       nextPid += 1
@@ -68,7 +77,7 @@ class TransactionCoordinatorTest {
     }).anyTimes()
   }
 
-  private def initPidGenericMocks(transactionalId: String): Unit = {
+  private def initPidGenericMocks(): Unit = {
     mockPidManager()
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)
@@ -99,7 +108,7 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldInitPidWithEpochZeroForNewTransactionalId(): Unit = {
-    initPidGenericMocks(transactionalId)
+    initPidGenericMocks()
 
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Right(None))
@@ -126,7 +135,7 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldGenerateNewProducerIdIfNoStateAndProducerIdAndEpochProvided(): Unit = {
-    initPidGenericMocks(transactionalId)
+    initPidGenericMocks()
 
     EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
       .andReturn(Right(None))
@@ -154,7 +163,7 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldGenerateNewProducerIdIfEpochsExhausted(): Unit = {
-    initPidGenericMocks(transactionalId)
+    initPidGenericMocks()
 
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, (Short.MaxValue - 1).toShort,
       (Short.MaxValue - 2).toShort, txnTimeoutMs, Empty, mutable.Set.empty, time.milliseconds(), time.milliseconds())
@@ -966,7 +975,6 @@ class TransactionCoordinatorTest {
 
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
-    coordinator.startup(false)
     time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
     scheduler.tick()
     EasyMock.verify(transactionManager)
@@ -1011,7 +1019,6 @@ class TransactionCoordinatorTest {
 
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
-    coordinator.startup(false)
     time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
     scheduler.tick()
     EasyMock.verify(transactionManager)
@@ -1049,7 +1056,6 @@ class TransactionCoordinatorTest {
 
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
-    coordinator.startup(false)
     time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
     scheduler.tick()
     EasyMock.verify(transactionManager)
@@ -1074,6 +1080,53 @@ class TransactionCoordinatorTest {
     coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, 10)),
       initProducerIdMockCallback)
     assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.CONCURRENT_TRANSACTIONS), result)
+
+    EasyMock.verify(transactionManager)
+  }
+
+  @Test
+  def testDescribeTransactionsWithEmptyTransactionalId(): Unit = {
+    val result = coordinator.handleDescribeTransactions("")
+    assertEquals("", result.transactionalId)
+    assertEquals(Errors.INVALID_REQUEST, Errors.forCode(result.errorCode))
+  }
+
+  @Test
+  def testDescribeTransactionsWhileCoordinatorLoading(): Unit = {
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS))
+
+    EasyMock.replay(transactionManager)
+
+    val result = coordinator.handleDescribeTransactions(transactionalId)
+    assertEquals(transactionalId, result.transactionalId)
+    assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.forCode(result.errorCode))
+
+    EasyMock.verify(transactionManager)
+  }
+
+  @Test
+  def testDescribeTransactions(): Unit = {
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, producerEpoch,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds())
+
+    EasyMock.expect(transactionManager.getTransactionState(EasyMock.eq(transactionalId)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    EasyMock.replay(transactionManager)
+
+    val result = coordinator.handleDescribeTransactions(transactionalId)
+    assertEquals(Errors.NONE, Errors.forCode(result.errorCode))
+    assertEquals(transactionalId, result.transactionalId)
+    assertEquals(producerId, result.producerId)
+    assertEquals(producerEpoch, result.producerEpoch)
+    assertEquals(txnTimeoutMs, result.transactionTimeoutMs)
+    assertEquals(time.milliseconds(), result.transactionStartTimeMs)
+
+    val addedPartitions = result.topicPartitions.asScala.flatMap { topicData =>
+      topicData.partitionIndexes.asScala.map(partition => new TopicPartition(topicData.name, partition))
+    }.toSet
+    assertEquals(partitions, addedPartitions)
 
     EasyMock.verify(transactionManager)
   }
