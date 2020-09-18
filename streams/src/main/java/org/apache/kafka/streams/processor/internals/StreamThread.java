@@ -608,7 +608,6 @@ public class StreamThread extends Thread {
      */
     // Visible for testing
     void runOnce() {
-        final ConsumerRecords<byte[], byte[]> records;
         final long startMs = time.milliseconds();
         now = startMs;
 
