@@ -55,7 +55,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -284,7 +283,7 @@ public class StreamThread extends Thread {
     private final InternalTopologyBuilder builder;
 
     private final AtomicInteger assignmentErrorCode;
-    private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
+    private final AtomicInteger shutdownTypeRequested = new AtomicInteger(AssignorError.NONE.code());
 
     public static StreamThread create(final InternalTopologyBuilder builder,
                                       final StreamsConfig config,
@@ -556,8 +555,8 @@ public class StreamThread extends Thread {
         // if the thread is still in the middle of a rebalance, we should keep polling
         // until the rebalance is completed before we close and commit the tasks
         while (isRunning() || taskManager.isRebalanceInProgress()) {
-            if (shutdownRequested.get()) {
-                sendShutdownRequest();
+            if (shutdownTypeRequested.get() != AssignorError.NONE.code()) {
+                sendShutdownRequest(shutdownTypeRequested);
                 break;
             }
             try {
@@ -582,14 +581,14 @@ public class StreamThread extends Thread {
     }
 
     public void initiateShutdown() {
-        shutdownRequested.set(true);
+        shutdownTypeRequested.set(AssignorError.SHUTDOWN_REQUESTED.code());
     }
 
-    private void sendShutdownRequest() {
+    private void sendShutdownRequest(final AtomicInteger shutdownType) {
         log.warn("Detected that shutdown was requested. " +
                 "The all clients in this app will now begin to shutdown");
         //set error code
-        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+        assignmentErrorCode.set(shutdownType.get());
         mainConsumer.unsubscribe();
         subscribeConsumer();
     }
