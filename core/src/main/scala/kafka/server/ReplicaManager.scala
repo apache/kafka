@@ -356,7 +356,7 @@ class ReplicaManager(val config: KafkaConfig,
       stateChangeLogger.info(s"Handling StopReplica request correlationId $correlationId from controller " +
         s"$controllerId for ${partitionStates.size} partitions")
       if (stateChangeLogger.isTraceEnabled)
-        partitionStates.foreachKv { (topicPartition, partitionState) =>
+        partitionStates.forKeyValue { (topicPartition, partitionState) =>
           stateChangeLogger.trace(s"Received StopReplica request $partitionState " +
             s"correlation id $correlationId from controller $controllerId " +
             s"epoch $controllerEpoch for partition $topicPartition")
@@ -373,7 +373,7 @@ class ReplicaManager(val config: KafkaConfig,
         this.controllerEpoch = controllerEpoch
 
         val stoppedPartitions = mutable.Map.empty[TopicPartition, StopReplicaPartitionState]
-        partitionStates.foreachKv { (topicPartition, partitionState) =>
+        partitionStates.forKeyValue { (topicPartition, partitionState) =>
           val deletePartition = partitionState.deletePartition
 
           getPartition(topicPartition) match {
@@ -428,7 +428,7 @@ class ReplicaManager(val config: KafkaConfig,
         // Second remove deleted partitions from the partition map. Fetchers rely on the
         // ReplicaManager to get Partition's information so they must be stopped first.
         val deletedPartitions = mutable.Set.empty[TopicPartition]
-        stoppedPartitions.foreachKv { (topicPartition, partitionState) =>
+        stoppedPartitions.forKeyValue { (topicPartition, partitionState) =>
           if (partitionState.deletePartition) {
             getPartition(topicPartition) match {
               case hostedPartition@HostedPartition.Online(partition) =>
@@ -1501,7 +1501,7 @@ class ReplicaManager(val config: KafkaConfig,
         s"controller $controllerId epoch $controllerEpoch as part of the become-leader transition for " +
         s"${partitionStates.size} partitions")
       // Update the partition information to be the leader
-      partitionStates.foreachKv { (partition, partitionState) =>
+      partitionStates.forKeyValue { (partition, partitionState) =>
         try {
           if (partition.makeLeader(partitionState, highWatermarkCheckpoints))
             partitionsToMakeLeaders += partition
@@ -1566,7 +1566,7 @@ class ReplicaManager(val config: KafkaConfig,
                             responseMap: mutable.Map[TopicPartition, Errors],
                             highWatermarkCheckpoints: OffsetCheckpoints) : Set[Partition] = {
     val traceLoggingEnabled = stateChangeLogger.isTraceEnabled
-    partitionStates.foreachKv { (partition, partitionState) =>
+    partitionStates.forKeyValue { (partition, partitionState) =>
       if (traceLoggingEnabled)
         stateChangeLogger.trace(s"Handling LeaderAndIsr request correlationId $correlationId from controller $controllerId " +
           s"epoch $controllerEpoch starting the become-follower transition for partition ${partition.topicPartition} with leader " +
@@ -1577,7 +1577,7 @@ class ReplicaManager(val config: KafkaConfig,
     val partitionsToMakeFollower: mutable.Set[Partition] = mutable.Set()
     try {
       // TODO: Delete leaders from LeaderAndIsrRequest
-      partitionStates.foreachKv { (partition, partitionState) =>
+      partitionStates.forKeyValue { (partition, partitionState) =>
         val newLeaderBrokerId = partitionState.leader
         try {
           metadataCache.getAliveBrokers.find(_.id == newLeaderBrokerId) match {

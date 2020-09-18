@@ -174,7 +174,7 @@ class TransactionStateManager(brokerId: Int,
           }
 
         def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
-          responses.foreachKv { (topicPartition, response) =>
+          responses.forKeyValue { (topicPartition, response) =>
             inReadLock(stateLock) {
               val toRemove = transactionalIdByPartition(topicPartition.partition)
               transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>

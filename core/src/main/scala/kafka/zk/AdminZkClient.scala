@@ -294,7 +294,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                                         expectedReplicationFactor: Int,
                                         availableBrokerIds: Set[Int]): Unit = {
 
-    replicaAssignment.foreachKv { (partitionId, replicas) =>
+    replicaAssignment.forKeyValue { (partitionId, replicas) =>
       if (replicas.isEmpty)
         throw new InvalidReplicaAssignmentException(
           s"Cannot have replication factor of 0 for partition id $partitionId.")

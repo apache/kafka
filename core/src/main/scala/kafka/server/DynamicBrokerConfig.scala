@@ -169,7 +169,7 @@ object DynamicBrokerConfig {
   }
 
   private[server] def addDynamicConfigs(configDef: ConfigDef): Unit = {
-    KafkaConfig.configKeys.foreachKv { (configName, config) =>
+    KafkaConfig.configKeys.forKeyValue { (configName, config) =>
       if (AllDynamicConfigs.contains(configName)) {
         configDef.define(config.name, config.`type`, config.defaultValue, config.validator,
           config.importance, config.documentation, config.group, config.orderInGroup, config.width,
@@ -355,7 +355,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         props.setProperty(configName, passwordEncoder.encode(new Password(value)))
       }
     }
-    configProps.asScala.foreachKv { (name, value) =>
+    configProps.asScala.forKeyValue { (name, value) =>
       if (isPasswordConfig(name))
         encodePassword(name, value)
     }
@@ -392,7 +392,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       }
     }
 
-    props.asScala.foreachKv { (name, value) =>
+    props.asScala.forKeyValue { (name, value) =>
       if (isPasswordConfig(name))
         decodePassword(name, value)
     }
@@ -407,7 +407,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     val props = persistentProps.clone().asInstanceOf[Properties]
     if (props.asScala.keySet.exists(isPasswordConfig)) {
       maybeCreatePasswordEncoder(kafkaConfig.passwordEncoderOldSecret).foreach { passwordDecoder =>
-        persistentProps.asScala.foreachKv { (configName, value) =>
+        persistentProps.asScala.forKeyValue { (configName, value) =>
           if (isPasswordConfig(configName) && value != null) {
             val decoded = try {
               Some(passwordDecoder.decode(value).value)
@@ -501,7 +501,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     * `props` (even though `log.roll.hours` is secondary to `log.roll.ms`).
     */
   private def overrideProps(props: mutable.Map[String, String], propsOverride: mutable.Map[String, String]): Unit = {
-    propsOverride.foreachKv { (k, v) =>
+    propsOverride.forKeyValue { (k, v) =>
       // Remove synonyms of `k` to ensure the right precedence is applied. But disable `matchListenerOverride`
       // so that base configs corresponding to listener configs are not removed. Base configs should not be removed
       // since they may be used by other listeners. It is ok to retain them in `props` since base configs cannot be
@@ -790,7 +790,7 @@ class DynamicMetricsReporters(brokerId: Int, server: KafkaServer) extends Reconf
                               updatedConfigs: util.Map[String, _]): Unit = {
     val props = new util.HashMap[String, AnyRef]
     updatedConfigs.forEach { (k, v) => props.put(k, v.asInstanceOf[AnyRef]) }
-    propsOverride.foreachKv { (k, v) => props.put(k, v) }
+    propsOverride.forKeyValue { (k, v) => props.put(k, v) }
     val reporters = dynamicConfig.currentKafkaConfig.getConfiguredInstances(reporterClasses, classOf[MetricsReporter], props)
     reporters.forEach { reporter =>
       metrics.addReporter(reporter)

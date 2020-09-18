@@ -1150,7 +1150,7 @@ class AdminManager(val config: KafkaConfig,
         }
       ).toMap
 
-    illegalRequestsByUser.foreachKv { (user, errorMessage) =>
+    illegalRequestsByUser.forKeyValue { (user, errorMessage) =>
       retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
         .setErrorCode(if (errorMessage == unknownScramMechanismMsg) {Errors.UNSUPPORTED_SASL_MECHANISM.code} else {Errors.UNACCEPTABLE_CREDENTIAL.code})
         .setErrorMessage(errorMessage)) }
@@ -1215,7 +1215,7 @@ class AdminManager(val config: KafkaConfig,
     }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
 
     // report failures
-    usersFailedToPrepareProperties.++(usersFailedToPersist).foreachKv { (user, exception) =>
+    usersFailedToPrepareProperties.++(usersFailedToPersist).forKeyValue { (user, exception) =>
       val error = Errors.forException(exception)
       retval.results.add(new AlterUserScramCredentialsResult()
         .setUser(user)

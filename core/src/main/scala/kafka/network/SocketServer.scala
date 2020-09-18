@@ -405,7 +405,7 @@ class SocketServer(val config: KafkaConfig,
   private def waitForAuthorizerFuture(acceptor: Acceptor,
                                       authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
     //we can't rely on authorizerFutures.get() due to ephemeral ports. Get the future using listener name
-    authorizerFutures.foreachKv { (endpoint, future) =>
+    authorizerFutures.forKeyValue { (endpoint, future) =>
       if (endpoint.listenerName == Optional.of(acceptor.endPoint.listenerName.value))
         future.join()
     }

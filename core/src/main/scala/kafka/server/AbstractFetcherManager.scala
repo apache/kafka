@@ -63,7 +63,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
-      fetcherThreadMap.foreachKv { (id, thread) =>
+      fetcherThreadMap.forKeyValue { (id, thread) =>
         val removedPartitions = thread.partitionsAndOffsets
         removeFetcherForPartitions(removedPartitions.keySet)
         if (id.fetcherId >= newSize)

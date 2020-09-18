@@ -49,7 +49,7 @@ class DelayedDeleteRecords(delayMs: Long,
   extends DelayedOperation(delayMs) {
 
   // first update the acks pending variable according to the error code
-  deleteRecordsStatus.foreachKv { (topicPartition, status) =>
+  deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
     if (status.responseStatus.errorCode == Errors.NONE.code) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
@@ -70,7 +70,7 @@ class DelayedDeleteRecords(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    deleteRecordsStatus.foreachKv { (topicPartition, status) =>
+    deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
       trace(s"Checking delete records satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
@@ -106,7 +106,7 @@ class DelayedDeleteRecords(delayMs: Long,
   }
 
   override def onExpiration(): Unit = {
-    deleteRecordsStatus.foreachKv { (topicPartition, status) =>
+    deleteRecordsStatus.forKeyValue { (topicPartition, status) =>
       if (status.acksPending) {
         DelayedDeleteRecordsMetrics.recordExpiration(topicPartition)
       }

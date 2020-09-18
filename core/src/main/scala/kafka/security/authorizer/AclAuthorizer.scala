@@ -145,7 +145,7 @@ class AclAuthorizer extends Authorizer with Logging {
   override def configure(javaConfigs: util.Map[String, _]): Unit = {
     val configs = javaConfigs.asScala
     val props = new java.util.Properties()
-    configs.foreachKv { (key, value) => props.put(key, value.toString) }
+    configs.forKeyValue { (key, value) => props.put(key, value.toString) }
 
     superUsers = configs.get(AclAuthorizer.SuperUsersProp).collect {
       case str: String if str.nonEmpty => str.split(";").map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toSet
@@ -206,7 +206,7 @@ class AclAuthorizer extends Authorizer with Logging {
 
     if (aclsToCreate.nonEmpty) {
       lock synchronized {
-        aclsToCreate.foreachKv { (resource, aclsWithIndex) =>
+        aclsToCreate.forKeyValue { (resource, aclsWithIndex) =>
           try {
             updateResourceAcls(resource) { currentAcls =>
               val newAcls = aclsWithIndex.map { case (acl, _) => new AclEntry(acl.entry) }
@@ -254,7 +254,7 @@ class AclAuthorizer extends Authorizer with Logging {
         resource -> matchingFilters
       }.toMap.filter(_._2.nonEmpty)
 
-      resourcesToUpdate.foreachKv { (resource, matchingFilters) =>
+      resourcesToUpdate.forKeyValue { (resource, matchingFilters) =>
         val resourceBindingsBeingDeleted = new mutable.HashMap[AclBinding, Int]()
         try {
           updateResourceAcls(resource) { currentAcls =>
@@ -387,7 +387,7 @@ class AclAuthorizer extends Authorizer with Logging {
     aclCacheSnapshot
       .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
       .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
-      .foreachKv { (resource, acls) =>
+      .forKeyValue { (resource, acls) =>
         if (resourceName.startsWith(resource.name)) prefixed ++= acls.acls
       }
 

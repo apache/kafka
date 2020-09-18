@@ -465,7 +465,7 @@ class ControllerContext {
   }
 
   private def cleanPreferredReplicaImbalanceMetric(topic: String): Unit = {
-    partitionAssignments.getOrElse(topic, mutable.Map.empty).foreachKv { (partition, replicaAssignment) =>
+    partitionAssignments.getOrElse(topic, mutable.Map.empty).forKeyValue { (partition, replicaAssignment) =>
       partitionLeadershipInfo.get(new TopicPartition(topic, partition)).foreach { leadershipInfo =>
         if (!hasPreferredLeader(replicaAssignment, leadershipInfo))
           preferredReplicaImbalanceCount -= 1

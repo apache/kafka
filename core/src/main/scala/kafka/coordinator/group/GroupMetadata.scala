@@ -617,7 +617,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId,
       mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
 
-    offsets.foreachKv { (topicPartition, offsetAndMetadata) =>
+    offsets.forKeyValue { (topicPartition, offsetAndMetadata) =>
       producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
     }
   }
@@ -661,7 +661,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
     if (isCommit) {
       pendingOffsetsOpt.foreach { pendingOffsets =>
-        pendingOffsets.foreachKv { (topicPartition, commitRecordMetadataAndOffset) =>
+        pendingOffsets.forKeyValue { (topicPartition, commitRecordMetadataAndOffset) =>
           if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
             throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
               s"and groupId $groupId even though the offset commit record itself hasn't been appended to the log.")
@@ -699,7 +699,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
       pendingOffsetCommits.remove(topicPartition)
-      pendingTransactionalOffsetCommits.foreachKv { (_, pendingOffsets) =>
+      pendingTransactionalOffsetCommits.forKeyValue { (_, pendingOffsets) =>
         pendingOffsets.remove(topicPartition)
       }
       val removedOffset = offsets.remove(topicPartition)

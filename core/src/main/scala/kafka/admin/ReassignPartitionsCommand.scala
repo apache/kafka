@@ -799,7 +799,7 @@ object ReassignPartitionsCommand extends Logging {
                           : Map[TopicPartition, Seq[Int]] = {
     val groupedByTopic = currentAssignment.groupBy { case (tp, _) => tp.topic }
     val proposedAssignments = mutable.Map[TopicPartition, Seq[Int]]()
-    groupedByTopic.foreachKv { (topic, assignment) =>
+    groupedByTopic.forKeyValue { (topic, assignment) =>
       val (_, replicas) = assignment.head
       val assignedReplicas = AdminUtils.
         assignReplicasToBrokers(brokerMetadatas, assignment.size, replicas.size)

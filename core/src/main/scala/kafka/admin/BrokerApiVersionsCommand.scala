@@ -60,7 +60,7 @@ object BrokerApiVersionsCommand {
     val adminClient = createAdminClient(opts)
     adminClient.awaitBrokers()
     val brokerMap = adminClient.listAllBrokerVersionInfo()
-    brokerMap.foreachKv { (broker, versionInfoOrError) =>
+    brokerMap.forKeyValue { (broker, versionInfoOrError) =>
       versionInfoOrError match {
         case Success(v) => out.print(s"${broker} -> ${v.toString(true)}\n")
         case Failure(v) => out.print(s"${broker} -> ERROR: ${v}\n")

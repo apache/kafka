@@ -116,7 +116,7 @@ class TxnMarkerQueue(@volatile var destination: Node) {
   }
 
   def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[TxnIdAndMarkerEntry]) => B): Unit =
-    markersPerTxnTopicPartition.foreachKv { (partition, queue) =>
+    markersPerTxnTopicPartition.forKeyValue { (partition, queue) =>
       if (!queue.isEmpty) f(partition, queue)
     }
 

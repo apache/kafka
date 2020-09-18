@@ -270,7 +270,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
       if (!failed.isEmpty) {
         val rootException = new AdminCommandFailedException(s"${failed.size} preferred replica(s) could not be elected")
-        failed.foreachKv { (topicPartition, exception) =>
+        failed.forKeyValue { (topicPartition, exception) =>
           println(s"Error completing preferred leader election for partition: $topicPartition: $exception")
           rootException.addSuppressed(exception)
         }

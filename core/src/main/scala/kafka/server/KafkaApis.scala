@@ -259,7 +259,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         partitionStates)
       // Clear the coordinator caches in case we were the leader. In the case of a reassignment, we
       // cannot rely on the LeaderAndIsr API for this since it is only sent to active replicas.
-      result.foreachKv { (topicPartition, error) =>
+      result.forKeyValue { (topicPartition, error) =>
         if (error == Errors.NONE) {
           if (topicPartition.topic == GROUP_METADATA_TOPIC_NAME
               && partitionStates(topicPartition).deletePartition) {
@@ -366,7 +366,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(commitStatus: Map[TopicPartition, Errors]): Unit = {
       val combinedCommitStatus = commitStatus ++ unauthorizedTopicErrors ++ nonExistingTopicErrors
       if (isDebugEnabled)
-        combinedCommitStatus.foreachKv { (topicPartition, error) =>
+        combinedCommitStatus.forKeyValue { (topicPartition, error) =>
           if (error != Errors.NONE) {
             debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
               s"on partition $topicPartition failed due to ${error.exceptionName}")
@@ -537,7 +537,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
       var errorInResponse = false
 
-      mergedResponseStatus.foreachKv { (topicPartition, status) =>
+      mergedResponseStatus.forKeyValue { (topicPartition, status) =>
         if (status.error != Errors.NONE) {
           errorInResponse = true
           debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
@@ -592,7 +592,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
-      processingStats.foreachKv { (tp, info) =>
+      processingStats.forKeyValue { (tp, info) =>
         updateRecordConversionStats(request, tp, info)
       }
     }
@@ -1580,7 +1580,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     sendResponseMaybeThrottle(request, requestThrottleMs => {
       val deletionCollections = new DeletableGroupResultCollection()
-      groupDeletionResult.foreachKv { (groupId, error) =>
+      groupDeletionResult.forKeyValue { (groupId, error) =>
         deletionCollections.add(new DeletableGroupResult()
           .setGroupId(groupId)
           .setErrorCode(error.code)
@@ -1773,7 +1773,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
       def handleCreateTopicsResults(errors: Map[String, ApiError]): Unit = {
-        errors.foreachKv { (topicName, error) =>
+        errors.forKeyValue { (topicName, error) =>
           val result = results.find(topicName)
           result.setErrorCode(error.error.code)
             .setErrorMessage(error.message)
@@ -1952,7 +1952,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a DeleteRecordsResponse
     def sendResponseCallback(authorizedTopicResponses: Map[TopicPartition, DeleteRecordsPartitionResult]): Unit = {
       val mergedResponseStatus = authorizedTopicResponses ++ unauthorizedTopicResponses ++ nonExistingTopicResponses
-      mergedResponseStatus.foreachKv { (topicPartition, status) =>
+      mergedResponseStatus.forKeyValue { (topicPartition, status) =>
         if (status.errorCode != Errors.NONE.code) {
           debug("DeleteRecordsRequest with correlation id %d from client %s on partition %s failed due to %s".format(
             request.header.correlationId,
@@ -2331,7 +2331,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       def sendResponseCallback(authorizedTopicErrors: Map[TopicPartition, Errors]): Unit = {
         val combinedCommitStatus = mutable.Map() ++= authorizedTopicErrors ++= unauthorizedTopicErrors ++= nonExistingTopicErrors
         if (isDebugEnabled)
-          combinedCommitStatus.foreachKv { (topicPartition, error) =>
+          combinedCommitStatus.forKeyValue { (topicPartition, error) =>
             if (error != Errors.NONE) {
               debug(s"TxnOffsetCommit with correlation id ${header.correlationId} from client ${header.clientId} " +
                 s"on partition $topicPartition failed due to ${error.exceptionName}")
@@ -2890,11 +2890,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         val electionResults = new util.ArrayList[ReplicaElectionResult]()
         adjustedResults
           .groupBy { case (tp, _) => tp.topic }
-          .foreachKv { (topic, ps) =>
+          .forKeyValue { (topic, ps) =>
             val electionResult = new ReplicaElectionResult()
 
             electionResult.setTopic(topic)
-            ps.foreachKv { (topicPartition, error) =>
+            ps.forKeyValue { (topicPartition, error) =>
               val partitionResult = new PartitionResult()
               partitionResult.setPartitionId(topicPartition.partition)
               partitionResult.setErrorCode(error.error.code)
@@ -2970,9 +2970,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           offsetDeleteRequest.getErrorResponse(requestThrottleMs, groupError)
         else {
           val topics = new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection
-          topicPartitionErrors.groupBy(_._1.topic).foreachKv { (topic, topicPartitions) =>
+          topicPartitionErrors.groupBy(_._1.topic).forKeyValue { (topic, topicPartitions) =>
             val partitions = new OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection
-            topicPartitions.foreachKv { (topicPartition, error) =>
+            topicPartitions.forKeyValue { (topicPartition, error) =>
               partitions.add(
                 new OffsetDeleteResponseData.OffsetDeleteResponsePartition()
                   .setPartitionIndex(topicPartition.partition)

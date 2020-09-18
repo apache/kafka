@@ -69,7 +69,7 @@ object DumpLogSegments {
       }
     }
 
-    misMatchesForIndexFilesMap.foreachKv { (fileName, listOfMismatches) =>
+    misMatchesForIndexFilesMap.forKeyValue { (fileName, listOfMismatches) =>
       System.err.println(s"Mismatches in :$fileName")
       listOfMismatches.foreach { case (indexOffset, logOffset) =>
         System.err.println(s"  Index offset: $indexOffset, log offset: $logOffset")
@@ -78,7 +78,7 @@ object DumpLogSegments {
 
     timeIndexDumpErrors.printErrors()
 
-    nonConsecutivePairsForLogFilesMap.foreachKv { (fileName, listOfNonConsecutivePairs) =>
+    nonConsecutivePairsForLogFilesMap.forKeyValue { (fileName, listOfNonConsecutivePairs) =>
       System.err.println(s"Non-consecutive offsets in $fileName")
       listOfNonConsecutivePairs.foreach { case (first, second) =>
         System.err.println(s"  $first is followed by $second")

@@ -395,7 +395,7 @@ class RequestChannel(val queueSize: Int,
     requestQueue.take()
 
   def updateErrorMetrics(apiKey: ApiKeys, errors: collection.Map[Errors, Integer]): Unit = {
-    errors.foreachKv { (error, count) =>
+    errors.forKeyValue { (error, count) =>
       metrics(apiKey.name).markErrorMeter(error, count)
     }
   }

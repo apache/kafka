@@ -58,7 +58,7 @@ class DelayedProduce(delayMs: Long,
   extends DelayedOperation(delayMs, lockOpt) {
 
   // first update the acks pending variable according to the error code
-  produceMetadata.produceStatus.foreachKv { (topicPartition, status) =>
+  produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
     if (status.responseStatus.error == Errors.NONE) {
       // Timeout error state will be cleared when required acks are received
       status.acksPending = true
@@ -82,7 +82,7 @@ class DelayedProduce(delayMs: Long,
    */
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
-    produceMetadata.produceStatus.foreachKv { (topicPartition, status) =>
+    produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
       trace(s"Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
@@ -111,7 +111,7 @@ class DelayedProduce(delayMs: Long,
   }
 
   override def onExpiration(): Unit = {
-    produceMetadata.produceStatus.foreachKv { (topicPartition, status) =>
+    produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>
       if (status.acksPending) {
         debug(s"Expiring produce request for partition $topicPartition with status $status")
         DelayedProduceMetrics.recordExpiration(topicPartition)

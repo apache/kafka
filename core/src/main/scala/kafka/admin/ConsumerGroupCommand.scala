@@ -710,7 +710,7 @@ object ConsumerGroupCommand extends Logging {
     private def createAdminClient(configOverrides: Map[String, String]): Admin = {
       val props = if (opts.options.has(opts.commandConfigOpt)) Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt)) else new Properties()
       props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
-      configOverrides.foreachKv { (k, v) => props.put(k, v)}
+      configOverrides.forKeyValue { (k, v) => props.put(k, v)}
       Admin.create(props)
     }
 

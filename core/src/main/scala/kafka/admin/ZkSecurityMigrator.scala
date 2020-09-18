@@ -129,7 +129,7 @@ object ZkSecurityMigrator extends Logging {
     // Now override any set system properties with explicitly-provided values from the config file
     // Emit INFO logs due to camel-case property names encouraging mistakes -- help people see mistakes they make
     info(s"Found ${zkTlsConfigFileProps.size()} ZooKeeper client configuration properties in file $filename")
-    zkTlsConfigFileProps.asScala.foreachKv { (key, value) =>
+    zkTlsConfigFileProps.asScala.forKeyValue { (key, value) =>
       info(s"Setting $key")
       KafkaConfig.setZooKeeperClientProperty(zkClientConfig, key, value)
     }
