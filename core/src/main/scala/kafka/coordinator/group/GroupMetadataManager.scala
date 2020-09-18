@@ -56,7 +56,7 @@ import scala.jdk.CollectionConverters._
 class GroupMetadataManager(brokerId: Int,
                            interBrokerProtocolVersion: ApiVersion,
                            config: OffsetConfig,
-                           replicaManager: ReplicaManager,
+                           val replicaManager: ReplicaManager,
                            zkClient: KafkaZkClient,
                            time: Time,
                            metrics: Metrics) extends Logging with KafkaMetricsGroup {
@@ -285,7 +285,7 @@ class GroupMetadataManager(brokerId: Int,
                    | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
                 Errors.COORDINATOR_NOT_AVAILABLE
 
-              case Errors.NOT_LEADER_FOR_PARTITION
+              case Errors.NOT_LEADER_OR_FOLLOWER
                    | Errors.KAFKA_STORAGE_ERROR =>
                 Errors.NOT_COORDINATOR
 
@@ -432,7 +432,7 @@ class GroupMetadataManager(brokerId: Int,
                        | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
                     Errors.COORDINATOR_NOT_AVAILABLE
 
-                  case Errors.NOT_LEADER_FOR_PARTITION
+                  case Errors.NOT_LEADER_OR_FOLLOWER
                        | Errors.KAFKA_STORAGE_ERROR =>
                     Errors.NOT_COORDINATOR
 

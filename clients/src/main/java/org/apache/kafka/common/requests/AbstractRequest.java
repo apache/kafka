@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -146,7 +147,7 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
             case PRODUCE:
                 return new ProduceRequest(struct, apiVersion);
             case FETCH:
-                return new FetchRequest(struct, apiVersion);
+                return new FetchRequest(new FetchRequestData(struct, apiVersion), apiVersion);
             case LIST_OFFSETS:
                 return new ListOffsetRequest(struct, apiVersion);
             case METADATA:
@@ -243,6 +244,10 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return new DescribeClientQuotasRequest(struct, apiVersion);
             case ALTER_CLIENT_QUOTAS:
                 return new AlterClientQuotasRequest(struct, apiVersion);
+            case DESCRIBE_USER_SCRAM_CREDENTIALS:
+                return new DescribeUserScramCredentialsRequest(struct, apiVersion);
+            case ALTER_USER_SCRAM_CREDENTIALS:
+                return new AlterUserScramCredentialsRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

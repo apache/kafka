@@ -437,8 +437,8 @@ public class KTableTransformValuesTest {
                  new KeyValueTimestamp<>("A", "3", 15)));
     }
 
-    private ArrayList<KeyValueTimestamp<Object, Object>> output() {
-        return capture.capturedProcessors(1).get(0).processed;
+    private ArrayList<KeyValueTimestamp<String, String>> output() {
+        return capture.capturedProcessors(1).get(0).processed();
     }
 
     private static KeyValueMapper<String, Integer, KeyValue<String, Integer>> toForceSendingOfOldValues() {

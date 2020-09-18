@@ -36,7 +36,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
      *
      * OFFSET_OUT_OF_RANGE (1)
      * UNKNOWN_TOPIC_OR_PARTITION (3)
-     * NOT_LEADER_FOR_PARTITION (6)
+     * NOT_LEADER_OR_FOLLOWER (6)
      * REQUEST_TIMED_OUT (7)
      * UNKNOWN (-1)
      */

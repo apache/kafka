@@ -16,6 +16,7 @@
   */
 package kafka.server
 
+import java.util
 import java.util.{Collections, Properties}
 
 import kafka.admin.{AdminOperationException, AdminUtils}
@@ -23,21 +24,25 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.{AlterConfigOp, ScramMechanism}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, LogLevelConfig}
+import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicConfigs, CreatableTopicResult}
-import org.apache.kafka.common.message.DescribeConfigsResponseData
+import org.apache.kafka.common.message.{AlterUserScramCredentialsRequestData, AlterUserScramCredentialsResponseData, DescribeConfigsResponseData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.scram.internals.{ScramMechanism => InternalScramMechanism}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.apache.kafka.common.protocol.Errors
@@ -45,6 +50,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
+import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
 
 import scala.collection.{Map, mutable, _}
@@ -80,6 +86,52 @@ class AdminManager(val config: KafkaConfig,
     debug(s"Request key ${key.keyLabel} unblocked $completed topic requests.")
   }
 
+  private def validateTopicCreatePolicy(topic: CreatableTopic,
+                                        resolvedNumPartitions: Int,
+                                        resolvedReplicationFactor: Short,
+                                        assignments: Map[Int, Seq[Int]]): Unit = {
+    createTopicPolicy.foreach { policy =>
+      // Use `null` for unset fields in the public API
+      val numPartitions: java.lang.Integer =
+        if (topic.assignments().isEmpty) resolvedNumPartitions else null
+      val replicationFactor: java.lang.Short =
+        if (topic.assignments().isEmpty) resolvedReplicationFactor else null
+      val javaAssignments = if (topic.assignments().isEmpty) {
+        null
+      } else {
+        assignments.map { case (k, v) =>
+          (k: java.lang.Integer) -> v.map(i => i: java.lang.Integer).asJava
+        }.asJava
+      }
+      val javaConfigs = new java.util.HashMap[String, String]
+      topic.configs.forEach(config => javaConfigs.put(config.name, config.value))
+      policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
+        javaAssignments, javaConfigs))
+    }
+  }
+
+  private def maybePopulateMetadataAndConfigs(metadataAndConfigs: Map[String, CreatableTopicResult],
+                                              topicName: String,
+                                              configs: Properties,
+                                              assignments: Map[Int, Seq[Int]]): Unit = {
+    metadataAndConfigs.get(topicName).foreach { result =>
+      val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), configs)
+      val createEntry = createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
+      val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
+        val entry = createEntry(k, v)
+        new CreatableTopicConfigs()
+          .setName(k)
+          .setValue(entry.value)
+          .setIsSensitive(entry.isSensitive)
+          .setReadOnly(entry.readOnly)
+          .setConfigSource(entry.configSource)
+      }.toList.asJava
+      result.setConfigs(topicConfigs)
+      result.setNumPartitions(assignments.size)
+      result.setReplicationFactor(assignments(0).size.toShort)
+    }
+  }
+
   /**
     * Create topics and wait until the topics have been completely created.
     * The callback function will be triggered either when timeout, error or the topics are created.
@@ -87,7 +139,8 @@ class AdminManager(val config: KafkaConfig,
   def createTopics(timeout: Int,
                    validateOnly: Boolean,
                    toCreate: Map[String, CreatableTopic],
-                   includeConfigsAndMetatadata: Map[String, CreatableTopicResult],
+                   includeConfigsAndMetadata: Map[String, CreatableTopicResult],
+                   controllerMutationQuota: ControllerMutationQuota,
                    responseCallback: Map[String, ApiError] => Unit): Unit = {
 
     // 1. map over topics creating assignment and calling zookeeper
@@ -101,12 +154,6 @@ class AdminManager(val config: KafkaConfig,
         if (nullConfigs.nonEmpty)
           throw new InvalidRequestException(s"Null value not supported for topic configs : ${nullConfigs.mkString(",")}")
 
-        val configs = new Properties()
-        topic.configs.forEach { entry =>
-          configs.setProperty(entry.name, entry.value)
-        }
-        LogConfig.validate(configs)
-
         if ((topic.numPartitions != NO_NUM_PARTITIONS || topic.replicationFactor != NO_REPLICATION_FACTOR)
             && !topic.assignments().isEmpty) {
           throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
@@ -118,7 +165,7 @@ class AdminManager(val config: KafkaConfig,
         val resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
           defaultReplicationFactor else topic.replicationFactor
 
-        val assignments = if (topic.assignments().isEmpty) {
+        val assignments = if (topic.assignments.isEmpty) {
           AdminUtils.assignReplicasToBrokers(
             brokers, resolvedNumPartitions, resolvedReplicationFactor)
         } else {
@@ -132,76 +179,47 @@ class AdminManager(val config: KafkaConfig,
         }
         trace(s"Assignments for topic $topic are $assignments ")
 
-        createTopicPolicy match {
-          case Some(policy) =>
-            adminZkClient.validateTopicCreate(topic.name, assignments, configs)
+        val configs = new Properties()
+        topic.configs.forEach(entry => configs.setProperty(entry.name, entry.value))
+        adminZkClient.validateTopicCreate(topic.name, assignments, configs)
+        validateTopicCreatePolicy(topic, resolvedNumPartitions, resolvedReplicationFactor, assignments)
 
-            // Use `null` for unset fields in the public API
-            val numPartitions: java.lang.Integer =
-              if (topic.assignments().isEmpty) resolvedNumPartitions else null
-            val replicationFactor: java.lang.Short =
-              if (topic.assignments().isEmpty) resolvedReplicationFactor else null
-            val javaAssignments = if (topic.assignments().isEmpty) {
-              null
-            } else {
-              assignments.map { case (k, v) =>
-                (k: java.lang.Integer) -> v.map(i => i: java.lang.Integer).asJava
-              }.asJava
-            }
-            val javaConfigs = new java.util.HashMap[String, String]
-            topic.configs.forEach(config => javaConfigs.put(config.name, config.value))
-            policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
-              javaAssignments, javaConfigs))
+        // For responses with DescribeConfigs permission, populate metadata and configs. It is
+        // safe to populate it before creating the topic because the values are unset if the
+        // creation fails.
+        maybePopulateMetadataAndConfigs(includeConfigsAndMetadata, topic.name, configs, assignments)
 
-            if (!validateOnly)
-              adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
-
-          case None =>
-            if (validateOnly)
-              adminZkClient.validateTopicCreate(topic.name, assignments, configs)
-            else
-              adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
+        if (validateOnly) {
+          CreatePartitionsMetadata(topic.name, assignments.keySet)
+        } else {
+          controllerMutationQuota.record(assignments.size)
+          adminZkClient.createTopicWithAssignment(topic.name, configs, assignments, validate = false)
+          CreatePartitionsMetadata(topic.name, assignments.keySet)
         }
-
-        // For responses with DescribeConfigs permission, populate metadata and configs
-        includeConfigsAndMetatadata.get(topic.name).foreach { result =>
-          val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), configs)
-          val createEntry = createTopicConfigEntry(logConfig, configs, includeSynonyms = false, includeDocumentation = false)(_, _)
-          val topicConfigs = logConfig.values.asScala.map { case (k, v) =>
-            val entry = createEntry(k, v)
-            new CreatableTopicConfigs()
-                .setName(k)
-                .setValue(entry.value)
-                .setIsSensitive(entry.isSensitive)
-                .setReadOnly(entry.readOnly)
-                .setConfigSource(entry.configSource)
-          }.toList.asJava
-          result.setConfigs(topicConfigs)
-          result.setNumPartitions(assignments.size)
-          result.setReplicationFactor(assignments(0).size.toShort)
-        }
-        CreatePartitionsMetadata(topic.name, assignments.keySet, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e: TopicExistsException =>
           debug(s"Topic creation failed since topic '${topic.name}' already exists.", e)
-          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, e)
+        case e: ThrottlingQuotaExceededException =>
+          debug(s"Topic creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
+          CreatePartitionsMetadata(topic.name, e)
         case e: ApiException =>
           info(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, e)
         case e: ConfigException =>
           info(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
+          CreatePartitionsMetadata(topic.name, new InvalidConfigurationException(e.getMessage, e.getCause))
         case e: Throwable =>
           error(s"Error processing create topic request $topic", e)
-          CreatePartitionsMetadata(topic.name, Set.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic.name, e)
       }).toBuffer
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
       val results = metadata.map { createTopicMetadata =>
         // ignore topics that already have errors
-        if (createTopicMetadata.error.isSuccess() && !validateOnly) {
+        if (createTopicMetadata.error.isSuccess && !validateOnly) {
           (createTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createTopicMetadata.topic, createTopicMetadata.error)
@@ -210,8 +228,9 @@ class AdminManager(val config: KafkaConfig,
       responseCallback(results)
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
-      val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this, responseCallback)
-      val delayedCreateKeys = toCreate.values.map(topic => new TopicKey(topic.name)).toBuffer
+      val delayedCreate = new DelayedCreatePartitions(timeout, metadata, this,
+        responseCallback)
+      val delayedCreateKeys = toCreate.values.map(topic => TopicKey(topic.name)).toBuffer
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }
@@ -223,20 +242,24 @@ class AdminManager(val config: KafkaConfig,
     */
   def deleteTopics(timeout: Int,
                    topics: Set[String],
+                   controllerMutationQuota: ControllerMutationQuota,
                    responseCallback: Map[String, Errors] => Unit): Unit = {
-
     // 1. map over topics calling the asynchronous delete
     val metadata = topics.map { topic =>
         try {
+          controllerMutationQuota.record(metadataCache.numPartitions(topic).getOrElse(0).toDouble)
           adminZkClient.deleteTopic(topic)
           DeleteTopicMetadata(topic, Errors.NONE)
         } catch {
           case _: TopicAlreadyMarkedForDeletionException =>
             // swallow the exception, and still track deletion allowing multiple calls to wait for deletion
             DeleteTopicMetadata(topic, Errors.NONE)
+          case e: ThrottlingQuotaExceededException =>
+            debug(s"Topic deletion not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
+            DeleteTopicMetadata(topic, e)
           case e: Throwable =>
             error(s"Error processing delete topic request for topic $topic", e)
-            DeleteTopicMetadata(topic, Errors.forException(e))
+            DeleteTopicMetadata(topic, e)
         }
     }
 
@@ -254,7 +277,7 @@ class AdminManager(val config: KafkaConfig,
     } else {
       // 3. else pass the topics and errors to the delayed operation and set the keys
       val delayedDelete = new DelayedDeleteTopics(timeout, metadata.toSeq, this, responseCallback)
-      val delayedDeleteKeys = topics.map(new TopicKey(_)).toSeq
+      val delayedDeleteKeys = topics.map(TopicKey).toSeq
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedDelete, delayedDeleteKeys)
     }
@@ -263,15 +286,15 @@ class AdminManager(val config: KafkaConfig,
   def createPartitions(timeout: Int,
                        newPartitions: Seq[CreatePartitionsTopic],
                        validateOnly: Boolean,
-                       listenerName: ListenerName,
+                       controllerMutationQuota: ControllerMutationQuota,
                        callback: Map[String, ApiError] => Unit): Unit = {
-
     val allBrokers = adminZkClient.getBrokerMetadatas()
     val allBrokerIds = allBrokers.map(_.id)
 
     // 1. map over topics creating assignment and calling AdminUtils
     val metadata = newPartitions.map { newPartition =>
       val topic = newPartition.name
+
       try {
         val existingAssignment = zkClient.getFullReplicaAssignmentForTopics(immutable.Set(topic)).map {
           case (topicPartition, assignment) =>
@@ -295,34 +318,44 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
-        val newPartitionsAssignment = Option(newPartition.assignments)
-          .map { assignmentMap =>
-            val assignments = assignmentMap.asScala.map {
-              createPartitionAssignment => createPartitionAssignment.brokerIds.asScala.map(_.toInt)
-            }
-            val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
-            if (unknownBrokers.nonEmpty)
-              throw new InvalidReplicaAssignmentException(
-                s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
+        val newPartitionsAssignment = Option(newPartition.assignments).map { assignmentMap =>
+          val assignments = assignmentMap.asScala.map {
+            createPartitionAssignment => createPartitionAssignment.brokerIds.asScala.map(_.toInt)
+          }
+          val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
+          if (unknownBrokers.nonEmpty)
+            throw new InvalidReplicaAssignmentException(
+              s"Unknown broker(s) in replica assignment: ${unknownBrokers.mkString(", ")}.")
 
-            if (assignments.size != numPartitionsIncrement)
-              throw new InvalidReplicaAssignmentException(
-                s"Increasing the number of partitions by $numPartitionsIncrement " +
-                  s"but ${assignments.size} assignments provided.")
+          if (assignments.size != numPartitionsIncrement)
+            throw new InvalidReplicaAssignmentException(
+              s"Increasing the number of partitions by $numPartitionsIncrement " +
+                s"but ${assignments.size} assignments provided.")
 
-            assignments.zipWithIndex.map { case (replicas, index) =>
-              existingAssignment.size + index -> replicas
-            }.toMap
+          assignments.zipWithIndex.map { case (replicas, index) =>
+            existingAssignment.size + index -> replicas
+          }.toMap
         }
 
-        val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
-          newPartition.count, newPartitionsAssignment, validateOnly = validateOnly)
-        CreatePartitionsMetadata(topic, updatedReplicaAssignment.keySet, ApiError.NONE)
+        val assignmentForNewPartitions = adminZkClient.createNewPartitionsAssignment(
+          topic, existingAssignment, allBrokers, newPartition.count, newPartitionsAssignment)
+
+        if (validateOnly) {
+          CreatePartitionsMetadata(topic, (existingAssignment ++ assignmentForNewPartitions).keySet)
+        } else {
+          controllerMutationQuota.record(numPartitionsIncrement)
+          val updatedReplicaAssignment = adminZkClient.createPartitionsWithAssignment(
+            topic, existingAssignment, assignmentForNewPartitions)
+          CreatePartitionsMetadata(topic, updatedReplicaAssignment.keySet)
+        }
       } catch {
         case e: AdminOperationException =>
-          CreatePartitionsMetadata(topic, Set.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, e)
+        case e: ThrottlingQuotaExceededException =>
+          debug(s"Partition(s) creation not allowed because quota is violated. Delay time: ${e.throttleTimeMs}")
+          CreatePartitionsMetadata(topic, e)
         case e: ApiException =>
-          CreatePartitionsMetadata(topic, Set.empty, ApiError.fromThrowable(e))
+          CreatePartitionsMetadata(topic, e)
       }
     }
 
@@ -346,7 +379,9 @@ class AdminManager(val config: KafkaConfig,
     }
   }
 
-  def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource], includeSynonyms: Boolean, includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
+  def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
+                      includeSynonyms: Boolean,
+                      includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { case resource =>
 
       def allConfigs(config: AbstractConfig) = {
@@ -884,19 +919,20 @@ class AdminManager(val config: KafkaConfig,
         !name.isDefined || !strict
     }
 
-    def fromProps(props: Properties): Map[String, Double] = {
-      props.asScala.map { case (key, value) =>
+    def fromProps(props: Map[String, String]): Map[String, Double] = {
+      props.map { case (key, value) =>
         val doubleValue = try value.toDouble catch {
           case _: NumberFormatException =>
-            throw new IllegalStateException(s"Unexpected client quota configuration value: ${key} -> ${value}")
+            throw new IllegalStateException(s"Unexpected client quota configuration value: $key -> $value")
         }
         key -> doubleValue
       }
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).map { case ((u, c), p) =>
-      if (!p.isEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
-        Some(userClientIdToEntity(u, c) -> fromProps(p))
+      val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isQuotaConfig(key) }
+      if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
+        Some(userClientIdToEntity(u, c) -> fromProps(quotaProps))
       else
         None
     }.flatten.toMap
@@ -948,5 +984,249 @@ class AdminManager(val config: KafkaConfig,
       }
       entry.entity -> apiError
     }.toMap
+  }
+
+  private val usernameMustNotBeEmptyMsg = "Username must not be empty"
+  private val errorProcessingDescribe = "Error processing describe user SCRAM credential configs request"
+  private val attemptToDescribeUserThatDoesNotExist = "Attempt to describe a user credential that does not exist"
+
+  def describeUserScramCredentials(users: Option[Seq[String]]): DescribeUserScramCredentialsResponseData = {
+    val describingAllUsers = !users.isDefined || users.get.isEmpty
+    val retval = new DescribeUserScramCredentialsResponseData()
+    val userResults = mutable.Map[String, DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult]()
+
+    def addToResultsIfHasScramCredential(user: String, userConfig: Properties, explicitUser: Boolean = false): Unit = {
+      val result = new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult().setUser(user)
+      val configKeys = userConfig.stringPropertyNames
+      val hasScramCredential = ScramMechanism.values().toList.exists(key => key != ScramMechanism.UNKNOWN && configKeys.contains(key.mechanismName))
+      if (hasScramCredential) {
+        val credentialInfos = new util.ArrayList[CredentialInfo]
+        try {
+          ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach { mechanism =>
+            val propertyValue = userConfig.getProperty(mechanism.mechanismName)
+            if (propertyValue != null) {
+              val iterations = ScramCredentialUtils.credentialFromString(propertyValue).iterations
+              credentialInfos.add(new CredentialInfo().setMechanism(mechanism.`type`).setIterations(iterations))
+            }
+          }
+          result.setCredentialInfos(credentialInfos)
+        } catch {
+          case e: Exception => { // should generally never happen, but just in case bad data gets in...
+            val apiError = apiErrorFrom(e, errorProcessingDescribe)
+            result.setErrorCode(apiError.error.code).setErrorMessage(apiError.error.message)
+          }
+        }
+        userResults += (user -> result)
+      } else if (explicitUser) {
+        // it is an error to request credentials for a user that has no credentials
+        result.setErrorCode(Errors.RESOURCE_NOT_FOUND.code).setErrorMessage(s"$attemptToDescribeUserThatDoesNotExist: $user")
+        userResults += (user -> result)
+      }
+    }
+
+    def collectRetrievedResults(): Unit = {
+      if (describingAllUsers) {
+        val usersSorted = SortedSet.empty[String] ++ userResults.keys
+        usersSorted.foreach { user => retval.results.add(userResults(user)) }
+      } else {
+        // be sure to only include a single copy of a result for any user requested multiple times
+        users.get.distinct.foreach { user =>  retval.results.add(userResults(user)) }
+      }
+    }
+
+    try {
+      if (describingAllUsers)
+        adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
+          case (user, properties) => addToResultsIfHasScramCredential(user, properties) }
+      else {
+        // describing specific users
+        val illegalUsers = users.get.filter(_.isEmpty).toSet
+        illegalUsers.foreach { user =>
+          userResults += (user -> new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+            .setUser(user)
+            .setErrorCode(Errors.RESOURCE_NOT_FOUND.code)
+            .setErrorMessage(usernameMustNotBeEmptyMsg)) }
+        val duplicatedUsers = users.get.groupBy(identity).filter(
+          userAndOccurrencesTuple => userAndOccurrencesTuple._2.length > 1).keys
+        duplicatedUsers.filterNot(illegalUsers.contains).foreach { user =>
+          userResults += (user -> new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+            .setUser(user)
+            .setErrorCode(Errors.DUPLICATE_RESOURCE.code)
+            .setErrorMessage(s"Cannot describe SCRAM credentials for the same user twice in a single request: $user")) }
+        val usersToSkip = illegalUsers ++ duplicatedUsers
+        users.get.filterNot(usersToSkip.contains).foreach { user =>
+          try {
+            val userConfigs = adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user))
+            addToResultsIfHasScramCredential(user, userConfigs, true)
+          } catch {
+            case e: Exception => {
+              val apiError = apiErrorFrom(e, errorProcessingDescribe)
+              userResults += (user -> new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+                .setUser(user)
+                .setErrorCode(apiError.error.code)
+                .setErrorMessage(apiError.error.message))
+            }
+          }
+        }
+      }
+      collectRetrievedResults()
+    } catch {
+      case e: Exception => {
+        // this should generally only happen when we get a failure trying to retrieve all user configs from ZooKeeper
+        val apiError = apiErrorFrom(e, errorProcessingDescribe)
+        retval.setErrorCode(apiError.error.code).setErrorMessage(apiError.messageWithFallback())
+      }
+    }
+    retval
+  }
+
+  def apiErrorFrom(e: Exception, message: String): ApiError = {
+    if (e.isInstanceOf[ApiException])
+      info(message, e)
+    else
+      error(message, e)
+    ApiError.fromThrowable(e)
+  }
+
+  case class requestStatus(user: String, mechanism: Option[ScramMechanism], legalRequest: Boolean, iterations: Int) {}
+
+  def alterUserScramCredentials(upsertions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialUpsertion],
+                                deletions: Seq[AlterUserScramCredentialsRequestData.ScramCredentialDeletion]): AlterUserScramCredentialsResponseData = {
+
+    def scramMechanism(mechanism: Byte): ScramMechanism = {
+      ScramMechanism.fromType(mechanism)
+    }
+
+    def mechanismName(mechanism: Byte): String = {
+      scramMechanism(mechanism).mechanismName
+    }
+
+    val retval = new AlterUserScramCredentialsResponseData()
+
+    // fail any user that is invalid due to an empty user name, an unknown SCRAM mechanism, or unacceptable number of iterations
+    val maxIterations = 16384
+    val illegalUpsertions = upsertions.map(upsertion =>
+      if (upsertion.name.isEmpty)
+        requestStatus(upsertion.name, None, false, upsertion.iterations) // no determined mechanism -- empty user is the cause of failure
+      else {
+        val publicScramMechanism = scramMechanism(upsertion.mechanism)
+        if (publicScramMechanism == ScramMechanism.UNKNOWN) {
+          requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // unknown mechanism is the cause of failure
+        } else {
+          if (upsertion.iterations < InternalScramMechanism.forMechanismName(publicScramMechanism.mechanismName).minIterations
+            || upsertion.iterations > maxIterations) {
+            requestStatus(upsertion.name, Some(publicScramMechanism), false, upsertion.iterations) // known mechanism, bad iterations is the cause of failure
+          } else {
+            requestStatus(upsertion.name, Some(publicScramMechanism), true, upsertion.iterations) // legal
+          }
+        }
+      }).filter { !_.legalRequest }
+    val illegalDeletions = deletions.map(deletion =>
+      if (deletion.name.isEmpty) {
+        requestStatus(deletion.name, None, false, 0) // no determined mechanism -- empty user is the cause of failure
+      } else {
+        val publicScramMechanism = scramMechanism(deletion.mechanism)
+        requestStatus(deletion.name, Some(publicScramMechanism), publicScramMechanism != ScramMechanism.UNKNOWN, 0)
+      }).filter { !_.legalRequest }
+    // map user names to error messages
+    val unknownScramMechanismMsg = "Unknown SCRAM mechanism"
+    val tooFewIterationsMsg = "Too few iterations"
+    val tooManyIterationsMsg = "Too many iterations"
+    val illegalRequestsByUser =
+      illegalDeletions.map(requestStatus =>
+        if (requestStatus.user.isEmpty) {
+          (requestStatus.user, usernameMustNotBeEmptyMsg)
+        } else {
+          (requestStatus.user, unknownScramMechanismMsg)
+        }
+      ).toMap ++ illegalUpsertions.map(requestStatus =>
+        if (requestStatus.user.isEmpty) {
+          (requestStatus.user, usernameMustNotBeEmptyMsg)
+        } else if (requestStatus.mechanism == Some(ScramMechanism.UNKNOWN)) {
+          (requestStatus.user, unknownScramMechanismMsg)
+        } else {
+          (requestStatus.user, if (requestStatus.iterations > maxIterations) {tooManyIterationsMsg} else {tooFewIterationsMsg})
+        }
+      ).toMap
+
+    illegalRequestsByUser.foreach { case (user, errorMessage) =>
+      retval.results.add(new AlterUserScramCredentialsResult().setUser(user)
+        .setErrorCode(if (errorMessage == unknownScramMechanismMsg) {Errors.UNSUPPORTED_SASL_MECHANISM.code} else {Errors.UNACCEPTABLE_CREDENTIAL.code})
+        .setErrorMessage(errorMessage)) }
+
+    val invalidUsers = (illegalUpsertions ++ illegalDeletions).map(_.user).toSet
+    val initiallyValidUserMechanismPairs = (upsertions.filter(upsertion => !invalidUsers.contains(upsertion.name)).map(upsertion => (upsertion.name, upsertion.mechanism)) ++
+      deletions.filter(deletion => !invalidUsers.contains(deletion.name)).map(deletion => (deletion.name, deletion.mechanism)))
+
+    val usersWithDuplicateUserMechanismPairs = initiallyValidUserMechanismPairs.groupBy(identity).filter (
+      userMechanismPairAndOccurrencesTuple => userMechanismPairAndOccurrencesTuple._2.length > 1).keys.map(userMechanismPair => userMechanismPair._1).toSet
+    usersWithDuplicateUserMechanismPairs.foreach { user =>
+      retval.results.add(new AlterUserScramCredentialsResult()
+        .setUser(user)
+        .setErrorCode(Errors.DUPLICATE_RESOURCE.code).setErrorMessage("A user credential cannot be altered twice in the same request")) }
+
+    def potentiallyValidUserMechanismPairs = initiallyValidUserMechanismPairs.filter(pair => !usersWithDuplicateUserMechanismPairs.contains(pair._1))
+
+    val potentiallyValidUsers = potentiallyValidUserMechanismPairs.map(_._1).toSet
+    val configsByPotentiallyValidUser = potentiallyValidUsers.map(user => (user, adminZkClient.fetchEntityConfig(ConfigType.User, Sanitizer.sanitize(user)))).toMap
+
+    // check for deletion of a credential that does not exist
+    val invalidDeletions = deletions.filter(deletion => potentiallyValidUsers.contains(deletion.name)).filter(deletion =>
+      configsByPotentiallyValidUser(deletion.name).getProperty(mechanismName(deletion.mechanism)) == null)
+    val invalidUsersDueToInvalidDeletions = invalidDeletions.map(_.name).toSet
+    invalidUsersDueToInvalidDeletions.foreach { user =>
+      retval.results.add(new AlterUserScramCredentialsResult()
+        .setUser(user)
+        .setErrorCode(Errors.RESOURCE_NOT_FOUND.code).setErrorMessage("Attempt to delete a user credential that does not exist")) }
+
+    // now prepare the new set of property values for users that don't have any issues identified above,
+    // keeping track of ones that fail
+    val usersToTryToAlter = potentiallyValidUsers.diff(invalidUsersDueToInvalidDeletions)
+    val usersFailedToPrepareProperties = usersToTryToAlter.map(user => {
+      try {
+        // deletions: remove property keys
+        deletions.filter(deletion => usersToTryToAlter.contains(deletion.name)).foreach { deletion =>
+          configsByPotentiallyValidUser(deletion.name).remove(mechanismName(deletion.mechanism)) }
+        // upsertions: put property key/value
+        upsertions.filter(upsertion => usersToTryToAlter.contains(upsertion.name)).foreach { upsertion =>
+          val mechanism = InternalScramMechanism.forMechanismName(mechanismName(upsertion.mechanism))
+          val credential = new ScramFormatter(mechanism)
+            .generateCredential(upsertion.salt, upsertion.saltedPassword, upsertion.iterations)
+          configsByPotentiallyValidUser(upsertion.name).put(mechanismName(upsertion.mechanism), ScramCredentialUtils.credentialToString(credential)) }
+        (user) // success, 1 element, won't be matched
+      } catch {
+        case e: Exception =>
+          info(s"Error encountered while altering user SCRAM credentials", e)
+          (user, e) // fail, 2 elements, will be matched
+      }
+    }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
+
+    // now persist the properties we have prepared, again keeping track of whatever fails
+    val usersFailedToPersist = usersToTryToAlter.filterNot(usersFailedToPrepareProperties.contains).map(user => {
+      try {
+        adminZkClient.changeConfigs(ConfigType.User, Sanitizer.sanitize(user), configsByPotentiallyValidUser(user))
+        (user) // success, 1 element, won't be matched
+      } catch {
+        case e: Exception =>
+          info(s"Error encountered while altering user SCRAM credentials", e)
+          (user, e) // fail, 2 elements, will be matched
+      }
+    }).collect { case (user: String, exception: Exception) => (user, exception) }.toMap
+
+    // report failures
+    usersFailedToPrepareProperties.++(usersFailedToPersist).foreach { case (user, exception) =>
+      val error = Errors.forException(exception)
+      retval.results.add(new AlterUserScramCredentialsResult()
+        .setUser(user)
+        .setErrorCode(error.code)
+        .setErrorMessage(error.message)) }
+
+    // report successes
+    usersToTryToAlter.filterNot(usersFailedToPrepareProperties.contains).filterNot(usersFailedToPersist.contains).foreach { user =>
+      retval.results.add(new AlterUserScramCredentialsResult()
+        .setUser(user)
+        .setErrorCode(Errors.NONE.code)) }
+
+    retval
   }
 }

@@ -38,9 +38,10 @@ public class ApiError {
     private final String message;
 
     public static ApiError fromThrowable(Throwable t) {
-        // Avoid populating the error message if it's a generic one
+        // Avoid populating the error message if it's a generic one. Also don't populate error
+        // message for UNKNOWN_SERVER_ERROR to ensure we don't leak sensitive information.
         Errors error = Errors.forException(t);
-        String message = error.message().equals(t.getMessage()) ? null : t.getMessage();
+        String message = error == Errors.UNKNOWN_SERVER_ERROR || error.message().equals(t.getMessage()) ? null : t.getMessage();
         return new ApiError(error, message);
     }
 
@@ -56,6 +57,11 @@ public class ApiError {
 
     public ApiError(Errors error, String message) {
         this.error = error;
+        this.message = message;
+    }
+
+    public ApiError(short code, String message) {
+        this.error = Errors.forCode(code);
         this.message = message;
     }
 
