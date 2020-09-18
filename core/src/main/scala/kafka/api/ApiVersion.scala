@@ -104,7 +104,10 @@ object ApiVersion {
     // Bup Fetch protocol for Raft protocol (KIP-595)
     KAFKA_2_7_IV1,
     // Introduced AlterIsr (KIP-497)
-    KAFKA_2_7_IV2
+    KAFKA_2_7_IV2,
+    // Enable redirection (KIP-590)
+    // TODO: remove this IBP in the 2.7 release if redirection work could not be done before the freeze
+    KAFKA_2_7_IV3
   )
 
   // Map keys are the union of the short and full versions
@@ -377,6 +380,13 @@ case object KAFKA_2_7_IV2 extends DefaultApiVersion {
   val subVersion = "IV2"
   val recordVersion = RecordVersion.V2
   val id: Int = 30
+}
+
+case object KAFKA_2_7_IV3 extends DefaultApiVersion {
+  val shortVersion: String = "2.7"
+  val subVersion = "IV3"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 31
 }
 
 object ApiVersionValidator extends Validator {
