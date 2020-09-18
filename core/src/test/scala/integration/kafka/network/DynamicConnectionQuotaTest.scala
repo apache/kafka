@@ -179,17 +179,21 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.ListenersProp, newListeners))
     waitForListener("EXTERNAL")
 
+    // we need to set the initialConnectionCount earlier and pass to verifyConnectionRate method
+    // so that the race condition won't occur for the following multi-thread test cases
+    val initialConnectionCount = connectionCount
+
     // new broker-wide connection rate limit
     val connRateLimit = 18
 
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
-    verifyConnectionRate(2 * connRateLimit, Int.MaxValue, "PLAINTEXT")
+    verifyConnectionRate(2 * connRateLimit, Int.MaxValue, "PLAINTEXT", initialConnectionCount)
 
     // Reduce total broker connection rate limit to 18 at the cluster level and verify the limit is enforced
     props.clear()  // so that we do not pass security protocol map which cannot be set at the cluster level
     props.put(KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString)
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString))
-    verifyConnectionRate(10, connRateLimit, "PLAINTEXT")
+    verifyConnectionRate(10, connRateLimit, "PLAINTEXT", initialConnectionCount)
 
     // Set 7 conn/sec rate limit for each listener and verify it gets enforced
     val listenerConnRateLimit = 7
@@ -200,7 +204,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     executor = Executors.newFixedThreadPool(newListenerNames.size)
     val futures = newListenerNames.map { listener =>
-      executor.submit((() => verifyConnectionRate(3, listenerConnRateLimit, listener)): Runnable)
+      executor.submit((() => verifyConnectionRate(3, listenerConnRateLimit, listener, initialConnectionCount)): Runnable)
     }
     futures.foreach(_.get(40, TimeUnit.SECONDS))
 
@@ -212,9 +216,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     reconfigureServers(props, perBrokerConfig = true, (plaintextListenerProp, newPlaintextRateLimit.toString))
 
     val plaintextFuture = executor.submit((() =>
-      verifyConnectionRate(18, newPlaintextRateLimit, "PLAINTEXT")): Runnable)
+      verifyConnectionRate(18, newPlaintextRateLimit, "PLAINTEXT", initialConnectionCount)): Runnable)
     val externalFuture = executor.submit((() =>
-      verifyConnectionRate(5, listenerConnRateLimit, "EXTERNAL")): Runnable)
+      verifyConnectionRate(5, listenerConnRateLimit, "EXTERNAL", initialConnectionCount)): Runnable)
     plaintextFuture.get(40, TimeUnit.SECONDS)
     externalFuture.get(40, TimeUnit.SECONDS)
   }
@@ -325,9 +329,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
    * of actual rate is close to `maxConnectionRate`. Instead, use `minConnectionRate` parameter to verify that the rate
    * is at least certain value. Note that throttling is tested and verified more accurately in ConnectionQuotasTest
    */
-  private def verifyConnectionRate(minConnectionRate: Int, maxConnectionRate: Int, listener: String): Unit = {
-    val initialConnectionCount = connectionCount
-
+  private def verifyConnectionRate(minConnectionRate: Int, maxConnectionRate: Int, listener: String,
+                                   initialConnectionCount: Int): Unit = {
     // duration such that the maximum rate should be at most 10% higher than the rate limit. Since all connections
     // can fall in the beginning of quota window, it is OK to create extra 2 seconds (window size) worth of connections
     val runTimeMs = TimeUnit.SECONDS.toMillis(25)
