@@ -64,26 +64,29 @@ public class FetchRequest extends AbstractRequest {
         public final long logStartOffset;
         public final int maxBytes;
         public final Optional<Integer> currentLeaderEpoch;
+        public final Optional<Integer> lastFetchedEpoch;
 
-        public PartitionData(long fetchOffset, long logStartOffset, int maxBytes, Optional<Integer> currentLeaderEpoch) {
+        public PartitionData(
+            long fetchOffset,
+            long logStartOffset,
+            int maxBytes,
+            Optional<Integer> currentLeaderEpoch
+        ) {
+            this(fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch, Optional.empty());
+        }
+
+        public PartitionData(
+            long fetchOffset,
+            long logStartOffset,
+            int maxBytes,
+            Optional<Integer> currentLeaderEpoch,
+            Optional<Integer> lastFetchedEpoch
+        ) {
             this.fetchOffset = fetchOffset;
             this.logStartOffset = logStartOffset;
             this.maxBytes = maxBytes;
             this.currentLeaderEpoch = currentLeaderEpoch;
-        }
-
-        @Override
-        public String toString() {
-            return "(fetchOffset=" + fetchOffset +
-                    ", logStartOffset=" + logStartOffset +
-                    ", maxBytes=" + maxBytes +
-                    ", currentLeaderEpoch=" + currentLeaderEpoch +
-                    ")";
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch);
+            this.lastFetchedEpoch = lastFetchedEpoch;
         }
 
         @Override
@@ -92,20 +95,48 @@ public class FetchRequest extends AbstractRequest {
             if (o == null || getClass() != o.getClass()) return false;
             PartitionData that = (PartitionData) o;
             return fetchOffset == that.fetchOffset &&
-                    logStartOffset == that.logStartOffset &&
-                    maxBytes == that.maxBytes &&
-                    currentLeaderEpoch.equals(that.currentLeaderEpoch);
+                logStartOffset == that.logStartOffset &&
+                maxBytes == that.maxBytes &&
+                Objects.equals(currentLeaderEpoch, that.currentLeaderEpoch) &&
+                Objects.equals(lastFetchedEpoch, that.lastFetchedEpoch);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch, lastFetchedEpoch);
+        }
+
+        @Override
+        public String toString() {
+            return "PartitionData(" +
+                "fetchOffset=" + fetchOffset +
+                ", logStartOffset=" + logStartOffset +
+                ", maxBytes=" + maxBytes +
+                ", currentLeaderEpoch=" + currentLeaderEpoch +
+                ", lastFetchedEpoch=" + lastFetchedEpoch +
+                ')';
+        }
+    }
+
+    private Optional<Integer> optionalEpoch(int rawEpochValue) {
+        if (rawEpochValue < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(rawEpochValue);
         }
     }
 
     private Map<TopicPartition, PartitionData> toPartitionDataMap(List<FetchRequestData.FetchTopic> fetchableTopics) {
         Map<TopicPartition, PartitionData> result = new LinkedHashMap<>();
         fetchableTopics.forEach(fetchTopic -> fetchTopic.partitions().forEach(fetchPartition -> {
-            Optional<Integer> leaderEpoch = Optional.of(fetchPartition.currentLeaderEpoch())
-                .filter(epoch -> epoch != RecordBatch.NO_PARTITION_LEADER_EPOCH);
             result.put(new TopicPartition(fetchTopic.topic(), fetchPartition.partition()),
-                new PartitionData(fetchPartition.fetchOffset(), fetchPartition.logStartOffset(),
-                    fetchPartition.partitionMaxBytes(), leaderEpoch));
+                new PartitionData(
+                    fetchPartition.fetchOffset(),
+                    fetchPartition.logStartOffset(),
+                    fetchPartition.partitionMaxBytes(),
+                    optionalEpoch(fetchPartition.currentLeaderEpoch()),
+                    optionalEpoch(fetchPartition.lastFetchedEpoch())
+                ));
         }));
         return Collections.unmodifiableMap(result);
     }
@@ -232,19 +263,25 @@ public class FetchRequest extends AbstractRequest {
             // We collect the partitions in a single FetchTopic only if they appear sequentially in the fetchData
             FetchRequestData.FetchTopic fetchTopic = null;
             for (Map.Entry<TopicPartition, PartitionData> entry : fetchData.entrySet()) {
-                if (fetchTopic == null || !entry.getKey().topic().equals(fetchTopic.topic())) {
+                TopicPartition topicPartition = entry.getKey();
+                PartitionData partitionData = entry.getValue();
+
+                if (fetchTopic == null || !topicPartition.topic().equals(fetchTopic.topic())) {
                     fetchTopic = new FetchRequestData.FetchTopic()
-                       .setTopic(entry.getKey().topic())
+                       .setTopic(topicPartition.topic())
                        .setPartitions(new ArrayList<>());
                     fetchRequestData.topics().add(fetchTopic);
                 }
 
-                fetchTopic.partitions().add(
-                    new FetchRequestData.FetchPartition().setPartition(entry.getKey().partition())
-                        .setCurrentLeaderEpoch(entry.getValue().currentLeaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-                        .setFetchOffset(entry.getValue().fetchOffset)
-                        .setLogStartOffset(entry.getValue().logStartOffset)
-                        .setPartitionMaxBytes(entry.getValue().maxBytes));
+                FetchRequestData.FetchPartition fetchPartition = new FetchRequestData.FetchPartition()
+                    .setPartition(topicPartition.partition())
+                    .setCurrentLeaderEpoch(partitionData.currentLeaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                    .setLastFetchedEpoch(partitionData.lastFetchedEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                    .setFetchOffset(partitionData.fetchOffset)
+                    .setLogStartOffset(partitionData.logStartOffset)
+                    .setPartitionMaxBytes(partitionData.maxBytes);
+
+                fetchTopic.partitions().add(fetchPartition);
             }
 
             if (metadata != null) {
