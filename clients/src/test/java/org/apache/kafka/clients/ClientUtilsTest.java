@@ -107,7 +107,7 @@ public class ClientUtilsTest {
 
     @Test
     public void testResolveDnsLookupAllIps() throws UnknownHostException {
-        assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size());
+        assertTrue(ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
     }
 
     private List<InetSocketAddress> checkWithoutLookup(String... url) {
