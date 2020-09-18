@@ -188,14 +188,14 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
     verifyConnectionRate(2 * connRateLimit, Int.MaxValue, "PLAINTEXT")
-    waitForConnectionCloseToInitState(initialConnectionCount)
+    waitForConnectionCount(initialConnectionCount)
 
     // Reduce total broker connection rate limit to 18 at the cluster level and verify the limit is enforced
     props.clear()  // so that we do not pass security protocol map which cannot be set at the cluster level
     props.put(KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString)
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString))
     verifyConnectionRate(10, connRateLimit, "PLAINTEXT")
-    waitForConnectionCloseToInitState(initialConnectionCount)
+    waitForConnectionCount(initialConnectionCount)
 
     // Set 7 conn/sec rate limit for each listener and verify it gets enforced
     val listenerConnRateLimit = 7
@@ -208,8 +208,8 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val futures = newListenerNames.map { listener =>
       executor.submit((() => verifyConnectionRate(3, listenerConnRateLimit, listener)): Runnable)
     }
-    waitForConnectionCloseToInitState(initialConnectionCount)
     futures.foreach(_.get(40, TimeUnit.SECONDS))
+    waitForConnectionCount(initialConnectionCount)
 
     // increase connection rate limit on PLAINTEXT (inter-broker) listener to 22 and verify that it will be able to
     // achieve this rate even though total connection rate may exceed broker-wide rate limit, while EXTERNAL listener
@@ -222,9 +222,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
       verifyConnectionRate(18, newPlaintextRateLimit, "PLAINTEXT")): Runnable)
     val externalFuture = executor.submit((() =>
       verifyConnectionRate(5, listenerConnRateLimit, "EXTERNAL")): Runnable)
-    waitForConnectionCloseToInitState(initialConnectionCount)
     plaintextFuture.get(40, TimeUnit.SECONDS)
     externalFuture.get(40, TimeUnit.SECONDS)
+    waitForConnectionCount(initialConnectionCount)
   }
 
   private def reconfigureServers(newProps: Properties, perBrokerConfig: Boolean, aPropToVerify: (String, String)): Unit = {
@@ -325,10 +325,10 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  private def waitForConnectionCloseToInitState(initialConnectionCount: Int): Unit = {
-    // make sure the state is the same as before the method call
-    TestUtils.waitUntilTrue(() => initialConnectionCount == connectionCount,
-      s"Connections not closed (initial = $initialConnectionCount current = $connectionCount)")
+  // make sure the connection count state is the same as the expectedConnectionCount
+  private def waitForConnectionCount(expectedConnectionCount: Int): Unit = {
+    TestUtils.waitUntilTrue(() => expectedConnectionCount == connectionCount,
+      s"Connections not closed (expected = $expectedConnectionCount current = $connectionCount)")
   }
 
   /**
