@@ -37,7 +37,7 @@ class LeaderEpochFileCacheTest {
   private var logEndOffset = 0L
   private val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     private var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: Seq[EpochEntry]): Unit = this.epochs = epochs
+    override def write(epochs: Iterable[EpochEntry]): Unit = this.epochs = epochs.toSeq
     override def read(): Seq[EpochEntry] = this.epochs
   }
   private val cache = new LeaderEpochFileCache(tp, () => logEndOffset, checkpoint)
@@ -438,7 +438,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, startOffset = 8)
     cache.assign(epoch = 4, startOffset = 11)
 
-    //When we clear from a postition between offset 8 & offset 11
+    //When we clear from a position between offset 8 & offset 11
     cache.truncateFromStart(startOffset = 9)
 
     //Then we should update the middle epoch entry's offset
@@ -452,10 +452,10 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 1, startOffset = 7)
     cache.assign(epoch = 2, startOffset = 10)
 
-    //When we clear from a postition between offset 0 & offset 7
+    //When we clear from a position between offset 0 & offset 7
     cache.truncateFromStart(startOffset = 5)
 
-    //Then we should keeep epoch 0 but update the offset appropriately
+    //Then we should keep epoch 0 but update the offset appropriately
     assertEquals(ListBuffer(EpochEntry(0,5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
   }
 

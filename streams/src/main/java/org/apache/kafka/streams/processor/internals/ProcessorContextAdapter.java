@@ -41,7 +41,7 @@ public final class ProcessorContextAdapter<KForward, VForward>
     private final InternalProcessorContext delegate;
 
     @SuppressWarnings("unchecked")
-    static <KForward, VForward> InternalApiProcessorContext<KForward, VForward> shim(final InternalProcessorContext delegate) {
+    public static <KForward, VForward> InternalApiProcessorContext<KForward, VForward> adapt(final InternalProcessorContext delegate) {
         if (delegate instanceof ProcessorContextReverseAdapter) {
             return (InternalApiProcessorContext<KForward, VForward>) ((ProcessorContextReverseAdapter) delegate).delegate();
         } else {
@@ -168,9 +168,10 @@ public final class ProcessorContextAdapter<KForward, VForward>
         delegate.register(store, stateRestoreCallback);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public StateStore getStateStore(final String name) {
-        return delegate.getStateStore(name);
+    public <S extends StateStore> S getStateStore(final String name) {
+        return (S) delegate.getStateStore(name);
     }
 
     @Override

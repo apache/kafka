@@ -70,6 +70,7 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirPartitionResult;
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData.AlterReplicaLogDirTopicResult;
+import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateAclsResponseData;
@@ -90,6 +91,8 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData.CredentialInfo;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
@@ -115,6 +118,7 @@ import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
+import org.apache.kafka.common.requests.AlterUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
@@ -131,6 +135,7 @@ import org.apache.kafka.common.requests.DescribeClientQuotasResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
@@ -960,6 +965,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Deprecated
     @Test
     public void testMetadataRetries() throws Exception {
         // We should continue retrying on metadata update failures in spite of retry configuration
@@ -971,8 +977,7 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, bootstrapCluster,
                 newStrMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999",
                         AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "10000000",
-                        AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100",
-                        AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100"))) {
+                        AdminClientConfig.RETRIES_CONFIG, "0"))) {
 
             // The first request fails with a disconnect
             env.kafkaClient().prepareResponse(null, true);
@@ -4386,15 +4391,13 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testAlterReplicaLogDirsPartialFailure() throws Exception {
-        try (AdminClientUnitTestEnv env = mockClientEnv(
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100",
-                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100")) {
-            // As we won't retry, this calls fails immediately with a DisconnectException
-            env.kafkaClient().prepareResponseFrom(
-                prepareAlterLogDirsResponse(Errors.NONE, "topic", 1),
-                env.cluster().nodeById(0),
-                true);
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
 
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
+
+            // Provide only one prepared response from node 1
             env.kafkaClient().prepareResponseFrom(
                 prepareAlterLogDirsResponse(Errors.NONE, "topic", 2),
                 env.cluster().nodeById(1));
@@ -4408,8 +4411,168 @@ public class KafkaAdminClientTest {
 
             AlterReplicaLogDirsResult result = env.adminClient().alterReplicaLogDirs(logDirs);
 
+            // Wait until the prepared attempt has been consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting requests");
+
+            // Wait until the request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
+
             TestUtils.assertFutureThrows(result.values().get(tpr1), ApiException.class);
             assertNull(result.values().get(tpr2).get());
+        }
+    }
+
+    @Test
+    public void testDescribeUserScramCredentials() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final String user0Name = "user0";
+            ScramMechanism user0ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
+            int user0Iterations0 = 4096;
+            ScramMechanism user0ScramMechanism1 = ScramMechanism.SCRAM_SHA_512;
+            int user0Iterations1 = 8192;
+
+            final CredentialInfo user0CredentialInfo0 = new CredentialInfo();
+            user0CredentialInfo0.setMechanism(user0ScramMechanism0.type());
+            user0CredentialInfo0.setIterations(user0Iterations0);
+            final CredentialInfo user0CredentialInfo1 = new CredentialInfo();
+            user0CredentialInfo1.setMechanism(user0ScramMechanism1.type());
+            user0CredentialInfo1.setIterations(user0Iterations1);
+
+            final String user1Name = "user1";
+            ScramMechanism user1ScramMechanism = ScramMechanism.SCRAM_SHA_256;
+            int user1Iterations = 4096;
+
+            final CredentialInfo user1CredentialInfo = new CredentialInfo();
+            user1CredentialInfo.setMechanism(user1ScramMechanism.type());
+            user1CredentialInfo.setIterations(user1Iterations);
+
+            DescribeUserScramCredentialsResponseData responseData = new DescribeUserScramCredentialsResponseData();
+            responseData.setResults(Arrays.asList(
+                    new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+                            .setUser(user0Name)
+                            .setCredentialInfos(Arrays.asList(user0CredentialInfo0, user0CredentialInfo1)),
+                    new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
+                            .setUser(user1Name)
+                            .setCredentialInfos(Arrays.asList(user1CredentialInfo))));
+
+            env.kafkaClient().prepareResponse(new DescribeUserScramCredentialsResponse(responseData));
+
+            List<String> usersRequestedList = asList(user0Name, user1Name);
+            Set<String> usersRequestedSet = usersRequestedList.stream().collect(Collectors.toSet());
+            DescribeUserScramCredentialsResult result = env.adminClient().describeUserScramCredentials(usersRequestedList);
+            Map<String, UserScramCredentialsDescription> descriptionResults = result.all().get();
+            KafkaFuture<UserScramCredentialsDescription> user0DescriptionFuture = result.description(user0Name);
+            KafkaFuture<UserScramCredentialsDescription> user1DescriptionFuture = result.description(user1Name);
+            Set<String> usersDescribedFromUsersSet = result.users().get().stream().collect(Collectors.toSet());
+            assertEquals(usersRequestedSet, usersDescribedFromUsersSet);
+            Set<String> usersDescribedFromMapKeySet = descriptionResults.keySet();
+            assertEquals(usersRequestedSet, usersDescribedFromMapKeySet);
+
+            UserScramCredentialsDescription userScramCredentialsDescription0 = descriptionResults.get(user0Name);
+            assertEquals(user0Name, userScramCredentialsDescription0.name());
+            assertEquals(2, userScramCredentialsDescription0.credentialInfos().size());
+            assertEquals(user0ScramMechanism0, userScramCredentialsDescription0.credentialInfos().get(0).mechanism());
+            assertEquals(user0Iterations0, userScramCredentialsDescription0.credentialInfos().get(0).iterations());
+            assertEquals(user0ScramMechanism1, userScramCredentialsDescription0.credentialInfos().get(1).mechanism());
+            assertEquals(user0Iterations1, userScramCredentialsDescription0.credentialInfos().get(1).iterations());
+            assertEquals(userScramCredentialsDescription0, user0DescriptionFuture.get());
+
+            UserScramCredentialsDescription userScramCredentialsDescription1 = descriptionResults.get(user1Name);
+            assertEquals(user1Name, userScramCredentialsDescription1.name());
+            assertEquals(1, userScramCredentialsDescription1.credentialInfos().size());
+            assertEquals(user1ScramMechanism, userScramCredentialsDescription1.credentialInfos().get(0).mechanism());
+            assertEquals(user1Iterations, userScramCredentialsDescription1.credentialInfos().get(0).iterations());
+            assertEquals(userScramCredentialsDescription1, user1DescriptionFuture.get());
+        }
+    }
+
+    @Test
+    public void testAlterUserScramCredentialsUnknownMechanism() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final String user0Name = "user0";
+            ScramMechanism user0ScramMechanism0 = ScramMechanism.UNKNOWN;
+
+            final String user1Name = "user1";
+            ScramMechanism user1ScramMechanism0 = ScramMechanism.UNKNOWN;
+
+            final String user2Name = "user2";
+            ScramMechanism user2ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
+
+            AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
+            responseData.setResults(Arrays.asList(
+                    new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult().setUser(user2Name)));
+
+            env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
+
+            AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(Arrays.asList(
+                    new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
+                    new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password"),
+                    new UserScramCredentialUpsertion(user2Name, new ScramCredentialInfo(user2ScramMechanism0, 4096), "password")));
+            Map<String, KafkaFuture<Void>> resultData = result.values();
+            assertEquals(3, resultData.size());
+            Arrays.asList(user0Name, user1Name).stream().forEach(u -> {
+                assertTrue(resultData.containsKey(u));
+                try {
+                    resultData.get(u).get();
+                    fail("Expected request for user " + u + " to complete exceptionally, but it did not");
+                } catch (Exception expected) {
+                    // ignore
+                }
+            });
+            assertTrue(resultData.containsKey(user2Name));
+            try {
+                resultData.get(user2Name).get();
+            } catch (Exception e) {
+                fail("Expected request for user " + user2Name + " to NOT complete excdptionally, but it did");
+            }
+            try {
+                result.all().get();
+                fail("Expected 'result.all().get()' to throw an exception since at least one user failed, but it did not");
+            } catch (final Exception expected) {
+                // ignore, expected
+            }
+        }
+    }
+
+    @Test
+    public void testAlterUserScramCredentials() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            final String user0Name = "user0";
+            ScramMechanism user0ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
+            ScramMechanism user0ScramMechanism1 = ScramMechanism.SCRAM_SHA_512;
+            final String user1Name = "user1";
+            ScramMechanism user1ScramMechanism0 = ScramMechanism.SCRAM_SHA_256;
+            final String user2Name = "user2";
+            ScramMechanism user2ScramMechanism0 = ScramMechanism.SCRAM_SHA_512;
+            AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
+            responseData.setResults(Arrays.asList(user0Name, user1Name, user2Name).stream().map(u ->
+                    new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
+                    .setUser(u).setErrorCode(Errors.NONE.code())).collect(Collectors.toList()));
+
+            env.kafkaClient().prepareResponse(new AlterUserScramCredentialsResponse(responseData));
+
+            AlterUserScramCredentialsResult result = env.adminClient().alterUserScramCredentials(Arrays.asList(
+                    new UserScramCredentialDeletion(user0Name, user0ScramMechanism0),
+                    new UserScramCredentialUpsertion(user0Name, new ScramCredentialInfo(user0ScramMechanism1, 8192), "password"),
+                    new UserScramCredentialUpsertion(user1Name, new ScramCredentialInfo(user1ScramMechanism0, 8192), "password"),
+                    new UserScramCredentialDeletion(user2Name, user2ScramMechanism0)));
+            Map<String, KafkaFuture<Void>> resultData = result.values();
+            assertEquals(3, resultData.size());
+            Arrays.asList(user0Name, user1Name, user2Name).stream().forEach(u -> {
+                assertTrue(resultData.containsKey(u));
+                assertFalse(resultData.get(u).isCompletedExceptionally());
+            });
         }
     }
 
@@ -4431,20 +4594,28 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testDescribeLogDirsPartialFailure() throws Exception {
-        try (AdminClientUnitTestEnv env = mockClientEnv(
-                AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100",
-                AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "100")) {
-            // As we won't retry, this calls fails immediately with a DisconnectException
-            env.kafkaClient().prepareResponseFrom(
-                prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
-                env.cluster().nodeById(0),
-                true);
+        long defaultApiTimeout = 60000;
+        MockTime time = new MockTime();
+
+        try (AdminClientUnitTestEnv env = mockClientEnv(time,
+            AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, String.valueOf(defaultApiTimeout))) {
 
             env.kafkaClient().prepareResponseFrom(
                 prepareDescribeLogDirsResponse(Errors.NONE, "/data"),
                 env.cluster().nodeById(1));
 
             DescribeLogDirsResult result = env.adminClient().describeLogDirs(Arrays.asList(0, 1));
+
+            // Wait until the prepared attempt has been consumed
+            TestUtils.waitForCondition(() -> env.kafkaClient().numAwaitingResponses() == 0,
+                "Failed awaiting requests");
+
+            // Wait until the request is sent out
+            TestUtils.waitForCondition(() -> env.kafkaClient().inFlightRequestCount() == 1,
+                "Failed awaiting request");
+
+            // Advance time past the default api timeout to time out the inflight request
+            time.sleep(defaultApiTimeout + 1);
 
             TestUtils.assertFutureThrows(result.descriptions().get(0), ApiException.class);
             assertNotNull(result.descriptions().get(1).get());

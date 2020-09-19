@@ -72,9 +72,10 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
     def set_authorizer_and_bounce(self, client_protocol, broker_protocol, authorizer_class_name = KafkaService.ACL_AUTHORIZER):
         self.kafka.authorizer_class_name = authorizer_class_name
-        self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group)
-        self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group)
-        self.bounce()
+        # Force use of direct ZooKeeper access due to SecurityDisabledException: No Authorizer is configured on the broker.
+        self.acls.set_acls(client_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True)
+        self.acls.set_acls(broker_protocol, self.kafka, self.topic, self.group, force_use_zk_connection=True)
+        self.bounce() # enables the authorizer
 
     def open_secured_port(self, client_protocol):
         self.kafka.security_protocol = client_protocol

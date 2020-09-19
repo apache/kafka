@@ -1534,7 +1534,7 @@ public class ConfigDef {
             }
             b.append("<li>\n");
             b.append(String.format("<h%1$d>" +
-                    "<a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
+                    "<a id=\"%3$s\"></a><a id=\"%2$s\" href=\"#%2$s\">%3$s</a>" +
                     "</h%1$d>%n", headerDepth, idGenerator.apply(key.name), key.name));
             b.append("<p>");
             b.append(key.documentation.replaceAll("\n", "<br>"));

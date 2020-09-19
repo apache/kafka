@@ -37,8 +37,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -856,11 +857,18 @@ public class KafkaStreamsTest {
         final String outputTopic = safeTestName + "-output";
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
-                .addProcessor("process", () -> new AbstractProcessor<String, String>() {
+                .addProcessor("process", () -> new Processor<String, String, String, String>() {
+                    private ProcessorContext<String, String> context;
+
+                    @Override
+                    public void init(final ProcessorContext<String, String> context) {
+                        this.context = context;
+                    }
+
                     @Override
                     public void process(final String key, final String value) {
                         if (value.length() % 2 == 0) {
-                            context().forward(key, key + value);
+                            context.forward(key, key + value);
                         }
                     }
                 }, "source")
@@ -950,15 +958,21 @@ public class KafkaStreamsTest {
             Serdes.Long());
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
-            .addProcessor("process", () -> new AbstractProcessor<String, String>() {
+            .addProcessor("process", () -> new Processor<String, String, String, String>() {
+                private ProcessorContext<String, String> context;
+
+                @Override
+                public void init(final ProcessorContext<String, String> context) {
+                    this.context = context;
+                }
+
                 @Override
                 public void process(final String key, final String value) {
-                    final KeyValueStore<String, Long> kvStore =
-                        (KeyValueStore<String, Long>) context().getStateStore(storeName);
+                    final KeyValueStore<String, Long> kvStore = context.getStateStore(storeName);
                     kvStore.put(key, 5L);
 
-                    context().forward(key, "5");
-                    context().commit();
+                    context.forward(key, "5");
+                    context.commit();
                 }
             }, "source")
             .addStateStore(storeBuilder, "process")

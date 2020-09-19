@@ -24,7 +24,7 @@ import kafka.api.KAFKA_0_11_0_IV2
 import kafka.log.LogConfig
 import kafka.message.{GZIPCompressionCodec, ProducerCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, Record, RecordBatch}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
@@ -210,6 +210,46 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse = sendFetchRequest(nonReplicaId, fetchRequest)
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, partitionData.error)
+  }
+
+  @Test
+  def testLastFetchedEpochValidation(): Unit = {
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(topicPartition.partition)
+    val firstLeaderEpoch = TestUtils.findLeaderEpoch(firstLeaderId, topicPartition, servers)
+
+    initProducer()
+
+    // Write some data in epoch 0
+    val firstEpochResponses = produceData(Seq(topicPartition), 100)
+    val firstEpochEndOffset = firstEpochResponses.lastOption.get.offset + 1
+    // Force a leader change
+    killBroker(firstLeaderId)
+    // Write some more data in epoch 1
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, topicPartition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, servers)
+    val secondEpochResponses = produceData(Seq(topicPartition), 100)
+    val secondEpochEndOffset = secondEpochResponses.lastOption.get.offset + 1
+
+    // Build a fetch request in the middle of the second epoch, but with the first epoch
+    val fetchOffset = secondEpochEndOffset + (secondEpochEndOffset - firstEpochEndOffset) / 2
+    val partitionMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
+    partitionMap.put(topicPartition, new FetchRequest.PartitionData(fetchOffset, 0L, 1024,
+      Optional.of(secondLeaderEpoch), Optional.of(firstLeaderEpoch)))
+    val fetchRequest = FetchRequest.Builder.forConsumer(0, 1, partitionMap).build()
+
+    // Validate the expected truncation
+    val fetchResponse = sendFetchRequest(secondLeaderId, fetchRequest)
+    val partitionData = fetchResponse.responseData.get(topicPartition)
+    assertEquals(Errors.NONE, partitionData.error)
+    assertEquals(0L, partitionData.records.sizeInBytes())
+    assertTrue(partitionData.divergingEpoch.isPresent)
+
+    val divergingEpoch = partitionData.divergingEpoch.get()
+    assertEquals(firstLeaderEpoch, divergingEpoch.epoch)
+    assertEquals(firstEpochEndOffset, divergingEpoch.endOffset)
   }
 
   @Test
@@ -668,7 +708,7 @@ class FetchRequestTest extends BaseRequestTest {
     }.toMap
   }
 
-  private def produceData(topicPartitions: Iterable[TopicPartition], numMessagesPerPartition: Int): Seq[ProducerRecord[String, String]] = {
+  private def produceData(topicPartitions: Iterable[TopicPartition], numMessagesPerPartition: Int): Seq[RecordMetadata] = {
     val records = for {
       tp <- topicPartitions.toSeq
       messageIndex <- 0 until numMessagesPerPartition
@@ -677,7 +717,6 @@ class FetchRequestTest extends BaseRequestTest {
       new ProducerRecord(tp.topic, tp.partition, s"key $suffix", s"value $suffix")
     }
     records.map(producer.send(_).get)
-    records
   }
 
 }
