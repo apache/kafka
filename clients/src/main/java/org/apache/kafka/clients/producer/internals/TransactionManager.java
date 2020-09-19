@@ -227,6 +227,7 @@ public class TransactionManager {
 
     private volatile State currentState = State.UNINITIALIZED;
     private volatile RuntimeException lastError = null;
+    private volatile RuntimeException abortableError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
     private volatile boolean transactionStarted = false;
     private volatile boolean epochBumpRequired = false;
@@ -369,7 +370,7 @@ public class TransactionManager {
         // If the error is an INVALID_PRODUCER_ID_MAPPING error, the server will not accept an EndTxnRequest, so skip
         // directly to InitProducerId. Otherwise, we must first abort the transaction, because the producer will be
         // fenced if we directly call InitProducerId.
-        if (!(lastError instanceof InvalidPidMappingException)) {
+        if (!(abortableError instanceof InvalidPidMappingException)) {
             EndTxnRequest.Builder builder = new EndTxnRequest.Builder(
                     new EndTxnRequestData()
                             .setTransactionalId(transactionalId)
@@ -1063,7 +1064,7 @@ public class TransactionManager {
 
     private void transitionTo(State target, RuntimeException error) {
         if (!currentState.isTransitionValid(currentState, target)) {
-            String idString = transactionalId == null ?  "" : "TransactionalId " + transactionalId + ": ";
+            String idString = transactionalId == null ? "" : "TransactionalId " + transactionalId + ": ";
             throw new KafkaException(idString + "Invalid transition attempted from state "
                     + currentState.name() + " to state " + target.name());
         }
@@ -1073,6 +1074,9 @@ public class TransactionManager {
                 throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
             lastError = error;
         } else {
+            if (target != State.ABORTING_TRANSACTION) {
+                abortableError = null;
+            }
             lastError = null;
         }
 
