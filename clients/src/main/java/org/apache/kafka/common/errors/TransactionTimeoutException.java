@@ -17,8 +17,8 @@
 package org.apache.kafka.common.errors;
 
 /**
- * TODO
- * Indicates that a request timed out.
+ * This exception indicates that the last ongoing transaction timed out on the coordinator.
+ * When encountering this exception, the producer should retry initialization with current epoch.
  */
 public class TransactionTimeoutException extends ApiException {
 
