@@ -3073,12 +3073,12 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testBumpTransactionalEpochOnTxnTimeoutErrorWhenAddOffsets()  throws InterruptedException{
+    public void testBumpTransactionalEpochOnTxnTimeoutErrorWhenAddOffsets() throws InterruptedException {
         verifyBumpTransactionalEpochOnRecoverableAddOffsetsRequestError(Errors.TRANSACTION_TIMED_OUT);
     }
 
     @Test
-    public void testInitializeTransactionsOnTxnTimeoutErrorWhenEndTxn()  throws InterruptedException{
+    public void testInitializeTransactionsOnTxnTimeoutErrorWhenEndTxn() throws InterruptedException {
         final short initialEpoch = 1;
         final short bumpedEpoch = 2;
 

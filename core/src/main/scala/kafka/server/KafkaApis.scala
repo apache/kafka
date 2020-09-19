@@ -2030,9 +2030,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorize(request.context, WRITE, TRANSACTIONAL_ID, transactionalId)) {
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
+          val needOld = endTxnRequest.version < 2 && (error == Errors.PRODUCER_FENCED || error == Errors
+            .TRANSACTION_TIMED_OUT)
           val finalError =
-            if (endTxnRequest.version < 2 && (error == Errors.PRODUCER_FENCED || error == Errors
-              .TRANSACTION_TIMED_OUT)) {
+            if (needOld) {
               // For older clients, they could not understand the new PRODUCER_FENCED/TRANSACTION_TIMED_OUT error code,
               // so we need to return the INVALID_PRODUCER_EPOCH to have the same client handling logic.
               Errors.INVALID_PRODUCER_EPOCH
@@ -2208,9 +2209,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         def sendResponseCallback(error: Errors): Unit = {
           def createResponse(requestThrottleMs: Int): AbstractResponse = {
+            val needOld = addPartitionsToTxnRequest.version < 2 && (error == Errors.PRODUCER_FENCED || error == Errors
+              .TRANSACTION_TIMED_OUT)
             val finalError =
-              if (addPartitionsToTxnRequest.version < 2 && (error == Errors.PRODUCER_FENCED || error == Errors
-                .TRANSACTION_TIMED_OUT)) {
+              if (needOld) {
                 // For older clients, they could not understand the new PRODUCER_FENCED/TRANSACTION_TIMED_OUT error code,
                 // so we need to return the INVALID_PRODUCER_EPOCH to have the same client handling logic.
                 Errors.INVALID_PRODUCER_EPOCH
@@ -2258,9 +2260,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       def sendResponseCallback(error: Errors): Unit = {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          val finalError =
-            if (addOffsetsToTxnRequest.version < 2 && (error == Errors.PRODUCER_FENCED || error == Errors
-              .TRANSACTION_TIMED_OUT)) {
+          val needOld = addOffsetsToTxnRequest.version < 2 && (error == Errors.PRODUCER_FENCED || error == Errors
+            .TRANSACTION_TIMED_OUT)
+          val finalError = if (needOld) {
               // For older clients, they could not understand the new PRODUCER_FENCED/TRANSACTION_TIMED_OUT error code,
               // so we need to return the INVALID_PRODUCER_EPOCH to have the same client handling logic.
               Errors.INVALID_PRODUCER_EPOCH
