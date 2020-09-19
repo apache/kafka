@@ -148,7 +148,7 @@ object ConsoleProducer {
       .describedAs("size")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(200)
-    val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "(Deprecated) Brokers can fail receiving the message for multiple reasons, and being unavailable transiently is just one of them. This property specifies the number of retires before the producer give up and drop this message.")
+    val messageSendMaxRetriesOpt = parser.accepts("message-send-max-retries", "(Deprecated) Brokers can fail receiving the message for multiple reasons, and being unavailable transiently is just one of them. This property specifies the number of retries before the producer give up and drop this message.")
       .withRequiredArg
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(3)

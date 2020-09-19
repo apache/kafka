@@ -232,6 +232,8 @@
   <subpackage name="message">
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="com.fasterxml.jackson.annotation" />
+    <allow pkg="net.sourceforge.argparse4j" />
+    <allow pkg="org.apache.message" />
   </subpackage>
 
   <subpackage name="streams">

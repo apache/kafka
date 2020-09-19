@@ -308,6 +308,44 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testPartitionReassignmentToBrokerWithOfflineLogDir(): Unit = {
+    servers = makeServers(2, logDirCount = 2)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+
+    val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.AlterPartitionReassignment.rateAndTimeMetricName.get}"
+    val timerCount = timer(metricName).count
+
+    val otherBroker = servers.filter(_.config.brokerId != controllerId).head
+    val otherBrokerId = otherBroker.config.brokerId
+
+    // To have an offline log dir, we need a topicPartition assigned to it
+    val topicPartitionToPutOffline = new TopicPartition("filler", 0)
+    TestUtils.createTopic(
+      zkClient,
+      topicPartitionToPutOffline.topic,
+      partitionReplicaAssignment = Map(topicPartitionToPutOffline.partition -> Seq(otherBrokerId)),
+      servers = servers
+    )
+
+    TestUtils.causeLogDirFailure(TestUtils.Checkpoint, otherBroker, topicPartitionToPutOffline)
+
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId))
+    val reassignment = Map(tp -> ReplicaAssignment(Seq(otherBrokerId), List(), List()))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    zkClient.createPartitionReassignment(reassignment.map { case (k, v) => k -> v.replicas })
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
+      "with an offline log directory on the target broker, the partition reassignment stalls")
+    TestUtils.waitUntilTrue(() =>  zkClient.getFullReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
+      "failed to get updated partition assignment on topic znode after partition reassignment")
+    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
+      "failed to remove reassign partitions path after completion")
+
+    val updatedTimerCount = timer(metricName).count
+    assertTrue(s"Timer count $updatedTimerCount should be greater than $timerCount", updatedTimerCount > timerCount)
+  }
+
+  @Test
   def testPartitionReassignmentWithOfflineReplicaHaltingProgress(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
@@ -769,8 +807,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                           enableControlledShutdown: Boolean = true,
                           listeners : Option[String] = None,
                           listenerSecurityProtocolMap : Option[String] = None,
-                          controlPlaneListenerName : Option[String] = None) = {
-    val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown)
+                          controlPlaneListenerName : Option[String] = None,
+                          logDirCount: Int = 1) = {
+    val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount)
     configs.foreach { config =>
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
       config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)

@@ -17,9 +17,9 @@
 package kafka.tools
 
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicBoolean
 
 import scala.collection.Seq
-
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.tools.MirrorMaker.{ConsumerWrapper, MirrorMakerProducer, NoRecordsException}
@@ -29,13 +29,34 @@ import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
+import org.apache.kafka.common.utils.Exit
+import org.junit.After
 import org.junit.Test
 import org.junit.Assert._
+import org.junit.Before
 
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs: Seq[KafkaConfig] =
     TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps(_, new Properties()))
+
+  val exited = new AtomicBoolean(false)
+
+  @Before
+  override def setUp(): Unit = {
+    Exit.setExitProcedure((_, _) => exited.set(true))
+    super.setUp()
+  }
+
+  @After
+  override def tearDown(): Unit = {
+    super.tearDown()
+    try {
+      assertFalse(exited.get())
+    } finally {
+      Exit.resetExitProcedure()
+    }
+  }
 
   @Test(expected = classOf[TimeoutException])
   def testCommitOffsetsThrowTimeoutException(): Unit = {

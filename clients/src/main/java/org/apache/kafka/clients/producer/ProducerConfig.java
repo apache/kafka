@@ -353,7 +353,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(METRICS_RECORDING_LEVEL_CONFIG,
                                         Type.STRING,
                                         Sensor.RecordingLevel.INFO.toString(),
-                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString()),
+                                        in(Sensor.RecordingLevel.INFO.toString(), Sensor.RecordingLevel.DEBUG.toString(), Sensor.RecordingLevel.TRACE.toString()),
                                         Importance.LOW,
                                         CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC)
                                 .define(METRIC_REPORTER_CLASSES_CONFIG,
@@ -564,7 +564,7 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG.toHtml());
+        System.out.println(CONFIG.toHtml(4, config -> "producerconfigs_" + config));
     }
 
 }

@@ -49,6 +49,7 @@ public class MeteredWindowStore<K, V>
     private Sensor putSensor;
     private Sensor fetchSensor;
     private Sensor flushSensor;
+    private Sensor e2eLatencySensor;
     private ProcessorContext context;
     private final String threadId;
     private String taskId;
@@ -79,6 +80,7 @@ public class MeteredWindowStore<K, V>
         putSensor = StateStoreMetrics.putSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         fetchSensor = StateStoreMetrics.fetchSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
         flushSensor = StateStoreMetrics.flushSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
+        e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId, metricsScope, name(), streamsMetrics);
         final Sensor restoreSensor =
             StateStoreMetrics.restoreSensor(threadId, taskId, metricsScope, name(), streamsMetrics);
 
@@ -133,6 +135,7 @@ public class MeteredWindowStore<K, V>
                 time,
                 putSensor
             );
+            maybeRecordE2ELatency();
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
@@ -169,14 +172,40 @@ public class MeteredWindowStore<K, V>
         );
     }
 
+    @Override
+    public WindowStoreIterator<V> backwardFetch(final K key,
+                                                final long timeFrom,
+                                                final long timeTo) {
+        return new MeteredWindowStoreIterator<>(
+            wrapped().backwardFetch(keyBytes(key), timeFrom, timeTo),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time
+        );
+    }
+
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from,
-                                                  final K to,
+    public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
+                                                  final K keyTo,
                                                   final long timeFrom,
                                                   final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
+            wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetch(final K keyFrom,
+                                                          final K keyTo,
+                                                          final long timeFrom,
+                                                          final long timeTo) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo), timeFrom, timeTo),
             fetchSensor,
             streamsMetrics,
             serdes,
@@ -196,8 +225,24 @@ public class MeteredWindowStore<K, V>
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> backwardFetchAll(final long timeFrom,
+                                                             final long timeTo) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().backwardFetchAll(timeFrom, timeTo),
+            fetchSensor,
+            streamsMetrics,
+            serdes,
+            time);
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> all() {
         return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchSensor, streamsMetrics, serdes, time);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> backwardAll() {
+        return new MeteredWindowedKeyValueIterator<>(wrapped().backwardAll(), fetchSensor, streamsMetrics, serdes, time);
     }
 
     @Override
@@ -210,11 +255,19 @@ public class MeteredWindowStore<K, V>
         try {
             wrapped().close();
         } finally {
-            streamsMetrics.removeAllStoreLevelSensors(threadId, taskId, name());
+            streamsMetrics.removeAllStoreLevelSensorsAndMetrics(taskId, name());
         }
     }
 
     private Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    private void maybeRecordE2ELatency() {
+        if (e2eLatencySensor.shouldRecord()) {
+            final long currentTime = time.milliseconds();
+            final long e2eLatency =  currentTime - context.timestamp();
+            e2eLatencySensor.record(e2eLatency, currentTime);
+        }
     }
 }
