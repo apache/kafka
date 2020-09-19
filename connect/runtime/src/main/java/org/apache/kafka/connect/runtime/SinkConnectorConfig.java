@@ -169,6 +169,6 @@ public class SinkConnectorConfig extends ConnectorConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(config.toHtml());
+        System.out.println(config.toHtml(4, config -> "sinkconnectorconfigs_" + config));
     }
 }
