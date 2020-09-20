@@ -89,8 +89,7 @@ public class ProducerPerformance {
                 for (String payload : payloadList) {
                     payloadByteList.add(payload.getBytes(StandardCharsets.UTF_8));
                 }
-            }
-            
+            }      
             Properties headerProps = new Properties();
             if (headersPath != null) {
                 headerProps.putAll(Utils.loadProps(headersPath));
@@ -131,13 +130,12 @@ public class ProducerPerformance {
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
-
             Enumeration e = headerProps.propertyNames();
             List<Header> headers = new ArrayList<>();
             while (e.hasMoreElements()) {
                 String key = (String) e.nextElement();
                 System.out.println(key + " -- " + headerProps.getProperty(key));
-                Header header = new RecordHeader(key,headerProps.getProperty(key).getBytes("UTF-8"));
+                Header header = new RecordHeader(key, headerProps.getProperty(key).getBytes("UTF-8"));
                 headers.add(header);
             } 
 
