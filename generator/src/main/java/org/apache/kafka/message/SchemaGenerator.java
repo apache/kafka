@@ -81,15 +81,17 @@ final class SchemaGenerator {
 
     void generateSchemas(MessageSpec message) throws Exception {
         this.messageFlexibleVersions = message.flexibleVersions();
+
+        // First generate schemas for common structures so that they are
+        // available when we generate the inline structures
+        for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
+            StructSpec struct = iter.next();
+            generateSchemas(struct.name(), struct, message.struct().versions());
+        }
+
         // Generate schemas for inline structures
         generateSchemas(message.dataClassName(), message.struct(),
             message.struct().versions());
-
-        // Generate schemas for common structures
-        for (Iterator<StructSpec> iter = structRegistry.commonStructs(); iter.hasNext(); ) {
-            StructSpec struct = iter.next();
-            generateSchemas(struct.name(), struct, struct.versions());
-        }
     }
 
     void generateSchemas(String className, StructSpec struct,

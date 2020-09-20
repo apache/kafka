@@ -31,6 +31,7 @@ import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors._
@@ -1033,9 +1034,13 @@ class Partition(val topicPartition: TopicPartition,
           abortedTransactions = None
         )
 
+        val divergingEpoch = new FetchResponseData.EpochEndOffset()
+          .setEpoch(epochEndOffset.leaderEpoch)
+          .setEndOffset(epochEndOffset.endOffset)
+
         return LogReadInfo(
           fetchedData = emptyFetchData,
-          truncationOffset = Some(epochEndOffset.endOffset),
+          divergingEpoch = Some(divergingEpoch),
           highWatermark = initialHighWatermark,
           logStartOffset = initialLogStartOffset,
           logEndOffset = initialLogEndOffset,
@@ -1046,7 +1051,7 @@ class Partition(val topicPartition: TopicPartition,
     val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
     LogReadInfo(
       fetchedData = fetchedData,
-      truncationOffset = None,
+      divergingEpoch = None,
       highWatermark = initialHighWatermark,
       logStartOffset = initialLogStartOffset,
       logEndOffset = initialLogEndOffset,

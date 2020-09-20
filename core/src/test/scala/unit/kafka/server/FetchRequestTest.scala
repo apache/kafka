@@ -245,8 +245,11 @@ class FetchRequestTest extends BaseRequestTest {
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
     assertEquals(0L, partitionData.records.sizeInBytes())
-    assertTrue(partitionData.truncationOffset.isPresent)
-    assertEquals(firstEpochEndOffset, partitionData.truncationOffset.get)
+    assertTrue(partitionData.divergingEpoch.isPresent)
+
+    val divergingEpoch = partitionData.divergingEpoch.get()
+    assertEquals(firstLeaderEpoch, divergingEpoch.epoch)
+    assertEquals(firstEpochEndOffset, divergingEpoch.endOffset)
   }
 
   @Test

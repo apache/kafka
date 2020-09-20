@@ -78,7 +78,6 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         return data;
     }
 
-
     public static final class AbortedTransaction {
         public final long producerId;
         public final long firstOffset;
@@ -122,7 +121,6 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
         // Derived fields
         private final Optional<Integer> preferredReplica;
-        private final Optional<Long> truncationOffset;
         private final List<AbortedTransaction> abortedTransactions;
         private final Errors error;
 
@@ -142,9 +140,6 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     .collect(Collectors.toList());
             }
 
-            this.truncationOffset = partitionResponse.truncationOffset() < 0 ?
-                Optional.empty() :
-                Optional.of(partitionResponse.truncationOffset());
             this.error = Errors.forCode(partitionResponse.errorCode());
         }
 
@@ -154,12 +149,11 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              long logStartOffset,
                              Optional<Integer> preferredReadReplica,
                              List<AbortedTransaction> abortedTransactions,
-                             Optional<Long> truncationOffset,
+                             Optional<FetchResponseData.EpochEndOffset> divergingEpoch,
                              T records) {
             this.preferredReplica = preferredReadReplica;
             this.abortedTransactions = abortedTransactions;
             this.error = error;
-            this.truncationOffset = truncationOffset;
 
             FetchResponseData.FetchablePartitionResponse partitionResponse =
                 new FetchResponseData.FetchablePartitionResponse();
@@ -178,7 +172,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             }
             partitionResponse.setPreferredReadReplica(preferredReadReplica.orElse(INVALID_PREFERRED_REPLICA_ID));
             partitionResponse.setRecordSet(records);
-            truncationOffset.ifPresent(partitionResponse::setTruncationOffset);
+            divergingEpoch.ifPresent(partitionResponse::setDivergingEpoch);
 
             this.partitionResponse = partitionResponse;
         }
@@ -228,6 +222,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     ", logStartOffset = " + logStartOffset() +
                     ", preferredReadReplica = " + preferredReadReplica().map(Object::toString).orElse("absent") +
                     ", abortedTransactions = " + abortedTransactions() +
+                    ", divergingEpoch =" + divergingEpoch() +
                     ", recordsSizeInBytes=" + records().sizeInBytes() + ")";
         }
 
@@ -255,8 +250,13 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             return abortedTransactions;
         }
 
-        public Optional<Long> truncationOffset() {
-            return truncationOffset;
+        public Optional<FetchResponseData.EpochEndOffset> divergingEpoch() {
+            FetchResponseData.EpochEndOffset epochEndOffset = partitionResponse.divergingEpoch();
+            if (epochEndOffset.epoch() < 0) {
+                return Optional.empty();
+            } else {
+                return Optional.of(epochEndOffset);
+            }
         }
 
         @SuppressWarnings("unchecked")
