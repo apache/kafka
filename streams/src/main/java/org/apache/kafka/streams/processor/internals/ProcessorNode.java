@@ -53,7 +53,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private Sensor destroySensor;
     private Sensor createSensor;
 
-    private boolean closed = false;
+    private boolean closed = true;
 
     public ProcessorNode(final String name) {
         this(name, (Processor<KIn, VIn, KOut, VOut>) null, null);
@@ -105,6 +105,9 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public void init(final InternalProcessorContext context) {
+        if (!closed)
+            throw new IllegalStateException("The processor is not closed");
+
         try {
             internalProcessorContext = context;
             initSensors();
@@ -137,6 +140,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public void close() {
+        throwIfClosed();
+
         try {
             maybeMeasureLatency(
                 () -> {
