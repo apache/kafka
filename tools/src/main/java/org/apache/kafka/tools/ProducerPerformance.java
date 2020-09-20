@@ -36,6 +36,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
@@ -130,6 +132,15 @@ public class ProducerPerformance {
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
 
+            Enumeration e = headerProps.propertyNames();
+            List<Header> headers = new ArrayList<>();
+            while (e.hasMoreElements()) {
+                String key = (String) e.nextElement();
+                System.out.println(key + " -- " + headerProps.getProperty(key));
+                Header header = new RecordHeader(key,headerProps.getProperty(key).getBytes("UTF-8"));
+                headers.add(header);
+            } 
+
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
@@ -141,13 +152,7 @@ public class ProducerPerformance {
                 if (payloadFilePath != null) {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 }
-                record = new ProducerRecord<>(topicName, payload);
-                Enumeration e = headerProps.propertyNames();
-                while (e.hasMoreElements()) {
-                    String key = (String) e.nextElement();
-                    System.out.println(key + " -- " + headerProps.getProperty(key));
-                    record.headers().add(key, headerProps.getProperty(key).getBytes("UTF-8"));
-                } 
+                record = new ProducerRecord<>(topicName, null, null, null, payload, headers);
                 long sendStartMs = System.currentTimeMillis();
                 Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
                 producer.send(record, cb);
