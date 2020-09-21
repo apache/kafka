@@ -289,10 +289,13 @@ public class StateDirectory {
             if (stateDir.exists()) {
                 Utils.delete(globalStateDir().getAbsoluteFile());
             }
-        } catch (final IOException e) {
-            log.error("{} Failed to delete global state directory of {} due to an unexpected exception",
-                logPrefix(), appId, e);
-            throw new StreamsException(e);
+        } catch (final IOException exception) {
+            log.error(
+                String.format("%s Failed to delete global state directory of %s due to an unexpected exception",
+                    logPrefix(), appId),
+                exception
+            );
+            throw new StreamsException(exception);
         }
     }
 
@@ -327,15 +330,20 @@ public class StateDirectory {
                         }
                     }
                 } catch (final OverlappingFileLockException | IOException exception) {
-                    log.warn("{} Swallowed the following exception during deletion of obsolete state directory {} for task {}: {}",
-                        logPrefix(), dirName, id, exception);
+                    log.warn(
+                        String.format("%s Swallowed the following exception during deletion of obsolete state directory %s for task %s:",
+                            logPrefix(), dirName, id),
+                        exception
+                    );
                 } finally {
                     try {
                         unlock(id);
                     } catch (final IOException exception) {
-                        log.warn("{} Swallowed the following exception during unlocking after " +
-                                "deletion of obsolete state directory for task {}: {}",
-                            logPrefix(), dirName, exception);
+                        log.warn(
+                            String.format("%s Swallowed the following exception during unlocking after deletion of obsolete " +
+                                "state directory %s for task %s:", logPrefix(), dirName, id),
+                            exception
+                        );
                     }
                 }
             }
@@ -352,10 +360,16 @@ public class StateDirectory {
                         log.info("{} Deleting state directory {} for task {} as user calling cleanup.",
                             logPrefix(), dirName, id);
                         Utils.delete(taskDir, Collections.singletonList(new File(taskDir, LOCK_FILE_NAME)));
+                    } else {
+                        log.warn("{} Could not get lock for state directory {} for task {} as user calling cleanup.",
+                            logPrefix(), dirName, id);
                     }
                 } catch (final OverlappingFileLockException | IOException exception) {
-                    log.error("{} Failed to delete state directory {} for task {} with exception: {}",
-                        logPrefix(), dirName, id, exception);
+                    log.error(
+                        String.format("%s Failed to delete state directory %s for task %s with exception:",
+                            logPrefix(), dirName, id),
+                        exception
+                    );
                     throw exception;
                 } finally {
                     try {
@@ -364,8 +378,11 @@ public class StateDirectory {
                         // the whole directory
                         Utils.delete(taskDir);
                     } catch (final IOException exception) {
-                        log.error("{} Failed to release lock on state directory {} for task {} with exception: {}",
-                            logPrefix(), dirName, id, exception);
+                        log.error(
+                            String.format("%s Failed to release lock on state directory %s for task %s with exception:",
+                                logPrefix(), dirName, id),
+                            exception
+                        );
                         throw exception;
                     }
                 }
