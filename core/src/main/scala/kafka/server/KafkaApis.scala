@@ -129,7 +129,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * @tparam RV resource value
    */
   private[server] abstract class ForwardRequestHandler[T <: AbstractRequest,
-    R <: AbstractResponse, RK, RV]() extends Logging {
+    R <: AbstractResponse, RK, RV](request: RequestChannel.Request) extends Logging {
 
     /**
      * Split the given resource into authorized and unauthorized sets.
@@ -165,7 +165,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def mergeResponse(forwardResponse: R,
                       unauthorizedResult: Map[RK, ApiError]): R
 
-    def handle(request: RequestChannel.Request): Unit = {
+    def handle(): Unit = {
       val requestBody = request.body[AbstractRequest].asInstanceOf[T]
       val (authorizedResources, unauthorizedResources) = resourceSplitByAuthorization(requestBody)
       if (isForwardingRequest(request)) {
@@ -1854,7 +1854,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val forwardRequestHandler = new ForwardRequestHandler[CreateTopicsRequest,
-      CreateTopicsResponse, String, CreatableTopic] {
+      CreateTopicsResponse, String, CreatableTopic](request) {
 
       override def resourceSplitByAuthorization(createTopicsRequest: CreateTopicsRequest):
       (Map[String, CreatableTopic], Map[String, ApiError]) = {
@@ -1955,7 +1955,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         forwardResponse
       }
     }
-    forwardRequestHandler.handle(request)
+    forwardRequestHandler.handle()
   }
 
   def handleCreatePartitionsRequest(request: RequestChannel.Request): Unit = {
@@ -2665,7 +2665,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val forwardRequestHandler = new ForwardRequestHandler[AlterConfigsRequest,
-      AlterConfigsResponse, ConfigResource, Config] {
+      AlterConfigsResponse, ConfigResource, Config](request) {
 
       override def resourceSplitByAuthorization(alterConfigsRequest: AlterConfigsRequest): (
         Map[ConfigResource, Config], Map[ConfigResource, ApiError]) = {
@@ -2713,7 +2713,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         forwardResponse.addResults(unauthorizedResult.asJava)
       }
     }
-    forwardRequestHandler.handle(request)
+    forwardRequestHandler.handle()
   }
 
   def handleAlterPartitionReassignmentsRequest(request: RequestChannel.Request): Unit = {
@@ -2817,7 +2817,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val forwardRequestHandler = new ForwardRequestHandler[IncrementalAlterConfigsRequest,
-      IncrementalAlterConfigsResponse, ConfigResource, Seq[AlterConfigOp]] {
+      IncrementalAlterConfigsResponse, ConfigResource, Seq[AlterConfigOp]](request) {
 
       override def resourceSplitByAuthorization(incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest):
       (Map[ConfigResource, Seq[AlterConfigOp]], Map[ConfigResource, ApiError]) = {
@@ -2869,7 +2869,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         forwardResponse.addResults(unauthorizedResult.asJava)
       }
     }
-    forwardRequestHandler.handle(request)
+    forwardRequestHandler.handle()
   }
 
   def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {
@@ -3225,7 +3225,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterClientQuotasRequest(request: RequestChannel.Request): Unit = {
     val forwardRequestHandler = new ForwardRequestHandler[AlterClientQuotasRequest,
-      AlterClientQuotasResponse, ClientQuotaAlteration, Unit] {
+      AlterClientQuotasResponse, ClientQuotaAlteration, Unit](request) {
 
       override def resourceSplitByAuthorization(alterClientQuotasRequest: AlterClientQuotasRequest):
       (Map[ClientQuotaAlteration, Unit],
@@ -3265,7 +3265,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
     }
-    forwardRequestHandler.handle(request)
+    forwardRequestHandler.handle()
   }
 
   def handleDescribeUserScramCredentialsRequest(request: RequestChannel.Request): Unit = {
