@@ -344,7 +344,7 @@ class WorkerSourceTask extends WorkerTask {
                 continue;
             }
 
-            log.trace("{} Appending record with key {}, value {}", this, record.key(), record.value());
+            log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
             // We need this queued first since the callback could happen immediately (even synchronously in some cases).
             // Because of this we need to be careful about handling retries -- we always save the previously attempted
             // record as part of toSend and need to use a flag to track whether we should actually add it to the outstanding
@@ -363,7 +363,6 @@ class WorkerSourceTask extends WorkerTask {
             try {
                 maybeCreateTopic(record.topic());
                 final String topic = producerRecord.topic();
-                log.debug("{} is going to send record to {}", WorkerSourceTask.this, topic);
                 producer.send(
                     producerRecord,
                     (recordMetadata, e) -> {
