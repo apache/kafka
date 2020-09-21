@@ -290,7 +290,7 @@ class AclAuthorizer extends Authorizer with Logging {
   @nowarn("cat=optimizer")
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
     val aclBindings = new util.ArrayList[AclBinding]()
-    // Using `foreachKv` triggers a scalac bug related to suppression of optimizer warnings, we
+    // Using `forKeyValue` triggers a scalac bug related to suppression of optimizer warnings, we
     // should change this code once that's fixed
     aclCache.foreach { case (resource, versionedAcls) =>
         versionedAcls.acls.foreach { acl =>

@@ -48,7 +48,7 @@ object Implicits {
   }
 
   /**
-   * Exposes `foreachKv` which maps to `foreachEntry` in Scala 2.13 and `foreach` in Scala 2.12
+   * Exposes `forKeyValue` which maps to `foreachEntry` in Scala 2.13 and `foreach` in Scala 2.12
    * (with the help of scala.collection.compat). `foreachEntry` avoids the tuple allocation and
    * is more efficient.
    *
