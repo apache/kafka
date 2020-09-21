@@ -136,7 +136,7 @@ class KafkaApis(val requestChannel: RequestChannel,
      *
      * @return authorized resources and unauthorized resources
      */
-    def resourceSplitByAuthorization(request: T): (Map[RK, RV], Map[RK, RV])
+    def resourceSplitByAuthorization(request: T): (Map[RK, RV], Map[RK, ApiError])
 
     /**
      * Controller handling logic of the request.
@@ -154,14 +154,6 @@ class KafkaApis(val requestChannel: RequestChannel,
      */
     def createRequestBuilder(authorizedResources: Map[RK, RV],
                              request: T): AbstractRequest.Builder[T]
-
-    /**
-     * Inject customized authorization failure info.
-     *
-     * @param unauthorizedResources unauthorized resources by the forwarding broker
-     * @return unauthorized resources with corresponding errors
-     */
-    def customizedAuthorizationError(unauthorizedResources: Map[RK, RV]): Map[RK, ApiError]
 
     /**
      * Merge the forward response with the previously unauthorized results.
@@ -195,14 +187,12 @@ class KafkaApis(val requestChannel: RequestChannel,
           sendResponseMaybeThrottle,
           request,
           response => {
-            mergeResponse(response.responseBody.asInstanceOf[R],
-              customizedAuthorizationError(unauthorizedResources))
+            mergeResponse(response.responseBody.asInstanceOf[R], unauthorizedResources)
           })
       } else {
         // When IBP is smaller than 2.7, forwarding is not supported,
         // therefore requests are handled directly
-        process(authorizedResources, customizedAuthorizationError(
-          unauthorizedResources), requestBody)
+        process(authorizedResources, unauthorizedResources, requestBody)
       }
     }
 
@@ -1867,7 +1857,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       CreateTopicsResponse, String, CreatableTopic] {
 
       override def resourceSplitByAuthorization(createTopicsRequest: CreateTopicsRequest):
-      (Map[String, CreatableTopic], Map[String, CreatableTopic]) = {
+      (Map[String, CreatableTopic], Map[String, ApiError]) = {
         val hasClusterAuthorization = authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME,
           logIfDenied = false)
         val topics = createTopicsRequest.data.topics.asScala.map(_.name)
@@ -1876,12 +1866,12 @@ class KafkaApis(val requestChannel: RequestChannel,
           else filterByAuthorized(request.context, CREATE, TOPIC, topics)(identity)
 
         val toCreate = mutable.Map[String, CreatableTopic]()
-        val unauthorizedTopics = mutable.Map[String, CreatableTopic]()
+        val unauthorizedTopics = mutable.Map[String, ApiError]()
         createTopicsRequest.data.topics.forEach { topic =>
           if (authorizedTopics.contains(topic.name)) {
             toCreate += topic.name -> topic
           } else {
-            unauthorizedTopics += topic.name -> topic
+            unauthorizedTopics += topic.name -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED)
           }
         }
 
@@ -1951,10 +1941,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setTopics(topicsAuthorized)
           .setTimeoutMs(createTopicsRequest.data.timeoutMs)
           .setValidateOnly(createTopicsRequest.data.validateOnly))
-      }
-
-      override def customizedAuthorizationError(unauthorizedResource: Map[String, CreatableTopic]): Map[String, ApiError] = {
-        unauthorizedResource.keys.map(topicName => topicName -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED)).toMap
       }
 
       override def mergeResponse(forwardResponse: CreateTopicsResponse,
@@ -2682,9 +2668,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       AlterConfigsResponse, ConfigResource, Config] {
 
       override def resourceSplitByAuthorization(alterConfigsRequest: AlterConfigsRequest): (
-        Map[ConfigResource, Config], Map[ConfigResource, Config]) = {
+        Map[ConfigResource, Config], Map[ConfigResource, ApiError]) = {
         val resources = alterConfigsRequest.configs.asScala.toMap
-        resources.partition { case (resource, _) =>
+        val (authorizedResources, unauthorizedResources) = resources.partition { case (resource, _) =>
           resource.`type` match {
             case ConfigResource.Type.BROKER_LOGGER =>
               throw new InvalidRequestException(
@@ -2696,6 +2682,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
           }
         }
+
+        (authorizedResources, unauthorizedResources.keys.map { resource =>
+          resource -> configsAuthorizationApiError(resource)
+        }.toMap)
       }
 
       override def process(authorizedResources: Map[ConfigResource, Config],
@@ -2715,13 +2705,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       AbstractRequest.Builder[AlterConfigsRequest] = {
         new AlterConfigsRequest.Builder(
           authorizedResources.asJava, request.validateOnly())
-      }
-
-      override def customizedAuthorizationError(unauthorizedResources: Map[ConfigResource, Config]):
-      Map[ConfigResource, ApiError] = {
-        unauthorizedResources.keys.map { resource =>
-          resource -> configsAuthorizationApiError(resource)
-        }.toMap
       }
 
       override def mergeResponse(forwardResponse: AlterConfigsResponse,
@@ -2837,7 +2820,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       IncrementalAlterConfigsResponse, ConfigResource, Seq[AlterConfigOp]] {
 
       override def resourceSplitByAuthorization(incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest):
-      (Map[ConfigResource, Seq[AlterConfigOp]], Map[ConfigResource, Seq[AlterConfigOp]]) = {
+      (Map[ConfigResource, Seq[AlterConfigOp]], Map[ConfigResource, ApiError]) = {
         val configs = incrementalAlterConfigsRequest.data.resources.iterator.asScala.map { alterConfigResource =>
           val configResource = new ConfigResource(ConfigResource.Type.forId(alterConfigResource.resourceType),
             alterConfigResource.resourceName)
@@ -2847,7 +2830,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }.toBuffer
         }.toMap
 
-        configs.partition { case (resource, _) =>
+        val (authorizedResources, unauthorizedResources) = configs.partition { case (resource, _) =>
           resource.`type` match {
             case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER =>
               authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)
@@ -2856,6 +2839,10 @@ class KafkaApis(val requestChannel: RequestChannel,
             case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
           }
         }
+
+        (authorizedResources, unauthorizedResources.keys.map { resource =>
+          resource -> configsAuthorizationApiError(resource)
+        }.toMap)
       }
 
       override def process(authorizedResources: Map[ConfigResource, Seq[AlterConfigOp]],
@@ -2874,13 +2861,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           AlterConfigsUtil.generateIncrementalRequestData(authorizedResources.map {
             case (resource, ops) => resource -> ops.asJavaCollection
           }.asJava, incrementalAlterConfigsRequest.data().validateOnly()))
-      }
-
-      override def customizedAuthorizationError(unauthorizedResources: Map[ConfigResource, Seq[AlterConfigOp]]):
-      Map[ConfigResource, ApiError] = {
-        unauthorizedResources.keys.map { resource =>
-          resource -> configsAuthorizationApiError(resource)
-        }.toMap
       }
 
       override def mergeResponse(forwardResponse: IncrementalAlterConfigsResponse,
@@ -3249,12 +3229,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       override def resourceSplitByAuthorization(alterClientQuotasRequest: AlterClientQuotasRequest):
       (Map[ClientQuotaAlteration, Unit],
-        Map[ClientQuotaAlteration, Unit]) = {
+        Map[ClientQuotaAlteration, ApiError]) = {
         val resources = alterClientQuotasRequest.entries.asScala.map(alteration => alteration -> ()).toMap
         if (authorize(request.context, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
           (resources, Map.empty)
         } else {
-          (Map.empty, resources)
+          (Map.empty, resources.keys.map(alteration =>
+            alteration -> new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap)
         }
       }
 
@@ -3262,12 +3243,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                                         request: AlterClientQuotasRequest):
       AbstractRequest.Builder[AlterClientQuotasRequest] = {
         new AlterClientQuotasRequest.Builder(authorizedResource.keys.asJavaCollection, request.validateOnly)
-      }
-
-      override def customizedAuthorizationError(unauthorizedResource: Map[ClientQuotaAlteration, Unit]):
-      Map[ClientQuotaAlteration, ApiError] = {
-          unauthorizedResource.keys.map(alteration =>
-            alteration -> new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
       }
 
       override def mergeResponse(forwardResponse: AlterClientQuotasResponse,
