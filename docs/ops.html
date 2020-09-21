@@ -856,6 +856,11 @@
         <td>Time in milliseconds spent on message format conversions.</td>
       </tr>
       <tr>
+        <td>Request Queue Size</td>
+        <td>kafka.network:type=RequestChannel,name=RequestQueueSize</td>
+        <td></td>
+      </tr>
+      <tr>
         <td>Message conversion rate</td>
         <td>kafka.server:type=BrokerTopicMetrics,name={Produce|Fetch}MessageConversionsPerSec,topic=([-.\w]+)</td>
         <td>Number of records which required message format conversion.</td>
