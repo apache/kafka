@@ -757,6 +757,33 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertTrue(!topicId1.equals(topicId2))
   }
 
+
+  @Test
+  def testTopicIdMigrationAndHandling(): Unit = {
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> ReplicaAssignment(Seq(0), List(), List()))
+    val adminZkClient = new AdminZkClient(zkClient)
+
+    servers = makeServers(1)
+    adminZkClient.createTopic(tp.topic, 1, 1)
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+    val topicIdAfterCreate = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertTrue(topicIdAfterCreate.isDefined)
+    assertEquals("correct topic ID cannot be found in the controller context",
+      topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic))
+
+    adminZkClient.addPartitions(tp.topic, assignment, adminZkClient.getBrokerMetadatas(), 2)
+    val topicIdAfterAddition = zkClient.getTopicIdsForTopics(Set(tp.topic())).get(tp.topic())
+    assertEquals(topicIdAfterCreate, topicIdAfterAddition)
+    assertEquals("topic ID changed after partition additions",
+      topicIdAfterCreate, servers.head.kafkaController.controllerContext.topicIds.get(tp.topic))
+
+    adminZkClient.deleteTopic(tp.topic)
+    TestUtils.waitUntilTrue(() => servers.head.kafkaController.controllerContext.topicIds.get(tp.topic).isEmpty,
+      "topic ID for topic should have been removed from controller context after deletion")
+  }
+
   @Test
   def testTopicIdPersistsThroughControllerReelection(): Unit = {
     servers = makeServers(2)

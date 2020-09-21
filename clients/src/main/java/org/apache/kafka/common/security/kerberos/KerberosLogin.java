@@ -213,6 +213,7 @@ public class KerberosLogin extends AbstractLogin {
                             break;
                         } catch (Exception e) {
                             if (retry > 0) {
+                                log.warn("[Principal={}]: Error when trying to renew with TicketCache, but will retry ", principal, e);
                                 --retry;
                                 // sleep for 10 seconds
                                 try {
@@ -237,6 +238,7 @@ public class KerberosLogin extends AbstractLogin {
                             break;
                         } catch (LoginException le) {
                             if (retry > 0) {
+                                log.warn("[Principal={}]: Error when trying to re-Login, but will retry ", principal, le);
                                 --retry;
                                 // sleep for 10 seconds.
                                 try {

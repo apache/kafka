@@ -262,7 +262,7 @@ private[log] object LogValidator extends Logging {
       recordConversionStats = recordConversionStats)
   }
 
-  private def assignOffsetsNonCompressed(records: MemoryRecords,
+  def assignOffsetsNonCompressed(records: MemoryRecords,
                                          topicPartition: TopicPartition,
                                          offsetCounter: LongRef,
                                          now: Long,

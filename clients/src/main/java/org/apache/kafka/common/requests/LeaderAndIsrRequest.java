@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrLiveL
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -156,23 +157,32 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         Errors error = Errors.forException(e);
         responseData.setErrorCode(error.code());
 
-        List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
-        if (version < 4) {
+        if (version < 5) {
+            List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
             for (LeaderAndIsrPartitionState partition : partitionStates()) {
                 partitions.add(new LeaderAndIsrPartitionError()
                         .setTopicName(partition.topicName())
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(error.code()));
             }
-        } else {
-            for (LeaderAndIsrPartitionState partition : partitionStates()) {
+            responseData.setPartitionErrors(partitions);
+            return new LeaderAndIsrResponse(responseData);
+        }
+
+        List<LeaderAndIsrTopicError> topics = new ArrayList<>();
+        for (LeaderAndIsrTopicState topicState : data.topicStates()) {
+            LeaderAndIsrTopicError topicError = new LeaderAndIsrTopicError();
+            topicError.setTopicID(topicIds().get(topicState.topicName()));
+            List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
+            for (LeaderAndIsrPartitionState partition : topicState.partitionStates()) {
                 partitions.add(new LeaderAndIsrPartitionError()
-                        .setTopicID(topicIds().get(partition.topicName()))
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(error.code()));
             }
+            topicError.setPartitionErrors(partitions);
+            topics.add(topicError);
         }
-        responseData.setPartitionErrors(partitions);
+        responseData.setTopics(topics);
         return new LeaderAndIsrResponse(responseData);
     }
 

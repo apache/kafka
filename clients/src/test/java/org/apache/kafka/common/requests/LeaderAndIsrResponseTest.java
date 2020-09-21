@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -29,7 +30,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -71,21 +71,19 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testErrorCountsWithTopLevelError() {
-        List<LeaderAndIsrPartitionError> partitions = createPartitions(UUID.randomUUID(),
-            asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
+        List<LeaderAndIsrTopicError> topics = createTopics(asList(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
-            .setPartitionErrors(partitions));
+            .setTopics(topics));
         assertEquals(Collections.singletonMap(Errors.UNKNOWN_SERVER_ERROR, 2), response.errorCounts());
     }
 
     @Test
     public void testErrorCountsNoTopLevelError() {
-        List<LeaderAndIsrPartitionError> partitions = createPartitions(UUID.randomUUID(),
-            asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+        List<LeaderAndIsrTopicError> topics = createTopics(asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
-            .setPartitionErrors(partitions));
+            .setTopics(topics));
         Map<Errors, Integer> errorCounts = response.errorCounts();
         assertEquals(2, errorCounts.size());
         assertEquals(1, errorCounts.get(Errors.NONE).intValue());
@@ -94,27 +92,30 @@ public class LeaderAndIsrResponseTest {
 
     @Test
     public void testToString() {
-        List<LeaderAndIsrPartitionError> partitions = createPartitions(UUID.randomUUID(),
-            asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
+        List<LeaderAndIsrTopicError> topics = createTopics(asList(Errors.NONE, Errors.CLUSTER_AUTHORIZATION_FAILED));
         LeaderAndIsrResponse response = new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
             .setErrorCode(Errors.NONE.code())
-            .setPartitionErrors(partitions));
+            .setTopics(topics));
         String responseStr = response.toString();
         assertTrue(responseStr.contains(LeaderAndIsrResponse.class.getSimpleName()));
-        assertTrue(responseStr.contains(partitions.toString()));
+        assertTrue(responseStr.contains(topics.toString()));
         assertTrue(responseStr.contains("errorCode=" + Errors.NONE.code()));
     }
 
-    private List<LeaderAndIsrPartitionError> createPartitions(UUID topicID, List<Errors> errors) {
+    private List<LeaderAndIsrTopicError> createTopics(List<Errors> errors) {
+        List<LeaderAndIsrTopicError> topics = new ArrayList<>();
+        LeaderAndIsrTopicError topic = new LeaderAndIsrTopicError();
+        topic.setTopicID(UUID.randomUUID());
         List<LeaderAndIsrPartitionError> partitions = new ArrayList<>();
         int partitionIndex = 0;
         for (Errors error : errors) {
             partitions.add(new LeaderAndIsrPartitionError()
-                .setTopicID(topicID)
                 .setPartitionIndex(partitionIndex++)
                 .setErrorCode(error.code()));
         }
-        return partitions;
+        topic.setPartitionErrors(partitions);
+        topics.add(topic);
+        return topics;
     }
 
 }

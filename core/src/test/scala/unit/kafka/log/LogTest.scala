@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.{Callable, Executors}
 import java.util.regex.Pattern
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Optional, Properties, UUID}
 
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.common.{OffsetsOutOfOrderException, RecordValidationException, UnexpectedAppendOffsetException}
@@ -30,7 +30,7 @@ import kafka.log.Log.DeleteDirSuffix
 import kafka.metrics.KafkaYammerMetrics
 import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
-import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata, PartitionMetadataFile}
 import kafka.utils._
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
@@ -2141,6 +2141,21 @@ class LogTest {
     log.close()
   }
 
+  @Test
+  def testLogRecoversTopicId(): Unit = {
+    val logConfig = LogTest.createLogConfig()
+    var log = createLog(logDir, logConfig)
+
+    val topicId = UUID.randomUUID()
+    log.partitionMetadataFile.get.write(topicId)
+    log.close()
+
+    // test recovery case
+    log = createLog(logDir, logConfig)
+    assertTrue(log.topicID == topicId)
+    log.close()
+  }
+
   /**
    * Test building the time index on the follower by setting assignOffsets to false.
    */
@@ -2660,19 +2675,21 @@ class LogTest {
   }
 
   @Test
-  def testWriteLeaderEpochCheckpointAfterDirectoryRename(): Unit = {
+  def testWriteLeaderEpochCheckpointAndPartitionMetadataAfterDirectoryRename(): Unit = {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
     assertEquals(Some(5), log.latestEpoch)
 
-    // Ensure that after a directory rename, the epoch cache is written to the right location
+    // Ensure that after a directory rename, the epoch cache and partition metadata are written to the right location
     val tp = Log.parseTopicPartitionName(log.dir)
     log.renameDir(Log.logDeleteDirName(tp))
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
     assertEquals(Some(10), log.latestEpoch)
     assertTrue(LeaderEpochCheckpointFile.newFile(log.dir).exists())
     assertFalse(LeaderEpochCheckpointFile.newFile(this.logDir).exists())
+    assertTrue(PartitionMetadataFile.newFile(log.dir).exists())
+    assertFalse(PartitionMetadataFile.newFile(this.logDir).exists())
   }
 
   @Test

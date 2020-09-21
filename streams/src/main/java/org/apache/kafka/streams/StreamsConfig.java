@@ -1438,6 +1438,6 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     public static void main(final String[] args) {
-        System.out.println(CONFIG.toHtml());
+        System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
     }
 }

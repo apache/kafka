@@ -41,6 +41,7 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.{DescribeLogDirsResponseData, FetchResponseData, LeaderAndIsrResponseData}
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
 import org.apache.kafka.common.metrics.Metrics
@@ -1333,11 +1334,22 @@ class ReplicaManager(val config: KafkaConfig,
                 Some(partition)
             }
 
+            // We propagate the partition state down if:
+            // 1. The leader epoch is higher than the current leader epoch of the partition
+            // 2. The leader epoch is same as the current leader epoch but a new topic id is being assigned. This is
+            //    needed to handle the case where a topic id is assigned for the first time after upgrade.
+            def propagatePartitionState(requestLeaderEpoch: Int, currentLeaderEpoch: Int, partition: Partition): Boolean = {
+              requestLeaderEpoch > currentLeaderEpoch ||
+                (requestLeaderEpoch == currentLeaderEpoch &&
+                  partition.log.map(_.topicID).isEmpty &&
+                  topicIds.get(topicPartition.topic()) != MessageUtil.ZERO_UUID)
+            }
+
             // Next check partition's leader epoch
             partitionOpt.foreach { partition =>
               val currentLeaderEpoch = partition.getLeaderEpoch
               val requestLeaderEpoch = partitionState.leaderEpoch
-              if (requestLeaderEpoch > currentLeaderEpoch) {
+              if (propagatePartitionState(requestLeaderEpoch, currentLeaderEpoch, partition)) {
                 // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
                 // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
                 if (partitionState.replicas.contains(localBrokerId))
@@ -1406,24 +1418,26 @@ class ReplicaManager(val config: KafkaConfig,
             if (localLog(topicPartition).isEmpty)
               markPartitionOffline(topicPartition)
             else {
-              // Write the partition metadata file if it is empty and we have a topic Id to write to it
               val id = topicIds.get(topicPartition.topic())
-              if (id != null && id != MessageUtil.ZERO_UUID) {
+              // Ensure we have not received a request from an older protocol
+              if (id != null && !id.equals(MessageUtil.ZERO_UUID)) {
                 val log = localLog(topicPartition).get
-                if (log.partitionMetadataFile.isEmpty || log.partitionMetadataFile.get.notExists()) {
-                  stateChangeLogger.warn(s"Partition metadata file for topic ${topicPartition.topic} +" +
-                    s"partition ${topicPartition.partition} is offline.")
+                // Check if the topic ID is in memory, if not, it must be new to the broker.
+                // If the broker previously wrote it to file, it would be recovered on restart after failure.
+                if (!log.topicID.equals(MessageUtil.ZERO_UUID)) {
+                  // Check if topic ID in request matches the topic ID in memory.
+                  if (!log.topicID.equals(topicIds.get(topicPartition.topic))) {
+                    stateChangeLogger.warn(s"Topic Id in memory: ${log.topicID.toString} does not" +
+                      s" match the topic Id provided in the request: " +
+                      s"${topicIds.get(topicPartition.topic).toString}.")
+                  }
                 } else {
+                  // Write the partition metadata file if it is empty.
                   if (log.partitionMetadataFile.get.isEmpty()) {
                     log.partitionMetadataFile.get.write(topicIds.get(topicPartition.topic))
+                    log.topicID = topicIds.get(topicPartition.topic)
                   } else {
-                    // Check if the topic ID in the file matches the topic ID provided in the request.
-                    // Warn if they do not match.
-                    val partitionMetadata = log.partitionMetadataFile.get.read()
-                    if (partitionMetadata.topicId != topicIds.get(topicPartition.topic)) {
-                      stateChangeLogger.warn(s"Topic Id on file: ${partitionMetadata.topicId.toString} does not" +
-                        s" match the topic Id provided in the request: ${topicIds.get(topicPartition.topic)}.")
-                    }
+                    stateChangeLogger.warn("Partition metadata file already contains content.")
                   }
                 }
               }
@@ -1440,25 +1454,38 @@ class ReplicaManager(val config: KafkaConfig,
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
           val version = leaderAndIsrRequest.version()
-          val responsePartitions =
-            if (version < 4) {
-              responseMap.iterator.map { case (tp, error) =>
-                new LeaderAndIsrPartitionError()
-                  .setTopicName(tp.topic)
+          if (version < 4) {
+            val responsePartitions = responseMap.iterator.map { case (tp, error) =>
+              new LeaderAndIsrPartitionError()
+                .setTopicName(tp.topic)
+                .setPartitionIndex(tp.partition)
+                .setErrorCode(error.code)
+            }.toBuffer
+            new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+              .setErrorCode(Errors.NONE.code)
+              .setPartitionErrors(responsePartitions.asJava))
+          } else {
+            val topics = new mutable.HashMap[String, List[LeaderAndIsrPartitionError]]
+            responseMap.asJava.forEach { case (tp, error) =>
+              if (topics.get(tp.topic) == None) {
+                topics.put(tp.topic, List(new LeaderAndIsrPartitionError()
+                                                                .setPartitionIndex(tp.partition)
+                                                                .setErrorCode(error.code)))
+              } else {
+                topics.put(tp.topic, new LeaderAndIsrPartitionError()
                   .setPartitionIndex(tp.partition)
-                  .setErrorCode(error.code)
-              }.toBuffer
-            } else {
-              responseMap.iterator.map { case (tp, error) =>
-                new LeaderAndIsrPartitionError()
-                  .setTopicID(topicIds.get(tp.topic))
-                  .setPartitionIndex(tp.partition)
-                  .setErrorCode(error.code)
-              }.toBuffer
+                  .setErrorCode(error.code)::topics.get(tp.topic).get)
+              }
             }
-          new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
-            .setErrorCode(Errors.NONE.code)
-            .setPartitionErrors(responsePartitions.asJava))
+            val topicErrors = topics.iterator.map { case (topic, partitionError) =>
+              new LeaderAndIsrTopicError()
+                .setTopicID(topicIds.get(topic))
+                .setPartitionErrors(partitionError.asJava)
+            }.toBuffer
+            new LeaderAndIsrResponse(new LeaderAndIsrResponseData()
+              .setErrorCode(Errors.NONE.code)
+              .setTopics(topicErrors.asJava))
+          }
         }
       }
       val endMs = time.milliseconds()

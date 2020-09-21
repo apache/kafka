@@ -22,7 +22,7 @@ import java.lang.{Long => JLong}
 import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
 import java.util.Map.{Entry => JEntry}
-import java.util.Optional
+import java.util.{Optional, UUID}
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 import java.util.regex.Pattern
@@ -37,6 +37,7 @@ import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchI
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.FetchResponseData
+import org.apache.kafka.common.protocol.MessageUtil
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -291,7 +292,9 @@ class Log(@volatile private var _dir: File,
   // Visible for testing
   @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
-  var partitionMetadataFile : Option[PartitionMetadataFile] = None
+  @volatile var partitionMetadataFile : Option[PartitionMetadataFile] = None
+
+  @volatile var topicID : UUID = MessageUtil.ZERO_UUID
 
   locally {
     // create the log directory if it doesn't exist
@@ -317,6 +320,11 @@ class Log(@volatile private var _dir: File,
     if (!producerStateManager.isEmpty)
       throw new IllegalStateException("Producer state must be empty during log initialization")
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
+
+    // Recover topic ID if present
+    if (!partitionMetadataFile.get.isEmpty()) {
+      topicID = partitionMetadataFile.get.read().topicId
+    }
   }
 
   def dir: File = _dir

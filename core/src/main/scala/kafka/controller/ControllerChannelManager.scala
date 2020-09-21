@@ -390,6 +390,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
         .setRemovingReplicas(replicaAssignment.removingReplicas.map(Integer.valueOf).asJava)
         .setIsNew(isNew || alreadyNew))
     }
+
     addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
   }
 

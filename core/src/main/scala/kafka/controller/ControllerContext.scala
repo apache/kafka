@@ -317,7 +317,10 @@ class ControllerContext {
     topicsToBeDeleted -= topic
     topicsWithDeletionStarted -= topic
     allTopics -= topic
-    topicIds.remove(topic)
+    if (topicIds.get(topic)!= None) {
+      topicNames.remove(topicIds.get(topic).get)
+      topicIds.remove(topic)
+    }
     partitionAssignments.remove(topic).foreach { assignments =>
       assignments.keys.foreach { partition =>
         partitionLeadershipInfo.remove(new TopicPartition(topic, partition))

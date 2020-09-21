@@ -17,10 +17,12 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaderAndIsrResponseData;
+import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.FlattenedIterator;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
@@ -45,8 +47,16 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         this.data = new LeaderAndIsrResponseData(struct, version);
     }
 
-    public List<LeaderAndIsrPartitionError> partitions() {
-        return data.partitionErrors();
+    public List<LeaderAndIsrTopicError> topics() {
+        return this.data.topics();
+    }
+
+    public Iterable<LeaderAndIsrPartitionError> partitions() {
+        if (data.topics().isEmpty()) {
+            return data.partitionErrors();
+        }
+        return () -> new FlattenedIterator<>(data.topics().iterator(),
+            topic -> topic.partitionErrors().iterator());
     }
 
     public Errors error() {
@@ -58,8 +68,17 @@ public class LeaderAndIsrResponse extends AbstractResponse {
         Errors error = error();
         if (error != Errors.NONE)
             // Minor optimization since the top-level error applies to all partitions
-            return Collections.singletonMap(error, data.partitionErrors().size());
-        return errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())));
+            if (data.topics().isEmpty()) {
+                return Collections.singletonMap(error, data.partitionErrors().size());
+            } else {
+                return Collections.singletonMap(error,
+                        data.topics().stream().mapToInt(t -> t.partitionErrors().size()).sum());
+            }
+        if (data.topics().isEmpty()) {
+            return errorCounts(data.partitionErrors().stream().map(l -> Errors.forCode(l.errorCode())));
+        }
+        return errorCounts(data.topics().stream().flatMap(t -> t.partitionErrors().stream()).map(l ->
+                Errors.forCode(l.errorCode())));
     }
 
     public static LeaderAndIsrResponse parse(ByteBuffer buffer, short version) {

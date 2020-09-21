@@ -156,7 +156,7 @@ public class LeaderAndIsrRequestTest {
                 topicIds = new HashMap<>();
             }
 
-            //  In between versions 1 and 5 there are TopicStates, but no topicIds, so deserialized requests will have
+            //  In versions 2-4 there are TopicStates, but no topicIds, so deserialized requests will have
             //  Zero UUIDs in place.
             if (version > 1 && version < 5) {
                 topicIds.put("topic0", MessageUtil.ZERO_UUID);
@@ -181,7 +181,7 @@ public class LeaderAndIsrRequestTest {
             partitionStates.add(new LeaderAndIsrPartitionState()
                 .setTopicName(tp.topic())
                 .setPartitionIndex(tp.partition()));
-            topicIds.putIfAbsent(tp.topic(), UUID.randomUUID());
+            topicIds.put(tp.topic(), UUID.randomUUID());
         }
         LeaderAndIsrRequest.Builder builder = new LeaderAndIsrRequest.Builder((short) 2, 0, 0, 0,
             partitionStates, topicIds, Collections.emptySet());
