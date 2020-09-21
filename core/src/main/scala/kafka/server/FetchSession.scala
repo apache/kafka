@@ -214,9 +214,9 @@ class FetchSession(val id: Int,
     partitionMap.isEmpty
   }
 
-  def lastUsedKey: LastUsedKey = synchronized {
-    LastUsedKey(lastUsedMs, id)
-  }
+//  def lastUsedKey: LastUsedKey = synchronized {
+//    LastUsedKey(lastUsedMs, id)
+//  }
 
   def evictableKey: EvictableKey = synchronized {
     EvictableKey(privileged, cachedSize, id)
@@ -495,10 +495,10 @@ class IncrementalFetchContext(private val time: Time,
   }
 }
 
-case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
-  override def compareTo(other: LastUsedKey): Int =
-    (lastUsedMs, id) compare (other.lastUsedMs, other.id)
-}
+//case class LastUsedKey(lastUsedMs: Long, id: Int) extends Comparable[LastUsedKey] {
+//  override def compareTo(other: LastUsedKey): Int =
+//    (lastUsedMs, id) compare (other.lastUsedMs, other.id)
+//}
 
 case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Comparable[EvictableKey] {
   override def compareTo(other: EvictableKey): Int =
@@ -525,8 +525,8 @@ class FetchSessionCache(private val maxEntries: Int,
   // A map of session ID to FetchSession.
   private val sessions = new mutable.HashMap[Int, FetchSession]
 
-  // Maps last used times to sessions.
-  private val lastUsed = new util.TreeMap[LastUsedKey, FetchSession]
+  // Maps session ID to session, items ordered by time last used.
+  private val lastUsed = new util.LinkedHashMap[Int, FetchSession]
 
   // A map containing sessions which can be evicted by both privileged and
   // unprivileged sessions. (A map which contains all unprivileged sessions.)
@@ -626,14 +626,15 @@ class FetchSessionCache(private val maxEntries: Int,
    */
   def tryEvict(privileged: Boolean, key: EvictableKey, now: Long): Boolean = synchronized {
     // Try to evict an entry which is stale.
-    val lastUsedEntry = lastUsed.firstEntry
-    if (lastUsedEntry == null) {
+    // val lastUsedEntry = lastUsed.firstEntry
+    val lastUsedSession = lastUsed.get(lastUsed.keySet().iterator().next())
+    if (lastUsedSession == null) {
       trace("There are no cache entries to evict.")
       false
-    } else if (now - lastUsedEntry.getKey.lastUsedMs > evictionMs) {
-      val session = lastUsedEntry.getValue
-      trace(s"Evicting stale FetchSession ${session.id}.")
-      remove(session)
+    } else if (now - lastUsedSession.lastUsedMs > evictionMs) {
+      // val session = lastUsedEntry.getValue
+      trace(s"Evicting stale FetchSession ${lastUsedSession.id}.")
+      remove(lastUsedSession)
       evictionsMeter.mark()
       true
     } else {
@@ -681,7 +682,7 @@ class FetchSessionCache(private val maxEntries: Int,
   def remove(session: FetchSession): Option[FetchSession] = synchronized {
     // ahu why is this the only session.synchronized block?
     // val evictableKey = session.synchronized {
-    lastUsed.remove(session.lastUsedKey)
+    lastUsed.remove(session.id)
     val evictableKey = session.evictableKey
     // }
     // ahu optimize
@@ -708,9 +709,10 @@ class FetchSessionCache(private val maxEntries: Int,
   def touch(session: FetchSession, now: Long): Unit = synchronized {
     session.synchronized {
       // Update the lastUsed map.
-      lastUsed.remove(session.lastUsedKey)
+      // lastUsed.remove(session.lastUsedKey)
+      lastUsed.remove(session.id)
       session.lastUsedMs = now
-      lastUsed.put(session.lastUsedKey, session)
+      lastUsed.put(session.id, session)
 
       val oldEvictableKey = session.evictableKey
       session.cachedSize = session.size

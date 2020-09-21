@@ -102,6 +102,8 @@ public class FetchSessionCacheBenchmark {
 
         private LinkedHashMap<TopicPartition, FetchRequest.PartitionData> reqData;
         private LinkedHashMap<TopicPartition, FetchResponse.PartitionData<Records>> respData;
+        private LinkedHashMap<TopicPartition, FetchRequest.PartitionData> reqData2;
+        private LinkedHashMap<TopicPartition, FetchResponse.PartitionData<Records>> respData2;
         FetchSessionCache cache;
         FetchManager fetchManager;
         List<Integer> sessions;
@@ -129,6 +131,15 @@ public class FetchSessionCacheBenchmark {
                     new FetchResponse.PartitionData<>(
                             Errors.NONE, 10, 10, 10, null,
                             MemoryRecords.readableRecords(ByteBuffer.allocate(0))));
+
+            reqData2 = new LinkedHashMap<>();
+            reqData2.put(new TopicPartition("foo", 2),
+                new FetchRequest.PartitionData(15, 0, 100, Optional.empty()));
+            respData2 = new LinkedHashMap<>();
+            respData2.put(new TopicPartition("foo", 2),
+                new FetchResponse.PartitionData<>(
+                    Errors.NONE, 10, 10, 10, null,
+                    MemoryRecords.readableRecords(ByteBuffer.allocate(0))));
 
             int sessionCount = (int)Math.ceil(cacheUtilization / 100.0 * cacheSize);
             for (int i = 0; i < sessionCount; i++) {
@@ -169,8 +180,11 @@ public class FetchSessionCacheBenchmark {
     @Benchmark
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public void sessionCacheBench(TestState state) {
-        FetchContext context = state.fetchManager.newContext(state.fetchMetadata, state.reqData,
+        // FetchContext context = state.fetchManager.newContext(state.fetchMetadata, state.reqData,
+        //         new ArrayList<>(), state.benchPrivileged);
+        // FetchResponse<Records> resp = context.updateAndGenerateResponseData(state.respData);
+        FetchContext context = state.fetchManager.newContext(state.fetchMetadata, state.reqData2,
                 new ArrayList<>(), state.benchPrivileged);
-        FetchResponse<Records> resp = context.updateAndGenerateResponseData(state.respData);
+        FetchResponse<Records> resp = context.updateAndGenerateResponseData(state.respData2);
     }
 }
