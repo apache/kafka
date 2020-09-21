@@ -55,10 +55,14 @@ public class ClusterConnectionStatesTest {
     private ClusterConnectionStates connectionStates;
 
     @Before
-    public void setup() {
+    public void setup() throws UnknownHostException {
+        DnsNameResolver dnsNameResolver = new MockDnsNameResolver.Builder()
+                .withMapping(hostTwoIps, InetAddress.getByName("95.216.24.32"), InetAddress.getByName("40.79.78.1"))
+                .withMapping("localhost", InetAddress.getByName("127.0.0.1"))
+                .build();
         this.connectionStates = new ClusterConnectionStates(
                 reconnectBackoffMs, reconnectBackoffMax,
-                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext());
+                connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), dnsNameResolver);
     }
 
     @Test
@@ -253,8 +257,6 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testSingleIPWithUseAll() throws UnknownHostException {
-        assertEquals(1, ClientUtils.resolve("localhost", ClientDnsLookup.USE_ALL_DNS_IPS).size());
-
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.USE_ALL_DNS_IPS);
@@ -263,8 +265,6 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testMultipleIPsWithDefault() throws UnknownHostException {
-        assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
-
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
@@ -273,8 +273,6 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testMultipleIPsWithUseAll() throws UnknownHostException {
-        assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
-
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
@@ -282,13 +280,11 @@ public class ClusterConnectionStatesTest {
         assertNotSame(addr1, addr2);
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr3 = connectionStates.currentAddress(nodeId1);
-        assertNotSame(addr1, addr3);
+        assertSame(addr1, addr3);
     }
 
     @Test
     public void testHostResolveChange() throws UnknownHostException, ReflectiveOperationException {
-        assertTrue(ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size() > 1);
-
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
 

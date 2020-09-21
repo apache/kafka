@@ -59,7 +59,7 @@ public final class ClientUtils {
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
                     if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
-                        InetAddress[] inetAddresses = InetAddress.getAllByName(host);
+                        InetAddress[] inetAddresses = DefaultDnsNameResolver.DEFAULT_DNS_NAME_RESOLVER.resolve(host);
                         for (InetAddress inetAddress : inetAddresses) {
                             String resolvedCanonicalName = inetAddress.getCanonicalHostName();
                             InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
@@ -106,8 +106,10 @@ public final class ClientUtils {
                 clientSaslMechanism, time, true, logContext);
     }
 
-    static List<InetAddress> resolve(String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
-        InetAddress[] addresses = InetAddress.getAllByName(host);
+    static List<InetAddress> resolve(String host,
+                                     DnsNameResolver dnsNameResolver,
+                                     ClientDnsLookup clientDnsLookup) throws UnknownHostException {
+        InetAddress[] addresses = dnsNameResolver.resolve(host);
 
         switch (clientDnsLookup) {
             case DEFAULT:
