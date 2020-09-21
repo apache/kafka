@@ -1186,7 +1186,8 @@ public class Fetcher<K, V> implements Closeable {
                 }
 
                 builder.add(partition, new FetchRequest.PartitionData(position.offset,
-                        FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize, position.currentLeader.epoch));
+                    FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize,
+                    position.currentLeader.epoch, Optional.empty()));
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
                     partition, position, node);

@@ -382,7 +382,7 @@ class LogSegmentTest {
     val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
       private var epochs = Seq.empty[EpochEntry]
 
-      override def write(epochs: Seq[EpochEntry]): Unit = {
+      override def write(epochs: Iterable[EpochEntry]): Unit = {
         this.epochs = epochs.toVector
       }
 

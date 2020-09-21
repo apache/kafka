@@ -182,9 +182,9 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                             parentVersions.intersect(struct.versions()));
                 }
             } else if (field.type().isStruct()) {
-                if (!structRegistry.commonStructNames().contains(field.name())) {
+                if (!structRegistry.commonStructNames().contains(field.typeString())) {
                     generateClass(Optional.empty(),
-                            field.type().toString(),
+                            field.typeString(),
                             structRegistry.findStruct(field),
                             parentVersions.intersect(struct.versions()));
                 }
