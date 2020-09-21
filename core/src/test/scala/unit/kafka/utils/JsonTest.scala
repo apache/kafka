@@ -40,15 +40,15 @@ class JsonTest {
   def testJsonParse(): Unit = {
     val jnf = JsonNodeFactory.instance
 
-    assertEquals(Json.parseFull("{}"), Some(JsonValue(new ObjectNode(jnf))))
-    assertEquals(Json.tryParseFull("{}"), Right(JsonValue(new ObjectNode(jnf))))
+    assertEquals(Some(JsonValue(new ObjectNode(jnf))), Json.parseFull("{}"))
+    assertEquals(Right(JsonValue(new ObjectNode(jnf))), Json.tryParseFull("{}"))
     assertThrows(classOf[IllegalArgumentException], () => Json.tryParseFull(null))
     assertThrows(classOf[IllegalArgumentException], () => Json.tryParseBytes(null))
 
-    assertEquals(Json.parseFull(""), Option(MissingNode.getInstance()).map(JsonValue(_)))
-    assertEquals(Json.tryParseFull(""), Right(MissingNode.getInstance()).map(JsonValue(_)))
+    assertEquals(Option(MissingNode.getInstance()).map(JsonValue(_)), Json.parseFull(""))
+    assertEquals(Right(MissingNode.getInstance()).map(JsonValue(_)), Json.tryParseFull(""))
 
-    assertEquals(Json.parseFull("""{"foo":"bar"s}"""), None)
+    assertEquals(None, Json.parseFull("""{"foo":"bar"s}"""))
     val tryRes = Json.tryParseFull("""{"foo":"bar"s}""")
     assertTrue(tryRes.isInstanceOf[Left[_, JsonValue]])
 
@@ -56,18 +56,18 @@ class JsonTest {
       jnf,
       Map[String, JsonNode]("foo" -> new TextNode("bar"), "is_enabled" -> BooleanNode.TRUE).asJava
     )
-    assertEquals(Json.parseFull("""{"foo":"bar", "is_enabled":true}"""), Some(JsonValue(objectNode)))
-    assertEquals(Json.tryParseFull("""{"foo":"bar", "is_enabled":true}"""), Right(JsonValue(objectNode)))
+    assertEquals(Some(JsonValue(objectNode)), Json.parseFull("""{"foo":"bar", "is_enabled":true}"""))
+    assertEquals(Right(JsonValue(objectNode)), Json.tryParseFull("""{"foo":"bar", "is_enabled":true}"""))
 
     val arrayNode = new ArrayNode(jnf)
     Vector(1, 2, 3).map(new IntNode(_)).foreach(arrayNode.add)
-    assertEquals(Json.parseFull("[1, 2, 3]"), Some(JsonValue(arrayNode)))
+    assertEquals(Some(JsonValue(arrayNode)), Json.parseFull("[1, 2, 3]"))
 
     // Test with encoder that properly escapes backslash and quotes
     val map = Map("foo1" -> """bar1\,bar2""", "foo2" -> """\bar""").asJava
     val encoded = Json.encodeAsString(map)
     val decoded = Json.parseFull(encoded)
-    assertEquals(Json.parseFull("""{"foo1":"bar1\\,bar2", "foo2":"\\bar"}"""), decoded)
+    assertEquals(decoded, Json.parseFull("""{"foo1":"bar1\\,bar2", "foo2":"\\bar"}"""))
   }
 
   @Test
