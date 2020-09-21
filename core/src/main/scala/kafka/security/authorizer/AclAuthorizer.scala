@@ -25,6 +25,7 @@ import kafka.security.authorizer.AclAuthorizer.{AclSeqs, ResourceOrdering, Versi
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils._
+import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
@@ -144,7 +145,7 @@ class AclAuthorizer extends Authorizer with Logging {
   override def configure(javaConfigs: util.Map[String, _]): Unit = {
     val configs = javaConfigs.asScala
     val props = new java.util.Properties()
-    configs.foreach { case (key, value) => props.put(key, value.toString) }
+    configs.forKeyValue { (key, value) => props.put(key, value.toString) }
 
     superUsers = configs.get(AclAuthorizer.SuperUsersProp).collect {
       case str: String if str.nonEmpty => str.split(";").map(s => SecurityUtils.parseKafkaPrincipal(s.trim)).toSet
@@ -188,28 +189,27 @@ class AclAuthorizer extends Authorizer with Logging {
   override def createAcls(requestContext: AuthorizableRequestContext,
                           aclBindings: util.List[AclBinding]): util.List[_ <: CompletionStage[AclCreateResult]] = {
     val results = new Array[AclCreateResult](aclBindings.size)
-    val aclsToCreate = aclBindings.asScala.zipWithIndex
-      .filter { case (aclBinding, i) =>
-        try {
-          if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
-            throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
-              s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
-          }
-          AuthorizerUtils.validateAclBinding(aclBinding)
-          true
-        } catch {
-          case e: Throwable =>
-            results(i) = new AclCreateResult(new InvalidRequestException("Failed to create ACL", apiException(e)))
-            false
+    val aclsToCreate = aclBindings.asScala.zipWithIndex.filter { case (aclBinding, i) =>
+      try {
+        if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
+          throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
+            s"${KafkaConfig.InterBrokerProtocolVersionProp} of $KAFKA_2_0_IV1 or greater")
         }
-      }.groupBy(_._1.pattern)
+        AuthorizerUtils.validateAclBinding(aclBinding)
+        true
+      } catch {
+        case e: Throwable =>
+          results(i) = new AclCreateResult(new InvalidRequestException("Failed to create ACL", apiException(e)))
+          false
+      }
+    }.groupBy(_._1.pattern)
 
     if (aclsToCreate.nonEmpty) {
       lock synchronized {
-        aclsToCreate.foreach { case (resource, aclsWithIndex) =>
+        aclsToCreate.forKeyValue { (resource, aclsWithIndex) =>
           try {
             updateResourceAcls(resource) { currentAcls =>
-              val newAcls = aclsWithIndex.map { case (acl, index) => new AclEntry(acl.entry) }
+              val newAcls = aclsWithIndex.map { case (acl, _) => new AclEntry(acl.entry) }
               currentAcls ++ newAcls
             }
             aclsWithIndex.foreach { case (_, index) => results(index) = AclCreateResult.SUCCESS }
@@ -254,7 +254,7 @@ class AclAuthorizer extends Authorizer with Logging {
         resource -> matchingFilters
       }.toMap.filter(_._2.nonEmpty)
 
-      resourcesToUpdate.foreach { case (resource, matchingFilters) =>
+      resourcesToUpdate.forKeyValue { (resource, matchingFilters) =>
         val resourceBindingsBeingDeleted = new mutable.HashMap[AclBinding, Int]()
         try {
           updateResourceAcls(resource) { currentAcls =>
@@ -289,8 +289,10 @@ class AclAuthorizer extends Authorizer with Logging {
 
   @nowarn("cat=optimizer")
   override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = {
-      val aclBindings = new util.ArrayList[AclBinding]()
-      aclCache.foreach { case (resource, versionedAcls) =>
+    val aclBindings = new util.ArrayList[AclBinding]()
+    // Using `forKeyValue` triggers a scalac bug related to suppression of optimizer warnings, we
+    // should change this code once that's fixed
+    aclCache.foreach { case (resource, versionedAcls) =>
         versionedAcls.acls.foreach { acl =>
           val binding = new AclBinding(resource, acl.ace)
           if (filter.matches(binding))
@@ -368,7 +370,6 @@ class AclAuthorizer extends Authorizer with Logging {
   }
 
   @nowarn("cat=deprecation")
-  @nowarn("cat=optimizer")
   private def matchingAcls(resourceType: ResourceType, resourceName: String): AclSeqs = {
     // this code is performance sensitive, make sure to run AclAuthorizerBenchmark after any changes
 
@@ -386,7 +387,7 @@ class AclAuthorizer extends Authorizer with Logging {
     aclCacheSnapshot
       .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
       .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
-      .foreach { case (resource, acls) =>
+      .forKeyValue { (resource, acls) =>
         if (resourceName.startsWith(resource.name)) prefixed ++= acls.acls
       }
 

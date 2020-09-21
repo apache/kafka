@@ -34,6 +34,7 @@ import kafka.network.SocketServer._
 import kafka.security.CredentialProvider
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils._
+import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
@@ -404,7 +405,7 @@ class SocketServer(val config: KafkaConfig,
   private def waitForAuthorizerFuture(acceptor: Acceptor,
                                       authorizerFutures: Map[Endpoint, CompletableFuture[Void]]): Unit = {
     //we can't rely on authorizerFutures.get() due to ephemeral ports. Get the future using listener name
-    authorizerFutures.foreach { case (endpoint, future) =>
+    authorizerFutures.forKeyValue { (endpoint, future) =>
       if (endpoint.listenerName == Optional.of(acceptor.endPoint.listenerName.value))
         future.join()
     }
