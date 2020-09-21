@@ -34,7 +34,7 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
         timestampSerializer = new LongSerializer();
     }
 
-    private static boolean skipTimestampAndCompareValues(final byte[] left, final byte[] right) {
+    private static boolean valuesAreSame(final byte[] left, final byte[] right) {
         for (int i = Long.BYTES; i < left.length; i++) {
             if (left[i] != right[i]) {
                 return false;
@@ -50,31 +50,29 @@ public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimest
     }
 
     /**
-     * @param left  the serialized byte array of the old record in state store
-     * @param right the serialized byte array of the new record being processed
+     * @param oldRecord  the serialized byte array of the old record in state store
+     * @param newRecord the serialized byte array of the new record being processed
      * @return true if the two serialized values are the same (excluding timestamp) or 
      *              if the timestamp of right is less than left (indicating out of order record)
      *         false otherwise
      */
-    public static boolean compareValuesAndCheckForIncreasingTimestamp(final byte[] left, final byte[] right) {
-        if (left == right) {
+    public static boolean valuesAreSameAndTimeIsIncreasing(final byte[] oldRecord, final byte[] newRecord) {
+        if (oldRecord == newRecord) {
             return true;
         }
-        if (left == null || right == null) {
+        if (oldRecord == null || newRecord == null) {
             return false;
         }
 
-        final int length = left.length;
-        if (right.length != length) {
+        final int length = oldRecord.length;
+        if (newRecord.length != length) {
             return false;
         }
 
-        final long leftTimestamp = extractTimestamp(left);
-        final long rightTimestamp = extractTimestamp(right);
-        if (rightTimestamp < leftTimestamp) {
+        if (extractTimestamp(newRecord) < extractTimestamp(oldRecord)) {
             return false;
         }
-        return skipTimestampAndCompareValues(left, right);
+        return valuesAreSame(oldRecord, newRecord);
     }
 
     @Override
