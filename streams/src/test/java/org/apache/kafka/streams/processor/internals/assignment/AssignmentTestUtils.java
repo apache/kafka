@@ -88,6 +88,8 @@ public final class AssignmentTestUtils {
     public static final Set<TaskId> EMPTY_TASKS = emptySet();
     public static final Map<TopicPartition, Long> EMPTY_CHANGELOG_END_OFFSETS = new HashMap<>();
 
+    private AssignmentTestUtils() {}
+
     static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
         final Map<UUID, ClientState> clientStates = new HashMap<>();
         int nthState = 1;
