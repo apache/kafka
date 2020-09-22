@@ -1199,19 +1199,19 @@ public class StreamThreadTest {
         final AtomicBoolean shouldThrow = new AtomicBoolean(false);
         final AtomicBoolean processed = new AtomicBoolean(false);
         internalTopologyBuilder.addProcessor(
-                "proc",
-                () -> new Processor<Object, Object, Object, Object>() {
+            "proc",
+            () -> new Processor<Object, Object, Object, Object>() {
 
-                    @Override
-                    public void process(final Object key, final Object value) {
-                        if (shouldThrow.get()) {
-                            throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
-                        } else {
-                            processed.set(true);
-                        }
+                @Override
+                public void process(final Object key, final Object value) {
+                    if (shouldThrow.get()) {
+                        throw new TaskCorruptedException(singletonMap(task1, new HashSet<>(singleton(storeChangelogTopicPartition))));
+                    } else {
+                        processed.set(true);
                     }
-                },
-                "name");
+                }
+            },
+            "name");
         internalTopologyBuilder.addStateStore(
                 Stores.keyValueStoreBuilder(
                         Stores.persistentKeyValueStore(storeName),
