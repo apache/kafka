@@ -41,7 +41,7 @@ object Log4jController {
           level = ancestor.getLevel
         }
       } else {
-        existingLogger(ROOT_LOGGER).getLevel
+        level = existingLogger(ROOT_LOGGER).getLevel
       }
     }
     level.toString
