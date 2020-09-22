@@ -1890,7 +1890,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val authorizedForDescribeConfigs = filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
           topics, logIfDenied = false)(identity).map(name => name -> results.find(name)).toMap
 
-        results.forKeyValue { topic =>
+        results.forEach { topic =>
           if (results.findAll(topic.name).size > 1) {
             topic.setErrorCode(Errors.INVALID_REQUEST.code)
             topic.setErrorMessage("Found multiple entries for this topic.")
@@ -1904,7 +1904,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         def handleCreateTopicsResults(errors: Map[String, ApiError]): Unit = {
-          errors.foreach { case (topicName, error) =>
+          errors.forKeyValue { case (topicName, error) =>
             val result = results.find(topicName)
             result.setErrorCode(error.error.code)
               .setErrorMessage(error.message)
