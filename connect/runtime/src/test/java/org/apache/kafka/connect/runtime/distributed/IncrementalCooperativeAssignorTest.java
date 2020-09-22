@@ -989,18 +989,24 @@ public class IncrementalCooperativeAssignorTest {
         assignor.handleLostAssignments(lostAssignments, newSubmissions,
                 new ArrayList<>(configuredAssignment.values()), memberConfigs);
 
-        // newWorker joined first, so should be picked up first as a candidate for reassignment
+        // both the newWorkers would need to be considered for re assignment of connectors and tasks
+        List<String> listOfConnectorsInLast2Workers = new ArrayList<>();
+        listOfConnectorsInLast2Workers.addAll(configuredAssignment.getOrDefault(newWorker, new WorkerLoad.Builder(flakyWorker).build())
+            .connectors());
+        listOfConnectorsInLast2Workers.addAll(configuredAssignment.getOrDefault(flakyWorker, new WorkerLoad.Builder(flakyWorker).build())
+            .connectors());
+        List<ConnectorTaskId> listOfTasksInLast2Workers = new ArrayList<>();
+        listOfTasksInLast2Workers.addAll(configuredAssignment.getOrDefault(newWorker, new WorkerLoad.Builder(flakyWorker).build())
+            .tasks());
+        listOfTasksInLast2Workers.addAll(configuredAssignment.getOrDefault(flakyWorker, new WorkerLoad.Builder(flakyWorker).build())
+            .tasks());
         assertTrue("Wrong assignment of lost connectors",
-                configuredAssignment.getOrDefault(newWorker, new WorkerLoad.Builder(flakyWorker).build())
-                        .connectors()
-                        .containsAll(lostAssignments.connectors()));
+            listOfConnectorsInLast2Workers.containsAll(lostAssignments.connectors()));
         assertTrue("Wrong assignment of lost tasks",
-                configuredAssignment.getOrDefault(newWorker, new WorkerLoad.Builder(flakyWorker).build())
-                        .tasks()
-                        .containsAll(lostAssignments.tasks()));
+            listOfTasksInLast2Workers.containsAll(lostAssignments.tasks()));
         assertThat("Wrong set of workers for reassignments",
-                Collections.emptySet(),
-                is(assignor.candidateWorkersForReassignment));
+            Collections.emptySet(),
+            is(assignor.candidateWorkersForReassignment));
         assertEquals(0, assignor.scheduledRebalance);
         assertEquals(0, assignor.delay);
     }
