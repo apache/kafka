@@ -183,21 +183,21 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val initialConnectionCount = connectionCount
 
     // new broker-wide connection rate limit
-    val connRateLimit = 18
+    val connRateLimit = 9
 
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)
     verifyConnectionRate(2 * connRateLimit, Int.MaxValue, "PLAINTEXT")
     waitForConnectionCount(initialConnectionCount)
 
-    // Reduce total broker connection rate limit to 18 at the cluster level and verify the limit is enforced
+    // Reduce total broker connection rate limit to 9 at the cluster level and verify the limit is enforced
     props.clear()  // so that we do not pass security protocol map which cannot be set at the cluster level
     props.put(KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString)
     reconfigureServers(props, perBrokerConfig = false, (KafkaConfig.MaxConnectionCreationRateProp, connRateLimit.toString))
-    verifyConnectionRate(10, connRateLimit, "PLAINTEXT")
+    verifyConnectionRate(8, connRateLimit, "PLAINTEXT")
     waitForConnectionCount(initialConnectionCount)
 
-    // Set 7 conn/sec rate limit for each listener and verify it gets enforced
-    val listenerConnRateLimit = 7
+    // Set 4 conn/sec rate limit for each listener and verify it gets enforced
+    val listenerConnRateLimit = 4
     val plaintextListenerProp = s"${listener.configPrefix}${KafkaConfig.MaxConnectionCreationRateProp}"
     props.put(s"listener.name.external.${KafkaConfig.MaxConnectionCreationRateProp}", listenerConnRateLimit.toString)
     props.put(plaintextListenerProp, listenerConnRateLimit.toString)
@@ -210,17 +210,17 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     futures.foreach(_.get(40, TimeUnit.SECONDS))
     waitForConnectionCount(initialConnectionCount)
 
-    // increase connection rate limit on PLAINTEXT (inter-broker) listener to 22 and verify that it will be able to
+    // increase connection rate limit on PLAINTEXT (inter-broker) listener to 12 and verify that it will be able to
     // achieve this rate even though total connection rate may exceed broker-wide rate limit, while EXTERNAL listener
     // should not exceed its listener limit
-    val newPlaintextRateLimit = 22
+    val newPlaintextRateLimit = 12
     props.put(plaintextListenerProp, newPlaintextRateLimit.toString)
     reconfigureServers(props, perBrokerConfig = true, (plaintextListenerProp, newPlaintextRateLimit.toString))
 
     val plaintextFuture = executor.submit((() =>
-      verifyConnectionRate(18, newPlaintextRateLimit, "PLAINTEXT")): Runnable)
+      verifyConnectionRate(10, newPlaintextRateLimit, "PLAINTEXT")): Runnable)
     val externalFuture = executor.submit((() =>
-      verifyConnectionRate(5, listenerConnRateLimit, "EXTERNAL")): Runnable)
+      verifyConnectionRate(3, listenerConnRateLimit, "EXTERNAL")): Runnable)
     plaintextFuture.get(40, TimeUnit.SECONDS)
     externalFuture.get(40, TimeUnit.SECONDS)
     waitForConnectionCount(initialConnectionCount)
