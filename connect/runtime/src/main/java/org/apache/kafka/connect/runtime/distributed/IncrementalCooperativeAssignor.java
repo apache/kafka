@@ -34,7 +34,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
@@ -604,20 +603,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     existing.worker(),
                     w -> new ConnectorsAndTasks.Builder().build());
                 resources.tasks().add(tasks.next());
-            }
-        }
-
-        numToRevoke = floorTasks;
-        for (WorkerLoad existing : existingWorkers) {
-            Iterator<ConnectorTaskId> tasks = existing.tasks().iterator();
-            for (int i = existing.tasksSize(); i > floorTasks && numToRevoke > 0; --i, --numToRevoke) {
-                ConnectorsAndTasks resources = revoking.computeIfAbsent(
-                    existing.worker(),
-                    w -> new ConnectorsAndTasks.Builder().build());
-                resources.tasks().add(tasks.next());
-            }
-            if (numToRevoke == 0) {
-                break;
             }
         }
 
