@@ -24,6 +24,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.log.{LeaderOffsetIncremented, LogAppendInfo}
 import kafka.server.AbstractFetcherThread.ReplicaFetch
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
@@ -252,7 +253,7 @@ class ReplicaFetcherThread(name: String,
     val partitionsWithError = mutable.Set[TopicPartition]()
 
     val builder = fetchSessionHandler.newBuilder(partitionMap.size, false)
-    partitionMap.foreach { case (topicPartition, fetchState) =>
+    partitionMap.forKeyValue { (topicPartition, fetchState) =>
       // We will not include a replica in the fetch request if it should be throttled.
       if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, fetchState, topicPartition)) {
         try {
