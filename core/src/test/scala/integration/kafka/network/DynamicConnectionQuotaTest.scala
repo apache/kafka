@@ -179,8 +179,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     reconfigureServers(props, perBrokerConfig = true, (KafkaConfig.ListenersProp, newListeners))
     waitForListener("EXTERNAL")
 
-    // we need to set the initialConnectionCount earlier and pass to verifyConnectionRate method
-    // so that the race condition won't occur for the following multi-thread test cases
+    // The expected connection count after each test run
     val initialConnectionCount = connectionCount
 
     // new broker-wide connection rate limit
@@ -325,7 +324,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  // make sure the connection count state is the same as the expectedConnectionCount
   private def waitForConnectionCount(expectedConnectionCount: Int): Unit = {
     TestUtils.waitUntilTrue(() => expectedConnectionCount == connectionCount,
       s"Connections not closed (expected = $expectedConnectionCount current = $connectionCount)")
