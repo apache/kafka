@@ -55,7 +55,7 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() {
-        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
+        assertEquals(apiKeysInResponse(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE), new HashSet<>(ApiKeys.enabledApis()));
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.supportedFeatures().isEmpty());
         assertTrue(ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeatures().isEmpty());
         assertEquals(ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH, ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.finalizedFeaturesEpoch());
@@ -67,7 +67,7 @@ public class ApiVersionsResponseTest {
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordBatch.CURRENT_MAGIC_VALUE,
             Features.emptySupportedFeatures());
-        assertEquals(Utils.mkSet(ApiKeys.values()), apiKeysInResponse(response));
+        assertEquals(new HashSet<>(ApiKeys.enabledApis()), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data.supportedFeatures().isEmpty());
         assertTrue(response.data.finalizedFeatures().isEmpty());
@@ -77,9 +77,9 @@ public class ApiVersionsResponseTest {
     @Test
     public void shouldHaveCorrectDefaultApiVersionsResponse() {
         Collection<ApiVersionsResponseKey> apiVersions = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys();
-        assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.values().length);
+        assertEquals("API versions for all API keys must be maintained.", apiVersions.size(), ApiKeys.enabledApis().size());
 
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKeys key : ApiKeys.enabledApis()) {
             ApiVersionsResponseKey version = ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.apiVersion(key.id);
             assertNotNull("Could not find ApiVersion for API " + key.name, version);
             assertEquals("Incorrect min version for Api " + key.name, version.minVersion(), key.oldestVersion());
