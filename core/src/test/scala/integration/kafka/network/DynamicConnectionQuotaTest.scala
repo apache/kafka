@@ -338,9 +338,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
    * is at least certain value. Note that throttling is tested and verified more accurately in ConnectionQuotasTest
    */
   private def verifyConnectionRate(minConnectionRate: Int, maxConnectionRate: Int, listener: String): Unit = {
-    // duration such that the maximum rate should be at most 10% higher than the rate limit. Since all connections
+    // duration such that the maximum rate should be at most 20% higher than the rate limit. Since all connections
     // can fall in the beginning of quota window, it is OK to create extra 2 seconds (window size) worth of connections
-    val runTimeMs = TimeUnit.SECONDS.toMillis(25)
+    val runTimeMs = TimeUnit.SECONDS.toMillis(13)
     val startTimeMs = System.currentTimeMillis
     val endTimeMs = startTimeMs + runTimeMs
 
@@ -351,7 +351,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
     val elapsedMs = System.currentTimeMillis - startTimeMs
     val actualRate = (connCount.toDouble / elapsedMs) * 1000
-    val rateCap = if (maxConnectionRate < Int.MaxValue) 1.1 * maxConnectionRate.toDouble else Int.MaxValue.toDouble
+    val rateCap = if (maxConnectionRate < Int.MaxValue) 1.2 * maxConnectionRate.toDouble else Int.MaxValue.toDouble
     assertTrue(s"Listener $listener connection rate $actualRate must be below $rateCap", actualRate <= rateCap)
     assertTrue(s"Listener $listener connection rate $actualRate must be above $minConnectionRate", actualRate >= minConnectionRate)
   }
