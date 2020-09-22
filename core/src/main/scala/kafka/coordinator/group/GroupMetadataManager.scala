@@ -42,7 +42,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
-import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors}
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, Errors, Message, ObjectSerializationCache}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -1021,12 +1021,22 @@ object GroupMetadataManager {
     expected = 1.toShort)
   private val CURRENT_GROUP_KEY_SCHEMA_VERSION = checkVersionOfGeneratedCode(
     clz = classOf[generated.GroupMetadataKey],
-    actual = (generated.GroupMetadataKey.SCHEMAS.length -1).toShort,
+    actual = (generated.GroupMetadataKey.SCHEMAS.length - 1).toShort,
     expected = 2.toShort)
   private val CURRENT_GROUP_METADATA_VALUE_SCHEMA_VERSION = checkVersionOfGeneratedCode(
     clz = classOf[GroupMetadataValue],
     actual = (GroupMetadataValue.SCHEMAS.length - 1).toShort,
     expected = 3.toShort)
+
+  private def serializeMessage(version: Short, message: Message): Array[Byte] = {
+    val cache = new ObjectSerializationCache()
+    val size = message.size(cache, version)
+    val bytes = ByteBuffer.allocate(2 + size)
+    val accessor = new ByteBufferAccessor(bytes)
+    accessor.writeShort(version)
+    message.write(accessor, cache, version)
+    bytes.array()
+  }
 
   /**
    * Generates the key for offset commit message for given (group, topic, partition)
@@ -1036,16 +1046,8 @@ object GroupMetadataManager {
    * @return key for offset commit message
    */
   def offsetCommitKey(groupId: String, topicPartition: TopicPartition): Array[Byte] = {
-    val key = new OffsetCommitKey()
-      .setGroup(groupId)
-      .setTopic(topicPartition.topic())
-      .setPartition(topicPartition.partition())
-    val struct = key.toStruct(CURRENT_OFFSET_KEY_SCHEMA_VERSION)
-
-    val byteBuffer = ByteBuffer.allocate(2 /* version */ + struct.sizeOf)
-    byteBuffer.putShort(CURRENT_OFFSET_KEY_SCHEMA_VERSION)
-    struct.writeTo(byteBuffer)
-    byteBuffer.array()
+    serializeMessage(CURRENT_OFFSET_KEY_SCHEMA_VERSION,
+      new OffsetCommitKey().setGroup(groupId).setTopic(topicPartition.topic()).setPartition(topicPartition.partition()))
   }
 
   /**
@@ -1055,14 +1057,8 @@ object GroupMetadataManager {
    * @return key bytes for group metadata message
    */
   def groupMetadataKey(groupId: String): Array[Byte] = {
-    val key = new kafka.internals.generated.GroupMetadataKey()
-      .setGroup(groupId)
-      .toStruct(CURRENT_GROUP_KEY_SCHEMA_VERSION)
-
-    val byteBuffer = ByteBuffer.allocate(2 /* version */ + key.sizeOf)
-    byteBuffer.putShort(CURRENT_GROUP_KEY_SCHEMA_VERSION)
-    key.writeTo(byteBuffer)
-    byteBuffer.array()
+    serializeMessage(CURRENT_GROUP_KEY_SCHEMA_VERSION,
+      new kafka.internals.generated.GroupMetadataKey().setGroup(groupId))
   }
 
   /**
@@ -1083,29 +1079,22 @@ object GroupMetadataManager {
           .setMetadata(offsetAndMetadata.metadata)
           .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
           // version 1 has a non empty expireTimestamp field
-          .setExpireTimestamp(offsetAndMetadata.expireTimestamp.getOrElse(OffsetCommitRequest.DEFAULT_TIMESTAMP))
-          .toStruct(version))
+          .setExpireTimestamp(offsetAndMetadata.expireTimestamp.getOrElse(OffsetCommitRequest.DEFAULT_TIMESTAMP)))
       } else if (apiVersion < KAFKA_2_1_IV1) {
         val version = 2.toShort
         (version, new OffsetCommitValue()
           .setOffset(offsetAndMetadata.offset)
           .setMetadata(offsetAndMetadata.metadata)
-          .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
-          .toStruct(version))
+          .setCommitTimestamp(offsetAndMetadata.commitTimestamp))
       } else {
         val version = 3.toShort
         (version, new OffsetCommitValue()
           .setOffset(offsetAndMetadata.offset)
           .setMetadata(offsetAndMetadata.metadata)
           .setCommitTimestamp(offsetAndMetadata.commitTimestamp)
-          .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
-          .toStruct(version))
+          .setLeaderEpoch(offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH)))
       }
-
-    val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(version)
-    value.writeTo(byteBuffer)
-    byteBuffer.array()
+    serializeMessage(version, value)
   }
 
   /**
@@ -1161,11 +1150,7 @@ object GroupMetadataManager {
 
     value.setMembers(memberArray.asJava)
 
-    val struct = value.toStruct(version)
-    val byteBuffer = ByteBuffer.allocate(2 /* version */ + struct.sizeOf)
-    byteBuffer.putShort(version)
-    struct.writeTo(byteBuffer)
-    byteBuffer.array()
+    serializeMessage(version, value)
   }
 
   /**
