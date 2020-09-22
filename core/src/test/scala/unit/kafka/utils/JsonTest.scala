@@ -19,7 +19,7 @@ package kafka.utils
 import java.nio.charset.StandardCharsets
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.core.JsonParseException
+import com.fasterxml.jackson.core.{JsonParseException, JsonProcessingException}
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node._
 import kafka.utils.JsonTest.TestObject
@@ -45,8 +45,8 @@ class JsonTest {
     assertThrows(classOf[IllegalArgumentException], () => Json.tryParseFull(null))
     assertThrows(classOf[IllegalArgumentException], () => Json.tryParseBytes(null))
 
-    assertEquals(Option(MissingNode.getInstance()).map(JsonValue(_)), Json.parseFull(""))
-    assertEquals(Right(MissingNode.getInstance()).map(JsonValue(_)), Json.tryParseFull(""))
+    assertEquals(None, Json.parseFull(""))
+    assertEquals(classOf[Left[JsonProcessingException, JsonValue]], Json.tryParseFull("").getClass)
 
     assertEquals(None, Json.parseFull("""{"foo":"bar"s}"""))
     val tryRes = Json.tryParseFull("""{"foo":"bar"s}""")

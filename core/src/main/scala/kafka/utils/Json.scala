@@ -16,8 +16,9 @@
  */
 package kafka.utils
 
-import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.core.{JsonParseException, JsonProcessingException}
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.MissingNode
 import kafka.utils.json.JsonValue
 
 import scala.reflect.ClassTag
@@ -69,8 +70,11 @@ object Json {
    * @return An `Either` which in case of `Left` means an exception and `Right` is the actual return value.
    */
   def tryParseFull(input: String): Either[JsonProcessingException, JsonValue] =
-    try Right(mapper.readTree(input)).map(JsonValue(_))
-    catch { case e: JsonProcessingException => Left(e) }
+    if (input != null && input.isEmpty)
+      Left(new JsonParseException(MissingNode.getInstance().traverse(), "The input string shouldn't be empty"))
+    else
+      try Right(mapper.readTree(input)).map(JsonValue(_))
+      catch { case e: JsonProcessingException => Left(e) }
 
   /**
    * Encode an object into a JSON string. This method accepts any type supported by Jackson's ObjectMapper in
