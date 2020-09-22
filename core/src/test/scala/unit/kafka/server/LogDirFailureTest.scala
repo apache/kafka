@@ -37,7 +37,7 @@ import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
-  * Test whether clients can producer and consume when there is log directory failure
+  * Test whether clients can produce and consume when there is log directory failure
   */
 class LogDirFailureTest extends IntegrationTestHarness {
 

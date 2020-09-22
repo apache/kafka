@@ -31,6 +31,7 @@ import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import kafka.zookeeper.ZooKeeperClientException
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors._
@@ -997,7 +998,8 @@ class Partition(val topicPartition: TopicPartition,
     info.copy(leaderHwChange = if (leaderHWIncremented) LeaderHwChange.Increased else LeaderHwChange.Same)
   }
 
-  def readRecords(fetchOffset: Long,
+  def readRecords(lastFetchedEpoch: Optional[Integer],
+                  fetchOffset: Long,
                   currentLeaderEpoch: Optional[Integer],
                   maxBytes: Int,
                   fetchIsolation: FetchIsolation,
@@ -1012,10 +1014,44 @@ class Partition(val topicPartition: TopicPartition,
     val initialLogStartOffset = localLog.logStartOffset
     val initialLogEndOffset = localLog.logEndOffset
     val initialLastStableOffset = localLog.lastStableOffset
-    val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
 
+    lastFetchedEpoch.ifPresent { fetchEpoch =>
+      val epochEndOffset = lastOffsetForLeaderEpoch(currentLeaderEpoch, fetchEpoch, fetchOnlyFromLeader = false)
+      if (epochEndOffset.error != Errors.NONE) {
+        throw epochEndOffset.error.exception()
+      }
+
+      if (epochEndOffset.hasUndefinedEpochOrOffset) {
+        throw new OffsetOutOfRangeException("Could not determine the end offset of the last fetched epoch " +
+          s"$lastFetchedEpoch from the request")
+      }
+
+      if (epochEndOffset.leaderEpoch < fetchEpoch || epochEndOffset.endOffset < fetchOffset) {
+        val emptyFetchData = FetchDataInfo(
+          fetchOffsetMetadata = LogOffsetMetadata(fetchOffset),
+          records = MemoryRecords.EMPTY,
+          firstEntryIncomplete = false,
+          abortedTransactions = None
+        )
+
+        val divergingEpoch = new FetchResponseData.EpochEndOffset()
+          .setEpoch(epochEndOffset.leaderEpoch)
+          .setEndOffset(epochEndOffset.endOffset)
+
+        return LogReadInfo(
+          fetchedData = emptyFetchData,
+          divergingEpoch = Some(divergingEpoch),
+          highWatermark = initialHighWatermark,
+          logStartOffset = initialLogStartOffset,
+          logEndOffset = initialLogEndOffset,
+          lastStableOffset = initialLastStableOffset)
+      }
+    }
+
+    val fetchedData = localLog.read(fetchOffset, maxBytes, fetchIsolation, minOneMessage)
     LogReadInfo(
       fetchedData = fetchedData,
+      divergingEpoch = None,
       highWatermark = initialHighWatermark,
       logStartOffset = initialLogStartOffset,
       logEndOffset = initialLogEndOffset,
