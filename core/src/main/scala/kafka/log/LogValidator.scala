@@ -234,7 +234,7 @@ private[log] object LogValidator extends Logging {
 
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
-    for (batch <- records.batches.asScala) {
+    records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, toMagicValue, brokerTopicStats)
 
       val recordErrors = new ArrayBuffer[ApiRecordError](0)
@@ -279,7 +279,7 @@ private[log] object LogValidator extends Logging {
 
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
-    for (batch <- records.batches.asScala) {
+    records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, magic, brokerTopicStats)
 
       var maxBatchTimestamp = RecordBatch.NO_TIMESTAMP
@@ -393,8 +393,7 @@ private[log] object LogValidator extends Logging {
     if (sourceCodec == NoCompressionCodec && firstBatch.isControlBatch)
       inPlaceAssignment = true
 
-    val batches = records.batches.asScala
-    for (batch <- batches) {
+    records.batches.forEach { batch =>
       validateBatch(topicPartition, firstBatch, batch, origin, toMagic, brokerTopicStats)
       uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
@@ -409,7 +408,7 @@ private[log] object LogValidator extends Logging {
         val recordErrors = new ArrayBuffer[ApiRecordError](0)
         // this is a hot path and we want to avoid any unnecessary allocations.
         var batchIndex = 0
-        for (record <- recordsIterator.asScala) {
+        recordsIterator.forEachRemaining { record =>
           val expectedOffset = expectedInnerOffset.getAndIncrement()
           val recordError = validateRecordCompression(batchIndex, record).orElse {
             validateRecord(batch, topicPartition, record, batchIndex, now,
