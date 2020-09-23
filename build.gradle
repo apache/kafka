@@ -989,6 +989,7 @@ project(':metadata') {
     compileOnly libs.log4j
     testCompile libs.junitJupiterApi
     testCompile libs.junitVintageEngine
+    testCompile libs.hamcrest
     testCompile libs.slf4jlog4j
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
   }
