@@ -79,6 +79,9 @@ def doStreamsArchetype() {
               || { echo 'Could not compile streams quickstart archetype project'; exit 1; }
         '''
       }
+
+      echo 'Cleaning up test-streams-archetype'
+      deleteDir
     }
   }
 }
