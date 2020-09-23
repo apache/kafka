@@ -45,7 +45,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.KafkaException
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue, assertThrows}
+import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
 import org.junit.{Before, Test}
 import org.scalatest.Assertions.fail
 
@@ -912,9 +912,13 @@ class GroupMetadataManagerTest {
     // reset the position to the starting position 0 so that it can read the data in correct order
     groupMetadataRecordValue.position(0)
 
-    val e = assertThrows(classOf[KafkaException],
-      () => GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecordValue, time))
-    assertEquals(s"Unknown group metadata version ${unsupportedVersion}", e.getMessage)
+    try {
+      GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecordValue, time)
+      fail("Expected KafkaException here")
+    } catch {
+      case e: KafkaException => assertEquals(s"Unknown group metadata version ${unsupportedVersion}", e.getMessage)
+      case _ => fail("Expected KafkaException here")
+    }
   }
 
   @Test
