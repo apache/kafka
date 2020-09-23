@@ -53,6 +53,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private Sensor destroySensor;
     private Sensor createSensor;
 
+    private boolean closed = true;
+
     public ProcessorNode(final String name) {
         this(name, (Processor<KIn, VIn, KOut, VOut>) null, null);
     }
@@ -93,7 +95,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         return children;
     }
 
-    ProcessorNode getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
         return childByName.get(childName);
     }
 
@@ -103,6 +105,9 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public void init(final InternalProcessorContext context) {
+        if (!closed)
+            throw new IllegalStateException("The processor is not closed");
+
         try {
             internalProcessorContext = context;
             initSensors();
@@ -118,6 +123,10 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
+
+        // revived tasks could re-initialize the topology,
+        // in which case we should reset the flag
+        closed = false;
     }
 
     private void initSensors() {
@@ -131,6 +140,8 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     }
 
     public void close() {
+        throwIfClosed();
+
         try {
             maybeMeasureLatency(
                 () -> {
@@ -149,10 +160,20 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
         }
+
+        closed = true;
+    }
+
+    protected void throwIfClosed() {
+        if (closed) {
+            throw new IllegalStateException("The processor is already closed");
+        }
     }
 
 
     public void process(final KIn key, final VIn value) {
+        throwIfClosed();
+
         try {
             maybeMeasureLatency(() -> processor.process(key, value), time, processSensor);
         } catch (final ClassCastException e) {

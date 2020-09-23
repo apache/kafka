@@ -1213,12 +1213,12 @@ public class StreamThreadTest {
             },
             "name");
         internalTopologyBuilder.addStateStore(
-            Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(storeName),
-                Serdes.String(),
-                Serdes.String()
-            ),
-            "proc"
+                Stores.keyValueStoreBuilder(
+                        Stores.persistentKeyValueStore(storeName),
+                        Serdes.String(),
+                        Serdes.String()
+                ),
+                "proc"
         );
 
         thread.setState(StreamThread.State.STARTING);
@@ -1236,12 +1236,12 @@ public class StreamThreadTest {
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         mockConsumer.assign(assignedPartitions);
         mockConsumer.updateBeginningOffsets(mkMap(
-            mkEntry(t1p1, 0L)
+                mkEntry(t1p1, 0L)
         ));
 
         final MockConsumer<byte[], byte[]> restoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer();
         restoreConsumer.updateBeginningOffsets(mkMap(
-            mkEntry(storeChangelogTopicPartition, 0L)
+                mkEntry(storeChangelogTopicPartition, 0L)
         ));
         final MockAdminClient admin = (MockAdminClient) thread.adminClient();
         admin.updateEndOffsets(singletonMap(storeChangelogTopicPartition, 0L));

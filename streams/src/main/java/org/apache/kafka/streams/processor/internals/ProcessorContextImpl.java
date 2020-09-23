@@ -217,12 +217,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                     forward((ProcessorNode<K, V, ?, ?>) child, key, value);
                 }
             } else {
-                final ProcessorNode<K, V, ?, ?> child = currentNode().getChild(sendTo);
+                final ProcessorNode<?, ?, ?, ?> child = currentNode().getChild(sendTo);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + sendTo
                         + " either does not exist or is not connected to this processor.");
                 }
-                forward(child, key, value);
+                forward((ProcessorNode<K, V, ?, ?>) child, key, value);
             }
         } finally {
             recordContext = previousContext;

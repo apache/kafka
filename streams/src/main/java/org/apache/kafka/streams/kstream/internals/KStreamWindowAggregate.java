@@ -208,8 +208,5 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             final W window = (W) windowedKey.window();
             return windowStore.fetch(key, window.start());
         }
-
-        @Override
-        public void close() {}
     }
 }
