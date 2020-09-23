@@ -304,7 +304,7 @@ class TransactionMetadataTest {
 
     val fencingTransitMetadata = txnMetadata.prepareFenceProducerEpoch()
     assertEquals(Short.MaxValue, fencingTransitMetadata.producerEpoch)
-    assertEquals(producerEpoch, fencingTransitMetadata.lastProducerEpoch)
+    assertEquals(RecordBatch.NO_PRODUCER_EPOCH, fencingTransitMetadata.lastProducerEpoch)
     assertEquals(Some(PrepareEpochFence), txnMetadata.pendingState)
 
     // We should reset the pending state to make way for the abort transition.

@@ -404,8 +404,8 @@ class TransactionCoordinator(brokerId: Int,
                 else
                   PrepareAbort
 
-                if (nextState == PrepareAbort && (txnMetadata.pendingState.get == PrepareEpochFence
-                  || txnMetadata.pendingState.get == PrepareEpochBumpThenAbort)) {
+                if (nextState == PrepareAbort && (txnMetadata.pendingState.contains(PrepareEpochFence)
+                  || txnMetadata.pendingState.contains(PrepareEpochBumpThenAbort))) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump
                   // the epoch in the transaction metadata we are about to append.
                   isEpochFence = txnMetadata.pendingState.get == PrepareEpochFence

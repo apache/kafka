@@ -324,6 +324,7 @@ public class TransactionManager {
                 transitionTo(State.INITIALIZING);
                 log.info("Invoking InitProducerId for the first time in order to acquire a producer ID");
             } else {
+                resetTransactions();
                 log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
             }
             InitProducerIdRequestData requestData = new InitProducerIdRequestData()
@@ -1206,6 +1207,14 @@ public class TransactionManager {
         return coordinatorSupportsBumpingEpoch;
     }
 
+    private void resetTransactions() {
+        transactionStarted = false;
+        newPartitionsInTransaction.clear();
+        pendingPartitionsInTransaction.clear();
+        partitionsInTransaction.clear();
+
+    }
+
     private void completeTransaction() {
         if (epochBumpRequired) {
             transitionTo(State.INITIALIZING);
@@ -1214,10 +1223,7 @@ public class TransactionManager {
         }
         lastError = null;
         epochBumpRequired = false;
-        transactionStarted = false;
-        newPartitionsInTransaction.clear();
-        pendingPartitionsInTransaction.clear();
-        partitionsInTransaction.clear();
+        resetTransactions();
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
