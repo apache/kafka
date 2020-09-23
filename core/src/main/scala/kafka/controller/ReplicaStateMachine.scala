@@ -19,6 +19,7 @@ package kafka.controller
 import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import kafka.server.KafkaConfig
+import kafka.utils.Implicits._
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
@@ -107,7 +108,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     if (replicas.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
-        replicas.groupBy(_.replica).foreach { case (replicaId, replicas) =>
+        replicas.groupBy(_.replica).forKeyValue { (replicaId, replicas) =>
           doHandleStateChanges(replicaId, replicas, targetState)
         }
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
@@ -224,7 +225,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           controllerContext.partitionLeadershipInfo(replica.topicPartition).isDefined
         }
         val updatedLeaderIsrAndControllerEpochs = removeReplicasFromIsr(replicaId, replicasWithLeadershipInfo.map(_.topicPartition))
-        updatedLeaderIsrAndControllerEpochs.foreach { case (partition, leaderIsrAndControllerEpoch) =>
+        updatedLeaderIsrAndControllerEpochs.forKeyValue { (partition, leaderIsrAndControllerEpoch) =>
           stateLogger.info(s"Partition $partition state changed to $leaderIsrAndControllerEpoch after removing replica $replicaId from the ISR as part of transition to $OfflineReplica")
           if (!controllerContext.isTopicQueuedUpForDeletion(partition.topic)) {
             val recipients = controllerContext.partitionReplicaAssignment(partition).filterNot(_ == replicaId)
