@@ -501,8 +501,20 @@ class IncrementalFetchContext(private val time: Time,
 //}
 
 case class EvictableKey(privileged: Boolean, size: Int, id: Int) extends Comparable[EvictableKey] {
-  override def compareTo(other: EvictableKey): Int =
-    (privileged, size, id) compare (other.privileged, other.size, other.id)
+  override def compareTo(other: EvictableKey): Int = {
+    // compareTo will be called often in maintaining the tree map.
+    // care should be taken when optimizing it as it has been
+    // unrolled to avoid tuple allocations
+    val privCompare = privileged.compareTo(other.privileged)
+    if (privCompare != 0)
+      return privCompare
+
+    val sizeCompare = size.compareTo(other.size)
+    if (sizeCompare != 0)
+      return sizeCompare
+
+    id.compareTo(other.id)
+  }
 }
 
 /**
