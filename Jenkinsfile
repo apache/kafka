@@ -98,7 +98,7 @@ pipeline {
   stages {
     stage('Build') {
       parallel {
-        stage('JDK 8') {
+        stage('JDK 8 and Scala 2.11') {
           agent { label 'ubuntu' }
           tools {
             jdk 'JDK 1.8 (latest)'
@@ -119,7 +119,7 @@ pipeline {
           }
         }
 
-        stage('JDK 11') {
+        stage('JDK 11 and Scala 2.12') {
           agent { label 'ubuntu' }
           tools {
             jdk 'JDK 11 (latest)'
@@ -139,7 +139,7 @@ pipeline {
           }
         }
 
-        stage('JDK 11') {
+        stage('JDK 11 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
             jdk 'JDK 11 (latest)'
