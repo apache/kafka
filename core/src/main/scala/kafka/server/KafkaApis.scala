@@ -3112,20 +3112,30 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleUpdateFeatures(request: RequestChannel.Request): Unit = {
     val updateFeaturesRequest = request.body[UpdateFeaturesRequest]
-    def featureUpdateErrors(error: Errors, msgOverride: Option[String]): Map[String, ApiError] = {
-      updateFeaturesRequest.data().featureUpdates().asScala.map(
-        update => update.feature() -> new ApiError(error, msgOverride.getOrElse(error.message()))
-      ).toMap
-    }
 
-    def sendResponseCallback(updateErrors: Map[String, ApiError]): Unit = {
-      sendResponseExemptThrottle(request, UpdateFeaturesResponse.createWithFeatureUpdateApiErrors(updateErrors.asJava))
+    def sendResponseCallback(errors: Either[ApiError, Map[String, ApiError]]): Unit = {
+      def createResponse(throttleTimeMs: Int): UpdateFeaturesResponse = {
+        errors match {
+          case Left(topLevelError) => {
+            val featureUpdateNoErrors = updateFeaturesRequest
+              .data().featureUpdates().asScala
+              .map(update => update.feature() -> ApiError.NONE)
+              .toMap.asJava
+            UpdateFeaturesResponse.createWithErrors(topLevelError, featureUpdateNoErrors, throttleTimeMs)
+          }
+          case Right(featureUpdateErrors) => UpdateFeaturesResponse.createWithErrors(
+            ApiError.NONE,
+            featureUpdateErrors.asJava,
+            throttleTimeMs)
+        }
+      }
+      sendResponseMaybeThrottle(request, requestThrottleMs => createResponse(requestThrottleMs))
     }
 
     if (!authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
-      sendResponseCallback(featureUpdateErrors(Errors.CLUSTER_AUTHORIZATION_FAILED, Option.empty))
+      sendResponseCallback(Left(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED)))
     } else if (!config.isFeatureVersioningEnabled) {
-      sendResponseCallback(featureUpdateErrors(Errors.INVALID_REQUEST, Some("Feature versioning system is disabled.")))
+      sendResponseCallback(Left(new ApiError(Errors.INVALID_REQUEST, "Feature versioning system is disabled.")))
     } else {
       controller.updateFeatures(updateFeaturesRequest, sendResponseCallback)
     }

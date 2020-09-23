@@ -4360,16 +4360,12 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 final ApiVersionsResponse apiVersionsResponse = (ApiVersionsResponse) response;
                 if (apiVersionsResponse.data.errorCode() == Errors.NONE.code()) {
-                    future.complete(
-                        new FeatureMetadata(
-                            apiVersionsResponse.finalizedFeatures(),
-                            apiVersionsResponse.finalizedFeaturesEpoch(),
-                            apiVersionsResponse.supportedFeatures()));
-                } else if (options.sendRequestToController() && apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
+                    future.complete(new FeatureMetadata(apiVersionsResponse));
+                } else if (options.sendRequestToController() &&
+                           apiVersionsResponse.data.errorCode() == Errors.NOT_CONTROLLER.code()) {
                     handleNotControllerError(Errors.NOT_CONTROLLER);
                 } else {
-                    future.completeExceptionally(
-                        Errors.forCode(apiVersionsResponse.data.errorCode()).exception());
+                    future.completeExceptionally(Errors.forCode(apiVersionsResponse.data.errorCode()).exception());
                 }
             }
 
@@ -4410,31 +4406,35 @@ public class KafkaAdminClient extends AdminClient {
                 final UpdateFeaturesResponse response =
                     (UpdateFeaturesResponse) abstractResponse;
 
-                // Check for controller change.
-                for (UpdatableFeatureResult result : response.data().results()) {
-                    final Errors error = Errors.forCode(result.errorCode());
-                    if (error == Errors.NOT_CONTROLLER) {
-                        handleNotControllerError(error);
-                        throw error.exception();
-                    }
-                }
-
-                for (UpdatableFeatureResult result : response.data().results()) {
-                    final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
-                    if (future == null) {
-                        log.warn("Server response mentioned unknown feature {}", result.feature());
-                    } else {
-                        final Errors error = Errors.forCode(result.errorCode());
-                        if (error == Errors.NONE) {
-                            future.complete(null);
-                        } else {
-                            future.completeExceptionally(error.exception(result.errorMessage()));
+                Errors topLevelError = Errors.forCode(response.data().errorCode());
+                switch (topLevelError) {
+                    case NONE:
+                        for (UpdatableFeatureResult result : response.data().results()) {
+                            final KafkaFutureImpl<Void> future = updateFutures.get(result.feature());
+                            if (future == null) {
+                                log.warn("Server response mentioned unknown feature {}", result.feature());
+                            } else {
+                                final Errors error = Errors.forCode(result.errorCode());
+                                if (error == Errors.NONE) {
+                                    future.complete(null);
+                                } else {
+                                    future.completeExceptionally(error.exception(result.errorMessage()));
+                                }
+                            }
                         }
-                    }
+                        // The server should send back a response for every feature, but we do a sanity check anyway.
+                        completeUnrealizedFutures(updateFutures.entrySet().stream(),
+                            feature -> "The controller response did not contain a result for feature " + feature);
+                        break;
+                    case NOT_CONTROLLER:
+                        handleNotControllerError(Errors.forCode(topLevelError.code()));
+                        break;
+                    default:
+                        for (Map.Entry<String, KafkaFutureImpl<Void>> entry : updateFutures.entrySet()) {
+                            entry.getValue().completeExceptionally(topLevelError.exception());
+                        }
+                        break;
                 }
-                // The server should send back a response for every feature, but we do a sanity check anyway.
-                completeUnrealizedFutures(updateFutures.entrySet().stream(),
-                    feature -> "The controller response did not contain a result for feature " + feature);
             }
 
             @Override

@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.clients.admin;
 
+import static java.util.stream.Collectors.joining;
+
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import org.apache.kafka.common.feature.Features;
-import org.apache.kafka.common.feature.FinalizedVersionRange;
-import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.ApiVersionsResponseData.FinalizedFeatureKey;
+import org.apache.kafka.common.message.ApiVersionsResponseData.SupportedFeatureKey;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 
 /**
  * Encapsulates details about finalized as well as supported features. This is particularly useful
@@ -28,32 +32,45 @@ import org.apache.kafka.common.feature.SupportedVersionRange;
  */
 public class FeatureMetadata {
 
-    private final Features<FinalizedVersionRange> finalizedFeatures;
+    private final Map<String, FinalizedVersionRange> finalizedFeatures;
 
     private final Optional<Integer> finalizedFeaturesEpoch;
 
-    private final Features<SupportedVersionRange> supportedFeatures;
+    private final Map<String, SupportedVersionRange> supportedFeatures;
 
-    public FeatureMetadata(final Features<FinalizedVersionRange> finalizedFeatures,
-                           final int finalizedFeaturesEpoch,
-                           final Features<SupportedVersionRange> supportedFeatures) {
-        Objects.requireNonNull(finalizedFeatures, "Provided finalizedFeatures can not be null.");
-        Objects.requireNonNull(supportedFeatures, "Provided supportedFeatures can not be null.");
-        this.finalizedFeatures = finalizedFeatures;
-        if (finalizedFeaturesEpoch >= 0) {
-            this.finalizedFeaturesEpoch = Optional.of(finalizedFeaturesEpoch);
+    public FeatureMetadata(final Map<String, FinalizedVersionRange> finalizedFeatures,
+                           final Optional<Integer> finalizedFeaturesEpoch,
+                           final Map<String, SupportedVersionRange> supportedFeatures) {
+        this.finalizedFeatures = new HashMap<>(finalizedFeatures);
+        this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
+        this.supportedFeatures = new HashMap<>(supportedFeatures);
+    }
+
+    public FeatureMetadata(ApiVersionsResponse response) {
+        this.supportedFeatures = new HashMap<>();
+        for (SupportedFeatureKey key : response.data().supportedFeatures().valuesSet()) {
+            supportedFeatures.put(key.name(), new SupportedVersionRange(key.minVersion(), key.maxVersion()));
+        }
+
+        this.finalizedFeatures = new HashMap<>();
+        for (FinalizedFeatureKey key : response.data().finalizedFeatures().valuesSet()) {
+            finalizedFeatures.put(key.name(), new FinalizedVersionRange(key.minVersionLevel(), key.maxVersionLevel()));
+        }
+
+        if (response.data().finalizedFeaturesEpoch() >= 0) {
+            this.finalizedFeaturesEpoch = Optional.of(response.data().finalizedFeaturesEpoch());
         } else {
             this.finalizedFeaturesEpoch = Optional.empty();
         }
-        this.supportedFeatures = supportedFeatures;
     }
 
     /**
-     * A map of finalized feature versions, with key being finalized feature name and value
-     * containing the min/max version levels for the finalized feature.
+     * Returns a map of finalized feature versions. Each entry in the map contains a key being a
+     * feature name and the value being a range of version levels supported by every broker in the
+     * cluster.
      */
-    public Features<FinalizedVersionRange> finalizedFeatures() {
-        return finalizedFeatures;
+    public Map<String, FinalizedVersionRange> finalizedFeatures() {
+        return new HashMap<>(finalizedFeatures);
     }
 
     /**
@@ -65,11 +82,12 @@ public class FeatureMetadata {
     }
 
     /**
-     * A map of supported feature versions, with key being supported feature name and value
-     * containing the min/max version for the supported feature.
+     * Returns a map of supported feature versions. Each entry in the map contains a key being a
+     * feature name and the value being a range of versions supported by a particular broker in the
+     * cluster.
      */
-    public Features<SupportedVersionRange> supportedFeatures() {
-        return supportedFeatures;
+    public Map<String, SupportedVersionRange> supportedFeatures() {
+        return new HashMap<>(supportedFeatures);
     }
 
     @Override
@@ -92,12 +110,23 @@ public class FeatureMetadata {
         return Objects.hash(finalizedFeatures, finalizedFeaturesEpoch, supportedFeatures);
     }
 
+    private static <ValueType> String mapToString(final Map<String, ValueType> featureVersionsMap) {
+        return String.format(
+            "{%s}",
+            featureVersionsMap
+                .entrySet()
+                .stream()
+                .map(entry -> String.format("(%s -> %s)", entry.getKey(), entry.getValue()))
+                .collect(joining(", "))
+        );
+    }
+
     @Override
     public String toString() {
         return String.format(
-            "FeatureMetadata{finalized:%s, finalizedFeaturesEpoch:%s, supported:%s}",
-            finalizedFeatures,
+            "FeatureMetadata{finalizedFeatures:%s, finalizedFeaturesEpoch:%s, supportedFeatures:%s}",
+            mapToString(finalizedFeatures),
             finalizedFeaturesEpoch.map(Object::toString).orElse("<none>"),
-            supportedFeatures);
+            mapToString(supportedFeatures));
     }
 }

@@ -64,7 +64,7 @@ object KafkaController extends Logging {
   type ListReassignmentsCallback = Either[Map[TopicPartition, ReplicaAssignment], ApiError] => Unit
   type AlterReassignmentsCallback = Either[Map[TopicPartition, ApiError], ApiError] => Unit
   type AlterIsrCallback = Either[Map[TopicPartition, Either[Errors, LeaderAndIsr]], Errors] => Unit
-  type UpdateFeaturesCallback = (Map[String, ApiError]) => Unit
+  type UpdateFeaturesCallback = Either[ApiError, Map[String, ApiError]] => Unit
 }
 
 class KafkaController(val config: KafkaConfig,
@@ -1192,30 +1192,14 @@ class KafkaController(val config: KafkaConfig,
 
   /**
    * Send the leader information for selected partitions to selected brokers so that they can correctly respond to
-   * metadata requests. Particularly, when feature versioning is enabled, we filter out brokers with incompatible
-   * features from receiving the metadata requests. This is because we do not want to activate incompatible brokers,
-   * as these may have harmful consequences to the cluster.
+   * metadata requests
    *
    * @param brokers The brokers that the update metadata request should be sent to
    */
   private[controller] def sendUpdateMetadataRequest(brokers: Seq[Int], partitions: Set[TopicPartition]): Unit = {
     try {
-      val filteredBrokers = scala.collection.mutable.Set[Int]() ++ brokers
-      if (config.isFeatureVersioningEnabled) {
-        def hasIncompatibleFeatures(broker: Broker): Boolean = {
-          featureCache.get.exists(
-            latestFinalizedFeatures =>
-              BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
-        }
-        controllerContext.liveOrShuttingDownBrokers.foreach(broker => {
-          if (filteredBrokers.contains(broker.id) && hasIncompatibleFeatures(broker)) {
-            warn(s"No UpdateMetadataRequest will be sent to broker: ${broker.id} due to incompatible features")
-            filteredBrokers -= broker.id
-          }
-        })
-      }
       brokerRequestBatch.newBatch()
-      brokerRequestBatch.addUpdateMetadataRequestForBrokers(filteredBrokers.toSeq, partitions)
+      brokerRequestBatch.addUpdateMetadataRequestForBrokers(brokers, partitions)
       brokerRequestBatch.sendRequestsToBrokers(epoch)
     } catch {
       case e: IllegalStateException =>
@@ -1570,6 +1554,27 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
+  /**
+   * Partitions the provided map of brokers and epochs into 2 new maps:
+   *  - The first map contains brokers whose features were found to be compatible with the existing
+   *    finalized features.
+   *  - The second map contains brokers whose features were found to be incompatible with the existing
+   *    finalized features.
+   *
+   * @param brokersAndEpochs   the map to be partitioned
+   * @return                   two maps: first contains compatible brokers and second contains incompatible brokers
+   *                           as explained above
+   */
+  private def partitionOnFeatureCompatibility(brokersAndEpochs: Map[Broker, Long]): (Map[Broker, Long], Map[Broker, Long]) = {
+    brokersAndEpochs.partition {
+      case (broker, _) =>
+        !config.isFeatureVersioningEnabled ||
+          !featureCache.get.exists(
+            latestFinalizedFeatures =>
+              BrokerFeatures.hasIncompatibleFeatures(broker.features, latestFinalizedFeatures.features))
+    }
+  }
+
   private def processBrokerChange(): Unit = {
     if (!isActive) return
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
@@ -1595,14 +1600,25 @@ class KafkaController(val config: KafkaConfig,
     bouncedBrokerIds.foreach(controllerChannelManager.removeBroker)
     bouncedBrokerAndEpochs.keySet.foreach(controllerChannelManager.addBroker)
     deadBrokerIds.foreach(controllerChannelManager.removeBroker)
+
     if (newBrokerIds.nonEmpty) {
-      controllerContext.addLiveBrokers(newBrokerAndEpochs)
+      val (newCompatibleBrokerAndEpochs, newIncompatibleBrokerAndEpochs) =
+        partitionOnFeatureCompatibility(newBrokerAndEpochs)
+      if (!newIncompatibleBrokerAndEpochs.isEmpty)
+        warn("Ignoring registration of new brokers due to incompatibilities with finalized features: " +
+          newIncompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
+      controllerContext.addLiveBrokers(newCompatibleBrokerAndEpochs)
       onBrokerStartup(newBrokerIdsSorted)
     }
     if (bouncedBrokerIds.nonEmpty) {
       controllerContext.removeLiveBrokers(bouncedBrokerIds)
       onBrokerFailure(bouncedBrokerIdsSorted)
-      controllerContext.addLiveBrokers(bouncedBrokerAndEpochs)
+      val (bouncedCompatibleBrokerAndEpochs, bouncedIncompatibleBrokerAndEpochs) =
+        partitionOnFeatureCompatibility(bouncedBrokerAndEpochs)
+      if (!bouncedIncompatibleBrokerAndEpochs.isEmpty)
+        warn("Ignoring registration of bounced brokers due to incompatibilities with finalized features: " +
+          bouncedIncompatibleBrokerAndEpochs.map { case (broker, _) => broker.id }.toSeq.sorted.mkString(","))
+      controllerContext.addLiveBrokers(bouncedCompatibleBrokerAndEpochs)
       onBrokerStartup(bouncedBrokerIdsSorted)
     }
     if (deadBrokerIds.nonEmpty) {
@@ -1895,16 +1911,29 @@ class KafkaController(val config: KafkaConfig,
       Right(new ApiError(Errors.INVALID_REQUEST, incompatibilityError))
     } else {
       val defaultMinVersionLevel = brokerFeatures.defaultMinVersionLevel(update.feature)
-      val newVersionRange = new FinalizedVersionRange(defaultMinVersionLevel, update.maxVersionLevel)
-      val numIncompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.count(broker => {
-        val singleFinalizedFeature =
-          Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
-        BrokerFeatures.hasIncompatibleFeatures(broker.features, singleFinalizedFeature)
-      })
-      if (numIncompatibleBrokers == 0) {
-        Left(newVersionRange)
+      var newVersionRange: FinalizedVersionRange = null
+      try {
+        newVersionRange = new FinalizedVersionRange(defaultMinVersionLevel, update.maxVersionLevel)
+      } catch {
+        // Ignoring because it means the provided maxVersionLevel is invalid.
+        case _: IllegalArgumentException => {}
+      }
+      if (newVersionRange == null) {
+       Right(new ApiError(Errors.INVALID_REQUEST,
+                          "Could not apply finalized feature update because the provided" +
+                          s" maxVersionLevel:${update.maxVersionLevel} is lower than the" +
+                          s" default minVersionLevel:$defaultMinVersionLevel."))
       } else {
-        Right(new ApiError(Errors.INVALID_REQUEST, incompatibilityError))
+        val numIncompatibleBrokers = controllerContext.liveOrShuttingDownBrokers.count(broker => {
+          val singleFinalizedFeature =
+            Features.finalizedFeatures(Utils.mkMap(Utils.mkEntry(update.feature, newVersionRange)))
+          BrokerFeatures.hasIncompatibleFeatures(broker.features, singleFinalizedFeature)
+        })
+        if (numIncompatibleBrokers == 0) {
+          Left(newVersionRange)
+        } else {
+          Right(new ApiError(Errors.INVALID_REQUEST, incompatibilityError))
+        }
       }
     }
   }
@@ -1991,10 +2020,7 @@ class KafkaController(val config: KafkaConfig,
     if (isActive) {
       processFeatureUpdatesWithActiveController(request, callback)
     } else {
-      val results = request.data().featureUpdates().asScala.map {
-        update => update.feature() -> new ApiError(Errors.NOT_CONTROLLER)
-      }.toMap
-      callback(results)
+      callback(Left(new ApiError(Errors.NOT_CONTROLLER)))
     }
   }
 
@@ -2037,7 +2063,7 @@ class KafkaController(val config: KafkaConfig,
     // of the FeatureZNode with the new features. This may result in partial or full modification
     // of the existing finalized features.
     if (existingFeatures.equals(targetFeatures)) {
-      callback(errors)
+      callback(Right(errors))
     } else {
       try {
         val newNode = new FeatureZNode(FeatureZNodeStatus.Enabled, Features.finalizedFeatures(targetFeatures.asJava))
@@ -2055,7 +2081,7 @@ class KafkaController(val config: KafkaConfig,
             }
           }
       } finally {
-        callback(errors)
+        callback(Right(errors))
       }
     }
   }
@@ -2686,6 +2712,7 @@ case class ListPartitionReassignments(partitionsOpt: Option[Set[TopicPartition]]
 case class UpdateFeatures(request: UpdateFeaturesRequest,
                           callback: UpdateFeaturesCallback) extends ControllerEvent {
   override def state: ControllerState = ControllerState.UpdateFeatures
+  override def preempt(): Unit = {}
 }
 
 

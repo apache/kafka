@@ -17,7 +17,6 @@
 package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.message.UpdateFeaturesResponseData;
@@ -66,6 +65,11 @@ public class UpdateFeaturesResponse extends AbstractResponse {
     }
 
     @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
+    }
+
+    @Override
     protected Struct toStruct(short version) {
         return data.toStruct(version);
     }
@@ -83,7 +87,7 @@ public class UpdateFeaturesResponse extends AbstractResponse {
         return new UpdateFeaturesResponse(ApiKeys.UPDATE_FEATURES.parseResponse(version, buffer), version);
     }
 
-    public static UpdateFeaturesResponse createWithFeatureUpdateApiErrors(Map<String, ApiError> updateErrors) {
+    public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
         for (Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
             final String feature = updateError.getKey();
@@ -94,14 +98,12 @@ public class UpdateFeaturesResponse extends AbstractResponse {
                 .setErrorMessage(error.message());
             results.add(result);
         }
-        return new UpdateFeaturesResponse(new UpdateFeaturesResponseData().setResults(results));
-    }
-
-    public static UpdateFeaturesResponse createWithFeatureUpdateErrors(Map<String, Errors> updateErrors) {
-        final Map<String, ApiError> updateApiErrors = new HashMap<>();
-        for (Map.Entry<String, Errors> entry : updateErrors.entrySet()) {
-            updateApiErrors.put(entry.getKey(), new ApiError(entry.getValue()));
-        }
-        return createWithFeatureUpdateApiErrors(updateApiErrors);
+        UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorCode(topLevelError.error().code())
+            .setErrorMessage(topLevelError.message())
+            .setResults(results)
+            .setThrottleTimeMs(throttleTimeMs);
+        return new UpdateFeaturesResponse(responseData);
     }
 }

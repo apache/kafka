@@ -582,6 +582,9 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.ALTER_ISR =>
           new AlterIsrRequest.Builder(new AlterIsrRequestData())
 
+        case ApiKeys.UPDATE_FEATURES =>
+          new UpdateFeaturesRequest.Builder(new UpdateFeaturesRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

@@ -24,23 +24,40 @@ import org.apache.kafka.common.feature.Features._
 import scala.jdk.CollectionConverters._
 
 /**
- * A class that encapsulates the following:
+ * A class that encapsulates the attributes explained below and also provides APIs to check for
+ * incompatibilities between the features supported by the Broker and finalized features.
+ * This class is immutable in production. It provides few APIs to mutate state only for the
+ * purpose of testing.
+ *
+ * Attributes:
  *
  * 1. The latest features supported by the Broker.
  *
- * 2. The default minimum version levels for specific features. This map enables feature
- *    version level deprecation. This is how it works: in order to deprecate feature version levels,
- *    in this map the default minimum version level of a feature can be set to a new value that's
- *    higher than 1 (let's call this latest_min_version_level). In doing so, the feature version levels
+ * 2. The optional default minimum version levels for specific finalized features.
+ *    - If you would want to deprecate a version level for some feature, then in this map you
+ *      need to supply the starting version value (greater than 1) that's just 1 beyond the highest
+ *      deprecated version. Ex: if this map contains {"feature1" -> 5}, then it indicates that feature
+ *      version levels: [1, 4] need to be deprecated. The value '5' is the default minimum version level.
+ *    - If you do not want to deprecate a version level for a feature, you do not have to supply
+ *      values in this map. The default minimum version level for absent features in this map
+ *      is assumed to be 1.
+ *
+ *    The primary use case to provide this map is feature version level deprecation.
+ *    When features are finalized via the ApiKeys.UPDATE_FEATURES api, the controller takes the
+ *    value provided in this map (if present) as the default minimum version level for the feature.
+ *    This is how it works: in order to deprecate feature version levels, in this map the default
+ *    minimum version level of a feature can be set to a new value that's higher than 1
+ *    (let's call this latest_min_version_level). In doing so, the feature version levels
  *    in the closed range: [1, latest_min_version_level - 1] get deprecated by the controller logic
  *    that applies this map to persistent finalized feature state in ZK (this mutation happens
  *    during controller election and during finalized feature updates via the
  *    ApiKeys.UPDATE_FEATURES api). This will automatically mean external clients of Kafka
  *    would need to stop using the finalized min version levels that have been deprecated.
  *
- * This class also provides APIs to check for incompatibilities between the features supported by
- * the Broker and finalized features. This class is immutable in production. It provides few APIs to
- * mutate state only for the purpose of testing.
+ *    NOTE: The difference between the values in this map and the minimum version value for a
+ *    broker's supported feature is the following: Version levels below the values specified in this
+ *    map are considered deprecated by the controller, whereas version levels below the minimum
+ *    version value for a  supported feature are considered unknown/unsupported.
  */
 class BrokerFeatures private (@volatile var supportedFeatures: Features[SupportedVersionRange],
                               @volatile var defaultFeatureMinVersionLevels: Map[String, Short]) {
