@@ -18,6 +18,7 @@
  */
 package kafka.tools
 
+import java.rmi.UnmarshalException
 import java.util.{Date, Objects}
 import java.text.SimpleDateFormat
 import javax.management._
@@ -189,22 +190,44 @@ object JmxTool extends Logging {
       sys.exit(1)
     }
 
-    val numExpectedAttributes: Map[ObjectName, Int] =
+    var objectNamesToFilterOut: Set[ObjectName] = Set()
+    var numExpectedAttributes: Map[ObjectName, Int] =
       if (!attributesWhitelistExists)
         names.map{name: ObjectName =>
           val mbean = mbsc.getMBeanInfo(name)
-          (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap
+          try {
+            (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)
+          } catch {
+            case _: UnmarshalException => {
+              System.err.println("UnmarshalException caught for " + name.toString + ". Filtering object from results")
+              objectNamesToFilterOut += name
+              (name, 0)
+            }
+          }
+        }.toMap
       else {
         if (!hasPatternQueries)
           names.map{name: ObjectName =>
             val mbean = mbsc.getMBeanInfo(name)
-            val attributes = mbsc.getAttributes(name, mbean.getAttributes.map(_.getName))
-            val expectedAttributes = attributes.asScala.asInstanceOf[mutable.Buffer[Attribute]]
-              .filter(attr => attributesWhitelist.get.contains(attr.getName))
-            (name, expectedAttributes.size)}.toMap.filter(_._2 > 0)
+            try {
+              val attributes = mbsc.getAttributes(name, mbean.getAttributes.map(_.getName))
+              val expectedAttributes = attributes.asScala.asInstanceOf[mutable.Buffer[Attribute]]
+                .filter(attr => attributesWhitelist.get.contains(attr.getName))
+              (name, expectedAttributes.size)
+            } catch {
+              case _: UnmarshalException => {
+                System.err.println("UnmarshalException caught for " + name.toString + ". Filtering object from results")
+                objectNamesToFilterOut += name
+                (name, 0)
+              }
+            }
+          }.toMap.filter(_._2 > 0)
         else
           queries.map((_, attributesWhitelist.get.length)).toMap
       }
+
+    numExpectedAttributes = numExpectedAttributes.filterNot(kv => objectNamesToFilterOut.contains(kv._1))
+    names = names.filterNot(objectNamesToFilterOut.contains(_))
 
     if(numExpectedAttributes.isEmpty) {
       CommandLineUtils.printUsageAndDie(parser, s"No matched attributes for the queried objects $queries.")
