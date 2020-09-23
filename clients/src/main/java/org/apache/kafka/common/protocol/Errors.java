@@ -34,7 +34,7 @@ import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
-import org.apache.kafka.common.errors.TransactionTimeoutException;
+import org.apache.kafka.common.errors.TransactionTimeOutException;
 import org.apache.kafka.common.internals.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
@@ -334,7 +334,7 @@ public enum Errors {
     DUPLICATE_RESOURCE(92, "A request illegally referred to the same resource twice.", DuplicateResourceException::new),
     UNACCEPTABLE_CREDENTIAL(93, "Requested credential would not meet criteria for acceptability.", UnacceptableCredentialException::new),
     TRANSACTION_TIMED_OUT(94, "The last ongoing transaction timed out on the coordinator, should retry initialization" +
-                                  " with current epoch.", TransactionTimeoutException::new);
+                                  " with current epoch.", TransactionTimeOutException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

@@ -401,9 +401,9 @@ class TransactionCoordinator(brokerId: Int,
               case Ongoing =>
                 val nextState = if (txnMarkerResult == TransactionResult.COMMIT)
                   PrepareCommit
-                else {
+                else
                   PrepareAbort
-                }
+
                 if (nextState == PrepareAbort && (txnMetadata.pendingState.get == PrepareEpochFence
                   || txnMetadata.pendingState.get == PrepareEpochBumpThenAbort)) {
                   // We should clear the pending state to make way for the transition to PrepareAbort and also bump

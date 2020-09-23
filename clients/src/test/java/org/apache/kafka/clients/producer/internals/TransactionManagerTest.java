@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.TransactionTimeoutException;
+import org.apache.kafka.common.errors.TransactionTimeOutException;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -1611,7 +1611,6 @@ public class TransactionManagerTest {
 
     @Test
     public void testTxnTimeoutInEndTxn() throws InterruptedException {
-
         doInitTransactions();
 
         transactionManager.beginTransaction();
@@ -1628,7 +1627,6 @@ public class TransactionManagerTest {
 
         runUntil(commitResult::isCompleted);
         runUntil(responseFuture::isDone);
-
     }
 
     private void verifyProducerFencedForAddPartitionsToTxn(Errors error) throws InterruptedException {
@@ -1700,7 +1698,7 @@ public class TransactionManagerTest {
             responseFuture.get();
             fail("Expected to get a ExecutionException from the response");
         } catch (ExecutionException e) {
-            assertTrue(e.getCause() instanceof TransactionTimeoutException);
+            assertTrue(e.getCause() instanceof TransactionTimeOutException);
         }
     }
 
@@ -3015,6 +3013,16 @@ public class TransactionManagerTest {
         verifyBumpTransactionalEpochOnRecoverableAddPartitionRequestError(Errors.TRANSACTION_TIMED_OUT);
     }
 
+    @Test
+    public void testBumpTransactionalEpochOnInvalidProducerIdMappingErrorWhenAddOffsets() throws InterruptedException {
+        verifyBumpTransactionalEpochOnRecoverableAddOffsetsRequestError(Errors.INVALID_PRODUCER_ID_MAPPING);
+    }
+
+    @Test
+    public void testBumpTransactionalEpochOnTxnTimeoutErrorWhenAddOffsets() throws InterruptedException {
+        verifyBumpTransactionalEpochOnRecoverableAddOffsetsRequestError(Errors.TRANSACTION_TIMED_OUT);
+    }
+
     private void verifyBumpTransactionalEpochOnRecoverableAddPartitionRequestError(Errors errors) {
         final short initialEpoch = 1;
         final short bumpedEpoch = 2;
@@ -3065,16 +3073,6 @@ public class TransactionManagerTest {
         assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
-    }
-
-    @Test
-    public void testBumpTransactionalEpochOnInvalidProducerIdMappingErrorWhenAddOffsets() throws InterruptedException {
-        verifyBumpTransactionalEpochOnRecoverableAddOffsetsRequestError(Errors.INVALID_PRODUCER_ID_MAPPING);
-    }
-
-    @Test
-    public void testBumpTransactionalEpochOnTxnTimeoutErrorWhenAddOffsets() throws InterruptedException {
-        verifyBumpTransactionalEpochOnRecoverableAddOffsetsRequestError(Errors.TRANSACTION_TIMED_OUT);
     }
 
     @Test
