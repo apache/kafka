@@ -42,7 +42,7 @@ import kafka.utils.{MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
-import org.apache.kafka.clients.admin.{AlterConfigOp, AlterConfigsUtil, ConfigEntry}
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.{IsolationLevel, Node, TopicPartition}
@@ -1225,10 +1225,10 @@ class KafkaApisTest {
     val topicHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion,
       clientId, 0)
 
-    val incrementalAlterConfigsRequest = new IncrementalAlterConfigsRequest.Builder(
-      getIncrementalAlterConfigRequestData(
-        Seq(authorizedResource, unauthorizedResource)))
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(
+      Seq(authorizedResource, unauthorizedResource))
       .build(topicHeader.apiVersion)
+
     val request = buildRequest(incrementalAlterConfigsRequest)
 
     EasyMock.expect(controller.isActive).andReturn(false)
@@ -1268,14 +1268,12 @@ class KafkaApisTest {
     val topicHeader = new RequestHeader(ApiKeys.INCREMENTAL_ALTER_CONFIGS, ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion,
       clientId, 0)
 
-    val incrementalAlterConfigsRequest = new IncrementalAlterConfigsRequest.Builder(
-      getIncrementalAlterConfigRequestData(
-        Seq(authorizedResource, unauthorizedResource)))
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(
+      Seq(authorizedResource, unauthorizedResource))
       .build(topicHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest)
 
-    val redirectRequestBuilder = new IncrementalAlterConfigsRequest.Builder(
-      getIncrementalAlterConfigRequestData(Seq(authorizedResource)))
+    val redirectRequestBuilder = getIncrementalAlterConfigRequestBuilder(Seq(authorizedResource))
 
     val clientResponse: ClientResponse = EasyMock.createNiceMock(classOf[ClientResponse])
 
@@ -1335,9 +1333,9 @@ class KafkaApisTest {
       ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion,
       clientId, 0, "initial-principal", "initial-client")
 
-    val incrementalAlterConfigsRequest = new IncrementalAlterConfigsRequest.Builder(
-      getIncrementalAlterConfigRequestData(Seq(configResource)))
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(configResource))
       .build(requestHeader.apiVersion)
+
     val request = buildRequest(incrementalAlterConfigsRequest,
       fromPrivilegedListener = true, requestHeader = Option(requestHeader))
 
@@ -1374,9 +1372,7 @@ class KafkaApisTest {
       ApiKeys.INCREMENTAL_ALTER_CONFIGS.latestVersion,
       clientId, 0, "initial-principal", "initial-client")
 
-    val incrementalAlterConfigsRequest = new IncrementalAlterConfigsRequest.Builder(
-      getIncrementalAlterConfigRequestData(
-        Seq(authorizedResource, unauthorizedResource)))
+    val incrementalAlterConfigsRequest = getIncrementalAlterConfigRequestBuilder(Seq(authorizedResource, unauthorizedResource))
       .build(requestHeader.apiVersion)
     val request = buildRequest(incrementalAlterConfigsRequest,
       fromPrivilegedListener = true, requestHeader = Option(requestHeader))
@@ -1400,14 +1396,14 @@ class KafkaApisTest {
     verify(authorizer, adminManager)
   }
 
-  private def getIncrementalAlterConfigRequestData(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequestData = {
+  private def getIncrementalAlterConfigRequestBuilder(configResources: Seq[ConfigResource]): IncrementalAlterConfigsRequest.Builder = {
     val resourceMap = configResources.map(configResource => {
       configResource -> Set(
         new AlterConfigOp(new ConfigEntry("foo", "bar"),
         OpType.forId(configResource.`type`.id))).asJavaCollection
     }).toMap.asJava
 
-    AlterConfigsUtil.generateIncrementalRequestData(resourceMap, false)
+    new IncrementalAlterConfigsRequest.Builder(resourceMap, false)
   }
 
   private def verifyIncrementalAlterConfigResult(incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest,

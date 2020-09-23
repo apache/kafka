@@ -2236,9 +2236,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public IncrementalAlterConfigsRequest.Builder createRequest(int timeoutMs) {
-                return new IncrementalAlterConfigsRequest.Builder(
-                    AlterConfigsUtil.generateIncrementalRequestData(resources, configs, options.shouldValidateOnly())
-                );
+                return new IncrementalAlterConfigsRequest.Builder(resources, configs, options.shouldValidateOnly());
             }
 
             @Override

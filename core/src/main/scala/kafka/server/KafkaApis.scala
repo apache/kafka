@@ -41,7 +41,7 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.{AlterConfigOp, AlterConfigsUtil, ConfigEntry}
+import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.acl.{AclBinding, AclOperation}
 import org.apache.kafka.common.acl.AclOperation._
@@ -2858,9 +2858,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                                         incrementalAlterConfigsRequest: IncrementalAlterConfigsRequest):
       AbstractRequest.Builder[IncrementalAlterConfigsRequest] = {
         new IncrementalAlterConfigsRequest.Builder(
-          AlterConfigsUtil.generateIncrementalRequestData(authorizedResources.map {
+          authorizedResources.map {
             case (resource, ops) => resource -> ops.asJavaCollection
-          }.asJava, incrementalAlterConfigsRequest.data().validateOnly()))
+          }.asJava, incrementalAlterConfigsRequest.data().validateOnly())
       }
 
       override def mergeResponse(forwardResponse: IncrementalAlterConfigsResponse,
