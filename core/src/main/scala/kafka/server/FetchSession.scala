@@ -31,7 +31,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetad
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, Time, Utils}
 
 import scala.math.Ordered.orderingToOrdered
-import scala.collection.{mutable, _}
+// import scala.collection.{mutable, _}
 
 object FetchSession {
   type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]
@@ -523,10 +523,11 @@ class FetchSessionCache(private val maxEntries: Int,
   private var numPartitions: Long = 0
 
   // A map of session ID to FetchSession.
-  private val sessions = new mutable.HashMap[Int, FetchSession]
+  // private val sessions = new mutable.HashMap[Int, FetchSession]
+  private val sessions = new util.LinkedHashMap[Int, FetchSession]
 
   // Maps session ID to session, items ordered by time last used.
-  private val lastUsed = new util.LinkedHashMap[Int, FetchSession]
+  // private val lastUsed = new util.LinkedHashMap[Int, FetchSession]
 
   // A map containing sessions which can be evicted by both privileged and
   // unprivileged sessions. (A map which contains all unprivileged sessions.)
@@ -551,7 +552,7 @@ class FetchSessionCache(private val maxEntries: Int,
    * @return           The session, or None if no such session was found.
    */
   def get(sessionId: Int): Option[FetchSession] = synchronized {
-    sessions.get(sessionId)
+    Option(sessions.get(sessionId))
   }
 
   /**
@@ -577,7 +578,7 @@ class FetchSessionCache(private val maxEntries: Int,
     var id = 0
     do {
       id = ThreadLocalRandom.current().nextInt(1, Int.MaxValue)
-    } while (sessions.contains(id) || id == INVALID_SESSION_ID)
+    } while (sessions.containsKey(id) || id == INVALID_SESSION_ID)
     id
   }
 
@@ -627,7 +628,8 @@ class FetchSessionCache(private val maxEntries: Int,
   def tryEvict(privileged: Boolean, key: EvictableKey, now: Long): Boolean = synchronized {
     // Try to evict an entry which is stale.
     // val lastUsedEntry = lastUsed.firstEntry
-    val lastUsedSession = lastUsed.get(lastUsed.keySet().iterator().next())
+    // val lastUsedSession = lastUsed.get(lastUsed.keySet().iterator().next())
+    val lastUsedSession = sessions.get(sessions.keySet().iterator().next())
     if (lastUsedSession == null) {
       trace("There are no cache entries to evict.")
       false
@@ -682,7 +684,7 @@ class FetchSessionCache(private val maxEntries: Int,
   def remove(session: FetchSession): Option[FetchSession] = synchronized {
     // ahu why is this the only session.synchronized block?
     // val evictableKey = session.synchronized {
-    lastUsed.remove(session.id)
+    // lastUsed.remove(session.id)
     val evictableKey = session.evictableKey
     // }
     // ahu optimize
@@ -693,7 +695,7 @@ class FetchSessionCache(private val maxEntries: Int,
     }
     // unprivilegedSessions.remove(evictableKey)
     // privilegedSessions.remove(evictableKey)
-    val removeResult = sessions.remove(session.id)
+    val removeResult = Option(sessions.remove(session.id))
     if (removeResult.isDefined) {
       numPartitions = numPartitions - session.cachedSize
     }
@@ -710,9 +712,9 @@ class FetchSessionCache(private val maxEntries: Int,
     session.synchronized {
       // Update the lastUsed map.
       // lastUsed.remove(session.lastUsedKey)
-      lastUsed.remove(session.id)
+      sessions.remove(session.id)
       session.lastUsedMs = now
-      lastUsed.put(session.id, session)
+      sessions.put(session.id, session)
 
       val oldEvictableKey = session.evictableKey
       session.cachedSize = session.size
