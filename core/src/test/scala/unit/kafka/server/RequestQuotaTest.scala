@@ -146,16 +146,18 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testUnthrottledClient(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClientActions)
+    for (apiKey <- RequestQuotaTest.ClientActions) {
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
+    }
 
     waitAndCheckResults()
   }
 
   @Test
   def testExemptRequestTime(): Unit = {
-    for (apiKey <- RequestQuotaTest.ClusterActions)
+    for (apiKey <- RequestQuotaTest.ClusterActions) {
       submitTest(apiKey, () => checkExemptRequestMetric(apiKey))
+    }
 
     waitAndCheckResults()
   }
@@ -164,8 +166,9 @@ class RequestQuotaTest extends BaseRequestTest {
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
-    for (apiKey <- ApiKeys.values)
+    for (apiKey <- ApiKeys.enabledApis.asScala) {
       submitTest(apiKey, () => checkUnauthorizedRequestThrottle(apiKey))
+    }
 
     waitAndCheckResults()
   }
@@ -560,6 +563,16 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.ALTER_USER_SCRAM_CREDENTIALS =>
           new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
 
+        case ApiKeys.VOTE =>
+          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, 1, 2, 0, 10))
+
+        case ApiKeys.BEGIN_QUORUM_EPOCH =>
+          new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, 2, 5))
+
+        case ApiKeys.END_QUORUM_EPOCH =>
+          new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
+            tp, 10, 2, 5, Collections.singletonList(3)))
+
         case ApiKeys.ALTER_ISR =>
           new AlterIsrRequest.Builder(new AlterIsrRequestData())
 
@@ -684,9 +697,9 @@ class RequestQuotaTest extends BaseRequestTest {
 }
 
 object RequestQuotaTest {
-  val ClusterActions = ApiKeys.values.toSet.filter(apiKey => apiKey.clusterAction)
+  val ClusterActions = ApiKeys.enabledApis.asScala.toSet.filter(apiKey => apiKey.clusterAction)
   val SaslActions = Set(ApiKeys.SASL_HANDSHAKE, ApiKeys.SASL_AUTHENTICATE)
-  val ClientActions = ApiKeys.values.toSet -- ClusterActions -- SaslActions
+  val ClientActions = ApiKeys.enabledApis.asScala.toSet -- ClusterActions -- SaslActions
 
   val UnauthorizedPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "Unauthorized")
   // Principal used for all client connections. This is modified by tests which

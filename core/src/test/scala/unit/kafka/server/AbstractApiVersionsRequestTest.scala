@@ -35,7 +35,7 @@ abstract class AbstractApiVersionsRequestTest extends BaseRequestTest {
   }
 
   def validateApiVersionsResponse(apiVersionsResponse: ApiVersionsResponse): Unit = {
-    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.values.length, apiVersionsResponse.data.apiKeys().size())
+    assertEquals("API keys in ApiVersionsResponse must match API keys supported by broker.", ApiKeys.enabledApis().size, apiVersionsResponse.data.apiKeys().size())
     for (expectedApiVersion: ApiVersionsResponseKey <- ApiVersionsResponse.DEFAULT_API_VERSIONS_RESPONSE.data.apiKeys().asScala) {
       val actualApiVersion = apiVersionsResponse.apiVersion(expectedApiVersion.apiKey)
       assertNotNull(s"API key ${actualApiVersion.apiKey} is supported by broker, but not received in ApiVersionsResponse.", actualApiVersion)

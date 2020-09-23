@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.message;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
@@ -298,8 +299,7 @@ public class SimpleExampleMessageTest {
         SimpleExampleMessageData.MyStruct myStruct =
                 new SimpleExampleMessageData.MyStruct().setStructId(10);
         // Check serialization throws exception for unsupported version
-        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct),
-            __ -> { }, (short) 1);
+        testRoundTrip(new SimpleExampleMessageData().setMyStruct(myStruct), (short) 1);
     }
 
     /**
@@ -320,6 +320,18 @@ public class SimpleExampleMessageTest {
             message -> assertEquals("abc", message.myString()), (short) 1);
         testRoundTrip(new SimpleExampleMessageData().setMyString("abc"),
             message -> assertEquals("abc", message.myString()), (short) 2);
+    }
+
+    @Test
+    public void testCommonStruct() {
+        SimpleExampleMessageData message = new SimpleExampleMessageData();
+        message.setMyCommonStruct(new SimpleExampleMessageData.TestCommonStruct()
+            .setFoo(1)
+            .setBar(2));
+        message.setMyOtherCommonStruct(new SimpleExampleMessageData.TestCommonStruct()
+            .setFoo(3)
+            .setBar(4));
+        testRoundTrip(message, (short) 2);
     }
 
     private ByteBuffer serialize(SimpleExampleMessageData message, short version) {
@@ -354,6 +366,10 @@ public class SimpleExampleMessageTest {
         return new SimpleExampleMessageData(struct, version);
     }
 
+    private void testRoundTrip(SimpleExampleMessageData message, short version) {
+        testRoundTrip(message, m -> { }, version);
+    }
+
     private void testRoundTrip(SimpleExampleMessageData message,
                                Consumer<SimpleExampleMessageData> validator) {
         testRoundTrip(message, validator, (short) 1);
@@ -376,5 +392,13 @@ public class SimpleExampleMessageTest {
         validator.accept(messageFromStruct);
         assertEquals(message, messageFromStruct);
         assertEquals(message.hashCode(), messageFromStruct.hashCode());
+
+        // Check JSON serialization
+        JsonNode serializedJson = SimpleExampleMessageDataJsonConverter.write(message, version);
+        SimpleExampleMessageData messageFromJson = SimpleExampleMessageDataJsonConverter.read(serializedJson, version);
+        validator.accept(messageFromJson);
+        assertEquals(message, messageFromJson);
+        assertEquals(message.hashCode(), messageFromJson.hashCode());
     }
+
 }

@@ -429,7 +429,7 @@ object ConsoleConsumer extends Logging {
         // avoid auto-committing offsets which haven't been consumed
         smallestUnconsumedOffsets.getOrElseUpdate(tp, record.offset)
       }
-      smallestUnconsumedOffsets.foreach { case (tp, offset) => consumer.seek(tp, offset) }
+      smallestUnconsumedOffsets.forKeyValue { (tp, offset) => consumer.seek(tp, offset) }
     }
 
     def receive(): ConsumerRecord[Array[Byte], Array[Byte]] = {
@@ -467,7 +467,7 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   override def configure(configs: Map[String, _]): Unit = {
     val props = new java.util.Properties()
-    configs.asScala.foreach { case (key, value) => props.put(key, value.toString) }
+    configs.asScala.forKeyValue { (key, value) => props.put(key, value.toString) }
     if (props.containsKey("print.timestamp"))
       printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
@@ -496,7 +496,7 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
     val newProps = new Properties()
-    props.asScala.foreach { case (key, value) =>
+    props.asScala.forKeyValue { (key, value) =>
       if (key.startsWith(prefix) && key.length > prefix.length)
         newProps.put(key.substring(prefix.length), value)
     }

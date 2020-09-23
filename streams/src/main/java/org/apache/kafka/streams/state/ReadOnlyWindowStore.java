@@ -25,6 +25,11 @@ import java.time.Instant;
  * A window store that only supports read operations.
  * Implementations should be thread-safe as concurrent reads and writes are expected.
  *
+ * <p>Note: The current implementation of either forward or backward fetches on range-key-range-time does not
+ * obey the ordering when there are multiple local stores hosted on that instance. For example,
+ * if there are two stores from two tasks hosting keys {1,3} and {2,4}, then a range query of key [1,4]
+ * would return in the order of [1,3,2,4] but not [1,2,3,4] since it is just looping over the stores only.
+ *
  * @param <K> Type of keys
  * @param <V> Type of values
  */

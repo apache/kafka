@@ -192,6 +192,14 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return new DescribeUserScramCredentialsResponse(struct, version);
             case ALTER_USER_SCRAM_CREDENTIALS:
                 return new AlterUserScramCredentialsResponse(struct, version);
+            case VOTE:
+                return new VoteResponse(struct, version);
+            case BEGIN_QUORUM_EPOCH:
+                return new BeginQuorumEpochResponse(struct, version);
+            case END_QUORUM_EPOCH:
+                return new EndQuorumEpochResponse(struct, version);
+            case DESCRIBE_QUORUM:
+                return new DescribeQuorumResponse(struct, version);
             case ALTER_ISR:
                 return new AlterIsrResponse(new AlterIsrResponseData(struct, version));
             default:
