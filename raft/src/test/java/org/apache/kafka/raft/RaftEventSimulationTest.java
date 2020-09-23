@@ -712,11 +712,6 @@ public class RaftEventSimulationTest {
 
             nodes.values().forEach(state -> {
                 state.store.writeElectionState(election);
-                if (election.hasLeader()) {
-                    Optional<OffsetAndEpoch> endOffset = state.log.endOffsetForEpoch(election.epoch);
-                    if (!endOffset.isPresent())
-                        state.log.assignEpochStartOffset(election.epoch, state.log.endOffset().offset);
-                }
             });
         }
 

@@ -141,13 +141,8 @@ public class MockLogTest {
 
     @Test
     public void testAssignEpochStartOffset() {
-        log.assignEpochStartOffset(2, 0);
+        log.initializeLeaderEpoch(2);
         assertEquals(2, log.lastFetchedEpoch());
-    }
-
-    @Test
-    public void testAssignEpochStartOffsetNotEqualToEndOffset() {
-        assertThrows(IllegalArgumentException.class, () -> log.assignEpochStartOffset(2, 1));
     }
 
     @Test
@@ -368,6 +363,23 @@ public class MockLogTest {
             Isolation.UNCOMMITTED));
         assertThrows(OffsetOutOfRangeException.class, () -> log.read(log.endOffset().offset + 1,
             Isolation.UNCOMMITTED));
+    }
+
+    @Test
+    public void testMonotonicEpochStartOffset() {
+        appendBatch(5, 1);
+        assertEquals(5L, log.endOffset().offset);
+
+        log.initializeLeaderEpoch(2);
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 2)), log.endOffsetForEpoch(2));
+
+        // Initialize a new epoch at the same end offset. The epoch cache ensures
+        // that the start offset of each retained epoch increases monotonically.
+        log.initializeLeaderEpoch(3);
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(1));
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 1)), log.endOffsetForEpoch(2));
+        assertEquals(Optional.of(new OffsetAndEpoch(5L, 3)), log.endOffsetForEpoch(3));
     }
 
     private Optional<OffsetRange> readOffsets(long startOffset, Isolation isolation) {

@@ -78,9 +78,13 @@ public interface ReplicatedLog extends Closeable {
     long startOffset();
 
     /**
-     * Assign a start offset to a given epoch.
+     * Initialize a new leader epoch beginning at the current log end offset. This API is invoked
+     * after becoming a leader and ensures that we can always determine the end offset and epoch
+     * with {@link #endOffsetForEpoch(int)} for any previous epoch.
+     *
+     * @param epoch Epoch of the newly elected leader
      */
-    void assignEpochStartOffset(int epoch, long startOffset);
+    void initializeLeaderEpoch(int epoch);
 
     /**
      * Truncate the log to the given offset. All records with offsets greater than or equal to
@@ -90,6 +94,13 @@ public interface ReplicatedLog extends Closeable {
      */
     void truncateTo(long offset);
 
+    /**
+     * Update the high watermark and associated metadata (which is used to avoid
+     * index lookups when handling reads with {@link #read(long, Isolation)} with
+     * the {@link Isolation#COMMITTED} isolation level.
+     *
+     * @param offsetMetadata The offset and optional metadata
+     */
     void updateHighWatermark(LogOffsetMetadata offsetMetadata);
 
     /**
