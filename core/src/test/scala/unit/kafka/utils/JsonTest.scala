@@ -42,7 +42,7 @@ class JsonTest {
 
     assertEquals(Some(JsonValue(new ObjectNode(jnf))), Json.parseFull("{}"))
     assertEquals(Right(JsonValue(new ObjectNode(jnf))), Json.tryParseFull("{}"))
-    assertThrows(classOf[IllegalArgumentException], () => Json.tryParseFull(null))
+    assertEquals(classOf[Left[JsonProcessingException, JsonValue]], Json.tryParseFull(null).getClass)
     assertThrows(classOf[IllegalArgumentException], () => Json.tryParseBytes(null))
 
     assertEquals(None, Json.parseFull(""))

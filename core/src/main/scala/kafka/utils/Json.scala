@@ -70,7 +70,7 @@ object Json {
    * @return An `Either` which in case of `Left` means an exception and `Right` is the actual return value.
    */
   def tryParseFull(input: String): Either[JsonProcessingException, JsonValue] =
-    if (input != null && input.isEmpty)
+    if (input == null || input.isEmpty)
       Left(new JsonParseException(MissingNode.getInstance().traverse(), "The input string shouldn't be empty"))
     else
       try Right(mapper.readTree(input)).map(JsonValue(_))
